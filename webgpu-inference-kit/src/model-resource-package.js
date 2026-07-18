@@ -4,6 +4,12 @@ import {
 import {
   describeWebGpuModelResourceSource,
 } from './model-resource-source.js';
+import {
+  defineWebGpuModelResourceChunkPlan,
+  preflightWebGpuModelResourceChunkSources,
+  snapshotWebGpuModelResourceChunkSources,
+  validateWebGpuModelResourceChunkPlan,
+} from './model-resource-chunk-plan.js';
 
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA = 'kaminos.webgpu-model-resource-package.v0';
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-package-lease.v0';
@@ -39,17 +45,28 @@ function manifestSemanticIdentity(manifest) {
 
 function packageIdentity(input) {
   const resources = input.resources
-    .map(resource => `${encodeURIComponent(resource.resourceId)}=${manifestSemanticIdentity(resource.manifest)}`)
+    .map(resource => {
+      const loaderIdentity = resource.chunkPlan
+        ? `:chunks:${encodeURIComponent(resource.chunkPlan.identity)}`
+        : '';
+      return `${encodeURIComponent(resource.resourceId)}=${manifestSemanticIdentity(resource.manifest)}${loaderIdentity}`;
+    })
     .join('&');
   return `${encodeURIComponent(input.packageId)}:${encodeURIComponent(input.modelId)}@${encodeURIComponent(input.revision)}#resources:${resources}`;
 }
 
 function sourceMemoryBound(modelPackage) {
+  const hasChunkResource = modelPackage.resources.some(resource => resource.chunkPlan);
   return deepFreeze({
-    authority: 'sequential-resource-acquisition-declared-byte-length',
+    authority: hasChunkResource
+      ? 'sequential-package-child-acquisition-declared-source-unit'
+      : 'sequential-resource-acquisition-declared-byte-length',
     largestResourceByteLength: modelPackage.largestResourceByteLength,
+    largestSourceByteLength: modelPackage.largestSourceByteLength ?? modelPackage.largestResourceByteLength,
     totalPackageByteLength: modelPackage.totalByteLength,
-    residual: 'one-resource-source-acquisition-may-retain-multiple-host-representations',
+    residual: hasChunkResource
+      ? 'one-ordinary-resource-or-chunk-source-acquisition-may-retain-multiple-host-representations'
+      : 'one-resource-source-acquisition-may-retain-multiple-host-representations',
   });
 }
 
@@ -78,10 +95,12 @@ function releaseChildLeases(childLeases) {
 
 function errorWithPackageReport(cause, report) {
   const error = cause instanceof Error ? cause : new Error(String(cause));
-  try {
-    error.packageReport = report;
-    if (error.packageReport === report) return error;
-  } catch {}
+  if (!Object.hasOwn(error, 'packageReport')) {
+    try {
+      error.packageReport = report;
+      if (error.packageReport === report) return error;
+    } catch {}
+  }
   const wrapped = new Error(error.message);
   wrapped.name = error.name;
   wrapped.cause = error;
@@ -112,6 +131,8 @@ export function validateWebGpuModelResourcePackage(modelPackage) {
   const tensorNames = new Set();
   let totalByteLength = 0;
   let largestResourceByteLength = 0;
+  let largestSourceByteLength = 0;
+  let hasChunkResource = false;
   modelPackage.resources.forEach((resource, index) => {
     const prefix = `resources[${index}]`;
     if (!resource || typeof resource !== 'object' || Array.isArray(resource)) {
@@ -130,6 +151,22 @@ export function validateWebGpuModelResourcePackage(modelPackage) {
       errors.push(...validation.errors.map(error => `${prefix}.manifest: ${error}`));
       return;
     }
+    const expectedLoadKind = resource.chunkPlan ? 'chunks' : 'source';
+    if (resource.loadKind != null && resource.loadKind !== expectedLoadKind) {
+      errors.push(`${prefix}.loadKind must match the declared child loader`);
+    }
+    if (resource.chunkPlan) {
+      hasChunkResource = true;
+      const chunkValidation = validateWebGpuModelResourceChunkPlan(resource.chunkPlan);
+      if (!chunkValidation.ok) {
+        errors.push(...chunkValidation.errors.map(error => `${prefix}.chunkPlan: ${error}`));
+      } else if (
+        manifestSemanticIdentity(resource.chunkPlan.manifest)
+        !== manifestSemanticIdentity(resource.manifest)
+      ) {
+        errors.push(`${prefix}.chunkPlan.manifest must match the package resource manifest`);
+      }
+    }
     if (resource.manifest.modelId !== modelPackage.modelId) {
       errors.push(`${prefix}.manifest.modelId must match package modelId`);
     }
@@ -139,6 +176,10 @@ export function validateWebGpuModelResourcePackage(modelPackage) {
     totalByteLength += resource.manifest.bundle.byteLength;
     if (!Number.isSafeInteger(totalByteLength)) errors.push('total package byte length exceeds safe integer range');
     largestResourceByteLength = Math.max(largestResourceByteLength, resource.manifest.bundle.byteLength);
+    largestSourceByteLength = Math.max(
+      largestSourceByteLength,
+      resource.chunkPlan?.largestChunkByteLength ?? resource.manifest.bundle.byteLength,
+    );
     for (const allocation of resource.manifest.allocations) {
       for (const tensor of allocation.tensors) {
         if (tensorNames.has(tensor.name)) errors.push(`duplicate package tensor name ${tensor.name}; tensor names must be unique`);
@@ -165,6 +206,13 @@ export function validateWebGpuModelResourcePackage(modelPackage) {
   } else if (modelPackage.largestResourceByteLength !== largestResourceByteLength) {
     errors.push('largestResourceByteLength must equal the largest resource bundle byte length');
   }
+  if (modelPackage.largestSourceByteLength == null && !hasChunkResource) {
+    // Source-only v0 package objects remain valid across the additive chunk extension.
+  } else if (!Number.isSafeInteger(modelPackage.largestSourceByteLength) || modelPackage.largestSourceByteLength <= 0) {
+    errors.push('largestSourceByteLength must be a positive safe integer');
+  } else if (modelPackage.largestSourceByteLength !== largestSourceByteLength) {
+    errors.push('largestSourceByteLength must equal the largest ordinary resource or declared chunk');
+  }
   if (
     errors.length === 0
     && modelPackage.identity !== packageIdentity(modelPackage)
@@ -178,16 +226,30 @@ export function defineWebGpuModelResourcePackage(input = {}) {
   if (input.maxResources != null || input.maxBytes != null || input.retentionLimit != null) {
     throw new Error('model resource packages are uncapped; maxResources, maxBytes, and retentionLimit are not supported');
   }
-  const resources = (input.resources || []).map(resource => ({
-    resourceId: resource?.resourceId,
-    manifest: resource?.manifest,
-  }));
+  const resources = (input.resources || []).map(resource => {
+    const chunkPlan = resource?.chunkPlan
+      ? defineWebGpuModelResourceChunkPlan(resource.chunkPlan)
+      : null;
+    return {
+      resourceId: resource?.resourceId,
+      loadKind: chunkPlan ? 'chunks' : 'source',
+      manifest: resource?.manifest ?? chunkPlan?.manifest,
+      ...(chunkPlan ? { chunkPlan } : {}),
+    };
+  });
   const totalByteLength = resources.reduce(
     (total, resource) => total + (resource.manifest?.bundle?.byteLength || 0),
     0,
   );
   const largestResourceByteLength = resources.reduce(
     (largest, resource) => Math.max(largest, resource.manifest?.bundle?.byteLength || 0),
+    0,
+  );
+  const largestSourceByteLength = resources.reduce(
+    (largest, resource) => Math.max(
+      largest,
+      resource.chunkPlan?.largestChunkByteLength ?? resource.manifest?.bundle?.byteLength ?? 0,
+    ),
     0,
   );
   const modelPackage = {
@@ -199,6 +261,7 @@ export function defineWebGpuModelResourcePackage(input = {}) {
     resourceIds: resources.map(resource => resource.resourceId),
     totalByteLength,
     largestResourceByteLength,
+    largestSourceByteLength,
   };
   modelPackage.identity = packageIdentity(modelPackage);
   const validation = validateWebGpuModelResourcePackage(modelPackage);
@@ -216,13 +279,17 @@ function validateSources(modelPackage, sources) {
     if (!Object.hasOwn(sources, resourceId) || sources[resourceId] == null) {
       throw new Error(`missing source for model package resource ${resourceId}`);
     }
-    descriptions.set(resourceId, describeWebGpuModelResourceSource(sources[resourceId]));
+    const resource = modelPackage.resources.find(candidate => candidate.resourceId === resourceId);
+    descriptions.set(resourceId, resource.chunkPlan
+      ? preflightWebGpuModelResourceChunkSources(resource.chunkPlan, sources[resourceId])
+      : describeWebGpuModelResourceSource(sources[resourceId]));
   }
   for (const resourceId of Object.keys(sources)) {
     if (!expected.has(resourceId)) throw new Error(`unknown model package source ${resourceId}`);
   }
   if (modelPackage.resources.length > 1) {
     for (const [resourceId, description] of descriptions) {
+      if (description instanceof Map) continue;
       if (description.kind === 'array-buffer' || description.kind === 'typed-array') {
         throw new Error(
           `multi-resource model package source ${resourceId} uses mutable bytes; wrap direct bytes in an immutable Blob or use a URL, Request, or Response source`,
@@ -230,21 +297,41 @@ function validateSources(modelPackage, sources) {
       }
     }
   }
+  return descriptions;
 }
 
 export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
   const validation = validateWebGpuModelResourcePackage(input.package);
   if (!validation.ok) throw new Error(`invalid WebGPU model resource package:\n${validation.errors.join('\n')}`);
   const modelPackage = defineWebGpuModelResourcePackage(input.package);
-  if (!input.route || typeof input.route.loadModelResourcesFromSource !== 'function') {
+  if (!input.route || typeof input.route !== 'object') {
     throw new Error('model resource package loading requires a registered session route');
+  }
+  const hasSourceResource = modelPackage.resources.some(resource => !resource.chunkPlan);
+  const hasChunkResource = modelPackage.resources.some(resource => resource.chunkPlan);
+  if (hasSourceResource && typeof input.route.loadModelResourcesFromSource !== 'function') {
+    throw new Error('source-backed model resource package loading requires route.loadModelResourcesFromSource');
+  }
+  if (
+    hasChunkResource
+    && typeof input.route.loadModelResourceChunksFromSources !== 'function'
+  ) {
+    throw new Error('chunk-backed model resource package loading requires route.loadModelResourceChunksFromSources');
   }
   if (input.maxResources != null || input.maxBytes != null || input.maxProgressEvents != null) {
     throw new Error('model resource package loading is uncapped; maxResources, maxBytes, and maxProgressEvents are not supported');
   }
-  validateSources(modelPackage, input.sources);
+  const sourceDescriptions = validateSources(modelPackage, input.sources);
   const sources = Object.create(null);
-  for (const resourceId of modelPackage.resourceIds) sources[resourceId] = input.sources[resourceId];
+  for (const resource of modelPackage.resources) {
+    sources[resource.resourceId] = resource.chunkPlan
+      ? snapshotWebGpuModelResourceChunkSources(
+        resource.chunkPlan,
+        input.sources[resource.resourceId],
+        sourceDescriptions.get(resource.resourceId),
+      )
+      : input.sources[resource.resourceId];
+  }
   Object.freeze(sources);
   throwIfAborted(input.signal);
 
@@ -276,18 +363,27 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
       const resource = modelPackage.resources[index];
       let lease;
       try {
-        lease = await input.route.loadModelResourcesFromSource({
-          manifest: resource.manifest,
-          source: sources[resource.resourceId],
+        const common = {
           cache: input.cache,
           fetch: input.fetch,
           fetchOptions: input.fetchOptions,
-          ownership: input.ownership,
           signal: input.signal,
           subtle: input.subtle,
           now: input.now,
           onProgress: event => recordProgress(resource, index, event),
-        });
+        };
+        lease = resource.chunkPlan
+          ? await input.route.loadModelResourceChunksFromSources({
+            ...common,
+            plan: resource.chunkPlan,
+            sources: sources[resource.resourceId],
+          })
+          : await input.route.loadModelResourcesFromSource({
+            ...common,
+            manifest: resource.manifest,
+            source: sources[resource.resourceId],
+            ownership: input.ownership,
+          });
       } catch (error) {
         const cleanup = releaseChildLeases(childLeases);
         const report = deepFreeze({
@@ -302,10 +398,15 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
             name: error?.name || 'Error',
             message: String(error?.message || error),
             acquisitionReport: error?.acquisitionReport || null,
+            chunkReport: error?.chunkReport || null,
+            authorityReport: error?.chunkReport || error?.acquisitionReport || null,
           },
           resources: resources.map(item => ({
             resourceId: item.resourceId,
+            loadKind: item.loadKind,
             acquisitionReport: item.acquisitionReport,
+            chunkReport: item.chunkReport,
+            authorityReport: item.authorityReport,
           })),
           progress,
           sourceMemoryBound: sourceMemoryBound(modelPackage),
@@ -316,8 +417,11 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
       childLeases.push({ resourceId: resource.resourceId, lease });
       resources.push(deepFreeze({
         resourceId: resource.resourceId,
+        loadKind: resource.loadKind,
         manifest: resource.manifest,
-        acquisitionReport: lease.acquisitionReport,
+        acquisitionReport: lease.acquisitionReport ?? null,
+        chunkReport: lease.chunkReport ?? null,
+        authorityReport: lease.chunkReport ?? lease.acquisitionReport,
         allocations: lease.allocations,
         tensors: lease.tensors,
       }));
@@ -336,7 +440,10 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
       failure: { name: error?.name || 'Error', message: String(error?.message || error) },
       resources: resources.map(item => ({
         resourceId: item.resourceId,
+        loadKind: item.loadKind,
         acquisitionReport: item.acquisitionReport,
+        chunkReport: item.chunkReport,
+        authorityReport: item.authorityReport,
       })),
       progress,
       sourceMemoryBound: sourceMemoryBound(modelPackage),
@@ -366,7 +473,10 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
     failure: null,
     resources: resources.map(resource => ({
       resourceId: resource.resourceId,
+      loadKind: resource.loadKind,
       acquisitionReport: resource.acquisitionReport,
+      chunkReport: resource.chunkReport,
+      authorityReport: resource.authorityReport,
     })),
     progress,
     sourceMemoryBound: sourceMemoryBound(modelPackage),

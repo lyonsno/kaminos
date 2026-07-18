@@ -391,7 +391,9 @@ function expectedChunk(plan, chunk) {
   };
 }
 
-function validateSources(plan, sources) {
+export function preflightWebGpuModelResourceChunkSources(plan, sources) {
+  const validation = validateWebGpuModelResourceChunkPlan(plan);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource chunk plan:\n${validation.errors.join('\n')}`);
   if (!sources || typeof sources !== 'object' || Array.isArray(sources)) {
     throw new Error('model resource chunk sources must be an object keyed by chunkId');
   }
@@ -416,6 +418,23 @@ function validateSources(plan, sources) {
     }
   }
   return descriptions;
+}
+
+export function snapshotWebGpuModelResourceChunkSources(plan, sources, descriptions = null) {
+  const sourceDescriptions = descriptions ?? preflightWebGpuModelResourceChunkSources(plan, sources);
+  const snapshot = Object.create(null);
+  for (const chunkId of plan.chunkIds) {
+    const source = sources[chunkId];
+    const description = sourceDescriptions.get(chunkId);
+    if (plan.chunkIds.length === 1 && description.kind === 'array-buffer') {
+      snapshot[chunkId] = source.slice(0);
+    } else if (plan.chunkIds.length === 1 && description.kind === 'typed-array') {
+      snapshot[chunkId] = Uint8Array.from(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
+    } else {
+      snapshot[chunkId] = source;
+    }
+  }
+  return Object.freeze(snapshot);
 }
 
 function assertRoute(route) {
@@ -471,20 +490,8 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
   if (input.maxChunks != null || input.maxBytes != null || input.maxProgressEvents != null) {
     throw new Error('model resource chunk loading is uncapped; maxChunks, maxBytes, and maxProgressEvents are not supported');
   }
-  const sourceDescriptions = validateSources(plan, input.sources);
-  const sources = Object.create(null);
-  for (const chunkId of plan.chunkIds) {
-    const source = input.sources[chunkId];
-    const description = sourceDescriptions.get(chunkId);
-    if (plan.chunkIds.length === 1 && description.kind === 'array-buffer') {
-      sources[chunkId] = source.slice(0);
-    } else if (plan.chunkIds.length === 1 && description.kind === 'typed-array') {
-      sources[chunkId] = Uint8Array.from(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
-    } else {
-      sources[chunkId] = source;
-    }
-  }
-  Object.freeze(sources);
+  const sourceDescriptions = preflightWebGpuModelResourceChunkSources(plan, input.sources);
+  const sources = snapshotWebGpuModelResourceChunkSources(plan, input.sources, sourceDescriptions);
   throwIfAborted(input.signal);
 
   const now = typeof input.now === 'function'

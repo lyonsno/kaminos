@@ -6,8 +6,10 @@ import {
   WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA,
   createWebGpuInferenceSession,
+  defineWebGpuModelResourceChunkPlan,
   defineWebGpuModelResourceManifest,
   defineWebGpuModelResourcePackage,
+  loadWebGpuModelResourcePackageFromSources,
   validateWebGpuModelResourcePackage,
 } from '../src/index.js';
 
@@ -105,6 +107,139 @@ assert.deepEqual(modelPackage.resourceIds, ['encoder', 'decoder', 'head']);
 assert.equal(modelPackage.totalByteLength, 36);
 assert.equal(modelPackage.largestResourceByteLength, 16);
 assert.equal(validateWebGpuModelResourcePackage(modelPackage).ok, true);
+const legacySourceOnlyPackage = {
+  ...modelPackage,
+  resources: modelPackage.resources.map(({ loadKind, ...resource }) => resource),
+};
+delete legacySourceOnlyPackage.largestSourceByteLength;
+assert.equal(validateWebGpuModelResourcePackage(legacySourceOnlyPackage).ok, true);
+assert.equal(legacySourceOnlyPackage.identity, modelPackage.identity);
+assert.equal(defineWebGpuModelResourcePackage(legacySourceOnlyPackage).identity, modelPackage.identity);
+const decoderChunkPlan = defineWebGpuModelResourceChunkPlan({
+  planId: 'acme/large-browser-model:decoder-chunks',
+  manifest: manifests.decoder,
+  allocations: [{
+    allocationId: 'decoder-weights',
+    chunks: [
+      {
+        chunkId: 'decoder-0',
+        byteOffset: 0,
+        byteLength: 4,
+        sha256: createHash('sha256').update(byteSets.decoder.slice(0, 4)).digest('hex'),
+      },
+      {
+        chunkId: 'decoder-1',
+        byteOffset: 4,
+        byteLength: 8,
+        sha256: createHash('sha256').update(byteSets.decoder.slice(4)).digest('hex'),
+      },
+    ],
+  }],
+});
+const mixedPackage = defineWebGpuModelResourcePackage({
+  packageId: modelPackage.packageId,
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [
+    { resourceId: 'encoder', manifest: manifests.encoder },
+    { resourceId: 'decoder', chunkPlan: decoderChunkPlan },
+  ],
+});
+assert.deepEqual(mixedPackage.resources.map(resource => resource.loadKind), ['source', 'chunks']);
+assert.equal(mixedPackage.resources[1].manifest, manifests.decoder);
+assert.equal(mixedPackage.resources[1].chunkPlan.identity, decoderChunkPlan.identity);
+assert.notEqual(
+  mixedPackage.identity,
+  defineWebGpuModelResourcePackage({
+    packageId: modelPackage.packageId,
+    modelId: modelPackage.modelId,
+    revision: modelPackage.revision,
+    resources: [
+      { resourceId: 'encoder', manifest: manifests.encoder },
+      { resourceId: 'decoder', manifest: manifests.decoder },
+    ],
+  }).identity,
+  'package identity must bind whether a child uses whole-source or chunk-plan loading',
+);
+assert.equal(mixedPackage.largestResourceByteLength, 12);
+assert.equal(mixedPackage.largestSourceByteLength, 8);
+assert.equal(validateWebGpuModelResourcePackage(mixedPackage).ok, true);
+const mismatchedChunkManifestPackage = {
+  ...mixedPackage,
+  resources: [
+    mixedPackage.resources[0],
+    { ...mixedPackage.resources[1], manifest: manifests.encoder },
+  ],
+};
+assert.equal(
+  validateWebGpuModelResourcePackage(mismatchedChunkManifestPackage).errors.some(
+    error => /chunkPlan\.manifest must match/.test(error),
+  ),
+  true,
+);
+await assert.rejects(
+  () => loadWebGpuModelResourcePackageFromSources({
+    package: mixedPackage,
+    route: {
+      routeId: 'source-only-route-surface',
+      loadModelResourcesFromSource() {},
+    },
+    sources: {
+      encoder: new Blob([byteSets.encoder]),
+      decoder: {
+        'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+        'decoder-1': new Blob([byteSets.decoder.slice(4)]),
+      },
+    },
+  }),
+  /chunk-backed.*loadModelResourceChunksFromSources/i,
+);
+const chunkOnlyPackage = defineWebGpuModelResourcePackage({
+  packageId: 'acme/large-browser-model:chunk-only',
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [{ resourceId: 'decoder', chunkPlan: decoderChunkPlan }],
+});
+await assert.rejects(
+  () => loadWebGpuModelResourcePackageFromSources({
+    package: chunkOnlyPackage,
+    route: {
+      routeId: 'chunk-only-route-surface',
+      loadModelResourceChunksFromSources() {
+        throw new Error('chunk-only-loader-invoked');
+      },
+    },
+    sources: {
+      decoder: {
+        'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+        'decoder-1': new Blob([byteSets.decoder.slice(4)]),
+      },
+    },
+  }),
+  /chunk-only-loader-invoked/,
+);
+const singleChunkDecoderPlan = defineWebGpuModelResourceChunkPlan({
+  planId: 'acme/large-browser-model:decoder-single-chunk',
+  manifest: manifests.decoder,
+  allocations: [{
+    allocationId: 'decoder-weights',
+    chunks: [{
+      chunkId: 'decoder-single',
+      byteOffset: 0,
+      byteLength: byteSets.decoder.byteLength,
+      sha256: createHash('sha256').update(byteSets.decoder).digest('hex'),
+    }],
+  }],
+});
+const mutableChunkPackage = defineWebGpuModelResourcePackage({
+  packageId: 'acme/large-browser-model:mutable-chunk-snapshot',
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [
+    { resourceId: 'encoder', manifest: manifests.encoder },
+    { resourceId: 'decoder', chunkPlan: singleChunkDecoderPlan },
+  ],
+});
 const semanticallyDistinctManifest = childManifest(
   'encoder-weights',
   'encoder.projection.weight',
@@ -209,6 +344,27 @@ snapshotFetchRelease.resolve();
 const snapshotLease = await snapshotLoad;
 assert.deepEqual(snapshotLease.resources.map(resource => resource.resourceId), ['encoder', 'decoder', 'head']);
 assert.equal(snapshotLease.release().status, 'released');
+const mutableChunkFetchStarted = deferred();
+const mutableChunkFetchRelease = deferred();
+const mutableDecoderChunk = Uint8Array.from(byteSets.decoder);
+const mutableChunkLoad = snapshotRoute.loadModelResourcePackageFromSources({
+  package: mutableChunkPackage,
+  sources: {
+    encoder: 'https://models.example/mutable-chunk-encoder.bin',
+    decoder: { 'decoder-single': mutableDecoderChunk },
+  },
+  async fetch() {
+    mutableChunkFetchStarted.resolve();
+    await mutableChunkFetchRelease.promise;
+    return responseFor(byteSets.encoder);
+  },
+});
+await mutableChunkFetchStarted.promise;
+mutableDecoderChunk.fill(0xff);
+mutableChunkFetchRelease.resolve();
+const mutableChunkLease = await mutableChunkLoad;
+assert.equal(mutableChunkLease.resources[1].chunkReport.status, 'loaded');
+assert.equal(mutableChunkLease.release().status, 'released');
 snapshotSession.unregisterRoute(snapshotRoute.routeId);
 snapshotSession.close();
 
@@ -269,6 +425,10 @@ assert.equal(sharpPackage.report.status, 'loaded');
 assert.equal(sharpPackage.report.resources.length, 3);
 assert.equal(sharpPackage.report.sourceMemoryBound.largestResourceByteLength, 16);
 assert.equal(sharpPackage.report.sourceMemoryBound.authority, 'sequential-resource-acquisition-declared-byte-length');
+assert.equal(
+  sharpPackage.report.sourceMemoryBound.residual,
+  'one-resource-source-acquisition-may-retain-multiple-host-representations',
+);
 assert.equal(fixture.buffers.length, 3);
 
 const sf3dPackage = await sf3d.loadModelResourcePackageFromSources({
@@ -286,6 +446,150 @@ assert.equal(sf3dPackage.release().status, 'released');
 session.unregisterRoute(sharp.routeId);
 session.unregisterRoute(sf3d.routeId);
 session.close();
+
+const mixedFixture = deviceFixture();
+const mixedSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-mixed-package-session',
+  device: mixedFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const mixedRoute = await mixedSession.registerRoute({ routeId: 'mixed-package-route' });
+const mixedSources = {
+  encoder: new Blob([byteSets.encoder]),
+  decoder: {
+    'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+    'decoder-1': new Blob([byteSets.decoder.slice(4)]),
+  },
+};
+const mixedLease = await mixedRoute.loadModelResourcePackageFromSources({
+  package: mixedPackage,
+  sources: mixedSources,
+});
+assert.deepEqual(mixedLease.resources.map(resource => resource.loadKind), ['source', 'chunks']);
+assert.equal(mixedLease.resources[0].acquisitionReport != null, true);
+assert.equal(mixedLease.resources[0].chunkReport, null);
+assert.equal(mixedLease.resources[1].acquisitionReport, null);
+assert.equal(mixedLease.resources[1].chunkReport.status, 'loaded');
+assert.equal(mixedLease.resources[1].authorityReport, mixedLease.resources[1].chunkReport);
+assert.deepEqual(Object.keys(mixedLease.tensors), ['encoder.weight', 'decoder.weight']);
+assert.equal(mixedLease.report.sourceMemoryBound.largestResourceByteLength, 12);
+assert.equal(mixedLease.report.sourceMemoryBound.largestSourceByteLength, 8);
+assert.equal(
+  mixedLease.report.sourceMemoryBound.authority,
+  'sequential-package-child-acquisition-declared-source-unit',
+);
+assert.equal(mixedFixture.buffers.length, 2);
+const mixedReuseRoute = await mixedSession.registerRoute({ routeId: 'mixed-package-reuse-route' });
+const mixedReuseLease = await mixedReuseRoute.loadModelResourcePackageFromSources({
+  package: mixedPackage,
+  sources: mixedSources,
+});
+assert.equal(mixedFixture.buffers.length, 2, 'mixed packages must reuse ordinary and chunk-backed resident allocations');
+assert.equal(mixedReuseLease.tensors['encoder.weight'].buffer, mixedLease.tensors['encoder.weight'].buffer);
+assert.equal(mixedReuseLease.tensors['decoder.weight'].buffer, mixedLease.tensors['decoder.weight'].buffer);
+assert.equal(
+  mixedReuseLease.resources[1].chunkReport.allocations[0].provenance,
+  mixedLease.resources[1].chunkReport.allocations[0].provenance,
+  'mixed package reuse must preserve the creator chunk verification provenance',
+);
+assert.equal(mixedReuseLease.release().status, 'released');
+assert.equal(mixedLease.release().status, 'released');
+mixedSession.unregisterRoute(mixedReuseRoute.routeId);
+mixedSession.unregisterRoute(mixedRoute.routeId);
+mixedSession.close();
+
+const mixedFailureFixture = deviceFixture();
+const mixedFailureSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-mixed-package-failure',
+  device: mixedFailureFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const mixedFailureRoute = await mixedFailureSession.registerRoute({ routeId: 'mixed-package-failure-route' });
+const mixedFailureJoinedRoute = await mixedFailureSession.registerRoute({
+  routeId: 'mixed-package-failure-joined-route',
+});
+await assert.rejects(
+  () => mixedFailureRoute.loadModelResourcePackageFromSources({
+    package: mixedPackage,
+    sources: {
+      encoder: new Blob([byteSets.encoder]),
+      decoder: {
+        'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+        'decoder-1': {},
+      },
+    },
+  }),
+  /source.*URL|Request|Response|Blob|ArrayBuffer|typed array/i,
+);
+assert.equal(
+  mixedFailureFixture.buffers.length,
+  0,
+  'every nested chunk source must be preflighted before an earlier package child allocates',
+);
+const corruptDecoderChunk = Uint8Array.from(byteSets.decoder.slice(4));
+corruptDecoderChunk[0] ^= 0xff;
+await assert.rejects(
+  () => mixedFailureRoute.loadModelResourcePackageFromSources({
+    package: mixedPackage,
+    sources: {
+      encoder: new Blob([byteSets.encoder]),
+      decoder: {
+        'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+        'decoder-1': new Blob([corruptDecoderChunk]),
+      },
+    },
+  }),
+  error => {
+    assert.equal(error.packageReport.failedResourceId, 'decoder');
+    assert.equal(error.packageReport.failure.acquisitionReport, null);
+    assert.equal(error.packageReport.failure.chunkReport.failedChunkId, 'decoder-1');
+    assert.equal(error.packageReport.failure.authorityReport, error.packageReport.failure.chunkReport);
+    assert.deepEqual(error.packageReport.resources.map(resource => resource.loadKind), ['source']);
+    assert.equal(
+      error.packageReport.resources[0].authorityReport,
+      error.packageReport.resources[0].acquisitionReport,
+    );
+    assert.equal(error.packageReport.cleanup.status, 'released');
+    return true;
+  },
+);
+assert.equal(mixedFailureSession.residency.hasActiveLeases(mixedFailureRoute.routeId), false);
+const joinedCorruptSources = {
+  encoder: new Blob([byteSets.encoder]),
+  decoder: {
+    'decoder-0': new Blob([byteSets.decoder.slice(0, 4)]),
+    'decoder-1': new Blob([corruptDecoderChunk]),
+  },
+};
+const joinedMixedFailures = await Promise.allSettled([
+  mixedFailureRoute.loadModelResourcePackageFromSources({
+    package: mixedPackage,
+    sources: joinedCorruptSources,
+  }),
+  mixedFailureJoinedRoute.loadModelResourcePackageFromSources({
+    package: mixedPackage,
+    sources: joinedCorruptSources,
+  }),
+]);
+assert.deepEqual(joinedMixedFailures.map(result => result.status), ['rejected', 'rejected']);
+assert.deepEqual(
+  joinedMixedFailures.map(result => result.reason.packageReport.routeId),
+  [mixedFailureRoute.routeId, mixedFailureJoinedRoute.routeId],
+  'shared child failure must produce caller-specific package reports',
+);
+assert.deepEqual(
+  joinedMixedFailures.map(result => result.reason.packageReport.failure.chunkReport.failedChunkId),
+  ['decoder-1', 'decoder-1'],
+);
+assert.deepEqual(
+  joinedMixedFailures.map(result => result.reason.packageReport.failure.chunkReport.routeId),
+  [mixedFailureRoute.routeId, mixedFailureJoinedRoute.routeId],
+  'shared creator chunk evidence must retain each package caller route identity',
+);
+assert.equal(mixedFailureSession.residency.hasActiveLeases(mixedFailureJoinedRoute.routeId), false);
+mixedFailureSession.unregisterRoute(mixedFailureJoinedRoute.routeId);
+mixedFailureSession.unregisterRoute(mixedFailureRoute.routeId);
+mixedFailureSession.close();
 
 const failureFixture = deviceFixture();
 const failureSession = await createWebGpuInferenceSession({

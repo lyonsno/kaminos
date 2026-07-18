@@ -266,7 +266,7 @@ const modelPackage = defineWebGpuModelResourcePackage({
   revision: "0123456789abcdef",
   resources: [
     { resourceId: "encoder", manifest: encoderManifest },
-    { resourceId: "decoder", manifest: decoderManifest },
+    { resourceId: "decoder", chunkPlan: decoderChunkPlan },
     { resourceId: "head", manifest: headManifest },
   ],
 });
@@ -275,7 +275,10 @@ const weights = await sharp.loadModelResourcePackageFromSources({
   package: modelPackage,
   sources: {
     encoder: new URL("./encoder.weights.bin", import.meta.url),
-    decoder: new URL("./decoder.weights.bin", import.meta.url),
+    decoder: Object.fromEntries(decoderChunkPlan.chunkIds.map(chunkId => [
+      chunkId,
+      new URL(`./decoder/${chunkId}.bin`, import.meta.url),
+    ])),
     head: new URL("./head.weights.bin", import.meta.url),
   },
   cache: modelBundleCache,
@@ -287,14 +290,15 @@ const weights = await sharp.loadModelResourcePackageFromSources({
 
 const encoderWeight = weights.tensors["encoder.weight"];
 weights.report.sourceMemoryBound.largestResourceByteLength;
+weights.report.sourceMemoryBound.largestSourceByteLength;
 weights.release();
 ```
 
-Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and package identity binds each child's normalized allocation and tensor semantics. The complete source map is copied and every source class is validated before GPU work starts. Multi-resource packages reject mutable `ArrayBuffer` and typed-array sources at admission instead of cloning and retaining a second whole-model byte set; wrap direct bytes in immutable `Blob`s or use URL, `Request`, or `Response` sources. A single-resource package retains direct mutable-byte compatibility because no later asynchronous package boundary exists. Fetch-backed content and consumable response bodies are still read when their declared resource reaches the sequential loader; the package does not claim to snapshot remote content at admission.
+Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and package identity binds each child's normalized allocation and tensor semantics. A child with `manifest` uses whole-source acquisition; a child with `chunkPlan` uses that plan's manifest and nested chunk source map. Source-only `v0` package identities remain compatible, while chunk-backed children additionally bind loader kind and chunk-plan identity. The complete ordinary and nested source maps are copied and every source class is validated before GPU work starts. Multi-resource packages reject mutable `ArrayBuffer` and typed-array whole-resource sources at admission instead of cloning and retaining a second whole-model byte set; wrap direct bytes in immutable `Blob`s or use URL, `Request`, or `Response` sources. A later single mutable chunk is snapshotted at package admission, while multi-chunk plans retain their existing mutable-byte rejection. Fetch-backed content and consumable response bodies are still read when their declared child reaches the sequential loader; the package does not claim to snapshot remote content at admission.
 
-Each resource retains its own SHA-256, CacheStorage entry, acquisition report, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired and names the exact failed resource.
+Each child retains its own whole-source acquisition report or chunk-load report, CacheStorage identity, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired, names the exact failed package resource, and preserves the child authority report.
 
-This bounds source acquisition to one declared package resource at a time; each resource can still carry the current cache-miss copies described above. It does not split one enormous allocation or claim an exact browser-process memory peak. Converters should partition large weight sets into useful independently allocated resources until a later chunk-authenticated format can safely stream within one allocation.
+This bounds source acquisition to the largest ordinary child source or declared chunk while loading package children sequentially. It does not claim an exact browser-process memory peak or eliminate the cache-miss copies inside the currently active source unit.
 
 ### Stream Allocations As Authenticated Chunks
 
@@ -374,7 +378,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 - `describeWebGpuModelResourceSource(source)`: validate a browser-native model source without fetching or consuming it and return its immutable source-class description.
 - `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
 - `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
-- `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose several same-model manifests into one sequentially acquired large-model package, preserve per-resource verification/cache/report identity, and return one composite lease with bounded source-resource granularity.
+- `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose ordinary source-backed and chunk-plan-backed same-model children into one sequential package, preserve each child's verification/cache/report identity, and return one composite lease bounded by the largest ordinary source or chunk.
 - `defineWebGpuModelResourceChunkPlan(input)` and `route.loadModelResourceChunksFromSources(input)`: bind a semantic model manifest to exact per-allocation chunk coverage, verify/cache one source chunk at a time, upload verified bytes directly into ranged GPU buffer offsets, and publish each allocation through shared single-flight residency only after complete chunk verification.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
