@@ -13,6 +13,8 @@ const {
 const sha = value => createHash('sha256').update(value).digest('hex');
 const manifestBytes = new TextEncoder().encode('{"stage":"b"}');
 const manifestSha256 = sha(manifestBytes);
+const acceptanceBytes = new TextEncoder().encode('{"stage":"b","status":"accepted"}');
+const acceptanceSha256 = sha(acceptanceBytes);
 const locked = [
   'support',
   'candidate-membership',
@@ -70,10 +72,11 @@ const manifest = {
     },
     {
       id: 'matched-optical',
-      path: 'captures/optical.png',
+      path: 'captures/optical.mp4',
       bytes: 256,
       sha256: sha('optical'),
-      mediaType: 'image/png',
+      mediaType: 'video/mp4',
+      frameCount: 21,
       loadRoute: 'matched-optical-recurrence-v0',
     },
   ],
@@ -190,6 +193,77 @@ assert.equal(admitted.authority.backend, 'WebGPU:apple');
 assert.equal(admitted.authority.fallbackReason, null);
 assert.equal(admitted.authoredFork.outputPath, manifest.authoredFork.outputPath);
 
+const acceptanceReceipt = {
+  schema: 'kaminos.pyro-cockpit-manifest-acceptance.v0',
+  status: 'accepted',
+  manifestSha256,
+  manifestSourceCommit: manifest.source.commit,
+  acceptedBy: 'pyro-radiance-transfer-bailiff',
+  acceptanceHead: 'b'.repeat(40),
+  acceptanceReportSha256: sha('accepted-report'),
+  evidenceAuthority: 'producer-evidence-accepted',
+  visualQuality: 'operator-unseen',
+  operatorScope: 'operator-exploration-pending',
+  decisionBearing: false,
+  presentationAuthority: 'producer-capture-media-v0',
+  producerCaptureArtifactId: 'matched-optical',
+  sameStateCaptureId: 'filament-orbit-f96-s96',
+};
+const accepted = admitStageBCockpitManifest({
+  requestedTreatment: 'matched-optical-recurrence-v0',
+  requestedManifestUrl: manifestUrl,
+  requestedManifestSha256: manifestSha256,
+  effectiveManifestUrl: manifestUrl,
+  effectiveManifestSha256: manifestSha256,
+  manifest,
+  resourceLoadReceipts,
+  requestedAcceptanceUrl: 'http://127.0.0.1:18782/manifests/stage-b-acceptance.json',
+  requestedAcceptanceSha256: acceptanceSha256,
+  effectiveAcceptanceUrl: 'http://127.0.0.1:18782/manifests/stage-b-acceptance.json',
+  effectiveAcceptanceSha256: acceptanceSha256,
+  acceptanceReceipt,
+});
+assert.equal(accepted.status, 'effective');
+assert.equal(accepted.authority.evidenceAuthority, 'producer-evidence-accepted');
+assert.equal(accepted.authority.visualQuality, 'operator-unseen');
+assert.equal(accepted.authority.operatorScope, 'operator-exploration-pending');
+assert.equal(accepted.authority.decisionBearing, false);
+assert.equal(accepted.authority.acceptanceHead, acceptanceReceipt.acceptanceHead);
+assert.equal(accepted.authority.acceptanceReportSha256, acceptanceReceipt.acceptanceReportSha256);
+assert.equal(accepted.effectiveAcceptanceSha256, acceptanceSha256);
+assert.equal(accepted.presentationAuthority, 'producer-capture-media-v0');
+assert.equal(accepted.producerCapture.id, 'matched-optical');
+assert.equal(accepted.producerCapture.mediaType, 'video/mp4');
+assert.equal(accepted.passes.rendererRequested, false, 'accepted producer media must not request the unrelated local renderer');
+assert.equal(accepted.passes.producerMediaApplied, false, 'manifest admission must not pretend producer media is already presented');
+
+for (const [label, mutate, expected] of [
+  ['acceptance manifest hash substitution', receipt => { receipt.manifestSha256 = sha('wrong-manifest'); }, /acceptance-manifest-hash-substitution/],
+  ['acceptance source commit substitution', receipt => { receipt.manifestSourceCommit = 'c'.repeat(40); }, /acceptance-source-commit-substitution/],
+  ['acceptance state substitution', receipt => { receipt.sameStateCaptureId = 'filament-orbit-f120-s120'; }, /acceptance-state-identity-substitution/],
+  ['acceptance visual overclaim', receipt => { receipt.visualQuality = 'operator-approved'; }, /acceptance-visual-quality-overclaim/],
+  ['acceptance decision-bearing overclaim', receipt => { receipt.decisionBearing = true; }, /acceptance-decision-bearing-overclaim/],
+]) {
+  const receipt = structuredClone(acceptanceReceipt);
+  mutate(receipt);
+  const rejected = admitStageBCockpitManifest({
+    requestedTreatment: 'matched-optical-recurrence-v0',
+    requestedManifestUrl: manifestUrl,
+    requestedManifestSha256: manifestSha256,
+    effectiveManifestUrl: manifestUrl,
+    effectiveManifestSha256: manifestSha256,
+    manifest: structuredClone(manifest),
+    resourceLoadReceipts: structuredClone(resourceLoadReceipts),
+    requestedAcceptanceUrl: 'http://127.0.0.1:18782/manifests/stage-b-acceptance.json',
+    requestedAcceptanceSha256: acceptanceSha256,
+    effectiveAcceptanceUrl: 'http://127.0.0.1:18782/manifests/stage-b-acceptance.json',
+    effectiveAcceptanceSha256: acceptanceSha256,
+    acceptanceReceipt: receipt,
+  });
+  assert.notEqual(rejected.status, 'effective', label);
+  assert.match(rejected.failures.join(','), expected, label);
+}
+
 for (const [label, mutate, expected] of [
   ['manifest hash substitution', input => { input.effectiveManifestSha256 = sha('wrong'); }, /manifest-hash-substitution/],
   ['manifest route substitution', input => { input.effectiveManifestUrl += '?fallback=1'; }, /manifest-route-substitution/],
@@ -283,6 +357,14 @@ assert.match(index, /full_support_stage_b_manifest_sha256/, 'cockpit route must 
 assert.doesNotMatch(index, /Matched optical recurrence:\s*awaiting source manifest/i, 'stale manifest-dependency language must be removed');
 assert.match(session, /--stage-b-manifest/, 'session launcher must accept a caller-provided Stage B manifest');
 assert.match(session, /--stage-b-manifest-sha256/, 'session launcher must accept the exact requested manifest identity');
+assert.match(session, /--stage-b-acceptance-receipt/, 'session launcher must accept a distinct checksum-bound acceptance sidecar');
+assert.match(index, /full_support_stage_b_acceptance_sha256/, 'cockpit route must bind the acceptance sidecar hash separately from the manifest');
+assert.match(index, /producer-evidence-accepted/, 'cockpit must visibly distinguish accepted producer evidence from complete-unaccepted evidence');
+assert.match(index, /producer-capture-media-v0/, 'accepted producer media must use its exact capture instead of the local analytical renderer');
+assert.match(index, /volume-stage-b-producer-video/, 'accepted producer media needs an explicit Volume-viewer presentation surface');
+assert.match(index, /#volume-stage-b-producer-media\s*\{[^}]*z-index:\s*[4-9]/, 'accepted producer media must stack above the active volume canvas');
+assert.match(index, /producer-capture-media-play-failed/, 'producer media playback failure must remain a Stage B media failure');
+assert.match(index, /catch[^]*stageBProducerMedia\.hidden\s*=\s*true/, 'failed producer media must not leave a blank overlay exposed');
 assert.match(selectiveLive, /key\.startsWith\('full_support_'\)/, 'wrapper must preserve Stage B manifest custody parameters');
 assert.match(witness, /__kaminosStageBCockpitReceipt/, 'browser witness must capture the effective Stage B consumer receipt');
 assert.match(witness, /stage-b-resources-missing/, 'pre-resource witness must require the explicit missing-resource reason');
@@ -292,6 +374,15 @@ assert.match(witness, /stageBReceipt\.effectiveManifestSha256[^]*stageBManifestA
 assert.match(witness, /full_support_stage_b_manifest[^]*stageBReceipt\.requestedManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the requested manifest route');
 assert.match(witness, /stageBReceipt\.effectiveManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the effective manifest route');
 assert.match(witness, /rendererApplied[^]*false/, 'pre-evidence witness must reject an unreported renderer application');
+assert.match(witness, /producer-media-decoded-frame-admission/, 'accepted-media witness must use a distinct decoded-frame admission phase');
+assert.match(witness, /videoWidth[^]*videoHeight[^]*readyState/, 'accepted-media witness must reject an undecoded or dimensionless video');
+assert.match(witness, /10\s*\/\s*6[^]*currentTime/, 'accepted-media witness must advance past the producer frame-10 threshold before capture');
+assert.match(witness, /requestVideoFrameCallback/, 'accepted-media witness must advance by decoded frames when the smoke server cannot seek by byte range');
+assert.match(witness, /topmostElementId/, 'accepted-media witness must prove the producer layer is topmost in the viewer');
+assert.match(witness, /getImageData[^]*litPixelCount[^]*lumaVariance/, 'accepted-media witness must reject decoded black frames with pixel statistics');
+assert.match(witness, /occlusionProbeIds/, 'accepted-media witness must sample occlusion beyond a single center point');
+assert.match(witness, /producerMediaVisualState/, 'accepted-media decoded state must survive in the durable witness report');
+assert.match(witness, /sourceReceipts\.push[^]*producer-media-decoded-frame-admission[^]*Page\.captureScreenshot/, 'deterministic producer-media admission must run after source switches and immediately before capture');
 assert.match(index, /operator-exploration-only/, 'complete unaccepted Stage B pixels must carry visible operator-only authority');
 assert.match(index, /resourceLoadReceipts/, 'cockpit must verify every provisional resource load before enabling pixels');
 assert.match(core, /BOUNDARY_SPLAT_OPTICAL_MODE\s*=\s*['"]matched-optical-recurrence-v0['"]/, 'exact analytical Stage B renderer mode is missing');

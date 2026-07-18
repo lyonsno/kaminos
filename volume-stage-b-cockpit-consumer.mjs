@@ -1,11 +1,14 @@
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const MANIFEST_SCHEMA = 'kaminos.pyro-cockpit-manifest.v0';
+const ACCEPTANCE_SCHEMA = 'kaminos.pyro-cockpit-manifest-acceptance.v0';
 const TREATMENT_IDENTITY = 'matched-optical-recurrence-v0';
 const MISSING_REASON = 'stage-b-resources-missing';
 const INCOMPLETE_REASON = 'stage-b-resources-incomplete';
 const PROVISIONAL_AUTHORITY = 'producer-evidence-unverified';
 const PROVISIONAL_SCOPE = 'operator-exploration-only';
+const ACCEPTED_AUTHORITY = 'producer-evidence-accepted';
+const ACCEPTED_SCOPE = 'operator-exploration-pending';
 const PRESENTATION_BASELINE = '0859abf8d5b06359e4d2708f5b597c327b43c4af';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
 const RENDERER_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
@@ -40,6 +43,8 @@ export const STAGE_B_COCKPIT_CONSUMER = Object.freeze({
   disabledReason: MISSING_REASON,
   provisionalAuthority: PROVISIONAL_AUTHORITY,
   provisionalScope: PROVISIONAL_SCOPE,
+  acceptedAuthority: ACCEPTED_AUTHORITY,
+  acceptedScope: ACCEPTED_SCOPE,
   producerContractCommit: '2a229b80',
   accumulationIdentity: 'depth-binned-emission-optical-depth-v0',
   transportIdentity: 'depth-binned-exponential-self-transmittance-v0',
@@ -168,7 +173,49 @@ function emptyPassReceipt() {
     rendererRequested: false,
     rendererEncoded: false,
     rendererApplied: false,
+    producerMediaRequested: false,
+    producerMediaApplied: false,
   };
+}
+
+function validateAcceptance(input, manifest) {
+  const supplied = Boolean(
+    input.requestedAcceptanceUrl
+    || input.requestedAcceptanceSha256
+    || input.effectiveAcceptanceUrl
+    || input.effectiveAcceptanceSha256
+    || input.acceptanceReceipt
+  );
+  if (!supplied) return { supplied: false, failures: [] };
+
+  const failures = [];
+  check(failures, typeof input.requestedAcceptanceUrl === 'string' && input.requestedAcceptanceUrl.length > 0, 'requested-acceptance-url-missing');
+  check(failures, SHA256.test(input.requestedAcceptanceSha256 || ''), 'requested-acceptance-hash-invalid');
+  check(failures, input.effectiveAcceptanceUrl === input.requestedAcceptanceUrl, 'acceptance-route-substitution');
+  check(failures, input.effectiveAcceptanceSha256 === input.requestedAcceptanceSha256, 'acceptance-hash-substitution');
+  const receipt = input.acceptanceReceipt;
+  check(failures, isObject(receipt), 'acceptance-receipt-missing');
+  if (isObject(receipt)) {
+    check(failures, receipt.schema === ACCEPTANCE_SCHEMA, 'acceptance-schema-mismatch');
+    check(failures, receipt.status === 'accepted', 'acceptance-status-invalid');
+    check(failures, receipt.manifestSha256 === input.effectiveManifestSha256, 'acceptance-manifest-hash-substitution');
+    check(failures, receipt.manifestSourceCommit === manifest?.source?.commit, 'acceptance-source-commit-substitution');
+    check(failures, receipt.acceptedBy === 'pyro-radiance-transfer-bailiff', 'acceptance-custodian-substitution');
+    check(failures, GIT_COMMIT.test(receipt.acceptanceHead || ''), 'acceptance-head-invalid');
+    check(failures, SHA256.test(receipt.acceptanceReportSha256 || ''), 'acceptance-report-hash-invalid');
+    check(failures, receipt.evidenceAuthority === ACCEPTED_AUTHORITY, 'acceptance-authority-substitution');
+    check(failures, receipt.visualQuality === 'operator-unseen', 'acceptance-visual-quality-overclaim');
+    check(failures, receipt.operatorScope === ACCEPTED_SCOPE, 'acceptance-scope-substitution');
+    check(failures, receipt.decisionBearing === false, 'acceptance-decision-bearing-overclaim');
+    check(failures, receipt.presentationAuthority === 'producer-capture-media-v0', 'acceptance-presentation-authority-substitution');
+    check(failures, receipt.producerCaptureArtifactId === 'matched-optical', 'acceptance-producer-capture-substitution');
+    check(failures, receipt.sameStateCaptureId === 'filament-orbit-f96-s96', 'acceptance-state-not-restored-state96');
+    check(failures, receipt.sameStateCaptureId === manifest?.state?.sameStateCaptureId, 'acceptance-state-identity-substitution');
+    const producerCapture = manifest?.artifacts?.find(artifact => artifact?.id === receipt.producerCaptureArtifactId);
+    check(failures, producerCapture?.mediaType === 'video/mp4', 'acceptance-producer-capture-media-type-invalid');
+    check(failures, producerCapture?.frameCount === 21, 'acceptance-producer-capture-frame-count-invalid');
+  }
+  return { supplied: true, failures, receipt };
 }
 
 function baseReceipt(input) {
@@ -182,6 +229,13 @@ function baseReceipt(input) {
     effectiveManifestUrl: null,
     requestedManifestSha256: input.requestedManifestSha256 ?? null,
     effectiveManifestSha256: null,
+    acceptanceState: 'unaccepted',
+    presentationAuthority: 'live-analytical-renderer-v0',
+    producerCapture: null,
+    requestedAcceptanceUrl: input.requestedAcceptanceUrl ?? null,
+    effectiveAcceptanceUrl: null,
+    requestedAcceptanceSha256: input.requestedAcceptanceSha256 ?? null,
+    effectiveAcceptanceSha256: null,
     fallbackUsed: false,
     resourceState: 'missing',
     authority: null,
@@ -267,6 +321,12 @@ export function admitStageBCockpitManifest(input = {}) {
     return receipt;
   }
 
+  const acceptance = validateAcceptance(input, input.manifest);
+  if (acceptance.failures.length > 0) {
+    receipt.failures = [...new Set(acceptance.failures)];
+    return receipt;
+  }
+
   receipt.status = 'effective';
   receipt.resourceState = 'complete';
   receipt.effectiveTreatment = TREATMENT_IDENTITY;
@@ -285,15 +345,28 @@ export function admitStageBCockpitManifest(input = {}) {
     overflowCount: input.manifest.capacity.overflowCount,
     lockedAxes: [...input.manifest.controls.locked],
     mutableAxes: [...input.manifest.controls.mutable],
-    evidenceAuthority: PROVISIONAL_AUTHORITY,
-    operatorScope: PROVISIONAL_SCOPE,
+    evidenceAuthority: acceptance.supplied ? ACCEPTED_AUTHORITY : PROVISIONAL_AUTHORITY,
+    visualQuality: input.manifest.visualQuality,
+    operatorScope: acceptance.supplied ? ACCEPTED_SCOPE : PROVISIONAL_SCOPE,
     decisionBearing: false,
     acceptanceCustodian: 'pyro-radiance-transfer-bailiff',
+    acceptanceHead: acceptance.receipt?.acceptanceHead ?? null,
+    acceptanceReportSha256: acceptance.receipt?.acceptanceReportSha256 ?? null,
   };
   receipt.viewSockets = structuredClone(input.manifest.viewSockets);
   receipt.authoredFork = structuredClone(input.manifest.authoredFork);
   receipt.resources = resources;
   receipt.passes.applied = ['manifest-validation', 'resource-binding', 'resource-load-verification'];
+  if (acceptance.supplied) {
+    receipt.acceptanceState = 'accepted';
+    receipt.presentationAuthority = acceptance.receipt.presentationAuthority;
+    receipt.producerCapture = structuredClone(
+      receipt.resources.find(resource => resource.id === acceptance.receipt.producerCaptureArtifactId),
+    );
+    receipt.effectiveAcceptanceUrl = input.effectiveAcceptanceUrl;
+    receipt.effectiveAcceptanceSha256 = input.effectiveAcceptanceSha256;
+    receipt.passes.applied.push('acceptance-validation');
+  }
   return receipt;
 }
 

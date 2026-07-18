@@ -84,6 +84,7 @@ let browser = null;
 let socket = null;
 let failurePhase = 'route-receipt-validation';
 let lastTrustworthyEvidence = { schema: SCHEMA, routeReceiptPath };
+let producerMediaVisualState = null;
 mkdirSync(dirname(reportPath), { recursive: true });
 mkdirSync(dirname(screenshotPath), { recursive: true });
 
@@ -158,6 +159,7 @@ try {
   assert.equal(stageBReceipt.requestedTreatment, 'matched-optical-recurrence-v0', 'Stage B requested treatment was substituted');
   assert.equal(stageBReceipt.fallbackUsed, false, 'Stage B fallback looked authoritative');
   const stageBManifestArtifact = routeReceipt.artifacts?.stageBManifest;
+  const stageBAcceptanceArtifact = routeReceipt.artifacts?.stageBAcceptance;
   if (stageBManifestArtifact) {
     const routedStageBManifestPath = new URL(routeReceipt.effectiveRoute).searchParams.get('full_support_stage_b_manifest');
     assert.ok(routedStageBManifestPath, 'effective route omitted its Stage B manifest mount');
@@ -169,18 +171,47 @@ try {
     assert.equal(stageBReceipt.effectiveManifestUrl, routedStageBManifestUrl, 'effective Stage B manifest route drifted from the mounted resource');
     assert.equal(stageBReceipt.requestedManifestSha256, stageBManifestArtifact.sha256, 'requested Stage B manifest hash drifted from the route receipt');
     assert.equal(stageBReceipt.effectiveManifestSha256, stageBManifestArtifact.sha256, 'effective Stage B manifest hash drifted from the mounted artifact');
-    assert.deepEqual(stageBReceipt.passes?.applied, ['manifest-validation', 'resource-binding', 'resource-load-verification'], 'verified Stage B resource passes were not reported exactly');
+    assert.deepEqual(
+      stageBReceipt.passes?.applied,
+      stageBAcceptanceArtifact
+        ? ['manifest-validation', 'resource-binding', 'resource-load-verification', 'acceptance-validation']
+        : ['manifest-validation', 'resource-binding', 'resource-load-verification'],
+      'verified Stage B resource and acceptance passes were not reported exactly',
+    );
     assert.ok(stageBReceipt.resources?.length >= 2, 'verified Stage B manifest did not bind the required resources');
     assert.ok(stageBReceipt.resources.every(resource => resource.loadStatus === 'loaded' && resource.loadFallbackUsed === false), 'Stage B resource loading was incomplete or used fallback');
-    assert.equal(stageBReceipt.authority?.evidenceAuthority, 'producer-evidence-unverified', 'provisional Stage B authority was inflated');
-    assert.equal(stageBReceipt.authority?.operatorScope, 'operator-exploration-only', 'provisional Stage B scope was hidden');
-    assert.equal(stageBReceipt.authority?.decisionBearing, false, 'provisional Stage B became decision-bearing');
-    assert.equal(stageBReceipt.passes?.rendererRequested, true, 'Stage B renderer request was not reported');
-    assert.equal(stageBReceipt.passes?.rendererEncoded, true, 'Stage B renderer did not encode after complete resource admission');
-    assert.equal(stageBReceipt.passes?.rendererApplied, true, 'Stage B renderer did not apply after complete resource admission');
-    assert.equal(stageBReceipt.rendererReceipt?.requestedMode, 'matched-optical-recurrence-v0', 'Stage B renderer request identity drifted');
-    assert.equal(stageBReceipt.rendererReceipt?.effectiveMode, 'matched-optical-recurrence-v0', 'Stage B renderer silently substituted the optical path');
-    assert.equal(stageBReceipt.rendererReceipt?.fallbackReason, null, 'Stage B renderer fallback looked authoritative');
+    if (stageBAcceptanceArtifact) {
+      const routedAcceptancePath = new URL(routeReceipt.effectiveRoute).searchParams.get('full_support_stage_b_acceptance');
+      assert.ok(routedAcceptancePath, 'effective route omitted its Stage B acceptance mount');
+      const routedAcceptanceUrl = new URL(routedAcceptancePath, routeReceipt.effectiveRoute).href;
+      assert.equal(stageBReceipt.acceptanceState, 'accepted', 'accepted Stage B sidecar was silently downgraded');
+      assert.equal(stageBReceipt.effectiveAcceptanceUrl, routedAcceptanceUrl, 'effective Stage B acceptance route drifted');
+      assert.equal(stageBReceipt.effectiveAcceptanceSha256, stageBAcceptanceArtifact.sha256, 'effective Stage B acceptance hash drifted');
+      assert.equal(stageBReceipt.authority?.evidenceAuthority, 'producer-evidence-accepted', 'accepted producer authority was hidden');
+      assert.equal(stageBReceipt.authority?.visualQuality, 'operator-unseen', 'accepted producer visual quality was inflated');
+      assert.equal(stageBReceipt.authority?.operatorScope, 'operator-exploration-pending', 'accepted operator exploration state was hidden');
+    } else {
+      assert.equal(stageBReceipt.authority?.evidenceAuthority, 'producer-evidence-unverified', 'provisional Stage B authority was inflated');
+      assert.equal(stageBReceipt.authority?.operatorScope, 'operator-exploration-only', 'provisional Stage B scope was hidden');
+    }
+    assert.equal(stageBReceipt.authority?.decisionBearing, false, 'Stage B became decision-bearing');
+    if (stageBAcceptanceArtifact) {
+      assert.equal(stageBReceipt.presentationAuthority, 'producer-capture-media-v0', 'accepted producer presentation authority was substituted');
+      assert.equal(stageBReceipt.passes?.rendererRequested, false, 'accepted producer media incorrectly requested the local renderer');
+      assert.equal(stageBReceipt.passes?.rendererEncoded, false, 'accepted producer media incorrectly encoded the local renderer');
+      assert.equal(stageBReceipt.passes?.rendererApplied, false, 'accepted producer media incorrectly applied the local renderer');
+      assert.equal(stageBReceipt.passes?.producerMediaRequested, true, 'accepted producer media request was not reported');
+      assert.equal(stageBReceipt.passes?.producerMediaApplied, true, 'accepted producer media was not presented');
+      assert.equal(stageBReceipt.producerMediaReceipt?.identity, 'producer-capture-media-v0', 'accepted producer media receipt was substituted');
+      assert.equal(stageBReceipt.producerMediaReceipt?.fallbackReason, null, 'accepted producer media fallback looked authoritative');
+    } else {
+      assert.equal(stageBReceipt.passes?.rendererRequested, true, 'Stage B renderer request was not reported');
+      assert.equal(stageBReceipt.passes?.rendererEncoded, true, 'Stage B renderer did not encode after complete resource admission');
+      assert.equal(stageBReceipt.passes?.rendererApplied, true, 'Stage B renderer did not apply after complete resource admission');
+      assert.equal(stageBReceipt.rendererReceipt?.requestedMode, 'matched-optical-recurrence-v0', 'Stage B renderer request identity drifted');
+      assert.equal(stageBReceipt.rendererReceipt?.effectiveMode, 'matched-optical-recurrence-v0', 'Stage B renderer silently substituted the optical path');
+      assert.equal(stageBReceipt.rendererReceipt?.fallbackReason, null, 'Stage B renderer fallback looked authoritative');
+    }
   } else {
     assert.equal(stageBReceipt.status, 'disabled', 'Stage B rendered without complete resources');
     assert.equal(stageBReceipt.disabledReason, 'stage-b-resources-missing', 'Stage B missing-resource reason was substituted');
@@ -225,6 +256,12 @@ try {
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, sourceReceipts: [...sourceReceipts] };
   }
 
+  if (stageBAcceptanceArtifact) {
+    failurePhase = 'producer-media-decoded-frame-admission';
+    producerMediaVisualState = await admitProducerMediaFrame(socket, timeoutMs, stageBReceipt.producerMediaReceipt.effectiveUrl);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, producerMediaVisualState };
+  }
+
   failurePhase = 'operator-frame-capture';
   const screenshot = await socket.call('Page.captureScreenshot', {
     format: 'png',
@@ -244,6 +281,7 @@ try {
     effectiveRoute: expectedUrl,
     bootstrap,
     stageBReceipt,
+    producerMediaVisualState,
     sourceReceipts,
     screenshotPath,
     elapsedMs: performance.now() - witnessStartedAt,
@@ -326,6 +364,10 @@ function assertRouteContract(expectedHref, admittedHref) {
     'full_support_exact_manifest',
     'full_support_baseline_manifest',
     'full_support_flow_manifest',
+    'full_support_stage_b_manifest',
+    'full_support_stage_b_manifest_sha256',
+    'full_support_stage_b_acceptance',
+    'full_support_stage_b_acceptance_sha256',
   ];
   for (const parameter of criticalRouteParameters) {
     assert.equal(
@@ -379,6 +421,129 @@ async function evaluate(cdp, expression) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'browser evaluation failed');
   }
   return result.result?.value;
+}
+
+async function admitProducerMediaFrame(cdp, timeout, expectedUrl) {
+  const requestedProducerFrameTime = 10 / 6;
+  const visualState = await evaluate(cdp, `(async () => {
+    const runtime = document.querySelector('#basin')?.contentWindow || window;
+    const video = runtime.document.getElementById('volume-stage-b-producer-video');
+    const media = runtime.document.getElementById('volume-stage-b-producer-media');
+    if (!video || !media || media.hidden) throw new Error('accepted-producer-media-surface-unavailable');
+    video.pause();
+    video.src = ${JSON.stringify(expectedUrl)};
+    await new Promise((resolveLoaded, rejectLoaded) => {
+      const timer = setTimeout(() => rejectLoaded(new Error('accepted-producer-media-load-timeout')), 15_000);
+      const cleanup = () => {
+        clearTimeout(timer);
+        video.removeEventListener('loadeddata', onLoaded);
+        video.removeEventListener('error', onError);
+      };
+      const onLoaded = () => { cleanup(); resolveLoaded(); };
+      const onError = () => { cleanup(); rejectLoaded(new Error('accepted-producer-media-load-failed')); };
+      video.addEventListener('loadeddata', onLoaded, { once: true });
+      video.addEventListener('error', onError, { once: true });
+      video.load();
+    });
+    const presentedFrame = await new Promise((resolveFrame, rejectFrame) => {
+      const timer = setTimeout(() => rejectFrame(new Error('accepted-producer-frame-timeout')), 15_000);
+      const onFrame = (_now, metadata) => {
+        if (metadata.mediaTime + (1 / 12) < ${requestedProducerFrameTime}) {
+          video.requestVideoFrameCallback(onFrame);
+          return;
+        }
+        clearTimeout(timer);
+        video.pause();
+        resolveFrame({ mediaTime: metadata.mediaTime, presentedFrames: metadata.presentedFrames });
+      };
+      video.requestVideoFrameCallback(onFrame);
+      video.play().catch(error => {
+        clearTimeout(timer);
+        rejectFrame(error);
+      });
+    });
+    const pixelCanvas = runtime.document.createElement('canvas');
+    pixelCanvas.width = video.videoWidth;
+    pixelCanvas.height = video.videoHeight;
+    const pixelContext = pixelCanvas.getContext('2d', { willReadFrequently: true });
+    pixelContext.drawImage(video, 0, 0, pixelCanvas.width, pixelCanvas.height);
+    const pixelBytes = pixelContext.getImageData(0, 0, pixelCanvas.width, pixelCanvas.height).data;
+    let litPixelCount = 0;
+    let lumaSum = 0;
+    let lumaSquaredSum = 0;
+    let minimumLuma = 255;
+    let maximumLuma = 0;
+    for (let index = 0; index < pixelBytes.length; index += 4) {
+      const luma = (pixelBytes[index] * 0.2126) + (pixelBytes[index + 1] * 0.7152) + (pixelBytes[index + 2] * 0.0722);
+      if (luma > 3) litPixelCount += 1;
+      lumaSum += luma;
+      lumaSquaredSum += luma * luma;
+      minimumLuma = Math.min(minimumLuma, luma);
+      maximumLuma = Math.max(maximumLuma, luma);
+    }
+    const pixelCount = pixelBytes.length / 4;
+    const meanLuma = lumaSum / pixelCount;
+    const lumaVariance = Math.max(0, (lumaSquaredSum / pixelCount) - (meanLuma * meanLuma));
+    const mediaRect = media.getBoundingClientRect();
+    const mediaStyle = runtime.getComputedStyle(media);
+    const occlusionProbeIds = [
+      [0.1, 0.1], [0.5, 0.1], [0.5, 0.5], [0.1, 0.9], [0.9, 0.9],
+    ].map(([x, y]) => runtime.document.elementFromPoint(
+      mediaRect.left + (mediaRect.width * x),
+      mediaRect.top + (mediaRect.height * y),
+    )?.id || null);
+    return {
+      readyState: video.readyState,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      duration: video.duration,
+      currentTime: video.currentTime,
+      mediaTime: presentedFrame.mediaTime,
+      presentedFrames: presentedFrame.presentedFrames,
+      minimumFrameTime: ${requestedProducerFrameTime},
+      paused: video.paused,
+      currentSrc: video.currentSrc,
+      hidden: media.hidden,
+      mediaRect: {
+        left: mediaRect.left,
+        top: mediaRect.top,
+        width: mediaRect.width,
+        height: mediaRect.height,
+      },
+      mediaDisplay: mediaStyle.display,
+      mediaVisibility: mediaStyle.visibility,
+      mediaOpacity: mediaStyle.opacity,
+      mediaZIndex: mediaStyle.zIndex,
+      topmostElementId: occlusionProbeIds[2],
+      occlusionProbeIds,
+      videoPixelStats: {
+        pixelCount,
+        litPixelCount,
+        minimumLuma,
+        maximumLuma,
+        meanLuma,
+        lumaVariance,
+      },
+    };
+  })()`);
+  assert.ok(visualState.readyState >= 2, 'accepted producer frame was not decoded');
+  assert.ok(visualState.videoWidth > 0 && visualState.videoHeight > 0, 'accepted producer frame had no decoded dimensions');
+  assert.ok(visualState.mediaTime + (1 / 12) >= requestedProducerFrameTime, 'accepted producer media did not reach the frame-10 minimum time');
+  assert.equal(visualState.paused, true, 'accepted producer witness did not hold the deterministic frame');
+  assert.equal(visualState.hidden, false, 'accepted producer media was hidden before capture');
+  assert.ok(visualState.mediaRect.width > 0 && visualState.mediaRect.height > 0, 'accepted producer media had no visible viewer geometry');
+  assert.notEqual(visualState.mediaDisplay, 'none', 'accepted producer media was display-suppressed');
+  assert.equal(visualState.mediaVisibility, 'visible', 'accepted producer media was visibility-suppressed');
+  assert.ok(Number(visualState.mediaOpacity) > 0, 'accepted producer media was transparent');
+  assert.ok(
+    visualState.occlusionProbeIds.every(id => ['volume-stage-b-producer-video', 'volume-stage-b-producer-label'].includes(id)),
+    `accepted producer media was occluded in the viewer: ${visualState.occlusionProbeIds.join(',')}`,
+  );
+  assert.ok(visualState.videoPixelStats.litPixelCount > 100, 'accepted producer frame was black');
+  assert.ok(visualState.videoPixelStats.maximumLuma > 10, 'accepted producer frame had no visible dynamic range');
+  assert.ok(visualState.videoPixelStats.lumaVariance > 1, 'accepted producer frame had no visible variance');
+  assert.equal(visualState.currentSrc, expectedUrl, 'deterministic producer frame URL was substituted');
+  return visualState;
 }
 
 function delay(ms) {

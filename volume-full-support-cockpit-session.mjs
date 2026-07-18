@@ -16,6 +16,11 @@ const stageBManifestArgument = args.get('--stage-b-manifest');
 const stageBManifestSha256 = args.get('--stage-b-manifest-sha256');
 assert.equal(Boolean(stageBManifestArgument), Boolean(stageBManifestSha256), '--stage-b-manifest and --stage-b-manifest-sha256 must be provided together');
 const stageBManifestPath = stageBManifestArgument ? requiredPath('--stage-b-manifest') : null;
+const stageBAcceptanceArgument = args.get('--stage-b-acceptance-receipt');
+const stageBAcceptanceSha256 = args.get('--stage-b-acceptance-sha256');
+assert.equal(Boolean(stageBAcceptanceArgument), Boolean(stageBAcceptanceSha256), '--stage-b-acceptance-receipt and --stage-b-acceptance-sha256 must be provided together');
+assert.ok(!stageBAcceptanceArgument || stageBManifestPath, 'Stage B acceptance requires an explicit Stage B manifest');
+const stageBAcceptancePath = stageBAcceptanceArgument ? requiredPath('--stage-b-acceptance-receipt') : null;
 const port = normalizePort(args.get('--port') || 18782);
 const requestedSource = String(args.get('--source') || 'analytical-exact');
 assert.ok(['analytical-exact', 'learned-baseline', 'learned-flow'].includes(requestedSource), `unsupported --source: ${requestedSource}`);
@@ -37,6 +42,7 @@ const mounts = {
   flow: dirname(flowOverlayManifestPath),
 };
 if (stageBManifestPath) mounts.stageB = dirname(stageBManifestPath);
+if (stageBAcceptancePath) mounts.stageBAcceptance = dirname(stageBAcceptancePath);
 for (const [name, target] of Object.entries(mounts)) ensureMount(join(mountRoot, name), target);
 
 const origin = `http://127.0.0.1:${port}`;
@@ -57,6 +63,12 @@ if (stageBManifestPath) {
   route.searchParams.set('full_support_stage_b_manifest', `/scratch/${mountSlug}/stageB/${basename(stageBManifestPath)}`);
   route.searchParams.set('full_support_stage_b_manifest_sha256', String(stageBManifestSha256));
 }
+if (stageBAcceptancePath) {
+  const acceptanceArtifact = artifact(stageBAcceptancePath);
+  assert.equal(acceptanceArtifact.sha256, stageBAcceptanceSha256, 'Stage B acceptance hash does not match --stage-b-acceptance-sha256');
+  route.searchParams.set('full_support_stage_b_acceptance', `/scratch/${mountSlug}/stageBAcceptance/${basename(stageBAcceptancePath)}`);
+  route.searchParams.set('full_support_stage_b_acceptance_sha256', String(stageBAcceptanceSha256));
+}
 
 const routeReceipt = {
   schema: 'kaminos.pyro.full-support-cockpit-session.v0',
@@ -74,6 +86,7 @@ const routeReceipt = {
     baselineOverlayManifest: artifact(baselineOverlayManifestPath),
     flowOverlayManifest: artifact(flowOverlayManifestPath),
     stageBManifest: stageBManifestPath ? artifact(stageBManifestPath) : null,
+    stageBAcceptance: stageBAcceptancePath ? artifact(stageBAcceptancePath) : null,
   },
 };
 const receiptPath = join(mountRoot, 'route-receipt.json');

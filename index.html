@@ -70,6 +70,10 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 /* Viewport */
 #viewport { flex: 1; min-width: 0; position: relative; overflow: hidden; isolation: isolate; background: #111; }
 canvas { display: block; }
+#volume-stage-b-producer-media { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #000; }
+#volume-stage-b-producer-media[hidden] { display: none; }
+#volume-stage-b-producer-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+#volume-stage-b-producer-label { position: absolute; left: 14px; bottom: 14px; max-width: min(620px, calc(100% - 28px)); padding: 7px 9px; border: 1px solid rgba(104,126,132,0.72); border-radius: 4px; background: rgba(8,11,12,0.82); color: #d3e0e3; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; }
 #volume-authored-mix-panel { position: relative; flex: 0 0 min(388px, 30vw); width: min(388px, 30vw); min-width: 320px; height: 100vh; display: flex; background: rgba(13,15,16,0.96); border-left: 1px solid #2c3437; overflow: hidden; }
 #volume-authored-mix-panel[hidden] { display: none; }
 #volume-authored-mix-panel[data-collapsed="true"] { flex-basis: 34px; width: 34px; min-width: 34px; }
@@ -2433,6 +2437,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 </div>
 
 <div id="viewport">
+  <div id="volume-stage-b-producer-media" hidden>
+    <video id="volume-stage-b-producer-video" muted loop playsinline preload="auto"></video>
+    <div id="volume-stage-b-producer-label"></div>
+  </div>
   <div id="env-loading">Loading environment...</div>
   <div id="pipeline-main-browser" hidden>
     <div class="pipeline-browser-shell">
@@ -17989,6 +17997,9 @@ async function initKaminosVolumeRoute() {
   const stageBStatus = document.getElementById('volume-stage-b-status');
   const stageBView = document.getElementById('volume-stage-b-view');
   const stageBApply = document.getElementById('volume-full-support-stage-b');
+  const stageBProducerMedia = document.getElementById('volume-stage-b-producer-media');
+  const stageBProducerVideo = document.getElementById('volume-stage-b-producer-video');
+  const stageBProducerLabel = document.getElementById('volume-stage-b-producer-label');
   const stageBViewLabels = {
     target: 'Raymarch target',
     treatment: 'Matched optical treatment',
@@ -18003,9 +18014,11 @@ async function initKaminosVolumeRoute() {
     if (!stageBStatus) return;
     stageBStatus.dataset.status = receipt?.status || 'failed';
     const failures = receipt?.failures?.length ? ` | ${receipt.failures.join(', ')}` : '';
-    const applied = receipt?.passes?.rendererApplied === true ? 'applied' : 'not applied';
+    const applied = receipt?.passes?.producerMediaApplied === true
+      ? 'producer capture applied'
+      : `renderer ${receipt?.passes?.rendererApplied === true ? 'applied' : 'not applied'}`;
     stageBStatus.textContent = receipt?.status === 'effective'
-      ? `${receipt.requestedTreatment} -> ${receipt.effectiveTreatment} | ${receipt.authority?.evidenceAuthority || 'producer-evidence-unverified'} | ${receipt.authority?.operatorScope || 'operator-exploration-only'} | decision-bearing ${receipt.authority?.decisionBearing === true ? 'yes' : 'no'} | manifest ${receipt.effectiveManifestSha256} | ${receipt.resources.length} resources loaded | renderer ${applied}`
+      ? `${receipt.requestedTreatment} -> ${receipt.effectiveTreatment} | ${receipt.authority?.evidenceAuthority || 'producer-evidence-unverified'} | ${receipt.authority?.visualQuality || 'operator-unseen'} | ${receipt.authority?.operatorScope || 'operator-exploration-only'} | decision-bearing ${receipt.authority?.decisionBearing === true ? 'yes' : 'no'} | manifest ${receipt.effectiveManifestSha256} | ${receipt.resources.length} resources loaded | ${applied}`
       : `${receipt?.disabledReason || receipt?.status || 'failed'} | requested ${receipt?.requestedTreatment || 'none'} | effective ${receipt?.effectiveTreatment || 'none'} | renderer not encoded/applied${failures}`;
   };
   const configureStageBView = receipt => {
@@ -18024,11 +18037,14 @@ async function initKaminosVolumeRoute() {
     }
     stageBView.value = 'treatment';
     stageBView.disabled = false;
-    const rendererAvailable = typeof volumePrototype.setBoundarySplatPresentationMode === 'function';
-    stageBApply.disabled = !rendererAvailable;
-    stageBApply.title = rendererAvailable
-      ? 'Apply provisional matched optical recurrence for operator exploration'
-      : 'Manifest validated; renderer treatment adapter is not installed on this source head';
+    const treatmentAvailable = receipt.presentationAuthority === 'producer-capture-media-v0'
+      || typeof volumePrototype.setBoundarySplatPresentationMode === 'function';
+    stageBApply.disabled = !treatmentAvailable;
+    stageBApply.title = treatmentAvailable
+      ? (receipt.authority?.evidenceAuthority === 'producer-evidence-accepted'
+        ? 'Apply accepted producer treatment for operator exploration; visual quality remains operator-unseen'
+        : 'Apply provisional matched optical recurrence for operator exploration')
+      : 'Manifest validated; no producer-media or renderer treatment adapter is installed on this source head';
   };
   const loadStageBResources = async (manifest, manifestUrl) => Promise.all((manifest?.artifacts || []).map(async artifact => {
     const requestedUrl = new URL(artifact.path, manifestUrl).href;
@@ -18063,7 +18079,7 @@ async function initKaminosVolumeRoute() {
     }
   }));
   const applyStageBTreatment = async receipt => {
-    if (receipt?.status !== 'effective' || typeof volumePrototype.setBoundarySplatPresentationMode !== 'function') return receipt;
+    if (receipt?.status !== 'effective') return receipt;
     const requestedView = stageBView?.value || 'treatment';
     const requestedIdentity = receipt.viewSockets?.[requestedView];
     if (requestedView !== 'treatment') {
@@ -18077,6 +18093,75 @@ async function initKaminosVolumeRoute() {
       renderStageBReceipt(failure);
       return failure;
     }
+    if (receipt.presentationAuthority === 'producer-capture-media-v0') {
+      const capture = receipt.producerCapture;
+      if (!capture?.effectiveUrl || capture.mediaType !== 'video/mp4') {
+        const failure = {
+          ...receipt,
+          status: 'failed',
+          effectiveTreatment: null,
+          failures: ['producer-capture-media-missing'],
+          passes: { ...receipt.passes, producerMediaRequested: true, producerMediaApplied: false },
+        };
+        renderStageBReceipt(failure);
+        return failure;
+      }
+      stageBProducerVideo.pause();
+      stageBProducerVideo.src = capture.effectiveUrl;
+      stageBProducerVideo.currentTime = 0;
+      stageBProducerLabel.textContent = `Accepted producer orbit | ${receipt.authority?.visualQuality || 'operator-unseen'} | ${receipt.authority?.operatorScope || 'operator-exploration-pending'} | ${receipt.authority?.candidateCount || 0} splats | ${receipt.authority?.sourceCommit || 'unknown source'} | local analytical renderer not applied`;
+      stageBProducerMedia.hidden = false;
+      try {
+        await stageBProducerVideo.play();
+      } catch (error) {
+        stageBProducerVideo.pause();
+        stageBProducerMedia.hidden = true;
+        const failure = {
+          ...receipt,
+          status: 'failed',
+          effectiveTreatment: null,
+          failures: [`producer-capture-media-play-failed:${error?.message || String(error)}`],
+          passes: {
+            ...receipt.passes,
+            rendererRequested: false,
+            rendererEncoded: false,
+            rendererApplied: false,
+            producerMediaRequested: true,
+            producerMediaApplied: false,
+          },
+        };
+        renderStageBReceipt(failure);
+        return failure;
+      }
+      const applied = {
+        ...receipt,
+        status: 'effective',
+        effectiveTreatment: receipt.requestedTreatment,
+        fallbackUsed: false,
+        failures: [],
+        passes: {
+          ...receipt.passes,
+          rendererRequested: false,
+          rendererEncoded: false,
+          rendererApplied: false,
+          producerMediaRequested: true,
+          producerMediaApplied: true,
+        },
+        producerMediaReceipt: {
+          identity: 'producer-capture-media-v0',
+          requestedUrl: capture.requestedUrl,
+          effectiveUrl: capture.effectiveUrl,
+          sha256: capture.sha256,
+          mediaType: capture.mediaType,
+          fallbackReason: null,
+        },
+      };
+      renderStageBReceipt(applied);
+      return applied;
+    }
+    stageBProducerVideo?.pause();
+    if (stageBProducerMedia) stageBProducerMedia.hidden = true;
+    if (typeof volumePrototype.setBoundarySplatPresentationMode !== 'function') return receipt;
     volumePrototype.setBoundarySplatPresentationMode(receipt.requestedTreatment);
     const sample = await volumePrototype.sampleFrame({ advanceSim: false, includeRgba: false });
     const presentation = sample?.boundarySplatPresentationReceipt || volumePrototype.debugState().boundarySplatPresentationReceipt;
@@ -18110,6 +18195,8 @@ async function initKaminosVolumeRoute() {
   const bootstrapStageBConsumer = async () => {
     const requestedManifestUrl = params.get('full_support_stage_b_manifest');
     const requestedManifestSha256 = params.get('full_support_stage_b_manifest_sha256');
+    const requestedAcceptanceUrl = params.get('full_support_stage_b_acceptance');
+    const requestedAcceptanceSha256 = params.get('full_support_stage_b_acceptance_sha256');
     if (!requestedManifestUrl && !requestedManifestSha256) {
       const receipt = admitStageBCockpitManifest({
         requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
@@ -18134,6 +18221,20 @@ async function initKaminosVolumeRoute() {
       renderStageBReceipt(failure);
       return failure;
     }
+    if (Boolean(requestedAcceptanceUrl) !== Boolean(requestedAcceptanceSha256)) {
+      const failure = {
+        status: 'failed',
+        requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+        effectiveTreatment: null,
+        fallbackUsed: false,
+        resources: [],
+        passes: { applied: [], rendererEncoded: false, rendererApplied: false },
+        failures: ['stage-b-acceptance-route-hash-pair-incomplete'],
+      };
+      configureStageBView(failure);
+      renderStageBReceipt(failure);
+      return failure;
+    }
     const effectiveManifestUrl = new URL(requestedManifestUrl, window.location.href).href;
     const response = await fetch(effectiveManifestUrl, { cache: 'no-store' });
     if (!response.ok) throw new Error(`stage-b-manifest-fetch-failed:${response.status}`);
@@ -18141,6 +18242,17 @@ async function initKaminosVolumeRoute() {
     const effectiveManifestSha256 = await fullSupportSha256(bytes);
     const manifest = JSON.parse(new TextDecoder().decode(bytes));
     const resourceLoadReceipts = await loadStageBResources(manifest, effectiveManifestUrl);
+    let effectiveAcceptanceUrl = null;
+    let effectiveAcceptanceSha256 = null;
+    let acceptanceReceipt = null;
+    if (requestedAcceptanceUrl) {
+      effectiveAcceptanceUrl = new URL(requestedAcceptanceUrl, window.location.href).href;
+      const acceptanceResponse = await fetch(effectiveAcceptanceUrl, { cache: 'no-store' });
+      if (!acceptanceResponse.ok) throw new Error(`stage-b-acceptance-fetch-failed:${acceptanceResponse.status}`);
+      const acceptanceBytes = await acceptanceResponse.arrayBuffer();
+      effectiveAcceptanceSha256 = await fullSupportSha256(acceptanceBytes);
+      acceptanceReceipt = JSON.parse(new TextDecoder().decode(acceptanceBytes));
+    }
     const receipt = admitStageBCockpitManifest({
       requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
       requestedManifestUrl: effectiveManifestUrl,
@@ -18149,6 +18261,11 @@ async function initKaminosVolumeRoute() {
       effectiveManifestSha256,
       manifest,
       resourceLoadReceipts,
+      requestedAcceptanceUrl: requestedAcceptanceUrl ? effectiveAcceptanceUrl : null,
+      requestedAcceptanceSha256,
+      effectiveAcceptanceUrl,
+      effectiveAcceptanceSha256,
+      acceptanceReceipt,
     });
     configureStageBView(receipt);
     if (receipt.status === 'effective') return applyStageBTreatment(receipt);
