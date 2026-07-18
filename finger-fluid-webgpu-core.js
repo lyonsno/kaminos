@@ -684,7 +684,6 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
   let boundarySupport = analytic_boundary_density_support(position);
   density = density + boundarySupport.w;
   gradientSelf = gradientSelf + boundarySupport.xyz;
-  gradientSquared = gradientSquared + dot(boundarySupport.xyz, boundarySupport.xyz);
 
   let constraint = density / params.fluid.y - 1.0;
   let lambda = -constraint / (gradientSquared + dot(gradientSelf, gradientSelf) + params.fluid.z);
@@ -1694,6 +1693,16 @@ function boundaryKernelAntiderivative(value) {
   return value - (4 / 3) * x3 + (6 / 5) * x5 - (4 / 7) * x7 + x9 / 9;
 }
 
+export function evaluateStaticBoundaryLambdaDenominator(constraintGradient, regularization = 0.012) {
+  if (!Array.isArray(constraintGradient) || constraintGradient.length !== 3 || !constraintGradient.every(Number.isFinite)) {
+    throw new TypeError(`Static boundary lambda denominator received an invalid constraint gradient: ${JSON.stringify(constraintGradient)}`);
+  }
+  if (!Number.isFinite(regularization) || regularization < 0) {
+    throw new RangeError(`Static boundary lambda denominator requires finite non-negative regularization: ${regularization}`);
+  }
+  return constraintGradient.reduce((sum, component) => sum + component * component, regularization);
+}
+
 export function evaluateAnalyticBoundaryKernelSupport(boundaries, {
   kernelRadius = 0.185,
   restDensity = 24.3,
@@ -1713,12 +1722,16 @@ export function evaluateAnalyticBoundaryKernelSupport(boundaries, {
     if (!Number.isFinite(distance) || !Array.isArray(normal) || normal.length !== 3 || !normal.every(Number.isFinite)) {
       throw new TypeError(`Boundary kernel support received an invalid boundary: ${JSON.stringify(boundary)}`);
     }
+    const normalLength = Math.hypot(...normal);
+    if (normalLength <= 1e-8) {
+      throw new TypeError(`Boundary kernel support received an invalid boundary normal: ${JSON.stringify(normal)}`);
+    }
     const normalizedDistance = clamp(distance / radius, 0, 1);
     const boundaryFraction = (fullHalfIntegral - boundaryKernelAntiderivative(normalizedDistance)) / (2 * fullHalfIntegral);
     const derivative = distance < radius
       ? -((1 - normalizedDistance ** 2) ** 4) / (2 * fullHalfIntegral * radius)
       : 0;
-    const boundaryGradient = normalize3(normal).map(component => component * derivative);
+    const boundaryGradient = normal.map(component => component * derivative / normalLength);
     fractionGradient = fractionGradient.map((component, axis) => (
       component * (1 - boundaryFraction) + boundaryGradient[axis] * (1 - missingFraction)
     ));
