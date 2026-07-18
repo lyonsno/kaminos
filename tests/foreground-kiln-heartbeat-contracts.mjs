@@ -334,7 +334,7 @@ function episodeHarness({
   });
   return {
     episode,
-    advance({ gapMs = 16, frameDelta = 1, simDelta = 1, nextVolume = null } = {}) {
+    advance({ gapMs = 16, frameDelta = 1, simDelta = 1, nextVolume = null, frameTimestampMs = null } = {}) {
       nowMs += gapMs;
       volume = nextVolume || {
         ...volume,
@@ -343,7 +343,7 @@ function episodeHarness({
       };
       const callback = scheduled;
       scheduled = null;
-      callback?.(nowMs);
+      callback?.(Number.isFinite(frameTimestampMs) ? frameTimestampMs : nowMs);
     },
     setVolume(nextVolume) {
       volume = { ...volume, ...nextVolume };
@@ -917,6 +917,36 @@ assert.equal(liveReport.simStepCountDelta > 0, true);
 assert.deepEqual(liveReport.requestedFireBudget, budget);
 assert.deepEqual(liveReport.effectiveFireBudget, budget);
 assert.equal(liveReport.sharpHeartbeat.schema, 'sharp-webgpu.background-heartbeat.v0');
+
+const preEpisodeFrame = episodeHarness();
+preEpisodeFrame.episode.start();
+preEpisodeFrame.advance({ gapMs: 16, frameTimestampMs: 99 });
+preEpisodeFrame.advance({ gapMs: 16 });
+const preEpisodeFrameReport = preEpisodeFrame.episode.finish({ phase: 'complete' });
+assert.equal(
+  preEpisodeFrameReport.preEpisodeFrameCallbackCount,
+  1,
+  'a callback timestamped before the episode must be discarded and reported',
+);
+assert.equal(preEpisodeFrameReport.samples.every((sample, index, samples) => (
+  index === 0 || sample.timestampMs >= samples[index - 1].timestampMs
+)), true, 'discarding the already-started frame must preserve sample ordering');
+
+const laterOutOfOrderFrame = episodeHarness({
+  firingId: 'firing-later-out-of-order',
+  requireSharpDutyCorrelation: true,
+});
+laterOutOfOrderFrame.episode.start();
+laterOutOfOrderFrame.advance({ gapMs: 16 });
+laterOutOfOrderFrame.advance({ gapMs: 16, frameTimestampMs: 110 });
+const laterOutOfOrderReport = laterOutOfOrderFrame.episode.finish({
+  phase: 'complete',
+  sharpHeartbeat: sharpDutyHeartbeat(),
+});
+assert.ok(
+  laterOutOfOrderReport.sharpDutyCorrelation.failures.includes('foreground-sample-order-invalid'),
+  'only the already-started first frame may be discarded; later ordering corruption must still fail loud',
+);
 
 const correlated = episodeHarness({
   firingId: 'firing-correlation-a',
