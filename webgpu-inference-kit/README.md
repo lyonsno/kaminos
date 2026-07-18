@@ -240,6 +240,7 @@ Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
 - `createWebGpuSchedulerApplication(input)`: bind adaptive decisions to one route and one declared control set, preserve submitted work as non-preemptible, and let active invocations consume newer exact revisions only at explicit pre-encoding boundaries.
+- `createWebGpuForegroundOpportunityInterlock(input)`: let live foreground consumers place real GPU work ahead of the next inference encode at an explicit safe boundary, with uncapped demand, submission, cancellation, and failure receipts.
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)`: describe non-preemptible submitted command work, preserve uncapped measured duty, and bind reusable chunk controls to effective route/run/clock identity.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)`: capture runtime-owned submissions automatically, preserve honest host-submit timing authority, and join a complete external measurement set into governor-ready duty observations.
 - `createWebGpuHostPhaseRecorder(input)`: record uncapped, route/run/clock-bound CPU preprocessing, command encoding, queue submission, readback, presentation, and custom host intervals while preserving failed phases and the last trustworthy interval.
@@ -421,6 +422,47 @@ if (decision.schedulerChanged) runtime.applySchedulerDecision(decision);
 ```
 
 `runProgram()` opens and closes one invocation automatically. Before every compute or staged-readback command is encoded, the runtime refreshes that invocation to the newest valid scheduler revision, resolves any matching `commandDuty.chunkControl`, and later stores the exact boundary receipt in the submitted duty descriptor. Boundary rows begin as `pending-encode-validation`, settle to `encoded`, or fail as `failed-before-encode` with an exact phase; ending an invocation with an unsettled boundary fails it explicitly. Pending and encoded boundaries say submission is `not-claimed`; only a pre-encoding failure says `not-submitted`. The uncapped application snapshot proves boundary uptake and encoding outcome, while the command-duty report separately proves which encoded duties reached `queue.submit()`. Together they name requested and effective revision, yield delay, phase controls, route, invocation, phase, duty, and failure without relabeling old work. Custom raw-queue adapters call `invocation.refreshAtBoundary({ boundaryId, dutyId, phase, position: "before-encode" })`, consume `invocation.getControl(controlId)` to choose the next bounded duty, and call `invocation.settleBoundary({ boundaryId, status: "encoded" })` only after encoding succeeds; failures settle with `status: "failed-before-encode"`, `phase`, and `error`. `runtime.runKernel()` and staged readback perform that lifecycle automatically. Nothing here pretends an already submitted command buffer can be split or preempted.
+
+### Put Real Foreground Work Between Inference Duties
+
+`yieldMs: 0` gives the browser event loop a turn, but it does not guarantee that a live renderer submits before inference occupies the queue again. Configure `foregroundOpportunities` when the foreground application can identify actual frame demand and encode against the same device:
+
+```js
+const runtime = await createWebGpuInferenceRuntime({
+  routeId,
+  device,
+  adapterName,
+  kernel,
+  schedulerApplication,
+  foregroundOpportunities: {
+    runId: crypto.randomUUID(),
+  },
+});
+
+function requestKilnFrame(frameId) {
+  return runtime.requestForegroundOpportunity({
+    requestId: `kiln-frame:${frameId}`,
+    metadata: { frameId },
+    run({ device, submit, signal }) {
+      if (signal.aborted) return;
+      const commandBuffer = encodeKilnFrame(device, frameId);
+      submit([commandBuffer], {
+        submissionId: `kiln-frame:${frameId}:submit`,
+        metadata: { frameId },
+      });
+    },
+  });
+}
+
+requestAnimationFrame(frameId => {
+  const frame = requestKilnFrame(frameId);
+  frame.completion.then(receipt => updateFrameDiagnostics(receipt));
+});
+```
+
+At the next runtime-owned compute or staged-readback boundary, every request already pending is serviced before the scheduler refreshes and before inference constructs its next command duty. A scheduler decision produced by that foreground work can therefore govern the immediately following inference encode. Requests arriving while an opportunity is open are retained for the next boundary, preventing an endless producer from silently extending one interleave window forever. With no pending demand, the runtime takes the direct preparation path.
+
+The submission lease records each `queue.submit()` call and preserves callback, serialization, cancellation, and submission failures. `cancel(reason)` removes a pending request or aborts an active callback through its signal. Receipts prove callback execution and queue submission return only; they do not prove GPU completion, compositor presentation, or frame cadence. An already submitted inference duty remains non-preemptible, so responsive products still need adapter chunk bounds small enough to reach these opportunities within their frame budget.
 
 ## Background Inference Queue
 

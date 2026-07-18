@@ -28,6 +28,9 @@ import {
   createWebGpuSchedulerApplication,
 } from './scheduler-application.js';
 import {
+  createWebGpuForegroundOpportunityInterlock,
+} from './foreground-opportunity.js';
+import {
   createWebGpuInferenceQueue,
 } from './inference-queue.js';
 import {
@@ -317,7 +320,7 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
     size: alignedSize,
     usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
   });
-  const preparedCommandDuty = runtime.prepareCommandDuty({
+  const preparedCommandDuty = await runtime.prepareCommandDutyAtBoundary({
     ...(options.commandDuty || {}),
     phase: options.commandDuty?.phase || `${tensor.name || 'tensor'}.readback`,
     kind: 'copy',
@@ -505,13 +508,31 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   let invocationSequence = 0;
   let commandDutySequence = 0;
   const preparedCommandDutyInvocations = new WeakMap();
+  const preparedCommandDutySequences = new WeakMap();
+  const foregroundOpportunities = input.foregroundOpportunities == null
+    ? null
+    : (typeof input.foregroundOpportunities.request === 'function'
+        && typeof input.foregroundOpportunities.serviceAtBoundary === 'function'
+        && typeof input.foregroundOpportunities.snapshot === 'function'
+      ? input.foregroundOpportunities
+      : createWebGpuForegroundOpportunityInterlock({
+          ...input.foregroundOpportunities,
+          routeId: input.foregroundOpportunities.routeId || input.routeId,
+          device,
+          queue,
+          now: input.foregroundOpportunities.now || now,
+        }));
+  if (foregroundOpportunities && foregroundOpportunities.snapshot().routeId !== input.routeId) {
+    throw new Error('foregroundOpportunities route mismatch');
+  }
 
-  function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
+  function initializeCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
     const descriptor = clone(descriptorInput || {});
     if (!isNonEmptyString(descriptor.phase)) throw new Error('command duty phase must be a non-empty string');
     commandDutySequence += 1;
+    const dutySequence = commandDutySequence;
     const dutyId = descriptor.dutyId
-      || `${commandDuties?.runId || runtime.runtimeLabel}:command-duty:${commandDutySequence}`;
+      || `${commandDuties?.runId || runtime.runtimeLabel}:command-duty:${dutySequence}`;
     descriptor.dutyId = dutyId;
 
     const control = descriptor.chunkControl;
@@ -524,11 +545,20 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       }
     }
 
+    preparedCommandDutySequences.set(descriptor, dutySequence);
+    return descriptor;
+  }
+
+  function refreshCommandDuty(descriptor, schedulerInvocation = null) {
+    const dutySequence = preparedCommandDutySequences.get(descriptor);
+    if (!Number.isInteger(dutySequence)) throw new Error('command duty sequence is unavailable');
+    const control = descriptor.chunkControl;
+
     let schedulerBoundary = null;
     if (schedulerInvocation?.refreshAtBoundary) {
       schedulerBoundary = schedulerInvocation.refreshAtBoundary({
-        boundaryId: `${schedulerInvocation.invocationId}:scheduler-boundary:${commandDutySequence}`,
-        dutyId,
+        boundaryId: `${schedulerInvocation.invocationId}:scheduler-boundary:${dutySequence}`,
+        dutyId: descriptor.dutyId,
         phase: descriptor.phase,
         position: 'before-encode',
         metadata: {
@@ -550,6 +580,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     return descriptor;
   }
 
+  function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
+    return refreshCommandDuty(initializeCommandDuty(descriptorInput, schedulerInvocation), schedulerInvocation);
+  }
+
   function settleCommandDuty(descriptor, settlementInput = {}) {
     if (!descriptor || typeof descriptor !== 'object') {
       throw new Error('prepared command duty descriptor must be an object');
@@ -566,6 +600,53 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     });
     descriptor.metadata.schedulerBoundary = clone(settled);
     preparedCommandDutyInvocations.delete(descriptor);
+    return descriptor;
+  }
+
+  async function prepareCommandDutyAtBoundary(descriptorInput = {}, schedulerInvocation = null) {
+    const descriptor = initializeCommandDuty(descriptorInput, schedulerInvocation);
+    if (!foregroundOpportunities) return refreshCommandDuty(descriptor, schedulerInvocation);
+    const foregroundSnapshot = foregroundOpportunities.snapshot();
+    if (foregroundSnapshot.pendingRequestCount === 0) {
+      return refreshCommandDuty(descriptor, schedulerInvocation);
+    }
+    if (!isNonEmptyString(schedulerInvocation?.invocationId)) {
+      const error = new Error('foreground opportunity service requires an active invocation identity');
+      refreshCommandDuty(descriptor, schedulerInvocation);
+      settleCommandDuty(descriptor, {
+        status: 'failed-before-encode',
+        phase: 'foreground-opportunity',
+        error,
+      });
+      throw error;
+    }
+    const dutySequence = preparedCommandDutySequences.get(descriptor);
+    const service = await foregroundOpportunities.serviceAtBoundary({
+      invocationId: schedulerInvocation.invocationId,
+      boundaryId: `${schedulerInvocation.invocationId}:foreground-boundary:${dutySequence}`,
+      dutyId: descriptor.dutyId,
+      phase: descriptor.phase,
+      position: 'before-encode',
+      metadata: {
+        runtimeLabel: runtime.runtimeLabel,
+        schedulerRevision: schedulerInvocation.schedulerRevision ?? null,
+      },
+    });
+    refreshCommandDuty(descriptor, schedulerInvocation);
+    descriptor.metadata = {
+      ...(descriptor.metadata || {}),
+      foregroundOpportunityService: clone(service),
+    };
+    if (service.status === 'failed') {
+      const firstFailure = service.failures[0];
+      const error = new Error(firstFailure?.failure?.error?.message || 'foreground opportunity failed');
+      settleCommandDuty(descriptor, {
+        status: 'failed-before-encode',
+        phase: 'foreground-opportunity',
+        error,
+      });
+      throw error;
+    }
     return descriptor;
   }
 
@@ -634,9 +715,32 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     hostPhases,
     commandDuties,
     schedulerApplication,
+    foregroundOpportunities,
     admissionCoordinator,
     prepareCommandDuty,
+    prepareCommandDutyAtBoundary,
     settleCommandDuty,
+
+    requestForegroundOpportunity(requestInput = {}) {
+      if (!foregroundOpportunities) {
+        throw new Error('foreground opportunity interlock is not configured for this runtime');
+      }
+      return foregroundOpportunities.request(requestInput);
+    },
+
+    foregroundOpportunitySnapshot() {
+      if (!foregroundOpportunities) {
+        throw new Error('foreground opportunity interlock is not configured for this runtime');
+      }
+      return foregroundOpportunities.snapshot();
+    },
+
+    finishForegroundOpportunities() {
+      if (!foregroundOpportunities) {
+        throw new Error('foreground opportunity interlock is not configured for this runtime');
+      }
+      return foregroundOpportunities.finish();
+    },
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -805,7 +909,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       }
       const preparedCommandDuty = options.submit === false
         ? null
-        : runtime.prepareCommandDuty({
+        : await runtime.prepareCommandDutyAtBoundary({
             ...(options.commandDuty || {}),
             phase: options.commandDuty?.phase || options.stage || kernelDefinition.name,
             kind: 'compute',
