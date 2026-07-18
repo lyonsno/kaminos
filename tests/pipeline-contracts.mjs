@@ -442,6 +442,36 @@ writeFileSync(report, JSON.stringify({
       runId: 'mock-sharp-live-run',
       clock: { clockId: 'mock-sharp-live-clock', source: 'performance.now', timeOriginEpochMs: 1700000000000 },
       retention: 'uncapped'
+    },
+    foregroundOpportunityReport: {
+      schema: 'kaminos.webgpu-foreground-opportunity-interlock.v0',
+      status: 'succeeded',
+      routeId: 'sharp.image-to-splat.webgpu.v1',
+      runId: 'mock-sharp-live-run',
+      retention: 'uncapped',
+      requestCount: 1,
+      pendingRequestCount: 0,
+      activeRequestCount: 0,
+      activeServiceCount: 0,
+      queuedServiceCount: 0,
+      receiptCount: 1,
+      receipts: [{
+        schema: 'kaminos.webgpu-foreground-opportunity-receipt.v0',
+        routeId: 'sharp.image-to-splat.webgpu.v1',
+        runId: 'mock-sharp-live-run',
+        requestId: 'mock-kiln-frame-1',
+        status: 'completed',
+        submissionCount: 1
+      }],
+      serviceCount: 1,
+      services: [{
+        schema: 'kaminos.webgpu-foreground-opportunity-service.v0',
+        status: 'serviced',
+        routeId: 'sharp.image-to-splat.webgpu.v1',
+        runId: 'mock-sharp-live-run',
+        servicedRequestCount: 1
+      }],
+      noDemandBoundaryCount: 0
     }
   },
   sideArtifacts: [
@@ -493,6 +523,7 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.status, 'observed');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.identity.runId, 'mock-sharp-live-run');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.identity.clock.clockId, 'mock-sharp-live-clock');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.foregroundOpportunityReport.requestCount, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.schema, 'kaminos.webgpu-scheduler-verification-receipt.v0');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.boundaryAssertions.some(assertion => assertion.field === 'phaseChunkSize.vitBlock' && assertion.status === 'unsupported'), true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');

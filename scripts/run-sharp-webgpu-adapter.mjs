@@ -201,13 +201,28 @@ function schedulerEvidence(telemetry = null, statusOverride = null) {
 
 function liveSchedulerRuntimeEvidence(result = null) {
   const sharpRunDebug = result?.sharpRunDebug || null;
-  const schedulerApplication = result?.schedulerApplication || sharpRunDebug?.schedulerApplication || null;
-  const commandDutyReport = result?.commandDutyReport || sharpRunDebug?.commandDutyReport || null;
-  const hostPhaseReport = result?.hostPhaseReport || sharpRunDebug?.hostPhaseReport || null;
-  const schedulerTelemetry = result?.schedulerTelemetry || sharpRunDebug?.schedulerTelemetry || null;
+  const schedulerApplication = sharpRunDebug?.schedulerApplication || null;
+  const commandDutyReport = sharpRunDebug?.commandDutyReport || null;
+  const hostPhaseReport = sharpRunDebug?.hostPhaseReport || null;
+  const foregroundOpportunityReport = sharpRunDebug?.foregroundOpportunityReport || null;
+  const schedulerTelemetry = sharpRunDebug?.schedulerTelemetry || null;
   const rejectedCandidate = result || null;
   const validationErrors = [];
-  const hasRuntimeCandidate = Boolean(schedulerApplication || commandDutyReport || hostPhaseReport);
+  const hasTopLevelAlias = Boolean(
+    result?.schedulerApplication
+    || result?.commandDutyReport
+    || result?.hostPhaseReport
+    || result?.foregroundOpportunityReport
+    || result?.schedulerTelemetry,
+  );
+  const hasRuntimeCandidate = Boolean(
+    sharpRunDebug
+    || schedulerApplication
+    || commandDutyReport
+    || hostPhaseReport
+    || foregroundOpportunityReport
+    || hasTopLevelAlias,
+  );
   const identityValue = (label, value) => {
     if (typeof value !== 'string' || value.trim() === '') {
       validationErrors.push(`${label} must be a non-empty string`);
@@ -231,12 +246,16 @@ function liveSchedulerRuntimeEvidence(result = null) {
       schedulerApplication: null,
       commandDutyReport: null,
       hostPhaseReport: null,
+      foregroundOpportunityReport: null,
       rejectedCandidate: null,
     };
   }
 
-  if (!schedulerApplication || !commandDutyReport || !hostPhaseReport) {
-    validationErrors.push('live scheduler runtime requires complete scheduler application, command duty, and host phase reports');
+  if (!sharpRunDebug) {
+    validationErrors.push('canonical SHARP run debug envelope is required for observed runtime evidence');
+  }
+  if (!schedulerApplication || !commandDutyReport || !hostPhaseReport || !foregroundOpportunityReport) {
+    validationErrors.push('live scheduler runtime requires complete scheduler application, command duty, host phase, and foreground opportunity reports');
   }
   if (schedulerTelemetry?.schema !== 'sharp-webgpu.scheduler-telemetry.v0') {
     validationErrors.push('scheduler telemetry schema is invalid');
@@ -276,6 +295,66 @@ function liveSchedulerRuntimeEvidence(result = null) {
   if (schedulerApplication?.retention !== 'uncapped') {
     validationErrors.push('scheduler application retention must be uncapped');
   }
+  if (foregroundOpportunityReport?.schema !== 'kaminos.webgpu-foreground-opportunity-interlock.v0') {
+    validationErrors.push('foreground opportunity report schema is invalid');
+  }
+  if (foregroundOpportunityReport?.status !== 'succeeded') {
+    validationErrors.push('foreground opportunity report status must be succeeded');
+  }
+  if (foregroundOpportunityReport?.retention !== 'uncapped') {
+    validationErrors.push('foreground opportunity report retention must be uncapped');
+  }
+  if (routeId && foregroundOpportunityReport?.routeId !== routeId) {
+    validationErrors.push('foreground opportunity report route identity mismatch');
+  }
+  if (runId && foregroundOpportunityReport?.runId !== runId) {
+    validationErrors.push('foreground opportunity report run identity mismatch');
+  }
+  for (const field of [
+    'requestCount',
+    'pendingRequestCount',
+    'activeRequestCount',
+    'activeServiceCount',
+    'queuedServiceCount',
+    'receiptCount',
+    'serviceCount',
+    'noDemandBoundaryCount',
+  ]) {
+    if (!Number.isInteger(foregroundOpportunityReport?.[field]) || foregroundOpportunityReport[field] < 0) {
+      validationErrors.push(`foreground opportunity report ${field} must be a non-negative integer`);
+    }
+  }
+  if (!Array.isArray(foregroundOpportunityReport?.receipts)
+    || foregroundOpportunityReport.receipts.length !== foregroundOpportunityReport?.receiptCount) {
+    validationErrors.push('foreground opportunity report receipt count mismatch');
+  }
+  if (!Array.isArray(foregroundOpportunityReport?.services)
+    || foregroundOpportunityReport.services.length !== foregroundOpportunityReport?.serviceCount) {
+    validationErrors.push('foreground opportunity report service count mismatch');
+  }
+  if (foregroundOpportunityReport?.status === 'succeeded'
+    && [
+      foregroundOpportunityReport.pendingRequestCount,
+      foregroundOpportunityReport.activeRequestCount,
+      foregroundOpportunityReport.activeServiceCount,
+      foregroundOpportunityReport.queuedServiceCount,
+    ].some(count => count !== 0)) {
+    validationErrors.push('foreground opportunity report succeeded with unresolved request or service pressure');
+  }
+  for (const receipt of foregroundOpportunityReport?.receipts || []) {
+    if (receipt?.schema !== 'kaminos.webgpu-foreground-opportunity-receipt.v0') {
+      validationErrors.push('foreground opportunity receipt schema is invalid');
+    }
+    if (routeId && receipt?.routeId !== routeId) validationErrors.push('foreground opportunity receipt route identity mismatch');
+    if (runId && receipt?.runId !== runId) validationErrors.push('foreground opportunity receipt run identity mismatch');
+  }
+  for (const service of foregroundOpportunityReport?.services || []) {
+    if (service?.schema !== 'kaminos.webgpu-foreground-opportunity-service.v0') {
+      validationErrors.push('foreground opportunity service schema is invalid');
+    }
+    if (routeId && service?.routeId !== routeId) validationErrors.push('foreground opportunity service route identity mismatch');
+    if (runId && service?.runId !== runId) validationErrors.push('foreground opportunity service run identity mismatch');
+  }
   if (validationErrors.length) {
     return {
       schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
@@ -287,6 +366,7 @@ function liveSchedulerRuntimeEvidence(result = null) {
       schedulerApplication: null,
       commandDutyReport: null,
       hostPhaseReport: null,
+      foregroundOpportunityReport: null,
       rejectedCandidate,
     };
   }
@@ -309,6 +389,7 @@ function liveSchedulerRuntimeEvidence(result = null) {
     schedulerApplication,
     commandDutyReport,
     hostPhaseReport,
+    foregroundOpportunityReport,
     rejectedCandidate: null,
   };
 }
@@ -1398,6 +1479,7 @@ async function runBrowserInference() {
           schedulerApplication: sharpRunDebug?.schedulerApplication || null,
           commandDutyReport: sharpRunDebug?.commandDutyReport || null,
           hostPhaseReport: sharpRunDebug?.hostPhaseReport || null,
+          foregroundOpportunityReport: sharpRunDebug?.foregroundOpportunityReport || null,
         });
       }
       return false;

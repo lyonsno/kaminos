@@ -126,6 +126,12 @@ const validLiveSchedulerResult = {
   sharpRunDebug: {
     schema: 'sharp.webgpu-route-run-debug.v0',
     status: 'real',
+    schedulerTelemetry: {
+      schema: 'sharp-webgpu.scheduler-telemetry.v0',
+      status: 'verified',
+      runId: liveSchedulerIdentity.runId,
+      eventTrace: { clock: { ...liveSchedulerIdentity.clock } },
+    },
     schedulerApplication: {
       schema: 'kaminos.webgpu-scheduler-application.v0',
       routeId: liveSchedulerIdentity.routeId,
@@ -145,6 +151,36 @@ const validLiveSchedulerResult = {
       clock: { ...liveSchedulerIdentity.clock },
       retention: 'uncapped',
     },
+    foregroundOpportunityReport: {
+      schema: 'kaminos.webgpu-foreground-opportunity-interlock.v0',
+      status: 'succeeded',
+      routeId: liveSchedulerIdentity.routeId,
+      runId: liveSchedulerIdentity.runId,
+      retention: 'uncapped',
+      requestCount: 1,
+      pendingRequestCount: 0,
+      activeRequestCount: 0,
+      activeServiceCount: 0,
+      queuedServiceCount: 0,
+      receiptCount: 1,
+      receipts: [{
+        schema: 'kaminos.webgpu-foreground-opportunity-receipt.v0',
+        routeId: liveSchedulerIdentity.routeId,
+        runId: liveSchedulerIdentity.runId,
+        requestId: 'kiln-frame:1',
+        status: 'completed',
+        submissionCount: 1,
+      }],
+      serviceCount: 1,
+      services: [{
+        schema: 'kaminos.webgpu-foreground-opportunity-service.v0',
+        status: 'serviced',
+        routeId: liveSchedulerIdentity.routeId,
+        runId: liveSchedulerIdentity.runId,
+        servicedRequestCount: 1,
+      }],
+      noDemandBoundaryCount: 0,
+    },
   },
 };
 const validLiveSchedulerEvidence = liveSchedulerRuntimeEvidence(validLiveSchedulerResult);
@@ -156,13 +192,31 @@ assert.deepEqual(
   'observed runtime evidence must bind exact route/run/clock identity',
 );
 assert.equal(validLiveSchedulerEvidence.validation.status, 'valid');
+assert.equal(validLiveSchedulerEvidence.foregroundOpportunityReport.status, 'succeeded');
+assert.equal(validLiveSchedulerEvidence.foregroundOpportunityReport.requestCount, 1);
+
+const missingCanonicalDebug = structuredClone(validLiveSchedulerResult);
+Object.assign(missingCanonicalDebug, missingCanonicalDebug.sharpRunDebug);
+delete missingCanonicalDebug.sharpRunDebug;
+const missingCanonicalEvidence = liveSchedulerRuntimeEvidence(missingCanonicalDebug);
+assert.equal(missingCanonicalEvidence.status, 'invalid', 'top-level aliases without canonical SHARP run debug must not become observed');
+assert.equal(missingCanonicalEvidence.source, 'invalid-sharp-browser-debug');
+assert.match(missingCanonicalEvidence.validationErrors.join('; '), /SHARP run debug envelope is required/);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(missingCanonicalEvidence.rejectedCandidate)),
+  JSON.parse(JSON.stringify(missingCanonicalDebug)),
+  'top-level-only aliases must survive as rejected non-authoritative evidence',
+);
 
 for (const [label, mutate, expectedError] of [
   ['mixed run', value => { value.sharpRunDebug.commandDutyReport.runId = 'stale-run'; }, /run identity mismatch/],
   ['mixed clock', value => { value.sharpRunDebug.hostPhaseReport.clock.clockId = 'stale-clock'; }, /clock identity mismatch/],
   ['wrong schema', value => { value.sharpRunDebug.schedulerApplication.schema = 'stale.scheduler-application.v0'; }, /scheduler application schema/],
   ['failed report', value => { value.sharpRunDebug.commandDutyReport.status = 'failed'; }, /command duty report status/],
-  ['partial debug', value => { value.sharpRunDebug.hostPhaseReport = null; }, /complete scheduler application, command duty, and host phase reports/],
+  ['partial debug', value => { value.sharpRunDebug.hostPhaseReport = null; }, /complete scheduler application, command duty, host phase, and foreground opportunity reports/],
+  ['foreground run mismatch', value => { value.sharpRunDebug.foregroundOpportunityReport.runId = 'stale-run'; }, /foreground opportunity report run identity mismatch/],
+  ['foreground incomplete', value => { value.sharpRunDebug.foregroundOpportunityReport.status = 'incomplete'; }, /foreground opportunity report status/],
+  ['foreground capped', value => { value.sharpRunDebug.foregroundOpportunityReport.retention = 'first-100'; }, /foreground opportunity report retention/],
 ]) {
   const candidate = structuredClone(validLiveSchedulerResult);
   mutate(candidate);
@@ -172,6 +226,7 @@ for (const [label, mutate, expectedError] of [
   assert.equal(evidence.schedulerApplication, null);
   assert.equal(evidence.commandDutyReport, null);
   assert.equal(evidence.hostPhaseReport, null);
+  assert.equal(evidence.foregroundOpportunityReport, null);
   assert.match(evidence.validationErrors.join('; '), expectedError);
   assert.deepEqual(
     JSON.parse(JSON.stringify(evidence.rejectedCandidate)),
