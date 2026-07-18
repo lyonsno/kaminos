@@ -27,7 +27,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "c1f8fb8d7b55",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -54,7 +54,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "b7c2c97b97d5",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -86,7 +86,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "aa4b595c78e0",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -113,7 +113,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "a3bec41b5fa6",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -145,7 +145,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "a8a8dd522f9d",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -172,7 +172,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "8071d7a961b9",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -204,7 +204,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "d91b76c29b5c",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -231,7 +231,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "be77c9d18fac",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -263,7 +263,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "b0db165eae46",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -290,7 +290,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "0cbb6587894b",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -322,7 +322,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "e9d715284236",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -349,7 +349,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "e520618d1ce8",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -381,7 +381,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "05616cbda757",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -408,7 +408,7 @@
       "stance": "lineage-seed",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "5dab2faa50b8",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {
@@ -440,7 +440,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "53c88ec5db48",
       "jobType": "mflux_flux2_edit_promptfile_2ref",
       "inputs": [
         {
@@ -467,7 +467,7 @@
       "stance": "prior-forward",
       "referenceSet": "clay-depth-normal",
       "seed": 717031,
-      "jobId": null,
+      "jobId": "be2763d2813a",
       "jobType": "mflux_flux2_edit_promptfile_3ref",
       "inputs": [
         {

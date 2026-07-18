@@ -1,0 +1,106 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-basin-assay-submission-report.v1",
+  "updatedAt": "2026-07-18T03:10:08Z",
+  "plannedCellCount": 16,
+  "submittedCellCount": 16,
+  "submissionFailureCount": 0,
+  "complete": true,
+  "cells": [
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "jobId": "c1f8fb8d7b55",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "jobId": "b7c2c97b97d5",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "jobId": "aa4b595c78e0",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "jobId": "a3bec41b5fa6",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "jobId": "a8a8dd522f9d",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "jobId": "8071d7a961b9",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "jobId": "d91b76c29b5c",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "jobId": "be77c9d18fac",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "jobId": "b0db165eae46",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "jobId": "0cbb6587894b",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "jobId": "e9d715284236",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "jobId": "e520618d1ce8",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717031",
+      "jobId": "05616cbda757",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-depth-normal-seed717031",
+      "jobId": "5dab2faa50b8",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-prior-forward-clay-normal-seed717031",
+      "jobId": "53c88ec5db48",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-prior-forward-clay-depth-normal-seed717031",
+      "jobId": "be2763d2813a",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    }
+  ]
+}
