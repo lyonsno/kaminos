@@ -319,15 +319,23 @@ def rasterize_coefficients(
     camera: dict[str, Any],
     depth_bins: int,
     footprint_mode: str,
+    tap_counts: np.ndarray | None = None,
+    tap_patterns: dict[int, dict[str, Any]] | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
     ndc, depth, valid = project(positions, pose["matrixWorldInverse"], pose["projectionMatrix"])
     pixel_x = (ndc[:, 0] * 0.5 + 0.5) * width
     pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height
-    x = pixel_x.astype(np.int32)
-    y = pixel_y.astype(np.int32)
-    valid &= (x >= 0) & (x < width) & (y >= 0) & (y < height) & np.isfinite(depth)
+    valid &= (
+        (pixel_x >= 0.0)
+        & (pixel_x < width)
+        & (pixel_y >= 0.0)
+        & (pixel_y < height)
+        & np.isfinite(depth)
+    )
+    x = np.floor(pixel_x).astype(np.int32)
+    y = np.floor(pixel_y).astype(np.int32)
     valid_indices = np.flatnonzero(valid)
     require(valid_indices.size > 0, f"camera {camera['cameraIndex']} projected zero admitted rows")
     near = float(np.percentile(depth[valid_indices], 0.01))
@@ -347,30 +355,50 @@ def rasterize_coefficients(
     base_radius = (2.0 / 160.0) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
-    offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
-    offset_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
+    fixed_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
+    fixed_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
+    if tap_counts is None:
+        quadrature_groups = [(np.ones(positions.shape[0], dtype=bool), fixed_offsets, fixed_weights)]
+        quadrature_rule = "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+        nominal_tap_evaluations = positions.shape[0] * len(fixed_offsets)
+    else:
+        counts = np.asarray(tap_counts)
+        require(counts.ndim == 1 and counts.size == positions.shape[0], "tap-count plan must match raster rows")
+        require(tap_patterns is not None and set(tap_patterns) == {3, 5, 7}, "variable-tap raster requires reviewed 3/5/7 patterns")
+        quadrature_groups = []
+        for tap_count in (3, 5, 7):
+            pattern = tap_patterns[tap_count]
+            offsets = tuple(pattern["offsets"])
+            weights = tuple(pattern["weights"])
+            require(len(offsets) == len(weights) == tap_count, f"{tap_count}-tap raster pattern width drifted")
+            require(abs(float(sum(weights)) - 1.0) <= 1e-6, f"{tap_count}-tap raster weights do not conserve coefficient mass")
+            quadrature_groups.append((counts == tap_count, offsets, weights))
+        require(np.all(np.isin(counts, (3, 5, 7))), "tap-count plan contains an unreviewed count")
+        quadrature_rule = "quota-balanced-variable-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+        nominal_tap_evaluations = int(np.sum(counts, dtype=np.int64))
     raster_size = depth_bins * height * width
     planes = np.zeros((depth_bins, height, width, 8), dtype=np.float32)
-    for offset, footprint_weight in zip(offsets, offset_weights):
-        if footprint_mode == "nearest":
-            pixel_samples = [(
-                x + np.rint(tx * major_px * offset).astype(np.int32),
-                y + np.rint(ty * major_px * offset).astype(np.int32),
-                np.ones_like(pixel_x, dtype=np.float32),
-            )]
-        else:
-            require(footprint_mode == "bilinear", f"unknown footprint mode {footprint_mode}")
-            pixel_samples = bilinear_pixel_samples(
-                pixel_x + tx * major_px * offset,
-                pixel_y + ty * major_px * offset,
-            )
-        for sx, sy, sample_weight in pixel_samples:
-            selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
-            rows = np.flatnonzero(selected)
-            flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
-            weighted = footprint_weight * sample_weight[rows]
-            for channel in range(8):
-                planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * weighted, raster_size).reshape(depth_bins, height, width)
+    for group_rows, offsets, offset_weights in quadrature_groups:
+        for offset, footprint_weight in zip(offsets, offset_weights):
+            if footprint_mode == "nearest":
+                pixel_samples = [(
+                    x + np.rint(tx * major_px * offset).astype(np.int32),
+                    y + np.rint(ty * major_px * offset).astype(np.int32),
+                    np.ones_like(pixel_x, dtype=np.float32),
+                )]
+            else:
+                require(footprint_mode == "bilinear", f"unknown footprint mode {footprint_mode}")
+                pixel_samples = bilinear_pixel_samples(
+                    pixel_x + tx * major_px * offset,
+                    pixel_y + ty * major_px * offset,
+                )
+            for sx, sy, sample_weight in pixel_samples:
+                selected = group_rows & valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
+                rows = np.flatnonzero(selected)
+                flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
+                weighted = footprint_weight * sample_weight[rows]
+                for channel in range(8):
+                    planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * weighted, raster_size).reshape(depth_bins, height, width)
     return planes, {
         "admittedRows": int(positions.shape[0]),
         "projectedRows": int(valid_indices.size),
@@ -381,6 +409,9 @@ def rasterize_coefficients(
         "kernelGeometry": KERNEL_GEOMETRY,
         "footprintMode": footprint_identity(footprint_mode),
         "orientation": footprint_identity(footprint_mode),
+        "quadratureRule": quadrature_rule,
+        "nominalTapEvaluations": int(nominal_tap_evaluations),
+        "nominalDepositEvaluations": int(nominal_tap_evaluations * (1 if footprint_mode == "nearest" else 4)),
     }
 
 

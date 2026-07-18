@@ -10,6 +10,7 @@ import importlib.util
 import json
 import math
 import os
+import shutil
 import traceback
 import types
 from collections.abc import Iterable
@@ -30,17 +31,68 @@ CAUSAL_SURVIVAL_FEATURE_COUNT = 41
 UNIFORM_AUTHORITY = "camera-independent-native-cell-hash-uniform-selection-v0"
 COMPARISON_AUTHORITY = "fixed-candidate-budget-matched-policy-comparator-v0"
 DEPOSITS_PER_CANDIDATE = 20
+FLOW_TAPS_PER_CANDIDATE = 5
+CONTRIBUTION_DEPOSITION_POLICY = "optical-hysteresis-adaptive-mean-contribution-deposition"
+CONTRIBUTION_DEPOSIT_RULE = "quota-balanced-variable-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+CONTRIBUTION_SCORE_AUTHORITY = "local-emission-divided-by-one-plus-local-extinction-v0"
+CONTRIBUTION_QUOTA_AUTHORITY = "projected-eight-by-eight-screen-times-eight-depth-quota-v0"
+CONTRIBUTION_TAP_PATTERNS = {
+    3: {
+        "offsets": (-1.0, 0.0, 1.0),
+        "weights": (0.2, 0.6, 0.2),
+        "slots": (0, 3, 6),
+    },
+    5: {
+        "offsets": (-1.0, -0.5, 0.0, 0.5, 1.0),
+        "weights": (0.075, 0.225, 0.4, 0.225, 0.075),
+        "slots": (0, 1, 3, 5, 6),
+    },
+    7: {
+        "offsets": (-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75),
+        "weights": (0.04, 0.11, 0.22, 0.26, 0.22, 0.11, 0.04),
+        "slots": (0, 1, 2, 3, 4, 5, 6),
+    },
+}
+CONTRIBUTION_MAXIMUM_DEPOSITS_PER_CANDIDATE = max(CONTRIBUTION_TAP_PATTERNS) * 4
 np: Any = None
 ORACLE: Any = None
 MOTION: Any = None
 LUMA: Any = None
-BOUND_IMPLEMENTATION_PAYLOADS: dict[str, bytes] | None = None
+BOUND_IMPLEMENTATION_PAYLOADS: dict[str, bytes] | None = globals().get("BOUND_IMPLEMENTATION_PAYLOADS")
+BOUND_SELF_EXECUTION = bool(globals().get("BOUND_SELF_EXECUTION", False))
 IMPLEMENTATION_PATH = Path(__file__).resolve()
 IMPLEMENTATION_FILENAMES = (
     "volume-layer-coefficient-budget-oracle.py",
     "volume-layer-coefficient-render-oracle.py",
     "volume-layer-coefficient-bilinear-motion-render.py",
 )
+
+
+def invalidate_visual_evidence(out_dir: Path) -> None:
+    viewer_path = out_dir / "selection-viewer.html"
+    if viewer_path.exists():
+        viewer_path.unlink()
+    for directory_name in ("images", "states"):
+        generated_dir = out_dir / directory_name
+        if generated_dir.exists():
+            shutil.rmtree(generated_dir)
+
+
+def write_failed_visual_tombstone(out_dir: Path, failure: dict[str, Any]) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "selection-viewer.html").write_text(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Evidence failed</title></head>"
+        "<body><h1>FAILED — visual evidence is not authoritative</h1><pre>"
+        + json.dumps(
+            {
+                "status": "failed",
+                "failurePhase": failure.get("failurePhase"),
+                "reason": failure.get("reason"),
+            },
+            indent=2,
+        )
+        + "</pre></body></html>"
+    )
 
 
 def load_module(filename: str, name: str) -> Any:
@@ -65,6 +117,17 @@ def load_module(filename: str, name: str) -> Any:
     return module
 
 
+def load_bound_budget_module(payloads: dict[str, bytes]) -> Any:
+    require(set(payloads) == set(IMPLEMENTATION_FILENAMES), "bound budget runtime payload set drifted")
+    module = types.ModuleType("kaminos_bound_budget_oracle")
+    module.__file__ = str(IMPLEMENTATION_PATH)
+    module.__dict__["BOUND_IMPLEMENTATION_PAYLOADS"] = payloads
+    module.__dict__["BOUND_SELF_EXECUTION"] = True
+    payload = payloads[IMPLEMENTATION_PATH.name]
+    exec(compile(payload, str(IMPLEMENTATION_PATH), "exec"), module.__dict__)
+    return module
+
+
 def initialize_runtime() -> None:
     global np, ORACLE, MOTION, LUMA
     if os.environ.get("KAMINOS_BUDGET_ORACLE_FAIL_RUNTIME_INIT") == "1":
@@ -82,6 +145,25 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def deposition_work_contract(policies: Iterable[str]) -> dict[str, Any]:
+    policy_rows = list(policies)
+    require(policy_rows and len(set(policy_rows)) == len(policy_rows), "deposition policies must be nonempty and unique")
+    maxima = {
+        policy: (
+            CONTRIBUTION_MAXIMUM_DEPOSITS_PER_CANDIDATE
+            if policy == CONTRIBUTION_DEPOSITION_POLICY
+            else DEPOSITS_PER_CANDIDATE
+        )
+        for policy in policy_rows
+    }
+    return {
+        "nominalDepositsPerCandidate": DEPOSITS_PER_CANDIDATE,
+        "maximumDepositsPerCandidate": max(maxima.values()),
+        "maximumDepositsPerCandidateByPolicy": maxima,
+        "contributionDepositionCouplesTapCountAndFootprintSpacing": CONTRIBUTION_DEPOSITION_POLICY in maxima,
+    }
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -93,11 +175,15 @@ def sha256_file(path: Path) -> str:
 def capture_implementation_bundle() -> tuple[dict[str, Any], dict[str, bytes]]:
     digest = hashlib.sha256()
     files: dict[str, dict[str, Any]] = {}
-    payloads: dict[str, bytes] = {}
+    payloads: dict[str, bytes] = BOUND_IMPLEMENTATION_PAYLOADS if BOUND_IMPLEMENTATION_PAYLOADS is not None else {}
     for filename in IMPLEMENTATION_FILENAMES:
         path = IMPLEMENTATION_PATH.with_name(filename)
-        payload = path.read_bytes()
-        payloads[filename] = payload
+        if BOUND_IMPLEMENTATION_PAYLOADS is None:
+            payload = path.read_bytes()
+            payloads[filename] = payload
+        else:
+            require(filename in BOUND_IMPLEMENTATION_PAYLOADS, f"bound implementation payload is missing {filename}")
+            payload = BOUND_IMPLEMENTATION_PAYLOADS[filename]
         file_sha256 = hashlib.sha256(payload).hexdigest()
         encoded_name = filename.encode("utf-8")
         digest.update(len(encoded_name).to_bytes(4, "little"))
@@ -111,6 +197,7 @@ def capture_implementation_bundle() -> tuple[dict[str, Any], dict[str, bytes]]:
         }
     receipt = {
         "authority": "sha256-length-delimited-three-file-python-runtime-bundle-v0",
+        "payloadSource": "captured-bound-execution" if BOUND_IMPLEMENTATION_PAYLOADS is not None else "mutable-filesystem-capture",
         "sha256": digest.hexdigest(),
         "files": files,
     }
@@ -480,6 +567,97 @@ def optical_energy_scores(coefficients: np.ndarray) -> np.ndarray:
     return emission / emission_scale + extinction / extinction_scale
 
 
+def local_transmitted_emission_scores(coefficients: np.ndarray) -> np.ndarray:
+    values = np.asarray(coefficients)
+    require(values.ndim == 2 and values.shape[1] == 8, "local contribution coefficients must have shape [rows,8]")
+    require(np.all(np.isfinite(values)), "local contribution coefficients must be finite")
+    emission = np.maximum(values[:, 0:3] + values[:, 4:7], 0.0) @ LUMA
+    extinction = np.maximum(values[:, 3] + values[:, 7], 0.0)
+    scores = emission / (1.0 + extinction)
+    require(np.all(np.isfinite(scores)) and np.all(scores >= 0.0), "local transmitted-emission scores are invalid")
+    return np.asarray(scores, dtype=np.float32)
+
+
+def quota_balanced_contribution_tap_counts(
+    native_ids: np.ndarray,
+    contribution_scores: np.ndarray,
+    quota_keys: np.ndarray,
+) -> np.ndarray:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    scores = np.asarray(contribution_scores, dtype=np.float64)
+    quotas = np.asarray(quota_keys, dtype=np.int64)
+    require(ids.ndim == scores.ndim == quotas.ndim == 1, "contribution allocation inputs must be vectors")
+    require(ids.size == scores.size == quotas.size > 0, "contribution allocation row populations must match and be nonempty")
+    require(np.unique(ids).size == ids.size, "contribution allocation native identities must be unique")
+    require(np.all(np.isfinite(scores)), "contribution allocation scores must be finite")
+    counts = np.full(ids.size, FLOW_TAPS_PER_CANDIDATE, dtype=np.int8)
+    for quota in np.unique(quotas[quotas >= 0]):
+        rows = np.flatnonzero(quotas == quota)
+        order = rows[np.lexsort((ids[rows], stable_hash(ids[rows]), -scores[rows]))]
+        pair_count = order.size // 2
+        counts[order[:pair_count]] = 7
+        counts[order[order.size - pair_count:]] = 3
+        require(
+            int(np.sum(counts[rows], dtype=np.int64)) == rows.size * FLOW_TAPS_PER_CANDIDATE,
+            "contribution quota changed its fixed tap budget",
+        )
+    require(int(np.sum(counts, dtype=np.int64)) == ids.size * FLOW_TAPS_PER_CANDIDATE, "contribution allocation changed total tap work")
+    return counts
+
+
+def contribution_deposition_plan(
+    native_ids: np.ndarray,
+    kernel_descriptors: np.ndarray,
+    coefficients: np.ndarray,
+    camera: dict[str, Any],
+) -> tuple[np.ndarray, dict[str, Any]]:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    descriptors = np.asarray(kernel_descriptors)
+    values = np.asarray(coefficients)
+    require(descriptors.ndim == 2 and descriptors.shape == (ids.size, 8), "contribution descriptors must have shape [rows,8]")
+    require(values.ndim == 2 and values.shape == (ids.size, 8), "contribution coefficients must have shape [rows,8]")
+    require(np.all(np.isfinite(descriptors)), "contribution descriptors must be finite")
+    positions = descriptors[:, 0:3]
+    pose = camera["cameraPose"]
+    ndc, depth, projected = ORACLE.project(positions, pose["matrixWorldInverse"], pose["projectionMatrix"])
+    width, height = int(camera["width"]), int(camera["height"])
+    pixel_x = (ndc[:, 0] * 0.5 + 0.5) * width
+    pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height
+    visible = projected & np.isfinite(depth) & (pixel_x >= 0.0) & (pixel_x < width) & (pixel_y >= 0.0) & (pixel_y < height)
+    screen_x = np.clip((pixel_x / max(width, 1) * 8.0).astype(np.int64), 0, 7)
+    screen_y = np.clip((pixel_y / max(height, 1) * 8.0).astype(np.int64), 0, 7)
+    depth_index = np.zeros(ids.size, dtype=np.int64)
+    if np.any(visible):
+        near = float(np.min(depth[visible]))
+        far = float(np.max(depth[visible]))
+        depth_index = np.clip(((depth - near) / max(far - near, 1e-6) * 8.0).astype(np.int64), 0, 7)
+    quota_keys = ((depth_index * 8 + screen_y) * 8 + screen_x).astype(np.int64)
+    quota_keys[~visible] = -1
+    scores = local_transmitted_emission_scores(values)
+    tap_counts = quota_balanced_contribution_tap_counts(ids, scores, quota_keys)
+    unique_counts, count_population = np.unique(tap_counts, return_counts=True)
+    nominal_taps = int(np.sum(tap_counts, dtype=np.int64))
+    return tap_counts, {
+        "authority": "fixed-work-target-free-contribution-aware-quadrature-v0",
+        "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
+        "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
+        "targetUsed": False,
+        "candidateRows": int(ids.size),
+        "visibleRows": int(np.count_nonzero(visible)),
+        "quotaCount": int(np.unique(quota_keys[visible]).size),
+        "tapCountDistribution": {str(int(key)): int(value) for key, value in zip(unique_counts, count_population)},
+        "nominalTapEvaluations": nominal_taps,
+        "nominalDepositEvaluations": nominal_taps * 4,
+        "matchedFixedFiveDepositEvaluations": ids.size * DEPOSITS_PER_CANDIDATE,
+        "scoreDistribution": {
+            "minimum": float(np.min(scores)),
+            "p50": float(np.percentile(scores, 50)),
+            "p95": float(np.percentile(scores, 95)),
+            "maximum": float(np.max(scores)),
+        },
+    }
+
+
 def optical_score_order(native_ids: np.ndarray, scores: np.ndarray) -> np.ndarray:
     return np.lexsort((native_ids, stable_hash(native_ids), -scores))
 
@@ -815,18 +993,28 @@ def validate_adjacent_state_motion(
 
             churn = row.get("multiplicityChurn")
             require(isinstance(churn, dict), f"{policy} multiplicity churn evidence is missing")
-            require(churn.get("depositRule") == "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0", f"{policy} deposit rule drifted")
+            expected_deposit_rule = previous_arm.get("depositRule")
+            require(isinstance(expected_deposit_rule, str) and expected_deposit_rule, f"{policy} previous deposit rule is missing")
+            require(current_arm.get("depositRule") == expected_deposit_rule, f"{policy} state arms changed deposit rules")
+            require(churn.get("depositRule") == expected_deposit_rule, f"{policy} deposit rule drifted")
             maximum_deposits = nonnegative_integer(churn.get("maximumDepositsPerCandidate"), f"{policy} maximum deposits per candidate")
-            require(maximum_deposits == DEPOSITS_PER_CANDIDATE, f"{policy} maximum deposit contract drifted")
-            previous_deposits = nonnegative_integer(churn.get("previousDepositCount"), f"{policy} previous deposit count")
-            current_deposits = nonnegative_integer(churn.get("currentDepositCount"), f"{policy} current deposit count")
+            require(previous_arm.get("maximumDepositsPerCandidate") == maximum_deposits, f"{policy} previous maximum deposit contract drifted")
+            require(current_arm.get("maximumDepositsPerCandidate") == maximum_deposits, f"{policy} current maximum deposit contract drifted")
+            previous_deposits = nonnegative_integer(
+                churn.get("previousActualInBoundsPositiveWeightDepositCount"),
+                f"{policy} previous actual positive-weight deposit count",
+            )
+            current_deposits = nonnegative_integer(
+                churn.get("currentActualInBoundsPositiveWeightDepositCount"),
+                f"{policy} current actual positive-weight deposit count",
+            )
             previous_arm_deposits = nonnegative_integer(
-                previous_arm.get("actualInBoundsDepositCount"),
-                f"{policy} previous state in-bounds deposit count",
+                previous_arm.get("actualInBoundsPositiveWeightDepositCount"),
+                f"{policy} previous state in-bounds positive-weight deposit count",
             )
             current_arm_deposits = nonnegative_integer(
-                current_arm.get("actualInBoundsDepositCount"),
-                f"{policy} current state in-bounds deposit count",
+                current_arm.get("actualInBoundsPositiveWeightDepositCount"),
+                f"{policy} current state in-bounds positive-weight deposit count",
             )
             require(previous_deposits == previous_arm_deposits, f"{policy} previous deposit count disagrees with the state arm")
             require(current_deposits == current_arm_deposits, f"{policy} current deposit count disagrees with the state arm")
@@ -835,7 +1023,10 @@ def validate_adjacent_state_motion(
             require(churn.get("sharedNodeCount") == shared_count, f"{policy} churn shared-node count disagrees with turnover")
             changed_count = nonnegative_integer(churn.get("sharedNodesWithChangedMultiplicity"), f"{policy} changed multiplicity count")
             require(changed_count <= shared_count, f"{policy} changed multiplicity count exceeds shared nodes")
-            require(churn.get("authority") == "actual-in-bounds-bilinear-deposit-count-v0", f"{policy} multiplicity authority drifted")
+            require(
+                churn.get("authority") == "actual-in-bounds-positive-weight-bilinear-deposit-count-v1",
+                f"{policy} multiplicity authority drifted",
+            )
             if shared_count == 0:
                 require(churn.get("meanAbsoluteSharedNodeDepositDelta") is None, f"{policy} empty churn mean must be null")
                 require(churn.get("maxAbsoluteSharedNodeDepositDelta") is None, f"{policy} empty churn max must be null")
@@ -848,7 +1039,9 @@ def validate_adjacent_state_motion(
             require(isinstance(velocity, dict), f"{policy} placement velocity evidence is missing")
             require(velocity.get("sharedNodeCount") == shared_count, f"{policy} velocity shared-node count disagrees with turnover")
             visible_taps = nonnegative_integer(velocity.get("sharedVisibleTapCount"), f"{policy} shared visible tap count")
-            require(visible_taps <= shared_count * 5, f"{policy} shared visible taps exceed five taps per node")
+            maximum_taps = maximum_deposits // 4
+            require(maximum_taps * 4 == maximum_deposits, f"{policy} maximum deposit count is not four-way bilinear work")
+            require(visible_taps <= shared_count * maximum_taps, f"{policy} shared visible taps exceed the arm maximum")
             require(velocity.get("unit") == "screen-pixels-per-simulator-step", f"{policy} placement velocity unit drifted")
             if visible_taps == 0:
                 require(all(velocity.get(field) is None for field in ("mean", "p50", "p95", "max")), f"{policy} empty placement statistics must be null")
@@ -870,13 +1063,18 @@ def validate_adjacent_state_motion(
                 require(value <= 2.0, f"{policy} {field} exceeds normalized difference-field range")
 
 
-def selection_viewer(rows: list[dict[str, Any]], policies: list[str]) -> str:
+def selection_viewer(
+    rows: list[dict[str, Any]],
+    policies: list[str],
+    evidence_identity: dict[str, Any],
+) -> str:
     payload = json.dumps(rows, separators=(",", ":"))
+    identity_payload = json.dumps(evidence_identity, separators=(",", ":"))
     options = "".join(f'<option value="{policy}">{policy}</option>' for policy in policies)
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fixed-Budget Quadrature Oracle</title><style>
 body{{margin:0;background:#0d1013;color:#f4f5f6;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}}header{{position:sticky;top:0;z-index:2;padding:12px;background:#15191d;border-bottom:1px solid #343a40;display:flex;gap:14px;align-items:center;flex-wrap:wrap}}button,select{{background:#222930;color:#fff;border:1px solid #46515b;padding:7px 12px}}input{{width:min(580px,55vw)}}main{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:10px}}figure{{margin:0;background:#15191d;border:1px solid #343a40}}figcaption{{padding:8px;color:#b8c0c8}}img{{display:block;width:100%;height:auto}}pre{{white-space:pre-wrap;margin:0;padding:10px;border-top:1px solid #343a40;color:#b8c0c8}}@media(max-width:900px){{main{{grid-template-columns:1fr}}}}
-</style></head><body><header><strong>Fixed-budget quadrature oracle</strong><select id="policy">{options}</select><button id="prev">◀</button><input id="step" type="range" min="0" max="{len(rows)-1}" value="0"><button id="next">▶</button><span id="label"></span></header><main><figure><figcaption>Exact target</figcaption><img id="target"></figure><figure><figcaption>Selected quadrature</figcaption><img id="render"></figure><figure><figcaption>Residual</figcaption><img id="residual"><pre id="metrics"></pre></figure></main><script>
-const rows={payload};const slider=document.querySelector('#step');function show(index){{index=Math.max(0,Math.min(rows.length-1,index));slider.value=index;const row=rows[index],arm=row.arms[policy.value];target.src=row.target;render.src=arm.render;residual.src=arm.residual;label.textContent=`${{row.stateId}} · ${{policy.value}} · ${{arm.selectedRows.toLocaleString()}} rows`;metrics.textContent=JSON.stringify(arm.metrics,null,2)}}slider.oninput=()=>show(+slider.value);policy.onchange=()=>show(+slider.value);prev.onclick=()=>show(+slider.value-1);next.onclick=()=>show(+slider.value+1);addEventListener('keydown',event=>{{if(event.key==='ArrowLeft')show(+slider.value-1);if(event.key==='ArrowRight')show(+slider.value+1)}});show(0);
+</style></head><body><header><strong>Fixed-budget quadrature oracle</strong><span id="evidence"></span><select id="policy">{options}</select><button id="prev">◀</button><input id="step" type="range" min="0" max="{len(rows)-1}" value="0"><button id="next">▶</button><span id="label"></span></header><main><figure><figcaption>Exact target</figcaption><img id="target"></figure><figure><figcaption>Selected quadrature</figcaption><img id="render"></figure><figure><figcaption>Residual</figcaption><img id="residual"><pre id="metrics"></pre></figure></main><script>
+const rows={payload};const evidenceIdentity={identity_payload};evidence.textContent=`${{evidenceIdentity.status}} · manifest ${{evidenceIdentity.manifestSha256.slice(0,12)}} · motion ${{evidenceIdentity.motionReportSha256.slice(0,12)}} · runtime ${{evidenceIdentity.implementationBundleSha256.slice(0,12)}}`;const slider=document.querySelector('#step');function show(index){{index=Math.max(0,Math.min(rows.length-1,index));slider.value=index;const row=rows[index],arm=row.arms[policy.value];target.src=row.target;render.src=arm.render;residual.src=arm.residual;label.textContent=`${{row.stateId}} · ${{policy.value}} · ${{arm.selectedRows.toLocaleString()}} rows`;metrics.textContent=JSON.stringify({{evidenceIdentity,metrics:arm.metrics}},null,2)}}slider.oninput=()=>show(+slider.value);policy.onchange=()=>show(+slider.value);prev.onclick=()=>show(+slider.value-1);next.onclick=()=>show(+slider.value+1);addEventListener('keydown',event=>{{if(event.key==='ArrowLeft')show(+slider.value-1);if(event.key==='ArrowRight')show(+slider.value+1)}});show(0);
 </script></body></html>"""
 
 
@@ -1039,14 +1237,28 @@ def selected_state(
         "nativeCellIndices": np.asarray(rows["nativeCellIndices"][row_indices], dtype=np.uint32),
         "kernelDescriptors": np.asarray(descriptors[row_indices]),
     }
+    camera = MOTION.camera_contract(state)
+    tap_counts: np.ndarray | None = None
+    tap_patterns: dict[int, dict[str, Any]] | None = None
+    deposition_plan: dict[str, Any] | None = None
+    if policy == CONTRIBUTION_DEPOSITION_POLICY:
+        tap_counts, deposition_plan = contribution_deposition_plan(
+            selected_rows["nativeCellIndices"],
+            selected_rows["kernelDescriptors"],
+            selected_rows["coefficients"],
+            camera,
+        )
+        tap_patterns = CONTRIBUTION_TAP_PATTERNS
     planes, telemetry = ORACLE.rasterize_coefficients(
         selected_rows["kernelDescriptors"][:, 0:3],
         selected_rows["kernelDescriptors"][:, 4:7],
         selected_rows["features"],
         selected_rows["coefficients"],
-        MOTION.camera_contract(state),
+        camera,
         MOTION.DEPTH_BINS,
         "bilinear",
+        tap_counts=tap_counts,
+        tap_patterns=tap_patterns,
     )
     linear, _, _, _ = ORACLE.compose_planes(planes, path_scale, "total")
     render = ORACLE.tone_map(linear)
@@ -1061,9 +1273,36 @@ def selected_state(
         ORACLE.write_png(target_path, target)
     ORACLE.write_png(render_path, render)
     ORACLE.write_png(residual_path, residual)
-    camera = MOTION.camera_contract(state)
-    placements = MOTION.flow_tap_placements(selected_rows, camera)
-    multiplicity = MOTION.bilinear_deposit_multiplicity(placements, camera["width"], camera["height"])
+    placements = MOTION.flow_tap_placements(
+        selected_rows,
+        camera,
+        tap_counts=tap_counts,
+        tap_patterns=tap_patterns,
+    )
+    tap_weights = MOTION.flow_tap_weights(
+        row_indices.size,
+        tap_counts=tap_counts,
+        tap_patterns=tap_patterns,
+    )
+    deposit_accounting = MOTION.bilinear_deposit_accounting(
+        placements,
+        tap_weights,
+        camera["width"],
+        camera["height"],
+    )
+    multiplicity = deposit_accounting["actualInBoundsPositiveWeightDeposits"]
+    deposit_rule = CONTRIBUTION_DEPOSIT_RULE if tap_counts is not None else "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+    maximum_deposits = 28 if tap_counts is not None else DEPOSITS_PER_CANDIDATE
+    nominal_deposit_budget = int(
+        np.sum(tap_counts, dtype=np.int64) * 4
+        if tap_counts is not None
+        else row_indices.size * DEPOSITS_PER_CANDIDATE
+    )
+    require(nominal_deposit_budget == row_indices.size * DEPOSITS_PER_CANDIDATE, "deposition treatment changed nominal work")
+    require(
+        int(np.sum(deposit_accounting["nominalDepositEvaluations"], dtype=np.int64)) == nominal_deposit_budget,
+        "deposit accounting disagrees with nominal work",
+    )
     steps = int((state.get("replay") or {}).get("completedSteps"))
     temporal = {
         "stateId": state_id,
@@ -1071,6 +1310,8 @@ def selected_state(
         "ids": selected_rows["nativeCellIndices"],
         "placements": placements,
         "multiplicity": multiplicity,
+        "depositRule": deposit_rule,
+        "maximumDepositsPerCandidate": maximum_deposits,
         "target": target,
         "render": render,
     }
@@ -1079,11 +1320,27 @@ def selected_state(
         "targetUsedForSelection": False,
         "selectedRows": int(row_indices.size),
         "candidateBudget": int(row_indices.size),
-        "nominalDepositEvaluationBudget": int(row_indices.size * DEPOSITS_PER_CANDIDATE),
-        "actualInBoundsDepositCount": actual_deposit_count(multiplicity),
-        "clippedDepositCount": int(row_indices.size * DEPOSITS_PER_CANDIDATE - actual_deposit_count(multiplicity)),
+        "nominalDepositEvaluationBudget": nominal_deposit_budget,
+        "depositRule": deposit_rule,
+        "maximumDepositsPerCandidate": maximum_deposits,
+        "positiveWeightDepositEvaluationCount": int(
+            np.sum(deposit_accounting["positiveWeightDepositEvaluations"], dtype=np.int64)
+        ),
+        "actualInBoundsPositiveWeightDepositCount": actual_deposit_count(multiplicity),
+        "outOfFramePositiveWeightDepositCount": int(
+            np.sum(deposit_accounting["outOfFramePositiveWeightDeposits"], dtype=np.int64)
+        ),
+        "invalidProjectionNominalDepositCount": int(
+            np.sum(deposit_accounting["invalidProjectionNominalDeposits"], dtype=np.int64)
+        ),
+        "retainedQuadratureWeightFraction": {
+            "sum": float(np.sum(deposit_accounting["retainedQuadratureWeightFraction"], dtype=np.float64)),
+            "meanPerCandidate": float(np.mean(deposit_accounting["retainedQuadratureWeightFraction"])),
+            "minimumPerCandidate": float(np.min(deposit_accounting["retainedQuadratureWeightFraction"])),
+        },
         "metrics": ORACLE.image_metrics(render, target),
         "rasterTelemetry": telemetry,
+        "contributionDeposition": deposition_plan,
         "images": {
             "render": str(render_path),
             "residual": str(residual_path),
@@ -1095,6 +1352,10 @@ def selected_state(
 def run(
     manifest_path: Path,
     motion_report_path: Path,
+    manifest: dict[str, Any],
+    manifest_sha256: str,
+    motion_report: dict[str, Any],
+    motion_report_sha256: str,
     out_dir: Path,
     budget_fraction: float,
     mode: str,
@@ -1105,13 +1366,12 @@ def run(
     adaptive_training_transitions: int,
     adaptive_calibration_transitions: int,
     adaptive_ridge_alpha: float,
+    contribution_deposition: bool,
     implementation_bundle_sha256: str,
     bound_implementation_bundle: dict[str, Any],
-) -> dict[str, Any]:
-    manifest, manifest_sha256 = load_json_binding(manifest_path)
-    motion_report, motion_report_sha256 = load_json_binding(motion_report_path)
-    validate_source_contract(manifest, motion_report, manifest_sha256)
+) -> tuple[dict[str, Any], str]:
     require(mode in {"frozen", "sequence"}, "mode must be frozen or sequence")
+    require(not contribution_deposition or adaptive_survival, "contribution deposition requires the matched-mean adaptive-survival sequence")
     states = manifest.get("states") or []
     require(len(states) >= 2, "budget oracle requires at least two captured exact states")
     budget_anchor_state = states[-1]
@@ -1157,6 +1417,8 @@ def run(
         if adaptive_survival
         else ["stable-uniform", "optical-energy", "optical-hysteresis"]
     )
+    if contribution_deposition:
+        policies.append(CONTRIBUTION_DEPOSITION_POLICY)
     temporal_by_policy: dict[str, list[dict[str, Any]]] = {policy: [] for policy in policies}
     previous_by_policy: dict[str, dict[str, Any]] = {}
     previous_hysteresis_ids: np.ndarray | None = None
@@ -1242,6 +1504,14 @@ def run(
             })
             selections["optical-hysteresis-adaptive-mean"] = adaptive_mean_rows
             selection_receipts["optical-hysteresis-adaptive-mean"] = adaptive_mean_receipt
+            if contribution_deposition:
+                selections[CONTRIBUTION_DEPOSITION_POLICY] = adaptive_mean_rows.copy()
+                selection_receipts[CONTRIBUTION_DEPOSITION_POLICY] = {
+                    **adaptive_mean_receipt,
+                    "authority": "matched-mean-membership-plus-target-free-contribution-deposition-v0",
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "depositionPolicy": CONTRIBUTION_DEPOSIT_RULE,
+                }
             previous_adaptive_mean_ids = ids[adaptive_mean_rows].copy()
             require(adaptive_model is not None, "causal adaptive model is missing after training")
             state_scores = optical_energy_scores(coefficients)
@@ -1336,8 +1606,6 @@ def run(
                 for policy, arm in row["arms"].items()
             },
         })
-    viewer_path = out_dir / "selection-viewer.html"
-    viewer_path.write_text(selection_viewer(viewer_rows, policies))
     require_unchanged_binding(manifest_path, manifest_sha256)
     require_unchanged_binding(motion_report_path, motion_report_sha256)
     implementation_bundle_at_completion = implementation_bundle_receipt()
@@ -1345,7 +1613,8 @@ def run(
         implementation_bundle_at_completion["sha256"] == implementation_bundle_sha256,
         "implementation bundle changed after binding",
     )
-    return {
+    viewer_path = out_dir / "selection-viewer.html"
+    report = {
         "schema": REPORT_SCHEMA,
         "status": "complete",
         "failurePhase": None,
@@ -1366,7 +1635,7 @@ def run(
             "candidateBudget": candidate_budget,
             "budgetAnchorStateId": str(budget_anchor_state["id"]),
             "budgetAnchorPopulation": budget_anchor_population,
-            "maximumDepositsPerCandidate": DEPOSITS_PER_CANDIDATE,
+            **deposition_work_contract(policies),
             "workEquivalence": "equal-selected-candidates-and-equal-nominal-deposit-evaluations; actual-in-bounds-deposits-reported-as-outcome",
             "policies": policies,
             "hysteresis": ({
@@ -1414,6 +1683,18 @@ def run(
                     "candidateBudgetMatched": True,
                     "nominalDepositWorkMatched": True,
                 },
+                "contributionDeposition": ({
+                    "policy": CONTRIBUTION_DEPOSITION_POLICY,
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
+                    "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
+                    "tapCounts": [3, 5, 7],
+                    "tapPatterns": CONTRIBUTION_TAP_PATTERNS,
+                    "allocationAndFootprintSpacingCoupled": True,
+                    "candidateBudgetMatched": True,
+                    "nominalDepositWorkMatched": True,
+                    "targetUsedForDeposition": False,
+                } if contribution_deposition else None),
             } if adaptive_survival else None),
         },
         "transport": {
@@ -1427,6 +1708,13 @@ def run(
         "adjacentStateMotion": temporal_by_policy,
         "selectionViewer": str(viewer_path),
     }
+    viewer_html = selection_viewer(viewer_rows, policies, {
+        "status": "complete",
+        "manifestSha256": manifest_sha256,
+        "motionReportSha256": motion_report_sha256,
+        "implementationBundleSha256": implementation_bundle_sha256,
+    })
+    return report, viewer_html
 
 
 def main() -> int:
@@ -1445,6 +1733,7 @@ def main() -> int:
     parser.add_argument("--adaptive-training-transitions", type=int, default=7)
     parser.add_argument("--adaptive-calibration-transitions", type=int, default=1)
     parser.add_argument("--adaptive-ridge-alpha", type=float, default=1e-3)
+    parser.add_argument("--contribution-deposition", action="store_true")
     parser.add_argument("--mode", choices=("frozen", "sequence"), default="frozen")
     args = parser.parse_args()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -1453,7 +1742,7 @@ def main() -> int:
     report_path = Path(args.report).expanduser().resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     implementation_bundle_sha256 = str(args.implementation_bundle_sha256).lower()
-    failure_phase = "implementation-binding"
+    failure_phase = "visual-evidence-invalidation"
     last_trustworthy_evidence: dict[str, Any] = {
         "implementationPath": str(IMPLEMENTATION_PATH),
         "implementationBundleSha256Expected": implementation_bundle_sha256,
@@ -1461,20 +1750,34 @@ def main() -> int:
         "motionReportPath": str(motion_report_path),
     }
     try:
+        invalidate_visual_evidence(out_dir)
+        failure_phase = "implementation-binding"
         require(len(implementation_bundle_sha256) == 64 and all(character in "0123456789abcdef" for character in implementation_bundle_sha256), "implementation bundle SHA-256 must be 64 lowercase hexadecimal characters")
         implementation_bundle_at_start, implementation_payloads = capture_implementation_bundle()
         last_trustworthy_evidence["implementationBundleAtStart"] = implementation_bundle_at_start
         require(implementation_bundle_at_start["sha256"] == implementation_bundle_sha256, "launched implementation bundle does not match the externally bound SHA-256")
         BOUND_IMPLEMENTATION_PAYLOADS = implementation_payloads
-        failure_phase = "runtime-initialization"
-        initialize_runtime()
         failure_phase = "source-validation"
         require(manifest_path.is_file(), f"manifest is missing: {manifest_path}")
         require(motion_report_path.is_file(), f"motion report is missing: {motion_report_path}")
+        manifest, manifest_sha256 = load_json_binding(manifest_path)
+        motion_report, motion_report_sha256 = load_json_binding(motion_report_path)
+        validate_source_contract(manifest, motion_report, manifest_sha256)
+        last_trustworthy_evidence["validatedSource"] = {
+            "manifestSha256": manifest_sha256,
+            "motionReportSha256": motion_report_sha256,
+            "motionReportStatus": motion_report.get("status"),
+        }
+        failure_phase = "runtime-initialization"
+        initialize_runtime()
         failure_phase = "fixed-budget-render"
-        report = run(
+        report, viewer_html = run(
             manifest_path,
             motion_report_path,
+            manifest,
+            manifest_sha256,
+            motion_report,
+            motion_report_sha256,
             out_dir,
             args.budget_fraction,
             args.mode,
@@ -1485,11 +1788,15 @@ def main() -> int:
             args.adaptive_training_transitions,
             args.adaptive_calibration_transitions,
             args.adaptive_ridge_alpha,
+            args.contribution_deposition,
             implementation_bundle_sha256,
             implementation_bundle_at_start,
         )
         last_trustworthy_evidence.update(report["source"])
+        failure_phase = "report-publication"
         report_path.write_text(json.dumps(report, indent=2) + "\n")
+        failure_phase = "visual-evidence-publication"
+        Path(report["selectionViewer"]).write_text(viewer_html)
         print(json.dumps({"status": "complete", "reportPath": str(report_path), "selectionViewer": report["selectionViewer"]}, indent=2))
         return 0
     except Exception as error:
@@ -1505,10 +1812,27 @@ def main() -> int:
             "lastTrustworthyEvidence": last_trustworthy_evidence,
             "traceback": traceback.format_exc(),
         }
+        try:
+            invalidate_visual_evidence(out_dir)
+            failure["visualEvidenceDisposition"] = "invalidated"
+        except Exception as cleanup_error:
+            failure["visualEvidenceDisposition"] = "failed-tombstone-written"
+            failure["visualEvidenceInvalidationError"] = str(cleanup_error)
+            try:
+                write_failed_visual_tombstone(out_dir, failure)
+            except Exception as tombstone_error:
+                failure["visualEvidenceDisposition"] = "tombstone-write-failed"
+                failure["visualEvidenceTombstoneError"] = str(tombstone_error)
         report_path.write_text(json.dumps(failure, indent=2) + "\n")
         print(json.dumps(failure, indent=2))
         return 1
 
 
+def execute_bound_main() -> int:
+    _, payloads = capture_implementation_bundle()
+    module = load_bound_budget_module(payloads)
+    return int(module.main())
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main() if BOUND_SELF_EXECUTION else execute_bound_main())

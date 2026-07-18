@@ -208,14 +208,42 @@ require(MODULE.IMPLEMENTATION_PATH == MODULE_PATH, "implementation provenance bi
 require(MODULE.implementation_bundle_receipt()["sha256"] == IMPLEMENTATION_BUNDLE_SHA256, "implementation bundle provenance drifted")
 
 with tempfile.TemporaryDirectory() as temporary:
+    manifest_path = Path(temporary) / "manifest.json"
+    motion_path = Path(temporary) / "motion.json"
+    manifest_path.write_text("{}")
+    motion_path.write_text("{}")
+    report_path = Path(temporary) / "invalid-source.json"
+    environment = dict(os.environ)
+    environment["KAMINOS_BUDGET_ORACLE_FAIL_RUNTIME_INIT"] = "1"
+    result = subprocess.run([
+        sys.executable,
+        str(MODULE_PATH),
+        "--manifest", str(manifest_path),
+        "--motion-report", str(motion_path),
+        "--out-dir", str(Path(temporary) / "out"),
+        "--report", str(report_path),
+        "--implementation-bundle-sha256", IMPLEMENTATION_BUNDLE_SHA256,
+    ], check=False, capture_output=True, text=True, env=environment)
+    require(result.returncode != 0, "malformed source falsely succeeded")
+    failure = json.loads(report_path.read_text())
+    require(failure.get("failurePhase") == "source-validation", "malformed source was masked by runtime initialization")
+
+with tempfile.TemporaryDirectory() as temporary:
+    manifest_path = Path(temporary) / "manifest.json"
+    motion_path = Path(temporary) / "motion.json"
+    manifest_path.write_text(json.dumps(valid_manifest))
+    manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    runtime_motion_report = dict(valid_motion_report)
+    runtime_motion_report["source"] = {"manifestSha256": manifest_sha256}
+    motion_path.write_text(json.dumps(runtime_motion_report))
     report_path = Path(temporary) / "runtime-failure.json"
     environment = dict(os.environ)
     environment["KAMINOS_BUDGET_ORACLE_FAIL_RUNTIME_INIT"] = "1"
     result = subprocess.run([
         sys.executable,
         str(MODULE_PATH),
-        "--manifest", str(Path(temporary) / "manifest.json"),
-        "--motion-report", str(Path(temporary) / "motion.json"),
+        "--manifest", str(manifest_path),
+        "--motion-report", str(motion_path),
         "--out-dir", str(Path(temporary) / "out"),
         "--report", str(report_path),
         "--implementation-bundle-sha256", IMPLEMENTATION_BUNDLE_SHA256,

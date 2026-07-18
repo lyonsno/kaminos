@@ -127,7 +127,12 @@ def pixel_mae(left: np.ndarray, right: np.ndarray) -> float:
     return float(np.mean(np.abs(left.astype(np.float32) - right.astype(np.float32))) / 255.0)
 
 
-def flow_tap_placements(rows: dict[str, Any], camera: dict[str, Any]) -> np.ndarray:
+def flow_tap_placements(
+    rows: dict[str, Any],
+    camera: dict[str, Any],
+    tap_counts: np.ndarray | None = None,
+    tap_patterns: dict[int, dict[str, Any]] | None = None,
+) -> np.ndarray:
     descriptors = rows["kernelDescriptors"]
     positions = np.asarray(descriptors[:, 0:3])
     tangents = np.asarray(descriptors[:, 4:7])
@@ -148,24 +153,121 @@ def flow_tap_placements(rows: dict[str, Any], camera: dict[str, Any]) -> np.ndar
     base_radius = (2.0 / 160.0) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
-    offsets = np.asarray(FLOW_TAP_OFFSETS, dtype=np.float32)
-    placements = np.stack([
-        pixel_x[:, None] + tx[:, None] * major_px[:, None] * offsets[None, :],
-        pixel_y[:, None] + ty[:, None] * major_px[:, None] * offsets[None, :],
-    ], axis=2).astype(np.float32)
-    placements[~(valid & tangent_valid)] = np.nan
+    visible = (
+        valid
+        & tangent_valid
+        & (pixel_x >= 0.0)
+        & (pixel_x < width)
+        & (pixel_y >= 0.0)
+        & (pixel_y < height)
+    )
+    if tap_counts is None:
+        offsets = np.asarray(FLOW_TAP_OFFSETS, dtype=np.float32)
+        placements = np.stack([
+            pixel_x[:, None] + tx[:, None] * major_px[:, None] * offsets[None, :],
+            pixel_y[:, None] + ty[:, None] * major_px[:, None] * offsets[None, :],
+        ], axis=2).astype(np.float32)
+        placements[~visible] = np.nan
+        return placements
+    counts = np.asarray(tap_counts)
+    require(counts.ndim == 1 and counts.size == positions.shape[0], "tap-count placement plan must match rows")
+    require(tap_patterns is not None and set(tap_patterns) == {3, 5, 7}, "variable-tap placements require reviewed 3/5/7 patterns")
+    require(np.all(np.isin(counts, (3, 5, 7))), "tap-count placement plan contains an unreviewed count")
+    placements = np.full((positions.shape[0], 7, 2), np.nan, dtype=np.float32)
+    for tap_count in (3, 5, 7):
+        pattern = tap_patterns[tap_count]
+        offsets = np.asarray(pattern["offsets"], dtype=np.float32)
+        slots = np.asarray(pattern["slots"], dtype=np.int64)
+        require(offsets.size == slots.size == tap_count, f"{tap_count}-tap placement pattern width drifted")
+        group = (counts == tap_count) & visible
+        group_rows = np.flatnonzero(group)
+        if group_rows.size == 0:
+            continue
+        placements[group_rows[:, None], slots[None, :], 0] = (
+            pixel_x[group_rows, None] + tx[group_rows, None] * major_px[group_rows, None] * offsets[None, :]
+        )
+        placements[group_rows[:, None], slots[None, :], 1] = (
+            pixel_y[group_rows, None] + ty[group_rows, None] * major_px[group_rows, None] * offsets[None, :]
+        )
     return placements
 
 
-def bilinear_deposit_multiplicity(placements: np.ndarray, width: int, height: int) -> np.ndarray:
+def flow_tap_weights(
+    row_count: int,
+    tap_counts: np.ndarray | None = None,
+    tap_patterns: dict[int, dict[str, Any]] | None = None,
+) -> np.ndarray:
+    if tap_counts is None:
+        return np.broadcast_to(
+            np.asarray((0.075, 0.225, 0.4, 0.225, 0.075), dtype=np.float32),
+            (row_count, 5),
+        ).copy()
+    counts = np.asarray(tap_counts)
+    require(counts.ndim == 1 and counts.size == row_count, "tap-count weight plan must match rows")
+    require(tap_patterns is not None and set(tap_patterns) == {3, 5, 7}, "variable-tap weights require reviewed 3/5/7 patterns")
+    weights = np.zeros((row_count, 7), dtype=np.float32)
+    for tap_count in (3, 5, 7):
+        pattern = tap_patterns[tap_count]
+        slots = np.asarray(pattern["slots"], dtype=np.int64)
+        pattern_weights = np.asarray(pattern["weights"], dtype=np.float32)
+        rows = np.flatnonzero(counts == tap_count)
+        if rows.size:
+            weights[rows[:, None], slots[None, :]] = pattern_weights[None, :]
+    require(np.allclose(np.sum(weights, axis=1), 1.0), "tap-count weights do not conserve coefficient mass")
+    return weights
+
+
+def bilinear_deposit_accounting(
+    placements: np.ndarray,
+    tap_weights: np.ndarray,
+    width: int,
+    height: int,
+) -> dict[str, np.ndarray]:
+    points = np.asarray(placements, dtype=np.float32)
+    weights = np.asarray(tap_weights, dtype=np.float32)
+    require(points.ndim == 3 and points.shape[2] == 2, "bilinear placements must have shape [rows,taps,2]")
+    require(weights.shape == points.shape[:2], "bilinear tap weights must match placement slots")
+    require(np.all(np.isfinite(weights)) and np.all(weights >= 0.0), "bilinear tap weights must be finite and nonnegative")
+    active = weights > 0.0
     finite = np.isfinite(placements).all(axis=2)
-    x0 = np.floor(np.where(finite, placements[..., 0], -1.0)).astype(np.int32)
-    y0 = np.floor(np.where(finite, placements[..., 1], -1.0)).astype(np.int32)
-    multiplicity = np.zeros(placements.shape[0], dtype=np.int16)
-    for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1)):
-        valid = finite & (x0 + dx >= 0) & (x0 + dx < width) & (y0 + dy >= 0) & (y0 + dy < height)
-        multiplicity += np.sum(valid, axis=1).astype(np.int16)
-    return multiplicity
+    x = np.where(finite, points[..., 0], 0.0)
+    y = np.where(finite, points[..., 1], 0.0)
+    x0 = np.floor(x).astype(np.int32)
+    y0 = np.floor(y).astype(np.int32)
+    fx = (x - x0).astype(np.float32)
+    fy = (y - y0).astype(np.float32)
+    samples = (
+        (0, 0, (1.0 - fx) * (1.0 - fy)),
+        (1, 0, fx * (1.0 - fy)),
+        (0, 1, (1.0 - fx) * fy),
+        (1, 1, fx * fy),
+    )
+    positive_count = np.zeros(points.shape[0], dtype=np.int32)
+    actual_count = np.zeros(points.shape[0], dtype=np.int32)
+    out_of_frame_count = np.zeros(points.shape[0], dtype=np.int32)
+    retained_mass = np.zeros(points.shape[0], dtype=np.float32)
+    for dx, dy, sample_weight in samples:
+        positive = active & finite & (sample_weight > 0.0)
+        in_bounds = positive & (x0 + dx >= 0) & (x0 + dx < width) & (y0 + dy >= 0) & (y0 + dy < height)
+        positive_count += np.sum(positive, axis=1).astype(np.int32)
+        actual_count += np.sum(in_bounds, axis=1).astype(np.int32)
+        out_of_frame_count += np.sum(positive & ~in_bounds, axis=1).astype(np.int32)
+        retained_mass += np.sum(np.where(in_bounds, weights * sample_weight, 0.0), axis=1).astype(np.float32)
+    return {
+        "nominalDepositEvaluations": np.sum(active, axis=1).astype(np.int32) * 4,
+        "positiveWeightDepositEvaluations": positive_count,
+        "actualInBoundsPositiveWeightDeposits": actual_count,
+        "outOfFramePositiveWeightDeposits": out_of_frame_count,
+        "invalidProjectionNominalDeposits": np.sum(active & ~finite, axis=1).astype(np.int32) * 4,
+        "retainedQuadratureWeightFraction": retained_mass,
+    }
+
+
+def bilinear_deposit_multiplicity(placements: np.ndarray, width: int, height: int) -> np.ndarray:
+    tap_weights = np.ones(placements.shape[:2], dtype=np.float32)
+    return bilinear_deposit_accounting(placements, tap_weights, width, height)[
+        "actualInBoundsPositiveWeightDeposits"
+    ]
 
 
 def placement_velocity(previous: dict[str, Any], current: dict[str, Any], step_delta: int) -> dict[str, Any]:
@@ -209,6 +311,12 @@ def node_turnover(previous_ids: np.ndarray, current_ids: np.ndarray) -> dict[str
 
 
 def multiplicity_churn(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    previous_rule = previous.get("depositRule", "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0")
+    current_rule = current.get("depositRule", "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0")
+    previous_maximum = previous.get("maximumDepositsPerCandidate", DEPOSITS_PER_CANDIDATE)
+    current_maximum = current.get("maximumDepositsPerCandidate", DEPOSITS_PER_CANDIDATE)
+    require(previous_rule == current_rule, "adjacent states changed deposit rules")
+    require(previous_maximum == current_maximum, "adjacent states changed maximum deposits per candidate")
     shared, previous_rows, current_rows = np.intersect1d(
         previous["ids"], current["ids"], assume_unique=True, return_indices=True
     )
@@ -216,15 +324,19 @@ def multiplicity_churn(previous: dict[str, Any], current: dict[str, Any]) -> dic
     current_values = current["multiplicity"][current_rows]
     delta = np.abs(current_values.astype(np.int32) - previous_values.astype(np.int32))
     return {
-        "depositRule": "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0",
-        "maximumDepositsPerCandidate": DEPOSITS_PER_CANDIDATE,
-        "previousDepositCount": int(np.sum(previous["multiplicity"], dtype=np.int64)),
-        "currentDepositCount": int(np.sum(current["multiplicity"], dtype=np.int64)),
+        "depositRule": previous_rule,
+        "maximumDepositsPerCandidate": int(previous_maximum),
+        "previousActualInBoundsPositiveWeightDepositCount": int(
+            np.sum(previous["multiplicity"], dtype=np.int64)
+        ),
+        "currentActualInBoundsPositiveWeightDepositCount": int(
+            np.sum(current["multiplicity"], dtype=np.int64)
+        ),
         "sharedNodeCount": int(shared.size),
         "sharedNodesWithChangedMultiplicity": int(np.count_nonzero(delta)),
         "meanAbsoluteSharedNodeDepositDelta": float(np.mean(delta)) if delta.size else None,
         "maxAbsoluteSharedNodeDepositDelta": int(np.max(delta)) if delta.size else None,
-        "authority": "actual-in-bounds-bilinear-deposit-count-v0",
+        "authority": "actual-in-bounds-positive-weight-bilinear-deposit-count-v1",
     }
 
 

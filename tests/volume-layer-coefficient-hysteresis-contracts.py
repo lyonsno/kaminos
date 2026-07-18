@@ -206,13 +206,13 @@ complete_transition = {
     "multiplicityChurn": {
         "depositRule": "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0",
         "maximumDepositsPerCandidate": 20,
-        "previousDepositCount": 40,
-        "currentDepositCount": 39,
+        "previousActualInBoundsPositiveWeightDepositCount": 40,
+        "currentActualInBoundsPositiveWeightDepositCount": 39,
         "sharedNodeCount": 2,
         "sharedNodesWithChangedMultiplicity": 1,
         "meanAbsoluteSharedNodeDepositDelta": 0.5,
         "maxAbsoluteSharedNodeDepositDelta": 1,
-        "authority": "actual-in-bounds-bilinear-deposit-count-v0",
+        "authority": "actual-in-bounds-positive-weight-bilinear-deposit-count-v1",
     },
     "placementVelocity": {
         "sharedNodeCount": 2,
@@ -236,7 +236,13 @@ report_states = [
         "stateId": "a",
         "steps": 10,
         "arms": {
-            policy: {"selectedRows": 3, "candidateBudget": 3, "actualInBoundsDepositCount": 40}
+            policy: {
+                "selectedRows": 3,
+                "candidateBudget": 3,
+                "actualInBoundsPositiveWeightDepositCount": 40,
+                "depositRule": "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0",
+                "maximumDepositsPerCandidate": 20,
+            }
             for policy in policies
         },
     },
@@ -244,7 +250,13 @@ report_states = [
         "stateId": "b",
         "steps": 12,
         "arms": {
-            policy: {"selectedRows": 3, "candidateBudget": 3, "actualInBoundsDepositCount": 39}
+            policy: {
+                "selectedRows": 3,
+                "candidateBudget": 3,
+                "actualInBoundsPositiveWeightDepositCount": 39,
+                "depositRule": "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0",
+                "maximumDepositsPerCandidate": 20,
+            }
             for policy in policies
         },
     },
@@ -256,8 +268,8 @@ MODULE.validate_adjacent_state_motion(
     "sequence",
 )
 undercounted = {policy: [copy.deepcopy(complete_transition)] for policy in policies}
-undercounted["optical-hysteresis"][0]["multiplicityChurn"]["previousDepositCount"] = 20
-undercounted["optical-hysteresis"][0]["multiplicityChurn"]["currentDepositCount"] = 19
+undercounted["optical-hysteresis"][0]["multiplicityChurn"]["previousActualInBoundsPositiveWeightDepositCount"] = 20
+undercounted["optical-hysteresis"][0]["multiplicityChurn"]["currentActualInBoundsPositiveWeightDepositCount"] = 19
 try:
     MODULE.validate_adjacent_state_motion(report_states, undercounted, policies, "sequence")
 except ValueError:
