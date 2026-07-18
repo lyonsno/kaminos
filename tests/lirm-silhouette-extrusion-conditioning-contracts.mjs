@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
@@ -86,7 +86,7 @@ for (const kind of ['clay', 'depth', 'normal']) {
     `${kind} contact sheet hash must bind its exact bytes`,
   );
 }
-for (const kind of ['clay', 'depth', 'normal', 'mask']) {
+for (const kind of ['clay', 'clayTransparent', 'depth', 'normal', 'mask']) {
   const output = receipt.bodies[0].outputs[kind];
   const path = join(outDir, output.path);
   assert.ok(existsSync(path), `${kind} output must exist`);
@@ -108,6 +108,28 @@ const verificationReportPath = join(outDir, 'verification-report.json');
 let verificationReport = JSON.parse(readFileSync(verificationReportPath, 'utf8'));
 assert.equal(verificationReport.status, 'complete');
 assert.equal(verificationReport.verifiedBodyCount, 1);
+assert.equal(verificationReport.verifiedOutputCount, 5);
+
+const packetPath = join(outDir, receipt.bodies[0].generationId, 'conditioning-packet.json');
+const omittedReceipt = structuredClone(receipt);
+delete omittedReceipt.bodies[0].outputs.clayTransparent;
+const omittedPacket = structuredClone(omittedReceipt.bodies[0]);
+writeFileSync(join(outDir, 'receipt.json'), `${JSON.stringify(omittedReceipt, null, 2)}\n`);
+writeFileSync(packetPath, `${JSON.stringify(omittedPacket, null, 2)}\n`);
+const omittedOutputVerification = spawnSync('python3', [
+  script.pathname,
+  '--verify-output-dir', outDir,
+], { encoding: 'utf8' });
+assert.notEqual(
+  omittedOutputVerification.status,
+  0,
+  'packet and receipt jointly omitting clayTransparent must fail verification',
+);
+verificationReport = JSON.parse(readFileSync(verificationReportPath, 'utf8'));
+assert.equal(verificationReport.status, 'failed');
+assert.match(verificationReport.error, /required conditioning outputs.*clayTransparent/i);
+writeFileSync(join(outDir, 'receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+writeFileSync(packetPath, `${JSON.stringify(receipt.bodies[0], null, 2)}\n`);
 
 const mutatedDepthPath = join(outDir, receipt.bodies[0].outputs.depth.path);
 writeFileSync(mutatedDepthPath, Buffer.concat([readFileSync(mutatedDepthPath), Buffer.from([0])]));
@@ -258,14 +280,25 @@ const malformedBasinRows = [
   ['signedDistanceHash', (row) => { delete row.signedDistanceHash; }],
   ['maskPath', (row) => { delete row.maskPath; }],
   ['signedDistancePath', (row) => { delete row.signedDistancePath; }],
+  ['maskPath source-root traversal', (row, external) => { row.maskPath = relative(external.root, external.maskPath); }, /maskPath.*escapes source root/i],
+  ['signedDistancePath absolute escape', (row, external) => { row.signedDistancePath = external.signedDistancePath; }, /signedDistancePath.*escapes source root/i],
 ];
-for (const [label, mutate] of malformedBasinRows) {
+for (const [label, mutate, expectedError] of malformedBasinRows) {
   const malformedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-malformed-'));
   await mkdir(join(malformedDir, 'generated'));
   await writeFile(join(malformedDir, 'generated', 'basin-03-s3p00-n00.pgm'), pgm);
   await writeFile(join(malformedDir, 'generated', 'basin-03-s3p00-n00.f32'), Buffer.from(normalizedSdf.buffer));
+  const externalDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-external-'));
+  const externalMaskPath = join(externalDir, 'outside.pgm');
+  const externalSignedDistancePath = join(externalDir, 'outside.f32');
+  await writeFile(externalMaskPath, pgm);
+  await writeFile(externalSignedDistancePath, Buffer.from(normalizedSdf.buffer));
   const malformedReceipt = structuredClone(basinSourceReceipt);
-  mutate(malformedReceipt.generations[0]);
+  mutate(malformedReceipt.generations[0], {
+    root: malformedDir,
+    maskPath: externalMaskPath,
+    signedDistancePath: externalSignedDistancePath,
+  });
   await writeFile(join(malformedDir, 'receipt.json'), `${JSON.stringify(malformedReceipt, null, 2)}\n`);
   const malformedRun = spawnSync('python3', [
     script.pathname,
@@ -277,7 +310,10 @@ for (const [label, mutate] of malformedBasinRows) {
   assert.notEqual(malformedRun.status, 0, `basin row missing or invalid ${label} must be rejected`);
   const malformedOutputReceipt = JSON.parse(readFileSync(join(malformedDir, 'out', 'receipt.json'), 'utf8'));
   assert.equal(malformedOutputReceipt.status, 'failed');
-  assert.match(malformedOutputReceipt.error, new RegExp(label.replaceAll('.', '\\.'), 'i'));
+  assert.match(
+    malformedOutputReceipt.error,
+    expectedError ?? new RegExp(label.replaceAll('.', '\\.'), 'i'),
+  );
 }
 
 const copiedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-copied-'));

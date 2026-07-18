@@ -14,6 +14,7 @@ import numpy as np
 
 
 SCHEMA = "kaminos.lirm-silhouette-extrusion-conditioning-witness.v0"
+REQUIRED_OUTPUT_KINDS = frozenset(("clay", "clayTransparent", "depth", "normal", "mask"))
 PACKET_SCHEMA = "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0"
 REQUESTED_ROUTE = "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0"
 EFFECTIVE_ROUTE = "cpu-sdf-raymarch-rounded-extrusion-v0"
@@ -287,6 +288,14 @@ def resolve_output_path(root: Path, relative_path: str) -> Path:
     return path
 
 
+def resolve_source_path(root: Path, relative_path: str, field: str) -> Path:
+    root = root.resolve()
+    path = (root / relative_path).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError(f"{field} escapes source root: {relative_path}")
+    return path
+
+
 def verify_output_inventory(out_dir: Path) -> dict:
     report_path = out_dir / "verification-report.json"
     report = {
@@ -313,6 +322,14 @@ def verify_output_inventory(out_dir: Path) -> dict:
             outputs = body.get("outputs")
             if not isinstance(outputs, dict) or not outputs:
                 raise ValueError(f"{generation_id} has no conditioning outputs")
+            output_kinds = frozenset(outputs)
+            if output_kinds != REQUIRED_OUTPUT_KINDS:
+                missing = sorted(REQUIRED_OUTPUT_KINDS - output_kinds)
+                unexpected = sorted(output_kinds - REQUIRED_OUTPUT_KINDS)
+                raise ValueError(
+                    f"{generation_id} required conditioning outputs do not reconcile: "
+                    f"missing={missing}, unexpected={unexpected}"
+                )
             for kind, output in outputs.items():
                 path = resolve_output_path(out_dir, output.get("path", ""))
                 if not path.is_file():
@@ -342,7 +359,7 @@ def verify_output_inventory(out_dir: Path) -> dict:
         raise
 
 
-def validate_basin_source_row(row: dict) -> None:
+def validate_basin_source_row(row: dict, source_dir: Path) -> None:
     generation_id = row.get("generationId", "<unknown>")
     required_scalars = {
         "generationId": str,
@@ -364,6 +381,12 @@ def validate_basin_source_row(row: dict) -> None:
         raise ValueError(f"{generation_id} basin field maskHash is missing or invalid")
     if not row["signedDistanceHash"].startswith("sha256:"):
         raise ValueError(f"{generation_id} basin field signedDistanceHash is missing or invalid")
+    resolve_source_path(source_dir, row["maskPath"], f"{generation_id} basin field maskPath")
+    resolve_source_path(
+        source_dir,
+        row["signedDistancePath"],
+        f"{generation_id} basin field signedDistancePath",
+    )
     usability = row.get("usabilityAssay")
     if not isinstance(usability, dict):
         raise ValueError(f"{generation_id} basin field usabilityAssay is missing or invalid")
@@ -407,7 +430,7 @@ def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[s
         accepted = {}
         for row in rows:
             if effective_route == BASIN_LATENT_SOURCE_ROUTE and row.get("acceptedForDownstream"):
-                validate_basin_source_row(row)
+                validate_basin_source_row(row, source_dir)
             novelty_assay = row.get("noveltyAssay")
             if novelty_assay is None and effective_route == BASIN_LATENT_SOURCE_ROUTE:
                 novelty_assay = {
@@ -460,7 +483,11 @@ def main() -> int:
         contact_sheet_images = {kind: [] for kind in ("clay", "depth", "normal")}
         for generation_id in requested_ids:
             row = accepted[generation_id]
-            mask_path = args.shape_space_dir / row["maskPath"]
+            mask_path = resolve_source_path(
+                args.shape_space_dir,
+                row["maskPath"],
+                f"{generation_id} source maskPath",
+            )
             mask_file_hash = file_contract(mask_path)["hash"]
             mask = read_pgm(mask_path)
             mask_array_hash = f"sha256:{hashlib.sha256(np.ascontiguousarray(mask, dtype=np.uint8).tobytes()).hexdigest()}"
@@ -471,7 +498,11 @@ def main() -> int:
             signed_distance_file_hash = None
             source_receipt_signed_distance_hash = row.get("signedDistanceHash")
             if effective_source_route != LATENT_SAMPLE_SOURCE_ROUTE:
-                signed_distance_path = args.shape_space_dir / row["signedDistancePath"]
+                signed_distance_path = resolve_source_path(
+                    args.shape_space_dir,
+                    row["signedDistancePath"],
+                    f"{generation_id} source signedDistancePath",
+                )
                 signed_distance_file_hash = file_contract(signed_distance_path)["hash"]
                 if (
                     source_receipt_signed_distance_hash is not None
