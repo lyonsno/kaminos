@@ -133,6 +133,19 @@ const manifest = {
   },
 };
 
+const manifestUrl = 'http://127.0.0.1:18782/manifests/stage-b.json';
+const resourceLoadReceipts = manifest.artifacts.map(artifact => ({
+  id: artifact.id,
+  requestedUrl: new URL(artifact.path, manifestUrl).href,
+  effectiveUrl: new URL(artifact.path, manifestUrl).href,
+  requestedSha256: artifact.sha256,
+  effectiveSha256: artifact.sha256,
+  requestedBytes: artifact.bytes,
+  effectiveBytes: artifact.bytes,
+  status: 'loaded',
+  fallbackUsed: false,
+}));
+
 assert.equal(STAGE_B_COCKPIT_CONSUMER.identity, 'matched-optical-recurrence-v0');
 assert.equal(STAGE_B_COCKPIT_CONSUMER.disabledReason, 'producer-evidence-unverified');
 
@@ -142,7 +155,8 @@ const unavailable = admitStageBCockpitManifest({
   requestedManifestSha256: null,
 });
 assert.equal(unavailable.status, 'disabled');
-assert.equal(unavailable.disabledReason, 'producer-evidence-unverified');
+assert.equal(unavailable.disabledReason, 'stage-b-resources-missing');
+assert.equal(unavailable.resourceState, 'missing');
 assert.equal(unavailable.requestedTreatment, 'matched-optical-recurrence-v0');
 assert.equal(unavailable.effectiveTreatment, null);
 assert.equal(unavailable.fallbackUsed, false);
@@ -151,16 +165,21 @@ assert.deepEqual(unavailable.resources, []);
 
 const admitted = admitStageBCockpitManifest({
   requestedTreatment: 'matched-optical-recurrence-v0',
-  requestedManifestUrl: 'http://127.0.0.1:18782/manifests/stage-b.json',
+  requestedManifestUrl: manifestUrl,
   requestedManifestSha256: manifestSha256,
-  effectiveManifestUrl: 'http://127.0.0.1:18782/manifests/stage-b.json',
+  effectiveManifestUrl: manifestUrl,
   effectiveManifestSha256: manifestSha256,
   manifest,
+  resourceLoadReceipts,
 });
 assert.equal(admitted.status, 'effective');
 assert.equal(admitted.effectiveTreatment, 'matched-optical-recurrence-v0');
+assert.equal(admitted.resourceState, 'complete');
+assert.equal(admitted.authority.evidenceAuthority, 'producer-evidence-unverified');
+assert.equal(admitted.authority.operatorScope, 'operator-exploration-only');
+assert.equal(admitted.authority.decisionBearing, false);
 assert.equal(admitted.fallbackUsed, false);
-assert.deepEqual(admitted.passes.applied, ['manifest-validation', 'resource-binding']);
+assert.deepEqual(admitted.passes.applied, ['manifest-validation', 'resource-binding', 'resource-load-verification']);
 assert.equal(admitted.passes.rendererApplied, false, 'manifest admission must not pretend the renderer pass already ran');
 assert.equal(admitted.resources.length, 2);
 assert.equal(admitted.resources[0].effectiveUrl, 'http://127.0.0.1:18782/manifests/captures/presentation.png');
@@ -192,6 +211,7 @@ for (const [label, mutate, expected] of [
     effectiveManifestUrl: 'http://127.0.0.1:18782/manifests/stage-b.json',
     effectiveManifestSha256: manifestSha256,
     manifest: structuredClone(manifest),
+    resourceLoadReceipts: structuredClone(resourceLoadReceipts),
   };
   mutate(input);
   const receipt = admitStageBCockpitManifest(input);
@@ -200,6 +220,29 @@ for (const [label, mutate, expected] of [
   assert.equal(receipt.effectiveTreatment, null, label);
   assert.deepEqual(receipt.passes.applied, [], label);
   assert.equal(receipt.fallbackUsed, false, label);
+}
+
+for (const [label, mutate, expected] of [
+  ['missing loaded resource', loads => { loads.pop(); }, /stage-b-resource-load-incomplete/],
+  ['loaded resource hash substitution', loads => { loads[0].effectiveSha256 = sha('wrong-resource'); }, /stage-b-resource-hash-substitution:original-presentation/],
+  ['loaded resource route substitution', loads => { loads[1].effectiveUrl += '?fallback=1'; }, /stage-b-resource-route-substitution:matched-optical/],
+  ['loaded resource fallback', loads => { loads[1].fallbackUsed = true; }, /stage-b-resource-fallback:matched-optical/],
+]) {
+  const loads = structuredClone(resourceLoadReceipts);
+  mutate(loads);
+  const receipt = admitStageBCockpitManifest({
+    requestedTreatment: 'matched-optical-recurrence-v0',
+    requestedManifestUrl: manifestUrl,
+    requestedManifestSha256: manifestSha256,
+    effectiveManifestUrl: manifestUrl,
+    effectiveManifestSha256: manifestSha256,
+    manifest: structuredClone(manifest),
+    resourceLoadReceipts: loads,
+  });
+  assert.notEqual(receipt.status, 'effective', label);
+  assert.match(receipt.failures.join(','), expected, label);
+  assert.equal(receipt.effectiveTreatment, null, label);
+  assert.equal(receipt.passes.rendererApplied, false, label);
 }
 
 const fork = buildStageBAuthoredFork({
@@ -223,11 +266,12 @@ assert.throws(
   /producer artifact cannot be overwritten/,
 );
 
-const [index, session, selectiveLive, witness] = await Promise.all([
+const [index, session, selectiveLive, witness, core] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../volume-full-support-cockpit-session.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../volume-selective-head-live.html', import.meta.url), 'utf8'),
   readFile(new URL('../volume-full-support-cockpit-witness.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../volume-core.js', import.meta.url), 'utf8'),
 ]);
 assert.match(index, /id="volume-stage-b-view"/, 'Stage B viewer must expose the producer-declared view sockets');
 assert.match(index, /id="volume-stage-b-status"[^]*producer-evidence-unverified/, 'Stage B must be visibly disabled before producer evidence validates');
@@ -245,5 +289,10 @@ assert.match(witness, /stageBReceipt\.effectiveManifestSha256[^]*stageBManifestA
 assert.match(witness, /full_support_stage_b_manifest[^]*stageBReceipt\.requestedManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the requested manifest route');
 assert.match(witness, /stageBReceipt\.effectiveManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the effective manifest route');
 assert.match(witness, /rendererApplied[^]*false/, 'pre-evidence witness must reject an unreported renderer application');
+assert.match(index, /operator-exploration-only/, 'complete unaccepted Stage B pixels must carry visible operator-only authority');
+assert.match(index, /resourceLoadReceipts/, 'cockpit must verify every provisional resource load before enabling pixels');
+assert.match(core, /BOUNDARY_SPLAT_OPTICAL_MODE\s*=\s*['"]matched-optical-recurrence-v0['"]/, 'exact analytical Stage B renderer mode is missing');
+assert.match(core, /BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS\s*=\s*16/, 'exact analytical Stage B depth-bin count is missing');
+assert.match(core, /encodeBoundarySplatOpticalRecurrence/, 'exact analytical Stage B pass is not encoded');
 
 console.log('volume Stage B cockpit consumer contracts passed');
