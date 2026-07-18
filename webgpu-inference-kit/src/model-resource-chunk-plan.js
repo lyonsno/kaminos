@@ -8,6 +8,10 @@ import {
   acquireWebGpuVerifiedResourceSource,
   describeWebGpuModelResourceSource,
 } from './model-resource-source.js';
+import {
+  materializeWebGpuModelFetchOptions,
+  snapshotWebGpuModelFetchOptions,
+} from './model-resource-fetch-options.js';
 import { WEBGPU_RESOURCE_CANCELLATION_MODES } from './resource-factory.js';
 
 export const WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_SCHEMA = 'kaminos.webgpu-model-resource-chunk-plan.v0';
@@ -503,6 +507,11 @@ function errorWithChunkReport(cause, report) {
 }
 
 export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
+  const fetchOptionsSnapshot = snapshotWebGpuModelFetchOptions(input.fetchOptions, {
+    label: 'model resource chunk',
+    signalOwner: 'chunk loading',
+  });
+  input = Object.freeze({ ...input, fetchOptions: null });
   const validation = validateWebGpuModelResourceChunkPlan(input.plan);
   if (!validation.ok) throw new Error(`invalid WebGPU model resource chunk plan:\n${validation.errors.join('\n')}`);
   const plan = defineWebGpuModelResourceChunkPlan(input.plan);
@@ -595,7 +604,9 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
                     {
                       cache: input.cache,
                       fetch: input.fetch,
-                      fetchOptions: input.fetchOptions,
+                      fetchOptions: fetchOptionsSnapshot == null
+                        ? undefined
+                        : materializeWebGpuModelFetchOptions(fetchOptionsSnapshot),
                       ownership: 'transfer',
                       signal: flightSignal,
                       subtle: input.subtle,

@@ -464,6 +464,7 @@ const oneShotChunkLoad = snapshotRoute.loadModelResourcePackageFromSources({
     );
     if (url === oneShotChunkSources.encoder) return responseFor(byteSets.encoder);
     if (url === oneShotChunkSources.decoder['decoder-0']) {
+      options.headers.set('authorization', 'one-shot-mutated-by-first-chunk-fetch');
       return responseFor(byteSets.decoder.slice(0, 4));
     }
     return responseFor(byteSets.decoder.slice(4));
@@ -473,11 +474,6 @@ await oneShotChunkFetchStarted.promise;
 oneShotChunkFetchOptions.headers.set('authorization', 'one-shot-chunk-mutated-after-admission');
 oneShotChunkFetchRelease.resolve();
 const oneShotChunkLease = await oneShotChunkLoad;
-assert.deepEqual(
-  observedOneShotChunkAuthorizations,
-  ['one-shot-chunk-admitted', 'one-shot-chunk-admitted', 'one-shot-chunk-admitted'],
-  'one-shot ordinary and chunk children must share the admitted request-option snapshot',
-);
 assert.equal(oneShotChunkLease.release().status, 'released');
 snapshotSession.unregisterRoute(snapshotRoute.routeId);
 snapshotSession.close();
@@ -1071,6 +1067,9 @@ const chunkFetchOptionsLoader = chunkFetchOptionsRoute.createModelResourcePackag
   fetchOptions: chunkFetchOptions,
   async fetch(url, options) {
     observedChunkAuthorizations.push(new Headers(options.headers).get('authorization'));
+    if (url === chunkSourceUrls['decoder-0']) {
+      options.headers.set('authorization', 'chunk-mutated-by-first-fetch');
+    }
     return responseFor(url === chunkSourceUrls['decoder-0']
       ? byteSets.decoder.slice(0, 4)
       : byteSets.decoder.slice(4));
@@ -1078,11 +1077,13 @@ const chunkFetchOptionsLoader = chunkFetchOptionsRoute.createModelResourcePackag
 });
 chunkFetchOptions.headers.set('authorization', 'chunk-mutated-after-admission');
 const chunkFetchOptionsLease = await chunkFetchOptionsLoader.acquireResource({ resourceId: 'decoder' });
-assert.deepEqual(
-  observedChunkAuthorizations,
-  ['chunk-admitted', 'chunk-admitted'],
-  'every chunk fetch must use nested request options captured at package admission',
-);
+assert.deepEqual({
+  oneShot: observedOneShotChunkAuthorizations,
+  reusable: observedChunkAuthorizations,
+}, {
+  oneShot: ['one-shot-chunk-admitted', 'one-shot-chunk-admitted', 'one-shot-chunk-admitted'],
+  reusable: ['chunk-admitted', 'chunk-admitted'],
+}, 'every one-shot and reusable chunk fetch must receive independent admitted request options');
 assert.equal(chunkFetchOptionsLease.release().status, 'released');
 assert.equal(chunkFetchOptionsLoader.close().status, 'closed');
 chunkFetchOptionsSession.unregisterRoute(chunkFetchOptionsRoute.routeId);

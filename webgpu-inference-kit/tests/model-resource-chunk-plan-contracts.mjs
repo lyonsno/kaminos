@@ -607,4 +607,50 @@ failureSession.unregisterRoute(failureRoute.routeId);
 failureSession.unregisterRoute(joinedFailureRoute.routeId);
 failureSession.close();
 
+const fetchOptionsFixture = deviceFixture();
+const fetchOptionsSession = await createWebGpuInferenceSession({
+  sessionId: 'chunk-plan-fetch-options',
+  device: fetchOptionsFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const fetchOptionsRoute = await fetchOptionsSession.registerRoute({
+  routeId: 'chunk-plan-fetch-options-route',
+});
+const directFetchStarted = deferred();
+const directFetchRelease = deferred();
+const directFetchOptions = { headers: new Headers({ authorization: 'direct-admitted' }) };
+const observedDirectAuthorizations = [];
+const directSources = Object.freeze(Object.fromEntries(
+  plan.chunkIds.map(chunkId => [chunkId, `https://models.example/direct-${chunkId}.bin`]),
+));
+const directBytesByUrl = new Map(
+  plan.chunkIds.map(chunkId => [directSources[chunkId], chunkBytes[chunkId]]),
+);
+const directLoad = fetchOptionsRoute.loadModelResourceChunksFromSources({
+  plan,
+  sources: directSources,
+  fetchOptions: directFetchOptions,
+  async fetch(url, options) {
+    observedDirectAuthorizations.push(new Headers(options.headers).get('authorization'));
+    if (url === directSources['encoder-0']) {
+      directFetchStarted.resolve();
+      await directFetchRelease.promise;
+      options.headers.set('authorization', 'direct-mutated-by-first-fetch');
+    }
+    return responseFor(directBytesByUrl.get(url));
+  },
+});
+await directFetchStarted.promise;
+directFetchOptions.headers.set('authorization', 'direct-mutated-after-admission');
+directFetchRelease.resolve();
+const directLease = await directLoad;
+assert.deepEqual(
+  observedDirectAuthorizations,
+  ['direct-admitted', 'direct-admitted', 'direct-admitted', 'direct-admitted'],
+  'direct chunk loading must snapshot at admission and materialize independently per fetch',
+);
+assert.equal(directLease.release().status, 'released');
+fetchOptionsSession.unregisterRoute(fetchOptionsRoute.routeId);
+fetchOptionsSession.close();
+
 console.log('model resource chunk plan contracts passed');
