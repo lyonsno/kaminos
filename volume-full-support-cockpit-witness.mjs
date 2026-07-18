@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.pyro.full-support-cockpit-witness.v0';
 const SOURCES = Object.freeze(['analytical-exact', 'learned-baseline', 'learned-flow']);
@@ -77,6 +77,8 @@ const timeoutMs = Number(args.get('--timeout-ms') || 900_000);
 const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42_000, 62_000));
+const sourceSweep = String(args.get('--source-sweep') || 'all');
+assert.ok(['all', 'bootstrap-only'].includes(sourceSweep), '--source-sweep must be all or bootstrap-only');
 const routeReceipt = readJson(routeReceiptPath);
 const witnessStartedAt = performance.now();
 
@@ -85,6 +87,9 @@ let socket = null;
 let failurePhase = 'route-receipt-validation';
 let lastTrustworthyEvidence = { schema: SCHEMA, routeReceiptPath };
 let producerMediaVisualState = null;
+let stageBTreatmentReentryReceipt = null;
+let browserProcessTelemetry = null;
+const browserProfilePath = `/tmp/kaminos-full-support-cockpit-witness-${process.pid}-${Date.now()}`;
 mkdirSync(dirname(reportPath), { recursive: true });
 mkdirSync(dirname(screenshotPath), { recursive: true });
 
@@ -109,7 +114,7 @@ try {
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
     `--remote-debugging-port=${debugPort}`,
-    `--user-data-dir=/tmp/kaminos-full-support-cockpit-witness-${process.pid}-${Date.now()}`,
+    `--user-data-dir=${browserProfilePath}`,
     `--window-size=${viewportWidth},${viewportHeight}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -222,8 +227,15 @@ try {
   }
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, stageBReceipt };
 
-  const sourceReceipts = [];
-  for (const source of SOURCES) {
+  const sourceReceipts = sourceSweep === 'bootstrap-only'
+    ? [{
+      requestedSource: bootstrap.sourceReceipt.requestedSource,
+      sourceReceipt: bootstrap.sourceReceipt,
+      state: bootstrap.presentedState,
+      admissionAuthority: 'bootstrap-source-already-effective',
+    }]
+    : [];
+  for (const source of sourceSweep === 'all' ? SOURCES : []) {
     failurePhase = `source-switch:${source}`;
     const receipt = await evaluate(socket, `(async () => {
       const runtime = document.querySelector('#basin')?.contentWindow || window;
@@ -257,6 +269,42 @@ try {
   }
 
   if (stageBAcceptanceArtifact) {
+    failurePhase = 'stage-b-treatment-reentry-survival';
+    const beforeReentry = captureBrowserProcessTelemetry(browser, browserProfilePath);
+    stageBTreatmentReentryReceipt = await evaluate(socket, `(async () => {
+      const runtime = document.querySelector('#basin')?.contentWindow || window;
+      if (typeof runtime.__kaminosApplyStageBTreatment !== 'function') {
+        throw new Error('stage-b-treatment-application-api-missing');
+      }
+      const concurrentReceipts = await Promise.all(Array.from(
+        { length: 8 },
+        () => runtime.__kaminosApplyStageBTreatment(runtime.__kaminosStageBCockpitReceipt),
+      ));
+      const sequentialReceipt = await runtime.__kaminosApplyStageBTreatment(runtime.__kaminosStageBCockpitReceipt);
+      return {
+        concurrentStatuses: concurrentReceipts.map(receipt => receipt?.status || null),
+        finalReceipt: sequentialReceipt,
+      };
+    })()`);
+    await delay(250);
+    const afterReentry = captureBrowserProcessTelemetry(browser, browserProfilePath);
+    browserProcessTelemetry = { beforeReentry, afterReentry };
+    const lifecycle = stageBTreatmentReentryReceipt.finalReceipt?.treatmentApplication;
+    assert.ok(stageBTreatmentReentryReceipt.concurrentStatuses.every(status => status === 'effective'), 'concurrent treatment request did not remain effective');
+    assert.equal(stageBTreatmentReentryReceipt.finalReceipt?.status, 'effective', 'sequential treatment request did not remain effective');
+    assert.equal(lifecycle?.mediaSourceResetCount, 1, 'repeated treatment reset the accepted producer media source');
+    assert.equal(lifecycle?.reusedExistingMedia, true, 'repeated treatment did not report reuse of the accepted producer media');
+    assert.ok(lifecycle?.reusedExistingMediaCount >= 2, 'concurrent and sequential treatment did not exercise media reuse');
+    assert.ok(lifecycle?.joinedInFlightCount >= 1, 'concurrent treatment requests did not join one in-flight owner');
+    assert.equal(lifecycle?.inFlight, false, 'completed treatment receipt remained marked in flight');
+    assert.equal(afterReentry.alive, true, 'isolated Chrome process exited during treatment re-entry');
+    assert.ok(afterReentry.rssKb > 0, 'isolated Chrome process memory telemetry was empty after treatment re-entry');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      stageBTreatmentReentryReceipt,
+      browserProcessTelemetry,
+    };
+
     failurePhase = 'producer-media-decoded-frame-admission';
     producerMediaVisualState = await admitProducerMediaFrame(socket, timeoutMs, stageBReceipt.producerMediaReceipt.effectiveUrl);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, producerMediaVisualState };
@@ -281,7 +329,10 @@ try {
     effectiveRoute: expectedUrl,
     bootstrap,
     stageBReceipt,
+    stageBTreatmentReentryReceipt,
+    browserProcessTelemetry,
     producerMediaVisualState,
+    sourceSweep,
     sourceReceipts,
     screenshotPath,
     elapsedMs: performance.now() - witnessStartedAt,
@@ -430,21 +481,25 @@ async function admitProducerMediaFrame(cdp, timeout, expectedUrl) {
     const video = runtime.document.getElementById('volume-stage-b-producer-video');
     const media = runtime.document.getElementById('volume-stage-b-producer-media');
     if (!video || !media || media.hidden) throw new Error('accepted-producer-media-surface-unavailable');
+    const currentMediaUrl = video.currentSrc || video.src;
+    if (currentMediaUrl !== ${JSON.stringify(expectedUrl)}) {
+      throw new Error('accepted-producer-media-route-substitution');
+    }
     video.pause();
-    video.src = ${JSON.stringify(expectedUrl)};
-    await new Promise((resolveLoaded, rejectLoaded) => {
-      const timer = setTimeout(() => rejectLoaded(new Error('accepted-producer-media-load-timeout')), 15_000);
-      const cleanup = () => {
-        clearTimeout(timer);
-        video.removeEventListener('loadeddata', onLoaded);
-        video.removeEventListener('error', onError);
-      };
-      const onLoaded = () => { cleanup(); resolveLoaded(); };
-      const onError = () => { cleanup(); rejectLoaded(new Error('accepted-producer-media-load-failed')); };
-      video.addEventListener('loadeddata', onLoaded, { once: true });
-      video.addEventListener('error', onError, { once: true });
-      video.load();
-    });
+    if (video.readyState < 2) {
+      await new Promise((resolveLoaded, rejectLoaded) => {
+        const timer = setTimeout(() => rejectLoaded(new Error('accepted-producer-media-load-timeout')), 15_000);
+        const cleanup = () => {
+          clearTimeout(timer);
+          video.removeEventListener('loadeddata', onLoaded);
+          video.removeEventListener('error', onError);
+        };
+        const onLoaded = () => { cleanup(); resolveLoaded(); };
+        const onError = () => { cleanup(); rejectLoaded(new Error('accepted-producer-media-load-failed')); };
+        video.addEventListener('loadeddata', onLoaded, { once: true });
+        video.addEventListener('error', onError, { once: true });
+      });
+    }
     const presentedFrame = await new Promise((resolveFrame, rejectFrame) => {
       const timer = setTimeout(() => rejectFrame(new Error('accepted-producer-frame-timeout')), 15_000);
       const onFrame = (_now, metadata) => {
@@ -544,6 +599,40 @@ async function admitProducerMediaFrame(cdp, timeout, expectedUrl) {
   assert.ok(visualState.videoPixelStats.lumaVariance > 1, 'accepted producer frame had no visible variance');
   assert.equal(visualState.currentSrc, expectedUrl, 'deterministic producer frame URL was substituted');
   return visualState;
+}
+
+function captureBrowserProcessTelemetry(browserProcess, profilePath) {
+  const output = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], { encoding: 'utf8' });
+  const processes = output.split('\n').flatMap(line => {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/);
+    return match ? [{
+      pid: Number(match[1]),
+      ppid: Number(match[2]),
+      rssKb: Number(match[3]),
+      command: match[4],
+    }] : [];
+  });
+  const selectedPids = new Set([browserProcess.pid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const process of processes) {
+      if (selectedPids.has(process.ppid) && !selectedPids.has(process.pid)) {
+        selectedPids.add(process.pid);
+        changed = true;
+      }
+    }
+  }
+  const processTree = processes.filter(process => (
+    selectedPids.has(process.pid) || process.command.includes(profilePath)
+  ));
+  return {
+    rootPid: browserProcess.pid,
+    alive: browserProcess.exitCode === null && processTree.some(process => process.pid === browserProcess.pid),
+    rssKb: processTree.reduce((sum, process) => sum + process.rssKb, 0),
+    processCount: processTree.length,
+    processes: processTree,
+  };
 }
 
 function delay(ms) {

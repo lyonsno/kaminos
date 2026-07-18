@@ -352,7 +352,7 @@ const [index, session, selectiveLive, witness, core] = await Promise.all([
 assert.match(index, /id="volume-stage-b-view"/, 'Stage B viewer must expose the producer-declared view sockets');
 assert.match(index, /id="volume-stage-b-status"[^]*stage-b-resources-missing/, 'Stage B must visibly name its missing resource state before admission');
 assert.match(index, /bootstrapStageBConsumer/, 'cockpit must bootstrap manifest validation and resource binding');
-assert.match(index, /if \(receipt\.status === 'effective'\) return applyStageBTreatment\(receipt\);[\s\S]*renderStageBReceipt\(receipt\)/, 'complete resources must publish only the post-render receipt');
+assert.match(index, /if \(receipt\.status === 'effective'\) return requestStageBTreatmentApply\(receipt\);[\s\S]*renderStageBReceipt\(receipt\)/, 'complete resources must publish only the serialized post-render receipt');
 assert.match(index, /full_support_stage_b_manifest_sha256/, 'cockpit route must bind the requested producer manifest hash');
 assert.doesNotMatch(index, /Matched optical recurrence:\s*awaiting source manifest/i, 'stale manifest-dependency language must be removed');
 assert.match(session, /--stage-b-manifest/, 'session launcher must accept a caller-provided Stage B manifest');
@@ -365,6 +365,12 @@ assert.match(index, /volume-stage-b-producer-video/, 'accepted producer media ne
 assert.match(index, /#volume-stage-b-producer-media\s*\{[^}]*z-index:\s*[4-9]/, 'accepted producer media must stack above the active volume canvas');
 assert.match(index, /producer-capture-media-play-failed/, 'producer media playback failure must remain a Stage B media failure');
 assert.match(index, /catch[^]*stageBProducerMedia\.hidden\s*=\s*true/, 'failed producer media must not leave a blank overlay exposed');
+assert.match(index, /let stageBTreatmentApplyPromise\s*=\s*null/, 'Stage B treatment application must have one explicit in-flight owner');
+assert.match(index, /if \(stageBTreatmentApplyPromise\)[^]*joinedInFlightCount[^]*return stageBTreatmentApplyPromise/, 'concurrent Stage B treatment requests must join the active application');
+assert.match(index, /sameProducerMediaAlreadyPresented[^]*reusedExistingMedia[^]*mediaSourceResetCount/, 'reapplying the same accepted producer must reuse its decoded media instead of resetting the source');
+assert.match(index, /stageBApply\.disabled\s*=\s*true[^]*finally[^]*stageBApply\.disabled/, 'the Apply treatment control must remain disabled for the full application lifecycle');
+assert.match(index, /finally[^]*stageBTreatmentLifecycle\.inFlight\s*=\s*false[^]*treatmentApplication\s*=\s*stageBTreatmentLifecycleReceipt[^]*renderStageBReceipt/, 'the published treatment receipt must record the completed post-finally lifecycle');
+assert.match(index, /stageBApply\?\.addEventListener\('click'[^]*requestStageBTreatmentApply[^]*catch[^]*stage-b-treatment-apply-failed/, 'button-triggered treatment failures must publish a Stage B failure instead of becoming unhandled rejections');
 assert.match(selectiveLive, /key\.startsWith\('full_support_'\)/, 'wrapper must preserve Stage B manifest custody parameters');
 assert.match(witness, /__kaminosStageBCockpitReceipt/, 'browser witness must capture the effective Stage B consumer receipt');
 assert.match(witness, /stage-b-resources-missing/, 'pre-resource witness must require the explicit missing-resource reason');
@@ -383,6 +389,10 @@ assert.match(witness, /getImageData[^]*litPixelCount[^]*lumaVariance/, 'accepted
 assert.match(witness, /occlusionProbeIds/, 'accepted-media witness must sample occlusion beyond a single center point');
 assert.match(witness, /producerMediaVisualState/, 'accepted-media decoded state must survive in the durable witness report');
 assert.match(witness, /sourceReceipts\.push[^]*producer-media-decoded-frame-admission[^]*Page\.captureScreenshot/, 'deterministic producer-media admission must run after source switches and immediately before capture');
+assert.match(witness, /stage-b-treatment-reentry-survival[^]*Promise\.all[^]*__kaminosApplyStageBTreatment/, 'browser witness must exercise concurrent treatment requests through the public API');
+assert.match(witness, /mediaSourceResetCount[^]*reusedExistingMedia[^]*joinedInFlightCount/, 'browser witness must reject repeated media resets and preserve treatment lifecycle receipts');
+assert.match(witness, /browserProcessTelemetry[^]*rssKb[^]*alive/, 'browser witness must preserve process survival and memory telemetry around treatment re-entry');
+assert.match(witness, /--source-sweep[^]*bootstrap-only[^]*bootstrap\.sourceReceipt/, 'treatment regression must support the already-admitted bootstrap source without redundant source reapplication');
 assert.match(index, /operator-exploration-only/, 'complete unaccepted Stage B pixels must carry visible operator-only authority');
 assert.match(index, /resourceLoadReceipts/, 'cockpit must verify every provisional resource load before enabling pixels');
 assert.match(core, /BOUNDARY_SPLAT_OPTICAL_MODE\s*=\s*['"]matched-optical-recurrence-v0['"]/, 'exact analytical Stage B renderer mode is missing');

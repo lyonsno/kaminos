@@ -18009,6 +18009,23 @@ async function initKaminosVolumeRoute() {
     combined: 'Combined layers',
     debug: 'Depth-bin optical debug',
   };
+  let stageBTreatmentApplyPromise = null;
+  const stageBTreatmentLifecycle = {
+    requestCount: 0,
+    effectiveApplicationCount: 0,
+    joinedInFlightCount: 0,
+    mediaSourceResetCount: 0,
+    reusedExistingMediaCount: 0,
+    inFlight: false,
+  };
+  const stageBTreatmentLifecycleReceipt = overrides => ({
+    ...stageBTreatmentLifecycle,
+    reusedExistingMedia: false,
+    ...overrides,
+  });
+  const stageBTreatmentAvailable = receipt => receipt?.status === 'effective'
+    && (receipt.presentationAuthority === 'producer-capture-media-v0'
+      || typeof volumePrototype.setBoundarySplatPresentationMode === 'function');
   const renderStageBReceipt = receipt => {
     window.__kaminosStageBCockpitReceipt = receipt;
     if (!stageBStatus) return;
@@ -18037,8 +18054,7 @@ async function initKaminosVolumeRoute() {
     }
     stageBView.value = 'treatment';
     stageBView.disabled = false;
-    const treatmentAvailable = receipt.presentationAuthority === 'producer-capture-media-v0'
-      || typeof volumePrototype.setBoundarySplatPresentationMode === 'function';
+    const treatmentAvailable = stageBTreatmentAvailable(receipt);
     stageBApply.disabled = !treatmentAvailable;
     stageBApply.title = treatmentAvailable
       ? (receipt.authority?.evidenceAuthority === 'producer-evidence-accepted'
@@ -18106,9 +18122,25 @@ async function initKaminosVolumeRoute() {
         renderStageBReceipt(failure);
         return failure;
       }
+      const currentReceipt = window.__kaminosStageBCockpitReceipt;
+      const currentMediaUrl = stageBProducerVideo.currentSrc || stageBProducerVideo.src;
+      const sameProducerMediaAlreadyPresented = stageBProducerMedia.hidden === false
+        && currentMediaUrl === capture.effectiveUrl
+        && currentReceipt?.passes?.producerMediaApplied === true
+        && currentReceipt?.producerMediaReceipt?.sha256 === capture.sha256;
+      if (sameProducerMediaAlreadyPresented) {
+        stageBTreatmentLifecycle.reusedExistingMediaCount += 1;
+        const reused = {
+          ...currentReceipt,
+          treatmentApplication: stageBTreatmentLifecycleReceipt({ reusedExistingMedia: true }),
+        };
+        renderStageBReceipt(reused);
+        return reused;
+      }
       stageBProducerVideo.pause();
       stageBProducerVideo.src = capture.effectiveUrl;
       stageBProducerVideo.currentTime = 0;
+      stageBTreatmentLifecycle.mediaSourceResetCount += 1;
       stageBProducerLabel.textContent = `Accepted producer orbit | ${receipt.authority?.visualQuality || 'operator-unseen'} | ${receipt.authority?.operatorScope || 'operator-exploration-pending'} | ${receipt.authority?.candidateCount || 0} splats | ${receipt.authority?.sourceCommit || 'unknown source'} | local analytical renderer not applied`;
       stageBProducerMedia.hidden = false;
       try {
@@ -18155,7 +18187,10 @@ async function initKaminosVolumeRoute() {
           mediaType: capture.mediaType,
           fallbackReason: null,
         },
+        treatmentApplication: stageBTreatmentLifecycleReceipt({ reusedExistingMedia: false }),
       };
+      stageBTreatmentLifecycle.effectiveApplicationCount += 1;
+      applied.treatmentApplication = stageBTreatmentLifecycleReceipt({ reusedExistingMedia: false });
       renderStageBReceipt(applied);
       return applied;
     }
@@ -18191,6 +18226,40 @@ async function initKaminosVolumeRoute() {
     };
     renderStageBReceipt(applied);
     return applied;
+  };
+  const requestStageBTreatmentApply = receipt => {
+    stageBTreatmentLifecycle.requestCount += 1;
+    if (stageBTreatmentApplyPromise) {
+      stageBTreatmentLifecycle.joinedInFlightCount += 1;
+      return stageBTreatmentApplyPromise;
+    }
+    stageBTreatmentLifecycle.inFlight = true;
+    if (stageBApply) stageBApply.disabled = true;
+    stageBTreatmentApplyPromise = applyStageBTreatment(receipt)
+      .catch(error => {
+        const failure = {
+          ...(receipt || {}),
+          status: 'failed',
+          effectiveTreatment: null,
+          failures: [`stage-b-treatment-apply-failed:${error?.message || String(error)}`],
+          treatmentApplication: stageBTreatmentLifecycleReceipt({ failurePhase: 'treatment-application' }),
+        };
+        renderStageBReceipt(failure);
+        return failure;
+      })
+      .finally(() => {
+        stageBTreatmentLifecycle.inFlight = false;
+        stageBTreatmentApplyPromise = null;
+        const completedReceipt = window.__kaminosStageBCockpitReceipt;
+        if (completedReceipt?.treatmentApplication) {
+          completedReceipt.treatmentApplication = stageBTreatmentLifecycleReceipt({
+            reusedExistingMedia: completedReceipt.treatmentApplication.reusedExistingMedia === true,
+          });
+          renderStageBReceipt(completedReceipt);
+        }
+        if (stageBApply) stageBApply.disabled = !stageBTreatmentAvailable(window.__kaminosStageBCockpitReceipt);
+      });
+    return stageBTreatmentApplyPromise;
   };
   const bootstrapStageBConsumer = async () => {
     const requestedManifestUrl = params.get('full_support_stage_b_manifest');
@@ -18268,13 +18337,22 @@ async function initKaminosVolumeRoute() {
       acceptanceReceipt,
     });
     configureStageBView(receipt);
-    if (receipt.status === 'effective') return applyStageBTreatment(receipt);
+    if (receipt.status === 'effective') return requestStageBTreatmentApply(receipt);
     renderStageBReceipt(receipt);
     return receipt;
   };
-  stageBApply?.addEventListener('click', () => void applyStageBTreatment(window.__kaminosStageBCockpitReceipt));
+  stageBApply?.addEventListener('click', () => {
+    void requestStageBTreatmentApply(window.__kaminosStageBCockpitReceipt).catch(error => {
+      renderStageBReceipt({
+        status: 'failed',
+        requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+        effectiveTreatment: null,
+        failures: [`stage-b-treatment-apply-failed:${error?.message || String(error)}`],
+      });
+    });
+  });
   window.__kaminosBootstrapStageBConsumer = bootstrapStageBConsumer;
-  window.__kaminosApplyStageBTreatment = applyStageBTreatment;
+  window.__kaminosApplyStageBTreatment = requestStageBTreatmentApply;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
