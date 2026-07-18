@@ -24,6 +24,9 @@ DEPOSITS_PER_CANDIDATE = len(FLOW_TAP_OFFSETS) * 4
 
 
 def load_oracle() -> Any:
+    bound_oracle = globals().get("BOUND_ORACLE")
+    if bound_oracle is not None:
+        return bound_oracle
     path = Path(__file__).with_name("volume-layer-coefficient-render-oracle.py")
     spec = importlib.util.spec_from_file_location("kaminos_layer_coefficient_render_oracle", path)
     if spec is None or spec.loader is None:

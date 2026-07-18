@@ -22,6 +22,7 @@ assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 MODULE.initialize_runtime()
+IMPLEMENTATION_BUNDLE_SHA256 = MODULE.implementation_bundle_receipt()["sha256"]
 
 
 def require(condition: bool, message: str) -> None:
@@ -41,9 +42,74 @@ coefficients[:, 3] = np.asarray([0.1, 0.1, 0.1, 0.1, 0.1, 6.0, 0.1, 0.1], dtype=
 optical = MODULE.select_optical_energy(ids, coefficients, 3)
 require(optical.size == 3, "optical selector changed the fixed budget")
 require(set(ids[optical].tolist()) == {3, 55, 66}, "optical selector missed the strongest exact local coefficients")
+uninitialized = MODULE.select_optical_hysteresis(ids, coefficients, 3, None, hysteresis_ratio=0.1)
+require(np.array_equal(uninitialized, optical), "first-state hysteretic selection drifted from the stateless optical control")
 
-selections = MODULE.fixed_budget_selections(ids, coefficients, 0.375)
-require(set(selections) == {"stable-uniform", "optical-energy"}, "fixed-budget arms drifted")
+near_boundary_coefficients = coefficients.copy()
+near_boundary_coefficients[:, 0] = np.asarray([0.1, 6.1, 0.3, 8.0, 0.4, 6.0, 0.6, 7.0], dtype=np.float32)
+hysteretic = MODULE.select_optical_hysteresis(
+    ids,
+    near_boundary_coefficients,
+    3,
+    ids[optical],
+    hysteresis_ratio=0.1,
+)
+require(hysteretic.size == 3, "hysteretic selector changed the fixed budget")
+require(
+    set(ids[hysteretic].tolist()) == {3, 55, 66},
+    "hysteretic selector replaced a prior member for a near-boundary newcomer",
+)
+reversed_hysteretic = MODULE.select_optical_hysteresis(
+    ids[::-1],
+    near_boundary_coefficients[::-1],
+    3,
+    ids[optical][::-1],
+    hysteresis_ratio=0.1,
+)
+require(
+    set(ids[::-1][reversed_hysteretic].tolist()) == {3, 55, 66},
+    "hysteretic membership depends on row or previous-membership order",
+)
+tied_coefficients = np.zeros_like(coefficients)
+tied_coefficients[:, 0] = 1.0
+tied_a = MODULE.select_optical_hysteresis(ids, tied_coefficients, 3, ids[optical], hysteresis_ratio=0.1)
+tied_b = MODULE.select_optical_hysteresis(ids[::-1], tied_coefficients[::-1], 3, ids[optical][::-1], hysteresis_ratio=0.1)
+require(set(ids[tied_a].tolist()) == set(ids[::-1][tied_b].tolist()), "exact-score hysteretic ties depend on row order")
+clear_replacement_coefficients = near_boundary_coefficients.copy()
+clear_replacement_coefficients[ids == 7, 0] = 12.0
+clear_replacement_coefficients[ids == 66, 0] = 0.05
+clear_replacement_coefficients[ids == 66, 3] = 0.0
+replaced = MODULE.select_optical_hysteresis(
+    ids,
+    clear_replacement_coefficients,
+    3,
+    ids[optical],
+    hysteresis_ratio=0.1,
+)
+require(
+    set(ids[replaced].tolist()) == {3, 7, 55},
+    "hysteretic selector retained a stale member after a clear causal-score replacement",
+)
+missing_previous = MODULE.select_optical_hysteresis(
+    ids[ids != 66],
+    near_boundary_coefficients[ids != 66],
+    3,
+    ids[optical],
+    hysteresis_ratio=0.1,
+)
+require(66 not in set(ids[ids != 66][missing_previous].tolist()), "hysteretic selector retained a node absent from the current state")
+
+selections = MODULE.fixed_budget_selections(
+    ids,
+    coefficients,
+    0.375,
+    previous_optical_ids=ids[optical],
+    hysteresis_ratio=0.1,
+)
+require(
+    set(selections) == {"stable-uniform", "optical-energy", "optical-hysteresis"},
+    "fixed-budget arms drifted",
+)
 require({rows.size for rows in selections.values()} == {3}, "fixed-budget arms do not spend identical candidate counts")
 require(MODULE.DEPOSITS_PER_CANDIDATE == 20, "deposit budget no longer matches five taps times four bilinear neighbors")
 require(
@@ -58,6 +124,8 @@ anchored = MODULE.fixed_budget_selections(
     expanded_coefficients,
     0.375,
     candidate_budget=3,
+    previous_optical_ids=ids[optical],
+    hysteresis_ratio=0.1,
 )
 require(
     {rows.size for rows in anchored.values()} == {3},
@@ -136,6 +204,9 @@ with tempfile.TemporaryDirectory() as temporary:
     else:
         raise AssertionError("source replacement after parse escaped the immutable binding gate")
 
+require(MODULE.IMPLEMENTATION_PATH == MODULE_PATH, "implementation provenance binds the wrong script path")
+require(MODULE.implementation_bundle_receipt()["sha256"] == IMPLEMENTATION_BUNDLE_SHA256, "implementation bundle provenance drifted")
+
 with tempfile.TemporaryDirectory() as temporary:
     report_path = Path(temporary) / "runtime-failure.json"
     environment = dict(os.environ)
@@ -147,6 +218,7 @@ with tempfile.TemporaryDirectory() as temporary:
         "--motion-report", str(Path(temporary) / "motion.json"),
         "--out-dir", str(Path(temporary) / "out"),
         "--report", str(report_path),
+        "--implementation-bundle-sha256", IMPLEMENTATION_BUNDLE_SHA256,
     ], check=False, capture_output=True, text=True, env=environment)
     require(result.returncode != 0, "forced runtime initialization failure falsely succeeded")
     require(report_path.is_file(), "runtime initialization failure did not write a durable report")
@@ -162,6 +234,7 @@ with tempfile.TemporaryDirectory() as temporary:
         "--motion-report", str(Path(temporary) / "missing-motion.json"),
         "--out-dir", str(Path(temporary) / "out"),
         "--report", str(report_path),
+        "--implementation-bundle-sha256", IMPLEMENTATION_BUNDLE_SHA256,
     ], check=False, capture_output=True, text=True)
     require(result.returncode != 0, "missing source artifacts falsely succeeded")
     require(report_path.is_file(), "pre-artifact failure did not write a durable report")
