@@ -209,6 +209,7 @@ const pickedScreenDrag = createLayeredStructuralPickedDragInteraction({
   start: { x: 0.4, y: 0.5 },
   current: { x: 0.7, y: 0.65 },
   contactPoint: pickedContact,
+  contactIdentity: resolvedNodeContact,
   screenRight: { x: 1, y: 0, z: 0 },
   screenDown: { x: 0, y: 1, z: 0 },
 });
@@ -216,6 +217,16 @@ assert.deepEqual(pickedScreenDrag.point, pickedContact, 'picked force remains an
 assert.deepEqual(pickedScreenDrag.start, pickedContact, 'force visualization begins at the picked structural contact');
 assert.ok(pickedScreenDrag.vector.x > 0.85 && pickedScreenDrag.vector.y > 0.4, 'screen delta composes through the supplied camera basis');
 assert.equal(pickedScreenDrag.authority, 'camera-relative-picked-contact-force-envelope-v0');
+assert.deepEqual(
+  pickedScreenDrag.contactIdentity,
+  {
+    authority: resolvedNodeContact.authority,
+    kind: resolvedNodeContact.kind,
+    id: resolvedNodeContact.id,
+    segmentT: null,
+  },
+  'picked force preserves stable structural contact identity separately from its coordinates',
+);
 assert.ok(pickedScreenDrag.inputLoad > 0, 'nonzero pointer displacement reports immediate input load');
 assert.equal(pickedScreenDrag.contactRamp, 1, 'strong input reports saturated solver contact ramp separately');
 

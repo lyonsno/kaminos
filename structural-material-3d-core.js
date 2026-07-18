@@ -488,6 +488,7 @@ export function createLayeredStructuralPickedDragInteraction({
   current,
   contactPoint,
   displayContactPoint,
+  contactIdentity,
   screenRight,
   screenDown,
   gestureId,
@@ -533,6 +534,18 @@ export function createLayeredStructuralPickedDragInteraction({
     y: displayContact.y + direction.y * visualLength,
     z: displayContact.z + direction.z * visualLength,
   };
+  const stableContactIdentity = contactIdentity?.kind === 'node' || contactIdentity?.kind === 'bond'
+    ? {
+        authority: typeof contactIdentity.authority === 'string'
+          ? contactIdentity.authority
+          : 'stable-rest-material-contact-v0',
+        kind: contactIdentity.kind,
+        id: String(contactIdentity.id),
+        segmentT: contactIdentity.kind === 'bond'
+          ? round(clamp(contactIdentity.segmentT ?? 0.5, 0, 1), 6)
+          : null,
+      }
+    : null;
   return {
     kind: 'camera-relative-picked-layered-drag',
     authority: 'camera-relative-picked-contact-force-envelope-v0',
@@ -542,6 +555,7 @@ export function createLayeredStructuralPickedDragInteraction({
     start: { ...displayContact },
     point: { ...contact },
     displayPoint: { ...displayContact },
+    contactIdentity: stableContactIdentity,
     visualEnd: { x: round(visualEnd.x), y: round(visualEnd.y), z: round(visualEnd.z) },
     vector: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
     screenBasis: {

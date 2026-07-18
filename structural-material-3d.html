@@ -389,10 +389,27 @@
       if (!material.sympatheticTear) return null;
       const direction = material.sympatheticTear.direction;
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      let responseWeight = 0;
+      const responseCentroid = material.nodes.reduce((centroid, node) => {
+        const weight = Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
+        responseWeight += weight;
+        centroid.x += node.x * weight;
+        centroid.y += node.y * weight;
+        centroid.z += node.z * weight;
+        return centroid;
+      }, { x: 0, y: 0, z: 0 });
       return {
         authority: material.sympatheticTear.authority,
         effectiveRoute: material.sympatheticTear.effectiveRoute,
         effectiveSequenceIdentity: material.sympatheticTear.effectiveSequenceIdentity,
+        contactResponse: material.sympatheticTear.contactResponse,
+        responseCentroid: responseWeight > 0
+          ? {
+              x: responseCentroid.x / responseWeight,
+              y: responseCentroid.y / responseWeight,
+              z: responseCentroid.z / responseWeight,
+            }
+          : null,
         components: material.components.map(component => {
           const nodes = component.nodeIds.map(nodeId => nodeById.get(nodeId));
           const displacementMagnitudes = nodes.map(node => Math.hypot(
@@ -411,6 +428,12 @@
             pinned: component.pinned,
             nodeCount: component.nodeCount,
             maxDisplacement: Math.max(...displacementMagnitudes),
+            maxPinnedDisplacement: Math.max(0, ...nodes
+              .filter(node => node.pinned)
+              .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
+            maxUnpinnedDisplacement: Math.max(0, ...nodes
+              .filter(node => !node.pinned)
+              .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
             minDirectionDot: Math.min(...directionDots),
           };
         }),
@@ -603,6 +626,7 @@
           current: point,
           contactPoint: dragStart?.contactPoint || lastPoint,
           displayContactPoint: dragStart?.displayContactPoint || dragStart?.contactPoint || lastPoint,
+          contactIdentity: dragStart?.contactIdentity,
           screenRight: dragStart?.screenRight,
           screenDown: dragStart?.screenDown,
           gestureId: dragStart?.gestureId,
@@ -872,6 +896,12 @@
           screen,
           contactPoint: pick.point,
           displayContactPoint: pick.displayPoint,
+          contactIdentity: {
+            authority: pick.authority,
+            kind: pick.kind,
+            id: pick.id,
+            segmentT: pick.segmentT,
+          },
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
         };
@@ -880,6 +910,7 @@
           current: screen,
           contactPoint: pick.point,
           displayContactPoint: pick.displayPoint,
+          contactIdentity: dragStart.contactIdentity,
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
           gestureId: dragStart.gestureId,
@@ -1212,15 +1243,31 @@
     window.__structuralMaterial3dRunGpuContactLocalityWitness = async () => {
       const runContact = async point => {
         const state = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const contactNode = state.nodes.reduce((nearest, node) => {
+          const distance = Math.hypot(node.x - point.x, node.y - point.y, node.z - point.z);
+          return !nearest || distance < nearest.distance ? { node, distance } : nearest;
+        }, null).node;
         const interaction = {
           kind: 'picked-contact-locality-witness',
+          gestureId: `contact-locality-${contactNode.id}`,
           point,
+          displayPoint: point,
+          contactIdentity: {
+            authority: 'stable-rest-material-contact-v0',
+            kind: 'node',
+            id: contactNode.id,
+            segmentT: null,
+          },
           vector: { x: 1, y: 0.08, z: -0.64 },
           magnitude: 1.46,
           radius: 0.18,
         };
         const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state });
         const receipt = await sidecar.execute(interaction);
+        const tearReceipt = buildLayeredStructuralHotSympatheticTearReceipt(state, receipt);
+        const responseMaterial = tearReceipt.status === 'passed'
+          ? buildLayeredStructuralGpuTearMaterial(state, tearReceipt, interaction)
+          : null;
         const brokenBondIndices = receipt.gpuStructuralState?.finalBondLiveness?.flatMap(
           (alive, index) => alive ? [] : [index],
         ) || [];
@@ -1233,6 +1280,36 @@
               return centroid;
             }, { x: 0, y: 0, z: 0 })
           : null;
+        let responseWeight = 0;
+        const responseCentroid = responseMaterial?.nodes.reduce((centroid, node) => {
+          const weight = Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
+          responseWeight += weight;
+          centroid.x += node.x * weight;
+          centroid.y += node.y * weight;
+          centroid.z += node.z * weight;
+          return centroid;
+        }, { x: 0, y: 0, z: 0 }) || null;
+        const visibleResponse = responseMaterial ? {
+          authority: responseMaterial.sympatheticTear.contactResponse.authority,
+          contactIdentity: responseMaterial.sympatheticTear.contactResponse.contactIdentity,
+          primaryContactComponentLabel:
+            responseMaterial.sympatheticTear.contactResponse.primaryContactComponentLabel,
+          localResponseNodeCount:
+            responseMaterial.sympatheticTear.contactResponse.localResponseNodeCount,
+          responseCentroid: responseWeight > 0 ? {
+            x: responseCentroid.x / responseWeight,
+            y: responseCentroid.y / responseWeight,
+            z: responseCentroid.z / responseWeight,
+          } : null,
+          maxPinnedDisplacement: Math.max(...responseMaterial.nodes
+            .filter(node => node.pinned)
+            .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
+          movedNodeCount: responseMaterial.nodes.filter(node => Math.hypot(
+            node.displacement.x,
+            node.displacement.y,
+            node.displacement.z,
+          ) > 0).length,
+        } : null;
         const dispose = await sidecar.dispose();
         return {
           requestedExecutionRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
@@ -1246,6 +1323,7 @@
           eventEpoch: receipt.eventEpoch,
           brokenBondIndices,
           breakCentroid,
+          visibleResponse,
           status: receipt.status,
           failurePhase: receipt.failurePhase,
           compactValidation: receipt.compactValidation,
@@ -1263,7 +1341,12 @@
         left.cpuFallbackUsed === false && right.cpuFallbackUsed === false &&
         left.brokenBondIndices.length > 0 && right.brokenBondIndices.length > 0 &&
         JSON.stringify(left.brokenBondIndices) !== JSON.stringify(right.brokenBondIndices) &&
-        right.breakCentroid.x > left.breakCentroid.x + 0.12;
+        right.breakCentroid.x > left.breakCentroid.x + 0.12 &&
+        left.visibleResponse?.movedNodeCount > 0 && right.visibleResponse?.movedNodeCount > 0 &&
+        left.visibleResponse?.maxPinnedDisplacement === 0 &&
+        right.visibleResponse?.maxPinnedDisplacement === 0 &&
+        right.visibleResponse?.responseCentroid?.x >
+          left.visibleResponse?.responseCentroid?.x + 0.3;
       return {
         schema: 'kaminos.structural-material.webgpu-contact-locality-witness.v0',
         status: passed ? 'passed' : 'failed',
@@ -1274,6 +1357,9 @@
         right,
         breakCentroidDeltaX: left.breakCentroid && right.breakCentroid
           ? right.breakCentroid.x - left.breakCentroid.x
+          : null,
+        responseCentroidDeltaX: left.visibleResponse?.responseCentroid && right.visibleResponse?.responseCentroid
+          ? right.visibleResponse.responseCentroid.x - left.visibleResponse.responseCentroid.x
           : null,
       };
     };

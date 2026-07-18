@@ -245,6 +245,70 @@ function deriveTopology(state, componentLabels) {
   };
 }
 
+function deriveComponentLabelsFromLiveness(state, finalBondLiveness) {
+  const nodeIndexById = new Map(state.nodes.map((node, index) => [node.id, index]));
+  const adjacency = state.nodes.map(() => []);
+  state.bonds.forEach((bond, bondIndex) => {
+    if (!finalBondLiveness[bondIndex]) return;
+    const a = nodeIndexById.get(bond.a);
+    const b = nodeIndexById.get(bond.b);
+    if (!Number.isInteger(a) || !Number.isInteger(b)) return;
+    adjacency[a].push(b);
+    adjacency[b].push(a);
+  });
+  const labels = new Array(state.nodes.length).fill(-1);
+  for (let start = 0; start < state.nodes.length; start += 1) {
+    if (labels[start] >= 0) continue;
+    const stack = [start];
+    const component = [];
+    labels[start] = start;
+    while (stack.length > 0) {
+      const index = stack.pop();
+      component.push(index);
+      for (const next of adjacency[index]) {
+        if (labels[next] >= 0) continue;
+        labels[next] = start;
+        stack.push(next);
+      }
+    }
+    const label = Math.min(...component);
+    component.forEach(index => {
+      labels[index] = label;
+    });
+  }
+  return labels;
+}
+
+function validateLivenessComponentCoherence(
+  state,
+  finalBondLiveness,
+  componentLabels,
+  receiptTopology,
+  reasons,
+) {
+  if (!Array.isArray(finalBondLiveness) || finalBondLiveness.length !== state.bonds.length ||
+      !finalBondLiveness.every(alive => typeof alive === 'boolean') ||
+      !Array.isArray(componentLabels) || componentLabels.length !== state.nodes.length) return;
+  const expectedLabels = deriveComponentLabelsFromLiveness(state, finalBondLiveness);
+  const expectedTopology = deriveTopology(state, expectedLabels);
+  if (!expectedLabels.every((label, index) => componentLabels[index] === label)) {
+    reasons.push('component-label-liveness-coherence');
+  }
+  if (receiptTopology?.componentCount !== expectedTopology.componentCount) {
+    reasons.push('topology-liveness-count');
+  }
+  if (JSON.stringify(receiptTopology?.componentLabels) !== JSON.stringify(expectedTopology.componentLabels)) {
+    reasons.push('topology-liveness-labels');
+  }
+  if (receiptTopology?.anchoredComponentLabel !== expectedTopology.anchoredComponentLabel) {
+    reasons.push('topology-liveness-anchor');
+  }
+  if (JSON.stringify(receiptTopology?.detachedComponentLabels) !==
+      JSON.stringify(expectedTopology.detachedComponentLabels)) {
+    reasons.push('topology-liveness-detached');
+  }
+}
+
 export function validateLayeredStructuralHotSidecarReceipt(state, receipt) {
   const reasons = [];
   const finalBondLiveness = receipt?.gpuStructuralState?.finalBondLiveness;
@@ -312,6 +376,13 @@ export function validateLayeredStructuralHotSidecarReceipt(state, receipt) {
         });
         if (!aliveBondLabelsAgree) reasons.push('alive-bond-component-coherence');
       }
+      validateLivenessComponentCoherence(
+        state,
+        finalBondLiveness,
+        componentLabels,
+        receipt?.topology,
+        reasons,
+      );
     }
   }
   return { ok: reasons.length === 0, reasons, expectedObjectIdentity };
@@ -419,6 +490,13 @@ export function validateLayeredStructuralHotBindingReceipt(state, receipt) {
       return componentLabels[nodeIndexById.get(bond.a)] === componentLabels[nodeIndexById.get(bond.b)];
     });
     if (!coherent) reasons.push('alive-bond-component-coherence');
+    validateLivenessComponentCoherence(
+      state,
+      finalBondLiveness,
+      componentLabels,
+      receipt?.topology,
+      reasons,
+    );
   }
   return { ok: reasons.length === 0, reasons, expectedObjectIdentity };
 }

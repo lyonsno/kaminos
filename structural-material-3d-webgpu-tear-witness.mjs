@@ -22,6 +22,7 @@ function usage() {
     '  [--debug-port 9223] [--width 1280] [--height 820]',
     '  [--device-scale-factor 1] [--load-timeout-ms 30000]',
     '  [--require-native-haptics true|false]',
+    '  [--contact-response-screenshot <left-contact-capture.png>]',
   ].join('\n');
 }
 
@@ -52,11 +53,19 @@ function parseArgs(argv) {
     }
     return value === 'true';
   };
+  const screenshot = resolve(values.get('screenshot'));
+  const extensionIndex = screenshot.lastIndexOf('.');
+  const derivedContactScreenshot = extensionIndex > screenshot.lastIndexOf('/')
+    ? `${screenshot.slice(0, extensionIndex)}-contact-response${screenshot.slice(extensionIndex)}`
+    : `${screenshot}-contact-response.png`;
   return {
     help: false,
     url: values.get('url'),
     out: resolve(values.get('out')),
-    screenshot: resolve(values.get('screenshot')),
+    screenshot,
+    contactResponseScreenshot: resolve(
+      values.get('contact-response-screenshot') || derivedContactScreenshot,
+    ),
     debugPort: number('debug-port', 9223),
     width: number('width', 1280),
     height: number('height', 820),
@@ -252,6 +261,7 @@ const report = {
     requireNativeHaptics: config.requireNativeHaptics,
     reportPath: config.out,
     screenshotPath: config.screenshot,
+    contactResponseScreenshotPath: config.contactResponseScreenshot,
   },
   effectiveConfig: null,
   browserVersion: null,
@@ -259,6 +269,7 @@ const report = {
   notchedTear: null,
   visibleTear: null,
   contactLocality: null,
+  contactResponseVisual: null,
   repeatDrag: null,
   residentBinding: null,
   visibleBinding: null,
@@ -266,6 +277,7 @@ const report = {
   checks: {},
   pixelProbe: null,
   screenshotPixelProbe: null,
+  contactResponseScreenshotPixelProbe: null,
   runtimeErrors: [],
   lastTrustworthyEvidence: null,
   error: null,
@@ -297,6 +309,7 @@ try {
     },
     reportPath: config.out,
     screenshotPath: config.screenshot,
+    contactResponseScreenshotPath: config.contactResponseScreenshot,
     browserTarget: 'first-page-target',
     requireNativeHaptics: config.requireNativeHaptics,
   };
@@ -351,11 +364,21 @@ try {
     rightLocality?.brokenBondIndices?.length > 0 &&
     JSON.stringify(leftLocality.brokenBondIndices) !== JSON.stringify(rightLocality.brokenBondIndices) &&
     report.contactLocality.breakCentroidDeltaX > 0.12;
+  report.checks.contactOwnedVisibleResponseMoved =
+    leftLocality?.visibleResponse?.authority === 'gpu-topology-contact-owned-visible-response-v0' &&
+    rightLocality?.visibleResponse?.authority === 'gpu-topology-contact-owned-visible-response-v0' &&
+    leftLocality.visibleResponse.contactIdentity?.id !== rightLocality.visibleResponse.contactIdentity?.id &&
+    leftLocality.visibleResponse.movedNodeCount > 0 &&
+    rightLocality.visibleResponse.movedNodeCount > 0 &&
+    leftLocality.visibleResponse.maxPinnedDisplacement === 0 &&
+    rightLocality.visibleResponse.maxPinnedDisplacement === 0 &&
+    report.contactLocality.responseCentroidDeltaX > 0.3;
   for (const name of [
     'contactLocalityRouteIdentity',
     'contactLocalityBackendIdentity',
     'contactLocalityPreservedInteractionPoints',
     'contactLocalityMovedGpuBreakCentroid',
+    'contactOwnedVisibleResponseMoved',
   ]) assertCheck(report.checks[name], `GPU contact-locality check failed: ${name}`);
   report.lastTrustworthyEvidence = {
     phase: 'gpu-contact-locality',
@@ -363,6 +386,9 @@ try {
     leftBreakCentroid: leftLocality.breakCentroid,
     rightBreakCentroid: rightLocality.breakCentroid,
     breakCentroidDeltaX: report.contactLocality.breakCentroidDeltaX,
+    leftResponseCentroid: leftLocality.visibleResponse.responseCentroid,
+    rightResponseCentroid: rightLocality.visibleResponse.responseCentroid,
+    responseCentroidDeltaX: report.contactLocality.responseCentroidDeltaX,
   };
 
   report.failurePhase = 'effigy-drag';
@@ -557,11 +583,15 @@ try {
   const gpuLabels = [...new Set(notched.gpuStructuralState?.componentLabels || [])].sort((a, b) => a - b);
   const anchoredVisible = visibleComponents.filter(component => component.pinned);
   const detachedVisible = visibleComponents.filter(component => !component.pinned);
+  const primaryContactVisible = visibleComponents.find(
+    component => component.label === pageAfter.visibleTear?.contactResponse?.primaryContactComponentLabel,
+  );
   report.checks.visibleTransformBoundToGpuLabels = pageAfter.sympatheticTear?.effectiveRoute === notched.effectiveRoute &&
     pageAfter.sympatheticTear?.effectiveSequenceIdentity === notched.effectiveSequenceIdentity &&
     JSON.stringify(visibleLabels) === JSON.stringify(gpuLabels) &&
     anchoredVisible.length === 1 &&
-    anchoredVisible[0].maxDisplacement < 0.000001 &&
+    anchoredVisible[0].maxPinnedDisplacement < 0.000001 &&
+    primaryContactVisible?.maxDisplacement > 0 &&
     detachedVisible.length >= 1 &&
     detachedVisible.every(component => component.minDirectionDot > 0);
 
@@ -1029,6 +1059,132 @@ try {
     cancelled?.structural?.visibleTear === null;
   assertCheck(report.checks.cancelledInFlightTearRejected, 'cancelled in-flight tear remained operator-visible as passed');
 
+  report.failurePhase = 'left-contact-response-visual';
+  const contactResetBefore = cancelled?.structural?.gpuHotSidecar?.lifecycle?.reinitializeCount || 0;
+  await evaluate("document.querySelector('#reset').click()");
+  const contactResetDeadline = Date.now() + config.loadTimeoutMs;
+  let contactReset = null;
+  while (Date.now() < contactResetDeadline) {
+    contactReset = await evaluate('window.__structuralMaterial3dWitness()');
+    if (contactReset.summary?.brokenBondCount === 0 &&
+        contactReset.summary?.componentCount === 1 &&
+        contactReset.gpuHotSidecar?.lifecycle?.reinitializeCount > contactResetBefore) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  assertCheck(
+    contactReset?.gpuHotSidecar?.lifecycle?.reinitializeCount > contactResetBefore,
+    'left-contact visual reset did not reach resident GPU state',
+  );
+  const leftContactPick = await evaluate(`(() => {
+    const candidates = window.__structuralMaterial3dPickTargets()
+      .filter(target => target.restPoint.x >= 0.1 && target.restPoint.x <= 0.3)
+      .sort((a, b) => {
+        const aDistance = Math.hypot(a.restPoint.y - 0.25, a.restPoint.z - 0.33333);
+        const bDistance = Math.hypot(b.restPoint.y - 0.25, b.restPoint.z - 0.33333);
+        return aDistance - bDistance;
+      });
+    for (const target of candidates) {
+      const probe = window.__structuralMaterial3dPickProbe(target.clientX, target.clientY);
+      if (probe?.kind === 'node' && probe.id === target.id &&
+          probe.point.x >= 0.1 && probe.point.x <= 0.3) {
+        return { target, probe };
+      }
+    }
+    return null;
+  })()`);
+  assertCheck(leftContactPick, 'rendered left material exposed no honest node hit target');
+  const leftContactStart = {
+    x: leftContactPick.target.clientX,
+    y: leftContactPick.target.clientY,
+  };
+  const leftContactEnd = {
+    x: Math.min(stageRect.left + stageRect.width - 4, leftContactStart.x + stageRect.width * 0.36),
+    y: leftContactStart.y,
+  };
+  const leftFinalCompletedBefore = contactReset.liveDrag?.scheduler?.finalCompletedCount || 0;
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...leftContactStart,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  const leftPointerDown = await evaluate('window.__structuralMaterial3dWitness()');
+  assertCheck(
+    leftPointerDown.interactionDiagnostics?.pick?.id === leftContactPick.probe.id &&
+      leftPointerDown.forceEnvelope?.contactIdentity?.id === leftContactPick.probe.id,
+    'real pointer-down did not preserve the ray-picked left structural identity',
+  );
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    ...leftContactEnd,
+    button: 'left',
+    buttons: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...leftContactEnd,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  const leftContactDeadline = Date.now() + config.loadTimeoutMs;
+  let leftContactVisualState = null;
+  while (Date.now() < leftContactDeadline) {
+    leftContactVisualState = await evaluate('window.__structuralMaterial3dWitness()');
+    if (leftContactVisualState.gpuSympatheticTear?.status === 'passed' &&
+        leftContactVisualState.liveDrag?.pointerActive === false &&
+        leftContactVisualState.liveDrag?.scheduler?.finalCompletedCount > leftFinalCompletedBefore &&
+        leftContactVisualState.liveDrag?.scheduler?.pointerExecutionActive === false &&
+        leftContactVisualState.liveDrag?.scheduler?.pendingInteractionId === null) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  await evaluate('new Promise(resolve => setTimeout(resolve, 150))', true);
+  leftContactVisualState = await evaluate('window.__structuralMaterial3dWitness()');
+  const leftContactVisualReceipt = leftContactVisualState.gpuSympatheticTear;
+  report.contactResponseVisual = {
+    pick: leftContactPick,
+    pointerDown: {
+      pick: leftPointerDown.interactionDiagnostics.pick,
+      forceEnvelope: leftPointerDown.forceEnvelope,
+    },
+    interaction: leftContactVisualState.forceEnvelope,
+    receipt: leftContactVisualReceipt,
+    summary: leftContactVisualState.summary,
+    visibleTear: leftContactVisualState.visibleTear,
+    camera: await evaluate('window.__structuralMaterial3dCameraWitness().state'),
+  };
+  const leftContactComponent = leftContactVisualState.visibleTear?.components?.find(
+    component => component.label ===
+      leftContactVisualState.visibleTear?.contactResponse?.primaryContactComponentLabel,
+  );
+  report.checks.leftContactResponseVisual = leftContactVisualReceipt?.status === 'passed' &&
+    leftContactVisualReceipt?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
+    leftContactVisualReceipt?.effectiveBackend === 'webgpu' &&
+    leftContactVisualReceipt?.cpuFallbackUsed === false &&
+    leftContactVisualState.visibleTear?.contactResponse?.contactIdentity?.id === leftContactPick.probe.id &&
+    leftContactVisualState.forceEnvelope?.contactIdentity?.id === leftContactPick.probe.id &&
+    leftContactVisualState.visibleTear?.contactResponse?.localResponseNodeCount > 0 &&
+    leftContactVisualState.visibleTear?.responseCentroid?.x < 0.35 &&
+    leftContactComponent?.maxPinnedDisplacement === 0 &&
+    leftContactComponent?.maxUnpinnedDisplacement > 0 &&
+    JSON.stringify(report.contactResponseVisual.camera) === JSON.stringify(cameraBefore);
+  assertCheck(report.checks.leftContactResponseVisual, 'left contact did not own the rendered material response');
+  const contactScreenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs);
+  report.contactResponseScreenshotPixelProbe = contactScreenshotEvidence.probe;
+  mkdirSync(dirname(config.contactResponseScreenshot), { recursive: true });
+  writeFileSync(
+    config.contactResponseScreenshot,
+    Buffer.from(contactScreenshotEvidence.capture.data, 'base64'),
+  );
+  report.checks.contactResponseScreenshotWritten =
+    report.contactResponseScreenshotPixelProbe.nonDarkPixels >=
+      report.contactResponseScreenshotPixelProbe.minimumNonDarkPixels;
+  assertCheck(
+    report.checks.contactResponseScreenshotWritten,
+    'left-contact response screenshot was blank or partial',
+  );
+
   report.runtimeErrors = cdp.runtimeErrors.slice();
   report.checks.noRuntimeErrors = report.runtimeErrors.length === 0;
   assertCheck(report.checks.noRuntimeErrors, `browser emitted runtime errors: ${report.runtimeErrors.join('; ')}`);
@@ -1044,6 +1200,9 @@ try {
     pixelProbe: report.pixelProbe,
     screenshotPixelProbe: report.screenshotPixelProbe,
     screenshotPath: config.screenshot,
+    contactResponseVisual: report.contactResponseVisual,
+    contactResponseScreenshotPixelProbe: report.contactResponseScreenshotPixelProbe,
+    contactResponseScreenshotPath: config.contactResponseScreenshot,
   };
 } catch (error) {
   report.error = { name: error.name, message: error.message, stack: error.stack };

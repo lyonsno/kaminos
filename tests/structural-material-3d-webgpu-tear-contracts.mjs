@@ -49,6 +49,7 @@ assert.match(witnessSource, /notchedControlDiscriminates/, 'browser witness reje
 assert.match(witnessSource, /visibleTransformBoundToGpuLabels/, 'browser witness binds visible transforms to GPU labels');
 assert.match(witnessSource, /releasePreservedSeparation/, 'browser witness checks persistent release state');
 assert.match(witnessSource, /contactLocalityMovedGpuBreakCentroid/, 'browser witness rejects x-invariant GPU breakup');
+assert.match(witnessSource, /contactOwnedVisibleResponseMoved/, 'browser witness rejects right-only visible response');
 assert.match(witnessSource, /displacedPickPreservedRestIdentity/, 'browser witness rejects displaced display coordinates used as rest contact');
 assert.match(witnessSource, /interactiveValidation/, 'product witness requires compact hot-route validation');
 assert.match(witnessSource, /hotResidency/, 'product witness proves the live WebGPU sidecar remains resident');
@@ -148,6 +149,163 @@ const exactReceipt = {
     componentLabels: [...notchedComponents.labels],
   },
 };
+
+function buildConnectedReceipt(state, identity) {
+  const connected = buildLayeredStructuralCpuComponentOracle(
+    state,
+    state.bonds.map(bond => bond.alive),
+  );
+  assert.equal(connected.componentCount, 1, 'contact-response fixture begins connected');
+  return {
+    ...exactReceipt,
+    requestedSequenceIdentity: identity,
+    effectiveSequenceIdentity: identity,
+    topology: {
+      ...exactReceipt.topology,
+      componentCount: connected.componentCount,
+      anchoredComponentLabel: connected.anchoredComponentLabel,
+      detachedComponentLabels: [],
+    },
+    gpuStructuralState: {
+      finalBondLiveness: state.bonds.map(bond => bond.alive),
+      componentLabels: connected.labels,
+    },
+  };
+}
+
+function displacementCentroidX(state) {
+  let weightedX = 0;
+  let totalWeight = 0;
+  state.nodes.forEach(node => {
+    const weight = Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
+    weightedX += node.x * weight;
+    totalWeight += weight;
+  });
+  return totalWeight > 0 ? weightedX / totalWeight : null;
+}
+
+const connectedReceipt = buildConnectedReceipt(notched, 'contact-owned-response-connected');
+const leftContactNode = notched.nodes.find(node => node.id === 'n55');
+const rightContactNode = notched.nodes.find(node => node.id === 'n61');
+const contactForce = (node, gestureId) => ({
+  kind: 'camera-relative-picked-layered-drag',
+  gestureId,
+  point: { x: node.x, y: node.y, z: node.z },
+  displayPoint: { x: node.x, y: node.y, z: node.z },
+  contactIdentity: {
+    authority: 'stable-rest-material-contact-v0',
+    kind: 'node',
+    id: node.id,
+    segmentT: null,
+  },
+  vector: { x: 1, y: 0.08, z: -0.64 },
+  magnitude: 1.46,
+  radius: 0.18,
+});
+const leftContactResponse = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  connectedReceipt,
+  contactForce(leftContactNode, 'left-contact-response'),
+);
+const rightContactResponse = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  connectedReceipt,
+  contactForce(rightContactNode, 'right-contact-response'),
+);
+assert.ok(
+  leftContactResponse.nodes.some(node => !node.pinned && Math.hypot(
+    node.displacement.x,
+    node.displacement.y,
+    node.displacement.z,
+  ) > 0),
+  'a left contact visibly deforms nearby unpinned material even while its component remains anchored',
+);
+for (const node of [...leftContactResponse.nodes, ...rightContactResponse.nodes]) {
+  if (node.pinned) {
+    assert.deepEqual(node.displacement, { x: 0, y: 0, z: 0 }, 'authored pins remain exactly fixed');
+  }
+}
+const leftResponseCentroidX = displacementCentroidX(leftContactResponse);
+const rightResponseCentroidX = displacementCentroidX(rightContactResponse);
+assert.ok(Number.isFinite(leftResponseCentroidX) && Number.isFinite(rightResponseCentroidX));
+assert.ok(
+  rightResponseCentroidX > leftResponseCentroidX + 0.35,
+  'force-equivalent left and right contacts materially move the visible-response centroid',
+);
+assert.equal(
+  leftContactResponse.sympatheticTear.contactResponse.primaryContactComponentLabel,
+  connectedReceipt.topology.anchoredComponentLabel,
+  'visible response records the GPU-labeled component that owns the accepted contact',
+);
+assert.equal(
+  leftContactResponse.sympatheticTear.contactResponse.contactIdentity.id,
+  leftContactNode.id,
+  'visible response preserves the stable picked structural identity',
+);
+
+const splitBond = notched.bonds.find(bond => bond.id === 'b52');
+const splitBondAIndex = notched.nodes.findIndex(node => node.id === splitBond.a);
+const splitBondBIndex = notched.nodes.findIndex(node => node.id === splitBond.b);
+assert.notEqual(
+  notchedComponents.labels[splitBondAIndex],
+  notchedComponents.labels[splitBondBIndex],
+  'split-bond fixture endpoints land in distinct post-fracture GPU components',
+);
+const splitBondInteraction = segmentT => ({
+  ...scenario.force,
+  gestureId: `split-bond-${segmentT}`,
+  point: {
+    x: notched.nodes[splitBondAIndex].x +
+      (notched.nodes[splitBondBIndex].x - notched.nodes[splitBondAIndex].x) * segmentT,
+    y: notched.nodes[splitBondAIndex].y +
+      (notched.nodes[splitBondBIndex].y - notched.nodes[splitBondAIndex].y) * segmentT,
+    z: notched.nodes[splitBondAIndex].z +
+      (notched.nodes[splitBondBIndex].z - notched.nodes[splitBondAIndex].z) * segmentT,
+  },
+  contactIdentity: {
+    authority: 'stable-rest-material-contact-v0',
+    kind: 'bond',
+    id: splitBond.id,
+    segmentT,
+  },
+});
+const splitNearA = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  exactReceipt,
+  splitBondInteraction(0.25),
+);
+const splitNearB = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  exactReceipt,
+  splitBondInteraction(0.75),
+);
+const labelA = notchedComponents.labels[splitBondAIndex];
+const labelB = notchedComponents.labels[splitBondBIndex];
+assert.deepEqual(
+  splitNearA.sympatheticTear.contactResponse.contactComponentLabels,
+  [labelA, labelB].sort((a, b) => a - b),
+  'split bond preserves both endpoint component labels as contact provenance',
+);
+assert.equal(
+  splitNearA.sympatheticTear.contactResponse.primaryContactComponentLabel,
+  labelA,
+  'segment contact near endpoint A selects only endpoint A component as primary',
+);
+assert.equal(
+  splitNearB.sympatheticTear.contactResponse.primaryContactComponentLabel,
+  labelB,
+  'segment contact near endpoint B selects only endpoint B component as primary',
+);
+const responseMagnitudeForLabel = (state, label) => {
+  const node = state.nodes.find(candidate => candidate.componentId === `g${label}` && !candidate.pinned);
+  return Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
+};
+const labelBSecondaryMagnitude = responseMagnitudeForLabel(splitNearA, labelB);
+const labelBPrimaryMagnitude = responseMagnitudeForLabel(splitNearB, labelB);
+assert.ok(
+  labelBPrimaryMagnitude > labelBSecondaryMagnitude * 3.5,
+  'non-primary split endpoint component receives secondary release instead of full primary response',
+);
 
 const firstGestureForce = { ...scenario.force, gestureId: 'gesture-1' };
 const torn = buildLayeredStructuralGpuTearMaterial(notched, exactReceipt, firstGestureForce);

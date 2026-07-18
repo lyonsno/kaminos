@@ -6,6 +6,7 @@ import {
   buildLayeredStructuralWitnessScenario,
   createLayeredStructuralMaterial,
 } from '../structural-material-3d-core.js';
+import { buildLayeredStructuralCpuSequenceOracle } from '../structural-material-3d-webgpu-retained.js';
 
 const root = new URL('..', import.meta.url).pathname;
 const hotCorePath = join(root, 'structural-material-3d-webgpu-hot-sidecar.js');
@@ -301,6 +302,27 @@ assert.equal(
   }).ok,
   false,
   'labels that split endpoints of an alive bond cannot author visible separation',
+);
+const fracturedLiveness = buildLayeredStructuralCpuSequenceOracle(
+  state,
+  [scenario.force],
+).finalBondLiveness;
+assert.ok(fracturedLiveness.some(alive => !alive), 'collapsed-label fixture uses genuinely fractured liveness');
+const collapsedFractureValidation = validateLayeredStructuralHotSidecarReceipt(state, {
+  ...exactReceipt,
+  gpuStructuralState: {
+    finalBondLiveness: fracturedLiveness,
+    componentLabels: state.nodes.map(() => 0),
+  },
+});
+assert.equal(
+  collapsedFractureValidation.ok,
+  false,
+  'labels collapsed across components induced by fractured liveness cannot pass compact validation',
+);
+assert.ok(
+  collapsedFractureValidation.reasons.includes('component-label-liveness-coherence'),
+  'collapsed-label rejection names exact liveness-to-label incoherence',
 );
 assert.equal(
   validateLayeredStructuralHotSidecarReceipt(state, {

@@ -57,6 +57,75 @@ function assertReceipt(condition, message) {
   if (!condition) throw new Error(`GPU sympathetic tear receipt ${message}`);
 }
 
+function resolveContactOwnership(state, interaction, componentLabels) {
+  const nodeIndexById = new Map(state.nodes.map((node, index) => [node.id, index]));
+  const contactPoint = {
+    x: finite(interaction.point?.x, 0.5),
+    y: finite(interaction.point?.y, 0.5),
+    z: finite(interaction.point?.z, 0.5),
+  };
+  const identity = interaction.contactIdentity;
+  let contactNodeIndices = [];
+  let contactIdentity = null;
+  if (identity?.kind === 'node') {
+    const nodeIndex = nodeIndexById.get(identity.id);
+    assertReceipt(Number.isInteger(nodeIndex), 'contains an unknown node contact identity');
+    contactNodeIndices = [nodeIndex];
+    contactIdentity = {
+      authority: identity.authority || 'stable-rest-material-contact-v0',
+      kind: 'node',
+      id: identity.id,
+      segmentT: null,
+    };
+  } else if (identity?.kind === 'bond') {
+    const bond = state.bonds.find(candidate => candidate.id === identity.id);
+    assertReceipt(Boolean(bond), 'contains an unknown bond contact identity');
+    const a = nodeIndexById.get(bond.a);
+    const b = nodeIndexById.get(bond.b);
+    assertReceipt(Number.isInteger(a) && Number.isInteger(b), 'contains unresolved bond contact endpoints');
+    const segmentT = clamp(identity.segmentT ?? 0.5, 0, 1);
+    contactNodeIndices = segmentT <= 0.5 ? [a, b] : [b, a];
+    contactIdentity = {
+      authority: identity.authority || 'stable-rest-material-contact-v0',
+      kind: 'bond',
+      id: identity.id,
+      segmentT: round(segmentT),
+    };
+  } else {
+    let nearestIndex = 0;
+    let nearestDistance = Infinity;
+    state.nodes.forEach((node, index) => {
+      const distance = Math.hypot(
+        node.x - contactPoint.x,
+        node.y - contactPoint.y,
+        node.z - contactPoint.z,
+      );
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    contactNodeIndices = [nearestIndex];
+    contactIdentity = {
+      authority: 'nearest-rest-node-contact-fallback-v0',
+      kind: 'node',
+      id: state.nodes[nearestIndex].id,
+      segmentT: null,
+    };
+  }
+  const contactComponentLabels = [...new Set(
+    contactNodeIndices.map(index => componentLabels[index]),
+  )].sort((a, b) => a - b);
+  return {
+    contactPoint,
+    contactIdentity,
+    contactNodeIndices,
+    contactNodeIds: contactNodeIndices.map(index => state.nodes[index].id),
+    contactComponentLabels,
+    primaryContactComponentLabel: componentLabels[contactNodeIndices[0]],
+  };
+}
+
 export function buildLayeredStructuralCpuComponentOracle(state, finalBondLiveness = []) {
   if (!state?.nodes || !state?.bonds) throw new Error('component oracle requires layered structural state');
   if (finalBondLiveness.length !== state.bonds.length) {
@@ -209,7 +278,12 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
 
   const direction = normalizedVector(interaction.vector);
   const magnitude = clamp(interaction.magnitude, 0, 5);
-  const separationScale = components.length > 1 ? clamp(magnitude * 0.095, 0.055, 0.18) : 0;
+  const separationScale = components.length > 1 && magnitude > 0
+    ? clamp(magnitude * 0.082, 0.045, 0.16)
+    : 0;
+  const localResponseScale = magnitude > 0 ? clamp(magnitude * 0.064, 0.018, 0.115) : 0;
+  const localResponseRadius = clamp(finite(interaction.radius, 0.18) * 2.1, 0.3, 0.58);
+  const secondaryReleaseRatio = 0.22;
   const gestureId = typeof interaction.gestureId === 'string' || Number.isFinite(interaction.gestureId)
     ? String(interaction.gestureId)
     : receipt.effectiveSequenceIdentity;
@@ -228,25 +302,40 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     };
   });
   const componentByLabel = new Map(components.map(component => [component.label, component]));
+  const contactOwnership = resolveContactOwnership(state, interaction, componentLabels);
   let detachedNodeCount = 0;
+  let localResponseNodeCount = 0;
+  let primaryResponseNodeCount = 0;
   const nodes = state.nodes.map((node, index) => {
     const label = componentLabels[index];
     const component = componentByLabel.get(label);
-    const anchoredNode = component.pinned;
-    if (!anchoredNode) detachedNodeCount += 1;
-    const distanceFactor = anchoredNode
+    const contactOwned = label === contactOwnership.primaryContactComponentLabel;
+    if (!component.pinned) detachedNodeCount += 1;
+    const contactDistance = Math.hypot(
+      node.x - contactOwnership.contactPoint.x,
+      node.y - contactOwnership.contactPoint.y,
+      node.z - contactOwnership.contactPoint.z,
+    );
+    const normalizedContactDistance = clamp(contactDistance / localResponseRadius, 0, 1);
+    const localInfluence = contactOwned && component.pinned && !node.pinned
+      ? (1 - normalizedContactDistance) ** 2
+      : 0;
+    const rigidResponseScale = component.pinned
       ? 0
-      : 0.82 + clamp(component.center.x, 0, 1) * 0.36;
+      : separationScale * (contactOwned ? 1 : secondaryReleaseRatio);
+    const responseScale = rigidResponseScale + localResponseScale * localInfluence;
+    if (localInfluence > 0) localResponseNodeCount += 1;
+    if (contactOwned && responseScale > 0) primaryResponseNodeCount += 1;
     const baseline = baselineDisplacements[index];
     return {
       ...node,
       componentId: `g${label}`,
-      displacement: anchoredNode
+      displacement: node.pinned
         ? { x: 0, y: 0, z: 0 }
         : {
-            x: round(baseline.x + direction.x * separationScale * distanceFactor),
-            y: round(baseline.y + direction.y * separationScale * distanceFactor),
-            z: round(baseline.z + direction.z * separationScale * distanceFactor),
+            x: round(baseline.x + direction.x * responseScale),
+            y: round(baseline.y + direction.y * responseScale),
+            z: round(baseline.z + direction.z * responseScale),
           },
     };
   });
@@ -285,6 +374,25 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       causingEventEpochs: [...new Set(receipt.gpuResult?.eventEpochs || [])].sort((a, b) => a - b),
       direction: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
       separationScale: round(separationScale),
+      contactResponse: {
+        authority: 'gpu-topology-contact-owned-visible-response-v0',
+        topologyAuthority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY,
+        contactIdentity: contactOwnership.contactIdentity,
+        contactPoint: {
+          x: round(contactOwnership.contactPoint.x),
+          y: round(contactOwnership.contactPoint.y),
+          z: round(contactOwnership.contactPoint.z),
+        },
+        contactNodeIds: contactOwnership.contactNodeIds,
+        contactComponentLabels: contactOwnership.contactComponentLabels,
+        primaryContactComponentLabel: contactOwnership.primaryContactComponentLabel,
+        localResponseScale: round(localResponseScale),
+        localResponseRadius: round(localResponseRadius),
+        secondaryReleaseRatio,
+        localResponseNodeCount,
+        primaryResponseNodeCount,
+        semantics: 'contact-owned-local-deformation-plus-gpu-labeled-component-release-v0',
+      },
       gestureId,
       displacementSemantics: 'gesture-baseline-plus-current-absolute-delta',
     },
