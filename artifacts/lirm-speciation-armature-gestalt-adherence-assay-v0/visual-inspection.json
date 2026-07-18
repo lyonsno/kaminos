@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-adherence-visual-inspection.v0",
+  "status": "inspected",
+  "sheet": {
+    "path": "gestalt-adherence-contact-sheet.png",
+    "sha256": "sha256:a5cd057c50d1266a4006ec2e64a21b809292efb1a2c582078e40e229933c5740"
+  },
+  "acceptedVisualCount": 4,
+  "rejectedVisualCount": 0,
+  "sharedPrior": [
+    "low quadruped anatomy",
+    "left-facing head",
+    "neutral clay material",
+    "dorsal armor"
+  ],
+  "perCandidate": {
+    "lirm-armature-08": "compact, deeply hunched, two large dorsal masses",
+    "lirm-armature-16": "broadest and squattest, blunt front, separated rear",
+    "lirm-armature-22": "deepest lifted arch, longest forelimbs, strongest face specificity",
+    "lirm-armature-24": "longest and lowest, strongest plating, extra silhouette breaks"
+  },
+  "verdict": "Positive gross-structure adherence with coherent learned-prior anatomy; prompt-pressure mapping is indicated."
+}

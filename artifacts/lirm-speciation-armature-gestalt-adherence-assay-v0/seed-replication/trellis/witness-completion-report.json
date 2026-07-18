@@ -1,0 +1,872 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-collection.v0",
+  "status": "complete-frames-uninspected",
+  "requestedCount": 20,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-left",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "67103392c762",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.0427709,
+      "startedAt": 1784369628.857216,
+      "finishedAt": 1784369630.6159842,
+      "durationSeconds": 1.7587683200836182,
+      "outputMtime": 1784369630.5105834,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 9455196,
+        "sha256": "sha256:be85751f0beb27030c8aaa8cdf1caf6dfeb683048eaeaa7f157ee28fb6f1dd5f"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png",
+        "bytes": 738697,
+        "sha256": "sha256:6781eabc38fafadcbd9999cfcfc88145cd8603ce5016680d764726f55497884d"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-front",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "ebcb782259d3",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.0672839,
+      "startedAt": 1784369630.618888,
+      "finishedAt": 1784369631.552903,
+      "durationSeconds": 0.9340150356292725,
+      "outputMtime": 1784369631.487732,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 9455196,
+        "sha256": "sha256:be85751f0beb27030c8aaa8cdf1caf6dfeb683048eaeaa7f157ee28fb6f1dd5f"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png",
+        "bytes": 682476,
+        "sha256": "sha256:b9a5aa4926f128361e2d4fa565e5832d4c4d1dcb63842592fb2c28703c635ca4"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-right",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "009e6a01510f",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.092014,
+      "startedAt": 1784369631.5558221,
+      "finishedAt": 1784369632.4534779,
+      "durationSeconds": 0.897655725479126,
+      "outputMtime": 1784369632.4067588,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 9455196,
+        "sha256": "sha256:be85751f0beb27030c8aaa8cdf1caf6dfeb683048eaeaa7f157ee28fb6f1dd5f"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png",
+        "bytes": 745571,
+        "sha256": "sha256:7031cee7a07d15696bd013b9b752f10358f378e201aac3a764c9e02eb2ae373b"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-opposite",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "3761bcbe278a",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.1162891,
+      "startedAt": 1784369632.455807,
+      "finishedAt": 1784369633.337826,
+      "durationSeconds": 0.88201904296875,
+      "outputMtime": 1784369633.2583299,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 9455196,
+        "sha256": "sha256:be85751f0beb27030c8aaa8cdf1caf6dfeb683048eaeaa7f157ee28fb6f1dd5f"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png",
+        "bytes": 661570,
+        "sha256": "sha256:9ca4a53a370590db4ccc29d0ef39bd9583d4c3d70f6a2e2d9f2a20cdcdf90381"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-left",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "0d6d38186407",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.1407979,
+      "startedAt": 1784369633.340553,
+      "finishedAt": 1784369634.228767,
+      "durationSeconds": 0.8882138729095459,
+      "outputMtime": 1784369634.18497,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10119232,
+        "sha256": "sha256:77e9325bed6a34204c18cc50e54f8a0fadb3cf21f160b3727535e4083e079063"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png",
+        "bytes": 739033,
+        "sha256": "sha256:e220d77be0bb32219424ede2797e5846bcecebad1405400fa60bd153a49a1550"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-front",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "2d78179444fd",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.165079,
+      "startedAt": 1784369634.230988,
+      "finishedAt": 1784369635.151684,
+      "durationSeconds": 0.9206960201263428,
+      "outputMtime": 1784369635.0705957,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10119232,
+        "sha256": "sha256:77e9325bed6a34204c18cc50e54f8a0fadb3cf21f160b3727535e4083e079063"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png",
+        "bytes": 695533,
+        "sha256": "sha256:1fab6e5a5860cd1203c410dccbf5c1969f7a22b83e80c0501b92ecf8417af468"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-right",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "7ab7866a3386",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.1890612,
+      "startedAt": 1784369635.1543849,
+      "finishedAt": 1784369636.107125,
+      "durationSeconds": 0.9527401924133301,
+      "outputMtime": 1784369636.0628133,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10119232,
+        "sha256": "sha256:77e9325bed6a34204c18cc50e54f8a0fadb3cf21f160b3727535e4083e079063"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png",
+        "bytes": 756466,
+        "sha256": "sha256:fd15d632f1f9f3ecc1344f2a6ac3b7d547c6c5bbc53dce720dc4542bff09fb84"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-opposite",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "857477c31347",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.213621,
+      "startedAt": 1784369636.109317,
+      "finishedAt": 1784369636.9740648,
+      "durationSeconds": 0.8647477626800537,
+      "outputMtime": 1784369636.9035268,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10119232,
+        "sha256": "sha256:77e9325bed6a34204c18cc50e54f8a0fadb3cf21f160b3727535e4083e079063"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png",
+        "bytes": 672389,
+        "sha256": "sha256:f0445f0bff5160935518cb44d97224c292ee911a7089dc25c1b54863827ecd73"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-left",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "71de270d5bdf",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.2376351,
+      "startedAt": 1784369636.976492,
+      "finishedAt": 1784369637.790051,
+      "durationSeconds": 0.8135590553283691,
+      "outputMtime": 1784369637.750896,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 8681204,
+        "sha256": "sha256:c20f52e73bb183d4ee292eb2a9138ad8aca59251390b3ffae4ce4270318a00ab"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png",
+        "bytes": 706887,
+        "sha256": "sha256:3f9f32c8832c4659cecf784b30004bb525304133ba79f147ab476d8cd32c6994"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-front",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "0c16411cfcd5",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.262224,
+      "startedAt": 1784369637.792332,
+      "finishedAt": 1784369638.6676621,
+      "durationSeconds": 0.8753302097320557,
+      "outputMtime": 1784369638.5759728,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 8681204,
+        "sha256": "sha256:c20f52e73bb183d4ee292eb2a9138ad8aca59251390b3ffae4ce4270318a00ab"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png",
+        "bytes": 670313,
+        "sha256": "sha256:17a9b71fbf7e8ec0b403936d58b9930ab7aace7562fedd68a1af4dead43591e0"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-right",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "d553638f6085",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.286316,
+      "startedAt": 1784369638.670061,
+      "finishedAt": 1784369639.605352,
+      "durationSeconds": 0.9352908134460449,
+      "outputMtime": 1784369639.5615518,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 8681204,
+        "sha256": "sha256:c20f52e73bb183d4ee292eb2a9138ad8aca59251390b3ffae4ce4270318a00ab"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png",
+        "bytes": 729088,
+        "sha256": "sha256:210c135bf883afa7f97b4a58962ecc7ce66075708ae1ed501fb5e1d56135905f"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-opposite",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "strict-blockout-preservation",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "5ca731e64b5e",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.31043,
+      "startedAt": 1784369639.607452,
+      "finishedAt": 1784369640.4893801,
+      "durationSeconds": 0.8819282054901123,
+      "outputMtime": 1784369640.3997562,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.glb",
+        "bytes": 8681204,
+        "sha256": "sha256:c20f52e73bb183d4ee292eb2a9138ad8aca59251390b3ffae4ce4270318a00ab"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png",
+        "bytes": 668479,
+        "sha256": "sha256:09717bfbec2434edc1ddb733f7c72d7a24db9c0ab97e7a5ac20f02f8b5277e29"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-left",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "2a7eab2d22d7",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.334752,
+      "startedAt": 1784369640.491668,
+      "finishedAt": 1784369641.379897,
+      "durationSeconds": 0.8882291316986084,
+      "outputMtime": 1784369641.3030005,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10108624,
+        "sha256": "sha256:fea3849cd944bdf2e7fff9a3eff91be7015a79b15b0ae1bbd1611dfb12df1211"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png",
+        "bytes": 732720,
+        "sha256": "sha256:888479c8b5426518db0ede6e7e59e7cf9541c6e87e31447d75239525dbdf3b36"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-front",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "da4de70ac80d",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.362554,
+      "startedAt": 1784369641.382136,
+      "finishedAt": 1784369642.261913,
+      "durationSeconds": 0.8797769546508789,
+      "outputMtime": 1784369642.1870344,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10108624,
+        "sha256": "sha256:fea3849cd944bdf2e7fff9a3eff91be7015a79b15b0ae1bbd1611dfb12df1211"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png",
+        "bytes": 697795,
+        "sha256": "sha256:a37c16cab22f0c628ce5645daff9c0d00c9e993dae00fd9b47de12845dd4d174"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-right",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "ec28a33de8d9",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.3870358,
+      "startedAt": 1784369642.2637172,
+      "finishedAt": 1784369643.149329,
+      "durationSeconds": 0.8856117725372314,
+      "outputMtime": 1784369643.0812128,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10108624,
+        "sha256": "sha256:fea3849cd944bdf2e7fff9a3eff91be7015a79b15b0ae1bbd1611dfb12df1211"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png",
+        "bytes": 751122,
+        "sha256": "sha256:abbf748cf21ca3250189084c640313c5a557ed1ccab7593c62005b33022f73e4"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-opposite",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-24",
+      "imagegenSeed": 717048,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "bfad833fe7f8",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.411426,
+      "startedAt": 1784369643.151584,
+      "finishedAt": 1784369644.0757172,
+      "durationSeconds": 0.92413330078125,
+      "outputMtime": 1784369643.9797373,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.glb",
+        "bytes": 10108624,
+        "sha256": "sha256:fea3849cd944bdf2e7fff9a3eff91be7015a79b15b0ae1bbd1611dfb12df1211"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png",
+        "bytes": 673096,
+        "sha256": "sha256:68b8557c2329c6998b7e839f47ae3eeb88cec9a3461dc7961ec76bdcfd2df012"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-left",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717047,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "8640d0c8b6dd",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.436131,
+      "startedAt": 1784369644.077794,
+      "finishedAt": 1784369644.9032571,
+      "durationSeconds": 0.825463056564331,
+      "outputMtime": 1784369644.8601682,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb",
+        "bytes": 9615172,
+        "sha256": "sha256:60034208facd5bbda5f11cd2ed105decbf7a761c1a439397fab891d538ee8de2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/left/render.png",
+        "bytes": 695474,
+        "sha256": "sha256:75a37300c7b1d90bcf85b95b85d424989a8b83a0c95b92b348785763d54373af"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-front",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717047,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "893066468146",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.461602,
+      "startedAt": 1784369644.905377,
+      "finishedAt": 1784369645.785752,
+      "durationSeconds": 0.8803751468658447,
+      "outputMtime": 1784369645.7109854,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb",
+        "bytes": 9615172,
+        "sha256": "sha256:60034208facd5bbda5f11cd2ed105decbf7a761c1a439397fab891d538ee8de2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/front/render.png",
+        "bytes": 670425,
+        "sha256": "sha256:39018f3ff3b86120897d48be5043d0dd521e9b3aaf6920d6c08edf89918bbf93"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-right",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717047,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "33505c54a6ed",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.486641,
+      "startedAt": 1784369645.7880828,
+      "finishedAt": 1784369646.6599302,
+      "durationSeconds": 0.87184739112854,
+      "outputMtime": 1784369646.5803998,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb",
+        "bytes": 9615172,
+        "sha256": "sha256:60034208facd5bbda5f11cd2ed105decbf7a761c1a439397fab891d538ee8de2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/right/render.png",
+        "bytes": 710270,
+        "sha256": "sha256:c56d79e580e08e51a6b5a3926d70b73f55b8732ec07dd70d53eb5699857251d5"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-opposite",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "generationId": "basin-10-s3p00-n00",
+      "candidateId": "lirm-armature-08",
+      "imagegenSeed": 717047,
+      "sourceBasinIndex": 10,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "c83bdf107d57",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784369628.51155,
+      "startedAt": 1784369646.66149,
+      "finishedAt": 1784369647.4907699,
+      "durationSeconds": 0.829279899597168,
+      "outputMtime": 1784369647.4374702,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.glb",
+        "bytes": 9615172,
+        "sha256": "sha256:60034208facd5bbda5f11cd2ed105decbf7a761c1a439397fab891d538ee8de2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/opposite/render.png",
+        "bytes": 658042,
+        "sha256": "sha256:4bc8e744d4d0f886b08cc8baf9a164923bf219b727145a9bf1cc19e95ca1b473"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "20 nonempty rendered frames accepted; visual inspection pending",
+  "visualInspectionClaim": "not-yet-inspected"
+}

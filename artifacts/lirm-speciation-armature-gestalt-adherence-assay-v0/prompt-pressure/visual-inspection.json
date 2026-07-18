@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-prompt-pressure-visual-inspection.v0",
+  "status": "inspected",
+  "sheet": {
+    "path": "gestalt-adherence-prompt-pressure-contact-sheet.png",
+    "sha256": "sha256:0e43b27f87b718d41600b491e9767b06598741d92c5e65ddeb36e1996238caa4"
+  },
+  "acceptedVisualCount": 8,
+  "rejectedVisualCount": 0,
+  "pressureEffect": {
+    "strict-blockout-preservation": "coarse envelope retained with restrained limb and surface completion",
+    "prior-led-invention": "coherent armored quadruped anatomy added while gross armature differences remain legible"
+  },
+  "perCandidate": {
+    "lirm-armature-08": "compact, deeply arched, and fore-heavy under both prompt pressures",
+    "lirm-armature-16": "broadest and squattest body with the shortest stance under both pressures",
+    "lirm-armature-22": "deep lifted arch and heavy central mass survive both completions",
+    "lirm-armature-24": "longest body and strongest extended locomotor line survive both completions"
+  },
+  "verdict": "Prompt pressure is a strong anatomical-invention lever without gross-structure collapse; extremal-armature seed replication is indicated."
+}

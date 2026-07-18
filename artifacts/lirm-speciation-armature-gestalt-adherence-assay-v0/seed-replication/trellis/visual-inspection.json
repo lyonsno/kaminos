@@ -1,0 +1,20 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-factorial-trellis-visual-inspection.v0",
+  "status": "inspected",
+  "sheet": {
+    "path": "gestalt-factorial-trellis-witness-contact-sheet.png",
+    "sha256": "sha256:914da67e93630d75b7d337306e8a72dc4da1e4cd1cad680721e132cd632a2c3c"
+  },
+  "acceptedCastCount": 5,
+  "acceptedViewCount": 20,
+  "rejectedCastCount": 0,
+  "rejectedViewCount": 0,
+  "spatialCoherence": "All five casts remain coherent and legible across left, front, right, and opposite views.",
+  "leverDecomposition": {
+    "armatureUnderStrictPressure": "Armature 08 remains compact, high-arched, and fore-heavy; armature 24 remains longer, lower, and more extended.",
+    "armatureUnderPriorLedPressure": "Both armatures converge toward one richly resolved armored-quadruped species basin; residual proportion differences remain, but prior attraction dominates gross identity.",
+    "imageSeed": "Changing only image seed from 717048 to 717047 yields a materially different green, long-snouted species while retaining a low armored-quadruped gestalt.",
+    "promptPressure": "Strict pressure preserves the procedural blockout strongly; prior-led pressure trades armature specificity for materially richer anatomy and surface resolution."
+  },
+  "verdict": "The controllable silhouette-armature route survives Trellis in spatially coherent form. Strict pressure is the stronger armature-preservation regime; prior-led pressure is a strong species-completion lever that can partially collapse armature differences. Intermediate pressure and broader silhouette archetypes are the next high-leverage discriminators."
+}

@@ -25,6 +25,115 @@ const STANCES = [
   { id: 'lineage-seed', file: 'lineage-seed.txt' },
 ];
 
+export function assertExactIdCoverage({ plannedIds, observedIds, label = 'item' }) {
+  if (!Array.isArray(plannedIds) || !Array.isArray(observedIds)) {
+    throw new TypeError(`${label} ID coverage requires plannedIds and observedIds arrays`);
+  }
+  const normalize = (ids, side) => {
+    const seen = new Set();
+    for (const id of ids) {
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new TypeError(`${side} ${label} ID must be a non-empty string`);
+      }
+      if (seen.has(id)) {
+        const error = new Error(`duplicate ${side} ${label} ID: ${id}`);
+        error.code = 'ERR_EXACT_ID_COVERAGE';
+        throw error;
+      }
+      seen.add(id);
+    }
+    return seen;
+  };
+  const planned = normalize(plannedIds, 'planned');
+  const observed = normalize(observedIds, 'observed');
+  for (const id of planned) {
+    if (!observed.has(id)) {
+      const error = new Error(`missing ${label} ID: ${id}`);
+      error.code = 'ERR_EXACT_ID_COVERAGE';
+      throw error;
+    }
+  }
+  for (const id of observed) {
+    if (!planned.has(id)) {
+      const error = new Error(`unexpected ${label} ID: ${id}`);
+      error.code = 'ERR_EXACT_ID_COVERAGE';
+      throw error;
+    }
+  }
+}
+
+function validateFactorialComparisonContract(contract, cells) {
+  const allowedKeys = new Set([
+    'kind',
+    'fixedSilhouetteLineage',
+    'factorialSeed',
+    'armatures',
+    'promptStances',
+    'seedProbe',
+  ]);
+  for (const key of Object.keys(contract)) {
+    if (!allowedKeys.has(key)) throw new Error(`comparison contract has unsupported field: ${key}`);
+  }
+  if (contract.kind !== 'armature-prompt-pressure-factorial-plus-seed-probe') {
+    throw new Error(`unsupported comparison contract kind: ${contract.kind}`);
+  }
+  if (typeof contract.fixedSilhouetteLineage !== 'string' || contract.fixedSilhouetteLineage.length === 0) {
+    throw new Error('comparison contract requires fixedSilhouetteLineage');
+  }
+  if (!Number.isSafeInteger(contract.factorialSeed)) {
+    throw new Error('comparison contract requires a safe integer factorialSeed');
+  }
+  for (const [field, values] of [
+    ['armatures', contract.armatures],
+    ['promptStances', contract.promptStances],
+  ]) {
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new Error(`comparison contract requires non-empty ${field}`);
+    }
+    assertExactIdCoverage({ plannedIds: values, observedIds: values, label: `comparison contract ${field}` });
+  }
+  const probe = contract.seedProbe;
+  if (!probe || typeof probe !== 'object' || Array.isArray(probe)
+    || typeof probe.candidateId !== 'string' || probe.candidateId.length === 0
+    || typeof probe.stance !== 'string' || probe.stance.length === 0
+    || !Number.isSafeInteger(probe.seed)) {
+    throw new Error('comparison contract requires an exact seedProbe');
+  }
+  if (probe.seed === contract.factorialSeed) {
+    throw new Error('comparison contract seed probe must use a different seed from the factorial');
+  }
+  const lineageIds = [...new Set(cells.map(cell => cell.generationId))];
+  if (lineageIds.length !== 1 || lineageIds[0] !== contract.fixedSilhouetteLineage) {
+    throw new Error(`comparison contract fixed silhouette lineage mismatch: ${lineageIds.join(',')}`);
+  }
+  const factorialCells = cells.filter(cell => cell.imagegenSeed === contract.factorialSeed);
+  const expectedFactorialIds = contract.armatures.flatMap(candidateId => (
+    contract.promptStances.map(stance => `${candidateId}\u0000${stance}`)
+  ));
+  const observedFactorialIds = factorialCells.map(cell => `${cell.candidateId}\u0000${cell.stance}`);
+  try {
+    assertExactIdCoverage({
+      plannedIds: expectedFactorialIds,
+      observedIds: observedFactorialIds,
+      label: 'comparison contract factorial cell',
+    });
+  } catch (error) {
+    throw new Error(`comparison contract factorial mismatch: ${error.message}`, { cause: error });
+  }
+  const probeCells = cells.filter(cell => (
+    cell.candidateId === probe.candidateId
+    && cell.stance === probe.stance
+    && cell.imagegenSeed === probe.seed
+  ));
+  if (probeCells.length !== 1) {
+    throw new Error(`comparison contract seed probe mismatch: found ${probeCells.length} matching cells`);
+  }
+  const describedIds = new Set([...factorialCells, ...probeCells].map(cell => cell.cellId));
+  if (describedIds.size !== cells.length || cells.some(cell => !describedIds.has(cell.cellId))) {
+    throw new Error('comparison contract does not account for every promoted cell');
+  }
+}
+
 async function fileEvidence(path) {
   const bytes = await readFile(path);
   if (bytes.length === 0) throw new Error(`empty evidence file: ${path}`);
@@ -100,67 +209,135 @@ export async function buildGestaltImagegenMatrix({
   promptRoot,
   outputRoot,
   seed = 717046,
+  seeds = null,
   generationIds = DEFAULT_GENERATIONS,
+  selections = null,
+  stances = STANCES,
 }) {
   assertCompositeReceipt(compositeReceipt);
-  const wanted = new Set(generationIds);
-  const bundles = compositeReceipt.bundles.filter(bundle => (
-    bundle.candidateId === 'lirm-armature-22'
-    && bundle.fieldModel?.actual3dStructure === true
-    && bundle.fieldModel?.kind === 'smooth-sdf-metaball-silhouette-morph'
-    && bundle.fieldModel?.gestaltPressure === 0.46
-    && wanted.has(bundle.gestaltEnvelope?.lineage?.generationId)
-    && bundle.gestaltEnvelope?.lineage?.acceptedForDownstream === true
-  ));
-  if (bundles.length !== generationIds.length) {
-    throw new Error(`expected ${generationIds.length} distinct p0.46 composite bundles, found ${bundles.length}`);
+  const requestedSelections = selections ?? generationIds.map(generationId => ({
+    candidateId: 'lirm-armature-22',
+    generationId,
+  }));
+  if (!Array.isArray(requestedSelections) || requestedSelections.length === 0) {
+    throw new Error('imagegen matrix requires at least one composite selection');
   }
-  const byGeneration = new Map(bundles.map(bundle => [bundle.gestaltEnvelope.lineage.generationId, bundle]));
-  if (byGeneration.size !== generationIds.length) throw new Error('duplicate composite generation lineage');
+  const selectionKeys = new Set();
+  for (const selection of requestedSelections) {
+    if (!selection?.candidateId || !selection?.generationId) {
+      throw new Error('composite selection requires candidateId and generationId');
+    }
+    const key = `${selection.candidateId}\u0000${selection.generationId}`;
+    if (selectionKeys.has(key)) {
+      throw new Error(`duplicate requested composite selection: ${selection.candidateId} / ${selection.generationId}`);
+    }
+    selectionKeys.add(key);
+  }
+
+  const bundles = requestedSelections.map((selection) => {
+    const pairMatches = compositeReceipt.bundles.filter(bundle => (
+      bundle.candidateId === selection.candidateId
+      && bundle.gestaltEnvelope?.lineage?.generationId === selection.generationId
+    ));
+    if (pairMatches.length === 0) {
+      throw new Error(`missing requested composite selection: ${selection.candidateId} / ${selection.generationId}`);
+    }
+    const pressureMatches = pairMatches.filter(bundle => bundle.fieldModel?.gestaltPressure === 0.46);
+    if (pressureMatches.length === 0) {
+      throw new Error(`requested composite is not an accepted true-3D p0.46 bundle: ${selection.candidateId} / ${selection.generationId}`);
+    }
+    if (pressureMatches.length > 1) {
+      throw new Error(`duplicate p0.46 composite bundles: ${selection.candidateId} / ${selection.generationId}`);
+    }
+    const bundle = pressureMatches[0];
+    if (bundle.fieldModel?.actual3dStructure !== true
+      || bundle.fieldModel?.kind !== 'smooth-sdf-metaball-silhouette-morph'
+      || bundle.gestaltEnvelope?.lineage?.acceptedForDownstream !== true) {
+      throw new Error(`requested composite is not an accepted true-3D p0.46 bundle: ${selection.candidateId} / ${selection.generationId}`);
+    }
+    return bundle;
+  });
+
+  if (!Array.isArray(stances) || stances.length === 0) {
+    throw new Error('imagegen matrix requires at least one prompt stance');
+  }
+  const stanceIds = new Set();
+  for (const stance of stances) {
+    if (!stance?.id || !stance?.file) throw new Error('prompt stance requires id and file');
+    if (stanceIds.has(stance.id)) throw new Error(`duplicate prompt stance: ${stance.id}`);
+    stanceIds.add(stance.id);
+  }
 
   const prompts = new Map();
-  for (const stance of STANCES) {
+  for (const stance of stances) {
     prompts.set(stance.id, await fileEvidence(resolve(promptRoot, stance.file)));
   }
 
+  const requestedSeeds = seeds ?? [seed];
+  if (!Array.isArray(requestedSeeds) || requestedSeeds.length === 0) {
+    throw new Error('imagegen matrix requires at least one seed');
+  }
+  const uniqueSeeds = new Set();
+  for (const requestedSeed of requestedSeeds) {
+    if (!Number.isSafeInteger(requestedSeed) || requestedSeed < 0) {
+      throw new Error(`invalid imagegen seed: ${requestedSeed}`);
+    }
+    if (uniqueSeeds.has(requestedSeed)) throw new Error(`duplicate imagegen seed: ${requestedSeed}`);
+    uniqueSeeds.add(requestedSeed);
+  }
+
   const cells = [];
-  for (const generationId of generationIds) {
-    const bundle = byGeneration.get(generationId);
-    if (!bundle) throw new Error(`missing requested composite generation: ${generationId}`);
+  for (const bundle of bundles) {
+    const generationId = bundle.gestaltEnvelope.lineage.generationId;
     const input = await fileEvidence(resolve(sourceRoot, bundle.trellisSource.rasterPath));
-    for (const stance of STANCES) {
-      const cellId = `${bundle.compositeId}-${stance.id}-seed${seed}`;
-      const cellOutputDir = resolve(outputRoot, 'cells', cellId);
-      cells.push({
-        cellId,
-        jobType: GESTALT_IMAGEGEN_JOB_TYPE,
-        requestedRoute: `gpu-greenroom/${GESTALT_IMAGEGEN_JOB_TYPE}`,
-        expectedRunner: GESTALT_IMAGEGEN_RUNNER,
-        candidateId: bundle.candidateId,
-        compositeId: bundle.compositeId,
-        generationId,
-        sourceBasinIndex: bundle.gestaltEnvelope.lineage.sourceBasinIndex,
-        posteriorStrength: bundle.gestaltEnvelope.lineage.posteriorStrength,
-        gestaltPressure: bundle.fieldModel.gestaltPressure,
-        dualLineage: bundle.dualLineage,
-        stance: stance.id,
-        seed,
-        input,
-        prompt: prompts.get(stance.id),
-        outputDir: cellOutputDir,
-        outputPath: resolve(cellOutputDir, 'output.png'),
-        settings: {
-          model: 'flux2-klein-9b',
-          quantize: 4,
-          width: 512,
-          height: 512,
-          steps: 8,
-          guidance: 1.0,
-          mlxCacheLimitGb: 48,
-        },
-      });
+    for (const requestedSeed of requestedSeeds) {
+      for (const stance of stances) {
+        const cellId = `${bundle.compositeId}-${stance.id}-seed${requestedSeed}`;
+        const cellOutputDir = resolve(outputRoot, 'cells', cellId);
+        cells.push({
+          cellId,
+          jobType: GESTALT_IMAGEGEN_JOB_TYPE,
+          requestedRoute: `gpu-greenroom/${GESTALT_IMAGEGEN_JOB_TYPE}`,
+          expectedRunner: GESTALT_IMAGEGEN_RUNNER,
+          candidateId: bundle.candidateId,
+          compositeId: bundle.compositeId,
+          generationId,
+          sourceBasinIndex: bundle.gestaltEnvelope.lineage.sourceBasinIndex,
+          posteriorStrength: bundle.gestaltEnvelope.lineage.posteriorStrength,
+          gestaltPressure: bundle.fieldModel.gestaltPressure,
+          dualLineage: bundle.dualLineage,
+          stance: stance.id,
+          seed: requestedSeed,
+          input,
+          prompt: prompts.get(stance.id),
+          outputDir: cellOutputDir,
+          outputPath: resolve(cellOutputDir, 'output.png'),
+          settings: {
+            model: 'flux2-klein-9b',
+            quantize: 4,
+            width: 512,
+            height: 512,
+            steps: 8,
+            guidance: 1.0,
+            mlxCacheLimitGb: 48,
+          },
+        });
+      }
     }
   }
+
+  const candidateIds = [...new Set(requestedSelections.map(selection => selection.candidateId))];
+  const selectedGenerationIds = [...new Set(requestedSelections.map(selection => selection.generationId))];
+  const comparisonContract = {
+    fixedGestaltPressure: 0.46,
+    variedPromptStances: stances.map(stance => stance.id),
+  };
+  if (requestedSeeds.length === 1) comparisonContract.fixedSeed = requestedSeeds[0];
+  else comparisonContract.variedSeeds = requestedSeeds;
+  if (candidateIds.length === 1) comparisonContract.fixedCandidate = candidateIds[0];
+  else comparisonContract.variedCandidates = candidateIds;
+  if (selectedGenerationIds.length === 1) comparisonContract.fixedSourceBasins = selectedGenerationIds;
+  else comparisonContract.variedSourceBasins = selectedGenerationIds;
 
   return {
     schema: GESTALT_IMAGEGEN_PLAN_SCHEMA,
@@ -168,13 +345,7 @@ export async function buildGestaltImagegenMatrix({
     purpose: 'Test whether true-3D silhouette-bounded armatures invoke distinct creature priors while preserving dual lineage.',
     requestedRoute: `gpu-greenroom/${GESTALT_IMAGEGEN_JOB_TYPE}`,
     expectedRunner: GESTALT_IMAGEGEN_RUNNER,
-    comparisonContract: {
-      fixedCandidate: 'lirm-armature-22',
-      fixedGestaltPressure: 0.46,
-      fixedSeed: seed,
-      variedSourceBasins: generationIds,
-      variedPromptStances: STANCES.map(stance => stance.id),
-    },
+    comparisonContract,
     falseClosureGuards: {
       directInferenceForbidden: true,
       fallbackRouteAccepted: false,
@@ -328,11 +499,61 @@ export async function buildGestaltImagegenContactSheetManifest({ plan, completio
   };
 }
 
+export async function buildGestaltAdherenceContactSheetManifest({ plan, completion, sourceRoot }) {
+  if (plan?.schema !== GESTALT_IMAGEGEN_PLAN_SCHEMA) throw new Error(`unexpected plan schema: ${plan?.schema}`);
+  if (completion?.schema !== 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0') {
+    throw new Error(`unexpected completion schema: ${completion?.schema}`);
+  }
+  if (completion.status !== 'complete') throw new Error(`imagegen collection is not complete: ${completion.status}`);
+  if (!Array.isArray(completion.accepted) || completion.accepted.length !== plan.cells.length) {
+    throw new Error('accepted output count does not match plan');
+  }
+  const accepted = new Map(completion.accepted.map(entry => [entry.cellId, entry]));
+  if (accepted.size !== plan.cells.length) throw new Error('accepted output count does not match plan');
+  const showSeed = Array.isArray(plan.comparisonContract?.variedSeeds);
+
+  const cells = [];
+  const evidence = [];
+  for (const cell of plan.cells) {
+    const source = await fileEvidence(cell.input.path);
+    if (source.sha256 !== cell.input.sha256) throw new Error(`source input hash drift for ${cell.cellId}`);
+    const depth = await fileEvidence(resolve(sourceRoot, cell.compositeId, 'depth-composite.png'));
+    const normal = await fileEvidence(resolve(sourceRoot, cell.compositeId, 'normal-composite.png'));
+    const acceptedOutput = accepted.get(cell.cellId);
+    if (!acceptedOutput) throw new Error(`missing accepted output for ${cell.cellId}`);
+    const output = await fileEvidence(cell.outputPath);
+    if (output.sha256 !== acceptedOutput.output.sha256) throw new Error(`generated output hash drift for ${cell.cellId}`);
+    evidence.push(source, depth, normal, output);
+    const title = showSeed ? `${cell.candidateId} / seed ${cell.seed}` : cell.candidateId;
+    const stanceLabel = cell.stance.replaceAll('-', ' ').toUpperCase();
+    cells.push(
+      { sourcePath: source.path, title, viewLabel: '3D SCAFFOLD' },
+      { sourcePath: depth.path, title, viewLabel: 'DEPTH' },
+      { sourcePath: normal.path, title, viewLabel: 'NORMAL' },
+      { sourcePath: output.path, title, viewLabel: stanceLabel },
+    );
+  }
+  return {
+    schema: 'kaminos.lirm-speciation-gestalt-adherence-contact-sheet-manifest.v0',
+    sheet: {
+      width: 2048,
+      cellWidth: 512,
+      cellHeight: 548,
+      imageHeight: 512,
+      imageOffsetY: 0,
+      headerHeight: 36,
+      cells,
+    },
+    evidence,
+  };
+}
+
 export async function buildGestaltTrellisPromotionPlan({
   imagegenPlan,
   imagegenCompletion,
   promotedCellIds,
   outputRoot,
+  comparisonContract = null,
 }) {
   if (imagegenPlan?.schema !== GESTALT_IMAGEGEN_PLAN_SCHEMA) {
     throw new Error(`unexpected imagegen plan schema: ${imagegenPlan?.schema}`);
@@ -358,9 +579,11 @@ export async function buildGestaltTrellisPromotionPlan({
       jobType: GESTALT_TRELLIS_JOB_TYPE,
       requestedRoute: `gpu-greenroom/${GESTALT_TRELLIS_JOB_TYPE}`,
       expectedRunner: GESTALT_TRELLIS_RUNNER,
+      candidateId: sourceCell.candidateId,
       generationId: sourceCell.generationId,
       sourceBasinIndex: sourceCell.sourceBasinIndex,
       stance: sourceCell.stance,
+      imagegenSeed: sourceCell.seed,
       dualLineage: sourceCell.dualLineage,
       input,
       outputDir: cellOutputDir,
@@ -376,22 +599,33 @@ export async function buildGestaltTrellisPromotionPlan({
       },
     });
   }
-  const lineageBasins = cells.filter(cell => cell.stance === 'lineage-seed').map(cell => cell.sourceBasinIndex);
-  const basin03Stances = cells.filter(cell => cell.sourceBasinIndex === 3).map(cell => cell.stance).sort();
-  if (JSON.stringify(lineageBasins) !== JSON.stringify([3, 10, 15, 22])) {
-    throw new Error(`promotion must compare lineage basins 3,10,15,22; got ${lineageBasins.join(',')}`);
-  }
-  if (JSON.stringify(basin03Stances) !== JSON.stringify(['lineage-seed', 'preserve-gestalt'])) {
-    throw new Error('promotion must compare both prompt stances in basin 03');
+  let effectiveComparisonContract;
+  if (comparisonContract === null) {
+    const lineageBasins = cells.filter(cell => cell.stance === 'lineage-seed').map(cell => cell.sourceBasinIndex);
+    const basin03Stances = cells.filter(cell => cell.sourceBasinIndex === 3).map(cell => cell.stance).sort();
+    if (JSON.stringify(lineageBasins) !== JSON.stringify([3, 10, 15, 22])) {
+      throw new Error(`promotion must compare lineage basins 3,10,15,22; got ${lineageBasins.join(',')}`);
+    }
+    if (JSON.stringify(basin03Stances) !== JSON.stringify(['lineage-seed', 'preserve-gestalt'])) {
+      throw new Error('promotion must compare both prompt stances in basin 03');
+    }
+    effectiveComparisonContract = {
+      lineageBasins: [3, 10, 15, 22],
+      withinBasinPromptPair: { sourceBasinIndex: 3, stances: ['preserve-gestalt', 'lineage-seed'] },
+      fixedSettings: cells[0].settings,
+    };
+  } else {
+    if (typeof comparisonContract !== 'object' || Array.isArray(comparisonContract)
+      || typeof comparisonContract.kind !== 'string' || comparisonContract.kind.length === 0) {
+      throw new Error('explicit Trellis comparison contract requires a non-empty kind');
+    }
+    validateFactorialComparisonContract(comparisonContract, cells);
+    effectiveComparisonContract = { ...comparisonContract, fixedSettings: cells[0].settings };
   }
   return {
     schema: GESTALT_TRELLIS_PLAN_SCHEMA,
     status: 'planned',
-    comparisonContract: {
-      lineageBasins: [3, 10, 15, 22],
-      withinBasinPromptPair: { sourceBasinIndex: 3, stances: ['preserve-gestalt', 'lineage-seed'] },
-      fixedSettings: cells[0].settings,
-    },
+    comparisonContract: effectiveComparisonContract,
     evidencePredicate: {
       routeFallbackAllowed: false,
       missingGlbCountsAsSuccess: false,
@@ -442,6 +676,8 @@ export async function validateGestaltTrellisCompletion({ cell, status }) {
     status: 'accepted',
     cellId: cell.cellId,
     generationId: cell.generationId,
+    candidateId: cell.candidateId,
+    imagegenSeed: cell.imagegenSeed,
     sourceBasinIndex: cell.sourceBasinIndex,
     stance: cell.stance,
     dualLineage: cell.dualLineage,
@@ -486,6 +722,8 @@ export async function buildGestaltTrellisWitnessPlan({ trellisPlan, trellisCompl
         witnessId: `${sourceCell.cellId}-${witnessView.view}`,
         cellId: sourceCell.cellId,
         generationId: sourceCell.generationId,
+        candidateId: sourceCell.candidateId,
+        imagegenSeed: sourceCell.imagegenSeed,
         sourceBasinIndex: sourceCell.sourceBasinIndex,
         stance: sourceCell.stance,
         jobType: GESTALT_WITNESS_JOB_TYPE,
@@ -551,6 +789,8 @@ export async function validateGestaltWitnessCompletion({ cell, status }) {
     witnessId: cell.witnessId,
     cellId: cell.cellId,
     generationId: cell.generationId,
+    candidateId: cell.candidateId,
+    imagegenSeed: cell.imagegenSeed,
     sourceBasinIndex: cell.sourceBasinIndex,
     stance: cell.stance,
     view: cell.view,

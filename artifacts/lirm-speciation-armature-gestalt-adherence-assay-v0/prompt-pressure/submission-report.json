@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-adherence-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompt-pressure/plan.json",
+  "requestedCount": 8,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "dd03578465c0",
+      "response": {
+        "job_id": "dd03578465c0"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "5eba9caa8358",
+      "response": {
+        "job_id": "5eba9caa8358"
+      }
+    },
+    {
+      "cellId": "lirm-armature-16__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "7bbb88695771",
+      "response": {
+        "job_id": "7bbb88695771"
+      }
+    },
+    {
+      "cellId": "lirm-armature-16__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "fc99a1458ecb",
+      "response": {
+        "job_id": "fc99a1458ecb"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "9c1f6e9e4342",
+      "response": {
+        "job_id": "9c1f6e9e4342"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "ee127d7f8b80",
+      "response": {
+        "job_id": "ee127d7f8b80"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "d7d5199a7937",
+      "response": {
+        "job_id": "d7d5199a7937"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "7eae0f46d709",
+      "response": {
+        "job_id": "7eae0f46d709"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "8/8 jobs submitted"
+}

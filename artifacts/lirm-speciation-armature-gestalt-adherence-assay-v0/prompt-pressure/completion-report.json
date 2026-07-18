@@ -1,0 +1,339 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-imagegen-collection.v0",
+  "status": "complete",
+  "requestedCount": 8,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "dd03578465c0",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.620057,
+      "startedAt": 1784367138.148756,
+      "finishedAt": 1784367169.7703412,
+      "durationSeconds": 31.62158513069153,
+      "outputMtime": 1784367169.2909617,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 113083,
+        "sha256": "sha256:2c42d10f432b6bf268c580bcf3d49075186ec3ba228a92ed0526120ef0e6b782"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "bytes": 589,
+        "sha256": "sha256:aaae590aedaf65faea772f828c2fbf98be9e730f6570424f7a24962fcfc6f422"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png",
+        "bytes": 228540,
+        "sha256": "sha256:ae001eaa113b6b6ddeb7d7066dd0b73b50daf53158c13e46de6d0ed758a9b86c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "5eba9caa8358",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.645847,
+      "startedAt": 1784367169.772792,
+      "finishedAt": 1784367200.384511,
+      "durationSeconds": 30.611718893051147,
+      "outputMtime": 1784367199.9422565,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 113083,
+        "sha256": "sha256:2c42d10f432b6bf268c580bcf3d49075186ec3ba228a92ed0526120ef0e6b782"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 585,
+        "sha256": "sha256:037d6dfae5410ec8963fe0afb796041f5b3829f79209bb2666ec8016b13e9380"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png",
+        "bytes": 246310,
+        "sha256": "sha256:ecd41177652e60ade3b85d93f0f42d42c2493e9f491f4fc5bbc3d7c48c43d567"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-16__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "7bbb88695771",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-16__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.6720252,
+      "startedAt": 1784367200.387174,
+      "finishedAt": 1784367231.7317781,
+      "durationSeconds": 31.34460425376892,
+      "outputMtime": 1784367231.22805,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 95109,
+        "sha256": "sha256:d47f101d2dd83bdaaac68d9b4fe55c02ac94a5b946bf92011d3c85735637fcc8"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "bytes": 589,
+        "sha256": "sha256:aaae590aedaf65faea772f828c2fbf98be9e730f6570424f7a24962fcfc6f422"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-16__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png",
+        "bytes": 250285,
+        "sha256": "sha256:0913178fbe8b9d614847f10e0936feaa1b4a99be57f30410428014503bc6dbf9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-16__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "fc99a1458ecb",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-16__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.71094,
+      "startedAt": 1784367231.735397,
+      "finishedAt": 1784367263.515108,
+      "durationSeconds": 31.7797110080719,
+      "outputMtime": 1784367263.0557225,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 95109,
+        "sha256": "sha256:d47f101d2dd83bdaaac68d9b4fe55c02ac94a5b946bf92011d3c85735637fcc8"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 585,
+        "sha256": "sha256:037d6dfae5410ec8963fe0afb796041f5b3829f79209bb2666ec8016b13e9380"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-16__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png",
+        "bytes": 240905,
+        "sha256": "sha256:eb03144257099d5fcf58dc853ad5f9e01582689ed04e314f187b0475ba388d7e"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "9c1f6e9e4342",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.739646,
+      "startedAt": 1784367263.531308,
+      "finishedAt": 1784367295.803216,
+      "durationSeconds": 32.27190804481506,
+      "outputMtime": 1784367295.4123857,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 125814,
+        "sha256": "sha256:f0c5415ca9d78fd64ccfcebab53538fe1553ae1077bde25362d1648c98da5413"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "bytes": 589,
+        "sha256": "sha256:aaae590aedaf65faea772f828c2fbf98be9e730f6570424f7a24962fcfc6f422"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png",
+        "bytes": 254444,
+        "sha256": "sha256:02120ea51af0d65fd224da15701f11281391d609f260a81e5990e04c3dc03a71"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "ee127d7f8b80",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.765034,
+      "startedAt": 1784367295.805124,
+      "finishedAt": 1784367328.344022,
+      "durationSeconds": 32.53889799118042,
+      "outputMtime": 1784367327.841473,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 125814,
+        "sha256": "sha256:f0c5415ca9d78fd64ccfcebab53538fe1553ae1077bde25362d1648c98da5413"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 585,
+        "sha256": "sha256:037d6dfae5410ec8963fe0afb796041f5b3829f79209bb2666ec8016b13e9380"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png",
+        "bytes": 245780,
+        "sha256": "sha256:a1255159b5db26250deb0fe4a94ad9f52a2f11b9aca3b4cec9a06609f04739a0"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046",
+      "jobId": "d7d5199a7937",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.79126,
+      "startedAt": 1784367328.346,
+      "finishedAt": 1784367363.815743,
+      "durationSeconds": 35.46974301338196,
+      "outputMtime": 1784367363.3660235,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 128244,
+        "sha256": "sha256:b3dd3e2c46329de7bc5dba7ac2cc2b56959bbaaada6522966720e92ac58c768f"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/strict-blockout-preservation.txt",
+        "bytes": 589,
+        "sha256": "sha256:aaae590aedaf65faea772f828c2fbf98be9e730f6570424f7a24962fcfc6f422"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717046/output.png",
+        "bytes": 247335,
+        "sha256": "sha256:dceabd12b9cfe18f8e4dde6ac31dc06843eb50d256aff91b2d35a7a73c37703f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717046",
+      "jobId": "7eae0f46d709",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "717046",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784367137.819286,
+      "startedAt": 1784367363.818274,
+      "finishedAt": 1784367401.413694,
+      "durationSeconds": 37.59541988372803,
+      "outputMtime": 1784367401.014572,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+        "bytes": 128244,
+        "sha256": "sha256:b3dd3e2c46329de7bc5dba7ac2cc2b56959bbaaada6522966720e92ac58c768f"
+      },
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 585,
+        "sha256": "sha256:037d6dfae5410ec8963fe0afb796041f5b3829f79209bb2666ec8016b13e9380"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-prompt-pressure-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717046/output.png",
+        "bytes": 238839,
+        "sha256": "sha256:ffd5692be613d27420a1bfbfc75eeb5c07a1d88fc6fc2c1526639dac52417563"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "8 primary outputs accepted"
+}

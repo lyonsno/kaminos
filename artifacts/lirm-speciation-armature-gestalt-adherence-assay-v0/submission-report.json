@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-adherence-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/plan.json",
+  "requestedCount": 4,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-design-seed-completion-seed717046",
+      "jobId": "d5e9d31d9244",
+      "response": {
+        "job_id": "d5e9d31d9244"
+      }
+    },
+    {
+      "cellId": "lirm-armature-16__basin-10-s3p00-n00-p046-design-seed-completion-seed717046",
+      "jobId": "9a52e8f54308",
+      "response": {
+        "job_id": "9a52e8f54308"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-design-seed-completion-seed717046",
+      "jobId": "d84a19ebcfef",
+      "response": {
+        "job_id": "d84a19ebcfef"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-design-seed-completion-seed717046",
+      "jobId": "1f6682a59687",
+      "response": {
+        "job_id": "1f6682a59687"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 jobs submitted"
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/seed-replication/trellis/plan.json",
+  "requestedCount": 5,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "jobId": "2f444e364db4",
+      "response": {
+        "job_id": "2f444e364db4"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "jobId": "e780e0cacf5c",
+      "response": {
+        "job_id": "e780e0cacf5c"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "jobId": "bc8616bba7ea",
+      "response": {
+        "job_id": "bc8616bba7ea"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "jobId": "fae02aa3d6cb",
+      "response": {
+        "job_id": "fae02aa3d6cb"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "jobId": "85e34f2bf3b7",
+      "response": {
+        "job_id": "85e34f2bf3b7"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "5/5 jobs submitted"
+}

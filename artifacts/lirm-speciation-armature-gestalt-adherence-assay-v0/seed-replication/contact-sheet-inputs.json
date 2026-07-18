@@ -1,0 +1,250 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717047/output.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.png",
+      "title": "lirm-armature-08 / seed 717047",
+      "viewLabel": "PRIOR LED INVENTION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.png",
+      "title": "lirm-armature-08 / seed 717048",
+      "viewLabel": "PRIOR LED INVENTION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717049/output.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717049/output.png",
+      "title": "lirm-armature-08 / seed 717049",
+      "viewLabel": "PRIOR LED INVENTION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717047/output.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/output.png",
+      "title": "lirm-armature-24 / seed 717047",
+      "viewLabel": "PRIOR LED INVENTION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/output.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/output.png",
+      "title": "lirm-armature-24 / seed 717048",
+      "viewLabel": "PRIOR LED INVENTION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717049/output.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "STRICT BLOCKOUT PRESERVATION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-seed-replication-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717049/output.png",
+      "title": "lirm-armature-24 / seed 717049",
+      "viewLabel": "PRIOR LED INVENTION"
+    }
+  ]
+}

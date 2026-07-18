@@ -1,0 +1,110 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png",
+      "title": "ARM08 / STRICT / S717048",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png",
+      "title": "ARM08 / STRICT / S717048",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png",
+      "title": "ARM08 / STRICT / S717048",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png",
+      "title": "ARM08 / STRICT / S717048",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png",
+      "title": "ARM08 / PRIOR-LED / S717048",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png",
+      "title": "ARM08 / PRIOR-LED / S717048",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png",
+      "title": "ARM08 / PRIOR-LED / S717048",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png",
+      "title": "ARM08 / PRIOR-LED / S717048",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/left/render.png",
+      "title": "ARM24 / STRICT / S717048",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/front/render.png",
+      "title": "ARM24 / STRICT / S717048",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/right/render.png",
+      "title": "ARM24 / STRICT / S717048",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048/opposite/render.png",
+      "title": "ARM24 / STRICT / S717048",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/left/render.png",
+      "title": "ARM24 / PRIOR-LED / S717048",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/front/render.png",
+      "title": "ARM24 / PRIOR-LED / S717048",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/right/render.png",
+      "title": "ARM24 / PRIOR-LED / S717048",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048/opposite/render.png",
+      "title": "ARM24 / PRIOR-LED / S717048",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/left/render.png",
+      "title": "ARM08 / PRIOR-LED / S717047",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/front/render.png",
+      "title": "ARM08 / PRIOR-LED / S717047",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/right/render.png",
+      "title": "ARM08 / PRIOR-LED / S717047",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-factorial-trellis-20260718/witness/lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047/opposite/render.png",
+      "title": "ARM08 / PRIOR-LED / S717047",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-seed-replication-visual-inspection.v0",
+  "status": "inspected",
+  "sheet": {
+    "path": "gestalt-adherence-seed-replication-contact-sheet.png",
+    "sha256": "sha256:2f5e7be17d34e7aab4de102030e97c17390e88af56d0e3934ddc2a409c080b99"
+  },
+  "acceptedVisualCount": 12,
+  "rejectedVisualCount": 0,
+  "leverDecomposition": {
+    "seed": "changes head design, plating, limb proportion, and species character",
+    "promptPressure": "changes anatomical completion from close blockout preservation to coherent armored anatomy",
+    "armature": "retains gross body proportion, arch, extension, and mass distribution"
+  },
+  "armatureStability": {
+    "lirm-armature-08": "compact, high-arched, and fore-heavy across all six completions",
+    "lirm-armature-24": "longer, lower, and more extended across all six completions"
+  },
+  "verdict": "The control relationship is stable across three new seeds; a five-cell Trellis factorial witness is indicated."
+}

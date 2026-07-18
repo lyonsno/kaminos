@@ -6,11 +6,13 @@ import { join } from 'node:path';
 const {
   buildGestaltImagegenMatrix,
   buildGestaltImagegenContactSheetManifest,
+  buildGestaltAdherenceContactSheetManifest,
   buildGreenroomSubmitArgs,
   buildGestaltTrellisPromotionPlan,
   buildGreenroomTrellisSubmitArgs,
   buildGestaltTrellisWitnessPlan,
   buildGreenroomWitnessSubmitArgs,
+  assertExactIdCoverage,
   parseGreenroomCliOutput,
   validateGestaltImagegenCompletion,
   validateGestaltTrellisCompletion,
@@ -38,6 +40,9 @@ for (const generationId of [
 }
 await writeFile(join(promptRoot, 'preserve-gestalt.txt'), 'preserve gestalt');
 await writeFile(join(promptRoot, 'lineage-seed.txt'), 'hallucinate descendant');
+await writeFile(join(promptRoot, 'design-seed-completion.txt'), 'complete this fictional creature figurine design');
+await writeFile(join(promptRoot, 'strict-blockout-preservation.txt'), 'preserve the blockout');
+await writeFile(join(promptRoot, 'prior-led-invention.txt'), 'invent coherent anatomy');
 
 const receipt = {
   schema: 'kaminos.lirm-speciation-armature-gestalt-composite-witness.v0',
@@ -94,6 +99,164 @@ assert.deepEqual([...new Set(plan.cells.map(cell => cell.stance))], ['preserve-g
 assert.ok(plan.cells.every(cell => cell.gestaltPressure === 0.46));
 assert.ok(plan.cells.every(cell => cell.input.sha256.startsWith('sha256:')));
 assert.ok(plan.cells.every(cell => cell.prompt.sha256.startsWith('sha256:')));
+
+const adherenceCandidateIds = [
+  'lirm-armature-08',
+  'lirm-armature-16',
+  'lirm-armature-22',
+  'lirm-armature-24',
+];
+const adherenceGenerationId = 'basin-10-s3p00-n00';
+const adherenceBundles = [];
+for (const candidateId of adherenceCandidateIds) {
+  const compositeId = `${candidateId}__${adherenceGenerationId}-p046`;
+  await import('node:fs/promises').then(({ mkdir }) => mkdir(join(sourceRoot, compositeId), { recursive: true }));
+  if (candidateId !== 'lirm-armature-22') {
+    await writeFile(join(sourceRoot, compositeId, 'trellis-source.png'), `png:${candidateId}:${adherenceGenerationId}`);
+  }
+  await writeFile(join(sourceRoot, compositeId, 'depth-composite.png'), `depth:${candidateId}:${adherenceGenerationId}`);
+  await writeFile(join(sourceRoot, compositeId, 'normal-composite.png'), `normal:${candidateId}:${adherenceGenerationId}`);
+  adherenceBundles.push({
+    compositeId,
+    candidateId,
+    fieldModel: {
+      kind: 'smooth-sdf-metaball-silhouette-morph',
+      actual3dStructure: true,
+      gestaltPressure: 0.46,
+    },
+    gestaltEnvelope: {
+      id: `${candidateId}:${adherenceGenerationId}-p046`,
+      pressure: 0.46,
+      lineage: {
+        generationId: adherenceGenerationId,
+        sourceBasinIndex: 10,
+        posteriorStrength: 3,
+        acceptedForDownstream: true,
+      },
+    },
+    dualLineage: {
+      armature: { candidateId, candidateSeed: `fixture:${candidateId}` },
+      silhouette: { generationId: adherenceGenerationId, sourceBasinIndex: 10 },
+    },
+    trellisSource: {
+      rasterPath: `${compositeId}/trellis-source.png`,
+    },
+  });
+}
+
+const adherenceSelections = adherenceCandidateIds.map(candidateId => ({
+  candidateId,
+  generationId: adherenceGenerationId,
+}));
+const adherencePlan = await buildGestaltImagegenMatrix({
+  compositeReceipt: { ...receipt, bundles: adherenceBundles },
+  sourceRoot,
+  promptRoot,
+  outputRoot: join(root, 'adherence-outputs'),
+  seed: 717046,
+  selections: adherenceSelections,
+  stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+});
+assert.equal(adherencePlan.cells.length, 4);
+assert.deepEqual(adherencePlan.comparisonContract.variedCandidates, adherenceCandidateIds);
+assert.deepEqual(adherencePlan.comparisonContract.fixedSourceBasins, [adherenceGenerationId]);
+assert.deepEqual([...new Set(adherencePlan.cells.map(cell => cell.stance))], ['design-seed-completion']);
+assert.deepEqual(adherencePlan.cells.map(cell => cell.candidateId), adherenceCandidateIds);
+assert.ok(adherencePlan.cells.every(cell => cell.cellId.includes(cell.candidateId)));
+
+const seedReplicationPlan = await buildGestaltImagegenMatrix({
+  compositeReceipt: { ...receipt, bundles: adherenceBundles },
+  sourceRoot,
+  promptRoot,
+  outputRoot: join(root, 'seed-replication-outputs'),
+  selections: [adherenceSelections[0], adherenceSelections[3]],
+  seeds: [717047, 717048, 717049],
+  stances: [
+    { id: 'strict-blockout-preservation', file: 'strict-blockout-preservation.txt' },
+    { id: 'prior-led-invention', file: 'prior-led-invention.txt' },
+  ],
+});
+assert.equal(seedReplicationPlan.cells.length, 12);
+assert.deepEqual(seedReplicationPlan.comparisonContract.variedSeeds, [717047, 717048, 717049]);
+assert.equal(seedReplicationPlan.comparisonContract.fixedSeed, undefined);
+assert.deepEqual([...new Set(seedReplicationPlan.cells.map(entry => entry.seed))], [717047, 717048, 717049]);
+assert.equal(new Set(seedReplicationPlan.cells.map(entry => entry.cellId)).size, 12);
+
+await assert.rejects(
+  () => buildGestaltImagegenMatrix({
+    compositeReceipt: { ...receipt, bundles: adherenceBundles },
+    sourceRoot,
+    promptRoot,
+    outputRoot: join(root, 'duplicate-seeds'),
+    selections: [adherenceSelections[0]],
+    seeds: [717047, 717047],
+    stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+  }),
+  /duplicate imagegen seed/,
+);
+
+await assert.rejects(
+  () => buildGestaltImagegenMatrix({
+    compositeReceipt: { ...receipt, bundles: adherenceBundles },
+    sourceRoot,
+    promptRoot,
+    outputRoot: join(root, 'duplicate-selection'),
+    selections: [adherenceSelections[0], adherenceSelections[0]],
+    stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+  }),
+  /duplicate requested composite selection/,
+);
+await assert.rejects(
+  () => buildGestaltImagegenMatrix({
+    compositeReceipt: { ...receipt, bundles: adherenceBundles },
+    sourceRoot,
+    promptRoot,
+    outputRoot: join(root, 'missing-selection'),
+    selections: [{ candidateId: 'lirm-armature-99', generationId: adherenceGenerationId }],
+    stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+  }),
+  /missing requested composite selection/,
+);
+await assert.rejects(
+  () => buildGestaltImagegenMatrix({
+    compositeReceipt: {
+      ...receipt,
+      bundles: [{
+        ...adherenceBundles[0],
+        fieldModel: { ...adherenceBundles[0].fieldModel, actual3dStructure: false },
+      }],
+    },
+    sourceRoot,
+    promptRoot,
+    outputRoot: join(root, 'flat-selection'),
+    selections: [adherenceSelections[0]],
+    stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+  }),
+  /requested composite is not an accepted true-3D p0.46 bundle/,
+);
+await assert.rejects(
+  () => buildGestaltImagegenMatrix({
+    compositeReceipt: {
+      ...receipt,
+      bundles: [{
+        ...adherenceBundles[0],
+        gestaltEnvelope: {
+          ...adherenceBundles[0].gestaltEnvelope,
+          lineage: {
+            ...adherenceBundles[0].gestaltEnvelope.lineage,
+            acceptedForDownstream: false,
+          },
+        },
+      }],
+    },
+    sourceRoot,
+    promptRoot,
+    outputRoot: join(root, 'unaccepted-selection'),
+    selections: [adherenceSelections[0]],
+    stances: [{ id: 'design-seed-completion', file: 'design-seed-completion.txt' }],
+  }),
+  /requested composite is not an accepted true-3D p0.46 bundle/,
+);
 
 const args = buildGreenroomSubmitArgs(plan.cells[0]);
 assert.equal(args.filter(value => value === '-p').length, 1, 'Greenroom params must follow one -p token');
@@ -225,6 +388,91 @@ const contactSheet = await buildGestaltImagegenContactSheetManifest({
 });
 assert.equal(contactSheet.sheet.cells.length, 16);
 assert.equal(contactSheet.evidence.length, 16);
+
+const adherenceAccepted = [];
+for (const matrixCell of adherencePlan.cells) {
+  await import('node:fs/promises').then(({ mkdir }) => mkdir(matrixCell.outputDir, { recursive: true }));
+  await writeFile(matrixCell.outputPath, `generated:${matrixCell.cellId}`);
+  adherenceAccepted.push(await validateGestaltImagegenCompletion({
+    cell: matrixCell,
+    status: {
+      ...status,
+      job_id: `job-${matrixCell.cellId}`,
+      input_path: matrixCell.input.path,
+      output_dir: matrixCell.outputDir,
+      params: {
+        ...status.params,
+        prompt_file: matrixCell.prompt.path,
+      },
+      effective_route: `${matrixCell.expectedRunner} --image-paths ${matrixCell.input.path} --prompt-file ${matrixCell.prompt.path} --output ${matrixCell.outputPath}`,
+    },
+  }));
+}
+const adherenceSheet = await buildGestaltAdherenceContactSheetManifest({
+  plan: adherencePlan,
+  completion: {
+    schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+    status: 'complete',
+    accepted: adherenceAccepted,
+  },
+  sourceRoot,
+});
+assert.equal(adherenceSheet.sheet.cells.length, 16);
+assert.equal(adherenceSheet.evidence.length, 16);
+assert.deepEqual(
+  adherenceSheet.sheet.cells.filter((_, index) => index % 4 === 0).map(entry => entry.title),
+  adherenceCandidateIds,
+);
+assert.deepEqual(
+  adherenceSheet.sheet.cells.filter((_, index) => index % 4 === 3).map(entry => entry.viewLabel),
+  adherenceCandidateIds.map(() => 'DESIGN SEED COMPLETION'),
+);
+
+const seedReplicationAccepted = [];
+for (const matrixCell of seedReplicationPlan.cells) {
+  await import('node:fs/promises').then(({ mkdir }) => mkdir(matrixCell.outputDir, { recursive: true }));
+  await writeFile(matrixCell.outputPath, `generated:${matrixCell.cellId}`);
+  seedReplicationAccepted.push(await validateGestaltImagegenCompletion({
+    cell: matrixCell,
+    status: {
+      ...status,
+      job_id: `job-${matrixCell.cellId}`,
+      input_path: matrixCell.input.path,
+      output_dir: matrixCell.outputDir,
+      params: {
+        ...status.params,
+        prompt_file: matrixCell.prompt.path,
+        seed: String(matrixCell.seed),
+      },
+      effective_route: `${matrixCell.expectedRunner} --image-paths ${matrixCell.input.path} --prompt-file ${matrixCell.prompt.path} --output ${matrixCell.outputPath}`,
+    },
+  }));
+}
+const seedReplicationSheet = await buildGestaltAdherenceContactSheetManifest({
+  plan: seedReplicationPlan,
+  completion: {
+    schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+    status: 'complete',
+    accepted: seedReplicationAccepted,
+  },
+  sourceRoot,
+});
+assert.deepEqual(
+  seedReplicationSheet.sheet.cells.filter((_, index) => index % 4 === 0).map(entry => entry.title),
+  seedReplicationPlan.cells.map(entry => `${entry.candidateId} / seed ${entry.seed}`),
+);
+await assert.rejects(
+  () => buildGestaltAdherenceContactSheetManifest({
+    plan: adherencePlan,
+    completion: {
+      schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+      status: 'complete',
+      accepted: adherenceAccepted.slice(1),
+    },
+    sourceRoot,
+  }),
+  /accepted output count does not match plan/,
+);
 await assert.rejects(
   () => buildGestaltImagegenContactSheetManifest({
     plan,
@@ -252,6 +500,93 @@ const trellisPlan = await buildGestaltTrellisPromotionPlan({
   outputRoot: join(root, 'trellis'),
 });
 assert.equal(trellisPlan.cells.length, 5);
+
+const factorialPromotedCellIds = [
+  'lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048',
+  'lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048',
+  'lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048',
+  'lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048',
+  'lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047',
+];
+const factorialComparisonContract = {
+  kind: 'armature-prompt-pressure-factorial-plus-seed-probe',
+  fixedSilhouetteLineage: 'basin-10-s3p00-n00',
+  factorialSeed: 717048,
+  armatures: ['lirm-armature-08', 'lirm-armature-24'],
+  promptStances: ['strict-blockout-preservation', 'prior-led-invention'],
+  seedProbe: { candidateId: 'lirm-armature-08', stance: 'prior-led-invention', seed: 717047 },
+};
+const factorialTrellisPlan = await buildGestaltTrellisPromotionPlan({
+  imagegenPlan: seedReplicationPlan,
+  imagegenCompletion: {
+    schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+    status: 'complete',
+    accepted: seedReplicationAccepted,
+  },
+  promotedCellIds: factorialPromotedCellIds,
+  outputRoot: join(root, 'factorial-trellis'),
+  comparisonContract: factorialComparisonContract,
+});
+assert.equal(factorialTrellisPlan.cells.length, 5);
+assert.deepEqual(factorialTrellisPlan.comparisonContract, {
+  ...factorialComparisonContract,
+  fixedSettings: factorialTrellisPlan.cells[0].settings,
+});
+await assert.rejects(
+  () => buildGestaltTrellisPromotionPlan({
+    imagegenPlan: seedReplicationPlan,
+    imagegenCompletion: {
+      schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+      status: 'complete',
+      accepted: seedReplicationAccepted,
+    },
+    promotedCellIds: factorialPromotedCellIds,
+    outputRoot: join(root, 'forged-factorial-trellis'),
+    comparisonContract: {
+      kind: 'armature-prompt-pressure-factorial-plus-seed-probe',
+      fixedSilhouetteLineage: 'basin-99-impossible',
+      factorialSeed: 999999,
+      armatures: ['lirm-armature-99'],
+      promptStances: ['nonexistent-stance'],
+      seedProbe: { candidateId: 'lirm-armature-99', stance: 'nonexistent-stance', seed: 999998 },
+    },
+  }),
+  /comparison contract/,
+);
+await assert.rejects(
+  () => buildGestaltTrellisPromotionPlan({
+    imagegenPlan: seedReplicationPlan,
+    imagegenCompletion: {
+      schema: 'kaminos.lirm-speciation-gestalt-imagegen-collection.v0',
+      status: 'complete',
+      accepted: seedReplicationAccepted,
+    },
+    promotedCellIds: factorialPromotedCellIds.slice(0, 4),
+    outputRoot: join(root, 'overlapping-probe-factorial-trellis'),
+    comparisonContract: {
+      ...factorialComparisonContract,
+      seedProbe: { candidateId: 'lirm-armature-08', stance: 'prior-led-invention', seed: 717048 },
+    },
+  }),
+  /seed probe must use a different seed/,
+);
+assert.doesNotThrow(() => assertExactIdCoverage({
+  plannedIds: ['a', 'b'],
+  observedIds: ['b', 'a'],
+  label: 'fixture',
+}));
+assert.throws(
+  () => assertExactIdCoverage({ plannedIds: ['a', 'b'], observedIds: ['a', 'a'], label: 'fixture' }),
+  /duplicate observed fixture ID: a/,
+);
+assert.throws(
+  () => assertExactIdCoverage({ plannedIds: ['a', 'b'], observedIds: ['a'], label: 'fixture' }),
+  /missing fixture ID: b/,
+);
+assert.throws(
+  () => assertExactIdCoverage({ plannedIds: ['a'], observedIds: ['a', 'b'], label: 'fixture' }),
+  /unexpected fixture ID: b/,
+);
 assert.deepEqual(trellisPlan.comparisonContract.lineageBasins, [3, 10, 15, 22]);
 assert.equal(trellisPlan.evidencePredicate.spatialCoherenceRequiresRenderedWitness, true);
 const trellisCell = trellisPlan.cells[0];
@@ -280,6 +615,8 @@ trellisStatus.started_at = nowSeconds - 5;
 trellisStatus.finished_at = nowSeconds + 5;
 const trellisCompletion = await validateGestaltTrellisCompletion({ cell: trellisCell, status: trellisStatus });
 assert.equal(trellisCompletion.spatialCoherence, 'unverified-pending-rendered-witness');
+assert.equal(trellisCompletion.candidateId, trellisCell.candidateId);
+assert.equal(trellisCompletion.imagegenSeed, trellisCell.imagegenSeed);
 assert.equal(trellisCompletion.durationSeconds, 10);
 assert.equal(trellisCompletion.startedAt, nowSeconds - 5);
 assert.equal(trellisCompletion.finishedAt, nowSeconds + 5);
@@ -321,6 +658,8 @@ assert.equal(witnessPlan.cells.length, 4);
 assert.deepEqual(witnessPlan.cells.map(entry => entry.view), ['left', 'front', 'right', 'opposite']);
 assert.equal(witnessPlan.evidencePredicate.spatialClaimRequiresHumanVisualInspection, true);
 const witnessCell = witnessPlan.cells[0];
+assert.equal(witnessCell.candidateId, trellisCell.candidateId);
+assert.equal(witnessCell.imagegenSeed, trellisCell.imagegenSeed);
 const witnessArgs = buildGreenroomWitnessSubmitArgs(witnessCell);
 assert.equal(witnessArgs.filter(value => value === '-p').length, 1);
 await import('node:fs/promises').then(({ mkdir }) => mkdir(witnessCell.outputDir, { recursive: true }));
@@ -340,6 +679,8 @@ const witnessStatus = {
 };
 const witnessCompletion = await validateGestaltWitnessCompletion({ cell: witnessCell, status: witnessStatus });
 assert.equal(witnessCompletion.visualInspectionClaim, 'not-yet-inspected');
+assert.equal(witnessCompletion.candidateId, trellisCell.candidateId);
+assert.equal(witnessCompletion.imagegenSeed, trellisCell.imagegenSeed);
 await assert.rejects(
   () => validateGestaltWitnessCompletion({ cell: witnessCell, status: { ...witnessStatus, effective_route: 'fallback-renderer' } }),
   /witness route/,

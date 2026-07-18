@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-08",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-08",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-08",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-adherence-imagegen-20260718/cells/lirm-armature-08__basin-10-s3p00-n00-p046-design-seed-completion-seed717046/output.png",
+      "title": "lirm-armature-08",
+      "viewLabel": "PRIOR COMPLETION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-16",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-16",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-16",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-adherence-imagegen-20260718/cells/lirm-armature-16__basin-10-s3p00-n00-p046-design-seed-completion-seed717046/output.png",
+      "title": "lirm-armature-16",
+      "viewLabel": "PRIOR COMPLETION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-22",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-22",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-22",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-adherence-imagegen-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-design-seed-completion-seed717046/output.png",
+      "title": "lirm-armature-22",
+      "viewLabel": "PRIOR COMPLETION"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "lirm-armature-24",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "lirm-armature-24",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "lirm-armature-24",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-gestalt-adherence-imagegen-20260718/cells/lirm-armature-24__basin-10-s3p00-n00-p046-design-seed-completion-seed717046/output.png",
+      "title": "lirm-armature-24",
+      "viewLabel": "PRIOR COMPLETION"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-adherence-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-adherence-assay-v0/seed-replication/plan.json",
+  "requestedCount": 12,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717047",
+      "jobId": "945a40eafa6f",
+      "response": {
+        "job_id": "945a40eafa6f"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "jobId": "d644aebd4ca0",
+      "response": {
+        "job_id": "d644aebd4ca0"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "jobId": "5cc84ae7edaf",
+      "response": {
+        "job_id": "5cc84ae7edaf"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "jobId": "f878c098b790",
+      "response": {
+        "job_id": "f878c098b790"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717049",
+      "jobId": "7cfb39b0ef1f",
+      "response": {
+        "job_id": "7cfb39b0ef1f"
+      }
+    },
+    {
+      "cellId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717049",
+      "jobId": "d33e4e6a3815",
+      "response": {
+        "job_id": "d33e4e6a3815"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717047",
+      "jobId": "2fdc2c0ec11b",
+      "response": {
+        "job_id": "2fdc2c0ec11b"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717047",
+      "jobId": "83439790eaad",
+      "response": {
+        "job_id": "83439790eaad"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048",
+      "jobId": "43bfa12f6976",
+      "response": {
+        "job_id": "43bfa12f6976"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048",
+      "jobId": "b8e724f2b90a",
+      "response": {
+        "job_id": "b8e724f2b90a"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717049",
+      "jobId": "d5df62828fd0",
+      "response": {
+        "job_id": "d5df62828fd0"
+      }
+    },
+    {
+      "cellId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717049",
+      "jobId": "abc5b454cb52",
+      "response": {
+        "job_id": "abc5b454cb52"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "12/12 jobs submitted"
+}

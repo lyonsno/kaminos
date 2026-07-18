@@ -1,0 +1,149 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 20,
+  "submitted": [
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-left",
+      "jobId": "67103392c762",
+      "response": {
+        "job_id": "67103392c762"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-front",
+      "jobId": "ebcb782259d3",
+      "response": {
+        "job_id": "ebcb782259d3"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-right",
+      "jobId": "009e6a01510f",
+      "response": {
+        "job_id": "009e6a01510f"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-opposite",
+      "jobId": "3761bcbe278a",
+      "response": {
+        "job_id": "3761bcbe278a"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-left",
+      "jobId": "0d6d38186407",
+      "response": {
+        "job_id": "0d6d38186407"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-front",
+      "jobId": "2d78179444fd",
+      "response": {
+        "job_id": "2d78179444fd"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-right",
+      "jobId": "7ab7866a3386",
+      "response": {
+        "job_id": "7ab7866a3386"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-opposite",
+      "jobId": "857477c31347",
+      "response": {
+        "job_id": "857477c31347"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-left",
+      "jobId": "71de270d5bdf",
+      "response": {
+        "job_id": "71de270d5bdf"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-front",
+      "jobId": "0c16411cfcd5",
+      "response": {
+        "job_id": "0c16411cfcd5"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-right",
+      "jobId": "d553638f6085",
+      "response": {
+        "job_id": "d553638f6085"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-strict-blockout-preservation-seed717048-opposite",
+      "jobId": "5ca731e64b5e",
+      "response": {
+        "job_id": "5ca731e64b5e"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-left",
+      "jobId": "2a7eab2d22d7",
+      "response": {
+        "job_id": "2a7eab2d22d7"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-front",
+      "jobId": "da4de70ac80d",
+      "response": {
+        "job_id": "da4de70ac80d"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-right",
+      "jobId": "ec28a33de8d9",
+      "response": {
+        "job_id": "ec28a33de8d9"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-24__basin-10-s3p00-n00-p046-prior-led-invention-seed717048-opposite",
+      "jobId": "bfad833fe7f8",
+      "response": {
+        "job_id": "bfad833fe7f8"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-left",
+      "jobId": "8640d0c8b6dd",
+      "response": {
+        "job_id": "8640d0c8b6dd"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-front",
+      "jobId": "893066468146",
+      "response": {
+        "job_id": "893066468146"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-right",
+      "jobId": "33505c54a6ed",
+      "response": {
+        "job_id": "33505c54a6ed"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-08__basin-10-s3p00-n00-p046-prior-led-invention-seed717047-opposite",
+      "jobId": "c83bdf107d57",
+      "response": {
+        "job_id": "c83bdf107d57"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "20/20 render jobs submitted"
+}
