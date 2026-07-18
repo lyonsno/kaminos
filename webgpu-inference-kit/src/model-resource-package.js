@@ -544,6 +544,8 @@ function snapshotFetchOptions(fetchOptions) {
 }
 
 export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
+  const fetchOptionsSnapshot = snapshotFetchOptions(input.fetchOptions);
+  input = Object.freeze({ ...input, fetchOptions: null });
   const { modelPackage, sources } = preparePackageAdmission(input, [
     'maxResources',
     'maxBytes',
@@ -582,7 +584,9 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
         const common = {
           cache: input.cache,
           fetch: input.fetch,
-          fetchOptions: input.fetchOptions,
+          fetchOptions: fetchOptionsSnapshot == null
+            ? undefined
+            : materializeFetchOptionValue(fetchOptionsSnapshot),
           signal: input.signal,
           subtle: input.subtle,
           now: input.now,

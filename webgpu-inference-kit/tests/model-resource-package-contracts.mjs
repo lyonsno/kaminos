@@ -382,6 +382,8 @@ const snapshotSources = {
   decoder: 'https://models.example/snapshot-decoder.bin',
   head: 'https://models.example/snapshot-head.bin',
 };
+const snapshotFetchOptions = { headers: { authorization: 'one-shot-admitted' } };
+const observedSnapshotAuthorizations = [];
 const snapshotBytes = new Map([
   [snapshotSources.encoder, byteSets.encoder],
   [snapshotSources.decoder, byteSets.decoder],
@@ -390,20 +392,28 @@ const snapshotBytes = new Map([
 const snapshotLoad = snapshotRoute.loadModelResourcePackageFromSources({
   package: mutablePackage,
   sources: snapshotSources,
-  async fetch(url) {
+  fetchOptions: snapshotFetchOptions,
+  async fetch(url, options) {
     if (url === snapshotSources.encoder) {
       snapshotFetchStarted.resolve();
       await snapshotFetchRelease.promise;
     }
+    observedSnapshotAuthorizations.push(new Headers(options.headers).get('authorization'));
     return responseFor(snapshotBytes.get(url));
   },
 });
 await snapshotFetchStarted.promise;
 mutablePackage.resources[1].resourceId = 'mutated-after-admission';
 snapshotSources.decoder = 'https://models.example/mutated-after-admission.bin';
+snapshotFetchOptions.headers.authorization = 'one-shot-mutated-after-admission';
 snapshotFetchRelease.resolve();
 const snapshotLease = await snapshotLoad;
 assert.deepEqual(snapshotLease.resources.map(resource => resource.resourceId), ['encoder', 'decoder', 'head']);
+assert.deepEqual(
+  observedSnapshotAuthorizations,
+  ['one-shot-admitted', 'one-shot-admitted', 'one-shot-admitted'],
+  'one-shot ordinary children must use request options captured at package admission',
+);
 assert.equal(snapshotLease.release().status, 'released');
 const mutableChunkFetchStarted = deferred();
 const mutableChunkFetchRelease = deferred();
@@ -426,6 +436,49 @@ mutableChunkFetchRelease.resolve();
 const mutableChunkLease = await mutableChunkLoad;
 assert.equal(mutableChunkLease.resources[1].chunkReport.status, 'loaded');
 assert.equal(mutableChunkLease.release().status, 'released');
+
+const oneShotChunkFetchStarted = deferred();
+const oneShotChunkFetchRelease = deferred();
+const oneShotChunkFetchOptions = {
+  headers: new Headers({ authorization: 'one-shot-chunk-admitted' }),
+};
+const observedOneShotChunkAuthorizations = [];
+const oneShotChunkSources = {
+  encoder: 'https://models.example/one-shot-chunk-encoder.bin',
+  decoder: {
+    'decoder-0': 'https://models.example/one-shot-decoder-0.bin',
+    'decoder-1': 'https://models.example/one-shot-decoder-1.bin',
+  },
+};
+const oneShotChunkLoad = snapshotRoute.loadModelResourcePackageFromSources({
+  package: mixedPackage,
+  sources: oneShotChunkSources,
+  fetchOptions: oneShotChunkFetchOptions,
+  async fetch(url, options) {
+    if (url === oneShotChunkSources.encoder) {
+      oneShotChunkFetchStarted.resolve();
+      await oneShotChunkFetchRelease.promise;
+    }
+    observedOneShotChunkAuthorizations.push(
+      new Headers(options.headers).get('authorization'),
+    );
+    if (url === oneShotChunkSources.encoder) return responseFor(byteSets.encoder);
+    if (url === oneShotChunkSources.decoder['decoder-0']) {
+      return responseFor(byteSets.decoder.slice(0, 4));
+    }
+    return responseFor(byteSets.decoder.slice(4));
+  },
+});
+await oneShotChunkFetchStarted.promise;
+oneShotChunkFetchOptions.headers.set('authorization', 'one-shot-chunk-mutated-after-admission');
+oneShotChunkFetchRelease.resolve();
+const oneShotChunkLease = await oneShotChunkLoad;
+assert.deepEqual(
+  observedOneShotChunkAuthorizations,
+  ['one-shot-chunk-admitted', 'one-shot-chunk-admitted', 'one-shot-chunk-admitted'],
+  'one-shot ordinary and chunk children must share the admitted request-option snapshot',
+);
+assert.equal(oneShotChunkLease.release().status, 'released');
 snapshotSession.unregisterRoute(snapshotRoute.routeId);
 snapshotSession.close();
 
