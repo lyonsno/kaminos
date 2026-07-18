@@ -170,6 +170,18 @@ await assert.rejects(
   /timing/,
 );
 await assert.rejects(
+  () => validateGestaltImagegenCompletion({ cell, status: { ...status, submitted_at: null } }),
+  /timing/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({ cell, status: { ...status, submitted_at: '' } }),
+  /timing/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({ cell, status: { ...status, submitted_at: String(status.submitted_at) } }),
+  /timing/,
+);
+await assert.rejects(
   () => validateGestaltImagegenCompletion({ cell, status: { ...status, submitted_at: 0, started_at: 1, finished_at: 2 } }),
   /outside job window/,
 );

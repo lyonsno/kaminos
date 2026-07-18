@@ -66,7 +66,7 @@ The first 20 Blender jobs used a registered route whose cwd pointed at a deleted
 
 The path-restricted automated Gemini review attempt exhausted both configured quotas and produced no review result. A read-only GPT-5.5 review over the same five authored files found four false-closure paths: stable-path input or prompt mutation, executable-prefix route spoofing, unverified Trellis hardcoded settings, and nullable timing with no output-freshness proof.
 
-`review.md` records the findings and their dispositions. The repaired validators rehash live inputs, prompts, and witness scripts; require exact executable identity; verify Trellis's fixed command flags; require complete monotonic job timing; and require each primary output's mtime to fall inside its job window. The original completed jobs were replayed through those contracts without new inference: all eight image outputs, five Trellis GLBs, and twenty witness frames passed with zero rejection.
+`review.md` records the findings and their dispositions. The repaired validators rehash live inputs, prompts, and witness scripts; require exact executable identity; verify Trellis's fixed command flags; require actual finite numeric and monotonic job timestamps; and require each primary output's mtime to fall inside its job window. The first revision confirmation exposed and closed a residual `null`-to-zero timestamp coercion path. The original completed jobs were replayed through the final contracts without new inference: all eight image outputs, five Trellis GLBs, and twenty witness frames passed with zero rejection.
 
 ## Verdict
 

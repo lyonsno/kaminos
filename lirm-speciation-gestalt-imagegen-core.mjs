@@ -61,12 +61,11 @@ function assertCommandOption(effectiveRoute, option, expectedValue, label) {
 }
 
 function validateRunTiming(status, outputStat, label) {
-  const submittedAt = Number(status?.submitted_at);
-  const startedAt = Number(status?.started_at);
-  const finishedAt = Number(status?.finished_at);
-  if (![submittedAt, startedAt, finishedAt].every(Number.isFinite)) {
+  const timestamps = [status?.submitted_at, status?.started_at, status?.finished_at];
+  if (!timestamps.every((value) => typeof value === 'number' && Number.isFinite(value))) {
     throw new Error(`${label} timing is incomplete`);
   }
+  const [submittedAt, startedAt, finishedAt] = timestamps;
   if (submittedAt > startedAt || startedAt > finishedAt) {
     throw new Error(`${label} timing is not monotonic`);
   }
