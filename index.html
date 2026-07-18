@@ -10136,9 +10136,18 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     requestedOpticalDebugMode: effectiveOpticalDebugMode,
     effectiveOpticalDebugMode: runtime.opticalDebugMode,
     supportPresentationEvidence: runtime.supportPresentationEvidence,
+    deferredSceneEvidence: runtime.deferredSceneEvidence,
     screenSpaceSurfaceEvidence: runtime.screenSpaceSurfaceEvidence,
     refractionEvidence: runtime.refractionEvidence,
+    ...(runtime.worldSpaceReflectionEvidence ? {
+      worldSpaceReflectionEvidence: runtime.worldSpaceReflectionEvidence,
+    } : {}),
   };
+}
+
+function setFingerFluidBenchReflectionMeshPhaseForWitness(phase) {
+  if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for reflection mesh witness');
+  return fingerFluidBenchSolver.setReflectionMeshPhaseForWitness(phase);
 }
 
 function resumeFingerFluidBenchAfterWitness() {
@@ -10326,6 +10335,7 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
   window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;
+  window.kaminosFingerFluidBenchSetReflectionMeshPhaseForWitness = setFingerFluidBenchReflectionMeshPhaseForWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
     volume: volumePrototype?.debugState?.() || null,

@@ -16,7 +16,9 @@ const screenSpaceRefractionOut = resolve(args.get('--screen-space-refraction-out
 const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.png$/i, '.sphere-debug.png'));
 const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.replace(/\.png$/i, '.screen-space-resized.png'));
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption'];
+const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.replace(/\.png$/i, '.reflection-phase-a.png'));
+const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -50,6 +52,8 @@ let refractionEvidence = null;
 let sameStateRendererComparison = null;
 let surfaceRegistrationViews = null;
 let sameStateOpticalComparison = null;
+let frozenStateWorldReflectionWitness = null;
+let reflectionHitKindField = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
 let opticalDebugViews = null;
@@ -129,6 +133,8 @@ function writeReport(report = {}) {
     sameStateRendererComparison,
     surfaceRegistrationViews,
     sameStateOpticalComparison,
+    frozenStateWorldReflectionWitness,
+    reflectionHitKindField,
     rendererResizeWitness,
     invalidRendererWitness,
     opticalDebugViews,
@@ -138,6 +144,8 @@ function writeReport(report = {}) {
     primaryRouteCanvasOut,
     resizedSurfaceOut,
     invalidRendererOut,
+    reflectionPhaseAOut,
+    reflectionPhaseBOut,
     preContactOut,
     midContactOut,
     postContactOut,
@@ -477,13 +485,67 @@ function requireSharedSupportPresentation(receipt, label) {
     supportPresentationEvidence?.route !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'
     || supportPresentationEvidence?.depthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
     || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
-    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_deferred_scene_v0'
     || supportPresentationEvidence?.passCount < 1
     || supportPresentationEvidence?.particleSupportDrawCount !== 0
   ) {
     throw new Error(`${label} shared analytic support presentation evidence missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
   }
   return supportPresentationEvidence;
+}
+
+function requireDeferredWorldReflectionEvidence(receipt, label, requireReflection = false) {
+  const deferredSceneEvidence = receipt?.deferredSceneEvidence;
+  const renderFrameId = deferredSceneEvidence?.renderFrameId;
+  const requestedOpticalDebugMode = receipt?.requestedOpticalDebugMode;
+  const effectiveOpticalDebugMode = receipt?.effectiveOpticalDebugMode;
+  const reflectionDiagnostic = requireReflection
+    && requestedOpticalDebugMode === effectiveOpticalDebugMode
+    && ['reflection', 'reflection_hit_kind', 'reflection_distance'].includes(effectiveOpticalDebugMode);
+  const dynamicMeshPresentationIsCurrent = reflectionDiagnostic
+    ? deferredSceneEvidence?.dynamicMesh?.presentationMode === 'suppressed_in_reflection_debug_provider_remains_active_v0'
+      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId !== renderFrameId
+    : deferredSceneEvidence?.dynamicMesh?.presentationMode === 'deferred_scene_visible_v0'
+      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId === renderFrameId;
+  if (
+    deferredSceneEvidence?.route !== 'webgpu-deferred-indexed-mesh-scene-v0'
+    || deferredSceneEvidence?.requestedRoute !== 'webgpu-deferred-indexed-mesh-scene-v0'
+    || deferredSceneEvidence?.effectiveRoute !== 'webgpu-deferred-indexed-mesh-scene-v0'
+    || deferredSceneEvidence?.fallbackReason
+    || deferredSceneEvidence?.passCount < 1
+    || !Number.isInteger(deferredSceneEvidence?.dynamicIndexedMeshDrawCount)
+    || deferredSceneEvidence.dynamicIndexedMeshDrawCount < 0
+    || !Number.isInteger(renderFrameId)
+    || renderFrameId < 1
+    || deferredSceneEvidence?.deferredSceneFrameId !== renderFrameId
+    || !dynamicMeshPresentationIsCurrent
+    || deferredSceneEvidence?.dynamicMesh?.objectId !== 101
+    || deferredSceneEvidence?.dynamicMesh?.indexCount !== 36
+    || deferredSceneEvidence?.attachments?.worldNormalRoughness?.format !== 'rgba16float'
+    || deferredSceneEvidence?.attachments?.albedoMetallic?.format !== 'rgba8unorm'
+    || deferredSceneEvidence?.attachments?.linearDepthObject?.format !== 'rgba16float'
+  ) {
+    throw new Error(`${label} deferred scene evidence missing, stale, or partial: ${JSON.stringify(deferredSceneEvidence)}`);
+  }
+  const worldSpaceReflectionEvidence = receipt?.worldSpaceReflectionEvidence;
+  if (!requireReflection && worldSpaceReflectionEvidence !== undefined) {
+    throw new Error(`${label} published reflection provider evidence for a renderer frame that did not execute it: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
+  }
+  if (requireReflection && (
+    worldSpaceReflectionEvidence?.providerRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
+    || worldSpaceReflectionEvidence?.requestedProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
+    || worldSpaceReflectionEvidence?.effectiveProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
+    || worldSpaceReflectionEvidence?.accelerationRoute !== 'uncapped-exact-triangle-scan-v0'
+    || worldSpaceReflectionEvidence?.fallbackReason
+    || worldSpaceReflectionEvidence?.compositePassCount < 1
+    || worldSpaceReflectionEvidence?.reflectionProviderFrameId !== renderFrameId
+    || worldSpaceReflectionEvidence?.dynamicMeshTransformGeneration !== deferredSceneEvidence?.dynamicMesh?.transformGeneration
+    || worldSpaceReflectionEvidence?.exactTriangleCount !== 12
+    || worldSpaceReflectionEvidence?.candidateCapMode !== 'uncapped_exact_dynamic_mesh_triangle_population_v0'
+  )) {
+    throw new Error(`${label} world-space reflection evidence missing, stale, or partial: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
+  }
+  return { deferredSceneEvidence, worldSpaceReflectionEvidence: requireReflection ? worldSpaceReflectionEvidence : null };
 }
 
 function measureCapturedPngDelta(leftPath, rightPath, label) {
@@ -515,6 +577,90 @@ function measureCapturedPngDelta(leftPath, rightPath, label) {
     changedRatio: Number((changedPixels / Math.max(1, pixelCount)).toFixed(5)),
     meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, left.stdout.length)).toFixed(3)),
     measurement: 'same_state_captured_rgb24_absolute_delta_v0',
+  };
+}
+
+function measureCapturedPngMaskedDelta(leftPath, rightPath, maskPath, label) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const left = decode(leftPath);
+  const right = decode(rightPath);
+  const mask = decode(maskPath);
+  if (
+    left.status !== 0
+    || right.status !== 0
+    || mask.status !== 0
+    || !left.stdout?.length
+    || left.stdout.length !== right.stdout?.length
+    || left.stdout.length !== mask.stdout?.length
+  ) throw new Error(`ffmpeg ${label} masked delta decode failed or dimensions disagree`);
+  let maskPixels = 0;
+  let changedPixels = 0;
+  let absoluteChannelDelta = 0;
+  for (let offset = 0; offset < left.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    if (!(maskR > 110 && maskR > maskG * 1.12 && maskG > maskB * 1.18)) continue;
+    maskPixels += 1;
+    const delta = Math.abs(left.stdout[offset] - right.stdout[offset])
+      + Math.abs(left.stdout[offset + 1] - right.stdout[offset + 1])
+      + Math.abs(left.stdout[offset + 2] - right.stdout[offset + 2]);
+    absoluteChannelDelta += delta;
+    if (delta >= 18) changedPixels += 1;
+  }
+  if (maskPixels < 1000) throw new Error(`${label} liquid mask is too sparse: ${maskPixels}`);
+  return {
+    label,
+    leftPath,
+    rightPath,
+    maskPath,
+    maskPixels,
+    changedPixels,
+    changedRatio: Number((changedPixels / maskPixels).toFixed(5)),
+    meanAbsoluteChannelDelta: Number((absoluteChannelDelta / (maskPixels * 3)).toFixed(3)),
+    measurement: 'frozen_state_optical_thickness_masked_rgb24_delta_v0',
+  };
+}
+
+function measureReflectionHitKinds(hitKindPath, maskPath) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const hitKind = decode(hitKindPath);
+  const mask = decode(maskPath);
+  if (hitKind.status !== 0 || mask.status !== 0 || !hitKind.stdout?.length || hitKind.stdout.length !== mask.stdout?.length) {
+    throw new Error('reflection hit-kind field decode failed or dimensions disagree');
+  }
+  let liquidPixels = 0;
+  let environmentPixels = 0;
+  let analyticPixels = 0;
+  let indexedMeshPixels = 0;
+  for (let offset = 0; offset < hitKind.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    if (!(maskR > 110 && maskR > maskG * 1.12 && maskG > maskB * 1.18)) continue;
+    liquidPixels += 1;
+    const r = hitKind.stdout[offset];
+    const g = hitKind.stdout[offset + 1];
+    const b = hitKind.stdout[offset + 2];
+    if (b > 120 && b > r * 1.5 && b > g * 1.2) environmentPixels += 1;
+    else if (r > 160 && g > 65 && r > g * 1.2 && g > b * 1.35) analyticPixels += 1;
+    else if (r > 160 && r > g * 2 && b > g * 1.35) indexedMeshPixels += 1;
+  }
+  return {
+    hitKindPath,
+    maskPath,
+    liquidPixels,
+    environmentPixels,
+    analyticPixels,
+    indexedMeshPixels,
+    indexedMeshRatio: Number((indexedMeshPixels / Math.max(1, liquidPixels)).toFixed(6)),
+    measurement: 'optical_thickness_masked_attributable_reflection_hit_kinds_v0',
   };
 }
 
@@ -1155,7 +1301,7 @@ async function main() {
         || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || refractionEvidence?.analyticSupportDepthPassCount < 1
         || refractionEvidence?.opticalDebugMode !== requestedOpticalDebugMode
-        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-deferred-scene-color-v0'
         || refractionEvidence?.scenePassCount < 1
         || refractionEvidence?.accumulationPassCount < 1
         || refractionEvidence?.compositePassCount < 1
@@ -1441,6 +1587,7 @@ async function main() {
         throw new Error(`optical renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
       requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
+      requireDeferredWorldReflectionEvidence(receipt, `${mode}:${opticalDebugMode}`, mode === 'screen_space_refraction');
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -1480,7 +1627,7 @@ async function main() {
       || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
       || refractionEvidence?.analyticSupportDepthPassCount < 1
       || refractionEvidence?.opticalDebugMode !== 'shaded'
-      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-deferred-scene-color-v0'
       || refractionEvidence?.scenePassCount < 1
       || refractionEvidence?.compositePassCount < 1
     ) throw new Error(`same-state refraction evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
@@ -1712,6 +1859,58 @@ async function main() {
       }
       previousOpticalDebugMode = opticalDebugMode;
     }
+    reflectionHitKindField = measureReflectionHitKinds(
+      opticalDebugOutputs.reflection_hit_kind,
+      opticalDebugOutputs.thickness,
+    );
+    if (reflectionHitKindField.environmentPixels < 1000 || reflectionHitKindField.indexedMeshPixels < 500) {
+      throw new Error(`reflection hit-kind field does not materially expose environment plus indexed mesh visibility: ${JSON.stringify(reflectionHitKindField)}`);
+    }
+
+    phase = 'frozen_state_world_reflection';
+    const setReflectionPhase = async phaseValue => evaluate(ws, `(() => {
+      const setPhase = window.kaminosFingerFluidBenchSetReflectionMeshPhaseForWitness;
+      if (typeof setPhase !== 'function') throw new Error('pre-output failure: missing reflection mesh transform witness hook');
+      return setPhase(${JSON.stringify(phaseValue)});
+    })()`);
+    const phaseATransform = await setReflectionPhase(0.0);
+    const phaseA = await renderSameState('screen_space_refraction', reflectionPhaseAOut, canvasRect, 'reflection');
+    const phaseBTransform = await setReflectionPhase(1.45);
+    const phaseB = await renderSameState('screen_space_refraction', reflectionPhaseBOut, canvasRect, 'reflection');
+    const maskedVisualDelta = measureCapturedPngMaskedDelta(
+      reflectionPhaseAOut,
+      reflectionPhaseBOut,
+      opticalDebugOutputs.thickness,
+      'dynamic_indexed_mesh_world_reflection',
+    );
+    if (
+      phaseATransform.stepCount !== phaseBTransform.stepCount
+      || phaseA.receipt.stepCount !== phaseB.receipt.stepCount
+      || phaseA.receipt.stepCount !== phaseATransform.stepCount
+    ) throw new Error(`frozen-state reflection witness advanced the simulation: ${JSON.stringify({ phaseATransform, phaseBTransform, phaseA: phaseA.receipt, phaseB: phaseB.receipt })}`);
+    if (
+      phaseA.receipt.worldSpaceReflectionEvidence?.dynamicMeshTransformGeneration !== phaseATransform.transformGeneration
+      || phaseB.receipt.worldSpaceReflectionEvidence?.dynamicMeshTransformGeneration !== phaseBTransform.transformGeneration
+      || phaseA.receipt.worldSpaceReflectionEvidence?.dynamicMeshPhase !== phaseATransform.phase
+      || phaseB.receipt.worldSpaceReflectionEvidence?.dynamicMeshPhase !== phaseBTransform.phase
+      || phaseA.receipt.worldSpaceReflectionEvidence?.dynamicMeshPresentationMode !== 'suppressed_in_reflection_debug_provider_remains_active_v0'
+      || phaseB.receipt.worldSpaceReflectionEvidence?.dynamicMeshPresentationMode !== 'suppressed_in_reflection_debug_provider_remains_active_v0'
+    ) throw new Error(`reflection transform evidence is stale or substituted: ${JSON.stringify({ phaseATransform, phaseBTransform, phaseA: phaseA.receipt, phaseB: phaseB.receipt })}`);
+    if (maskedVisualDelta.changedRatio < 0.002 || maskedVisualDelta.meanAbsoluteChannelDelta < 0.12) {
+      throw new Error(`moving indexed mesh produced no material reflection delta inside frozen liquid: ${JSON.stringify(maskedVisualDelta)}`);
+    }
+    frozenStateWorldReflectionWitness = {
+      schema: 'kaminos.finger-fluid.frozen-state-world-reflection-witness.v0',
+      sameSimulationState: true,
+      sameCamera: true,
+      maskSource: opticalDebugOutputs.thickness,
+      phaseATransform,
+      phaseBTransform,
+      phaseA,
+      phaseB,
+      maskedVisualDelta,
+    };
+    await setReflectionPhase(0.36);
 
     phase = 'bind_primary_requested_route';
     const primaryRouteCanvas = await renderSameState(
