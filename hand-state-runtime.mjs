@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { summarizeLatencySamples } from './hand-state-latency-benchmark.mjs';
 
 const params = new URLSearchParams(window.location.search);
 const runtimeUrl = params.get('runtime_url') || 'http://127.0.0.1:8766';
@@ -55,6 +56,21 @@ let faceSignature = '';
 let smoothedPositions = null;
 let lastLiveAt = 0;
 let frameSequence = 0;
+let benchmarkSessionId = '';
+let pendingLatencySample = null;
+let benchmarkDroppedBeforeRender = 0;
+let lastBenchmarkError = null;
+const captureMetricsByFrame = new Map();
+const latencySamples = [];
+
+function resetLatencyBenchmark() {
+  benchmarkSessionId = globalThis.crypto?.randomUUID?.() || `hand-${Date.now()}`;
+  pendingLatencySample = null;
+  benchmarkDroppedBeforeRender = 0;
+  lastBenchmarkError = null;
+  captureMetricsByFrame.clear();
+  latencySamples.length = 0;
+}
 
 function setStatus(message, state = 'idle') {
   status.textContent = message;
@@ -131,6 +147,9 @@ async function captureFrame() {
   try {
     const width = Math.min(video.videoWidth || 640, 640);
     const height = Math.round(width * (video.videoHeight || 480) / Math.max(video.videoWidth || 640, 1));
+    const capturedAt = Date.now();
+    const captureId = `${capturedAt}-${frameSequence += 1}`;
+    const encodeStartedAt = performance.now();
     if (captureCanvas.width !== width || captureCanvas.height !== height) {
       captureCanvas.width = width;
       captureCanvas.height = height;
@@ -142,18 +161,27 @@ async function captureFrame() {
     captureContext.restore();
     const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.78));
     if (!blob) throw new Error('camera frame encoding failed');
-    const capturedAt = Date.now();
+    const clientEncodeMs = performance.now() - encodeStartedAt;
+    const postStartedAt = performance.now();
     await runtimeFetch('/native-frame', {
       method: 'POST',
       headers: {
         'Content-Type': 'image/jpeg',
-        'X-Capture-Id': `${capturedAt}-${frameSequence += 1}`,
+        'X-Capture-Id': captureId,
         'X-Capture-Epoch-Ms': String(capturedAt),
         'X-Frame-Width': String(width),
         'X-Frame-Height': String(height),
       },
       body: blob,
     });
+    captureMetricsByFrame.set(captureId, {
+      capturedAtEpochMs: capturedAt,
+      clientEncodeMs,
+      nativePostMs: performance.now() - postStartedAt,
+    });
+    for (const [frameId, metrics] of captureMetricsByFrame) {
+      if (capturedAt - metrics.capturedAtEpochMs > 10_000) captureMetricsByFrame.delete(frameId);
+    }
   } catch (error) {
     setStatus(error.message || String(error), 'error');
   } finally {
@@ -167,8 +195,44 @@ async function pollState() {
     const state = await runtimeFetch(`/state?max_age_ms=${maxAgeMs}`);
     const frame = state.frame;
     if (frame?.authority?.sourceAuthority === 'live_simulation' && updateHandSurface(frame.mano)) {
-      const latency = frame.telemetry?.cameraToPublishMs;
-      setStatus(`live MANO / ${frame.mano.vertexCount} vertices${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms` : ''}`, 'live');
+      const frameId = frame.frame?.frameId;
+      const captureMetrics = captureMetricsByFrame.get(frameId);
+      if (frameId && captureMetrics && !latencySamples.some(sample => sample.frameId === frameId) && pendingLatencySample?.frameId !== frameId) {
+        const captureToViewerReceiveMs = Date.now() - frame.frame.captureTimestampMs;
+        const captureToSidecarPublishMs = frame.timing?.cameraFrameAgeMs;
+        const modelLatencyMs = frame.timing?.modelLatencyMs;
+        if ([captureToViewerReceiveMs, captureToSidecarPublishMs, modelLatencyMs].every(Number.isFinite)) {
+          if (pendingLatencySample) benchmarkDroppedBeforeRender += 1;
+          pendingLatencySample = {
+            schema: 'hand-state.viewer-latency-sample.v0',
+            benchmarkSessionId,
+            frameId,
+            runtimeOwner: state.runtimeOwner,
+            sourceAuthority: frame.authority.sourceAuthority,
+            requestedRoute: frame.source.requestedRoute,
+            effectiveRoute: frame.source.effectiveRoute,
+            model: frame.source.model,
+            deviceRoute: frame.source.deviceRoute,
+            dtypeRoute: frame.source.dtypeRoute,
+            manoVertexCount: frame.mano.vertexCount,
+            manoFaceCount: frame.mano.faceCount,
+            captureTimestampMs: frame.frame.captureTimestampMs,
+            viewerReceiveTimestampMs: Date.now(),
+            clientEncodeMs: captureMetrics.clientEncodeMs,
+            nativePostMs: captureMetrics.nativePostMs,
+            modelLatencyMs,
+            captureToSidecarPublishMs,
+            publishToViewerReceiveMs: Math.max(0, captureToViewerReceiveMs - captureToSidecarPublishMs),
+            captureToViewerReceiveMs,
+            captureToRenderCompleteMs: null,
+          };
+          captureMetricsByFrame.delete(frameId);
+        } else {
+          lastBenchmarkError = `incomplete live timing for ${frameId}`;
+        }
+      }
+      const latency = pendingLatencySample?.captureToViewerReceiveMs || latencySamples.at(-1)?.captureToViewerReceiveMs;
+      setStatus(`live MANO / ${frame.mano.vertexCount} vertices${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms receipt` : ''}`, 'live');
     } else {
       setStatus(`waiting for live MANO / ${frame?.authority?.fallbackReason || 'no frame'}`);
     }
@@ -184,6 +248,7 @@ async function start() {
   video.srcObject = stream;
   await video.play();
   await runtimeFetch('/sidecar/start', { method: 'POST' });
+  resetLatencyBenchmark();
   running = true;
   toggle.textContent = 'Stop Hand';
   toggle.dataset.running = 'true';
@@ -231,9 +296,29 @@ function resize() {
 function animate(now) {
   if (handMesh.visible && now - lastLiveAt > 1200 && !fixtureMode) handMaterial.emissiveIntensity = 0;
   handMesh.rotation.y = Math.sin(now * 0.00022) * 0.08;
-  renderer.renderAsync(scene, camera);
+  const renderPromise = renderer.renderAsync(scene, camera);
+  if (pendingLatencySample) {
+    const sample = pendingLatencySample;
+    pendingLatencySample = null;
+    Promise.resolve(renderPromise).then(() => {
+      sample.captureToRenderCompleteMs = Math.max(0, Date.now() - sample.captureTimestampMs);
+      latencySamples.push(sample);
+      runtimeFetch('/viewer-latency-sample', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sample),
+      }).catch(error => { lastBenchmarkError = error.message || String(error); });
+    }).catch(error => { lastBenchmarkError = error.message || String(error); });
+  }
   requestAnimationFrame(animate);
 }
+
+window.__kaminosHandStateLatencyBenchmark = () => ({
+  benchmarkSessionId,
+  droppedBeforeRender: benchmarkDroppedBeforeRender,
+  lastError: lastBenchmarkError,
+  report: latencySamples.length ? summarizeLatencySamples(latencySamples) : null,
+});
 
 window.__kaminosHandStateDebugState = () => ({
   schema: 'kaminos.hand-state-runtime-viewer.v0',
@@ -245,9 +330,14 @@ window.__kaminosHandStateDebugState = () => ({
   vertexCount: handGeometry.getAttribute('position')?.count || 0,
   faceCount: handGeometry.index ? handGeometry.index.count / 3 : 0,
   status: status.textContent,
+  benchmarkSessionId,
+  benchmarkSampleCount: latencySamples.length,
+  benchmarkDroppedBeforeRender,
+  benchmarkError: lastBenchmarkError,
 });
 
 resize();
+resetLatencyBenchmark();
 window.addEventListener('resize', resize);
 if (fixtureMode) {
   fetch('./tests/fixtures/wilor-mano-surface.json', { cache: 'no-store' })
