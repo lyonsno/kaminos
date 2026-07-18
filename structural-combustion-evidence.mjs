@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 const PAGE_PATH = '/structural-combustion.html';
 const PAGE_ROUTE = 'kaminos.structural-combustion-dimensional-witness.v0';
 const AUTHORITY = 'same-device-pyro-node-material-bond-strength-v0';
+const CARRIED_FIRE_MODE = 'carried-fire';
+const REQUIRED_ROLES = ['emitter', 'control', 'propagation-target', 'propagation-control'];
+const REQUIRED_CARRIED_CHECKS = [
+  'detachedEmitterMoved',
+  'movedSourceAccepted',
+  'propagationTargetExposed',
+  'propagationAfterDetachment',
+  'propagationTargetIgnited',
+  'propagationControlCool',
+];
 
 function assertScreenshot(record, name) {
   assert.ok(record?.sha256, `${name} screenshot identity is missing`);
@@ -46,6 +56,21 @@ export function validateStructuralCombustionEvidence(evidence) {
 
   const terminal = evidence.final.terminalReceipt;
   assert.equal(terminal?.status, 'passed', 'terminal receipt did not pass');
+  assert.equal(terminal.mode, CARRIED_FIRE_MODE, 'terminal receipt is not in carried-fire mode');
+  assert.ok(Array.isArray(terminal.structures), 'terminal receipt structures are missing');
+  for (const role of REQUIRED_ROLES) {
+    assert.equal(
+      terminal.structures.filter(structure => structure?.role === role).length,
+      1,
+      `terminal receipt requires exactly one ${role}`,
+    );
+  }
+  assert.equal(terminal.structures.length, REQUIRED_ROLES.length, 'terminal receipt contains unexpected structural roles');
+  assert.ok(terminal.carriedAudit?.movedSourceRecords > 0, 'terminal carried-source audit is missing or empty');
+  for (const check of REQUIRED_CARRIED_CHECKS) {
+    assert.ok(Object.hasOwn(terminal.checks || {}, check), `terminal receipt is missing ${check}`);
+    assert.equal(terminal.checks[check], true, `terminal receipt failed ${check}`);
+  }
   assert.ok(
     terminal.checks && Object.values(terminal.checks).length > 0 && Object.values(terminal.checks).every(Boolean),
     'terminal receipt contains a failed causal check',

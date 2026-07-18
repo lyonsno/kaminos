@@ -10,9 +10,16 @@ import {
 
 export const STRUCTURAL_COMBUSTION_SCHEMA = 'kaminos.structural-combustion.node-material.v0';
 export const STRUCTURAL_COMBUSTION_AUTHORITY = 'same-device-pyro-node-material-bond-strength-v0';
+export const STRUCTURAL_EXPOSURE_ENABLED = 1 << 0;
+export const STRUCTURAL_EMISSION_ENABLED = 1 << 1;
+export const STRUCTURAL_CONTROL = 1 << 2;
+export const STRUCTURAL_MOTION_ENABLED = 1 << 3;
+export const STRUCTURAL_CARRIED_FIRE_MODE = 'carried-fire';
 
 const NODE_MATERIAL_BYTES = 64;
-const PARAMS_BYTES = 128;
+const COMPONENT_MOTION_BYTES = 32;
+const CARRIED_FIRE_AUDIT_BYTES = 32;
+const PARAMS_BYTES = 144;
 const PRESENTATION_BYTES = 96;
 const SOURCE_FRAME_HASH = 0x53545243;
 const WORKGROUP_SIZE = 64;
@@ -73,14 +80,112 @@ export function evaluateStructuralBurnAppearance({
   };
 }
 
+export function evaluateStructuralComponentMotion({
+  componentLabel = 0,
+  step = 0,
+  detachmentStep = 0,
+  dt = 1 / 60,
+  lateralRate = 0.18,
+  gravity = -0.82,
+  depthRate = 0.04,
+  maximumAge = 1,
+} = {}) {
+  const label = Math.max(0, Math.floor(finite(componentLabel, 0)));
+  const currentStep = Math.max(0, Math.floor(finite(step, 0)));
+  if (label === 0) return { active: false, componentLabel: 0, detachmentStep: 0, translation: [0, 0, 0] };
+  const firstStep = Math.max(0, Math.floor(finite(detachmentStep, 0))) || currentStep;
+  const age = Math.min(
+    Math.max(0, (currentStep - firstStep) * Math.max(0, finite(dt, 1 / 60))),
+    Math.max(0, finite(maximumAge, 1)),
+  );
+  return {
+    active: true,
+    componentLabel: label,
+    detachmentStep: firstStep,
+    translation: [
+      finite(lateralRate, 0.18) * age,
+      finite(gravity, -0.82) * age * age,
+      finite(depthRate, 0.04) * age,
+    ].map(value => value || 0),
+  };
+}
+
+export function transformStructuralCarriedNode({
+  position,
+  displacement = [0, 0, 0],
+  translation = [0, 0, 0],
+  pyroScale,
+  pyroOffset,
+  displayScale = [1.12, 0.68, 0.58],
+  worldOffset = [0, 0, 0],
+} = {}) {
+  const vector = (value, fallback) => Array.from({ length: 3 }, (_, index) => finite(value?.[index], fallback[index]));
+  const local = vector(position, [0, 0, 0]);
+  const nodeDisplacement = vector(displacement, [0, 0, 0]);
+  const carriedTranslation = vector(translation, [0, 0, 0]);
+  const sourceScale = vector(pyroScale, [1, 1, 1]);
+  const sourceOffset = vector(pyroOffset, [0, 0, 0]);
+  const renderScale = vector(displayScale, [1.12, 0.68, 0.58]);
+  const renderOffset = vector(worldOffset, [0, 0, 0]);
+  const carriedLocal = local.map((value, index) => value + carriedTranslation[index]);
+  const sourcePosition = carriedLocal.map((value, index) => value * sourceScale[index] + sourceOffset[index]);
+  const displayedPosition = carriedLocal.map(
+    (value, index) => (value - 0.5) * renderScale[index] + nodeDisplacement[index] + renderOffset[index],
+  );
+  return { carriedLocal, sourcePosition, exposurePosition: [...sourcePosition], displayedPosition };
+}
+
+export function evaluateStructuralCarriedFireTerminalChecks({
+  decodedStructures,
+  receiverAudit,
+  carriedAudit,
+  hostCausalFeedbackCount = 0,
+} = {}) {
+  const emitter = decodedStructures?.find(structure => structure.role === 'emitter');
+  const propagationTarget = decodedStructures?.find(structure => structure.role === 'propagation-target');
+  const propagationControl = decodedStructures?.find(structure => structure.role === 'propagation-control');
+  if (!emitter || !propagationTarget || !propagationControl || !receiverAudit?.audit || !carriedAudit) {
+    throw new Error('structural carried-fire terminal evidence is incomplete');
+  }
+  const detachedMotions = emitter.nodes
+    .map(node => node.componentMotion)
+    .filter(motion => motion?.active && motion.detachmentStep > 0);
+  const detachmentSteps = detachedMotions.map(motion => motion.detachmentStep);
+  const firstDetachmentStep = detachmentSteps.length ? Math.min(...detachmentSteps) : 0;
+  const moved = detachedMotions.some(motion => motion.translation.some(value => Math.abs(value) > 0.01));
+  const targetExposureSteps = propagationTarget.nodes.map(node => node.firstExposureStep).filter(Boolean);
+  const targetIgnitionSteps = propagationTarget.nodes.map(node => node.ignitionStep).filter(Boolean);
+  const firstTargetExposure = targetExposureSteps.length ? Math.min(...targetExposureSteps) : 0;
+  return {
+    detachedEmitterMoved: moved,
+    movedSourceAccepted: moved && carriedAudit.movedSourceRecords > 0 &&
+      carriedAudit.firstMovedSourceStep >= firstDetachmentStep &&
+      carriedAudit.lastMovedSourceStep <= receiverAudit.audit.lastAcceptedStep &&
+      receiverAudit.audit.auditObjectId === emitter.objectId &&
+      receiverAudit.audit.acceptedRecords > 0 && receiverAudit.audit.rejectedRecords === 0 &&
+      receiverAudit.audit.lastAcceptedStep > firstDetachmentStep,
+    propagationTargetExposed: firstTargetExposure > 0 &&
+      propagationTarget.nodes.some(node => node.peakExposure > 0),
+    propagationAfterDetachment: firstDetachmentStep > 0 && firstTargetExposure > firstDetachmentStep,
+    propagationTargetIgnited: targetIgnitionSteps.length > 0 &&
+      Math.min(...targetIgnitionSteps) >= firstTargetExposure,
+    propagationControlCool: propagationControl.nodes.every(
+      node => node.ignitionStep === 0 && node.temperature <= 0.085 && node.firstExposureStep === 0,
+    ),
+    noHostFeedback: hostCausalFeedbackCount === 0,
+  };
+}
+
 export function evaluateStructuralCombustionTerminalChecks({
   decodedStructures,
   sourceHeader,
   receiverAudit,
   hostCausalFeedbackCount = 0,
 } = {}) {
-  const targetResult = decodedStructures?.find(structure => !structure.control);
-  const controlResult = decodedStructures?.find(structure => structure.control);
+  const targetResult = decodedStructures?.find(structure => structure.role === 'emitter') ||
+    decodedStructures?.find(structure => !structure.control);
+  const controlResult = decodedStructures?.find(structure => structure.role === 'control') ||
+    decodedStructures?.find(structure => structure.control);
   if (!targetResult || !controlResult || !sourceHeader || !receiverAudit?.audit) {
     throw new Error('structural combustion terminal evidence is incomplete');
   }
@@ -251,7 +356,18 @@ export function simulateStructuralCombustionReference({
   };
 }
 
-function packNodeMaterials(state, objectId, control) {
+function structureFlags(structure) {
+  const control = Boolean(structure.control);
+  const exposureEnabled = structure.exposureEnabled ?? !control;
+  const emissionEnabled = structure.emissionEnabled ?? !control;
+  const motionEnabled = structure.motionEnabled ?? emissionEnabled;
+  return (exposureEnabled ? STRUCTURAL_EXPOSURE_ENABLED : 0) |
+    (emissionEnabled ? STRUCTURAL_EMISSION_ENABLED : 0) |
+    (control ? STRUCTURAL_CONTROL : 0) |
+    (motionEnabled ? STRUCTURAL_MOTION_ENABLED : 0);
+}
+
+function packNodeMaterials(state, objectId, flags) {
   const bytes = new ArrayBuffer(state.nodes.length * NODE_MATERIAL_BYTES);
   const view = new DataView(bytes);
   state.nodes.forEach((node, index) => {
@@ -259,7 +375,7 @@ function packNodeMaterials(state, objectId, control) {
     view.setUint32(offset, objectId, true);
     view.setUint32(offset + 4, index, true);
     view.setUint32(offset + 8, 0, true);
-    view.setUint32(offset + 12, control ? 1 : 0, true);
+    view.setUint32(offset + 12, flags, true);
     view.setFloat32(offset + 16, 0.08, true);
     view.setFloat32(offset + 20, 1, true);
   });
@@ -274,14 +390,28 @@ function packParams(structure, nodeCount, bondCount, capacity, gridSize) {
   const bytes = new ArrayBuffer(PARAMS_BYTES);
   const u32 = new Uint32Array(bytes);
   const f32 = new Float32Array(bytes);
-  u32.set([1, 0, structure.objectId >>> 0, structure.control ? 1 : 0], 0);
+  u32.set([1, 0, structure.objectId >>> 0, structure.flags >>> 0], 0);
   u32.set([nodeCount, bondCount, capacity, gridSize], 4);
   f32.set([...(structure.pyroScale || [0.28, 0.32, 0.32]), 0], 8);
-  f32.set([...(structure.pyroOffset || [0.3, 0.26, 0.32]), 0], 12);
-  f32.set([1 / 60, 0.08, 0.62, 0.035], 16);
-  f32.set([0.22, 0.005, 0.82, 0.018], 20);
+  f32.set([
+    ...(structure.pyroOffset || [0.3, 0.26, 0.32]),
+    finite(structure.contactThreshold, 0.0001),
+  ], 12);
+  f32.set([
+    finite(structure.dt, 1 / 60),
+    finite(structure.ambientTemperature, 0.08),
+    finite(structure.ignitionTemperature, 0.62),
+    finite(structure.cooling, 0.035),
+  ], 16);
+  f32.set([
+    finite(structure.conduction, 0.22),
+    finite(structure.burnRate, 0.005),
+    finite(structure.charStrengthLoss, 0.82),
+    finite(structure.sourceRadius, 0.018),
+  ], 20);
   f32.set([3.2, 0.72, 0.28, 0.45], 24);
   f32.set([...(structure.worldOffset || [0, 0, 0]), structure.control ? 1 : 0], 28);
+  f32.set([...(structure.motion || [0.18, -0.82, 0.04]), finite(structure.maximumMotionAge, 1)], 32);
   return bytes;
 }
 
@@ -292,6 +422,9 @@ const WORKGROUP_SIZE: u32 = ${WORKGROUP_SIZE}u;
 const SOURCE_MAGIC: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_MAGIC}u;
 const SOURCE_VERSION: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_VERSION}u;
 const FIXED_POINT: f32 = 65536.0;
+const STRUCTURAL_EXPOSURE_ENABLED: u32 = ${STRUCTURAL_EXPOSURE_ENABLED}u;
+const STRUCTURAL_EMISSION_ENABLED: u32 = ${STRUCTURAL_EMISSION_ENABLED}u;
+const STRUCTURAL_MOTION_ENABLED: u32 = ${STRUCTURAL_MOTION_ENABLED}u;
 
 struct NodeRecord {
   position: vec4<f32>,
@@ -311,6 +444,11 @@ struct NodeMaterial {
   thermal: vec4<f32>,
   events: vec4<u32>,
   rates: vec4<f32>,
+}
+
+struct ComponentMotion {
+  translation: vec4<f32>,
+  identity: vec4<u32>,
 }
 
 struct SourceRecord {
@@ -333,6 +471,7 @@ struct Params {
   kinetics: vec4<f32>,
   emission: vec4<f32>,
   world: vec4<f32>,
+  motion: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> fluid: array<vec4<f32>>;
@@ -344,6 +483,13 @@ struct Params {
 @group(0) @binding(6) var<storage, read_write> sourceHeader: array<atomic<u32>>;
 @group(0) @binding(7) var<storage, read_write> sourceRecords: array<SourceRecord>;
 @group(0) @binding(8) var<uniform> params: Params;
+@group(0) @binding(9) var<storage, read> componentLabels: array<u32>;
+@group(0) @binding(10) var<storage, read_write> componentMotions: array<ComponentMotion>;
+@group(0) @binding(11) var<storage, read_write> carriedFireAudit: array<atomic<u32>>;
+
+fn carriedNodePosition(nodeIndex: u32) -> vec3<f32> {
+  return nodes[nodeIndex].position.xyz + componentMotions[nodeIndex].translation.xyz;
+}
 
 fn fluidExposure(position: vec3<f32>) -> f32 {
   let samplePosition = clamp(position * params.pyroScale.xyz + params.pyroOffset.xyz, vec3<f32>(0.0), vec3<f32>(0.9999));
@@ -382,9 +528,10 @@ fn updateNodes(@builtin(global_invocation_id) gid: vec3<u32>) {
   let nodeIndex = gid.x;
   if (nodeIndex >= params.counts.x) { return; }
   var state = materialsIn[nodeIndex];
-  let control = params.identity.w != 0u;
   var exposure = 0.0;
-  if (!control) { exposure = fluidExposure(nodes[nodeIndex].position.xyz); }
+  if ((params.identity.w & STRUCTURAL_EXPOSURE_ENABLED) != 0u) {
+    exposure = fluidExposure(carriedNodePosition(nodeIndex));
+  }
 
   var conductiveDelta = 0.0;
   var conductiveCount = 0.0;
@@ -415,46 +562,23 @@ fn updateNodes(@builtin(global_invocation_id) gid: vec3<u32>) {
   var fuel = state.thermal.y;
   var charMass = state.thermal.z;
   var phase = state.identity.z;
+  var consumedFuel = 0.0;
   let step = atomicLoad(&sourceHeader[18]);
+  if (exposure > params.pyroOffset.w && state.events.w == 0u) { state.events.w = step; }
   if (incidentFracture && state.events.z == 0u) { state.events.z = step; }
   if (phase == 0u && temperature >= params.thermal.z) {
     phase = 1u;
     state.events.x = step;
   }
   if (phase > 0u && fuel > 0.0) {
-    let consumedFuel = min(fuel, params.kinetics.y);
+    consumedFuel = min(fuel, params.kinetics.y);
     fuel -= consumedFuel;
     charMass = 1.0 - fuel;
     temperature += consumedFuel * 1.8;
-    if (!control) {
-      let sourceIndex = atomicAdd(&sourceHeader[9], 1u);
-      if (sourceIndex < params.counts.z) {
-        let position = nodes[nodeIndex].position.xyz * params.pyroScale.xyz + params.pyroOffset.xyz;
-        let emittedFuel = consumedFuel * params.emission.y;
-        let emittedSoot = consumedFuel * params.emission.z;
-        sourceRecords[sourceIndex] = SourceRecord(
-          vec4<f32>(position, params.kinetics.w),
-          vec4<f32>(0.0, 1.0, 0.0, params.kinetics.w),
-          vec4<f32>(0.0),
-          vec4<f32>(temperature * consumedFuel * params.emission.x, emittedFuel, emittedSoot, emittedSoot * params.emission.w),
-          vec4<f32>(fuel, charMass, temperature, 1.0),
-          vec4<f32>(f32(params.identity.x), f32(params.identity.y), f32(step), f32(params.identity.z)),
-          vec4<f32>(1.0 - charMass, f32(state.events.x), f32(nodeIndex), 0.0),
-          vec4<f32>(0.0)
-        );
-        atomicAdd(&sourceHeader[14], u32(round((emittedFuel + emittedSoot) * FIXED_POINT)));
-        atomicAdd(&sourceHeader[15], u32(round(emittedFuel * FIXED_POINT)));
-        atomicAdd(&sourceHeader[16], u32(round(emittedSoot * FIXED_POINT)));
-        atomicAdd(&sourceHeader[17], u32(round(temperature * consumedFuel * params.emission.x * FIXED_POINT)));
-        if (state.events.y == 0u) { state.events.y = step; }
-      } else {
-        atomicAdd(&sourceHeader[11], 1u);
-      }
-    }
   }
   state.identity.z = phase;
   state.thermal = vec4<f32>(temperature, fuel, charMass, max(state.thermal.w, exposure));
-  state.rates.x = exposure;
+  state.rates = vec4<f32>(exposure, consumedFuel, state.rates.z, state.rates.w);
   materialsOut[nodeIndex] = state;
 }
 
@@ -466,6 +590,72 @@ fn weakenBonds(@builtin(global_invocation_id) gid: vec3<u32>) {
   let adjacentChar = max(materialsOut[bond.endpoints.x].thermal.z, materialsOut[bond.endpoints.y].thermal.z);
   bond.material.y = bondBaselines[bondIndex] * (1.0 - params.kinetics.z * adjacentChar);
   bonds[bondIndex] = bond;
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn updateComponentMotions(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let nodeIndex = gid.x;
+  if (nodeIndex >= params.counts.x) { return; }
+  let label = componentLabels[nodeIndex];
+  let step = atomicLoad(&sourceHeader[18]);
+  var motion = componentMotions[nodeIndex];
+  if (label == 0u || (params.identity.w & STRUCTURAL_MOTION_ENABLED) == 0u) {
+    motion.translation = vec4<f32>(0.0);
+    motion.identity = vec4<u32>(0u, 0u, step, 0u);
+  } else {
+    let newlyDetached = motion.identity.w == 0u || motion.identity.x != label;
+    let detachmentStep = select(motion.identity.y, step, newlyDetached);
+    let age = min(f32(step - detachmentStep) * params.thermal.x, params.motion.w);
+    motion.translation = vec4<f32>(
+      params.motion.x * age,
+      params.motion.y * age * age,
+      params.motion.z * age,
+      1.0
+    );
+    motion.identity = vec4<u32>(label, detachmentStep, step, 1u);
+  }
+  componentMotions[nodeIndex] = motion;
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn emitSources(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let nodeIndex = gid.x;
+  if (nodeIndex >= params.counts.x || (params.identity.w & STRUCTURAL_EMISSION_ENABLED) == 0u) { return; }
+  var state = materialsOut[nodeIndex];
+  let consumedFuel = state.rates.y;
+  if (state.identity.z == 0u || consumedFuel <= 0.0) { return; }
+  let step = atomicLoad(&sourceHeader[18]);
+  let sourceIndex = atomicAdd(&sourceHeader[9], 1u);
+  if (sourceIndex < params.counts.z) {
+    let position = carriedNodePosition(nodeIndex) * params.pyroScale.xyz + params.pyroOffset.xyz;
+    let emittedFuel = consumedFuel * params.emission.y;
+    let emittedSoot = consumedFuel * params.emission.z;
+    sourceRecords[sourceIndex] = SourceRecord(
+      vec4<f32>(position, params.kinetics.w),
+      vec4<f32>(0.0, 1.0, 0.0, params.kinetics.w),
+      vec4<f32>(params.motion.x, params.motion.y, params.motion.z, 0.0),
+      vec4<f32>(state.thermal.x * consumedFuel * params.emission.x, emittedFuel, emittedSoot, emittedSoot * params.emission.w),
+      vec4<f32>(state.thermal.y, state.thermal.z, state.thermal.x, 1.0),
+      vec4<f32>(f32(params.identity.x), f32(params.identity.y), f32(step), f32(params.identity.z)),
+      vec4<f32>(1.0 - state.thermal.z, f32(state.events.x), f32(nodeIndex), f32(componentMotions[nodeIndex].identity.x)),
+      vec4<f32>(componentMotions[nodeIndex].translation.xyz, f32(componentMotions[nodeIndex].identity.y))
+    );
+    atomicAdd(&sourceHeader[14], u32(round((emittedFuel + emittedSoot) * FIXED_POINT)));
+    atomicAdd(&sourceHeader[15], u32(round(emittedFuel * FIXED_POINT)));
+    atomicAdd(&sourceHeader[16], u32(round(emittedSoot * FIXED_POINT)));
+    atomicAdd(&sourceHeader[17], u32(round(state.thermal.x * consumedFuel * params.emission.x * FIXED_POINT)));
+    if (state.events.y == 0u) { state.events.y = step; }
+    materialsOut[nodeIndex] = state;
+    let translation = componentMotions[nodeIndex].translation.xyz;
+    if (componentMotions[nodeIndex].identity.w != 0u && dot(translation, translation) > 0.0001) {
+      atomicAdd(&carriedFireAudit[0], 1u);
+      atomicMin(&carriedFireAudit[1], step);
+      atomicMax(&carriedFireAudit[2], step);
+      atomicAdd(&carriedFireAudit[3], u32(round(state.thermal.x * consumedFuel * params.emission.x * FIXED_POINT)));
+    }
+  } else {
+    atomicAdd(&sourceHeader[11], 1u);
+  }
 }
 
 @compute @workgroup_size(1)
@@ -501,6 +691,11 @@ struct NodeMaterial {
   rates: vec4<f32>,
 }
 
+struct ComponentMotion {
+  translation: vec4<f32>,
+  identity: vec4<u32>,
+}
+
 struct Presentation {
   viewProjection: mat4x4<f32>,
   world: vec4<f32>,
@@ -518,15 +713,16 @@ struct VertexOut {
 @group(0) @binding(3) var<storage, read> componentLabels: array<u32>;
 @group(0) @binding(4) var<uniform> presentation: Presentation;
 @group(0) @binding(5) var<storage, read> bondBaselines: array<f32>;
+@group(0) @binding(6) var<storage, read> componentMotions: array<ComponentMotion>;
+
+fn carriedNodePosition(nodeIndex: u32) -> vec3<f32> {
+  return nodes[nodeIndex].position.xyz + componentMotions[nodeIndex].translation.xyz;
+}
 
 fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
   let node = nodes[nodeIndex];
-  let detached = componentLabels[nodeIndex] != 0u;
-  let fallProgress = min(1.0, presentation.style.y * 0.012);
-  let fall = select(0.0, fallProgress * fallProgress * 0.82, detached);
-  let lateral = select(0.0, fallProgress * 0.18, detached);
-  return (node.position.xyz - vec3<f32>(0.5)) * vec3<f32>(1.12, 0.68, 0.58) +
-    node.displacement.xyz + presentation.world.xyz + vec3<f32>(lateral, -fall, 0.0);
+  return (carriedNodePosition(nodeIndex) - vec3<f32>(0.5)) * presentation.style.xyz +
+    node.displacement.xyz + presentation.world.xyz;
 }
 
 fn materialColor(material: NodeMaterial) -> vec3<f32> {
@@ -587,14 +783,13 @@ export async function createGpuStructuralCombustionAssembly({
   format,
   structures = [],
   load,
+  mode = 'structural-combustion',
 } = {}) {
   if (!device?.queue) throw new Error('GPU structural combustion requires a caller-owned GPUDevice and GPUQueue');
   const grid = positiveInteger(gridSize, 0);
   if (grid < 4) throw new Error('GPU structural combustion grid must be at least 4');
   if (!format) throw new Error('GPU structural combustion requires a presentation format');
   if (!Array.isArray(structures) || structures.length < 1) throw new Error('GPU structural combustion requires structural sockets');
-  const targetStructures = structures.filter(structure => !structure.control);
-  if (targetStructures.length !== 1) throw new Error('GPU structural combustion requires exactly one emitting target');
 
   const sockets = structures.map(structure => {
     const descriptor = structure.sidecar?.residentDescriptor?.();
@@ -610,10 +805,35 @@ export async function createGpuStructuralCombustionAssembly({
     if (descriptor.nodeStrideBytes !== 32 || descriptor.bondStrideBytes !== 80) {
       throw new Error(`structural combustion structural ABI mismatch for ${structure.id}`);
     }
-    return { ...structure, descriptor, materialIndex: 0, bindGroups: [new Map(), new Map()] };
+    const flags = structureFlags(structure);
+    return {
+      ...structure,
+      role: structure.role || (structure.control ? 'control' : 'emitter'),
+      flags,
+      exposureEnabled: (flags & STRUCTURAL_EXPOSURE_ENABLED) !== 0,
+      emissionEnabled: (flags & STRUCTURAL_EMISSION_ENABLED) !== 0,
+      motionEnabled: (flags & STRUCTURAL_MOTION_ENABLED) !== 0,
+      descriptor,
+      materialIndex: 0,
+      bindGroups: [new Map(), new Map()],
+    };
   });
-  const target = targetStructures[0];
-  const sourceCapacity = target.state.nodes.length;
+  const emittingSockets = sockets.filter(socket => socket.emissionEnabled);
+  if (emittingSockets.length !== 1) throw new Error('GPU structural combustion requires exactly one emitting target');
+  if (mode === STRUCTURAL_CARRIED_FIRE_MODE) {
+    const requiredRoles = ['emitter', 'control', 'propagation-target', 'propagation-control'];
+    for (const role of requiredRoles) {
+      if (sockets.filter(socket => socket.role === role).length !== 1) {
+        throw new Error(`GPU structural carried fire requires exactly one ${role}`);
+      }
+    }
+    if (sockets.length !== requiredRoles.length) {
+      throw new Error('GPU structural carried fire contains unexpected structural roles');
+    }
+  }
+  const targetSocket = emittingSockets[0];
+  const target = targetSocket;
+  const sourceCapacity = targetSocket.state.nodes.length;
   const ownedBuffers = [];
   const makeBuffer = descriptor => {
     const buffer = device.createBuffer(descriptor);
@@ -630,16 +850,34 @@ export async function createGpuStructuralCombustionAssembly({
     size: sourceCapacity * COMBUSTIBLE_OBJECT_SOURCE_RECORD_BYTES,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
+  const carriedFireAuditBuffer = makeBuffer({
+    label: 'structural combustion carried fire audit',
+    size: CARRIED_FIRE_AUDIT_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+  });
   device.queue.writeBuffer(sourceHeaderBuffer, 0, new Uint32Array(COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES / 4));
+  device.queue.writeBuffer(carriedFireAuditBuffer, 0, new Uint32Array([
+    0, 0xffffffff, 0, 0, 0, 0, 0, 0,
+  ]));
 
   for (const socket of sockets) {
-    const initialMaterials = packNodeMaterials(socket.state, socket.objectId, socket.control);
+    const initialMaterials = packNodeMaterials(socket.state, socket.objectId, socket.flags);
     socket.materialBuffers = [0, 1].map(index => makeBuffer({
       label: `structural combustion ${socket.id} materials ${index}`,
       size: initialMaterials.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     }));
     socket.materialBuffers.forEach(buffer => device.queue.writeBuffer(buffer, 0, initialMaterials));
+    socket.componentMotionBuffer = makeBuffer({
+      label: `structural combustion ${socket.id} component motions`,
+      size: socket.descriptor.nodeCount * COMPONENT_MOTION_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
+    device.queue.writeBuffer(
+      socket.componentMotionBuffer,
+      0,
+      new Uint32Array(socket.descriptor.nodeCount * COMPONENT_MOTION_BYTES / Uint32Array.BYTES_PER_ELEMENT),
+    );
     const baselines = packBondBaselines(socket.state);
     socket.baselineBuffer = makeBuffer({
       label: `structural combustion ${socket.id} bond baselines`,
@@ -678,18 +916,49 @@ export async function createGpuStructuralCombustionAssembly({
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const motionLayout = device.createBindGroupLayout({
+    label: 'structural combustion component motion layout',
+    entries: [
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const emissionLayout = device.createBindGroupLayout({
+    label: 'structural combustion carried source emission layout',
+    entries: [
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({
     label: 'structural combustion compute pipeline layout',
     bindGroupLayouts: [computeLayout],
   });
-  const [clearPipeline, updatePipeline, weakenPipeline, finalizePipeline] = await Promise.all([
+  const motionPipelineLayout = device.createPipelineLayout({
+    label: 'structural combustion component motion pipeline layout',
+    bindGroupLayouts: [motionLayout],
+  });
+  const emissionPipelineLayout = device.createPipelineLayout({
+    label: 'structural combustion carried source emission pipeline layout',
+    bindGroupLayouts: [emissionLayout],
+  });
+  const [clearPipeline, updatePipeline, weakenPipeline, motionPipeline, emitPipeline, finalizePipeline] = await Promise.all([
     device.createComputePipelineAsync({ label: 'structural combustion clear source', layout: computePipelineLayout, compute: { module, entryPoint: 'clearSource' } }),
     device.createComputePipelineAsync({ label: 'structural combustion update nodes', layout: computePipelineLayout, compute: { module, entryPoint: 'updateNodes' } }),
     device.createComputePipelineAsync({ label: 'structural combustion weaken bonds', layout: computePipelineLayout, compute: { module, entryPoint: 'weakenBonds' } }),
+    device.createComputePipelineAsync({ label: 'structural combustion project component motion', layout: motionPipelineLayout, compute: { module, entryPoint: 'updateComponentMotions' } }),
+    device.createComputePipelineAsync({ label: 'structural combustion emit carried sources', layout: emissionPipelineLayout, compute: { module, entryPoint: 'emitSources' } }),
     device.createComputePipelineAsync({ label: 'structural combustion finalize source', layout: computePipelineLayout, compute: { module, entryPoint: 'finalizeSource' } }),
   ]);
   const presentationModule = device.createShaderModule({
@@ -705,6 +974,7 @@ export async function createGpuStructuralCombustionAssembly({
       { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
       { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
     ],
   });
   const presentationPipelineLayout = device.createPipelineLayout({
@@ -745,6 +1015,30 @@ export async function createGpuStructuralCombustionAssembly({
         { binding: 3, resource: { buffer: socket.descriptor.componentLabelBuffer } },
         { binding: 4, resource: { buffer: socket.presentationBuffer } },
         { binding: 5, resource: { buffer: socket.baselineBuffer } },
+        { binding: 6, resource: { buffer: socket.componentMotionBuffer } },
+      ],
+    }));
+    socket.motionBindGroup = device.createBindGroup({
+      label: `structural combustion ${socket.id} component motion`,
+      layout: motionLayout,
+      entries: [
+        { binding: 6, resource: { buffer: sourceHeaderBuffer } },
+        { binding: 8, resource: { buffer: socket.paramsBuffer } },
+        { binding: 9, resource: { buffer: socket.descriptor.componentLabelBuffer } },
+        { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
+      ],
+    });
+    socket.emissionBindGroups = socket.materialBuffers.map((_, materialIndex) => device.createBindGroup({
+      label: `structural combustion ${socket.id} carried source emission ${materialIndex}`,
+      layout: emissionLayout,
+      entries: [
+        { binding: 1, resource: { buffer: socket.descriptor.nodeBuffer } },
+        { binding: 4, resource: { buffer: socket.materialBuffers[1 - materialIndex] } },
+        { binding: 6, resource: { buffer: sourceHeaderBuffer } },
+        { binding: 7, resource: { buffer: sourceRecordsBuffer } },
+        { binding: 8, resource: { buffer: socket.paramsBuffer } },
+        { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
+        { binding: 11, resource: { buffer: carriedFireAuditBuffer } },
       ],
     }));
   });
@@ -764,8 +1058,8 @@ export async function createGpuStructuralCombustionAssembly({
         { binding: 4, resource: { buffer: socket.materialBuffers[1 - socket.materialIndex] } },
         { binding: 5, resource: { buffer: socket.baselineBuffer } },
         { binding: 6, resource: { buffer: sourceHeaderBuffer } },
-        { binding: 7, resource: { buffer: sourceRecordsBuffer } },
         { binding: 8, resource: { buffer: socket.paramsBuffer } },
+        { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
       ],
     });
     cache.set(fluidBuffer, bindGroup);
@@ -792,7 +1086,8 @@ export async function createGpuStructuralCombustionAssembly({
     if (frozen) throw new Error('GPU structural combustion assembly is frozen');
     if (!encoder?.beginComputePass || !fluidBuffer) throw new Error('GPU structural combustion encode requires an encoder and current Pyro field');
     const groups = sockets.map(socket => bindGroup(socket, fluidBuffer));
-    encodePass(encoder, 'structural combustion clear source', clearPipeline, groups[0], 1);
+    const targetGroup = groups[sockets.indexOf(targetSocket)];
+    encodePass(encoder, 'structural combustion clear source', clearPipeline, targetGroup, 1);
     sockets.forEach((socket, index) => {
       encodePass(
         encoder,
@@ -810,9 +1105,25 @@ export async function createGpuStructuralCombustionAssembly({
         groups[index],
         Math.ceil(socket.descriptor.bondCount / WORKGROUP_SIZE),
       );
-      socket.sidecar.encodeResidentInteraction(encoder, load);
+      socket.sidecar.encodeResidentInteraction(encoder, socket.load || load);
     });
-    encodePass(encoder, 'structural combustion finalize source', finalizePipeline, groups[0], 1);
+    sockets.forEach((socket, index) => {
+      encodePass(
+        encoder,
+        `structural combustion component motion ${socket.id}`,
+        motionPipeline,
+        socket.motionBindGroup,
+        Math.ceil(socket.descriptor.nodeCount / WORKGROUP_SIZE),
+      );
+    });
+    encodePass(
+      encoder,
+      `structural combustion emit carried sources ${targetSocket.id}`,
+      emitPipeline,
+      targetSocket.emissionBindGroups[targetSocket.materialIndex],
+      Math.ceil(targetSocket.descriptor.nodeCount / WORKGROUP_SIZE),
+    );
+    encodePass(encoder, 'structural combustion finalize source', finalizePipeline, targetGroup, 1);
     sockets.forEach(socket => { socket.materialIndex = 1 - socket.materialIndex; });
     dispatchCount += 1;
     return {
@@ -869,7 +1180,7 @@ export async function createGpuStructuralCombustionAssembly({
       const values = new Float32Array(PRESENTATION_BYTES / 4);
       values.set(viewProjection, 0);
       values.set([...(socket.worldOffset || [0, 0, 0]), socket.control ? 1 : 0], 16);
-      values.set([dispatchCount, dispatchCount, socket.objectId, socket.control ? 1 : 0], 20);
+      values.set([...(socket.displayScale || [1.12, 0.68, 0.58]), socket.control ? 1 : 0], 20);
       device.queue.writeBuffer(socket.presentationBuffer, 0, values);
     });
     const pass = encoder.beginRenderPass({
@@ -902,6 +1213,7 @@ export async function createGpuStructuralCombustionAssembly({
       const materialBytes = socket.descriptor.nodeCount * NODE_MATERIAL_BYTES;
       const bondBytes = socket.descriptor.bondCount * socket.descriptor.bondStrideBytes;
       const componentBytes = socket.descriptor.nodeCount * Uint32Array.BYTES_PER_ELEMENT;
+      const motionBytes = socket.descriptor.nodeCount * COMPONENT_MOTION_BYTES;
       const layout = {
         socket,
         materialOffset: cursor,
@@ -910,12 +1222,16 @@ export async function createGpuStructuralCombustionAssembly({
         bondBytes,
         componentOffset: cursor + materialBytes + bondBytes,
         componentBytes,
+        motionOffset: cursor + materialBytes + bondBytes + componentBytes,
+        motionBytes,
       };
-      cursor += materialBytes + bondBytes + componentBytes;
+      cursor += materialBytes + bondBytes + componentBytes + motionBytes;
       return layout;
     });
     const sourceHeaderOffset = cursor;
     cursor += COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES;
+    const carriedAuditOffset = cursor;
+    cursor += CARRIED_FIRE_AUDIT_BYTES;
     const receiverStatsOffset = cursor;
     cursor += COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES;
     const readback = device.createBuffer({
@@ -947,6 +1263,13 @@ export async function createGpuStructuralCombustionAssembly({
         layout.componentOffset,
         layout.componentBytes,
       );
+      encoder.copyBufferToBuffer(
+        socket.componentMotionBuffer,
+        0,
+        readback,
+        layout.motionOffset,
+        layout.motionBytes,
+      );
     });
     encoder.copyBufferToBuffer(
       sourceHeaderBuffer,
@@ -954,6 +1277,13 @@ export async function createGpuStructuralCombustionAssembly({
       readback,
       sourceHeaderOffset,
       COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES,
+    );
+    encoder.copyBufferToBuffer(
+      carriedFireAuditBuffer,
+      0,
+      readback,
+      carriedAuditOffset,
+      CARRIED_FIRE_AUDIT_BYTES,
     );
     encoder.copyBufferToBuffer(
       receiverStatsDescriptor.buffer,
@@ -973,12 +1303,13 @@ export async function createGpuStructuralCombustionAssembly({
       const socket = layout.socket;
       const nodes = socket.state.nodes.map((node, index) => {
         const offset = layout.materialOffset + index * NODE_MATERIAL_BYTES;
+        const motionOffset = layout.motionOffset + index * COMPONENT_MOTION_BYTES;
         return {
           nodeId: node.id,
           objectId: view.getUint32(offset, true),
           nodeIndex: view.getUint32(offset + 4, true),
           phase: view.getUint32(offset + 8, true),
-          control: (view.getUint32(offset + 12, true) & 1) !== 0,
+          control: (view.getUint32(offset + 12, true) & STRUCTURAL_CONTROL) !== 0,
           position: [node.x, node.y, node.z],
           temperature: view.getFloat32(offset + 16, true),
           fuel: view.getFloat32(offset + 20, true),
@@ -987,7 +1318,19 @@ export async function createGpuStructuralCombustionAssembly({
           ignitionStep: view.getUint32(offset + 32, true),
           firstEmissionStep: view.getUint32(offset + 36, true),
           firstIncidentFractureStep: view.getUint32(offset + 40, true),
+          firstExposureStep: view.getUint32(offset + 44, true),
           lastExposure: view.getFloat32(offset + 48, true),
+          componentMotion: {
+            translation: [
+              view.getFloat32(motionOffset, true),
+              view.getFloat32(motionOffset + 4, true),
+              view.getFloat32(motionOffset + 8, true),
+            ],
+            componentLabel: view.getUint32(motionOffset + 16, true),
+            detachmentStep: view.getUint32(motionOffset + 20, true),
+            updatedStep: view.getUint32(motionOffset + 24, true),
+            active: view.getUint32(motionOffset + 28, true) !== 0,
+          },
         };
       });
       const bonds = socket.state.bonds.map((bond, index) => {
@@ -1004,8 +1347,12 @@ export async function createGpuStructuralCombustionAssembly({
       ));
       return {
         id: socket.id,
+        role: socket.role,
         objectId: socket.objectId,
         control: Boolean(socket.control),
+        exposureEnabled: socket.exposureEnabled,
+        emissionEnabled: socket.emissionEnabled,
+        motionEnabled: socket.motionEnabled,
         nodes,
         bonds,
         componentLabels,
@@ -1033,6 +1380,16 @@ export async function createGpuStructuralCombustionAssembly({
       overflowCount: header[11],
       materialStep: header[18],
     };
+    const carriedAuditValues = new Uint32Array(bytes.slice(
+      carriedAuditOffset,
+      carriedAuditOffset + CARRIED_FIRE_AUDIT_BYTES,
+    ));
+    const carriedAudit = {
+      movedSourceRecords: carriedAuditValues[0],
+      firstMovedSourceStep: carriedAuditValues[1] === 0xffffffff ? 0 : carriedAuditValues[1],
+      lastMovedSourceStep: carriedAuditValues[2],
+      movedSourceHeat: carriedAuditValues[3] / 65536,
+    };
     const receiverAudit = decodeCombustibleObjectFireConsumerStats(
       bytes.slice(receiverStatsOffset, receiverStatsOffset + COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES),
     );
@@ -1042,9 +1399,18 @@ export async function createGpuStructuralCombustionAssembly({
       receiverAudit,
       hostCausalFeedbackCount: 0,
     });
+    if (mode === STRUCTURAL_CARRIED_FIRE_MODE) {
+      Object.assign(checks, evaluateStructuralCarriedFireTerminalChecks({
+        decodedStructures,
+        receiverAudit,
+        carriedAudit,
+        hostCausalFeedbackCount: 0,
+      }));
+    }
     lastTerminalReceipt = {
       schema: 'kaminos.structural-combustion.frozen-terminal-receipt.v0',
       authority: STRUCTURAL_COMBUSTION_AUTHORITY,
+      mode,
       status: Object.values(checks).every(Boolean) ? 'passed' : 'failed',
       checks,
       dispatchCount,
@@ -1056,6 +1422,7 @@ export async function createGpuStructuralCombustionAssembly({
       hostCausalFeedbackCount: 0,
       structures: decodedStructures,
       sourceHeader,
+      carriedAudit,
       receiverAudit,
     };
     return lastTerminalReceipt;
@@ -1065,6 +1432,7 @@ export async function createGpuStructuralCombustionAssembly({
     return {
       schema: STRUCTURAL_COMBUSTION_SCHEMA,
       authority: STRUCTURAL_COMBUSTION_AUTHORITY,
+      mode,
       status: destroyed ? 'destroyed' : frozen ? 'frozen' : 'active',
       dispatchCount,
       presentationCount,

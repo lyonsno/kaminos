@@ -22,6 +22,7 @@ const fixture = {
     screenshot: { sha256: 'final', nonDarkPixels: 2550, sampledPixels: 9216 },
     frame: 924,
     terminalReceipt: {
+      mode: 'carried-fire',
       status: 'passed',
       checks: {
         targetIgnited: true,
@@ -35,7 +36,20 @@ const fixture = {
         sourceFinalized: true,
         sourceAccepted: true,
         noHostFeedback: true,
+        detachedEmitterMoved: true,
+        movedSourceAccepted: true,
+        propagationTargetExposed: true,
+        propagationAfterDetachment: true,
+        propagationTargetIgnited: true,
+        propagationControlCool: true,
       },
+      structures: [
+        { role: 'emitter' },
+        { role: 'control' },
+        { role: 'propagation-target' },
+        { role: 'propagation-control' },
+      ],
+      carriedAudit: { movedSourceRecords: 12, firstMovedSourceStep: 120, lastMovedSourceStep: 180 },
       dispatchCount: 900,
       presentationCount: 900,
       liveRuntimeReadbackCount: 0,
@@ -79,6 +93,32 @@ assert.throws(
     },
   }),
   /terminal receipt/i,
+);
+assert.throws(
+  () => validateStructuralCombustionEvidence({
+    ...fixture,
+    final: {
+      ...fixture.final,
+      terminalReceipt: {
+        ...fixture.final.terminalReceipt,
+        structures: fixture.final.terminalReceipt.structures.filter(
+          structure => structure.role !== 'propagation-target',
+        ),
+      },
+    },
+  }),
+  /propagation-target/i,
+);
+const { propagationTargetIgnited, ...missingCarriedCheck } = fixture.final.terminalReceipt.checks;
+assert.throws(
+  () => validateStructuralCombustionEvidence({
+    ...fixture,
+    final: {
+      ...fixture.final,
+      terminalReceipt: { ...fixture.final.terminalReceipt, checks: missingCarriedCheck },
+    },
+  }),
+  /propagationTargetIgnited/,
 );
 assert.throws(
   () => validateStructuralCombustionEvidence({

@@ -153,6 +153,20 @@ function structuralSocket(state, countLoad) {
 try {
   const targetSidecar = structuralSocket(targetState, () => { targetLoadEncodes += 1; });
   const controlSidecar = structuralSocket(controlState, () => { controlLoadEncodes += 1; });
+  await assert.rejects(
+    () => createGpuStructuralCombustionAssembly({
+      device,
+      gridSize: 32,
+      format: 'rgba8unorm',
+      mode: 'carried-fire',
+      structures: [
+        { id: 'target', objectId: 21, state: targetState, sidecar: targetSidecar, role: 'emitter' },
+        { id: 'control', objectId: 22, state: controlState, sidecar: controlSidecar, role: 'control', control: true },
+      ],
+    }),
+    /propagation-target/i,
+    'carried-fire mode cannot fall back to the two-object structural predicate',
+  );
   const assembly = await createGpuStructuralCombustionAssembly({
     device,
     gridSize: 32,
