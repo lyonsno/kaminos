@@ -1,6 +1,9 @@
 import {
   validateWebGpuModelResourceManifest,
 } from './model-resource-manifest.js';
+import {
+  describeWebGpuModelResourceSource,
+} from './model-resource-source.js';
 
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA = 'kaminos.webgpu-model-resource-package.v0';
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-package-lease.v0';
@@ -27,9 +30,16 @@ function throwIfAborted(signal) {
   if (signal?.aborted) throw abortError(signal);
 }
 
+function manifestSemanticIdentity(manifest) {
+  const allocations = manifest.allocations
+    .map(allocation => encodeURIComponent(allocation.semanticResourceId))
+    .join(',');
+  return `${encodeURIComponent(manifest.identity)}#allocations:${allocations}`;
+}
+
 function packageIdentity(input) {
   const resources = input.resources
-    .map(resource => `${encodeURIComponent(resource.resourceId)}=${encodeURIComponent(resource.manifest.identity)}`)
+    .map(resource => `${encodeURIComponent(resource.resourceId)}=${manifestSemanticIdentity(resource.manifest)}`)
     .join('&');
   return `${encodeURIComponent(input.packageId)}:${encodeURIComponent(input.modelId)}@${encodeURIComponent(input.revision)}#resources:${resources}`;
 }
@@ -201,13 +211,24 @@ function validateSources(modelPackage, sources) {
     throw new Error('model resource package sources must be an object keyed by resourceId');
   }
   const expected = new Set(modelPackage.resourceIds);
+  const descriptions = new Map();
   for (const resourceId of expected) {
     if (!Object.hasOwn(sources, resourceId) || sources[resourceId] == null) {
       throw new Error(`missing source for model package resource ${resourceId}`);
     }
+    descriptions.set(resourceId, describeWebGpuModelResourceSource(sources[resourceId]));
   }
   for (const resourceId of Object.keys(sources)) {
     if (!expected.has(resourceId)) throw new Error(`unknown model package source ${resourceId}`);
+  }
+  if (modelPackage.resources.length > 1) {
+    for (const [resourceId, description] of descriptions) {
+      if (description.kind === 'array-buffer' || description.kind === 'typed-array') {
+        throw new Error(
+          `multi-resource model package source ${resourceId} uses mutable bytes; wrap direct bytes in an immutable Blob or use a URL, Request, or Response source`,
+        );
+      }
+    }
   }
 }
 

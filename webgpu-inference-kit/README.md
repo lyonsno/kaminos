@@ -290,7 +290,9 @@ weights.report.sourceMemoryBound.largestResourceByteLength;
 weights.release();
 ```
 
-Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and the complete source map is validated before GPU work starts. Each resource retains its own SHA-256, CacheStorage entry, acquisition report, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired and names the exact failed resource.
+Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and package identity binds each child's normalized allocation and tensor semantics. The complete source map is copied and every source class is validated before GPU work starts. Multi-resource packages reject mutable `ArrayBuffer` and typed-array sources at admission instead of cloning and retaining a second whole-model byte set; wrap direct bytes in immutable `Blob`s or use URL, `Request`, or `Response` sources. A single-resource package retains direct mutable-byte compatibility because no later asynchronous package boundary exists. Fetch-backed content and consumable response bodies are still read when their declared resource reaches the sequential loader; the package does not claim to snapshot remote content at admission.
+
+Each resource retains its own SHA-256, CacheStorage entry, acquisition report, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired and names the exact failed resource.
 
 This bounds source acquisition to one declared package resource at a time; each resource can still carry the current cache-miss copies described above. It does not split one enormous allocation or claim an exact browser-process memory peak. Converters should partition large weight sets into useful independently allocated resources until a later chunk-authenticated format can safely stream within one allocation.
 
@@ -320,6 +322,7 @@ This bounds source acquisition to one declared package resource at a time; each 
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
 - `prepareWebGpuModelResourceBundle(manifest, bundle, options)`: establish a releasable, manifest-bound verified byte-custody handle using safe-copy or zero-copy `ArrayBuffer` transfer ownership.
 - `acquireWebGpuModelResourceBundle(manifest, source, options)`: fetch or consume browser-native model bytes, stream uncapped progress, honor cancellation, verify exact manifest identity, recover from corrupt persistent cache entries, and return a verified custody handle plus effective-source report.
+- `describeWebGpuModelResourceSource(source)`: validate a browser-native model source without fetching or consuming it and return its immutable source-class description.
 - `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
 - `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
 - `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose several same-model manifests into one sequentially acquired large-model package, preserve per-resource verification/cache/report identity, and return one composite lease with bounded source-resource granularity.

@@ -151,6 +151,7 @@ export {
   WEBGPU_MODEL_RESOURCE_SOURCE_PROGRESS_SCHEMA,
   WEBGPU_MODEL_RESOURCE_SOURCE_REPORT_SCHEMA,
   acquireWebGpuModelResourceBundle,
+  describeWebGpuModelResourceSource,
 } from './model-resource-source.js';
 
 export {

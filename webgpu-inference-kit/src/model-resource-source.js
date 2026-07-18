@@ -50,7 +50,7 @@ function isInstance(value, constructorName) {
   return typeof Constructor === 'function' && value instanceof Constructor;
 }
 
-function sourceDescription(source) {
+export function describeWebGpuModelResourceSource(source) {
   if (typeof source === 'string' || isInstance(source, 'URL')) {
     return deepFreeze({ kind: 'url', url: String(source) });
   }
@@ -127,18 +127,18 @@ async function consumeSource(source, input = {}) {
   throwIfAborted(input.signal);
   if (source instanceof ArrayBuffer) {
     input.recordProgress(source.byteLength, source.byteLength, source.byteLength);
-    return { buffer: source, effectiveSource: sourceDescription(source) };
+    return { buffer: source, effectiveSource: describeWebGpuModelResourceSource(source) };
   }
   if (ArrayBuffer.isView(source)) {
     const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
     input.recordProgress(buffer.byteLength, buffer.byteLength, buffer.byteLength);
-    return { buffer, effectiveSource: sourceDescription(source) };
+    return { buffer, effectiveSource: describeWebGpuModelResourceSource(source) };
   }
   if (isInstance(source, 'Blob')) {
     const streamBuffer = await readStream(source.stream?.(), { ...input, totalBytes: source.size });
     const buffer = streamBuffer ?? await awaitWithAbort(source.arrayBuffer(), input.signal);
     if (streamBuffer == null) input.recordProgress(buffer.byteLength, buffer.byteLength, source.size);
-    return { buffer, effectiveSource: sourceDescription(source) };
+    return { buffer, effectiveSource: describeWebGpuModelResourceSource(source) };
   }
   if (isInstance(source, 'Response')) {
     if (!source.ok) throw new Error(`model resource response status ${source.status} is not successful`);
@@ -146,7 +146,7 @@ async function consumeSource(source, input = {}) {
     const streamBuffer = await readStream(source.body, { ...input, totalBytes });
     const buffer = streamBuffer ?? await awaitWithAbort(source.arrayBuffer(), input.signal);
     if (streamBuffer == null) input.recordProgress(buffer.byteLength, buffer.byteLength, totalBytes);
-    return { buffer, effectiveSource: sourceDescription(source) };
+    return { buffer, effectiveSource: describeWebGpuModelResourceSource(source) };
   }
   throw new Error('model resource source did not resolve to consumable bytes');
 }
@@ -281,7 +281,7 @@ async function acquire(manifest, source, options) {
     if (cache) cacheState.key = cacheKey(manifest);
 
     phase = 'source-normalization';
-    requestedSource = sourceDescription(source);
+    requestedSource = describeWebGpuModelResourceSource(source);
     throwIfAborted(options.signal);
     if (cache) {
       let cachedSource = null;

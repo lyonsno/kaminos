@@ -105,6 +105,28 @@ assert.deepEqual(modelPackage.resourceIds, ['encoder', 'decoder', 'head']);
 assert.equal(modelPackage.totalByteLength, 36);
 assert.equal(modelPackage.largestResourceByteLength, 16);
 assert.equal(validateWebGpuModelResourcePackage(modelPackage).ok, true);
+const semanticallyDistinctManifest = childManifest(
+  'encoder-weights',
+  'encoder.projection.weight',
+  byteSets.encoder,
+);
+const semanticallyDistinctPackage = defineWebGpuModelResourcePackage({
+  packageId: modelPackage.packageId,
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [{ resourceId: 'encoder', manifest: semanticallyDistinctManifest }],
+});
+const semanticBaselinePackage = defineWebGpuModelResourcePackage({
+  packageId: modelPackage.packageId,
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [{ resourceId: 'encoder', manifest: manifests.encoder }],
+});
+assert.notEqual(
+  semanticallyDistinctPackage.identity,
+  semanticBaselinePackage.identity,
+  'package identity must bind normalized child allocation and tensor semantics',
+);
 const missingMemoryAuthority = { ...modelPackage };
 delete missingMemoryAuthority.largestResourceByteLength;
 assert.equal(
@@ -272,15 +294,52 @@ const failureSession = await createWebGpuInferenceSession({
   adapterName: 'fixture-adapter',
 });
 const failureRoute = await failureSession.registerRoute({ routeId: 'package-failure-route' });
+const buffersBeforeMalformedSource = failureFixture.buffers.length;
+await assert.rejects(
+  () => failureRoute.loadModelResourcePackageFromSources({
+    package: modelPackage,
+    sources: {
+      encoder: new Blob([byteSets.encoder]),
+      decoder: {},
+      head: new Blob([byteSets.head]),
+    },
+  }),
+  /source.*URL|Request|Response|Blob|ArrayBuffer|typed array/i,
+);
+assert.equal(
+  failureFixture.buffers.length,
+  buffersBeforeMalformedSource,
+  'every package source shape must be validated before the first GPU allocation',
+);
+assert.equal(failureSession.residency.hasActiveLeases(failureRoute.routeId), false);
+
+const buffersBeforeMutableSources = failureFixture.buffers.length;
+await assert.rejects(
+  () => failureRoute.loadModelResourcePackageFromSources({
+    package: modelPackage,
+    sources: {
+      encoder: byteSets.encoder,
+      decoder: byteSets.decoder,
+      head: byteSets.head,
+    },
+  }),
+  /multi-resource.*mutable|mutable.*Blob|immutable.*Blob/i,
+);
+assert.equal(
+  failureFixture.buffers.length,
+  buffersBeforeMutableSources,
+  'mutable package bytes must be rejected before the first GPU allocation',
+);
+
 const corruptDecoder = Uint8Array.from(byteSets.decoder);
 corruptDecoder[0] ^= 0xff;
 await assert.rejects(
   () => failureRoute.loadModelResourcePackageFromSources({
     package: modelPackage,
     sources: {
-      encoder: byteSets.encoder,
-      decoder: corruptDecoder,
-      head: byteSets.head,
+      encoder: new Blob([byteSets.encoder]),
+      decoder: new Blob([corruptDecoder]),
+      head: new Blob([byteSets.head]),
     },
   }),
   error => {
@@ -293,6 +352,19 @@ await assert.rejects(
   },
 );
 assert.equal(failureFixture.buffers.length, 1, 'failure must stop before later package resources upload');
+
+const singleResourcePackage = defineWebGpuModelResourcePackage({
+  packageId: 'acme/large-browser-model:single-resource',
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [{ resourceId: 'encoder', manifest: manifests.encoder }],
+});
+const singleResourceLease = await failureRoute.loadModelResourcePackageFromSources({
+  package: singleResourcePackage,
+  sources: { encoder: byteSets.encoder },
+});
+assert.equal(singleResourceLease.resources.length, 1);
+assert.equal(singleResourceLease.release().status, 'released');
 
 const buffersBeforeMissingSource = failureFixture.buffers.length;
 await assert.rejects(
