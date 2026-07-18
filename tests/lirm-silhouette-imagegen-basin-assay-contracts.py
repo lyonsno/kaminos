@@ -90,9 +90,15 @@ def write_plan(root: Path, source: Path, prompt: Path, output_dir: Path, authori
     return plan_path
 
 
-def write_greenroom_job(plan_path: Path, *, route_runner: str = "/opt/mflux-generate-flux2-edit", status: str = "done") -> None:
+def write_greenroom_job(
+    plan_path: Path,
+    *,
+    cell_index: int = 0,
+    route_runner: str = "/opt/mflux-generate-flux2-edit",
+    status: str = "done",
+) -> None:
     plan = json.loads(plan_path.read_text())
-    cell = plan["cells"][0]
+    cell = plan["cells"][cell_index]
     authority = Path(plan["greenroomAuthority"])
     job_dir = authority / status / cell["jobId"]
     job_dir.mkdir(parents=True)
@@ -226,5 +232,31 @@ with tempfile.TemporaryDirectory() as temp:
     report = json.loads(report_path.read_text())
     assert report["cells"][0]["failurePhase"] == "inference"
     assert report["cells"][0]["lastTrustworthyEvidence"] == "greenroom_failure_receipt"
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    source, prompt, output_dir, authority = make_case(root)
+    plan_path = write_plan(root, source, prompt, output_dir, authority)
+    plan = json.loads(plan_path.read_text())
+    duplicate = dict(plan["cells"][0])
+    duplicate["cellId"] = "shape-a-lineage-seed-clay-normal-seed8"
+    duplicate["jobId"] = "def456"
+    duplicate["seed"] = 8
+    duplicate_dir = root / "runtime" / "cells" / duplicate["cellId"]
+    duplicate["outputDir"] = str(duplicate_dir)
+    duplicate["outputPath"] = str(duplicate_dir / "output.png")
+    duplicate_dir.mkdir(parents=True)
+    (duplicate_dir / "output.png").write_bytes((output_dir / "output.png").read_bytes())
+    plan["cells"].append(duplicate)
+    plan_path.write_text(json.dumps(plan, indent=2) + "\n")
+    write_greenroom_job(plan_path, cell_index=0)
+    write_greenroom_job(plan_path, cell_index=1)
+    report_path = root / "assay" / "report.json"
+    result = collect(plan_path, report_path)
+    assert result.returncode != 0
+    report = json.loads(report_path.read_text())
+    assert report["verifiedCellCount"] == 0
+    assert all(cell["verified"] is False for cell in report["cells"])
+    assert all("duplicate_output" in cell["failureCodes"] for cell in report["cells"])
 
 print("lirm silhouette imagegen basin assay contracts passed")

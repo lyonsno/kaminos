@@ -458,16 +458,19 @@ def collect_plan(args: argparse.Namespace) -> int:
     if plan.get("schema") != PLAN_SCHEMA:
         raise ValueError("unsupported plan schema")
     cells = [verify_completed_cell(plan, cell) for cell in plan["cells"]]
-    seen_hashes: dict[str, str] = {}
+    cells_by_hash: dict[str, list[dict[str, Any]]] = {}
     for cell in cells:
         output_hash = cell.get("output", {}).get("sha256")
         if not output_hash:
             continue
-        if output_hash in seen_hashes:
+        cells_by_hash.setdefault(output_hash, []).append(cell)
+    for duplicate_cells in cells_by_hash.values():
+        if len(duplicate_cells) < 2:
+            continue
+        for cell in duplicate_cells:
             cell["failureCodes"].append("duplicate_output")
             cell["verified"] = False
-        else:
-            seen_hashes[output_hash] = cell["cellId"]
+            cell["lastTrustworthyEvidence"] = "validated_generated_output_before_uniqueness_check"
     verified = sum(bool(cell["verified"]) for cell in cells)
     report = {
         "schema": REPORT_SCHEMA,
