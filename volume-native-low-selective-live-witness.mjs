@@ -15,6 +15,11 @@ const MODEL_96 = 'exact-basin-selective-carrier-heads-160-to-96-v0';
 const MODEL_96_SHA256 = 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
 const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
+const NATIVE96_F32_FRONT_STUDENTS = Object.freeze({
+  16: Object.freeze({ identity: 'native96-front-student-width16-f32-v0', sha256: '165c72534e630f1b44ff1292034fc4ed3050c7457b90ffc3da3a96d14ede2e21', byteLength: 13460 }),
+  24: Object.freeze({ identity: 'native96-front-student-width24-f32-v0', sha256: 'ad768f93e292bcce61fa33d3eec0271218309945e37e69863182cb13cfe3cdfc', byteLength: 19444 }),
+  32: Object.freeze({ identity: 'native96-front-student-width32-f32-v0', sha256: '0dd7c2810722ba9e31ff2db005a9514b7a74f6d03b5e47e101670875f1cf9652', byteLength: 25428 }),
+});
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -64,6 +69,11 @@ const sparseFrontContinuityRequested = requestedUrl.searchParams.get('sparse_fro
   || (cockpitRequested && requestedUrl.searchParams.get('sparse_front_continuity') !== '0');
 const f16FrontTeacherRequested = sparseFrontContinuityRequested
   && requestedUrl.searchParams.get('f16_front_teacher') === '1';
+const requestedFrontStudentWidthParam = requestedUrl.searchParams.get('front_student_width');
+const requestedFrontStudentWidth = requestedFrontStudentWidthParam == null || requestedFrontStudentWidthParam === ''
+  ? null
+  : Number(requestedFrontStudentWidthParam);
+const requestedFrontStudent = requestedFrontStudentWidth === null ? null : NATIVE96_F32_FRONT_STUDENTS[requestedFrontStudentWidth];
 const frontAuthorityGateRequested = sparseFrontContinuityRequested
   && requestedUrl.searchParams.get('front_authority_gate') === '1';
 const requestedFrontAuthorityThreshold = Math.max(0, Number(requestedUrl.searchParams.get('front_authority_threshold') || 0.01));
@@ -123,6 +133,7 @@ class CdpSocket {
 }
 
 try {
+  assert.ok(requestedFrontStudentWidth === null || requestedFrontStudent, `unsupportedNative96FrontStudentWidth:${requestedFrontStudentWidthParam}`);
   assert.ok(minimumContinuousSeconds >= 5 && minimumContinuousSeconds <= 30, '--minimum-seconds must be within 5-30');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -208,7 +219,7 @@ try {
         : state?.headCostTimingAuthority === 'webgpu-timestamp-query-native96-sparse-front-continuity-v0'
         && state?.nativeLowHeadCostProfile?.values?.length === 6
         && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
-        && Number(state?.nativeLowHeadCostProfile?.exactFrontTeacherEvalGpuMs) >= 0
+        && Number(state?.nativeLowHeadCostProfile?.frontModelEvalGpuMs) >= 0
         && Number(state?.nativeLowHeadCostProfile?.continuityReconstructionGpuMs) >= 0
         && Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0
       : coarseSourceHistorySupportFrontRequested
@@ -496,7 +507,17 @@ try {
       assert.equal(sparseFront?.hardZeroOutsideCandidateVisuallyRejected, true, 'sparse-front route did not preserve hard-mask rejection');
       assert.equal(sparseFront?.hardMaskTreatmentClaim, false, 'sparse-front route revived a hard-mask claim');
       assert.equal(sparseFront?.sparseContinuityTreatmentRendererConsumed, true, 'sparse-front treatment was not renderer-consumed');
-      assert.ok(Number(sparseFront?.exactFrontTeacherEvalGpuMs) >= 0, 'sparse-front teacher timing missing');
+      const expectedFrontModelEvalStage = f16FrontTeacherRequested
+        ? 'f16-front-teacher-candidate-dispatch-indirect-v0'
+        : requestedFrontStudentWidth !== null
+          ? frontAuthorityGateRequested
+            ? `front-authority-gated-f32-front-student-width${requestedFrontStudentWidth}-candidate-dispatch-indirect-v0`
+            : `f32-front-student-width${requestedFrontStudentWidth}-candidate-dispatch-indirect-v0`
+          : frontAuthorityGateRequested
+            ? 'front-authority-gated-f32-front-teacher-candidate-dispatch-indirect-v0'
+            : 'exact-front-teacher-candidate-dispatch-indirect-v0';
+      assert.ok(Number(sparseFront?.frontModelEvalGpuMs) >= 0, 'sparse-front model timing missing');
+      assert.equal(sparseFront?.frontModelEvalStage, expectedFrontModelEvalStage, 'sparse-front model timing stage drifted from the effective route');
       assert.ok(Number(sparseFront?.continuityReconstructionGpuMs) >= 0, 'sparse-front continuity timing missing');
       assert.ok(Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0, 'sparse-front total timing missing');
       if (f16FrontTeacherRequested) {
@@ -511,9 +532,29 @@ try {
         assert.equal(Number(sparseFront?.f16FrontTeacherByteLength), 18698, 'f16 teacher model byte length drifted');
         assert.ok(Number(state?.nativeLowHeadCostProfile?.f16FrontTeacherEvalGpuMs) >= 0, 'f16 teacher timing missing from head cost profile');
       }
+      if (requestedFrontStudentWidth !== null) {
+        const expectedStudent = NATIVE96_F32_FRONT_STUDENTS[requestedFrontStudentWidth];
+        const expectedStudentRoute = frontAuthorityGateRequested
+          ? `native96-front-authority-gated-f32-front-student-width${requestedFrontStudentWidth}-candidates-v0`
+          : `native96-front-student-width${requestedFrontStudentWidth}-f32-candidates-v0`;
+        assert.equal(sparseFront?.requestedTeacherExecutionRoute, expectedStudentRoute, 'f32 student route was not requested effectively');
+        assert.equal(sparseFront?.effectiveTeacherExecutionRoute, expectedStudentRoute, 'f32 student route fell back');
+        assert.equal(sparseFront?.runtimeArithmeticDtype, 'f32', 'f32 student used the wrong arithmetic dtype');
+        assert.equal(Number(sparseFront?.requestedFrontStudentWidth), requestedFrontStudentWidth, 'requested f32 student width drifted');
+        assert.equal(Number(sparseFront?.effectiveFrontStudentWidth), requestedFrontStudentWidth, 'effective f32 student width drifted');
+        assert.equal(sparseFront?.frontStudentModelIdentity, expectedStudent.identity, 'f32 student model identity drifted');
+        assert.equal(sparseFront?.frontStudentModelSha256, expectedStudent.sha256, 'f32 student model checksum drifted');
+        assert.equal(Number(sparseFront?.frontStudentModelByteLength), expectedStudent.byteLength, 'f32 student model byte length drifted');
+        assert.equal(Number(sparseFront?.frontStudentFeatureCount), 185, 'f32 student narrowed the full input feature set');
+        assert.equal(sparseFront?.frontStudentInputAblation, false, 'f32 student enabled an input ablation');
+        assert.equal(sparseFront?.exactFrontTeacherEvalGpuMs, null, 'f32 student timing masqueraded as exact-teacher timing');
+        assert.ok(Number(sparseFront?.frontStudentEvalGpuMs) >= 0, 'f32 student timing alias missing');
+      }
       if (frontAuthorityGateRequested) {
-        assert.equal(sparseFront?.requestedTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route was not requested effectively');
-        assert.equal(sparseFront?.effectiveTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route fell back');
+        if (requestedFrontStudentWidth === null) {
+          assert.equal(sparseFront?.requestedTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route was not requested effectively');
+          assert.equal(sparseFront?.effectiveTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route fell back');
+        }
         assert.equal(sparseFront?.frontAuthorityGateRequested, true, 'front-authority gate request receipt missing');
         assert.equal(sparseFront?.frontAuthorityGateEffective, true, 'front-authority gate was not effective');
         assert.equal(sparseFront?.runtimeTruthUsed, false, 'front-authority gate used runtime truth');
@@ -900,6 +941,7 @@ try {
     coarseSourceHistorySupportFrontRequested,
     sparseFrontContinuityRequested,
     f16FrontTeacherRequested,
+    requestedFrontStudentWidth,
     frontAuthorityGateRequested,
     requestedFrontAuthorityThreshold,
     directSparseCuesRequested,

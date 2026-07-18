@@ -24,6 +24,7 @@ FEATURE_IDENTITY = "full-low-field-plus-spatial-rbf-features-v0"
 FEATURE_COUNT = 185
 TEACHER_WIDTH = 48
 DEFAULT_WIDTHS = (16, 24, 32)
+STORAGE_DTYPES = ("float16-le", "float32-le")
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
     "smokeDensity", "heat", "fuel", "detail",
@@ -46,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir")
     parser.add_argument("--widths", default=",".join(map(str, DEFAULT_WIDTHS)))
     parser.add_argument("--batch-cells", type=int, default=32768)
+    parser.add_argument("--storage-dtype", choices=STORAGE_DTYPES, default="float16-le")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 
@@ -201,7 +203,11 @@ def select_hidden_basis(stats: dict[str, Any], requested_width: int) -> dict[str
     return {"selected": selected, "w2": beta[:-1], "b2": float(beta[-1]), "fitSse": sse}
 
 
-def pack_student(teacher: dict[str, Any], selection: dict[str, Any]) -> tuple[np.ndarray, dict[str, int]]:
+def pack_student(
+    teacher: dict[str, Any],
+    selection: dict[str, Any],
+    storage_dtype: str = "float16-le",
+) -> tuple[np.ndarray, dict[str, int]]:
     selected = selection["selected"]
     arrays = [
         teacher["featureMean"], teacher["featureStd"], teacher["w1"][:, selected].reshape(-1),
@@ -214,12 +220,19 @@ def pack_student(teacher: dict[str, Any], selection: dict[str, Any]) -> tuple[np
     for name, array in zip(names, arrays):
         offsets[name] = cursor
         cursor += int(np.asarray(array).size)
-    packed = np.concatenate([np.asarray(array, dtype=np.float32).reshape(-1) for array in arrays]).astype("<f2")
+    numpy_dtype = "<f2" if storage_dtype == "float16-le" else "<f4"
+    packed = np.concatenate([np.asarray(array, dtype=np.float32).reshape(-1) for array in arrays]).astype(numpy_dtype)
     return packed, offsets
 
 
-def unpack_student(packed: np.ndarray, width: int, offsets: dict[str, int]) -> dict[str, Any]:
-    values = np.asarray(packed, dtype=np.float16).astype(np.float32)
+def unpack_student(
+    packed: np.ndarray,
+    width: int,
+    offsets: dict[str, int],
+    storage_dtype: str = "float16-le",
+) -> dict[str, Any]:
+    numpy_dtype = np.float16 if storage_dtype == "float16-le" else np.float32
+    values = np.asarray(packed, dtype=numpy_dtype).astype(np.float32, copy=False)
     tail = offsets["b2TargetMeanTargetStd"]
     return {
         "featureMean": values[offsets["featureMean"]:offsets["featureMean"] + FEATURE_COUNT],
@@ -276,7 +289,7 @@ def finalize_metrics(state: dict[str, float]) -> dict[str, Any]:
     }
 
 
-def self_test() -> dict[str, Any]:
+def self_test(storage_dtype: str = "float16-le") -> dict[str, Any]:
     rng = np.random.default_rng(1707)
     row_count = 4096
     features = rng.normal(0.0, 1.0, size=(row_count, FEATURE_COUNT)).astype(np.float32)
@@ -298,8 +311,8 @@ def self_test() -> dict[str, Any]:
     for width in DEFAULT_WIDTHS:
         selection = select_hidden_basis(stats, width)
         deterministic = deterministic and selection["selected"] == select_hidden_basis(stats, width)["selected"]
-        packed, offsets = pack_student(teacher, selection)
-        student = unpack_student(packed, width, offsets)
+        packed, offsets = pack_student(teacher, selection, storage_dtype)
+        student = unpack_student(packed, width, offsets, storage_dtype)
         truth = standardized * np.float32(teacher["targetStd"]) + np.float32(teacher["targetMean"])
         prediction = predict_student(features, student)
         metric = make_metric_state()
@@ -322,9 +335,9 @@ def self_test() -> dict[str, Any]:
         "maximumRuntimeWidth": TEACHER_WIDTH,
         "studentWidths": list(DEFAULT_WIDTHS),
         "rowAccounting": "complete-uncapped-input-row-accounting-v0",
-        "weightStorageDtype": "float16-le",
-        "runtimeArithmeticDtype": "f16",
-        "metricArithmetic": "float32-over-f16-quantized-package-v0",
+        "weightStorageDtype": storage_dtype,
+        "runtimeArithmeticDtype": "f16" if storage_dtype == "float16-le" else "f32",
+        "metricArithmetic": "float32-over-f16-quantized-package-v0" if storage_dtype == "float16-le" else "float32-over-f32-package-v0",
         "runtimeTruthUsed": False,
         "inputAblation": False,
         "teacherFloat32ByteLength": teacher_float_count * 4,
@@ -347,6 +360,10 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
     if not args.teacher_manifest or not args.native_manifest or not args.out_dir:
         raise CompressionFailure("argument-validation", "--teacher-manifest, --native-manifest, and --out-dir are required")
     widths = parse_widths(args.widths)
+    storage_dtype = str(args.storage_dtype)
+    runtime_arithmetic_dtype = "f16" if storage_dtype == "float16-le" else "f32"
+    metric_arithmetic = "float32-over-f16-quantized-package-v0" if storage_dtype == "float16-le" else "float32-over-f32-package-v0"
+    packed_suffix = "f16" if storage_dtype == "float16-le" else "f32"
     batch_cells = max(1, int(args.batch_cells))
     teacher_manifest_path = Path(args.teacher_manifest).resolve()
     native_manifest_path = Path(args.native_manifest).resolve()
@@ -404,8 +421,8 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
     candidates: dict[int, dict[str, Any]] = {}
     for width in widths:
         selection = select_hidden_basis(stats, width)
-        packed, offsets = pack_student(teacher, selection)
-        path = out_dir / f"front-student-width{width}.f16"
+        packed, offsets = pack_student(teacher, selection, storage_dtype)
+        path = out_dir / f"front-student-width{width}.{packed_suffix}"
         temp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
         packed.tofile(temp)
         temp.replace(path)
@@ -414,7 +431,7 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "packed": packed,
             "offsets": offsets,
             "path": path,
-            "student": unpack_student(packed, width, offsets),
+            "student": unpack_student(packed, width, offsets, storage_dtype),
             "metrics": make_metric_state(),
         }
 
@@ -434,7 +451,7 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
             raise CompressionFailure("row-accounting", f"width {width} metric rows are incomplete")
         model_payload = {
             "schema": MODEL_SCHEMA,
-            "identity": f"native96-front-student-width{width}-f16-v0",
+            "identity": f"native96-front-student-width{width}-{runtime_arithmetic_dtype}-v0",
             "status": "captured",
             "failurePhase": None,
             "teacher": {
@@ -466,9 +483,9 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
             },
             "packed": {
                 "path": candidate["path"].name,
-                "dtype": "float16-le",
-                "runtimeArithmeticDtype": "f16",
-                "metricArithmetic": "float32-over-f16-quantized-package-v0",
+                "dtype": storage_dtype,
+                "runtimeArithmeticDtype": runtime_arithmetic_dtype,
+                "metricArithmetic": metric_arithmetic,
                 "floatCount": int(candidate["packed"].size),
                 "byteLength": int(candidate["packed"].nbytes),
                 "sha256": sha256_file(candidate["path"]),
@@ -495,7 +512,7 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
 
     payload = {
         "schema": SCHEMA,
-        "identity": "native96-front-full-input-hidden-basis-f16-matrix-v0",
+        "identity": f"native96-front-full-input-hidden-basis-{runtime_arithmetic_dtype}-matrix-v0",
         "status": "captured",
         "failurePhase": None,
         "teacherManifestPath": str(teacher_manifest_path),
@@ -509,9 +526,9 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "studentWidths": widths,
         "rowCount": high_cells,
         "rowAccounting": "complete-uncapped-input-row-accounting-v0",
-        "weightStorageDtype": "float16-le",
-        "runtimeArithmeticDtype": "f16",
-        "metricArithmetic": "float32-over-f16-quantized-package-v0",
+        "weightStorageDtype": storage_dtype,
+        "runtimeArithmeticDtype": runtime_arithmetic_dtype,
+        "metricArithmetic": metric_arithmetic,
         "runtimeTruthUsed": False,
         "visualClaim": False,
         "runtimeClaim": False,
@@ -524,7 +541,7 @@ def build_actual_matrix(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     args = parse_args()
     if args.self_test:
-        print(json.dumps(self_test()))
+        print(json.dumps(self_test(args.storage_dtype)))
         return 0
     out_dir = Path(args.out_dir).resolve() if args.out_dir else None
     manifest_path = out_dir / "manifest.json" if out_dir else None
@@ -539,7 +556,7 @@ def main() -> int:
         evidence = error.evidence if isinstance(error, CompressionFailure) else {}
         failure = {
             "schema": SCHEMA,
-            "identity": "native96-front-full-input-hidden-basis-f16-matrix-v0",
+            "identity": f"native96-front-full-input-hidden-basis-{'f16' if args.storage_dtype == 'float16-le' else 'f32'}-matrix-v0",
             "status": "failed",
             "failurePhase": phase,
             "error": str(error),

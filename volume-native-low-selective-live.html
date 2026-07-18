@@ -33,7 +33,7 @@
     .cockpit-section:first-of-type { border-top: 0; }
     .cockpit-label { color: #aebdc0; font-size: 11px; }
     .role-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-    .role-tabs button, .cockpit-actions button, #packageSlot { min-height: 34px; border: 1px solid #3c4b4f; border-radius: 5px; background: #111719; color: #dce7e9; font: inherit; }
+    .role-tabs button, .cockpit-actions button, #packageSlot, #frontStudentWidth { min-height: 34px; border: 1px solid #3c4b4f; border-radius: 5px; background: #111719; color: #dce7e9; font: inherit; }
     .role-tabs button[aria-pressed="true"] { border-color: #e2a74c; background: #2a2114; color: #fff2d8; }
     .cockpit-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
     .range-row { display: grid; grid-template-columns: 62px 1fr 48px; gap: 7px; align-items: center; font-size: 11px; }
@@ -89,6 +89,15 @@
       </select>
     </div>
     <div class="cockpit-section">
+      <label class="cockpit-label" for="frontStudentWidth">Front model width</label>
+      <select id="frontStudentWidth">
+        <option value="exact">Exact teacher: 48</option>
+        <option value="32">Student: 32</option>
+        <option value="24">Student: 24</option>
+        <option value="16">Student: 16</option>
+      </select>
+    </div>
+    <div class="cockpit-section">
       <label class="range-row" for="radiusControl"><span>Radius</span><input id="radiusControl" type="range" min="0.12" max="0.9" step="0.01" value="0.53"><output id="radiusValue">0.53</output></label>
       <label class="range-row" for="flowControl"><span>Flow</span><input id="flowControl" type="range" min="0" max="2.5" step="0.05" value="1"><output id="flowValue">1.00</output></label>
       <label class="range-row" for="gainControl"><span>Gain</span><input id="gainControl" type="range" min="0" max="3" step="0.05" value="1.12"><output id="gainValue">1.12</output></label>
@@ -107,6 +116,7 @@
       NATIVE_LOW_INPUT_AUTHORITY,
       NATIVE_LOW_FEATURE_AUTHORITY,
       NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+      NATIVE96_F32_FRONT_STUDENT_WIDTHS,
       NATIVE96_SPARSE_FRONT_CONTINUITY,
       NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
       NATIVE_LOW_SHARED_DEVICE_ROUTE,
@@ -177,6 +187,8 @@
         hardMaskTreatmentClaim: false,
         continuityReconstructionMode: 'feathered-local-5x5x5-front-residual-reconstruction-v0',
         deterministicVsLearnedEffectParity: 'preserve-native96-accepted-structural-delta-v0',
+        frontModelEvalGpuMs: null,
+        frontModelEvalStage: null,
         exactFrontTeacherEvalGpuMs: null,
         continuityReconstructionGpuMs: null,
         totalSparseFrontContinuityGpuMs: null,
@@ -396,6 +408,13 @@
     const coarseSourceHistorySupportFrontEnabled = !native64ManifestMode && params.get('coarse_source_history_support_front') === '1';
     const native96SparseFrontContinuityEnabled = !native64ManifestMode && (params.get('sparse_front_continuity') === '1' || (cockpitMode && params.get('sparse_front_continuity') !== '0'));
     const native96F16FrontTeacherEnabled = native96SparseFrontContinuityEnabled && params.get('f16_front_teacher') === '1';
+    const requestedFrontStudentWidthParam = params.get('front_student_width');
+    let native96FrontStudentWidth = requestedFrontStudentWidthParam == null || requestedFrontStudentWidthParam === ''
+      ? null
+      : Number(requestedFrontStudentWidthParam);
+    if (native96FrontStudentWidth !== null && !NATIVE96_F32_FRONT_STUDENT_WIDTHS.includes(native96FrontStudentWidth)) {
+      throw new Error(`unsupportedNative96FrontStudentWidth:${requestedFrontStudentWidthParam}`);
+    }
     const native96FrontAuthorityGateEnabled = native96SparseFrontContinuityEnabled && params.get('front_authority_gate') === '1';
     const native96FrontAuthorityThreshold = Math.max(0, Number(params.get('front_authority_threshold') || 0.01));
     const nativeLowDirectSparseCuesEnabled = !native64ManifestMode && params.get('direct_sparse_cues') === '1';
@@ -509,6 +528,7 @@
       title.querySelector('strong').textContent = 'Native-Low Live Research Cockpit';
       title.querySelector('span').textContent = 'One authoritative native96 history, direct renderer canvas, splat-only-v0';
       document.getElementById('packageSlot').value = selectedPackageSlot;
+      document.getElementById('frontStudentWidth').value = native96FrontStudentWidth === null ? 'exact' : String(native96FrontStudentWidth);
       liveRoleLabel.textContent = selectedCockpitRole;
       document.querySelectorAll('#roleTabs button').forEach(button => {
         button.setAttribute('aria-pressed', button.dataset.role === selectedCockpitRole ? 'true' : 'false');
@@ -744,7 +764,7 @@
         sourceDeltaAdmissionGpuMs: stage.sourceDeltaAdmissionGpuMs ?? null,
         learnedModelGpuMs: receipt?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
           ? 0
-          : stage.exactFrontTeacherEvalGpuMs ?? stage.inferenceGpuMs ?? receipt?.inferenceGpuMs ?? null,
+          : stage.frontModelEvalGpuMs ?? stage.exactFrontTeacherEvalGpuMs ?? stage.inferenceGpuMs ?? receipt?.inferenceGpuMs ?? null,
         reconstructionGpuMs: receipt?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
           ? 0
           : stage.continuityReconstructionGpuMs ?? null,
@@ -866,6 +886,7 @@
         coarseSourceHistorySupportFrontEnabled,
         native96SparseFrontContinuityEnabled,
         native96F16FrontTeacherEnabled,
+        native96FrontStudentWidth,
         native96FrontAuthorityGateEnabled,
         native96FrontAuthorityThreshold,
         nativeLowDirectSparseCuesEnabled,
@@ -1829,6 +1850,13 @@
         button.addEventListener('click', () => setCockpitRole(button.dataset.role));
       });
       document.getElementById('packageSlot').addEventListener('change', event => setPackageSlot(event.target.value));
+      document.getElementById('frontStudentWidth').addEventListener('change', event => {
+        const value = event.target.value;
+        native96FrontStudentWidth = value === 'exact' ? null : Number(value);
+        if (native96FrontStudentWidth !== null && !NATIVE96_F32_FRONT_STUDENT_WIDTHS.includes(native96FrontStudentWidth)) {
+          throw new Error(`unsupportedNative96FrontStudentWidth:${value}`);
+        }
+      });
       document.getElementById('radiusControl').addEventListener('input', event => setEmitterRadius(event.target.value));
       document.getElementById('flowControl').addEventListener('input', event => setFlowRate(event.target.value));
       document.getElementById('gainControl').addEventListener('input', event => setTreatmentGain(event.target.value));

@@ -13163,11 +13163,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null, f16Teacher = false) {
+  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null, f16Teacher = false, frontStudentWidth = null, frontAuthorityGate = false) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
     source.unmap();
     source.destroy();
+    const parsedFrontStudentWidth = frontStudentWidth == null ? null : Number(frontStudentWidth);
+    const effectiveFrontStudentWidth = Number.isInteger(parsedFrontStudentWidth) ? parsedFrontStudentWidth : null;
+    const frontModelEvalStage = f16Teacher
+      ? 'f16-front-teacher-candidate-dispatch-indirect-v0'
+      : effectiveFrontStudentWidth !== null
+        ? frontAuthorityGate
+          ? `front-authority-gated-f32-front-student-width${effectiveFrontStudentWidth}-candidate-dispatch-indirect-v0`
+          : `f32-front-student-width${effectiveFrontStudentWidth}-candidate-dispatch-indirect-v0`
+        : frontAuthorityGate
+          ? 'front-authority-gated-f32-front-teacher-candidate-dispatch-indirect-v0'
+          : 'exact-front-teacher-candidate-dispatch-indirect-v0';
     const invalid = values.length < 6
       || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n || values[4] === 0n || values[5] === 0n
       || values[1] < values[0] || values[3] < values[2] || values[5] < values[4];
@@ -13177,7 +13188,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         label,
         headCostTimingAuthority: 'timestamp-query-invalid',
         sourceDeltaAdmissionGpuMs: null,
+        frontModelEvalGpuMs: null,
+        frontModelEvalStage,
         exactFrontTeacherEvalGpuMs: null,
+        f16FrontTeacherEvalGpuMs: null,
+        frontStudentEvalGpuMs: null,
         continuityReconstructionGpuMs: null,
         totalSparseFrontContinuityGpuMs: fallbackMs,
         inferenceGpuMs: fallbackMs,
@@ -13185,19 +13200,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     }
     const sourceDeltaAdmissionGpuMs = Number(values[1] - values[0]) / 1_000_000;
-    const exactFrontTeacherEvalGpuMs = Number(values[3] - values[2]) / 1_000_000;
+    const frontModelEvalGpuMs = Number(values[3] - values[2]) / 1_000_000;
     const continuityReconstructionGpuMs = Number(values[5] - values[4]) / 1_000_000;
-    const totalSparseFrontContinuityGpuMs = sourceDeltaAdmissionGpuMs + exactFrontTeacherEvalGpuMs + continuityReconstructionGpuMs;
+    const totalSparseFrontContinuityGpuMs = sourceDeltaAdmissionGpuMs + frontModelEvalGpuMs + continuityReconstructionGpuMs;
     return {
       identity: 'native-low-head-cost-profile-v0',
       label,
       headCostTimingAuthority: 'webgpu-timestamp-query-native96-sparse-front-continuity-v0',
       sourceDeltaAdmissionGpuMs,
       sourceDeltaAdmissionStage: 'fixed-source-delta-admission-plus-finalize-v0',
-      exactFrontTeacherEvalGpuMs,
-      f16FrontTeacherEvalGpuMs: f16Teacher ? exactFrontTeacherEvalGpuMs : null,
+      frontModelEvalGpuMs,
+      frontModelEvalStage,
+      exactFrontTeacherEvalGpuMs: !f16Teacher && effectiveFrontStudentWidth === null ? frontModelEvalGpuMs : null,
+      f16FrontTeacherEvalGpuMs: f16Teacher ? frontModelEvalGpuMs : null,
+      frontStudentEvalGpuMs: effectiveFrontStudentWidth !== null ? frontModelEvalGpuMs : null,
       runtimeArithmeticDtype: f16Teacher ? 'f16' : 'f32',
-      exactFrontTeacherEvalStage: 'exact-front-teacher-candidate-dispatch-indirect-v0',
+      exactFrontTeacherEvalStage: !f16Teacher && effectiveFrontStudentWidth === null ? frontModelEvalStage : null,
       continuityReconstructionGpuMs,
       continuityReconstructionStage: 'feathered-front-continuity-full-grid-v0',
       totalSparseFrontContinuityGpuMs,
@@ -13431,6 +13449,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         coarseSourceHistorySupportFrontEnabled,
         native96SparseFrontContinuityEnabled,
         native96F16FrontTeacherEnabled: options.native96F16FrontTeacherEnabled === true,
+        native96FrontStudentWidth: options.native96FrontStudentWidth ?? null,
         native96FrontAuthorityGateEnabled: options.native96FrontAuthorityGateEnabled === true,
         native96FrontAuthorityThreshold: Number(options.native96FrontAuthorityThreshold ?? 0.01),
         historyOnly: cockpitHistoryOnly,
@@ -13495,6 +13514,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
               NATIVE96_SPARSE_FRONT_CONTINUITY,
               inferenceWallMs,
               options.native96F16FrontTeacherEnabled === true,
+              options.native96FrontStudentWidth ?? null,
+              options.native96FrontAuthorityGateEnabled === true,
             )
           : coarseSourceHistorySupportFrontEnabled || cockpitHistoryOnly
           ? await readNativeLowSourceDeltaOnlyCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs)
@@ -14133,6 +14154,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             requestedRoute: NATIVE96_SPARSE_FRONT_CONTINUITY,
             requestedTeacherExecutionRoute: options.native96F16FrontTeacherEnabled === true
               ? 'native96-f16-front-teacher-candidates-v0'
+              : options.native96FrontStudentWidth != null
+                ? options.native96FrontAuthorityGateEnabled === true
+                  ? `native96-front-authority-gated-f32-front-student-width${Number(options.native96FrontStudentWidth)}-candidates-v0`
+                  : `native96-front-student-width${Number(options.native96FrontStudentWidth)}-f32-candidates-v0`
               : options.native96FrontAuthorityGateEnabled === true
                 ? 'native96-front-authority-gated-f32-front-teacher-candidates-v0'
               : 'native96-exact-f32-front-teacher-candidates-v0',
@@ -14175,7 +14200,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             runtimeTopK: false,
             dynamicPercentile: false,
             sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
+            frontModelEvalGpuMs: nativeLowHeadCostProfile.frontModelEvalGpuMs ?? null,
+            frontModelEvalStage: nativeLowHeadCostProfile.frontModelEvalStage ?? null,
             exactFrontTeacherEvalGpuMs: nativeLowHeadCostProfile.exactFrontTeacherEvalGpuMs ?? null,
+            f16FrontTeacherEvalGpuMs: nativeLowHeadCostProfile.f16FrontTeacherEvalGpuMs ?? null,
+            frontStudentEvalGpuMs: nativeLowHeadCostProfile.frontStudentEvalGpuMs ?? null,
             continuityReconstructionGpuMs: nativeLowHeadCostProfile.continuityReconstructionGpuMs ?? null,
             totalSparseFrontContinuityGpuMs,
             sourceDeltaAdmissionStage: nativeLowHeadCostProfile.sourceDeltaAdmissionStage,
@@ -14631,6 +14660,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           inferenceGpuMs: inferenceTiming.ms,
           vivisectorWidth32ReceiverGpuMs: nativeLowVivisectorWidth32LiveReceiver?.vivisectorWidth32ReceiverGpuMs ?? null,
           sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
+          frontModelEvalGpuMs: nativeLowHeadCostProfile.frontModelEvalGpuMs ?? null,
           exactFrontTeacherEvalGpuMs: nativeLowHeadCostProfile.exactFrontTeacherEvalGpuMs ?? null,
           continuityReconstructionGpuMs: nativeLowHeadCostProfile.continuityReconstructionGpuMs ?? null,
           totalSparseFrontContinuityGpuMs: native96SparseFrontContinuity?.totalSparseFrontContinuityGpuMs ?? null,

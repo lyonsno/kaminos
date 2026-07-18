@@ -1,0 +1,95 @@
+{
+  "schema": "kaminos.volume.native96-front-student-model.v0",
+  "identity": "native96-front-student-width32-f32-v0",
+  "status": "captured",
+  "failurePhase": null,
+  "teacher": {
+    "identity": "latest-happy-bowl-front-only-160-to-96-step96-v0",
+    "manifestSha256": "b3781fc5cba260c04af1946bd1e34be9e8bcffe47f1b1eed309c8a5e8c3d7abf",
+    "packedSha256": "2eb3d311d8964d21ba471bba973b38ac1f32ee25b0a73926a6ee7b43ca78e95b",
+    "hiddenWidth": 48
+  },
+  "source": {
+    "nativeManifestSha256": "e7a1e1fef6e542bda8891a867f121cf7f2558d745e133af67369f0caf53309b8",
+    "nativeFluidSha256": "3658b543060757358dfe40261d3d7453f6de18c26d4ef877341642c17721e54b",
+    "nativeFrontSha256": "e9d39a24f0b73457dddbfc670e551a917afa857b62e7bb1f302997d77d36ac3f",
+    "lowGrid": 96,
+    "receiverGrid": 160,
+    "rowCount": 4096000,
+    "rowAccounting": "complete-uncapped-input-row-accounting-v0"
+  },
+  "features": {
+    "identity": "full-low-field-plus-spatial-rbf-features-v0",
+    "featureCount": 185,
+    "inputAblation": false
+  },
+  "architecture": {
+    "identity": "selected-teacher-hidden-basis-refit-output-v0",
+    "activation": "tanh",
+    "hiddenWidth": 32,
+    "selectedTeacherHiddenUnits": [
+      14,
+      42,
+      6,
+      32,
+      7,
+      41,
+      20,
+      13,
+      2,
+      40,
+      16,
+      28,
+      15,
+      17,
+      3,
+      39,
+      21,
+      22,
+      33,
+      10,
+      47,
+      9,
+      36,
+      25,
+      0,
+      5,
+      46,
+      26,
+      19,
+      30,
+      23,
+      38
+    ],
+    "fitSseBeforeF16": 309394.0770477012
+  },
+  "packed": {
+    "path": "front-student-width32.f32",
+    "dtype": "float32-le",
+    "runtimeArithmeticDtype": "f32",
+    "metricArithmetic": "float32-over-f32-package-v0",
+    "floatCount": 6357,
+    "byteLength": 25428,
+    "sha256": "0dd7c2810722ba9e31ff2db005a9514b7a74f6d03b5e47e101670875f1cf9652",
+    "offsets": {
+      "featureMean": 0,
+      "featureStd": 185,
+      "w1": 370,
+      "b1": 6290,
+      "w2": 6322,
+      "b2TargetMeanTargetStd": 6354
+    }
+  },
+  "metrics": {
+    "rowCount": 4096000,
+    "rmseVsTeacher": 0.004595275354759727,
+    "maeVsTeacher": 0.0034520375722366906,
+    "correlationVsTeacher": 0.7574763226209978,
+    "errorReductionVsZeroTeacher": 0.6727419721303816,
+    "predictionToTeacherEnergyRatio": 0.6727419938960179,
+    "signAgreement": 0.744427978515625
+  },
+  "runtimeTruthUsed": false,
+  "visualClaim": false,
+  "runtimeClaim": false
+}

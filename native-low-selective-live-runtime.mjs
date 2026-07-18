@@ -34,6 +34,7 @@ export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'nativ
 export const NATIVE96_SPARSE_FRONT_CONTINUITY = 'native96-sparse-front-continuity-v0';
 export const NATIVE96_F16_FRONT_TEACHER_CANDIDATES = 'native96-f16-front-teacher-candidates-v0';
 export const NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES = 'native96-front-authority-gated-f32-front-teacher-candidates-v0';
+export const NATIVE96_F32_FRONT_STUDENT_WIDTHS = Object.freeze([16, 24, 32]);
 export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
@@ -105,6 +106,41 @@ const NATIVE96_F16_FRONT_TEACHER_IDENTITY = 'native96-front-student-width48-f16-
 const NATIVE96_F16_FRONT_TEACHER_URL = new URL('./models/native96-front-student-width48-f16-v0/front-student-width48.f16', import.meta.url).href;
 const NATIVE96_F16_FRONT_TEACHER_SHA256 = '8650b2231cf4fd0d8e1a6414ff25a4aeee1ca143f3cb70905299e74c5942b4be';
 const NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH = 18698;
+const NATIVE96_F32_FRONT_STUDENTS = Object.freeze({
+  16: Object.freeze({
+    width: 16,
+    identity: 'native96-front-student-width16-f32-v0',
+    executionRoute: 'native96-front-student-width16-f32-candidates-v0',
+    gatedExecutionRoute: 'native96-front-authority-gated-f32-front-student-width16-candidates-v0',
+    url: new URL('./models/native96-front-student-f32-matrix-v0/front-student-width16.f32', import.meta.url).href,
+    sha256: '165c72534e630f1b44ff1292034fc4ed3050c7457b90ffc3da3a96d14ede2e21',
+    byteLength: 13460,
+    floatCount: 3365,
+    offsets: Object.freeze({ featureMean: 0, featureStd: 185, w1: 370, b1: 3330, w2: 3346, b2: 3362, targetMean: 3363, targetStd: 3364 }),
+  }),
+  24: Object.freeze({
+    width: 24,
+    identity: 'native96-front-student-width24-f32-v0',
+    executionRoute: 'native96-front-student-width24-f32-candidates-v0',
+    gatedExecutionRoute: 'native96-front-authority-gated-f32-front-student-width24-candidates-v0',
+    url: new URL('./models/native96-front-student-f32-matrix-v0/front-student-width24.f32', import.meta.url).href,
+    sha256: 'ad768f93e292bcce61fa33d3eec0271218309945e37e69863182cb13cfe3cdfc',
+    byteLength: 19444,
+    floatCount: 4861,
+    offsets: Object.freeze({ featureMean: 0, featureStd: 185, w1: 370, b1: 4810, w2: 4834, b2: 4858, targetMean: 4859, targetStd: 4860 }),
+  }),
+  32: Object.freeze({
+    width: 32,
+    identity: 'native96-front-student-width32-f32-v0',
+    executionRoute: 'native96-front-student-width32-f32-candidates-v0',
+    gatedExecutionRoute: 'native96-front-authority-gated-f32-front-student-width32-candidates-v0',
+    url: new URL('./models/native96-front-student-f32-matrix-v0/front-student-width32.f32', import.meta.url).href,
+    sha256: '0dd7c2810722ba9e31ff2db005a9514b7a74f6d03b5e47e101670875f1cf9652',
+    byteLength: 25428,
+    floatCount: 6357,
+    offsets: Object.freeze({ featureMean: 0, featureStd: 185, w1: 370, b1: 6290, w2: 6322, b2: 6354, targetMean: 6355, targetStd: 6356 }),
+  }),
+});
 const VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT = 1944;
 const VIVISECTOR_WIDTH32_WEIGHT_BYTES = VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const VIVISECTOR_FEATURE_MEAN_OFFSET = 0;
@@ -776,6 +812,20 @@ const NATIVE96_FRONT_AUTHORITY_GATED_SPARSE_FRONT_CONTINUITY_WGSL = NATIVE96_SPA
     'let highIndex = sourceHistoryCandidates[compactIndex];\n  let frontAuthorityThreshold = bitcast<f32>(atomicLoad(&sourceHistoryStats[4]));\n  if (sparseFrontContinuityFront[highIndex] <= frontAuthorityThreshold) { return; }\n  atomicAdd(&sourceHistoryStats[2], 1u);\n  let z = highIndex / (HIGH_GRID * HIGH_GRID);',
   );
 
+function specializeNative96F32FrontStudentWgsl(source, student) {
+  if (!student || !NATIVE96_F32_FRONT_STUDENT_WIDTHS.includes(student.width)) {
+    throw new Error(`unsupportedNative96FrontStudentWidth:${student?.width ?? 'missing'}`);
+  }
+  return source
+    .replace('const HIDDEN_WIDTH: u32 = 48u;', `const HIDDEN_WIDTH: u32 = ${student.width}u;`)
+    .replace('const FRONT_B1_OFFSET: u32 = 9250u;', `const FRONT_B1_OFFSET: u32 = ${student.offsets.b1}u;`)
+    .replace('const FRONT_W2_OFFSET: u32 = 9298u;', `const FRONT_W2_OFFSET: u32 = ${student.offsets.w2}u;`)
+    .replace('const FRONT_B2_OFFSET: u32 = 9346u;', `const FRONT_B2_OFFSET: u32 = ${student.offsets.b2}u;`)
+    .replace('const FRONT_TARGET_MEAN_OFFSET: u32 = 9347u;', `const FRONT_TARGET_MEAN_OFFSET: u32 = ${student.offsets.targetMean}u;`)
+    .replace('const FRONT_TARGET_STD_OFFSET: u32 = 9348u;', `const FRONT_TARGET_STD_OFFSET: u32 = ${student.offsets.targetStd}u;`)
+    .replace('var hidden: array<f32, 48>;', `var hidden: array<f32, ${student.width}>;`);
+}
+
 const VIVISECTOR_WIDTH32_RECEIVER_WGSL = `
 const LOW_GRID: u32 = ${LOW_GRID}u;
 const HIGH_GRID: u32 = ${HIGH_GRID}u;
@@ -961,6 +1011,20 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   ) {
     throw new Error(`native96F16FrontTeacherChecksumMismatch:${f16FrontTeacherSha256}`);
   }
+  const native96F32FrontStudentPackages = new Map(await Promise.all(NATIVE96_F32_FRONT_STUDENT_WIDTHS.map(async width => {
+    const student = NATIVE96_F32_FRONT_STUDENTS[width];
+    if (student.byteLength !== student.floatCount * Float32Array.BYTES_PER_ELEMENT) {
+      throw new Error(`native96F32FrontStudentLayoutMismatch:${width}:${student.byteLength}:${student.floatCount}`);
+    }
+    const studentResponse = await fetch(student.url, { cache: 'no-store' });
+    if (!studentResponse.ok) throw new Error(`native96F32FrontStudentFetchFailed:${width}:${studentResponse.status}`);
+    const bytes = await studentResponse.arrayBuffer();
+    const sha256 = await sha256Hex(bytes);
+    if (bytes.byteLength !== student.byteLength || sha256 !== student.sha256) {
+      throw new Error(`native96F32FrontStudentChecksumMismatch:${width}:${sha256}`);
+    }
+    return [width, { ...student, bytes, effectiveSha256: sha256 }];
+  })));
   const lowCells = lowGrid ** 3;
   const highCells = HIGH_GRID ** 3;
   const lowFluidBytes = lowCells * SLOTS_PER_CELL * 4 * Float32Array.BYTES_PER_ELEMENT;
@@ -1006,6 +1070,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const paddedF16FrontTeacherBytes = new Uint8Array(Math.ceil(f16FrontTeacherBytes.byteLength / 4) * 4);
   paddedF16FrontTeacherBytes.set(new Uint8Array(f16FrontTeacherBytes));
   device.queue.writeBuffer(native96F16FrontTeacherModel, 0, paddedF16FrontTeacherBytes);
+  const native96F32FrontStudentModels = new Map();
+  for (const [width, student] of native96F32FrontStudentPackages) {
+    const studentModel = makeBuffer(
+      `native-low shared-device f32 native96 front student ${student.identity}`,
+      student.byteLength,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
+    device.queue.writeBuffer(studentModel, 0, student.bytes);
+    native96F32FrontStudentModels.set(width, studentModel);
+  }
   const shader = device.createShaderModule({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} WGSL`, code: specializeLowGridWgsl(WGSL, lowGrid) });
   const compilation = await shader.getCompilationInfo();
   const errors = compilation.messages.filter(message => message.type === 'error');
@@ -1255,6 +1329,34 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     layout: native96SparseFrontContinuityPipelineLayout,
     compute: { module: native96FrontAuthorityGateShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
   });
+  const native96F32FrontStudentCandidatePipelines = new Map();
+  const native96F32FrontStudentAuthorityGateCandidatePipelines = new Map();
+  for (const width of NATIVE96_F32_FRONT_STUDENT_WIDTHS) {
+    const student = NATIVE96_F32_FRONT_STUDENTS[width];
+    const variants = [
+      [false, NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL],
+      [true, NATIVE96_FRONT_AUTHORITY_GATED_SPARSE_FRONT_CONTINUITY_WGSL],
+    ];
+    for (const [authorityGated, source] of variants) {
+      const studentShader = device.createShaderModule({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 f32 width-${width}${authorityGated ? ' front-authority-gated' : ''} student WGSL`,
+        code: specializeLowGridWgsl(specializeNative96F32FrontStudentWgsl(source, student), lowGrid),
+      });
+      const studentCompilation = await studentShader.getCompilationInfo();
+      const studentErrors = studentCompilation.messages.filter(message => message.type === 'error');
+      if (studentErrors.length) {
+        throw new Error(`native96 f32 width-${width}${authorityGated ? ' gated' : ''} student WGSL failed:${studentErrors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
+      }
+      const pipeline = device.createComputePipeline({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 f32 width-${width}${authorityGated ? ' front-authority-gated' : ''} student candidates`,
+        layout: native96SparseFrontContinuityPipelineLayout,
+        compute: { module: studentShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
+      });
+      (authorityGated
+        ? native96F32FrontStudentAuthorityGateCandidatePipelines
+        : native96F32FrontStudentCandidatePipelines).set(width, pipeline);
+    }
+  }
   const shaderF16Available = device.features?.has?.('shader-f16') === true;
   let native96F16FrontTeacherCandidatePipeline = null;
   if (shaderF16Available) {
@@ -1958,12 +2060,31 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       if (native96SparseFrontContinuityActive) {
         const f16FrontTeacherRequested = options.native96F16FrontTeacherEnabled === true;
         const frontAuthorityGateRequested = options.native96FrontAuthorityGateEnabled === true;
-        if (f16FrontTeacherRequested && frontAuthorityGateRequested) {
+        const requestedFrontStudentWidth = options.native96FrontStudentWidth == null
+          ? null
+          : Number(options.native96FrontStudentWidth);
+        if (requestedFrontStudentWidth !== null && !NATIVE96_F32_FRONT_STUDENT_WIDTHS.includes(requestedFrontStudentWidth)) {
+          throw new Error(`unsupportedNative96FrontStudentWidth:${options.native96FrontStudentWidth}`);
+        }
+        if (f16FrontTeacherRequested && (frontAuthorityGateRequested || requestedFrontStudentWidth !== null)) {
           throw new Error('native96-front-authority-gate-f16-combination-not-validated');
         }
         if (f16FrontTeacherRequested && !native96F16FrontTeacherCandidatePipeline) {
           throw new Error('f16-fallback-forbidden:shader-f16-unavailable');
         }
+        const frontStudent = requestedFrontStudentWidth === null
+          ? null
+          : native96F32FrontStudentPackages.get(requestedFrontStudentWidth);
+        const frontStudentModel = requestedFrontStudentWidth === null
+          ? null
+          : native96F32FrontStudentModels.get(requestedFrontStudentWidth);
+        const effectiveTeacherExecutionRoute = f16FrontTeacherRequested
+          ? NATIVE96_F16_FRONT_TEACHER_CANDIDATES
+          : frontStudent
+            ? (frontAuthorityGateRequested ? frontStudent.gatedExecutionRoute : frontStudent.executionRoute)
+            : frontAuthorityGateRequested
+              ? NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES
+              : 'native96-exact-f32-front-teacher-candidates-v0';
         const continuityBindGroup = device.createBindGroup({
           label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity bind group`,
           layout: native96SparseFrontContinuityLayout,
@@ -1972,7 +2093,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
             { binding: 1, resource: { buffer: sourceFront } },
             { binding: 2, resource: { buffer: sourceHistoryCandidates } },
             { binding: 3, resource: { buffer: sourceHistoryDispatchArgs } },
-            { binding: 4, resource: { buffer: f16FrontTeacherRequested ? native96F16FrontTeacherModel : native96ExactFrontTeacherModel } },
+            { binding: 4, resource: { buffer: f16FrontTeacherRequested ? native96F16FrontTeacherModel : frontStudentModel || native96ExactFrontTeacherModel } },
             { binding: 5, resource: { buffer: predictedFluid } },
             { binding: 6, resource: { buffer: predictedFront } },
             { binding: 7, resource: { buffer: nativeUpsampleFront } },
@@ -1987,11 +2108,15 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         initializePass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
         initializePass.end();
         const teacherPass = encoder.beginComputePass({
-          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} ${f16FrontTeacherRequested ? 'native96 f16' : 'native96 exact f32'} front teacher candidates`,
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} ${frontStudent ? `native96 f32 width-${frontStudent.width} student` : f16FrontTeacherRequested ? 'native96 f16' : 'native96 exact f32'} front teacher candidates`,
           ...(teacherTimestampWrites ? { timestampWrites: teacherTimestampWrites } : {}),
         });
-        teacherPass.setPipeline(frontAuthorityGateRequested
-          ? native96FrontAuthorityGateCandidatePipeline
+        teacherPass.setPipeline(frontStudent
+          ? (frontAuthorityGateRequested
+              ? native96F32FrontStudentAuthorityGateCandidatePipelines.get(frontStudent.width)
+              : native96F32FrontStudentCandidatePipelines.get(frontStudent.width))
+          : frontAuthorityGateRequested
+            ? native96FrontAuthorityGateCandidatePipeline
           : f16FrontTeacherRequested
             ? native96F16FrontTeacherCandidatePipeline
             : native96ExactFrontTeacherCandidatePipeline);
@@ -2010,16 +2135,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
           enabled: true,
           authority: 'exact-front-teacher-over-uncapped-source-history-candidates-plus-feathered-continuity-v0',
-          requestedTeacherExecutionRoute: f16FrontTeacherRequested
-            ? NATIVE96_F16_FRONT_TEACHER_CANDIDATES
-            : frontAuthorityGateRequested
-              ? NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES
-            : 'native96-exact-f32-front-teacher-candidates-v0',
-          effectiveTeacherExecutionRoute: f16FrontTeacherRequested
-            ? NATIVE96_F16_FRONT_TEACHER_CANDIDATES
-            : frontAuthorityGateRequested
-              ? NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES
-            : 'native96-exact-f32-front-teacher-candidates-v0',
+          requestedTeacherExecutionRoute: effectiveTeacherExecutionRoute,
+          effectiveTeacherExecutionRoute,
           runtimeArithmeticDtype: f16FrontTeacherRequested ? 'f16' : 'f32',
           shaderF16Required: f16FrontTeacherRequested,
           shaderF16Available,
@@ -2027,6 +2144,13 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           f16FrontTeacherModelIdentity: f16FrontTeacherRequested ? NATIVE96_F16_FRONT_TEACHER_IDENTITY : null,
           f16FrontTeacherModelSha256: f16FrontTeacherRequested ? f16FrontTeacherSha256 : null,
           f16FrontTeacherByteLength: f16FrontTeacherRequested ? NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH : null,
+          requestedFrontStudentWidth,
+          effectiveFrontStudentWidth: frontStudent?.width ?? null,
+          frontStudentModelIdentity: frontStudent?.identity ?? null,
+          frontStudentModelSha256: frontStudent?.effectiveSha256 ?? null,
+          frontStudentModelByteLength: frontStudent?.byteLength ?? null,
+          frontStudentFeatureCount: frontStudent ? FEATURE_COUNT : null,
+          frontStudentInputAblation: frontStudent ? false : null,
           frontAuthorityGateRequested,
           frontAuthorityGateEffective: frontAuthorityGateRequested,
           frontAuthorityThresholdEffective: frontAuthorityGateRequested ? frontAuthorityThresholdEffective : null,
