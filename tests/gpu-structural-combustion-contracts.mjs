@@ -102,6 +102,8 @@ globalThis.GPUShaderStage = { COMPUTE: 1, VERTEX: 2, FRAGMENT: 4 };
 
 const buffers = [];
 let presentationCompilationMessages = [];
+let rejectedComputeEntryPoint = null;
+let rejectedRenderEntryPoint = null;
 const queue = { writeBuffer() {}, async onSubmittedWorkDone() {} };
 const device = {
   queue,
@@ -123,8 +125,18 @@ const device = {
   },
   createBindGroupLayout() { return {}; },
   createPipelineLayout() { return {}; },
-  async createComputePipelineAsync() { return { getBindGroupLayout() { return {}; } }; },
-  async createRenderPipelineAsync() { return { getBindGroupLayout() { return {}; } }; },
+  async createComputePipelineAsync(descriptor) {
+    if (descriptor.compute.entryPoint === rejectedComputeEntryPoint) {
+      throw new Error(`compute validation rejected ${descriptor.compute.entryPoint}`);
+    }
+    return { getBindGroupLayout() { return {}; } };
+  },
+  async createRenderPipelineAsync(descriptor) {
+    if (descriptor.vertex.entryPoint === rejectedRenderEntryPoint) {
+      throw new Error(`render validation rejected ${descriptor.vertex.entryPoint}`);
+    }
+    return { getBindGroupLayout() { return {}; } };
+  },
   createBindGroup(descriptor) { return { descriptor }; },
 };
 const targetState = createLayeredStructuralMaterial({ columns: 5, rows: 4, layers: 3, notch: true });
@@ -164,6 +176,10 @@ function structuralSocket(state, countLoad) {
 try {
   const targetSidecar = structuralSocket(targetState, () => { targetLoadEncodes += 1; });
   const controlSidecar = structuralSocket(controlState, () => { controlLoadEncodes += 1; });
+  const diagnosticStructures = [
+    { id: 'target', objectId: 21, state: targetState, sidecar: targetSidecar, control: false },
+    { id: 'control', objectId: 22, state: controlState, sidecar: controlSidecar, control: true },
+  ];
   await assert.rejects(
     () => createGpuStructuralCombustionAssembly({
       device,
@@ -191,10 +207,7 @@ try {
       device,
       gridSize: 32,
       format: 'rgba8unorm',
-      structures: [
-        { id: 'target', objectId: 21, state: targetState, sidecar: targetSidecar, control: false },
-        { id: 'control', objectId: 22, state: controlState, sidecar: controlSidecar, control: true },
-      ],
+      structures: diagnosticStructures,
     }),
     error => {
       assert.match(error.message, /structural combustion dimensional presentation/i);
@@ -206,6 +219,58 @@ try {
     'presentation WGSL failure preserves module, source, line, column, and compiler message',
   );
   presentationCompilationMessages = [];
+  const renderFailureBufferStart = buffers.length;
+  rejectedRenderEntryPoint = 'bondVertex';
+  await assert.rejects(
+    () => createGpuStructuralCombustionAssembly({
+      device,
+      gridSize: 32,
+      format: 'rgba8unorm',
+      structures: diagnosticStructures,
+    }),
+    error => {
+      assert.match(error.message, /structural combustion dimensional presentation/i);
+      assert.match(error.message, /bondVertex/);
+      assert.match(error.message, /source [0-9a-f]{8}/i);
+      assert.match(error.message, /render validation rejected bondVertex/);
+      return true;
+    },
+    'bondVertex pipeline validation preserves presentation module, entry point, source, and browser text',
+  );
+  const renderFailureBuffers = buffers.slice(renderFailureBufferStart);
+  assert.ok(renderFailureBuffers.length > 0, 'render pipeline failure exercise allocates assembly-owned buffers');
+  assert.ok(
+    renderFailureBuffers.every(buffer => buffer.destroyCount === 1),
+    'render pipeline validation failure destroys every assembly-owned buffer exactly once',
+  );
+  rejectedRenderEntryPoint = null;
+
+  const computeFailureBufferStart = buffers.length;
+  rejectedComputeEntryPoint = 'updateNodes';
+  await assert.rejects(
+    () => createGpuStructuralCombustionAssembly({
+      device,
+      gridSize: 32,
+      format: 'rgba8unorm',
+      structures: diagnosticStructures,
+    }),
+    error => {
+      assert.match(error.message, new RegExp(STRUCTURAL_COMBUSTION_AUTHORITY, 'i'));
+      assert.match(error.message, /updateNodes/);
+      assert.match(error.message, /source [0-9a-f]{8}/i);
+      assert.match(error.message, /compute validation rejected updateNodes/);
+      return true;
+    },
+    'compute pipeline validation preserves compute module, entry point, source, and browser text',
+  );
+  const computeFailureBuffers = buffers.slice(computeFailureBufferStart);
+  assert.ok(computeFailureBuffers.length > 0, 'compute pipeline failure exercise allocates assembly-owned buffers');
+  assert.ok(
+    computeFailureBuffers.every(buffer => buffer.destroyCount === 1),
+    'compute pipeline validation failure destroys every assembly-owned buffer exactly once',
+  );
+  rejectedComputeEntryPoint = null;
+
   const assembly = await createGpuStructuralCombustionAssembly({
     device,
     gridSize: 32,

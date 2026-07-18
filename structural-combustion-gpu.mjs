@@ -41,6 +41,28 @@ async function assertShaderModuleCompiles(module, label, source) {
   throw new Error(`${label} WGSL compilation failed (source ${shaderSourceIdentity(source)}):\n${detail}`);
 }
 
+async function createShaderPipeline({ create, moduleLabel, entryPoint, source }) {
+  try {
+    return await create();
+  } catch (error) {
+    throw new Error(
+      `${moduleLabel} pipeline validation failed (entry point ${entryPoint}, source ${shaderSourceIdentity(source)}): ` +
+      `${error?.message || String(error)}`,
+    );
+  }
+}
+
+async function constructWithOwnedBufferCleanup(ownedBuffers, construct) {
+  try {
+    return await construct();
+  } catch (error) {
+    ownedBuffers.forEach(buffer => {
+      try { buffer.destroy(); } catch {}
+    });
+    throw error;
+  }
+}
+
 function finite(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -922,16 +944,26 @@ export async function createGpuStructuralCombustionAssembly({
     });
   }
 
-  const computeShaderSource = structuralCombustionShader(grid);
-  const module = device.createShaderModule({
-    label: STRUCTURAL_COMBUSTION_AUTHORITY,
-    code: computeShaderSource,
-  });
-  const presentationModule = device.createShaderModule({
-    label: 'structural combustion dimensional presentation',
-    code: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
-  });
-  try {
+  const {
+    computeLayout,
+    clearPipeline,
+    updatePipeline,
+    weakenPipeline,
+    motionPipeline,
+    emitPipeline,
+    finalizePipeline,
+    bondPresentationPipeline,
+    nodePresentationPipeline,
+  } = await constructWithOwnedBufferCleanup(ownedBuffers, async () => {
+    const computeShaderSource = structuralCombustionShader(grid);
+    const module = device.createShaderModule({
+      label: STRUCTURAL_COMBUSTION_AUTHORITY,
+      code: computeShaderSource,
+    });
+    const presentationModule = device.createShaderModule({
+      label: 'structural combustion dimensional presentation',
+      code: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
+    });
     await Promise.all([
       assertShaderModuleCompiles(module, STRUCTURAL_COMBUSTION_AUTHORITY, computeShaderSource),
       assertShaderModuleCompiles(
@@ -940,141 +972,161 @@ export async function createGpuStructuralCombustionAssembly({
         STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
       ),
     ]);
-  } catch (error) {
-    ownedBuffers.forEach(buffer => buffer.destroy());
-    throw error;
-  }
-  const computeLayout = device.createBindGroupLayout({
-    label: 'structural combustion compute layout',
-    entries: [
-      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-    ],
-  });
-  const motionLayout = device.createBindGroupLayout({
-    label: 'structural combustion component motion layout',
-    entries: [
-      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-      { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-    ],
-  });
-  const emissionLayout = device.createBindGroupLayout({
-    label: 'structural combustion carried source emission layout',
-    entries: [
-      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-    ],
-  });
-  const computePipelineLayout = device.createPipelineLayout({
-    label: 'structural combustion compute pipeline layout',
-    bindGroupLayouts: [computeLayout],
-  });
-  const motionPipelineLayout = device.createPipelineLayout({
-    label: 'structural combustion component motion pipeline layout',
-    bindGroupLayouts: [motionLayout],
-  });
-  const emissionPipelineLayout = device.createPipelineLayout({
-    label: 'structural combustion carried source emission pipeline layout',
-    bindGroupLayouts: [emissionLayout],
-  });
-  const [clearPipeline, updatePipeline, weakenPipeline, motionPipeline, emitPipeline, finalizePipeline] = await Promise.all([
-    device.createComputePipelineAsync({ label: 'structural combustion clear source', layout: computePipelineLayout, compute: { module, entryPoint: 'clearSource' } }),
-    device.createComputePipelineAsync({ label: 'structural combustion update nodes', layout: computePipelineLayout, compute: { module, entryPoint: 'updateNodes' } }),
-    device.createComputePipelineAsync({ label: 'structural combustion weaken bonds', layout: computePipelineLayout, compute: { module, entryPoint: 'weakenBonds' } }),
-    device.createComputePipelineAsync({ label: 'structural combustion project component motion', layout: motionPipelineLayout, compute: { module, entryPoint: 'updateComponentMotions' } }),
-    device.createComputePipelineAsync({ label: 'structural combustion emit carried sources', layout: emissionPipelineLayout, compute: { module, entryPoint: 'emitSources' } }),
-    device.createComputePipelineAsync({ label: 'structural combustion finalize source', layout: computePipelineLayout, compute: { module, entryPoint: 'finalizeSource' } }),
-  ]);
-  const presentationLayout = device.createBindGroupLayout({
-    label: 'structural combustion presentation layout',
-    entries: [
-      { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-      { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-      { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-      { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
-      { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-      { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
-    ],
-  });
-  const presentationPipelineLayout = device.createPipelineLayout({
-    label: 'structural combustion presentation pipeline layout',
-    bindGroupLayouts: [presentationLayout],
-  });
-  const presentationTargets = [{
-    format,
-    blend: {
-      color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-      alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-    },
-  }];
-  const [bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
-    device.createRenderPipelineAsync({
-      label: 'structural combustion resident bonds',
-      layout: presentationPipelineLayout,
-      vertex: { module: presentationModule, entryPoint: 'bondVertex' },
-      fragment: { module: presentationModule, entryPoint: 'fragmentMain', targets: presentationTargets },
-      primitive: { topology: 'line-list', cullMode: 'none' },
-    }),
-    device.createRenderPipelineAsync({
-      label: 'structural combustion resident nodes',
-      layout: presentationPipelineLayout,
-      vertex: { module: presentationModule, entryPoint: 'nodeVertex' },
-      fragment: { module: presentationModule, entryPoint: 'fragmentMain', targets: presentationTargets },
-      primitive: { topology: 'triangle-list', cullMode: 'none' },
-    }),
-  ]);
-  sockets.forEach(socket => {
-    socket.presentationBindGroups = socket.materialBuffers.map((materialBuffer, index) => device.createBindGroup({
-      label: `structural combustion ${socket.id} presentation ${index}`,
-      layout: presentationLayout,
+    const computeLayout = device.createBindGroupLayout({
+      label: 'structural combustion compute layout',
       entries: [
-        { binding: 0, resource: { buffer: socket.descriptor.nodeBuffer } },
-        { binding: 1, resource: { buffer: socket.descriptor.bondBuffer } },
-        { binding: 2, resource: { buffer: materialBuffer } },
-        { binding: 3, resource: { buffer: socket.descriptor.componentLabelBuffer } },
-        { binding: 4, resource: { buffer: socket.presentationBuffer } },
-        { binding: 5, resource: { buffer: socket.baselineBuffer } },
-        { binding: 6, resource: { buffer: socket.componentMotionBuffer } },
-      ],
-    }));
-    socket.motionBindGroup = device.createBindGroup({
-      label: `structural combustion ${socket.id} component motion`,
-      layout: motionLayout,
-      entries: [
-        { binding: 6, resource: { buffer: sourceHeaderBuffer } },
-        { binding: 8, resource: { buffer: socket.paramsBuffer } },
-        { binding: 9, resource: { buffer: socket.descriptor.componentLabelBuffer } },
-        { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
     });
-    socket.emissionBindGroups = socket.materialBuffers.map((_, materialIndex) => device.createBindGroup({
-      label: `structural combustion ${socket.id} carried source emission ${materialIndex}`,
-      layout: emissionLayout,
+    const motionLayout = device.createBindGroupLayout({
+      label: 'structural combustion component motion layout',
       entries: [
-        { binding: 1, resource: { buffer: socket.descriptor.nodeBuffer } },
-        { binding: 4, resource: { buffer: socket.materialBuffers[1 - materialIndex] } },
-        { binding: 6, resource: { buffer: sourceHeaderBuffer } },
-        { binding: 7, resource: { buffer: sourceRecordsBuffer } },
-        { binding: 8, resource: { buffer: socket.paramsBuffer } },
-        { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
-        { binding: 11, resource: { buffer: carriedFireAuditBuffer } },
+        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
-    }));
+    });
+    const emissionLayout = device.createBindGroupLayout({
+      label: 'structural combustion carried source emission layout',
+      entries: [
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
+    const computePipelineLayout = device.createPipelineLayout({
+      label: 'structural combustion compute pipeline layout',
+      bindGroupLayouts: [computeLayout],
+    });
+    const motionPipelineLayout = device.createPipelineLayout({
+      label: 'structural combustion component motion pipeline layout',
+      bindGroupLayouts: [motionLayout],
+    });
+    const emissionPipelineLayout = device.createPipelineLayout({
+      label: 'structural combustion carried source emission pipeline layout',
+      bindGroupLayouts: [emissionLayout],
+    });
+    const computePipeline = descriptor => createShaderPipeline({
+      create: () => device.createComputePipelineAsync(descriptor),
+      moduleLabel: STRUCTURAL_COMBUSTION_AUTHORITY,
+      entryPoint: descriptor.compute.entryPoint,
+      source: computeShaderSource,
+    });
+    const [clearPipeline, updatePipeline, weakenPipeline, motionPipeline, emitPipeline, finalizePipeline] = await Promise.all([
+      computePipeline({ label: 'structural combustion clear source', layout: computePipelineLayout, compute: { module, entryPoint: 'clearSource' } }),
+      computePipeline({ label: 'structural combustion update nodes', layout: computePipelineLayout, compute: { module, entryPoint: 'updateNodes' } }),
+      computePipeline({ label: 'structural combustion weaken bonds', layout: computePipelineLayout, compute: { module, entryPoint: 'weakenBonds' } }),
+      computePipeline({ label: 'structural combustion project component motion', layout: motionPipelineLayout, compute: { module, entryPoint: 'updateComponentMotions' } }),
+      computePipeline({ label: 'structural combustion emit carried sources', layout: emissionPipelineLayout, compute: { module, entryPoint: 'emitSources' } }),
+      computePipeline({ label: 'structural combustion finalize source', layout: computePipelineLayout, compute: { module, entryPoint: 'finalizeSource' } }),
+    ]);
+    const presentationLayout = device.createBindGroupLayout({
+      label: 'structural combustion presentation layout',
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+        { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      ],
+    });
+    const presentationPipelineLayout = device.createPipelineLayout({
+      label: 'structural combustion presentation pipeline layout',
+      bindGroupLayouts: [presentationLayout],
+    });
+    const presentationTargets = [{
+      format,
+      blend: {
+        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+      },
+    }];
+    const renderPipeline = (label, entryPoint, primitive) => createShaderPipeline({
+      create: () => device.createRenderPipelineAsync({
+        label,
+        layout: presentationPipelineLayout,
+        vertex: { module: presentationModule, entryPoint },
+        fragment: { module: presentationModule, entryPoint: 'fragmentMain', targets: presentationTargets },
+        primitive,
+      }),
+      moduleLabel: 'structural combustion dimensional presentation',
+      entryPoint,
+      source: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
+    });
+    const [bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
+      renderPipeline('structural combustion resident bonds', 'bondVertex', {
+        topology: 'line-list',
+        cullMode: 'none',
+      }),
+      renderPipeline('structural combustion resident nodes', 'nodeVertex', {
+        topology: 'triangle-list',
+        cullMode: 'none',
+      }),
+    ]);
+    sockets.forEach(socket => {
+      socket.presentationBindGroups = socket.materialBuffers.map((materialBuffer, index) => device.createBindGroup({
+        label: `structural combustion ${socket.id} presentation ${index}`,
+        layout: presentationLayout,
+        entries: [
+          { binding: 0, resource: { buffer: socket.descriptor.nodeBuffer } },
+          { binding: 1, resource: { buffer: socket.descriptor.bondBuffer } },
+          { binding: 2, resource: { buffer: materialBuffer } },
+          { binding: 3, resource: { buffer: socket.descriptor.componentLabelBuffer } },
+          { binding: 4, resource: { buffer: socket.presentationBuffer } },
+          { binding: 5, resource: { buffer: socket.baselineBuffer } },
+          { binding: 6, resource: { buffer: socket.componentMotionBuffer } },
+        ],
+      }));
+      socket.motionBindGroup = device.createBindGroup({
+        label: `structural combustion ${socket.id} component motion`,
+        layout: motionLayout,
+        entries: [
+          { binding: 6, resource: { buffer: sourceHeaderBuffer } },
+          { binding: 8, resource: { buffer: socket.paramsBuffer } },
+          { binding: 9, resource: { buffer: socket.descriptor.componentLabelBuffer } },
+          { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
+        ],
+      });
+      socket.emissionBindGroups = socket.materialBuffers.map((_, materialIndex) => device.createBindGroup({
+        label: `structural combustion ${socket.id} carried source emission ${materialIndex}`,
+        layout: emissionLayout,
+        entries: [
+          { binding: 1, resource: { buffer: socket.descriptor.nodeBuffer } },
+          { binding: 4, resource: { buffer: socket.materialBuffers[1 - materialIndex] } },
+          { binding: 6, resource: { buffer: sourceHeaderBuffer } },
+          { binding: 7, resource: { buffer: sourceRecordsBuffer } },
+          { binding: 8, resource: { buffer: socket.paramsBuffer } },
+          { binding: 10, resource: { buffer: socket.componentMotionBuffer } },
+          { binding: 11, resource: { buffer: carriedFireAuditBuffer } },
+        ],
+      }));
+    });
+    return {
+      computeLayout,
+      clearPipeline,
+      updatePipeline,
+      weakenPipeline,
+      motionPipeline,
+      emitPipeline,
+      finalizePipeline,
+      bondPresentationPipeline,
+      nodePresentationPipeline,
+    };
   });
 
   function bindGroup(socket, fluidBuffer) {
