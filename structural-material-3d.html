@@ -143,6 +143,7 @@
       buildLayeredStructuralWitnessScenario,
       createLayeredStructuralMaterial,
       createLayeredStructuralPickedDragInteraction,
+      resolveLayeredStructuralRestContact,
       summarizeLayeredStructuralState,
     } from './structural-material-3d-core.js';
     import {
@@ -340,7 +341,7 @@
         world.add(mesh);
       }
       if (forceEnvelope) {
-        const contactPoint = forceEnvelope.point || forceEnvelope.start;
+        const contactPoint = forceEnvelope.displayPoint || forceEnvelope.start || forceEnvelope.point;
         const visualEnd = forceEnvelope.visualEnd || forceEnvelope.point;
         const start = new THREE.Vector3((contactPoint.x - 0.5) * 2.35, (0.5 - contactPoint.y) * 1.25, (contactPoint.z - 0.5) * 0.95);
         const end = new THREE.Vector3((visualEnd.x - 0.5) * 2.35, (0.5 - visualEnd.y) * 1.25, (visualEnd.z - 0.5) * 0.95);
@@ -494,12 +495,12 @@
       };
     }
 
-    function structuralPointFromWorld(hitPoint) {
+    function displayedStructuralPointFromWorld(hitPoint) {
       const local = world.worldToLocal(hitPoint.clone());
       return {
-        x: Math.max(0, Math.min(1, local.x / 2.35 + 0.5)),
-        y: Math.max(0, Math.min(1, 0.5 - local.y / 1.25)),
-        z: Math.max(0, Math.min(1, local.z / 0.95 + 0.5)),
+        x: local.x / 2.35 + 0.5,
+        y: 0.5 - local.y / 1.25,
+        z: local.z / 0.95 + 0.5,
       };
     }
 
@@ -531,25 +532,55 @@
         .intersectObjects(world.children, false)
         .find(intersection => intersection.object.userData.structuralPick);
       if (!hit) return null;
+      const structuralPick = hit.object.userData.structuralPick;
+      const displayPoint = displayedStructuralPointFromWorld(hit.point);
+      let segmentT = null;
+      if (structuralPick.kind === 'bond') {
+        const bond = material.bonds.find(candidate => candidate.id === structuralPick.id);
+        const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+        const a = worldPoint(nodeById.get(bond.a));
+        const b = worldPoint(nodeById.get(bond.b));
+        const localHit = world.worldToLocal(hit.point.clone());
+        const segment = b.clone().sub(a);
+        segmentT = segment.lengthSq() > 0
+          ? Math.max(0, Math.min(1, localHit.clone().sub(a).dot(segment) / segment.lengthSq()))
+          : 0.5;
+      }
+      const contact = resolveLayeredStructuralRestContact(material, {
+        ...structuralPick,
+        displayPoint,
+        segmentT,
+      });
       return {
-        ...hit.object.userData.structuralPick,
-        point: structuralPointFromWorld(hit.point),
+        ...contact,
         distance: hit.distance,
       };
     }
 
-    function projectedStructuralPickTarget() {
+    function projectedStructuralPickTargets() {
       camera.updateMatrixWorld(true);
       world.updateMatrixWorld(true);
       const rect = renderer.domElement.getBoundingClientRect();
       const candidates = world.children
         .filter(child => child.userData.structuralPick?.kind === 'node')
         .map(child => {
+          const node = material.nodes.find(candidate => candidate.id === child.userData.structuralPick.id);
           const worldPosition = child.getWorldPosition(new THREE.Vector3());
           const projected = worldPosition.clone().project(camera);
           return {
             kind: child.userData.structuralPick.kind,
             id: child.userData.structuralPick.id,
+            restPoint: { x: node.x, y: node.y, z: node.z },
+            displayPoint: {
+              x: node.x + node.displacement.x,
+              y: node.y + node.displacement.y,
+              z: node.z + node.displacement.z,
+            },
+            displacementMagnitude: Math.hypot(
+              node.displacement.x,
+              node.displacement.y,
+              node.displacement.z,
+            ),
             clientX: rect.left + (projected.x + 1) * 0.5 * rect.width,
             clientY: rect.top + (1 - projected.y) * 0.5 * rect.height,
             ndc: { x: projected.x, y: projected.y, z: projected.z },
@@ -558,7 +589,11 @@
         })
         .filter(candidate => Math.abs(candidate.ndc.x) < 0.82 && Math.abs(candidate.ndc.y) < 0.82 && candidate.ndc.z > -1 && candidate.ndc.z < 1)
         .sort((a, b) => a.centerDistance - b.centerDistance);
-      return candidates[0] || null;
+      return candidates;
+    }
+
+    function projectedStructuralPickTarget() {
+      return projectedStructuralPickTargets()[0] || null;
     }
 
     function applyDrag(point) {
@@ -567,6 +602,7 @@
           start: dragStart?.screen || point,
           current: point,
           contactPoint: dragStart?.contactPoint || lastPoint,
+          displayContactPoint: dragStart?.displayContactPoint || dragStart?.contactPoint || lastPoint,
           screenRight: dragStart?.screenRight,
           screenDown: dragStart?.screenDown,
           gestureId: dragStart?.gestureId,
@@ -835,6 +871,7 @@
           gestureId: `picked-drag-${++structuralGestureSequence}`,
           screen,
           contactPoint: pick.point,
+          displayContactPoint: pick.displayPoint,
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
         };
@@ -842,6 +879,7 @@
           start: screen,
           current: screen,
           contactPoint: pick.point,
+          displayContactPoint: pick.displayPoint,
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
           gestureId: dragStart.gestureId,
@@ -995,6 +1033,7 @@
     });
 
     window.__structuralMaterial3dPickTarget = projectedStructuralPickTarget;
+    window.__structuralMaterial3dPickTargets = projectedStructuralPickTargets;
     window.__structuralMaterial3dPickProbe = (clientX, clientY) => pickStructuralContact({ clientX, clientY });
     window.__structuralMaterial3dGpuStatusWitness = () => ({
       latestGpuOperation: latestGpuOperationTracker.snapshot(),
@@ -1167,6 +1206,75 @@
           first.lifecycle.bufferAllocationCount === 9 &&
           second.lifecycle.bufferAllocationCount === 9,
         disposeIdempotent: JSON.stringify(dispose) === JSON.stringify(disposeAgain),
+      };
+    };
+
+    window.__structuralMaterial3dRunGpuContactLocalityWitness = async () => {
+      const runContact = async point => {
+        const state = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const interaction = {
+          kind: 'picked-contact-locality-witness',
+          point,
+          vector: { x: 1, y: 0.08, z: -0.64 },
+          magnitude: 1.46,
+          radius: 0.18,
+        };
+        const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state });
+        const receipt = await sidecar.execute(interaction);
+        const brokenBondIndices = receipt.gpuStructuralState?.finalBondLiveness?.flatMap(
+          (alive, index) => alive ? [] : [index],
+        ) || [];
+        const breakCentroid = brokenBondIndices.length > 0
+          ? brokenBondIndices.reduce((centroid, index) => {
+              const midpoint = state.bonds[index].midpoint;
+              centroid.x += midpoint.x / brokenBondIndices.length;
+              centroid.y += midpoint.y / brokenBondIndices.length;
+              centroid.z += midpoint.z / brokenBondIndices.length;
+              return centroid;
+            }, { x: 0, y: 0, z: 0 })
+          : null;
+        const dispose = await sidecar.dispose();
+        return {
+          requestedExecutionRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+          effectiveExecutionRoute: receipt.effectiveRoute,
+          requestedBackend: 'webgpu',
+          effectiveBackend: receipt.effectiveBackend,
+          cpuFallbackUsed: receipt.cpuFallbackUsed,
+          requestedInteraction: interaction,
+          effectiveInteraction: receipt.interaction,
+          objectIdentity: receipt.objectIdentity,
+          eventEpoch: receipt.eventEpoch,
+          brokenBondIndices,
+          breakCentroid,
+          status: receipt.status,
+          failurePhase: receipt.failurePhase,
+          compactValidation: receipt.compactValidation,
+          lifecycle: receipt.lifecycle,
+          timingsMs: receipt.timingsMs,
+          dispose,
+        };
+      };
+      const left = await runContact({ x: 0.18, y: 0.24, z: 0.5 });
+      const right = await runContact({ x: 0.88, y: 0.24, z: 0.5 });
+      const passed = left.status === 'passed' && right.status === 'passed' &&
+        left.effectiveExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+        right.effectiveExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+        left.effectiveBackend === 'webgpu' && right.effectiveBackend === 'webgpu' &&
+        left.cpuFallbackUsed === false && right.cpuFallbackUsed === false &&
+        left.brokenBondIndices.length > 0 && right.brokenBondIndices.length > 0 &&
+        JSON.stringify(left.brokenBondIndices) !== JSON.stringify(right.brokenBondIndices) &&
+        right.breakCentroid.x > left.breakCentroid.x + 0.12;
+      return {
+        schema: 'kaminos.structural-material.webgpu-contact-locality-witness.v0',
+        status: passed ? 'passed' : 'failed',
+        failurePhase: passed ? null : 'gpu-contact-locality',
+        requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+        effectiveRoute: passed ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE : null,
+        left,
+        right,
+        breakCentroidDeltaX: left.breakCentroid && right.breakCentroid
+          ? right.breakCentroid.x - left.breakCentroid.x
+          : null,
       };
     };
 

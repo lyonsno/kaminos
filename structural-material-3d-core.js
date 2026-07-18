@@ -314,6 +314,47 @@ export function createLayeredStructuralMaterial(options = {}) {
   return finalizeState(initial);
 }
 
+export function resolveLayeredStructuralRestContact(state, pick = {}) {
+  const kind = pick.kind === 'bond' ? 'bond' : pick.kind === 'node' ? 'node' : null;
+  if (!kind || typeof pick.id !== 'string') throw new Error('structural pick requires node or bond identity');
+  const displayPoint = {
+    x: finite(pick.displayPoint?.x, 0.5),
+    y: finite(pick.displayPoint?.y, 0.5),
+    z: finite(pick.displayPoint?.z, 0.5),
+  };
+  if (kind === 'node') {
+    const node = state.nodes.find(candidate => candidate.id === pick.id);
+    if (!node) throw new Error(`unknown structural node pick: ${pick.id}`);
+    return {
+      authority: 'stable-rest-material-contact-v0',
+      kind,
+      id: node.id,
+      point: { x: node.x, y: node.y, z: node.z },
+      displayPoint,
+      segmentT: null,
+    };
+  }
+  const bond = state.bonds.find(candidate => candidate.id === pick.id);
+  if (!bond) throw new Error(`unknown structural bond pick: ${pick.id}`);
+  const nodeById = new Map(state.nodes.map(node => [node.id, node]));
+  const a = nodeById.get(bond.a);
+  const b = nodeById.get(bond.b);
+  if (!a || !b) throw new Error(`structural bond ${bond.id} has missing endpoints`);
+  const segmentT = clamp(pick.segmentT ?? 0.5, 0, 1);
+  return {
+    authority: 'stable-rest-material-contact-v0',
+    kind,
+    id: bond.id,
+    point: {
+      x: round(a.x + (b.x - a.x) * segmentT, 6),
+      y: round(a.y + (b.y - a.y) * segmentT, 6),
+      z: round(a.z + (b.z - a.z) * segmentT, 6),
+    },
+    displayPoint,
+    segmentT: round(segmentT, 6),
+  };
+}
+
 function stressForBond(bond, interaction) {
   const direction = normalizedVector3(interaction.vector);
   const magnitude = clamp(interaction.magnitude, 0, 5);
@@ -325,7 +366,12 @@ function stressForBond(bond, interaction) {
     bond.direction.z * direction.x - bond.direction.x * direction.z,
     bond.direction.x * direction.y - bond.direction.y * direction.x,
   );
-  const xLoad = 0.18 + bond.midpoint.x * 0.86;
+  const contactX = Math.max(0.04, point.x);
+  const pathCoordinate = clamp(bond.midpoint.x / contactX, 0, 1);
+  const beyondContact = Math.max(0, bond.midpoint.x - point.x);
+  const pathTail = Math.max(0.04, radius * 0.55);
+  const xLoad = (0.18 + pathCoordinate * 0.86) *
+    Math.exp(-(beyondContact * beyondContact) / (2 * pathTail * pathTail));
   const dy = bond.midpoint.y - point.y;
   const dz = bond.midpoint.z - point.z;
   const grip = 0.28 + 0.72 * Math.exp(-(dy * dy + dz * dz * 0.72) / (2 * radius * radius));
@@ -441,6 +487,7 @@ export function createLayeredStructuralPickedDragInteraction({
   start,
   current,
   contactPoint,
+  displayContactPoint,
   screenRight,
   screenDown,
   gestureId,
@@ -448,6 +495,11 @@ export function createLayeredStructuralPickedDragInteraction({
   const dragStart = normalizedPoint2(start);
   const dragCurrent = normalizedPoint2(current, dragStart);
   const contact = normalizedPoint3(contactPoint, { x: 0.5, y: 0.5, z: 0.5 });
+  const displayContact = {
+    x: finite(displayContactPoint?.x, contact.x),
+    y: finite(displayContactPoint?.y, contact.y),
+    z: finite(displayContactPoint?.z, contact.z),
+  };
   const rightRaw = {
     x: finite(screenRight?.x, 1),
     y: finite(screenRight?.y, 0),
@@ -477,9 +529,9 @@ export function createLayeredStructuralPickedDragInteraction({
     : 1;
   const visualLength = Math.min(length, 0.42);
   const visualEnd = {
-    x: contact.x + direction.x * visualLength,
-    y: contact.y + direction.y * visualLength,
-    z: contact.z + direction.z * visualLength,
+    x: displayContact.x + direction.x * visualLength,
+    y: displayContact.y + direction.y * visualLength,
+    z: displayContact.z + direction.z * visualLength,
   };
   return {
     kind: 'camera-relative-picked-layered-drag',
@@ -487,8 +539,9 @@ export function createLayeredStructuralPickedDragInteraction({
     gestureId: typeof gestureId === 'string' || Number.isFinite(gestureId)
       ? String(gestureId)
       : null,
-    start: { ...contact },
+    start: { ...displayContact },
     point: { ...contact },
+    displayPoint: { ...displayContact },
     visualEnd: { x: round(visualEnd.x), y: round(visualEnd.y), z: round(visualEnd.z) },
     vector: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
     screenBasis: {

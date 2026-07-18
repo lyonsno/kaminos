@@ -20,6 +20,7 @@ const {
   STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE,
   buildLayeredStructuralCpuBondOracle,
   compareLayeredStructuralGpuParity,
+  packLayeredStructuralGpuInteraction,
   packLayeredStructuralGpuSnapshot,
   runLayeredStructuralWebGpuParity,
 } = await import('../structural-material-3d-webgpu-core.js');
@@ -52,6 +53,14 @@ assert.equal(packed.bondCount, state.bonds.length);
 assert.equal(packed.nodeData.byteLength, state.nodes.length * packed.layout.nodeStrideBytes);
 assert.equal(packed.bondData.byteLength, state.bonds.length * packed.layout.bondStrideBytes);
 assert.equal(packed.interactionData.byteLength, packed.layout.interactionBytes);
+const packedShiftedContact = packLayeredStructuralGpuInteraction(state, {
+  ...scenario.force,
+  point: { x: 0.18, y: 0.24, z: 0.5 },
+});
+const packedShiftedView = new DataView(packedShiftedContact);
+assert.ok(Math.abs(packedShiftedView.getFloat32(16, true) - 0.18) < 0.000001, 'packed ABI preserves picked contact x');
+assert.ok(Math.abs(packedShiftedView.getFloat32(20, true) - 0.24) < 0.000001, 'packed ABI preserves picked contact y');
+assert.ok(Math.abs(packedShiftedView.getFloat32(24, true) - 0.5) < 0.000001, 'packed ABI preserves picked contact z');
 assert.equal(oracle.responses.length, state.bonds.length);
 assert.equal(oracle.eventCandidates.length, scenario.summaries.cracked.brokenBondCount);
 assert.ok(oracle.eventCandidates.some(event => event.bondKind === 'depth'), 'CPU parity oracle includes depth fracture candidates');

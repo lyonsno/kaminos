@@ -48,6 +48,8 @@ assert.match(tearSource, /componentLabels/, 'tear bridge consumes GPU-returned c
 assert.match(witnessSource, /notchedControlDiscriminates/, 'browser witness rejects geometry-independent breakup');
 assert.match(witnessSource, /visibleTransformBoundToGpuLabels/, 'browser witness binds visible transforms to GPU labels');
 assert.match(witnessSource, /releasePreservedSeparation/, 'browser witness checks persistent release state');
+assert.match(witnessSource, /contactLocalityMovedGpuBreakCentroid/, 'browser witness rejects x-invariant GPU breakup');
+assert.match(witnessSource, /displacedPickPreservedRestIdentity/, 'browser witness rejects displaced display coordinates used as rest contact');
 assert.match(witnessSource, /interactiveValidation/, 'product witness requires compact hot-route validation');
 assert.match(witnessSource, /hotResidency/, 'product witness proves the live WebGPU sidecar remains resident');
 assert.match(witnessSource, /screenshotPixelProbe/, 'browser witness inspects the actual screenshot pixels');
@@ -57,6 +59,8 @@ assert.match(
   'browser witness retries compositor capture within the caller-owned timeout budget',
 );
 assert.match(pageSource, /__structuralMaterial3dRunGpuSympatheticTear/, '3D route exposes the product-level GPU tear');
+assert.match(pageSource, /__structuralMaterial3dRunGpuContactLocalityWitness/, '3D route exposes reset-identical resident GPU contact locality evidence');
+assert.match(pageSource, /__structuralMaterial3dPickTargets/, '3D route exposes projected structural targets for adversarial displaced-pick evidence');
 assert.match(pageSource, /pointerup/, 'effigy drag release remains the world-consequence boundary');
 assert.match(
   pageSource,

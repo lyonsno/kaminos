@@ -116,7 +116,11 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let nodeMidpoint = (nodes[bond.endpoints.x].position.xyz + nodes[bond.endpoints.y].position.xyz) * 0.5;
   let axial = abs(dot(direction, forceDirection));
   let shear = length(cross(direction, forceDirection));
-  let xLoad = 0.18 + nodeMidpoint.x * 0.86;
+  let contactX = max(0.04, point.x);
+  let pathCoordinate = clamp(nodeMidpoint.x / contactX, 0.0, 1.0);
+  let beyondContact = max(0.0, nodeMidpoint.x - point.x);
+  let pathTail = max(0.04, radius * 0.55);
+  let xLoad = (0.18 + pathCoordinate * 0.86) * exp(-(beyondContact * beyondContact) / (2.0 * pathTail * pathTail));
   let dy = nodeMidpoint.y - point.y;
   let dz = nodeMidpoint.z - point.z;
   let grip = 0.28 + 0.72 * exp(-(dy * dy + dz * dz * 0.72) / (2.0 * radius * radius));

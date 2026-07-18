@@ -13,6 +13,7 @@ import {
   createLayeredStructuralDragInteraction,
   createLayeredStructuralMaterial,
   createLayeredStructuralPickedDragInteraction,
+  evaluateLayeredStructuralBondResponse,
   summarizeLayeredStructuralState,
 } from '../structural-material-3d-core.js';
 
@@ -90,6 +91,104 @@ assert.equal(initialSummary.sidecar.visualConsumerAuthority, STRUCTURAL_MATERIAL
 assert.ok(initialSummary.sidecar.storageShape.nodeFields.includes('position3'), 'sidecar records 3D node storage fields');
 assert.ok(initialSummary.sidecar.storageShape.bondFields.includes('alive'), 'sidecar records persistent bond liveness');
 
+function stressLocus(state, interaction) {
+  const weighted = state.bonds.map(bond => ({
+    bond,
+    stress: evaluateLayeredStructuralBondResponse(bond, interaction).stress,
+  }));
+  const totalStress = weighted.reduce((total, entry) => total + entry.stress, 0);
+  const peak = weighted.reduce((best, entry) => entry.stress > best.stress ? entry : best, weighted[0]);
+  return {
+    centroidX: weighted.reduce((total, entry) => total + entry.bond.midpoint.x * entry.stress, 0) / totalStress,
+    peakX: peak.bond.midpoint.x,
+    fingerprint: weighted.map(entry => entry.stress.toFixed(6)).join(':'),
+  };
+}
+
+const upperLeftContact = {
+  ...force,
+  point: { x: 0.18, y: 0.24, z: 0.5 },
+  radius: 0.18,
+};
+const upperRightContact = {
+  ...upperLeftContact,
+  point: { ...upperLeftContact.point, x: 0.88 },
+};
+const upperLeftLocus = stressLocus(notched, upperLeftContact);
+const upperRightLocus = stressLocus(notched, upperRightContact);
+assert.notEqual(
+  upperLeftLocus.fingerprint,
+  upperRightLocus.fingerprint,
+  'changing only picked x must change the solver stress field',
+);
+assert.ok(
+  upperRightLocus.centroidX > upperLeftLocus.centroidX + 0.12,
+  'force-equivalent separated picks move the weighted structural stress locus',
+);
+assert.ok(
+  upperRightLocus.peakX > upperLeftLocus.peakX + 0.12,
+  'force-equivalent separated picks move the peak structural stress neighborhood',
+);
+const nearAnchorLoci = [0, 0.02, 0.04].map(x => stressLocus(notched, {
+  ...upperLeftContact,
+  point: { ...upperLeftContact.point, x },
+}));
+assert.ok(
+  nearAnchorLoci.every(locus => Number.isFinite(locus.centroidX) && locus.centroidX < 0.15),
+  'near-zero contacts remain finite and localized on the anchor side of the material',
+);
+assert.ok(
+  nearAnchorLoci[0].centroidX < nearAnchorLoci[1].centroidX &&
+    nearAnchorLoci[1].centroidX < nearAnchorLoci[2].centroidX,
+  'the deliberate contact-x floor stays continuous enough to preserve sub-floor contact ordering',
+);
+
+const coreModule = await import('../structural-material-3d-core.js');
+assert.equal(
+  typeof coreModule.resolveLayeredStructuralRestContact,
+  'function',
+  'picked rendered geometry has an explicit stable rest-material contact resolver',
+);
+const displacedNodeState = structuredClone(notched);
+const displacedNode = displacedNodeState.nodes.find(node => !node.pinned && node.x > 0.7 && node.y < 0.3);
+displacedNode.displacement = { x: -0.42, y: 0.17, z: -0.08 };
+const displayedNodePoint = {
+  x: displacedNode.x + displacedNode.displacement.x,
+  y: displacedNode.y + displacedNode.displacement.y,
+  z: displacedNode.z + displacedNode.displacement.z,
+};
+const resolvedNodeContact = coreModule.resolveLayeredStructuralRestContact(displacedNodeState, {
+  kind: 'node',
+  id: displacedNode.id,
+  displayPoint: displayedNodePoint,
+});
+assert.deepEqual(
+  resolvedNodeContact.point,
+  { x: displacedNode.x, y: displacedNode.y, z: displacedNode.z },
+  'a displaced node pick resolves to its authored rest-material point',
+);
+assert.deepEqual(
+  resolvedNodeContact.displayPoint,
+  displayedNodePoint,
+  'a displaced node pick preserves the separately rendered contact point',
+);
+
+const pickedBond = displacedNodeState.bonds.find(bond => bond.a === displacedNode.id || bond.b === displacedNode.id);
+const bondA = displacedNodeState.nodes.find(node => node.id === pickedBond.a);
+const bondB = displacedNodeState.nodes.find(node => node.id === pickedBond.b);
+const bondSegmentT = 0.25;
+const resolvedBondContact = coreModule.resolveLayeredStructuralRestContact(displacedNodeState, {
+  kind: 'bond',
+  id: pickedBond.id,
+  segmentT: bondSegmentT,
+  displayPoint: { x: 0.13, y: 0.27, z: 0.41 },
+});
+assert.deepEqual(resolvedBondContact.point, {
+  x: Number((bondA.x + (bondB.x - bondA.x) * bondSegmentT).toFixed(6)),
+  y: Number((bondA.y + (bondB.y - bondA.y) * bondSegmentT).toFixed(6)),
+  z: Number((bondA.z + (bondB.z - bondA.z) * bondSegmentT).toFixed(6)),
+}, 'a displayed bond hit fraction interpolates authored endpoints');
+
 const shortDrag = createLayeredStructuralDragInteraction({
   start: { x: 0.48, y: 0.5 },
   current: { x: 0.56, y: 0.51 },
@@ -130,6 +229,19 @@ const pickedAfterOrbit = createLayeredStructuralPickedDragInteraction({
 assert.deepEqual(pickedAfterOrbit.point, pickedContact, 'camera changes do not move the picked contact');
 assert.ok(pickedAfterOrbit.vector.z < -0.99, 'rightward screen drag follows the post-orbit camera right basis');
 assert.ok(Math.abs(pickedAfterOrbit.vector.x) < 0.001, 'post-orbit drag does not leak the original structural x basis');
+
+const displacedDisplayedContact = { x: -0.14, y: 0.72, z: 1.08 };
+const pickedWithDisplacedDisplay = createLayeredStructuralPickedDragInteraction({
+  start: { x: 0.4, y: 0.5 },
+  current: { x: 0.7, y: 0.5 },
+  contactPoint: pickedContact,
+  displayContactPoint: displacedDisplayedContact,
+  screenRight: { x: 1, y: 0, z: 0 },
+  screenDown: { x: 0, y: 1, z: 0 },
+});
+assert.deepEqual(pickedWithDisplacedDisplay.point, pickedContact, 'solver contact remains in authored material coordinates');
+assert.deepEqual(pickedWithDisplacedDisplay.displayPoint, displacedDisplayedContact, 'visible contact can remain outside the authored rest volume');
+assert.deepEqual(pickedWithDisplacedDisplay.start, displacedDisplayedContact, 'force marker begins at the displaced rendered contact');
 
 const pickedWithoutMotion = createLayeredStructuralPickedDragInteraction({
   start: { x: 0.4, y: 0.5 },

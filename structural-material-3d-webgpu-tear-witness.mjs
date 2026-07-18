@@ -258,6 +258,7 @@ const report = {
   unnotchedControl: null,
   notchedTear: null,
   visibleTear: null,
+  contactLocality: null,
   repeatDrag: null,
   residentBinding: null,
   visibleBinding: null,
@@ -323,6 +324,45 @@ try {
     phase: 'page-load',
     effectivePageRoute: report.effectivePageRoute,
     cameraAuthority: pageBefore.cameraControlAuthority,
+  };
+
+  report.failurePhase = 'gpu-contact-locality';
+  report.contactLocality = await evaluate(
+    'window.__structuralMaterial3dRunGpuContactLocalityWitness()',
+    true,
+  );
+  const leftLocality = report.contactLocality?.left;
+  const rightLocality = report.contactLocality?.right;
+  report.checks.contactLocalityRouteIdentity = report.contactLocality?.status === 'passed' &&
+    report.contactLocality?.requestedRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    report.contactLocality?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    leftLocality?.effectiveExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    rightLocality?.effectiveExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE;
+  report.checks.contactLocalityBackendIdentity = leftLocality?.effectiveBackend === 'webgpu' &&
+    rightLocality?.effectiveBackend === 'webgpu' &&
+    leftLocality?.cpuFallbackUsed === false && rightLocality?.cpuFallbackUsed === false;
+  report.checks.contactLocalityPreservedInteractionPoints =
+    JSON.stringify(leftLocality?.requestedInteraction?.point) ===
+      JSON.stringify(leftLocality?.effectiveInteraction?.point) &&
+    JSON.stringify(rightLocality?.requestedInteraction?.point) ===
+      JSON.stringify(rightLocality?.effectiveInteraction?.point);
+  report.checks.contactLocalityMovedGpuBreakCentroid =
+    leftLocality?.brokenBondIndices?.length > 0 &&
+    rightLocality?.brokenBondIndices?.length > 0 &&
+    JSON.stringify(leftLocality.brokenBondIndices) !== JSON.stringify(rightLocality.brokenBondIndices) &&
+    report.contactLocality.breakCentroidDeltaX > 0.12;
+  for (const name of [
+    'contactLocalityRouteIdentity',
+    'contactLocalityBackendIdentity',
+    'contactLocalityPreservedInteractionPoints',
+    'contactLocalityMovedGpuBreakCentroid',
+  ]) assertCheck(report.checks[name], `GPU contact-locality check failed: ${name}`);
+  report.lastTrustworthyEvidence = {
+    phase: 'gpu-contact-locality',
+    effectiveRoute: report.contactLocality.effectiveRoute,
+    leftBreakCentroid: leftLocality.breakCentroid,
+    rightBreakCentroid: rightLocality.breakCentroid,
+    breakCentroidDeltaX: report.contactLocality.breakCentroidDeltaX,
   };
 
   report.failurePhase = 'effigy-drag';
@@ -545,7 +585,13 @@ try {
   assertCheck(report.checks.releasePreservedSeparation, 'release did not preserve the GPU-authored separation');
 
   report.failurePhase = 'repeat-drag-continuity';
-  const repeatPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  const repeatPickTarget = await evaluate(`(() => {
+    const targets = window.__structuralMaterial3dPickTargets();
+    return targets
+      .filter(candidate => candidate.displacementMagnitude > 0.001)
+      .sort((a, b) => b.displacementMagnitude - a.displacementMagnitude)[0] ||
+      window.__structuralMaterial3dPickTarget();
+  })()`);
   assertCheck(repeatPickTarget, 'displaced material exposed no projected target for a second drag');
   const repeatStart = { x: repeatPickTarget.clientX, y: repeatPickTarget.clientY };
   const repeatEnd = {
@@ -567,6 +613,25 @@ try {
   assertCheck(
     report.checks.repeatPointerDownPreservedDisplacement,
     'second pointer down changed accepted component displacement before drag input',
+  );
+  const repeatPick = repeatPointerDown.interactionDiagnostics?.pick;
+  const repeatForce = repeatPointerDown.forceEnvelope;
+  const displayedRestDistance = repeatPick?.point && repeatPick?.displayPoint
+    ? Math.hypot(
+        repeatPick.point.x - repeatPick.displayPoint.x,
+        repeatPick.point.y - repeatPick.displayPoint.y,
+        repeatPick.point.z - repeatPick.displayPoint.z,
+      )
+    : 0;
+  report.checks.displacedPickPreservedRestIdentity =
+    repeatPick?.authority === 'stable-rest-material-contact-v0' &&
+    displayedRestDistance > 0.001 &&
+    JSON.stringify(repeatPick.point) === JSON.stringify(repeatForce?.point) &&
+    JSON.stringify(repeatPick.displayPoint) === JSON.stringify(repeatForce?.displayPoint) &&
+    JSON.stringify(repeatPick.displayPoint) === JSON.stringify(repeatForce?.start);
+  assertCheck(
+    report.checks.displacedPickPreservedRestIdentity,
+    'displaced rendered pick did not preserve separate display and stable rest-material contacts',
   );
   await send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -613,6 +678,8 @@ try {
     pointerDown: {
       visibleTear: repeatPointerDown.visibleTear,
       forceEnvelope: repeatPointerDown.forceEnvelope,
+      pick: repeatPick,
+      displayedRestDistance,
     },
     before: {
       visibleTear: persisted.visibleTear,
