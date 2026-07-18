@@ -369,6 +369,123 @@ function compareFluidProjections(sphere, surface) {
   };
 }
 
+function measureSharedSupportIdentity(spherePath, surfacePath, refractionThicknessPath, label) {
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', spherePath,
+  ], { encoding: 'utf8' });
+  const stream = probe.status === 0 ? JSON.parse(probe.stdout || '{}')?.streams?.[0] : null;
+  const width = Number(stream?.width);
+  const height = Number(stream?.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error(`ffprobe ${label} support identity dimensions failed: ${probe.stderr || probe.status}`);
+  }
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const sphere = decode(spherePath);
+  const surface = decode(surfacePath);
+  const refraction = decode(refractionThicknessPath);
+  const expectedBytes = width * height * 3;
+  if (
+    sphere.status !== 0
+    || surface.status !== 0
+    || refraction.status !== 0
+    || sphere.stdout?.length !== expectedBytes
+    || surface.stdout?.length !== expectedBytes
+    || refraction.stdout?.length !== expectedBytes
+  ) {
+    throw new Error(`ffmpeg ${label} support identity decode failed or dimensions disagree`);
+  }
+
+  let liquidMask = new Uint8Array(width * height);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const offset = pixel * 3;
+    const sphereR = sphere.stdout[offset];
+    const sphereG = sphere.stdout[offset + 1];
+    const sphereB = sphere.stdout[offset + 2];
+    const surfaceR = surface.stdout[offset];
+    const surfaceG = surface.stdout[offset + 1];
+    const surfaceB = surface.stdout[offset + 2];
+    const thicknessR = refraction.stdout[offset];
+    const thicknessG = refraction.stdout[offset + 1];
+    const thicknessB = refraction.stdout[offset + 2];
+    const sphereLiquid = sphereB >= 58 && sphereB >= sphereR * 1.28 && sphereB >= sphereG * 0.92 && sphereG >= sphereR * 1.02;
+    const surfaceLiquid = surfaceB >= 58 && surfaceB >= surfaceR * 1.28 && surfaceB >= surfaceG * 0.92 && surfaceG >= surfaceR * 1.02;
+    const thicknessLiquid = thicknessR > 110 && thicknessR > thicknessG * 1.12 && thicknessG > thicknessB * 1.18;
+    if (sphereLiquid || surfaceLiquid || thicknessLiquid) liquidMask[pixel] = 1;
+  }
+  for (let dilation = 0; dilation < 12; dilation += 1) {
+    const expanded = liquidMask.slice();
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const pixel = y * width + x;
+        if (!liquidMask[pixel]) continue;
+        expanded[pixel - width - 1] = 1;
+        expanded[pixel - width] = 1;
+        expanded[pixel - width + 1] = 1;
+        expanded[pixel - 1] = 1;
+        expanded[pixel + 1] = 1;
+        expanded[pixel + width - 1] = 1;
+        expanded[pixel + width] = 1;
+        expanded[pixel + width + 1] = 1;
+      }
+    }
+    liquidMask = expanded;
+  }
+
+  let comparedPixels = 0;
+  let mismatchedPixels = 0;
+  let absoluteChannelDelta = 0;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    if (liquidMask[pixel]) continue;
+    const offset = pixel * 3;
+    let maximumDelta = 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const sphereValue = sphere.stdout[offset + channel];
+      const surfaceDelta = Math.abs(sphereValue - surface.stdout[offset + channel]);
+      const refractionDelta = Math.abs(sphereValue - refraction.stdout[offset + channel]);
+      maximumDelta = Math.max(maximumDelta, surfaceDelta, refractionDelta);
+      absoluteChannelDelta += surfaceDelta + refractionDelta;
+    }
+    comparedPixels += 1;
+    if (maximumDelta > 4) mismatchedPixels += 1;
+  }
+  const pixelCount = width * height;
+  if (comparedPixels < pixelCount * 0.35) {
+    throw new Error(`${label} support identity mask left insufficient full-frame evidence: ${comparedPixels}/${pixelCount}`);
+  }
+  return {
+    label,
+    spherePath,
+    surfacePath,
+    refractionThicknessPath,
+    pixelCount,
+    comparedPixels,
+    comparedRatio: Number((comparedPixels / pixelCount).toFixed(5)),
+    mismatchedPixels,
+    mismatchRatio: Number((mismatchedPixels / comparedPixels).toFixed(6)),
+    meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, comparedPixels * 6)).toFixed(4)),
+    liquidMaskDilationPixels: 12,
+    measurement: 'same_camera_nonliquid_shared_support_rgb24_identity_v0',
+  };
+}
+
+function requireSharedSupportPresentation(receipt, label) {
+  const supportPresentationEvidence = receipt?.supportPresentationEvidence;
+  if (
+    supportPresentationEvidence?.route !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'
+    || supportPresentationEvidence?.depthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
+    || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
+    || supportPresentationEvidence?.passCount < 1
+    || supportPresentationEvidence?.particleSupportDrawCount !== 0
+  ) {
+    throw new Error(`${label} shared analytic support presentation evidence missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
+  }
+  return supportPresentationEvidence;
+}
+
 function measureCapturedPngDelta(leftPath, rightPath, label) {
   const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
     encoding: null,
@@ -1019,6 +1136,7 @@ async function main() {
       throw new Error(`optical renderer disagreement in requested/effective route identity: ${JSON.stringify({ requestedRendererMode, expectedRendererRoute, requestedRenderer: lastDebugState.runtime?.requestedRenderer, effectiveRenderer: lastDebugState.runtime?.effectiveRenderer })}`);
     }
     if (lastDebugState.runtime?.fallbackReason) throw new Error(`renderer fallback rejected: ${lastDebugState.runtime.fallbackReason}`);
+    requireSharedSupportPresentation(lastDebugState.runtime, 'initial runtime');
     if (effectiveRendererMode === 'screen_space_surface') {
       screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
       if (screenSpaceSurfaceEvidence?.route !== 'webgpu-screen-space-liquid-surface-v0') throw new Error(`screen-space route evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
@@ -1037,7 +1155,7 @@ async function main() {
         || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || refractionEvidence?.analyticSupportDepthPassCount < 1
         || refractionEvidence?.opticalDebugMode !== requestedOpticalDebugMode
-        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-shared-support-scene-color-v0'
+        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
         || refractionEvidence?.scenePassCount < 1
         || refractionEvidence?.accumulationPassCount < 1
         || refractionEvidence?.compositePassCount < 1
@@ -1050,8 +1168,18 @@ async function main() {
     if (effectiveChemistryDiffusion === 0 && lastDebugState.runtime?.chemistryDiffusionPassCount !== 0) throw new Error(`zero diffusion dispatched hidden chemistry work: ${lastDebugState.runtime?.chemistryDiffusionPassCount}`);
     if (effectiveChemistryDiffusion > 0 && lastDebugState.runtime?.chemistryDiffusionPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled chemistry diffusion missed required passes: ${JSON.stringify({ chemistryDiffusionPassCount: lastDebugState.runtime?.chemistryDiffusionPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
-    if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
-      throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
+    const playground = lastDebugState.runtime?.playground;
+    if (
+      !playground?.rendered
+      || playground.supportGeometryMode !== 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'
+      || playground.supportPresentationRoute !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'
+      || playground.supportGeometryCountUnit !== 'vertices'
+      || playground.terrainVertexCount <= 0
+      || playground.obstacleVertexCount <= 0
+      || playground.supportGeometryCount !== playground.terrainVertexCount + playground.obstacleVertexCount
+      || playground.particleSupportDrawCount !== 0
+    ) {
+      throw new Error(`shared analytic playground presentation is missing or stale: ${JSON.stringify(playground)}`);
     }
     if (lastDebugState.runtime?.obstacleContract !== 'shared-solver-render-obstacle-v0' || lastDebugState.runtime?.obstacle?.rendered !== true) throw new Error(`solver obstacle is not attributable in the renderer: ${JSON.stringify(lastDebugState.runtime?.obstacle)}`);
     if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
@@ -1262,7 +1390,7 @@ async function main() {
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       if (max > 66 && max - min > 18) activePixels += 1;
-      if (g > 28 && r > 20 && g > r * 1.03 && r > b * 1.12 && max < 105) supportPixels += 1;
+      if (g > 28 && r > 20 && b > 20 && g > r * 1.03 && g >= b * 0.98 && b >= r * 0.95 && max < 130) supportPixels += 1;
     }
     const pixelCount = Math.floor(decoded.stdout.length / 3);
     canvasActivity = {
@@ -1312,6 +1440,7 @@ async function main() {
       if (receipt.requestedOpticalDebugMode !== opticalDebugMode || receipt.effectiveOpticalDebugMode !== opticalDebugMode) {
         throw new Error(`optical renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
+      requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -1351,7 +1480,7 @@ async function main() {
       || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
       || refractionEvidence?.analyticSupportDepthPassCount < 1
       || refractionEvidence?.opticalDebugMode !== 'shaded'
-      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-shared-support-scene-color-v0'
+      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
       || refractionEvidence?.scenePassCount < 1
       || refractionEvidence?.compositePassCount < 1
     ) throw new Error(`same-state refraction evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
@@ -1501,11 +1630,15 @@ async function main() {
       const refractionProjection = measureFluidProjection(refractionPath, `${camera.id}:screen_space_refraction:thickness`, 'optical_thickness');
       const surfaceComparison = compareFluidProjections(sphereProjection, surfaceProjection);
       const refractionComparison = compareFluidProjections(sphereProjection, refractionProjection);
+      const sharedSupportIdentity = measureSharedSupportIdentity(spherePath, surfacePath, refractionPath, camera.id);
       if (surfaceComparison.normalizedCentroidDistance > 0.12 || surfaceComparison.minimumBoundsOverlap < 0.35) {
         throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(surfaceComparison)}`);
       }
       if (refractionComparison.normalizedCentroidDistance > 0.12 || refractionComparison.minimumBoundsOverlap < 0.35) {
         throw new Error(`refraction registration mismatch at ${camera.id}: ${JSON.stringify(refractionComparison)}`);
+      }
+      if (sharedSupportIdentity.mismatchRatio > 0.002 || sharedSupportIdentity.meanAbsoluteChannelDelta > 0.25) {
+        throw new Error(`shared support presentation mismatch at ${camera.id}: ${JSON.stringify(sharedSupportIdentity)}`);
       }
       surfaceRegistrationViews.push({
         camera: effectiveCamera,
@@ -1515,6 +1648,7 @@ async function main() {
         refractionProjection,
         surfaceComparison,
         refractionComparison,
+        sharedSupportIdentity,
       });
     }
     await evaluate(ws, `(() => {
