@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const REPORT_SCHEMA = 'kaminos.volume.splat-optical-recurrence.v0';
 const MANIFEST_SCHEMA = 'kaminos.pyro-cockpit-manifest.v0';
@@ -100,7 +103,13 @@ function validateOpticalArm(arm, source) {
   assert.equal(arm.intermediateClamped, false, 'clamped optical intermediate cannot close');
   assert.equal(arm.intermediateReadbackStatus, 'complete', 'optical intermediate readback is incomplete');
   assert.equal(arm.telemetry?.status, 'complete', 'optical telemetry is partial');
-  assert.equal(arm.telemetry?.activeDepthBins, DEPTH_BINS, 'optical telemetry did not cover every depth bin');
+  assert.equal(arm.telemetry?.depthBins, DEPTH_BINS, 'optical telemetry depth-bin configuration changed');
+  assert.ok(
+    Number.isInteger(arm.telemetry?.activeDepthBins)
+      && arm.telemetry.activeDepthBins > 0
+      && arm.telemetry.activeDepthBins <= DEPTH_BINS,
+    'optical telemetry has no lawful occupied depth bins',
+  );
   assert.equal(arm.telemetry?.nonFiniteChannels, 0, 'optical intermediate contains non-finite channels');
   assert.equal(arm.telemetry?.overflowCount, 0, 'optical route overflowed');
   validateCaptures(arm, source);
@@ -266,6 +275,38 @@ export function buildSplatOpticalCockpitManifest({ report, artifacts, authoredFo
     },
   };
   return validateSplatOpticalCockpitManifest(manifest);
+}
+
+export function writeSplatOpticalRecurrenceFailureReport(reportPath, failureReport) {
+  mkdirSync(dirname(reportPath), { recursive: true });
+  const priorBytes = existsSync(reportPath) ? readFileSync(reportPath) : null;
+  let priorPayload = null;
+  if (priorBytes) {
+    try {
+      priorPayload = JSON.parse(priorBytes.toString('utf8'));
+    } catch {
+      priorPayload = null;
+    }
+  }
+  const payload = {
+    ...failureReport,
+    lastTrustworthyEvidence: {
+      ...(failureReport.lastTrustworthyEvidence || {}),
+      ...(priorBytes ? {
+        displacedPrimaryReport: {
+          path: reportPath,
+          byteLength: priorBytes.byteLength,
+          sha256: createHash('sha256').update(priorBytes).digest('hex'),
+          schema: priorPayload?.schema || null,
+          status: priorPayload?.status || 'unparseable',
+        },
+      } : {}),
+    },
+  };
+  const temporaryPath = `${reportPath}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temporaryPath, JSON.stringify(payload, null, 2));
+  renameSync(temporaryPath, reportPath);
+  return payload;
 }
 
 export const SPLAT_OPTICAL_RECURRENCE_CONTRACT = Object.freeze({

@@ -6,6 +6,10 @@ import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { validateCameraHoldoutReport } from './boundary-splat-camera-holdout-oracle.mjs';
 import { validateSplatRadianceParityReport } from './volume-splat-radiance-parity-contract.mjs';
+import {
+  validateSplatOpticalRecurrenceReport,
+  writeSplatOpticalRecurrenceFailureReport,
+} from './volume-splat-optical-recurrence-contract.mjs';
 
 const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -23,6 +27,8 @@ const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json
 const captureReportPath = resolve(`${outDir}/capture-report.json`);
 const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
 const radianceParityReportPath = resolve(String(args.get('--radiance-parity-report') || `${outDir}/radiance-parity-report.json`));
+const opticalRecurrenceReportPath = resolve(String(args.get('--optical-recurrence-report') || `${outDir}/optical-recurrence-report.json`));
+const opticalRecurrenceRequested = args.has('--optical-recurrence-report');
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
 const expectedFrameCount = optionalInteger('--expected-frame-count');
@@ -225,6 +231,10 @@ try {
     captures.push(await captureAndPersist(camera, 'worldCovarianceAdditive', maxRaySteps));
     failurePhase = `camera-${camera.index}-world-covariance-matched-presentation`;
     captures.push(await captureAndPersist(camera, 'worldCovarianceMatchedPresentation', maxRaySteps));
+    if (opticalRecurrenceRequested) {
+      failurePhase = `camera-${camera.index}-world-covariance-matched-optical-recurrence`;
+      captures.push(await captureAndPersist(camera, 'worldCovarianceMatchedOpticalRecurrence', maxRaySteps));
+    }
     failurePhase = `camera-${camera.index}-ridge-transport-ridge-extinction`;
     captures.push(await captureAndPersist(camera, 'ridgeTransportRidgeExtinction', maxRaySteps));
     failurePhase = `camera-${camera.index}-ridge-transport-total-extinction`;
@@ -391,6 +401,108 @@ try {
   validateSplatRadianceParityReport(radianceParityReport);
   writeFileSync(radianceParityReportPath, JSON.stringify(radianceParityReport, null, 2));
   lastTrustworthyEvidence.radianceParityReport = fileArtifact(radianceParityReportPath);
+
+  if (opticalRecurrenceRequested) {
+    failurePhase = 'optical-recurrence-validation';
+  const firstCameraIndex = initialization.cameras[0]?.index;
+  const opticalSourceAudit = captureMap.get(
+    `${firstCameraIndex}-worldCovarianceMatchedPresentation-${maxRaySteps}`,
+  )?.footprintAudit;
+  const sourceHashes = {
+    controlsSha256: report.frozenState.controlsHash,
+    candidatePayloadSha256: opticalSourceAudit?.candidatePayloadSha256,
+    supportSha256: opticalSourceAudit?.candidatePayloadSha256,
+    coefficientSha256: opticalSourceAudit?.coefficientPayloadSha256,
+    covarianceSha256: opticalSourceAudit?.covariancePayloadSha256,
+  };
+  const opticalArmCaptures = initialization.cameras.map(camera => (
+    captureMap.get(`${camera.index}-worldCovarianceMatchedOpticalRecurrence-${maxRaySteps}`)
+  ));
+  const opticalTelemetry = opticalArmCaptures.map(capture => capture?.boundarySplatPresentationReceipt?.hdrTelemetry);
+  assert.ok(opticalTelemetry.every(telemetry => telemetry?.status === 'complete'), 'optical recurrence telemetry is partial');
+  assert.ok(opticalTelemetry.every(telemetry => telemetry.depthBins === 16), 'optical recurrence depth-bin configuration changed');
+  assert.ok(opticalTelemetry.every(telemetry => telemetry.nonFiniteChannels === 0), 'optical recurrence intermediate contains non-finite channels');
+  assert.ok(opticalTelemetry.every(telemetry => telemetry.overflowCount === 0), 'optical recurrence overflowed');
+  const recurrenceCaptures = (mode) => initialization.cameras.map(camera => {
+    const capture = captureMap.get(`${camera.index}-${mode}-${maxRaySteps}`);
+    return {
+      cameraIndex: capture.cameraIndex,
+      cameraPoseHash: capture.cameraPoseHash,
+      pixelHash: capture.pixelHash,
+      candidateCount: capture.boundarySplatCandidateCount,
+      controlsSha256: report.frozenState.controlsHash,
+      candidatePayloadSha256: capture.footprintAudit?.candidatePayloadSha256,
+      supportSha256: capture.footprintAudit?.candidatePayloadSha256,
+      coefficientSha256: capture.footprintAudit?.coefficientPayloadSha256,
+      covarianceSha256: capture.footprintAudit?.covariancePayloadSha256,
+      nonblank: capture.metrics?.nonblank === true,
+      imagePath: capture.imagePath,
+      metrics: capture.metrics,
+      hdrTelemetry: capture.boundarySplatPresentationReceipt?.hdrTelemetry || null,
+    };
+  });
+  const matchedPresentationReceipt = captureMap.get(`${firstCameraIndex}-worldCovarianceMatchedPresentation-${maxRaySteps}`)?.boundarySplatPresentationReceipt;
+  const matchedOpticalReceipt = captureMap.get(`${firstCameraIndex}-worldCovarianceMatchedOpticalRecurrence-${maxRaySteps}`)?.boundarySplatPresentationReceipt;
+  const opticalRecurrenceReport = {
+    schema: 'kaminos.volume.splat-optical-recurrence.v0',
+    status: 'completed',
+    failurePhase: null,
+    runStartedAt,
+    runCompletedAt: new Date().toISOString(),
+    requestedRoute: '/volume-selective-head-live.html',
+    effectiveWrapperRoute: report.effectiveWrapperRoute,
+    effectiveRendererRoute: report.effectiveRendererRoute,
+    backend: report.finalState.backend,
+    cameraCount: initialization.cameras.length,
+    source: {
+      commit: report.commit,
+      presentationBaselineCommit: '0859abf8d5b06359e4d2708f5b597c327b43c4af',
+      sameStateCaptureId: report.frozenState.sameStateCaptureId,
+      ...sourceHashes,
+      candidateCount: opticalSourceAudit?.candidateCount,
+      fluidSha256: report.replayAuthority.warmupReceipt?.fluidSha256,
+      frontSha256: report.replayAuthority.warmupReceipt?.frontSha256,
+    },
+    arms: [
+      {
+        id: 'matched-presentation-v0',
+        requestedRoute: 'matched-presentation-v0',
+        effectiveRoute: matchedPresentationReceipt?.effectiveMode,
+        targetFormat: matchedPresentationReceipt?.targetFormat,
+        accumulationIdentity: matchedPresentationReceipt?.accumulationIdentity,
+        transportIdentity: matchedPresentationReceipt?.transportIdentity,
+        presentationIdentity: matchedPresentationReceipt?.resolveIdentity,
+        fallbackReason: matchedPresentationReceipt?.fallbackReason ?? null,
+        intermediateClamped: matchedPresentationReceipt?.intermediateClamped,
+        captures: recurrenceCaptures('worldCovarianceMatchedPresentation'),
+      },
+      {
+        id: 'matched-optical-recurrence-v0',
+        requestedRoute: 'matched-optical-recurrence-v0',
+        effectiveRoute: matchedOpticalReceipt?.effectiveMode,
+        targetFormat: matchedOpticalReceipt?.targetFormat,
+        layerFormat: matchedOpticalReceipt?.layerFormat,
+        accumulationIdentity: matchedOpticalReceipt?.accumulationIdentity,
+        transportIdentity: matchedOpticalReceipt?.transportIdentity,
+        presentationIdentity: matchedOpticalReceipt?.resolveIdentity,
+        depthBins: matchedOpticalReceipt?.depthBins,
+        fallbackReason: matchedOpticalReceipt?.fallbackReason ?? null,
+        intermediateClamped: matchedOpticalReceipt?.intermediateClamped,
+        intermediateReadbackStatus: opticalTelemetry.every(telemetry => telemetry.status === 'complete') ? 'complete' : 'partial',
+        telemetry: {
+          ...opticalTelemetry[0],
+          activeDepthBins: Math.min(...opticalTelemetry.map(telemetry => telemetry.activeDepthBins)),
+          capacity: Math.min(...opticalTelemetry.map(telemetry => telemetry.capacity)),
+          overflowCount: Math.max(...opticalTelemetry.map(telemetry => telemetry.overflowCount)),
+        },
+        captures: recurrenceCaptures('worldCovarianceMatchedOpticalRecurrence'),
+      },
+    ],
+  };
+  validateSplatOpticalRecurrenceReport(opticalRecurrenceReport);
+  writeFileSync(opticalRecurrenceReportPath, JSON.stringify(opticalRecurrenceReport, null, 2));
+    lastTrustworthyEvidence.opticalRecurrenceReport = fileArtifact(opticalRecurrenceReportPath);
+  }
   const cameraRows = [];
   for (const camera of initialization.cameras) {
     const targetCapture = captureMap.get(`${camera.index}-raymarch-${maxRaySteps}`);
@@ -466,6 +578,7 @@ try {
     report: reportPath,
     holdoutReport: holdoutReportPath,
     radianceParityReport: radianceParityReportPath,
+    opticalRecurrenceReport: opticalRecurrenceRequested ? opticalRecurrenceReportPath : null,
     captureCount: report.captures.length,
     frozenDeterminism: report.frozenDeterminism,
     filamentSummary: report.filamentContinuity.summary,
@@ -496,6 +609,16 @@ try {
       requestedRoute: '/volume-selective-head-live.html',
       lastTrustworthyEvidence,
     }, null, 2));
+  }
+  if (opticalRecurrenceRequested) {
+    writeSplatOpticalRecurrenceFailureReport(opticalRecurrenceReportPath, {
+      schema: 'kaminos.volume.splat-optical-recurrence.v0',
+      status: 'failed',
+      failurePhase,
+      error: failureReport.error,
+      requestedRoute: '/volume-selective-head-live.html',
+      lastTrustworthyEvidence,
+    });
   }
   writeFileSync(reportPath, JSON.stringify(failureReport, null, 2));
   console.error(JSON.stringify(failureReport, null, 2));
@@ -1199,6 +1322,7 @@ function parseArgs(argv) {
     '--report',
     '--holdout-report',
     '--radiance-parity-report',
+    '--optical-recurrence-report',
     '--ray-steps',
     '--orbit-angles',
     '--expected-frame-count',

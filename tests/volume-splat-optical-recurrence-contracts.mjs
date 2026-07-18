@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -14,8 +15,24 @@ assert.match(core, /depth-binned-emission-optical-depth-v0/, 'live receipt must 
 assert.match(core, /depth-binned-exponential-self-transmittance-v0/, 'live receipt must identify the optical recurrence');
 assert.match(core, /projected-ndc-zero-to-one-depth-interval-v0/, 'live receipt must identify the effective depth interval');
 assert.match(core, /encodeBoundarySplatOpticalRecurrence/, 'live route must encode the optical treatment separately');
+assert.match(core, /overflowCount:\s*state\.boundarySplatOverflowCount\s*[,}]/, 'missing optical overflow telemetry must not be coerced to zero');
 const orbitWitness = readFileSync(join(root, 'volume-raymarch-filament-orbit-witness.mjs'), 'utf8');
 assert.match(orbitWitness, /worldCovarianceMatchedOpticalRecurrence[\s\S]*matched-optical-recurrence-v0/, 'frozen witness delegate must expose the matched optical arm explicitly');
+assert.match(orbitWitness, /captureAndPersist\(camera,\s*['"]worldCovarianceMatchedOpticalRecurrence['"]/, 'frozen orbit must actually capture the matched optical arm');
+assert.match(orbitWitness, /opticalRecurrenceRequested[\s\S]*args\.has\(['"]--optical-recurrence-report['"]\)/, 'optical capture must require explicit witness intent');
+assert.match(orbitWitness, /['"]--optical-recurrence-report['"]/, 'delegate parser must accept the optical report path');
+assert.match(orbitWitness, /validateSplatOpticalRecurrenceReport\(opticalRecurrenceReport\)/, 'frozen orbit must validate its optical report before publication');
+assert.match(orbitWitness, /writeFileSync\(opticalRecurrenceReportPath,\s*JSON\.stringify\(opticalRecurrenceReport/, 'frozen orbit must publish the accepted optical report');
+
+const opticalWitnessPath = join(root, 'volume-splat-optical-recurrence-witness.mjs');
+assert.ok(existsSync(opticalWitnessPath), 'queue-native optical witness wrapper must exist');
+const opticalWitness = readFileSync(opticalWitnessPath, 'utf8');
+assert.match(opticalWitness, /--optical-recurrence-report/, 'optical wrapper must request the delegate optical report explicitly');
+assert.match(opticalWitness, /buildSplatOpticalCockpitManifest/, 'optical wrapper must build Cockpit Manifest V0 from accepted evidence');
+assert.match(opticalWitness, /validateSplatOpticalCockpitManifest/, 'optical wrapper must validate Cockpit Manifest V0 before publication');
+assert.match(opticalWitness, /writeSplatOpticalRecurrenceFailureReport/, 'optical wrapper must durably replace false or stale completion evidence on failure');
+assert.match(opticalWitness, /ffconcat version 1\.0/, 'dynamic media must enumerate the current accepted capture set');
+assert.doesNotMatch(opticalWitness, /pattern_type['"],\s*['"]glob/, 'dynamic media must not absorb stale frames through an output-directory glob');
 
 const contractPath = join(root, 'volume-splat-optical-recurrence-contract.mjs');
 assert.ok(existsSync(contractPath), 'optical recurrence evidence and cockpit manifest validator must exist');
@@ -23,6 +40,7 @@ const {
   buildSplatOpticalCockpitManifest,
   validateSplatOpticalCockpitManifest,
   validateSplatOpticalRecurrenceReport,
+  writeSplatOpticalRecurrenceFailureReport,
 } = await import(contractPath);
 
 const sha = character => character.repeat(64);
@@ -84,7 +102,7 @@ const opticalArm = {
   fallbackReason: null,
   intermediateClamped: false,
   intermediateReadbackStatus: 'complete',
-  telemetry: { status: 'complete', activeDepthBins: 16, nonFiniteChannels: 0, overflowCount: 0 },
+  telemetry: { status: 'complete', depthBins: 16, activeDepthBins: 16, nonFiniteChannels: 0, overflowCount: 0 },
   captures: captures('optical'),
 };
 const validReport = {
@@ -101,6 +119,13 @@ const validReport = {
 };
 
 assert.doesNotThrow(() => validateSplatOpticalRecurrenceReport(validReport), 'complete checksum-bound optical recurrence evidence must validate');
+
+const partiallyOccupiedDepthReport = structuredClone(validReport);
+partiallyOccupiedDepthReport.arms[1].telemetry.activeDepthBins = 5;
+assert.doesNotThrow(
+  () => validateSplatOpticalRecurrenceReport(partiallyOccupiedDepthReport),
+  'configured depth-bin coverage remains complete when lawful projected intervals are empty',
+);
 
 const acceptedFalseClosures = [];
 const recordFalseClosureAcceptance = (label, validation) => {
@@ -131,6 +156,9 @@ for (const [label, mutate] of [
   ['candidate substitution', report => { report.arms[1].captures[5].candidatePayloadSha256 = sha('b'); }],
   ['presentation baseline drift', report => { report.source.presentationBaselineCommit = 'b'.repeat(40); }],
   ['partial telemetry', report => { report.arms[1].telemetry.status = 'partial'; }],
+  ['configured depth-bin telemetry missing', report => { delete report.arms[1].telemetry.depthBins; }],
+  ['blank optical depth occupancy', report => { report.arms[1].telemetry.activeDepthBins = 0; }],
+  ['missing overflow telemetry', report => { delete report.arms[1].telemetry.overflowCount; }],
 ]) {
   const report = structuredClone(validReport);
   mutate(report);
@@ -180,5 +208,28 @@ for (const [label, mutate] of [
 }
 
 assert.deepEqual(acceptedFalseClosures, [], `false closure evidence was accepted: ${acceptedFalseClosures.join(', ')}`);
+
+const failureRoot = mkdtempSync(join(tmpdir(), 'kaminos-optical-failure-contract-'));
+const displacedReportPath = join(failureRoot, 'report.json');
+writeFileSync(displacedReportPath, JSON.stringify(validReport));
+const displacedFailure = writeSplatOpticalRecurrenceFailureReport(displacedReportPath, {
+  schema: 'kaminos.volume.splat-optical-recurrence.v0',
+  status: 'failed',
+  failurePhase: 'route-preflight',
+  error: 'unreachable test route',
+});
+assert.equal(displacedFailure.status, 'failed');
+assert.equal(displacedFailure.lastTrustworthyEvidence.displacedPrimaryReport.status, 'completed');
+assert.match(displacedFailure.lastTrustworthyEvidence.displacedPrimaryReport.sha256, /^[0-9a-f]{64}$/);
+assert.equal(JSON.parse(readFileSync(displacedReportPath, 'utf8')).failurePhase, 'route-preflight');
+
+const nestedFailurePath = join(failureRoot, 'missing', 'parents', 'report.json');
+assert.doesNotThrow(() => writeSplatOpticalRecurrenceFailureReport(nestedFailurePath, {
+  schema: 'kaminos.volume.splat-optical-recurrence.v0',
+  status: 'failed',
+  failurePhase: 'route-preflight',
+  error: 'nested-path test failure',
+}));
+assert.equal(JSON.parse(readFileSync(nestedFailurePath, 'utf8')).status, 'failed');
 
 console.log('volume splat optical recurrence contracts passed');

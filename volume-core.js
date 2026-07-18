@@ -201,6 +201,10 @@ export function canonicalizeBoundarySplatAuditRows(values, instanceCount, stride
   });
   const positionSupport = new Float32Array(instanceCount * 4);
   const attributes = new Float32Array(instanceCount * (strideFloats - 4));
+  const coefficientWidth = Math.min(4, Math.max(0, strideFloats - 4));
+  const covarianceWidth = Math.max(0, strideFloats - 8);
+  const coefficients = new Float32Array(instanceCount * coefficientWidth);
+  const covariance = new Float32Array(instanceCount * covarianceWidth);
   for (let canonicalIndex = 0; canonicalIndex < order.length; canonicalIndex += 1) {
     const sourceOffset = order[canonicalIndex] * strideFloats;
     positionSupport.set(values.subarray(sourceOffset, sourceOffset + 4), canonicalIndex * 4);
@@ -208,8 +212,16 @@ export function canonicalizeBoundarySplatAuditRows(values, instanceCount, stride
       values.subarray(sourceOffset + 4, sourceOffset + strideFloats),
       canonicalIndex * (strideFloats - 4),
     );
+    coefficients.set(
+      values.subarray(sourceOffset + 4, sourceOffset + 4 + coefficientWidth),
+      canonicalIndex * coefficientWidth,
+    );
+    covariance.set(
+      values.subarray(sourceOffset + 8, sourceOffset + 8 + covarianceWidth),
+      canonicalIndex * covarianceWidth,
+    );
   }
-  return { positionSupport, attributes };
+  return { positionSupport, attributes, coefficients, covariance };
 }
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
@@ -10383,7 +10395,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const values = new Float32Array(readback.getMappedRange()).slice();
       readback.unmap();
       const strideFloats = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
-      const { positionSupport: identity, attributes } = canonicalizeBoundarySplatAuditRows(
+      const {
+        positionSupport: identity,
+        attributes,
+        coefficients,
+        covariance,
+      } = canonicalizeBoundarySplatAuditRows(
         values,
         draw.instanceCount,
         strideFloats,
@@ -10413,6 +10430,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         new Uint8Array(attributeDigest),
         value => value.toString(16).padStart(2, '0'),
       ).join('');
+      const coefficientDigest = await crypto.subtle.digest('SHA-256', coefficients);
+      const coefficientPayloadSha256 = Array.from(
+        new Uint8Array(coefficientDigest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
+      const covarianceDigest = await crypto.subtle.digest('SHA-256', covariance);
+      const covariancePayloadSha256 = Array.from(
+        new Uint8Array(covarianceDigest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
       const relativeError = Math.abs(effectiveIntegratedAlphaSum - baseIntegratedAlphaSum)
         / Math.max(Math.abs(baseIntegratedAlphaSum), 1e-12);
       return {
@@ -10424,6 +10451,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidatePayloadSha256,
         attributePayloadAuthority: 'gpu-compacted-boundary-splat-effective-attributes-v0',
         attributePayloadSha256,
+        coefficientPayloadAuthority: 'gpu-compacted-boundary-splat-color-opacity-coefficients-v0',
+        coefficientPayloadSha256,
+        covariancePayloadAuthority: 'gpu-compacted-boundary-splat-world-covariance-attributes-v0',
+        covariancePayloadSha256,
         candidateCount: draw.candidateCount,
         instanceCount: draw.instanceCount,
         overflowCount: draw.overflowCount,
@@ -12831,7 +12862,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       maxOpticalDepth,
       nonFiniteChannels,
       capacity: state.boundarySplatCapacity,
-      overflowCount: state.boundarySplatOverflowCount ?? 0,
+      overflowCount: state.boundarySplatOverflowCount,
       intermediateClamped: false,
       timingAuthority: BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY,
       timingStatus: state.boundarySplatTimestampStatus,
