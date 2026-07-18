@@ -133,6 +133,7 @@ export function createFingerFluidBenchState(options = {}) {
     playground: options.playground || null,
     config: options.config || null,
     playgroundZoneDiagnostics: options.playgroundZoneDiagnostics || null,
+    laminarInletDiagnostics: options.laminarInletDiagnostics || null,
     interfaceCarrier: options.interfaceCarrier || null,
     downgrades,
     compatibility: {

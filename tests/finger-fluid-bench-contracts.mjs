@@ -82,7 +82,7 @@ assert.match(webgpuCoreSource, /nearest_particle_center_view_depth/, 'screen-spa
 assert.match(webgpuCoreSource, /let supportOrderingDepth = weightedDepth\(centerAccum\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth/, 'neighbor-smoothed shading depth cannot pull hidden liquid in front of analytic support');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*false,\s*depthCompare:\s*'less'/, 'screen-space liquid depth-tests against analytic support without replacing support depth');
 assert.match(webgpuCoreSource, /analyticSupportPresentationPass[\s\S]*loadOp:\s*'clear'[\s\S]*depthLoadOp:\s*'clear'[\s\S]*analyticSupportPresentationPipeline/, 'one analytic support pass clears and writes coherent color plus collision-authoritative depth');
-assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(ANALYTIC_SUPPORT_VERTEX_COUNT\)[\s\S]*if \(effectiveRendererMode === 'sphere_debug'\)/, 'all renderer modes execute the same support presentation before their liquid-specific branch');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(analyticSupportVertexCount\)[\s\S]*if \(effectiveRendererMode === 'sphere_debug'\)/, 'all renderer modes execute the same scene-scoped support presentation before their liquid-specific branch');
 assert.match(webgpuCoreSource, /effectiveRendererMode === 'sphere_debug'[\s\S]*pass\.draw\(6, safeParticleCount\)/, 'sphere-debug preserves particle spheres without drawing tiled support proxies');
 assert.doesNotMatch(webgpuCoreSource, /draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT/, 'sphere-debug cannot silently restore particle-tiled support geometry');
 assert.match(webgpuCoreSource, /compositePass[\s\S]*depthStencilAttachment:\s*\{[\s\S]*view:\s*depthTexture\.createView\(\)[\s\S]*depthLoadOp:\s*'load'/, 'surface composite loads analytic support depth instead of painting through terrain');
@@ -242,7 +242,7 @@ assert.match(webgpuCoreSource, /let diagnosticsRequestCount = 0/, 'full GPU diag
 assert.match(webgpuCoreSource, /let diagnosticsCompletionCount = 0/, 'full GPU diagnostics expose an exact completion count');
 assert.match(webgpuCoreSource, /diagnosticsRequestCount \+= 1/, 'accepted full-diagnostic requests are counted at their execution boundary');
 assert.match(webgpuCoreSource, /diagnosticsCompletionCount \+= 1/, 'completed full-diagnostic snapshots are counted separately from requests');
-assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(ANALYTIC_SUPPORT_VERTEX_COUNT\)/, 'direct renderer draws the shared analytic playground and obstacle in the operator viewport');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(analyticSupportVertexCount\)/, 'direct renderer draws the scene-scoped shared analytic support in the operator viewport');
 assert.match(webgpuCoreSource, /playgroundZoneDiagnostics/, 'sparse diagnostics measure population and energy by playground regime');
 assert.match(webgpuCoreSource, /supportedTransportParticleCount/, 'sparse diagnostics expose the support-adjacent transport population');
 assert.match(webgpuCoreSource, /averageSupportedTangentialSpeed/, 'sparse diagnostics quantify support-adjacent lateral speed');
@@ -288,7 +288,7 @@ assert.match(webgpuCoreSource, /postProjectionGridRefreshCount/, 'runtime eviden
 assert.match(webgpuCoreSource, /isObstacle/, 'the direct renderer distinguishes shared obstacle support geometry');
 assert.match(webgpuCoreSource, /geometrySource:\s*'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0'/, 'the exact solver playground and obstacle are named as analytic support presentation geometry');
 assert.doesNotMatch(webgpuCoreSource, /shared_analytic_heightfield_billboard_tiles_and_cliff_skirt_v0/, 'human-visible support metadata cannot advertise the retired billboard topology');
-assert.match(webgpuCoreSource, /supportGeometryMode:\s*'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'[\s\S]*supportPresentationRoute:\s*KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE[\s\S]*supportGeometryCount:\s*ANALYTIC_SUPPORT_VERTEX_COUNT[\s\S]*supportGeometryCountUnit:\s*'vertices'/, 'playground receipt names the effective analytic presentation topology, route, and count unit');
+assert.match(webgpuCoreSource, /supportGeometryMode:\s*'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'[\s\S]*supportPresentationRoute:\s*KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE[\s\S]*supportGeometryCount:\s*analyticSupportVertexCount[\s\S]*supportGeometryCountUnit:\s*'vertices'/, 'playground receipt names the effective scene-scoped analytic presentation topology, route, and count unit');
 assert.match(webgpuCoreSource, /obstacle:\s*\{[^}]*rendered:\s*directRenderFrameCount\s*>\s*0[^}]*\}/, 'obstacle render evidence derives from an actual submitted render frame');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
@@ -539,7 +539,7 @@ assert.equal(state.acceptance.iframeAcceptance, false);
 assert.equal(state.acceptance.openDirectAcceptance, false);
 
 const webgpuMod = await import(webgpuCorePath);
-assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRUTH_SCENES, ['multi_regime_playground', 'deep_pool_rest', 'dam_break']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRUTH_SCENES, ['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets']);
 assert.equal(webgpuMod.resolveFingerFluidTruthScene('deep_pool_rest'), 'deep_pool_rest');
 assert.throws(() => webgpuMod.resolveFingerFluidTruthScene('quietly_default'), /Unsupported finger fluid truth scene/);
 assert.equal(typeof webgpuMod.createFingerFluidTruthSceneParticles, 'function');
@@ -619,12 +619,16 @@ assert.equal(outsideSupport.missingFraction, 0, 'solid support contributes nothi
 const multiRegimeInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'multi_regime_playground');
 const deepPoolInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'deep_pool_rest');
 const damBreakInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'dam_break');
+const laminarInletInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'laminar_inlets');
 assert.equal(multiRegimeInitial.length, 1024 * 16);
 assert.equal(deepPoolInitial.length, 1024 * 16);
 assert.equal(damBreakInitial.length, 1024 * 16);
+assert.equal(laminarInletInitial.length, 1024 * 16);
 assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...multiRegimeInitial.slice(index * 16 + 8, index * 16 + 11))).some(speed => speed > 0.1), 'multi-regime scene preserves authored transport');
 assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...deepPoolInitial.slice(index * 16 + 8, index * 16 + 11))).every(speed => speed === 0), 'deep-pool scene begins at rest');
 assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...damBreakInitial.slice(index * 16 + 8, index * 16 + 11))).every(speed => speed === 0), 'dam-break scene begins from gravity rather than hidden launch velocity');
+assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...laminarInletInitial.slice(index * 16 + 8, index * 16 + 11))).some(speed => speed > 0.5), 'laminar inlet scene begins with authored aperture-profile transport');
+assert.notDeepEqual([...laminarInletInitial.slice(0, 16)], [...damBreakInitial.slice(0, 16)], 'laminar inlet scene cannot fall through to the dam-break initializer');
 const damBreakHeights = Array.from({ length: 1024 }, (_, index) => damBreakInitial[index * 16 + 1]);
 assert.ok(Math.max(...damBreakHeights) - Math.min(...damBreakHeights) > 0.5, 'dam-break scene starts as a materially tall retained column');
 const syntheticTruthParticles = new Float32Array(2 * 16);
