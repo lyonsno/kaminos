@@ -23,6 +23,28 @@ assert.match(
 );
 assert.match(viewer, /renderer\.setClearColor\([^,]+,\s*0\)/, 'the MANO canvas clears to transparent instead of an opaque black lid');
 assert.match(viewer, /screenSpaceRefractionRenderFrameCount/, 'Hand debug truth exposes completed continuous-fluid render frames');
+assert.match(
+  viewer,
+  /try\s*\{[\s\S]*fingerJuiceRenderAttemptCount \+= 1;[\s\S]*fingerJuiceRenderer\.render\([\s\S]*catch \(error\)\s*\{[\s\S]*fingerJuiceError/,
+  'a synchronous fluid-render failure is contained without terminating the MANO animation loop',
+);
+assert.match(viewer, /animationFrameCount/, 'Hand debug truth proves the MANO animation loop remains alive');
+assert.match(viewer, /fingerJuiceRenderAttemptCount/, 'Hand debug truth distinguishes fluid render attempts from completed passes');
+assert.match(
+  viewer,
+  /function scheduleFingerJuiceWarmup[\s\S]*setTimeout[\s\S]*ensureFingerJuice/,
+  'continuous fluid warmup has an explicit post-MANO scheduling seam',
+);
+assert.match(
+  viewer,
+  /updateHandSurface\(frame\.mano\)[\s\S]*scheduleFingerJuiceWarmup\(\)/,
+  'the first valid live MANO surface schedules fluid warmup only after presentation becomes possible',
+);
+assert.doesNotMatch(
+  viewer,
+  /async function start\(\)[\s\S]*?void ensureFingerJuice[\s\S]*?async function stop\(\)/,
+  'Start Hand cannot synchronously enter the expensive fluid initialization path before first-visible MANO',
+);
 assert.doesNotMatch(
   viewer,
   /lerms-finger-juice-webgpu-core|createWebGPUFingerJuiceSolver/,

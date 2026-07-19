@@ -78,11 +78,15 @@ let fingerJuiceSolver = null;
 let fingerJuiceRenderer = null;
 let fingerJuiceInitPromise = null;
 let fingerJuiceStepPromise = null;
+let fingerJuiceWarmupTimer = null;
 let fingerJuiceLastStepAt = 0;
 let fingerJuicePacket = createLiveFingerJuiceEmitterPacket(null);
 let previousFingerTips = null;
 let previousFingerTimestampMs = null;
 let fingerJuiceError = null;
+let animationFrameCount = 0;
+let handRenderFrameCount = 0;
+let fingerJuiceRenderAttemptCount = 0;
 
 const MANO_FINGERTIP_VERTICES = Object.freeze([
   ['thumb', 745, 'splash'],
@@ -167,6 +171,15 @@ async function ensureFingerJuice() {
     throw error;
   });
   return fingerJuiceInitPromise;
+}
+
+function scheduleFingerJuiceWarmup() {
+  if (fixtureMode || !running || !handMesh.visible || fingerJuiceSolver || fingerJuiceInitPromise || fingerJuiceWarmupTimer) return;
+  fingerJuiceWarmupTimer = setTimeout(() => {
+    fingerJuiceWarmupTimer = null;
+    if (!running || !handMesh.visible) return;
+    void ensureFingerJuice().catch(error => setStatus(error.message || String(error), 'error'));
+  }, 1200);
 }
 
 async function probeFingerJuice(emitterPacket, steps = 24) {
@@ -318,6 +331,7 @@ async function captureFrame() {
 function applyState(state) {
   const frame = state.frame;
   if (frame?.authority?.sourceAuthority === 'live_simulation' && updateHandSurface(frame.mano)) {
+    scheduleFingerJuiceWarmup();
     updateFingerJuice(state);
     const frameId = frame.frame?.frameId;
     const captureMetrics = captureMetricsByFrame.get(frameId);
@@ -400,7 +414,6 @@ async function start() {
   toggle.dataset.running = 'true';
   captureTimer = setInterval(captureFrame, captureIntervalMs);
   void streamState();
-  void ensureFingerJuice().catch(error => setStatus(error.message || String(error), 'error'));
   await captureFrame();
 }
 
@@ -408,6 +421,8 @@ async function stop() {
   running = false;
   clearInterval(captureTimer);
   captureTimer = null;
+  clearTimeout(fingerJuiceWarmupTimer);
+  fingerJuiceWarmupTimer = null;
   stateAbortController?.abort();
   stateAbortController = null;
   fingerJuicePacket = createLiveFingerJuiceEmitterPacket(null);
@@ -433,6 +448,7 @@ toggle.addEventListener('click', async () => {
 });
 
 window.addEventListener('beforeunload', () => {
+  clearTimeout(fingerJuiceWarmupTimer);
   stateAbortController?.abort();
   stream?.getTracks().forEach(track => track.stop());
   if (unflushedLatencySamples.length) {
@@ -453,9 +469,16 @@ function resize() {
 }
 
 function animate(now) {
+  animationFrameCount += 1;
   if (handMesh.visible && now - lastLiveAt > 1200 && !fixtureMode) handMaterial.emissiveIntensity = 0;
   handMesh.rotation.y = Math.sin(now * 0.00022) * 0.08;
-  const renderPromise = renderer.renderAsync(scene, camera);
+  let renderPromise = null;
+  try {
+    renderPromise = renderer.renderAsync(scene, camera);
+    handRenderFrameCount += 1;
+  } catch (error) {
+    lastBenchmarkError = error.message || String(error);
+  }
   if (running && fingerJuiceSolver && fingerJuiceRenderer) {
     const dt = fingerJuiceLastStepAt ? Math.min(1 / 30, Math.max(1 / 120, (now - fingerJuiceLastStepAt) / 1000)) : 1 / 60;
     fingerJuiceLastStepAt = now;
@@ -464,16 +487,21 @@ function animate(now) {
         .catch(error => { fingerJuiceError = error.message || String(error); })
         .finally(() => { fingerJuiceStepPromise = null; });
     }
-    fingerJuiceRenderer.render({
-      width: window.innerWidth,
-      height: window.innerHeight,
-      pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
-      yaw: 0,
-      pitch: 0,
-      distance: 4.45,
-      target: [0, 0, -0.2],
-      rendererMode: 'screen_space_refraction',
-    });
+    try {
+      fingerJuiceRenderAttemptCount += 1;
+      fingerJuiceRenderer.render({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
+        yaw: 0,
+        pitch: 0,
+        distance: 4.45,
+        target: [0, 0, -0.2],
+        rendererMode: 'screen_space_refraction',
+      });
+    } catch (error) {
+      fingerJuiceError = error.message || String(error);
+    }
   }
   if (pendingLatencySample) {
     const sample = pendingLatencySample;
@@ -538,6 +566,9 @@ window.__kaminosHandStateDebugState = () => ({
   eventSequence: lastStateSequence,
   stateDeliveryMode: 'long_poll',
   manoOrientationContract: MANO_DISPLAY_ORIENTATION_CONTRACT,
+  animationFrameCount,
+  handRenderFrameCount,
+  fingerJuiceRenderAttemptCount,
   fingerJuice: fingerJuiceDebugState(),
 });
 

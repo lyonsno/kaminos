@@ -9,6 +9,7 @@ for (let index = 2; index < process.argv.length; index += 2) args.set(process.ar
 const requestedUrl = args.get('--url') || 'http://127.0.0.1:18142/index.html?kaminos_hand_state=1&hand_fixture=1';
 const fakeVideo = args.get('--fake-video') ? resolve(args.get('--fake-video')) : null;
 const out = resolve(args.get('--out') || '/tmp/kaminos-hand-state-runtime.png');
+const manoFirstOutput = out.replace(/\.png$/i, '.mano-first.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9517);
 const width = Number(args.get('--viewport-width') || 1720);
@@ -23,6 +24,7 @@ let emitterGrowthReceipt = null;
 let inactiveEmitterRespawnReceipt = null;
 let liveRuntimeState = null;
 let primaryOutputWritten = false;
+let manoFirstOutputWritten = false;
 let stderr = '';
 
 function delay(ms) { return new Promise(resolveDelay => setTimeout(resolveDelay, ms)); }
@@ -36,6 +38,8 @@ function writeReport(extra = {}) {
     fixtureMode: debugState?.fixtureMode ?? null,
     runtimeOwner: debugState?.runtimeOwner ?? null,
     primary_output_written: primaryOutputWritten,
+    mano_first_output: manoFirstOutput,
+    mano_first_output_written: manoFirstOutputWritten,
     failure_phase: phase,
     viewport: { width, height },
     consoleEvents,
@@ -163,19 +167,26 @@ async function main() {
       }
       effectiveUrl = startReceipt?.effectiveUrl || null;
       if (!startReceipt?.buttonPresent) throw new Error('live Hand Start command never became available');
-      await evaluate(socket, `(() => {
+      // The parent route rewrites the iframe URL with its effective cache identity.
+      // Let that navigation settle so the click cannot land on the superseded child.
+      await delay(750);
+      const startClickReceipt = await evaluate(socket, `(() => {
         const frame = document.getElementById('hand-state-runtime-frame');
-        frame.contentWindow.document.getElementById('hand-toggle').click();
-        return true;
+        const button = frame?.contentWindow?.document?.getElementById('hand-toggle');
+        if (!button || button.disabled) return { clicked: false, effectiveUrl: frame?.contentWindow?.location?.href || null };
+        button.click();
+        return { clicked: true, effectiveUrl: frame.contentWindow.location.href };
       })()`);
+      effectiveUrl = startClickReceipt?.effectiveUrl || effectiveUrl;
+      if (!startClickReceipt?.clicked) throw new Error('live Hand Start command was unavailable after iframe navigation settled');
 
       phase = 'wait_for_live_mano';
-      const liveDeadline = Date.now() + 45000;
+      const liveDeadline = Date.now() + 90000;
       while (Date.now() < liveDeadline) {
         const receipt = await evaluate(socket, `(async () => {
           const frame = document.getElementById('hand-state-runtime-frame');
           const read = frame?.contentWindow?.__kaminosHandStateDebugState;
-          const stateResponse = await frame?.contentWindow?.fetch('http://127.0.0.1:8766/state', { cache: 'no-store' });
+          const stateResponse = await frame?.contentWindow?.fetch('http://127.0.0.1:8766/state', { cache: 'no-store' }).catch(() => null);
           return {
             effectiveUrl: frame?.contentWindow?.location?.href || null,
             state: typeof read === 'function' ? read() : null,
@@ -185,8 +196,18 @@ async function main() {
         effectiveUrl = receipt?.effectiveUrl || effectiveUrl;
         debugState = receipt?.state || null;
         liveRuntimeState = receipt?.runtimeState || null;
+        if (!manoFirstOutputWritten && debugState?.running && debugState?.fixtureMode === false
+          && debugState?.meshVisible && debugState.vertexCount > 0 && debugState.faceCount > 0
+          && debugState.handRenderFrameCount >= 3
+          && liveRuntimeState?.frame?.authority?.sourceAuthority === 'live_simulation') {
+          const manoScreenshot = await request(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+          mkdirSync(dirname(manoFirstOutput), { recursive: true });
+          writeFileSync(manoFirstOutput, Buffer.from(manoScreenshot.data, 'base64'));
+          manoFirstOutputWritten = true;
+        }
         if (debugState?.running && debugState?.fixtureMode === false && debugState?.meshVisible
           && debugState.vertexCount > 0 && debugState.faceCount > 0
+          && debugState?.fingerJuice?.directRenderFrameCount >= 3
           && liveRuntimeState?.frame?.authority?.sourceAuthority === 'live_simulation') break;
         await delay(250);
       }
@@ -194,6 +215,9 @@ async function main() {
       if (!debugState?.running) throw new Error('Start Hand did not enter the running state');
       if (!debugState?.meshVisible || debugState.vertexCount <= 0 || debugState.faceCount <= 0) {
         throw new Error('controlled live camera route produced no MANO mesh');
+      }
+      if (debugState?.fingerJuice?.directRenderFrameCount < 3) {
+        throw new Error('controlled live witness did not reach post-initialization continuous-fluid rendering');
       }
       if (liveRuntimeState?.frame?.authority?.sourceAuthority !== 'live_simulation') {
         throw new Error(`controlled live camera route has ${liveRuntimeState?.frame?.authority?.sourceAuthority || 'missing'} authority`);

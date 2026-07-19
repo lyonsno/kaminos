@@ -36,5 +36,7 @@ assert.match(witness, /--use-file-for-fake-video-capture=/, 'controlled live wit
 assert.match(witness, /hand-toggle/, 'controlled live witness invokes the same Start Hand command as the operator');
 assert.match(witness, /sourceAuthority[^\n]*live_simulation/, 'controlled live witness rejects stale or fallback hand authority');
 assert.match(witness, /fixtureMode[^\n]*false/, 'controlled live witness cannot masquerade as the recorded surface fixture');
+assert.match(witness, /directRenderFrameCount[^\n]*>= 3/, 'controlled live witness waits through continuous-fluid initialization before capturing MANO visibility');
+assert.match(witness, /manoFirstOutput/, 'controlled live witness preserves the first-visible MANO frame separately from post-fluid acceptance');
 
 console.log('hand-state runtime witness contracts passed');

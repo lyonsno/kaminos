@@ -12,7 +12,7 @@ assert.match(index, /data-tab="hand-state"/, 'Kaminos exposes a Hand tab');
 assert.match(index, /id="tab-hand-state"/, 'Hand tab has operator controls');
 assert.match(index, /id="hand-state-runtime-frame"/, 'Hand tab mounts the live runtime viewer');
 assert.match(index, /hand-state-runtime\.html/, 'Hand tab loads the dedicated live viewer');
-assert.match(index, /palm-continuous-fluid-0718b/, 'Hand tab cache identity advances with the transparent continuous-fluid composition');
+assert.match(index, /palm-mano-first-fluid-0718/, 'Hand tab cache identity advances with MANO-first fluid startup');
 
 assert.match(page, /Start Hand/, 'viewer has one explicit camera start command');
 assert.match(page, /data-runtime-owner="hand-state-runtime"/, 'viewer declares runtime ownership');
