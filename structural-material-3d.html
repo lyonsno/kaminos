@@ -232,6 +232,14 @@
       advanceAcceptedStructuralBellTower,
       deriveAcceptedBellTowerState,
     } from './structural-material-3d-bell-tower.js';
+    import {
+      DETACHED_DYNAMICS_AUTHORITY,
+      DETACHED_DYNAMICS_ROUTE,
+      advanceDetachedDynamicsToTime,
+      createDetachedDynamicsSidecar,
+      reconcileAcceptedDetachedDynamics,
+      resetDetachedDynamics,
+    } from './structural-material-3d-detached-dynamics.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -244,6 +252,7 @@
     const bellTowerMode = pageUrl.searchParams.get('bellTower') === '1';
     const sympatheticCitadelMode = pageUrl.searchParams.get('sympatheticCitadel') === '1' || bellTowerMode;
     const showStructuralOverlay = pageUrl.searchParams.get('structuralOverlay') === '1';
+    const detachedDynamicsGroundPlaneY = 1.12;
     const hapticCompanionParameter = pageUrl.searchParams.get('hapticCompanion');
     const nativeHapticCompanionUrl = hapticCompanionParameter === 'off'
       ? null
@@ -346,6 +355,12 @@
       new THREE.Vector2(0.11, -0.145),
     ], 24);
     const structuralBlockGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const detachedDynamicsGroundGeometry = new THREE.BoxGeometry(3.2, 0.035, 1.4);
+    const detachedDynamicsGroundMaterial = new THREE.MeshStandardMaterial({
+      color: 0x273039,
+      roughness: 0.96,
+      metalness: 0.02,
+    });
     const forceMaterial = new THREE.LineBasicMaterial({ color: 0xf1cc62, transparent: true, opacity: 0.96 });
     const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
     const structuralRaycaster = new THREE.Raycaster();
@@ -383,6 +398,11 @@
     let material = createProductMaterial();
     let geometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
     let structuralAssetSidecar = buildStructuralAssetSidecar(material, geometrySidecar);
+    let detachedDynamics = createDetachedDynamicsSidecar({
+      groundPlaneY: detachedDynamicsGroundPlaneY,
+    });
+    let detachedDynamicsClockOrigin = null;
+    let detachedDynamicsAnimationFrame = null;
     const geometryTransitionLedger = [];
     let materialPointerId = null;
     let dragStart = null;
@@ -461,7 +481,8 @@
           child.geometry &&
           child.geometry !== nodeGeometry &&
           child.geometry !== bellFallbackGeometry &&
-          child.geometry !== structuralBlockGeometry
+          child.geometry !== structuralBlockGeometry &&
+          child.geometry !== detachedDynamicsGroundGeometry
         ) child.geometry.dispose?.();
       }
     }
@@ -545,6 +566,19 @@
       targetGroup.userData.topologyEpoch = material.topologyEpoch;
       targetGroup.userData.connectivityEpoch = material.connectivityEpoch;
       if (assetComposition) {
+        const ground = new THREE.Mesh(detachedDynamicsGroundGeometry, detachedDynamicsGroundMaterial);
+        ground.position.copy(worldCoordinate({
+          x: 0.5,
+          y: detachedDynamicsGroundPlaneY + 0.014,
+          z: 0.5,
+        }));
+        ground.userData.sympatheticProjection = {
+          consumerId,
+          kind: 'detached-dynamics-ground',
+          dynamicsRoute: DETACHED_DYNAMICS_ROUTE,
+          groundPlaneY: detachedDynamicsGroundPlaneY,
+        };
+        targetGroup.add(ground);
         const blockBatches = new Map();
         for (const anchor of structuralAssetSidecar.anchors) {
           if (anchor.prototype.instancePolicy !== 'shared-instanced-prototype') continue;
@@ -709,10 +743,13 @@
       if (bellAnchor) {
         const bellMesh = new THREE.Mesh(bellFallbackGeometry, bellMaterial);
         const previewOffset = contactPreviewOffsetByNodeId.get(bellAnchor.structuralNodeId);
+        const dynamicsBody = consumerId === 'represented-citadel'
+          ? detachedDynamics.bodies.find(body => body.assetAnchorId === bellAnchor.id) || null
+          : null;
         const renderedBodyCenter = {
-          x: bellAnchor.acceptedBodyCenter.x + (previewOffset?.x || 0),
-          y: bellAnchor.acceptedBodyCenter.y + (previewOffset?.y || 0),
-          z: bellAnchor.acceptedBodyCenter.z + (previewOffset?.z || 0),
+          x: (dynamicsBody?.position.x ?? bellAnchor.acceptedBodyCenter.x) + (previewOffset?.x || 0),
+          y: (dynamicsBody?.position.y ?? bellAnchor.acceptedBodyCenter.y) + (previewOffset?.y || 0),
+          z: (dynamicsBody?.position.z ?? bellAnchor.acceptedBodyCenter.z) + (previewOffset?.z || 0),
         };
         const crownWorld = worldCoordinate(bellAnchor.acceptedCrownPoint);
         const bodyWorld = worldCoordinate(renderedBodyCenter);
@@ -724,6 +761,17 @@
             renderedAxis.normalize(),
           );
         }
+        bellMesh.userData.detachedDynamicsBaseQuaternion = bellMesh.quaternion.toArray();
+        if (dynamicsBody) {
+          const tumbleAxis = new THREE.Vector3(
+            dynamicsBody.rotationAxis.x * 2.35,
+            dynamicsBody.rotationAxis.y * -1.25,
+            dynamicsBody.rotationAxis.z * 0.95,
+          ).normalize();
+          bellMesh.quaternion.premultiply(
+            new THREE.Quaternion().setFromAxisAngle(tumbleAxis, dynamicsBody.rotationAngle),
+          );
+        }
         bellMesh.userData.sympatheticProjection = {
           consumerId,
           kind: 'authored-asset-fallback',
@@ -732,11 +780,115 @@
           structuralNodeId: bellAnchor.structuralNodeId,
           attached: bellAnchor.attached,
           visualStatus: bellAnchor.prototype.visualStatus,
+          dynamicsBodyId: dynamicsBody?.id || null,
+          dynamicsPhase: dynamicsBody?.phase || null,
         };
         bellMesh.userData.structuralAssetAnchor = structuredClone(bellAnchor);
         if (pickable) bellMesh.userData.structuralPick = { kind: 'node', id: bellAnchor.structuralNodeId };
         targetGroup.add(bellMesh);
       }
+    }
+
+    function assetProjectionForState(state) {
+      const nextGeometry = buildEffigyTileGeometrySidecar(state, { profile: 'rib-upper-v0' });
+      if (nextGeometry.status !== 'passed') {
+        throw new Error('detached dynamics requires a passed accepted geometry projection');
+      }
+      return buildStructuralAssetSidecar(state, nextGeometry);
+    }
+
+    function reconcileDetachedDynamicsTransition(previousAssets, nextState, receipt, operation) {
+      if (!bellTowerMode) return;
+      const nextAssets = assetProjectionForState(nextState);
+      detachedDynamics = reconcileAcceptedDetachedDynamics(
+        detachedDynamics,
+        previousAssets,
+        nextAssets,
+        {
+          accepted: true,
+          eventEpoch: receipt.eventEpoch,
+          operation,
+          objectIdentity: receipt.objectIdentity,
+        },
+      );
+    }
+
+    function applyDetachedDynamicsTransforms() {
+      if (!bellTowerMode) return [];
+      const bodiesByAnchor = new Map(detachedDynamics.bodies.map(body => [body.assetAnchorId, body]));
+      const applied = [];
+      citadelWorld.traverse(object => {
+        const projection = object.userData?.sympatheticProjection;
+        if (projection?.kind !== 'authored-asset-fallback') return;
+        const body = bodiesByAnchor.get(projection.assetAnchorId);
+        if (!body) return;
+        const expectedPosition = worldCoordinate(body.position);
+        object.position.copy(expectedPosition);
+        const baseQuaternion = object.userData.detachedDynamicsBaseQuaternion;
+        if (Array.isArray(baseQuaternion)) object.quaternion.fromArray(baseQuaternion);
+        const tumbleAxis = new THREE.Vector3(
+          body.rotationAxis.x * 2.35,
+          body.rotationAxis.y * -1.25,
+          body.rotationAxis.z * 0.95,
+        ).normalize();
+        object.quaternion.premultiply(
+          new THREE.Quaternion().setFromAxisAngle(tumbleAxis, body.rotationAngle),
+        );
+        projection.dynamicsBodyId = body.id;
+        projection.dynamicsPhase = body.phase;
+        applied.push({
+          bodyId: body.id,
+          assetAnchorId: body.assetAnchorId,
+          phase: body.phase,
+          expectedPosition: expectedPosition.toArray(),
+          renderedPosition: object.position.toArray(),
+          positionError: object.position.distanceTo(expectedPosition),
+          rotationAngle: body.rotationAngle,
+        });
+      });
+      return applied;
+    }
+
+    function detachedDynamicsRenderWitness() {
+      return {
+        route: DETACHED_DYNAMICS_ROUTE,
+        authority: DETACHED_DYNAMICS_AUTHORITY,
+        transforms: applyDetachedDynamicsTransforms(),
+      };
+    }
+
+    function detachedDynamicsHasMovingBodies() {
+      return detachedDynamics.bodies.some(body => body.phase !== 'settled');
+    }
+
+    function cancelDetachedDynamicsAnimation() {
+      if (detachedDynamicsAnimationFrame !== null) {
+        cancelAnimationFrame(detachedDynamicsAnimationFrame);
+        detachedDynamicsAnimationFrame = null;
+      }
+    }
+
+    function animateDetachedDynamics(timestamp) {
+      detachedDynamicsAnimationFrame = null;
+      if (!detachedDynamicsHasMovingBodies()) return;
+      if (detachedDynamicsClockOrigin === null) {
+        detachedDynamicsClockOrigin = timestamp - detachedDynamics.elapsedSeconds * 1000;
+      }
+      detachedDynamics = advanceDetachedDynamicsToTime(
+        detachedDynamics,
+        Math.max(detachedDynamics.elapsedSeconds, (timestamp - detachedDynamicsClockOrigin) / 1000),
+      );
+      applyDetachedDynamicsTransforms();
+      updateReadout();
+      renderScene();
+      if (detachedDynamicsHasMovingBodies()) {
+        detachedDynamicsAnimationFrame = requestAnimationFrame(animateDetachedDynamics);
+      }
+    }
+
+    function startDetachedDynamicsAnimation() {
+      if (!detachedDynamicsHasMovingBodies() || detachedDynamicsAnimationFrame !== null) return;
+      detachedDynamicsAnimationFrame = requestAnimationFrame(animateDetachedDynamics);
     }
 
     function renderMaterial() {
@@ -823,9 +975,13 @@
     function updateReadout() {
       const summary = summarizeLayeredStructuralState(material);
       const interactionMode = structuralInteractionMode.snapshot().mode;
-      readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
+      const dynamicsBody = detachedDynamics.bodies[0] || null;
+      const dynamicsSuffix = bellTowerMode
+        ? ` | dynamics ${dynamicsBody?.phase || 'attached'} c${detachedDynamics.contactEpoch}`
+        : '';
+      readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}${dynamicsSuffix}`;
       route.textContent = sympatheticCitadelMode
-        ? `${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | shared accepted state`
+        ? `${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | ${bellTowerMode ? DETACHED_DYNAMICS_ROUTE : 'shared accepted state'}`
         : `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
       const latestGpuReceipt = latestGpuOperation?.receipt;
@@ -1131,6 +1287,7 @@
     function render() {
       const startedAt = performance.now();
       renderMaterial();
+      applyDetachedDynamicsTransforms();
       const materialCompletedAt = performance.now();
       updateReadout();
       const readoutCompletedAt = performance.now();
@@ -1522,6 +1679,7 @@
           if (!acceptance.accepted) return receipt;
           let nextMaterial;
           runStructuralMutation('gpu-sympathetic-tear', () => {
+            const previousAssets = structuralAssetSidecar;
             nextMaterial = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
             if (bellTowerMode) {
               nextMaterial = advanceAcceptedStructuralBellTower(effectiveSourceState, nextMaterial, {
@@ -1529,10 +1687,12 @@
                 eventEpoch: receipt.eventEpoch,
                 operation: 'shear',
               });
+              reconcileDetachedDynamicsTransition(previousAssets, nextMaterial, receipt, 'shear');
             }
             material = nextMaterial;
             gpuBindingReceipt = null;
           });
+          startDetachedDynamicsAnimation();
           try {
             renderedMotionSequence += 1;
             const motionScheduler = {
@@ -1637,6 +1797,7 @@
         gpuBindingReceipt = receipt;
         if (receipt.status === 'passed') {
           runStructuralMutation('gpu-resident-binding', () => {
+            const previousAssets = structuralAssetSidecar;
             const boundMaterial = buildLayeredStructuralGpuBindingMaterial(effectiveSourceState, receipt);
             material = bellTowerMode
               ? advanceAcceptedStructuralBellTower(effectiveSourceState, boundMaterial, {
@@ -1645,8 +1806,12 @@
                   operation: 'bind',
                 })
               : boundMaterial;
+            if (bellTowerMode) {
+              reconcileDetachedDynamicsTransition(previousAssets, material, receipt, 'bind');
+            }
             gpuTearReceipt = null;
           });
+          startDetachedDynamicsAnimation();
         } else {
           updateReadout();
           renderScene();
@@ -1829,6 +1994,9 @@
     }, true);
     document.querySelector('#reset').addEventListener('click', () => {
       runStructuralMutation('reset', () => {
+        cancelDetachedDynamicsAnimation();
+        detachedDynamics = resetDetachedDynamics(detachedDynamics);
+        detachedDynamicsClockOrigin = null;
         liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
         gpuTearAcceptanceGate.clear();
@@ -1911,6 +2079,8 @@
           bellAnchor: structuredClone(structuralAssetSidecar.anchors.find(anchor =>
             anchor.structuralRole === 'bell-body') || null),
         } : null,
+        detachedDynamics: bellTowerMode ? structuredClone(detachedDynamics) : null,
+        detachedDynamicsRendered: bellTowerMode ? detachedDynamicsRenderWitness() : null,
         bellRingEvents: material.sound.events.filter(event => event.kind === 'ring').map(event => ({ ...event })),
         rendered: { effigy, citadel },
         acceptedSurfaceCorrespondence:
@@ -1945,6 +2115,8 @@
       },
       geometryTransitionLedger: structuredClone(geometryTransitionLedger),
       sympatheticCitadel: sympatheticCitadelWitness(),
+      detachedDynamics: bellTowerMode ? structuredClone(detachedDynamics) : null,
+      detachedDynamicsRendered: bellTowerMode ? detachedDynamicsRenderWitness() : null,
       visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       summary: summarizeLayeredStructuralState(material),
       forceEnvelope,
@@ -2004,6 +2176,15 @@
       })),
       gpuBindingPending: gpuBindingPromise !== null,
       };
+    };
+
+    window.__structuralMaterial3dAdvanceDetachedDynamicsToTime = elapsedSeconds => {
+      cancelDetachedDynamicsAnimation();
+      detachedDynamics = advanceDetachedDynamicsToTime(detachedDynamics, elapsedSeconds);
+      applyDetachedDynamicsTransforms();
+      updateReadout();
+      renderScene();
+      return window.__structuralMaterial3dWitness();
     };
 
     window.__structuralMaterial3dCameraWitness = () => ({

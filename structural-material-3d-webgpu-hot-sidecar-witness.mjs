@@ -27,6 +27,10 @@ import {
   STRUCTURAL_BELL_TOWER_AUTHORITY,
   STRUCTURAL_BELL_TOWER_ROUTE,
 } from './structural-material-3d-bell-tower.js';
+import {
+  DETACHED_DYNAMICS_AUTHORITY,
+  DETACHED_DYNAMICS_ROUTE,
+} from './structural-material-3d-detached-dynamics.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-hot-sidecar-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
@@ -751,6 +755,89 @@ try {
       report.checks.bellTowerAcceptedMotionAndRing,
       'accepted bell drag did not couple graph motion, asset anchor motion, and a material-derived ring event',
     );
+
+    const acceptedDynamics = livePage.detachedDynamics;
+    const acceptedDynamicsRendered = livePage.detachedDynamicsRendered;
+    const launchedBody = acceptedDynamics?.bodies?.find(body =>
+      body.assetAnchorId === acceptedAsset.bellAnchor?.id);
+    report.detachedDynamicsAccepted = {
+      state: acceptedDynamics,
+      rendered: acceptedDynamicsRendered,
+      structuralFingerprint:
+        livePage.sympatheticCitadel?.acceptedState?.structuralFingerprint || null,
+      camera: cameraAfter,
+    };
+    report.checks.detachedDynamicsAcceptedLaunch =
+      acceptedDynamics?.route === DETACHED_DYNAMICS_ROUTE &&
+      acceptedDynamics.authority === DETACHED_DYNAMICS_AUTHORITY &&
+      acceptedDynamics.status === 'passed' &&
+      acceptedDynamics.bodies.length === 1 &&
+      launchedBody?.prototypeAssetId === 'citadel-bell-v0' &&
+      launchedBody.structuralNodeId === acceptedBell.bellNodeId &&
+      launchedBody.componentId === acceptedBell.componentId &&
+      launchedBody.launchEventEpoch > 0 &&
+      ['airborne', 'contact', 'settled'].includes(launchedBody.phase) &&
+      acceptedDynamics.launchKeys.length === 1;
+    assertCheck(
+      report.checks.detachedDynamicsAcceptedLaunch,
+      'accepted graph separation did not launch exactly one route-identified bell dynamics body',
+    );
+
+    report.failurePhase = 'detached-dynamics-settlement';
+    const settledPage = await evaluate(
+      'window.__structuralMaterial3dAdvanceDetachedDynamicsToTime(8)',
+      true,
+    );
+    const settledBody = settledPage.detachedDynamics?.bodies?.find(body =>
+      body.assetAnchorId === acceptedAsset.bellAnchor?.id);
+    const settledTransform = settledPage.detachedDynamicsRendered?.transforms?.find(transform =>
+      transform.assetAnchorId === acceptedAsset.bellAnchor?.id);
+    const settledCamera = await evaluate('window.__structuralMaterial3dCameraWitness().state');
+    const settledCapture = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    const settledScreenshot = config.screenshot.replace(/\.png$/i, '-dynamics-settled.png');
+    writeFileSync(settledScreenshot, Buffer.from(settledCapture.data, 'base64'));
+    const settledPixelProbe = await probeScreenshot(evaluate, settledCapture.data);
+    report.detachedDynamicsSettled = {
+      state: settledPage.detachedDynamics,
+      rendered: settledPage.detachedDynamicsRendered,
+      structuralFingerprint:
+        settledPage.sympatheticCitadel?.acceptedState?.structuralFingerprint || null,
+      camera: settledCamera,
+      screenshot: {
+        path: settledScreenshot,
+        byteLength: Buffer.from(settledCapture.data, 'base64').byteLength,
+        pixelProbe: settledPixelProbe,
+      },
+    };
+    report.checks.detachedDynamicsSettledContact =
+      settledBody?.phase === 'settled' &&
+      settledBody.contactEpoch > 0 &&
+      settledBody.position.y === settledBody.groundCenterY &&
+      settledBody.linearVelocity.x === 0 &&
+      settledBody.linearVelocity.y === 0 &&
+      settledBody.linearVelocity.z === 0 &&
+      settledBody.angularSpeed === 0 &&
+      settledPage.detachedDynamics.contactEpoch > 0;
+    report.checks.detachedDynamicsRenderAgreement =
+      settledTransform?.bodyId === settledBody?.id &&
+      settledTransform.phase === 'settled' &&
+      settledTransform.positionError <= 0.000001 &&
+      settledPixelProbe.nonDarkPixels >= 500 &&
+      settledPixelProbe.structuralColorPixels >= 40 &&
+      report.detachedDynamicsSettled.structuralFingerprint ===
+        report.detachedDynamicsAccepted.structuralFingerprint &&
+      JSON.stringify(settledCamera) === JSON.stringify(cameraAfter);
+    assertCheck(
+      report.checks.detachedDynamicsSettledContact,
+      'detached bell did not collide and settle without ground penetration',
+    );
+    assertCheck(
+      report.checks.detachedDynamicsRenderAgreement,
+      'settled dynamics state did not reach the represented authored bell while preserving structural and camera state',
+    );
   }
 
   report.failurePhase = 'bind-mode-selection';
@@ -1032,6 +1119,25 @@ try {
   report.checks.bindCameraPreserved = JSON.stringify(cameraBefore) === JSON.stringify(
     await evaluate('window.__structuralMaterial3dCameraWitness().state'),
   );
+  if (bellTowerRequested) {
+    report.detachedDynamicsAfterBind = {
+      state: boundPage.detachedDynamics,
+      rendered: boundPage.detachedDynamicsRendered,
+      bellTower: boundPage.sympatheticCitadel?.bellTower || null,
+    };
+    const retiredBell = boundPage.detachedDynamics?.retiredBodies?.find(body =>
+      body.assetAnchorId === report.bellTowerAccepted.structuralAssetSidecar.bellAnchor?.id);
+    report.checks.detachedDynamicsAcceptedReattachment =
+      boundPage.sympatheticCitadel?.bellTower?.attached === true &&
+      boundPage.detachedDynamics?.bodies?.length === 0 &&
+      retiredBell?.retirementCause === 'accepted-structural-reattachment' &&
+      retiredBell.retirementEventEpoch === boundPage.gpuResidentBinding?.eventEpoch &&
+      boundPage.detachedDynamicsRendered?.transforms?.length === 0;
+    assertCheck(
+      report.checks.detachedDynamicsAcceptedReattachment,
+      'accepted Bind did not explicitly retire the detached bell body at reattachment',
+    );
+  }
 
   report.failurePhase = 'visual-evidence';
   const screenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs, {
