@@ -1,0 +1,110 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 420,
+  "imageHeight": 384,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/semantic-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "SEMANTIC"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/semantic-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "SEMANTIC"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/semantic-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "SEMANTIC"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/semantic-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "SEMANTIC"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/semantic-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "SEMANTIC"
+    }
+  ]
+}

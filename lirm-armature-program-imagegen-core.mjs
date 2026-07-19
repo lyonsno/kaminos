@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import {
   GESTALT_IMAGEGEN_JOB_TYPE,
@@ -13,6 +13,8 @@ import {
 } from './lirm-speciation-gestalt-imagegen-core.mjs';
 
 export const ARMATURE_PROGRAM_IMAGEGEN_PLAN_SCHEMA = 'kaminos.lirm-armature-program-imagegen-plan.v0';
+export const ARMATURE_GESTALT_FAMILY_IMAGEGEN_PLAN_SCHEMA =
+  'kaminos.lirm-armature-gestalt-family-imagegen-plan.v0';
 
 const EXPECTED_CONDITIONING_SCHEMA = 'kaminos.lirm-armature-program-implicit-body-witness.v0';
 const EXPECTED_CONDITIONING_ROUTE = 'kaminos/lirm-armature-program/implicit-body-v0';
@@ -196,6 +198,218 @@ export async function buildArmatureProgramImagegenMatrix({
       everyConditioningInputMustMatchWitnessHash: true,
     },
     cells,
+  };
+}
+
+function assertFamilyReceipt(familyReceipt) {
+  if (familyReceipt?.schema !== 'kaminos.lirm-armature-gestalt-family-witness.v0') {
+    throw new Error(`unexpected armature family witness schema: ${familyReceipt?.schema ?? 'missing'}`);
+  }
+  if (familyReceipt.status !== 'complete') {
+    throw new Error(`armature family witness is not complete: ${familyReceipt.status ?? 'missing'}`);
+  }
+  if (!Array.isArray(familyReceipt.candidates) || familyReceipt.candidates.length === 0) {
+    throw new Error('armature family witness has no candidates');
+  }
+  const ids = new Set();
+  for (const candidate of familyReceipt.candidates) {
+    if (!candidate?.id || ids.has(candidate.id)) {
+      throw new Error(`duplicate family candidate id: ${candidate?.id ?? 'missing'}`);
+    }
+    ids.add(candidate.id);
+    if (!candidate.receiptPath || candidate.receiptEvidence?.path !== candidate.receiptPath) {
+      throw new Error(`family candidate receipt evidence mismatch: ${candidate.id}`);
+    }
+  }
+  if (JSON.stringify(familyReceipt.requestedCandidateIds) !== JSON.stringify([...ids])) {
+    throw new Error('family candidate coverage differs from requested candidate ids');
+  }
+}
+
+async function loadFamilyCandidateReceipt(candidate, conditioningRoot) {
+  const absolutePath = resolve(conditioningRoot, candidate.receiptPath);
+  const evidence = await fileEvidence(absolutePath);
+  if (evidence.bytes !== candidate.receiptEvidence.byteSize
+      || evidence.sha256 !== candidate.receiptEvidence.sha256) {
+    throw new Error(`family candidate receipt hash mismatch: ${candidate.id}`);
+  }
+  const receipt = JSON.parse(await readFile(absolutePath, 'utf8'));
+  if (receipt.candidateId !== candidate.id) {
+    throw new Error(`family candidate receipt identity mismatch: ${candidate.id}`);
+  }
+  return { receipt, receiptRoot: dirname(absolutePath), evidence };
+}
+
+export async function buildArmatureGestaltFamilyImagegenMatrix({
+  familyReceipt,
+  conditioningRoot,
+  promptRoot,
+  outputRoot,
+  seeds = [718021, 718113],
+  stance = { id: 'world-creature-invention', file: 'world-creature-invention.txt' },
+  referenceSets = [
+    { id: 'clay-only', roles: ['clay'] },
+    { id: 'clay-depth-normal', roles: ['clay', 'depth', 'normal'] },
+  ],
+} = {}) {
+  assertFamilyReceipt(familyReceipt);
+  if (!conditioningRoot || !promptRoot || !outputRoot) {
+    throw new Error('conditioningRoot, promptRoot, and outputRoot are required');
+  }
+  if (!stance?.id || !stance?.file) throw new Error('family imagegen matrix requires one fixed prompt stance');
+
+  const candidatePlans = [];
+  const receiptEvidence = [];
+  for (const candidate of familyReceipt.candidates) {
+    const loaded = await loadFamilyCandidateReceipt(candidate, conditioningRoot);
+    candidatePlans.push(await buildArmatureProgramImagegenMatrix({
+      conditioningReceipt: loaded.receipt,
+      conditioningRoot: loaded.receiptRoot,
+      promptRoot,
+      outputRoot,
+      seeds,
+      stances: [stance],
+      referenceSets,
+    }));
+    receiptEvidence.push({ candidateId: candidate.id, ...loaded.evidence });
+  }
+
+  const cells = candidatePlans.flatMap(plan => plan.cells);
+  if (new Set(cells.map(cell => cell.cellId)).size !== cells.length) {
+    throw new Error('family imagegen matrix produced duplicate cell ids');
+  }
+  const expectedCount = familyReceipt.candidates.length * seeds.length * referenceSets.length;
+  if (cells.length !== expectedCount) {
+    throw new Error(`family imagegen cell coverage mismatch: ${cells.length} != ${expectedCount}`);
+  }
+
+  return {
+    schema: ARMATURE_GESTALT_FAMILY_IMAGEGEN_PLAN_SCHEMA,
+    createdAt: new Date().toISOString(),
+    purpose: 'Measure whether distinct source-anchored 3D creature gestalts recruit distinct model priors while preserving lineage.',
+    requestedConditioningRoute: familyReceipt.effectiveRoute,
+    expectedRunner: GESTALT_IMAGEGEN_RUNNER,
+    familyCandidateReceiptEvidence: receiptEvidence,
+    comparisonContract: {
+      kind: 'multi-gestalt-reference-seed-factorial',
+      fixedCandidateIds: familyReceipt.candidates.map(candidate => candidate.id),
+      fixedStance: stance.id,
+      fixedModel: 'flux2-klein-9b',
+      fixedSteps: 8,
+      fixedGuidance: 1.0,
+      variedReferenceSets: referenceSets.map(set => set.id),
+      variedSeeds: seeds,
+      loadBearingDiscriminator:
+        'The fixed invention prompt must recruit materially different creature priors from the five bodies while preserving recognizable lineage.',
+    },
+    falseClosureGuards: {
+      directInferenceForbidden: true,
+      fallbackRouteAccepted: false,
+      missingOrEmptyPrimaryOutputAccepted: false,
+      requestedRouteMustEqualEffectiveJobType: true,
+      effectiveRunnerMustMatch: GESTALT_IMAGEGEN_RUNNER,
+      everyConditioningInputMustMatchWitnessHash: true,
+      samePromptAcrossEveryCandidate: true,
+      visuallyDistinctOutputWithoutLineage: 'does_not_satisfy',
+      visuallyAdherentOutputWithoutDistinctPriorRecruitment: 'does_not_satisfy',
+    },
+    cells,
+  };
+}
+
+export async function buildArmatureGestaltFamilyImagegenContactSheetManifest({ plan, completion } = {}) {
+  if (plan?.schema !== ARMATURE_GESTALT_FAMILY_IMAGEGEN_PLAN_SCHEMA) {
+    throw new Error(`unexpected armature family imagegen plan schema: ${plan?.schema ?? 'missing'}`);
+  }
+  if (completion?.schema !== 'kaminos.lirm-armature-gestalt-family-imagegen-collection.v0'
+      || completion.status !== 'complete') {
+    throw new Error(`armature family imagegen collection is not complete: ${completion?.status ?? 'missing'}`);
+  }
+  if (!Array.isArray(completion.accepted) || completion.accepted.length !== plan.cells.length) {
+    throw new Error('accepted family output count does not match plan');
+  }
+  const accepted = new Map(completion.accepted.map(entry => [entry.cellId, entry]));
+  if (accepted.size !== plan.cells.length) throw new Error('accepted family outputs contain duplicate cell ids');
+
+  const candidateIds = plan.comparisonContract?.fixedCandidateIds;
+  const referenceSets = plan.comparisonContract?.variedReferenceSets;
+  const seeds = plan.comparisonContract?.variedSeeds;
+  if (!Array.isArray(candidateIds) || !Array.isArray(referenceSets) || !Array.isArray(seeds)) {
+    throw new Error('family comparison contract lacks candidate, reference, or seed axes');
+  }
+  if (referenceSets.length !== 2 || seeds.length !== 2) {
+    throw new Error('family contact sheet requires the two-reference-by-two-seed factorial');
+  }
+
+  const sheets = [];
+  for (const seed of seeds) {
+    const cells = [];
+    const evidence = [];
+    for (const candidateId of candidateIds) {
+      const candidateCells = plan.cells.filter(cell => cell.candidateId === candidateId);
+      if (candidateCells.length !== referenceSets.length * seeds.length) {
+        throw new Error(`family contact sheet coverage mismatch for ${candidateId}`);
+      }
+      const sourceHashes = new Set(candidateCells.map(cell => cell.input.sha256));
+      if (sourceHashes.size !== 1) throw new Error(`candidate clay source differs across cells: ${candidateId}`);
+      const source = await fileEvidence(candidateCells[0].input.path);
+      if (source.sha256 !== candidateCells[0].input.sha256) {
+        throw new Error(`source input hash drift for ${candidateId}`);
+      }
+
+      const clayCell = candidateCells.find(cell => cell.referenceSet === referenceSets[0] && cell.seed === seed);
+      const threeRefCell = candidateCells.find(cell => cell.referenceSet === referenceSets[1] && cell.seed === seed);
+      if (!clayCell || !threeRefCell) throw new Error(`missing family seed pair for ${candidateId}/${seed}`);
+      const normalReference = threeRefCell.references.find(reference => reference.role === 'normal');
+      if (!normalReference) throw new Error(`missing normal reference for ${threeRefCell.cellId}`);
+      const normal = await fileEvidence(normalReference.path);
+      if (normal.sha256 !== normalReference.sha256) {
+        throw new Error(`normal input hash drift for ${threeRefCell.cellId}`);
+      }
+
+      const outputCells = [clayCell, threeRefCell];
+      const outputs = [];
+      for (const cell of outputCells) {
+        const acceptedOutput = accepted.get(cell.cellId);
+        if (!acceptedOutput) throw new Error(`missing accepted output for ${cell.cellId}`);
+        const output = await fileEvidence(cell.outputPath);
+        if (output.sha256 !== acceptedOutput.output.sha256) {
+          throw new Error(`generated output hash drift for ${cell.cellId}`);
+        }
+        outputs.push(output);
+      }
+
+      evidence.push(
+        { candidateId, role: 'armature', ...source },
+        { candidateId, role: 'normal', ...normal },
+        { candidateId, role: `clay-only/seed${seed}`, ...outputs[0] },
+        { candidateId, role: `clay-depth-normal/seed${seed}`, ...outputs[1] },
+      );
+      cells.push(
+        { sourcePath: source.path, title: candidateId, viewLabel: 'ARMATURE' },
+        { sourcePath: normal.path, title: candidateId, viewLabel: 'NORMAL' },
+        { sourcePath: outputs[0].path, title: candidateId, viewLabel: 'CLAY' },
+        { sourcePath: outputs[1].path, title: candidateId, viewLabel: '3REF' },
+      );
+    }
+    sheets.push({
+      seed,
+      sheet: {
+        width: 2048,
+        cellWidth: 512,
+        cellHeight: 548,
+        imageHeight: 512,
+        imageOffsetY: 0,
+        headerHeight: 36,
+        cells,
+      },
+      evidence,
+    });
+  }
+
+  return {
+    schema: 'kaminos.lirm-armature-gestalt-family-imagegen-contact-sheet-manifest.v0',
+    sheets,
   };
 }
 

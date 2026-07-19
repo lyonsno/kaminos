@@ -1,0 +1,100 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-imagegen-assay.v0",
+  "status": "multi-gestalt-morphology-passed-inspected",
+  "result": {
+    "loadBearingQuestion": "Does one fixed invention prompt recruit materially different organism priors from five source-anchored 3D body plans while preserving recognizable lineage?",
+    "answer": "yes-with-reference-pressure-gradient",
+    "comparisonClass": "five body plans, clay-only versus clay-depth-normal, two fixed seeds, one fixed Flux2 Klein prompt and inference budget",
+    "candidateCount": 5,
+    "armatureProgramCount": 3,
+    "generatedOutputCount": 20
+  },
+  "visualFindings": [
+    {
+      "candidateId": "crawler-basin22",
+      "finding": "Three-reference conditioning retains the paired posterior domes and low splayed contact plan; clay-only expands toward generic quadrupedal reptilian anatomy."
+    },
+    {
+      "candidateId": "upright-basin03",
+      "finding": "Three-reference conditioning retains the tall narrow trunk and fused basal pedestal; clay-only recruits broader humanoid or bipedal anatomy."
+    },
+    {
+      "candidateId": "upright-basin10",
+      "finding": "Both seeds produce a compact forward-heavy organism on discrete splayed contacts, materially distinct from the other upright fits."
+    },
+    {
+      "candidateId": "upright-basin22",
+      "finding": "Both seeds produce a consolidated vertical body on a broad radial foot with a different head-to-base proportion from basin10."
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "finding": "All four cells preserve the long anterior neck, posterior ballast, and low radial base, confirming the already observed strong basin."
+    }
+  ],
+  "referencePressureFinding": "Clay-only acts as an inspiration regime with more model-prior anatomy; clay-depth-normal acts as a lineage regime with stronger spatial adherence. The route therefore exposes a useful adherence/invention lever without changing the body generator.",
+  "residualUncertainty": {
+    "styleIndependence": "not_yet_assayed",
+    "trellisSurvivalForNewGestalts": "not_yet_fired",
+    "arbitraryTopologyComposition": "not_claimed",
+    "withinProgramBasinWidth": "supported_by_three_upright_fits_but_not_exhaustively_mapped"
+  },
+  "timing": {
+    "totalModelSeconds": 1098.9548177719116,
+    "averageModelSeconds": 54.94774088859558,
+    "byRoute": [
+      {
+        "effectiveJobType": "mflux_flux2_edit_promptfile",
+        "count": 10,
+        "averageSeconds": 38.31624927520752,
+        "minimumSeconds": 32.6942458152771,
+        "maximumSeconds": 42.84131622314453
+      },
+      {
+        "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+        "count": 10,
+        "averageSeconds": 71.57923250198364,
+        "minimumSeconds": 58.17285919189453,
+        "maximumSeconds": 80.55187511444092
+      }
+    ]
+  },
+  "evidence": {
+    "plan": {
+      "path": "imagegen/plan.json",
+      "byteSize": 141138,
+      "sha256": "sha256:53e0452798d0053778319e9eb209740e59778989d7baacc357cd83767c3d5407"
+    },
+    "completion": {
+      "path": "imagegen/completion-report.json",
+      "byteSize": 71797,
+      "sha256": "sha256:912580c2ab9501019735efc4707190a3bb99581649f6e1b55fd67d083360c7aa"
+    },
+    "contactSheetReceipt": {
+      "path": "imagegen/contact-sheet-receipt.json",
+      "byteSize": 20957,
+      "sha256": "sha256:5f695d841cfed15941e135213cfb2d185fb04ac029828246276ea9118acdd9cb"
+    },
+    "sheets": [
+      {
+        "path": "imagegen/multi-gestalt-imagegen-seed718021.png",
+        "byteSize": 4236280,
+        "sha256": "sha256:2d323578caa84e7a238b87532b12687553123e16d9091b234c58d548857200dc"
+      },
+      {
+        "path": "imagegen/multi-gestalt-imagegen-seed718113.png",
+        "byteSize": 4158477,
+        "sha256": "sha256:8e9910f4f3a6f032ace33c5a7c4ed414f92019ce31cc99c6b747c48176e48291"
+      }
+    ]
+  },
+  "nextPressure": [
+    "Promote upright-basin10 clay-depth-normal seed718113 through Trellis to test cast survival for a newly proven gestalt.",
+    "Hold the body/reference regime fixed and fire a radically different aesthetic/material prompt to test whether morphology and style are independently steerable."
+  ],
+  "falseClosureGuards": {
+    "productionCreatureClaim": "forbidden",
+    "generalCreatureMediumClaim": "promising_not_proven",
+    "styleAxisClaim": "not_yet_assayed",
+    "trellisCastClaim": "not_yet_fired_for_this_family"
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "schema": "kaminos.lirm-armature-multi-gestalt-conditioning-assay.v0",
+  "status": "imagegen-multi-gestalt-passed-inspected",
+  "evidencePredicate": {
+    "candidateCount": 5,
+    "distinctArmatureProgramCount": 3,
+    "eachCandidateRequires": [
+      "clay",
+      "depth",
+      "normal",
+      "semantic"
+    ],
+    "inferenceClaim": "20 Flux2 outputs accepted and inspected",
+    "nextGate": "one newly proven gestalt through Trellis plus an orthogonal style/material pressure firing",
+    "imagegenClaim": "five-body morphology steering passed across two seeds and two reference regimes"
+  },
+  "familyReceipt": {
+    "path": "receipt.json",
+    "byteSize": 9072,
+    "sha256": "sha256:e9ad8ddfc08a0be6cc2645c913fde89cf9fabe20f760952a235e961c9c9e5914"
+  },
+  "contactSheetReceipt": {
+    "path": "conditioning-contact-sheet-receipt.json",
+    "byteSize": 7350,
+    "sha256": "sha256:3035472d3334cab6eeec1ae7ea61db11efc46b5310d24bd2c86f4baa11d9aa0b"
+  },
+  "contactSheet": {
+    "path": "conditioning-contact-sheet.png",
+    "byteSize": 913828,
+    "sha256": "sha256:50ba211d46e21b807ed38c552dce16fe9c7b82eb455337e1d627d1db7efc20e6"
+  },
+  "candidates": [
+    {
+      "id": "crawler-basin22",
+      "armatureProgramId": "kaminos.lirm-armature-program.crawler.v0",
+      "acceptance": {
+        "kind": "direct-status",
+        "status": "assay-passed-inspected",
+        "outcome": "assay-passed-inspected",
+        "visualDisposition": "embedded-in-fit-report"
+      },
+      "donorSha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088",
+      "metrics": {
+        "heldOutMeanIou": 0.8027339517547596,
+        "heldOutMeanDepthMae": 0.027290036764858364
+      }
+    },
+    {
+      "id": "upright-basin03",
+      "armatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+      "acceptance": {
+        "kind": "ledger-row",
+        "status": "basin-passed-inspected",
+        "outcome": "recovered",
+        "visualDisposition": "accepted",
+        "donorId": "basin-03-metabolizer-upright"
+      },
+      "donorSha256": "sha256:74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+      "metrics": {
+        "heldOutMeanIou": 0.6145026368430624,
+        "heldOutMeanDepthMae": 0.0353509058397931
+      }
+    },
+    {
+      "id": "upright-basin10",
+      "armatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+      "acceptance": {
+        "kind": "ledger-row",
+        "status": "basin-passed-inspected",
+        "outcome": "recovered",
+        "visualDisposition": "accepted",
+        "donorId": "basin-10-metabolizer-upright"
+      },
+      "donorSha256": "sha256:72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+      "metrics": {
+        "heldOutMeanIou": 0.45887148856376714,
+        "heldOutMeanDepthMae": 0.04780881951089862
+      }
+    },
+    {
+      "id": "upright-basin22",
+      "armatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+      "acceptance": {
+        "kind": "ledger-row",
+        "status": "basin-passed-inspected",
+        "outcome": "recovered",
+        "visualDisposition": "accepted",
+        "donorId": "basin-22-metabolizer-upright"
+      },
+      "donorSha256": "sha256:6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+      "metrics": {
+        "heldOutMeanIou": 0.5779733805402569,
+        "heldOutMeanDepthMae": 0.04565415723033932
+      }
+    },
+    {
+      "id": "bulbous-radial-lirm02",
+      "armatureProgramId": "kaminos.lirm-armature-program.bulbous-radial-upright.v0",
+      "acceptance": {
+        "kind": "direct-status",
+        "status": "assay-passed-inspected",
+        "outcome": "assay-passed-inspected",
+        "visualDisposition": "embedded-in-fit-report"
+      },
+      "donorSha256": "sha256:2ada08fd300ec58fb9acdd33668043a866af150919e7f751b2002fed234ffd69",
+      "metrics": {
+        "heldOutMeanIou": 0.3544137285154958,
+        "heldOutMeanDepthMae": 0.11022040492816612
+      }
+    }
+  ],
+  "visualInspection": {
+    "disposition": "accepted-for-imagegen-factorial",
+    "contactSheet": "conditioning-contact-sheet.png",
+    "visibleDelta": "The source-anchored family spans low crawler, three meaningfully different upright macrocephalic bodies, and the bulbous radial upright control while retaining coherent clay, depth, normal, and semantic projections.",
+    "loadBearingDiscriminator": "A successful next slice must make these body-plan differences recruit visibly different creature priors while preserving recognizable lineage; additional seeds inside the already-proven bulbous body do not satisfy that claim."
+  },
+  "falseClosureGuards": {
+    "visualProgressClaim": "multi_gestalt_imagegen_outputs_inspected",
+    "imagegenBasinClaim": "multi_gestalt_morphology_passed",
+    "trellisCastClaim": "not_yet_fired_for_new_gestalt",
+    "generalMorphologyMediumClaim": "promising_not_proven"
+  },
+  "imagegenReport": {
+    "path": "imagegen/report.json",
+    "byteSize": 4421,
+    "sha256": "sha256:ac26429ec7a640430e2f76c01938e2d0d39f9ad73b6f26d7e79a117b2a053d92"
+  }
+}

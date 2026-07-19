@@ -1,0 +1,1001 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-imagegen-collection.v0",
+  "status": "complete",
+  "requestedCount": 20,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crawler-basin22-clay-only-world-creature-invention-seed718021",
+      "jobId": "229433e801b8",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.656142,
+      "startedAt": 1784448910.5285382,
+      "finishedAt": 1784448943.222784,
+      "durationSeconds": 32.6942458152771,
+      "outputMtime": 1784448942.6400168,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 286160,
+        "sha256": "sha256:54fe364badd8fff93a71a213ade3903cd164ed1b4f0ad9065ae63cc8993391ec"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crawler-basin22-clay-only-world-creature-invention-seed718113",
+      "jobId": "c2ed25699e42",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.683554,
+      "startedAt": 1784448943.226979,
+      "finishedAt": 1784448975.9526138,
+      "durationSeconds": 32.725634813308716,
+      "outputMtime": 1784448975.4953473,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 267716,
+        "sha256": "sha256:f4cd8c496bbdeb0dd8afdc461b73cf54ecd76866996f21e5b24ea039eafb5add"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crawler-basin22-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "2160efc6fb5a",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.711842,
+      "startedAt": 1784448975.957254,
+      "finishedAt": 1784449034.1301131,
+      "durationSeconds": 58.17285919189453,
+      "outputMtime": 1784449033.6576023,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 231959,
+        "sha256": "sha256:a42350bc790bed01b3a7fc4705f452b7ad0fd626cf2ae961495a1cdd731518e0"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crawler-basin22-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "48a80839cfb7",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.7407959,
+      "startedAt": 1784449034.1344728,
+      "finishedAt": 1784449093.397834,
+      "durationSeconds": 59.26336121559143,
+      "outputMtime": 1784449092.9579484,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 250646,
+        "sha256": "sha256:d5429d1d9206611488e44c13434c99813d298286b6e2174a47c4e8159ce174d3"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin03-clay-only-world-creature-invention-seed718021",
+      "jobId": "919bb8473ec1",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.775518,
+      "startedAt": 1784449093.4023838,
+      "finishedAt": 1784449126.664843,
+      "durationSeconds": 33.26245927810669,
+      "outputMtime": 1784449126.2230337,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 298961,
+        "sha256": "sha256:d41632358e02ac3fcdc32531d6ff6cf53cc84d136f6ca802b420db243b6894f4"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin03-clay-only-world-creature-invention-seed718113",
+      "jobId": "5bd407af6cc4",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.805181,
+      "startedAt": 1784449126.669487,
+      "finishedAt": 1784449160.499207,
+      "durationSeconds": 33.82972002029419,
+      "outputMtime": 1784449160.0444572,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 240889,
+        "sha256": "sha256:63b69a497978f349655c120a64aeff2ba384cc4f95af0fc5a0294999ca4cbc2b"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin03-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "71989e66f967",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.840398,
+      "startedAt": 1784449160.5032508,
+      "finishedAt": 1784449222.808264,
+      "durationSeconds": 62.30501317977905,
+      "outputMtime": 1784449222.3360271,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 229990,
+        "sha256": "sha256:ddc359dfbbfff77d7f4987fb0f2b9a02dbf31e641aa523063e88c1acf21e77f7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin03-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "e70bbf166439",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.870218,
+      "startedAt": 1784449222.812872,
+      "finishedAt": 1784449298.699318,
+      "durationSeconds": 75.88644599914551,
+      "outputMtime": 1784449298.2100863,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 229851,
+        "sha256": "sha256:6c906a9524b1f0eecd2f2c823d80822f26880b2e0af3be9996a9b37dd083628c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin10-clay-only-world-creature-invention-seed718021",
+      "jobId": "19ab76f16692",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.910663,
+      "startedAt": 1784449298.708564,
+      "finishedAt": 1784449340.908136,
+      "durationSeconds": 42.19957184791565,
+      "outputMtime": 1784449340.4618976,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 227802,
+        "sha256": "sha256:ec46933d46e209af119cda1946832533fe267ba981ab38ca6eb6d340806b5e77"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin10-clay-only-world-creature-invention-seed718113",
+      "jobId": "bd0104e7f0a3",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.94006,
+      "startedAt": 1784449340.91225,
+      "finishedAt": 1784449381.927042,
+      "durationSeconds": 41.01479196548462,
+      "outputMtime": 1784449381.4439917,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 239887,
+        "sha256": "sha256:2b2315f3cbd5c530a5fb1b35b2689448e405f0893ed9d90762e06aed415b7ce9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "c14dd0db7f42",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448909.990399,
+      "startedAt": 1784449381.931108,
+      "finishedAt": 1784449454.442903,
+      "durationSeconds": 72.51179504394531,
+      "outputMtime": 1784449453.9992888,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 224581,
+        "sha256": "sha256:b1dd180f0d8c0059e525a7e1c1afc8e988a6f4ba71225a9381a543128b3d1c3b"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "a212d8156094",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.0191061,
+      "startedAt": 1784449454.4456809,
+      "finishedAt": 1784449528.3136199,
+      "durationSeconds": 73.86793899536133,
+      "outputMtime": 1784449527.8590987,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 230910,
+        "sha256": "sha256:3103849ec0d03f4cbd1405195db23649d4073b1c0524ac4a3946db033ef453d3"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin22-clay-only-world-creature-invention-seed718021",
+      "jobId": "804908db18d7",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.048525,
+      "startedAt": 1784449528.3176582,
+      "finishedAt": 1784449569.528606,
+      "durationSeconds": 41.2109477519989,
+      "outputMtime": 1784449569.0596392,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 235089,
+        "sha256": "sha256:dca99ceb3afa576ea5266f348aaadf43669a69cdcb26c253c71404bc888c12da"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin22-clay-only-world-creature-invention-seed718113",
+      "jobId": "e5118e046f35",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.083065,
+      "startedAt": 1784449569.5322611,
+      "finishedAt": 1784449610.612593,
+      "durationSeconds": 41.080331802368164,
+      "outputMtime": 1784449610.142388,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 239169,
+        "sha256": "sha256:e052fb431c246823bc77bf306ca9f54ad2845ce1f7e8f43d7deea651d42497a5"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin22-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "2ed0f6440510",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.111542,
+      "startedAt": 1784449610.6154408,
+      "finishedAt": 1784449685.9346719,
+      "durationSeconds": 75.3192310333252,
+      "outputMtime": 1784449685.3781023,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 230385,
+        "sha256": "sha256:586769cb0fb376097ecbb19b2be632eb2660fe7c5087df972802e1187ef90115"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin22-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "62942f027f44",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.153773,
+      "startedAt": 1784449685.938735,
+      "finishedAt": 1784449764.395277,
+      "durationSeconds": 78.45654201507568,
+      "outputMtime": 1784449763.8837647,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 230654,
+        "sha256": "sha256:4d34475319f7bf4cb2ead5b70cb5e4bc325ab660ce4688c2ed68770afee36dd0"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "bulbous-radial-lirm02-clay-only-world-creature-invention-seed718021",
+      "jobId": "cbf17d13d71b",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.182667,
+      "startedAt": 1784449764.398176,
+      "finishedAt": 1784449807.2394922,
+      "durationSeconds": 42.84131622314453,
+      "outputMtime": 1784449806.774123,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 283706,
+        "sha256": "sha256:56af8878decdc3bc3005dbe13a74036ed90896ee304d11ae24df81b460f85ac9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "bulbous-radial-lirm02-clay-only-world-creature-invention-seed718113",
+      "jobId": "9a2320f5ad3b",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.211114,
+      "startedAt": 1784449807.2418618,
+      "finishedAt": 1784449849.545335,
+      "durationSeconds": 42.303473234176636,
+      "outputMtime": 1784449848.9525769,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 248645,
+        "sha256": "sha256:c3736240ef9b37ff4bec392bab4f758ef32b58b37cf4437497d21d8968aa5dfd"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "33f5403d77fe",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.2393222,
+      "startedAt": 1784449849.5482528,
+      "finishedAt": 1784449929.005516,
+      "durationSeconds": 79.45726323127747,
+      "outputMtime": 1784449928.4782426,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 256615,
+        "sha256": "sha256:89ff5c6cba4e57b72f80b2ae616781e235201760be96c63546d7a3ef7e33e72b"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "4c22785604a8",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784448910.268815,
+      "startedAt": 1784449929.008362,
+      "finishedAt": 1784450009.5602372,
+      "durationSeconds": 80.55187511444092,
+      "outputMtime": 1784450009.00858,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/prompts/world-creature-invention.txt",
+        "bytes": 1339,
+        "sha256": "sha256:add357f1757e550361e2cd554e0f9c9eebda6ba9867f8880be1afd7ad822ae04"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 237814,
+        "sha256": "sha256:ce3cd99feb57fdd6d66120ab9ca6896c3e5c7ae639910aa1a0259c0d911368dc"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "20/20 primary outputs accepted"
+}

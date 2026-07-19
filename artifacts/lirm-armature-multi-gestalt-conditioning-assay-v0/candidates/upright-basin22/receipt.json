@@ -1,0 +1,276 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "upright-basin22",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "upright-basin22/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "upright-basin22/clay-implicit.svg",
+        "rasterPath": "upright-basin22/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "upright-basin22/depth-implicit.svg",
+        "rasterPath": "upright-basin22/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "upright-basin22/normal-implicit.svg",
+        "rasterPath": "upright-basin22/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "upright-basin22/mask-implicit.svg",
+        "rasterPath": "upright-basin22/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "upright-basin22/semantic-implicit.svg",
+        "rasterPath": "upright-basin22/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "upright-basin22/trellis-source.svg",
+      "rasterPath": "upright-basin22/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "upright-basin22/bundle.json",
+      "byteSize": 5343,
+      "sha256": "sha256:984b57bf1c818457159a6df316b7195d690d2245d5f470d55a28d4e7d7ce1fcb"
+    },
+    {
+      "path": "upright-basin22/clay-implicit.svg",
+      "byteSize": 482099,
+      "sha256": "sha256:95002b863b9319674641623b174c0a703d865683ce047831abc811ab47a642ed"
+    },
+    {
+      "path": "upright-basin22/clay-implicit.png",
+      "byteSize": 23589,
+      "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+    },
+    {
+      "path": "upright-basin22/depth-implicit.svg",
+      "byteSize": 496095,
+      "sha256": "sha256:fbeeeb7951481bf001698a96bd708b34d758fee10c12e694e225f2bc7af82c38"
+    },
+    {
+      "path": "upright-basin22/depth-implicit.png",
+      "byteSize": 14281,
+      "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252"
+    },
+    {
+      "path": "upright-basin22/normal-implicit.svg",
+      "byteSize": 488087,
+      "sha256": "sha256:e19e544a24c62ce06c70bc99680d188c848d0dcff2a3c05028df47948c0bb09a"
+    },
+    {
+      "path": "upright-basin22/normal-implicit.png",
+      "byteSize": 29564,
+      "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0"
+    },
+    {
+      "path": "upright-basin22/mask-implicit.svg",
+      "byteSize": 496051,
+      "sha256": "sha256:f388ea4791396ec2de75d41b5b69ab42490c009cbbdfa8a95a432f8782b61a33"
+    },
+    {
+      "path": "upright-basin22/mask-implicit.png",
+      "byteSize": 5942,
+      "sha256": "sha256:0de4a101ba21c6980c7f7bc0e49c36a254e73d0fcc2e163b24de058a766cf69d"
+    },
+    {
+      "path": "upright-basin22/semantic-implicit.svg",
+      "byteSize": 532017,
+      "sha256": "sha256:e80caf17339589cdbea7d558fb55c9dc3457e236c419e98f94a091e385073b9d"
+    },
+    {
+      "path": "upright-basin22/semantic-implicit.png",
+      "byteSize": 7228,
+      "sha256": "sha256:b1b7ebf83ec87ad117624d4c1d3547f3e73c66d5b0e314f9c16d99c20378dd72"
+    },
+    {
+      "path": "upright-basin22/trellis-source.svg",
+      "byteSize": 481685,
+      "sha256": "sha256:8ae9be3c14bcd3a1e0cb58f61f47186ac4cc2b30d16259435647b8ed81407cb1"
+    },
+    {
+      "path": "upright-basin22/trellis-source.png",
+      "byteSize": 92361,
+      "sha256": "sha256:949a6110efe29d57f473cb9c157081179724fe6f1765f5c61ac18b23584f8676"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+    "parameterSpecs": [
+      {
+        "id": "trunkHeight",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.78,
+        "min": 0.42,
+        "max": 1.24,
+        "step": 0.14
+      },
+      {
+        "id": "trunkWidth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.38,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.09
+      },
+      {
+        "id": "trunkDepth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "crownWidth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.74,
+        "min": 0.38,
+        "max": 1.18,
+        "step": 0.14
+      },
+      {
+        "id": "crownHeight",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "crownDepth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.58,
+        "min": 0.3,
+        "max": 0.98,
+        "step": 0.12
+      },
+      {
+        "id": "crownLift",
+        "semanticRole": "crownElevation",
+        "initial": 0.16,
+        "min": -0.04,
+        "max": 0.42,
+        "step": 0.07
+      },
+      {
+        "id": "waistScale",
+        "semanticRole": "waistCompression",
+        "initial": 0.56,
+        "min": 0.3,
+        "max": 0.9,
+        "step": 0.09
+      },
+      {
+        "id": "crownForward",
+        "semanticRole": "anteriorProjection",
+        "initial": 0.08,
+        "min": -0.24,
+        "max": 0.38,
+        "step": 0.08
+      },
+      {
+        "id": "posteriorBulb",
+        "semanticRole": "posteriorCountermass",
+        "initial": 0.42,
+        "min": 0.16,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "radialContactField",
+        "initial": 0.62,
+        "min": 0.36,
+        "max": 1.02,
+        "step": 0.11
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.32,
+        "min": 0.16,
+        "max": 0.62,
+        "step": 0.08
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.085,
+        "min": 0.045,
+        "max": 0.18,
+        "step": 0.025
+      },
+      {
+        "id": "radialTwist",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.08,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ]
+  },
+  "parameters": {
+    "trunkHeight": 0.6332116799999999,
+    "trunkWidth": 0.38,
+    "trunkDepth": 0.6311512,
+    "crownWidth": 0.4443883199999999,
+    "crownHeight": 0.3268488,
+    "crownDepth": 0.5465545599999999,
+    "crownLift": 0.05279416,
+    "waistScale": 0.64563608,
+    "crownForward": 0.017991040000000007,
+    "posteriorBulb": 0.6311512,
+    "contactSpread": 0.51,
+    "contactLength": 0.17799104,
+    "contactThickness": 0.07891000000000001,
+    "radialTwist": 0.009999999999999995
+  },
+  "implicitPrimitiveCount": 18,
+  "semanticRoles": [
+    "uprightTrunk",
+    "posteriorCountermass",
+    "waistCompression",
+    "macrocephalicCrown",
+    "radialContactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

@@ -1514,7 +1514,7 @@ function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, 
       path: `${candidate.id}/${kind}-${outputSuffix}.svg`,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displayWidth}" height="${displayHeight}" viewBox="0 0 ${pixelWidth} ${pixelHeight}" role="img" aria-label="${xml(title)}" data-implicit-render="${xml(kind)}" data-render-mode="raymarched-implicit-field" data-field-kind="${fieldKind}"${envelopeAttribute}${attrs[kind]}>
   <metadata>candidate=${xml(candidate.id)}; terminal mouth is a semantic surface primitive; pixels are ray hits against an implicit 3D field${gestaltEnvelope ? `; gestaltEnvelope=${xml(gestaltEnvelope.id)}; pressure=${gestaltEnvelope.pressure}` : ''}</metadata>
-  <rect width="100%" height="100%" fill="${backgrounds[kind]}"/>
+  <rect x="0" y="0" width="${pixelWidth}" height="${pixelHeight}" fill="${backgrounds[kind]}"/>
   <g data-layer="implicit-surface-pixels" data-candidate-id="${xml(candidate.id)}" data-pixel-grid="${pixelWidth}x${pixelHeight}" data-primitive-count="${primitives.length}" style="shape-rendering:crispEdges">
     ${rectsByKind[kind].join('\n    ')}
   </g>

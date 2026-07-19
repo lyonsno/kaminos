@@ -1,0 +1,150 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/plan.json",
+  "requestedCount": 20,
+  "submitted": [
+    {
+      "cellId": "crawler-basin22-clay-only-world-creature-invention-seed718021",
+      "jobId": "229433e801b8",
+      "response": {
+        "job_id": "229433e801b8"
+      }
+    },
+    {
+      "cellId": "crawler-basin22-clay-only-world-creature-invention-seed718113",
+      "jobId": "c2ed25699e42",
+      "response": {
+        "job_id": "c2ed25699e42"
+      }
+    },
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "2160efc6fb5a",
+      "response": {
+        "job_id": "2160efc6fb5a"
+      }
+    },
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "48a80839cfb7",
+      "response": {
+        "job_id": "48a80839cfb7"
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-only-world-creature-invention-seed718021",
+      "jobId": "919bb8473ec1",
+      "response": {
+        "job_id": "919bb8473ec1"
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-only-world-creature-invention-seed718113",
+      "jobId": "5bd407af6cc4",
+      "response": {
+        "job_id": "5bd407af6cc4"
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "71989e66f967",
+      "response": {
+        "job_id": "71989e66f967"
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "e70bbf166439",
+      "response": {
+        "job_id": "e70bbf166439"
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-only-world-creature-invention-seed718021",
+      "jobId": "19ab76f16692",
+      "response": {
+        "job_id": "19ab76f16692"
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-only-world-creature-invention-seed718113",
+      "jobId": "bd0104e7f0a3",
+      "response": {
+        "job_id": "bd0104e7f0a3"
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "c14dd0db7f42",
+      "response": {
+        "job_id": "c14dd0db7f42"
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "a212d8156094",
+      "response": {
+        "job_id": "a212d8156094"
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-only-world-creature-invention-seed718021",
+      "jobId": "804908db18d7",
+      "response": {
+        "job_id": "804908db18d7"
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-only-world-creature-invention-seed718113",
+      "jobId": "e5118e046f35",
+      "response": {
+        "job_id": "e5118e046f35"
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "2ed0f6440510",
+      "response": {
+        "job_id": "2ed0f6440510"
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "62942f027f44",
+      "response": {
+        "job_id": "62942f027f44"
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-only-world-creature-invention-seed718021",
+      "jobId": "cbf17d13d71b",
+      "response": {
+        "job_id": "cbf17d13d71b"
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-only-world-creature-invention-seed718113",
+      "jobId": "9a2320f5ad3b",
+      "response": {
+        "job_id": "9a2320f5ad3b"
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "33f5403d77fe",
+      "response": {
+        "job_id": "33f5403d77fe"
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "4c22785604a8",
+      "response": {
+        "job_id": "4c22785604a8"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "20/20 jobs submitted"
+}

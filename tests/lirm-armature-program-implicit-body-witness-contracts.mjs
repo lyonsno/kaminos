@@ -54,6 +54,14 @@ for (const evidence of receipt.outputEvidence) {
 for (const item of [...receipt.outputInventory.maps, receipt.outputInventory.trellisSource]) {
   assert.ok(statSync(join(outDir, item.rasterPath)).size > 100, `${item.rasterPath} must be nonempty`);
 }
+for (const map of receipt.outputInventory.maps) {
+  const svg = readFileSync(join(outDir, map.path), 'utf8');
+  assert.match(
+    svg,
+    /<rect x="0" y="0" width="48" height="36" fill=/,
+    `${map.kind} background must cover the exact viewBox instead of relying on renderer-dependent percentages`,
+  );
+}
 
 const failedOutDir = await mkdtemp(join(tmpdir(), 'kaminos-armature-program-implicit-failure-'));
 await assert.rejects(

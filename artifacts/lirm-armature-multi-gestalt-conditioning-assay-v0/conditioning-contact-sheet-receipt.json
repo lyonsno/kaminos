@@ -1,0 +1,210 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-conditioning-contact-sheet.v0",
+  "status": "complete-inspected",
+  "requestedRoute": "kaminos/lirm-armature-gestalt-family/contact-sheet-v0",
+  "effectiveRoute": "kaminos/lirm-armature-gestalt-family/contact-sheet-v0",
+  "requestedConfig": {
+    "candidateCount": 5,
+    "mapKinds": [
+      "clay",
+      "depth",
+      "normal",
+      "semantic"
+    ],
+    "columns": 4
+  },
+  "effectiveConfig": {
+    "candidateCount": 5,
+    "mapKinds": [
+      "clay",
+      "depth",
+      "normal",
+      "semantic"
+    ],
+    "columns": 4
+  },
+  "familyReceipt": {
+    "path": "receipt.json",
+    "byteSize": 9072,
+    "sha256": "sha256:e9ad8ddfc08a0be6cc2645c913fde89cf9fabe20f760952a235e961c9c9e5914"
+  },
+  "manifest": {
+    "path": "conditioning-contact-sheet-manifest.json",
+    "byteSize": 5625,
+    "sha256": "sha256:96220cb238b9f4cee7425be32543fa562ed1a706dffd4bcea5cef23a4af9948e"
+  },
+  "assembler": {
+    "path": "../lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "byteSize": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "conditioning-contact-sheet.png",
+    "byteSize": 913828,
+    "sha256": "sha256:50ba211d46e21b807ed38c552dce16fe9c7b82eb455337e1d627d1db7efc20e6"
+  },
+  "pngInspection": {
+    "width": 2048,
+    "height": 2100,
+    "luminanceStdDev": 53.827500537140274,
+    "edgeRatio": 0.022035598454053597,
+    "activePixelRatio": 0.3296561104910714,
+    "activeBoundsRatio": 1,
+    "activeBounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 2047,
+      "maxY": 2099
+    }
+  },
+  "sourceEvidence": [
+    {
+      "candidateId": "crawler-basin22",
+      "kind": "clay",
+      "path": "candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+      "byteSize": 20469,
+      "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+    },
+    {
+      "candidateId": "crawler-basin22",
+      "kind": "depth",
+      "path": "candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+      "byteSize": 12291,
+      "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55"
+    },
+    {
+      "candidateId": "crawler-basin22",
+      "kind": "normal",
+      "path": "candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+      "byteSize": 25217,
+      "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7"
+    },
+    {
+      "candidateId": "crawler-basin22",
+      "kind": "semantic",
+      "path": "candidates/crawler-basin22/crawler-basin22/semantic-implicit.png",
+      "byteSize": 6266,
+      "sha256": "sha256:7bd7211daae4459fc46f195eaaf9b6348c6e2ce86b39f8b6f1bbd90d012d3dc6"
+    },
+    {
+      "candidateId": "upright-basin03",
+      "kind": "clay",
+      "path": "candidates/upright-basin03/upright-basin03/clay-implicit.png",
+      "byteSize": 23917,
+      "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+    },
+    {
+      "candidateId": "upright-basin03",
+      "kind": "depth",
+      "path": "candidates/upright-basin03/upright-basin03/depth-implicit.png",
+      "byteSize": 14059,
+      "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d"
+    },
+    {
+      "candidateId": "upright-basin03",
+      "kind": "normal",
+      "path": "candidates/upright-basin03/upright-basin03/normal-implicit.png",
+      "byteSize": 29689,
+      "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b"
+    },
+    {
+      "candidateId": "upright-basin03",
+      "kind": "semantic",
+      "path": "candidates/upright-basin03/upright-basin03/semantic-implicit.png",
+      "byteSize": 6659,
+      "sha256": "sha256:01cd9ab8eb76b39a667b713bb5b01420190c0ba040d9cc80a5359ed22061a55d"
+    },
+    {
+      "candidateId": "upright-basin10",
+      "kind": "clay",
+      "path": "candidates/upright-basin10/upright-basin10/clay-implicit.png",
+      "byteSize": 21926,
+      "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+    },
+    {
+      "candidateId": "upright-basin10",
+      "kind": "depth",
+      "path": "candidates/upright-basin10/upright-basin10/depth-implicit.png",
+      "byteSize": 13728,
+      "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625"
+    },
+    {
+      "candidateId": "upright-basin10",
+      "kind": "normal",
+      "path": "candidates/upright-basin10/upright-basin10/normal-implicit.png",
+      "byteSize": 27258,
+      "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66"
+    },
+    {
+      "candidateId": "upright-basin10",
+      "kind": "semantic",
+      "path": "candidates/upright-basin10/upright-basin10/semantic-implicit.png",
+      "byteSize": 7864,
+      "sha256": "sha256:ba532cbecb0b9988257fce939996ff46bfb0f7f81ab57f3644add5156963868e"
+    },
+    {
+      "candidateId": "upright-basin22",
+      "kind": "clay",
+      "path": "candidates/upright-basin22/upright-basin22/clay-implicit.png",
+      "byteSize": 23589,
+      "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+    },
+    {
+      "candidateId": "upright-basin22",
+      "kind": "depth",
+      "path": "candidates/upright-basin22/upright-basin22/depth-implicit.png",
+      "byteSize": 14281,
+      "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252"
+    },
+    {
+      "candidateId": "upright-basin22",
+      "kind": "normal",
+      "path": "candidates/upright-basin22/upright-basin22/normal-implicit.png",
+      "byteSize": 29564,
+      "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0"
+    },
+    {
+      "candidateId": "upright-basin22",
+      "kind": "semantic",
+      "path": "candidates/upright-basin22/upright-basin22/semantic-implicit.png",
+      "byteSize": 7228,
+      "sha256": "sha256:b1b7ebf83ec87ad117624d4c1d3547f3e73c66d5b0e314f9c16d99c20378dd72"
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "kind": "clay",
+      "path": "candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+      "byteSize": 25339,
+      "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "kind": "depth",
+      "path": "candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+      "byteSize": 14772,
+      "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b"
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "kind": "normal",
+      "path": "candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+      "byteSize": 30859,
+      "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478"
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "kind": "semantic",
+      "path": "candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/semantic-implicit.png",
+      "byteSize": 9450,
+      "sha256": "sha256:a96b796d70bd1f43c5909060efb0223c59f42ff3c6b7a47f41c4a56d4c508fe1"
+    }
+  ],
+  "visualInspectionClaim": "accepted-distinct-coherent-control-families",
+  "visualInspection": {
+    "disposition": "accepted-for-imagegen-factorial",
+    "visibleDelta": "The five source-anchored bodies preserve three materially distinct armature programs and useful within-program variation: low axial crawler mass; narrow fused upright crown; forward-biased upright crown with discrete contacts; tall consolidated upright trunk; and long posterior bulb with elevated anterior neck and open lateral negative space.",
+    "conditioningCoherence": "Clay silhouettes agree with depth, normal, and semantic maps in every row. Exact viewBox backgrounds removed the prior partial-transparent raster confound.",
+    "remainingBoundary": "This witness establishes distinct coherent conditioning controls only; it does not yet show that imagegen recruits distinct priors or that resulting images survive 3D casting."
+  },
+  "lastTrustworthyEvidence": "all 20 source maps match candidate receipts and assembled PNG passed structural evidence admission"
+}

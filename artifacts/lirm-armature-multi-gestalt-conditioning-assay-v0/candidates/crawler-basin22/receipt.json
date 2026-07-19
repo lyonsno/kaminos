@@ -1,0 +1,265 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "crawler-basin22",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.crawler.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "crawler-basin22/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "crawler-basin22/clay-implicit.svg",
+        "rasterPath": "crawler-basin22/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "crawler-basin22/depth-implicit.svg",
+        "rasterPath": "crawler-basin22/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "crawler-basin22/normal-implicit.svg",
+        "rasterPath": "crawler-basin22/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "crawler-basin22/mask-implicit.svg",
+        "rasterPath": "crawler-basin22/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "crawler-basin22/semantic-implicit.svg",
+        "rasterPath": "crawler-basin22/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "crawler-basin22/trellis-source.svg",
+      "rasterPath": "crawler-basin22/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "crawler-basin22/bundle.json",
+      "byteSize": 4985,
+      "sha256": "sha256:bf161bf252507f8d3db7669551500894c5ee8d3e3684e86f2d8a98b2197239ac"
+    },
+    {
+      "path": "crawler-basin22/clay-implicit.svg",
+      "byteSize": 411552,
+      "sha256": "sha256:39f1b50d2a1cf525fe87379d298f75c267fee1f61d59f87cdd5faaf4454b60b3"
+    },
+    {
+      "path": "crawler-basin22/clay-implicit.png",
+      "byteSize": 20469,
+      "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+    },
+    {
+      "path": "crawler-basin22/depth-implicit.svg",
+      "byteSize": 422241,
+      "sha256": "sha256:26077fd06e85769e67cdba898696adba20c1739ce4a7eaff275e1b48e54a7e63"
+    },
+    {
+      "path": "crawler-basin22/depth-implicit.png",
+      "byteSize": 12291,
+      "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55"
+    },
+    {
+      "path": "crawler-basin22/normal-implicit.svg",
+      "byteSize": 415223,
+      "sha256": "sha256:f79af9b696f2b3b0ab85021227da1fffa325050c2c5a60d37383ab55845be60c"
+    },
+    {
+      "path": "crawler-basin22/normal-implicit.png",
+      "byteSize": 25217,
+      "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7"
+    },
+    {
+      "path": "crawler-basin22/mask-implicit.svg",
+      "byteSize": 422197,
+      "sha256": "sha256:92c103aa07c640c5cbd402316117c3ac53a9f0236fa91142efdec18b8728c19f"
+    },
+    {
+      "path": "crawler-basin22/mask-implicit.png",
+      "byteSize": 4894,
+      "sha256": "sha256:c5b93b927da386bb156ce9b0a58e7826523196a833eb6a638a6d505c63a43062"
+    },
+    {
+      "path": "crawler-basin22/semantic-implicit.svg",
+      "byteSize": 455491,
+      "sha256": "sha256:5316f2418e98b9f2c872be696b280452d8377f3ff7649300caf73eea6cc28b83"
+    },
+    {
+      "path": "crawler-basin22/semantic-implicit.png",
+      "byteSize": 6266,
+      "sha256": "sha256:7bd7211daae4459fc46f195eaaf9b6348c6e2ce86b39f8b6f1bbd90d012d3dc6"
+    },
+    {
+      "path": "crawler-basin22/trellis-source.svg",
+      "byteSize": 411135,
+      "sha256": "sha256:7f7814ad317bac9200f13fe9a4e116d84bd34c10d6c33ba441467dbb565ec8fe"
+    },
+    {
+      "path": "crawler-basin22/trellis-source.png",
+      "byteSize": 78339,
+      "sha256": "sha256:aec8777cec7eb22ff69a16b22b21564aac058466d94f5d27c335d6c002e59f5a"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.crawler.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "initial": 0.92,
+        "min": 0.58,
+        "max": 1.58,
+        "step": 0.18
+      },
+      {
+        "id": "bodyWidth",
+        "semanticRole": "lateralMass",
+        "initial": 0.46,
+        "min": 0.25,
+        "max": 0.92,
+        "step": 0.12
+      },
+      {
+        "id": "bodyHeight",
+        "semanticRole": "verticalMass",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "headScale",
+        "semanticRole": "headOrientation",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.18,
+        "step": 0.13
+      },
+      {
+        "id": "bellyScale",
+        "semanticRole": "bodyMass",
+        "initial": 0.72,
+        "min": 0.4,
+        "max": 1.42,
+        "step": 0.15
+      },
+      {
+        "id": "tailScale",
+        "semanticRole": "posteriorTaper",
+        "initial": 0.42,
+        "min": 0.18,
+        "max": 0.95,
+        "step": 0.12
+      },
+      {
+        "id": "dorsalLift",
+        "semanticRole": "dorsalProfile",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.36,
+        "step": 0.08
+      },
+      {
+        "id": "curveAmplitude",
+        "semanticRole": "axialCurvature",
+        "initial": 0.04,
+        "min": 0,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "limbLength",
+        "semanticRole": "contactLimb",
+        "initial": 0.28,
+        "min": 0.12,
+        "max": 0.68,
+        "step": 0.09
+      },
+      {
+        "id": "limbSpread",
+        "semanticRole": "contactFootprint",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "limbThickness",
+        "semanticRole": "contactLimb",
+        "initial": 0.09,
+        "min": 0.045,
+        "max": 0.22,
+        "step": 0.035
+      },
+      {
+        "id": "contactHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.25,
+        "min": -0.62,
+        "max": -0.08,
+        "step": 0.08
+      },
+      {
+        "id": "headLift",
+        "semanticRole": "headOrientation",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 1.1,
+    "bodyWidth": 0.40735456000000003,
+    "bodyHeight": 0.44587119999999997,
+    "headScale": 0.34090344000000006,
+    "bellyScale": 0.8069999999999999,
+    "tailScale": 0.67338144,
+    "dorsalLift": 0.04,
+    "curveAmplitude": 0.00989016,
+    "limbLength": 0.19000000000000003,
+    "limbSpread": 0.38200000000000006,
+    "limbThickness": 0.125,
+    "contactHeight": -0.26799104,
+    "headLift": -0.010490160000000004
+  },
+  "implicitPrimitiveCount": 14,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "contactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}
