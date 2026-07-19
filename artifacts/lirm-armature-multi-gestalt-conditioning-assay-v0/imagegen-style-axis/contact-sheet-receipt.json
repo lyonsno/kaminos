@@ -1,0 +1,315 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-style-axis-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "morphology-material-factorization-passed",
+  "lastTrustworthyEvidence": "all ten style outputs rehashed and visually inspected; five distinct body plans persisted across an exact-seed material displacement and a fresh-seed replication",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/plan.json",
+    "bytes": 76911,
+    "sha256": "sha256:d9f2fa98cea4a62f413be848dbb26b80693a47d5d63fcdf9b5ce9e570a547890"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/completion-report.json",
+    "bytes": 43928,
+    "sha256": "sha256:fd612a27e12b1850966aa3c18d5e1e599cdfebe122ceb4baef9d96916d168e0e"
+  },
+  "baselinePlan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/plan.json",
+    "bytes": 141138,
+    "sha256": "sha256:53e0452798d0053778319e9eb209740e59778989d7baacc357cd83767c3d5407"
+  },
+  "baselineCompletion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen/completion-report.json",
+    "bytes": 71797,
+    "sha256": "sha256:912580c2ab9501019735efc4707190a3bb99581649f6e1b55fd67d083360c7aa"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheets": [
+    {
+      "manifest": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/style-axis-exact-seed718113-inputs.json",
+        "bytes": 5728,
+        "sha256": "sha256:00ccc1ea5a94cba7680ce0ddeebba88fc6a1b5c2faafaec21e59dd3214d759e5"
+      },
+      "sheet": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/style-axis-exact-seed718113.png",
+        "bytes": 4093857,
+        "sha256": "sha256:8167014f96a570fdcf6293b4cbdc0ca0f8e81f0f0f6e0667df12fbf6436613dd"
+      },
+      "pngInspection": {
+        "width": 2048,
+        "height": 2740,
+        "luminanceStdDev": 50.06829452314821,
+        "edgeRatio": 0.027604122282152335,
+        "activePixelRatio": 0.5434342210310219,
+        "activeBoundsRatio": 1,
+        "activeBounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 2047,
+          "maxY": 2739
+        }
+      },
+      "sourceEvidence": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+          "bytes": 20469,
+          "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+          "bytes": 230436,
+          "sha256": "sha256:e608ab64ba46530933de4e8467b724459a9f2b3d25b56a85a8726fa97a851451"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+          "bytes": 250646,
+          "sha256": "sha256:d5429d1d9206611488e44c13434c99813d298286b6e2174a47c4e8159ce174d3"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+          "bytes": 23917,
+          "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+          "bytes": 234541,
+          "sha256": "sha256:34234d5d5957dd79ca76e1ac49733bc83cfc9997dc99e968b6b0d2562503cc09"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718113/output.png",
+          "bytes": 229851,
+          "sha256": "sha256:6c906a9524b1f0eecd2f2c823d80822f26880b2e0af3be9996a9b37dd083628c"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+          "bytes": 21926,
+          "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+          "bytes": 239542,
+          "sha256": "sha256:28be68f455d90865fb014dfb264889f8c6637c335362936d404b901d7565db07"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png",
+          "bytes": 230910,
+          "sha256": "sha256:3103849ec0d03f4cbd1405195db23649d4073b1c0524ac4a3946db033ef453d3"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+          "bytes": 23589,
+          "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+          "bytes": 235735,
+          "sha256": "sha256:ecb8cde894bf7369cafc76c6b18587aa24d132a75c4acb584a138c0111089718"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+          "bytes": 230654,
+          "sha256": "sha256:4d34475319f7bf4cb2ead5b70cb5e4bc325ab660ce4688c2ed68770afee36dd0"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+          "bytes": 25339,
+          "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+          "bytes": 241728,
+          "sha256": "sha256:1aa09e5e4d8b8cac29076f6b22373399b7e47ad8c91f4186f0ab35a0e7eeb90d"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113/output.png",
+          "bytes": 237814,
+          "sha256": "sha256:ce3cd99feb57fdd6d66120ab9ca6896c3e5c7ae639910aa1a0259c0d911368dc"
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/style-axis-replication-seed718211-inputs.json",
+        "bytes": 5679,
+        "sha256": "sha256:b2b97373ef94b50135991cfbba5663d0051ea8754ed3dff730b788318d3bfe0f"
+      },
+      "sheet": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/style-axis-replication-seed718211.png",
+        "bytes": 2572510,
+        "sha256": "sha256:715124f5ca8a9c0d2ce5627c639c258f536b2becb4013a59fbd81aef16fe5507"
+      },
+      "pngInspection": {
+        "width": 2048,
+        "height": 2740,
+        "luminanceStdDev": 53.70381501388444,
+        "edgeRatio": 0.023537356800328608,
+        "activePixelRatio": 0.5285550082687044,
+        "activeBoundsRatio": 1,
+        "activeBounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 2047,
+          "maxY": 2739
+        }
+      },
+      "sourceEvidence": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+          "bytes": 20469,
+          "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+          "bytes": 202759,
+          "sha256": "sha256:1d12cbcafb954b29b16e11cc367727f3b2c8f4459a29031590fe082a60fc05f7"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+          "bytes": 23917,
+          "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+          "bytes": 226147,
+          "sha256": "sha256:2fa79d747250caafead11cdd5b56576eeac96ce57ad03831fbf5150cf5e5b10b"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+          "bytes": 21926,
+          "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+          "bytes": 224303,
+          "sha256": "sha256:99daa90c5dafc1cd38b86fd0e7ad73981b87d591723ba78a5b36f45ab74fa11a"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+          "bytes": 23589,
+          "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+          "bytes": 226922,
+          "sha256": "sha256:c5315649ab8574a9f4d5af2b7f2d95de71b06c24a6ea8b45448325467c6161c6"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+          "bytes": 25339,
+          "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478"
+        },
+        {
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+          "bytes": 222473,
+          "sha256": "sha256:43e9e8751a02ed905224ff26a5dd6ae867adb05c154a5c328dd19634982bdc56"
+        }
+      ]
+    }
+  ]
+}

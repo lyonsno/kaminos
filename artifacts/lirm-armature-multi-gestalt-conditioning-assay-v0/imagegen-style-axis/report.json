@@ -1,0 +1,59 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-style-axis-assay.v0",
+  "status": "morphology-material-factorization-passed-inspected",
+  "question": "Can the image generator displace material and aesthetic language radically while preserving the body-plan distinctions carried by five three-reference armatures?",
+  "answer": "yes-for-one-large-material-axis",
+  "fixedRoute": {
+    "requested": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "resolution": [512, 512],
+    "steps": 8,
+    "guidance": 1.0,
+    "referenceSet": ["clay", "depth", "normal"]
+  },
+  "factorial": {
+    "candidateCount": 5,
+    "seeds": [718113, 718211],
+    "outputCount": 10,
+    "exactSeedControl": 718113,
+    "freshSeedReplication": 718211,
+    "stylePrompt": "mineral-ceramic-fungal"
+  },
+  "timing": {
+    "totalSeconds": 775.1001739501953,
+    "averageSeconds": 77.51001739501953,
+    "bySeed": [
+      {"seed": 718113, "count": 5, "totalSeconds": 414.0938220024109, "averageSeconds": 82.81876440048218, "minSeconds": 80.55238080024719, "maxSeconds": 84.215567111969},
+      {"seed": 718211, "count": 5, "totalSeconds": 361.0063519477844, "averageSeconds": 72.20127038955688, "minSeconds": 58.04999399185181, "maxSeconds": 91.46792197227478}
+    ]
+  },
+  "evidence": {
+    "exactSeedSheet": {
+      "bytes": 4093857,
+      "sha256": "sha256:8167014f96a570fdcf6293b4cbdc0ca0f8e81f0f0f6e0667df12fbf6436613dd"
+    },
+    "freshSeedSheet": {
+      "bytes": 2572510,
+      "sha256": "sha256:715124f5ca8a9c0d2ce5627c639c258f536b2becb4013a59fbd81aef16fe5507"
+    }
+  },
+  "visualFindings": [
+    "At seed 718113, all five green-purple fleshy baseline organisms become pale cracked ceramic-mineral/fungal organisms with cyan seams while retaining recognizable silhouette, mass distribution, and contact pattern.",
+    "At seed 718211, the same material basin reproduces across all five bodies and the program-level morphology distinctions remain legible.",
+    "Crawler, three upright variants, and long-necked bulbous radial form remain mutually distinct after style displacement.",
+    "In several cells the explicit material prompt also improves adherence to the source armature relative to the baseline invention prompt."
+  ],
+  "claimBoundary": {
+    "supported": "Within this five-body, two-seed assay, body-plan conditioning and one radically displaced material/aesthetic instruction are independently steerable enough to compose.",
+    "unsupported": [
+      "arbitrary style independence",
+      "arbitrary topology",
+      "production creature quality",
+      "semantic-region-localized style edits",
+      "motion or behavior preservation"
+    ]
+  },
+  "nextPressure": "Widen silhouette and gestalt variation inside source-anchored 3D programs, then test region-localized semantic handles rather than spending the next slice on another global style prompt."
+}

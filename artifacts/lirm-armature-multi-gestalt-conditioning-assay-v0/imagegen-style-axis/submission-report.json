@@ -1,0 +1,214 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-style-axis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 10,
+  "submitted": [
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobId": "e0c8d40267cf",
+      "response": {
+        "job_id": "e0c8d40267cf",
+        "status": "done",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+        "params": {
+          "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "718211",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784451640.0142028,
+        "started_at": 1784451640.542442,
+        "finished_at": 1784451698.592436,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718211 --mlx-cache-limit-gb 48",
+        "pid": 19387,
+        "warnings": []
+      },
+      "recoveredAfterReplan": true
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobId": "db7e1ce281a4",
+      "response": {
+        "job_id": "db7e1ce281a4",
+        "status": "done",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+        "params": {
+          "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "718211",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784451640.041787,
+        "started_at": 1784451698.595456,
+        "finished_at": 1784451757.63947,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718211 --mlx-cache-limit-gb 48",
+        "pid": 19387,
+        "warnings": []
+      },
+      "recoveredAfterReplan": true
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobId": "654e09f59dc5",
+      "response": {
+        "job_id": "654e09f59dc5",
+        "status": "done",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+        "params": {
+          "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "718211",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784451640.0697129,
+        "started_at": 1784451757.642604,
+        "finished_at": 1784451822.94845,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718211 --mlx-cache-limit-gb 48",
+        "pid": 19387,
+        "warnings": []
+      },
+      "recoveredAfterReplan": true
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobId": "30c57c8c0399",
+      "response": {
+        "job_id": "30c57c8c0399",
+        "status": "running",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+        "params": {
+          "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "718211",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784451640.097949,
+        "started_at": 1784451822.953634,
+        "finished_at": null,
+        "exit_code": null,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718211 --mlx-cache-limit-gb 48",
+        "pid": 19387,
+        "warnings": []
+      },
+      "recoveredAfterReplan": true
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobId": "4e5bd74d860d",
+      "response": {
+        "job_id": "4e5bd74d860d",
+        "status": "pending",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+        "params": {
+          "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "718211",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784451640.125767,
+        "started_at": null,
+        "finished_at": null,
+        "exit_code": null,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": null,
+        "pid": null,
+        "warnings": []
+      },
+      "recoveredAfterReplan": true
+    },
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobId": "85ad49b2c004",
+      "response": {
+        "job_id": "85ad49b2c004"
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobId": "6e8f8ca7edb5",
+      "response": {
+        "job_id": "6e8f8ca7edb5"
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobId": "e45b84bfe240",
+      "response": {
+        "job_id": "e45b84bfe240"
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobId": "0d55d47abd09",
+      "response": {
+        "job_id": "0d55d47abd09"
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobId": "ad9033e3b984",
+      "response": {
+        "job_id": "ad9033e3b984"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "10/10 jobs submitted"
+}

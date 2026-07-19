@@ -1,0 +1,110 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+      "title": "crawler-basin22",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/crawler-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+      "title": "crawler-basin22",
+      "viewLabel": "BASE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "title": "crawler-basin22",
+      "viewLabel": "MINERAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+      "title": "upright-basin03",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin03-clay-depth-normal-world-creature-invention-seed718113/output.png",
+      "title": "upright-basin03",
+      "viewLabel": "BASE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "title": "upright-basin03",
+      "viewLabel": "MINERAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+      "title": "upright-basin10",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png",
+      "title": "upright-basin10",
+      "viewLabel": "BASE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "title": "upright-basin10",
+      "viewLabel": "MINERAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+      "title": "upright-basin22",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin22-clay-depth-normal-world-creature-invention-seed718113/output.png",
+      "title": "upright-basin22",
+      "viewLabel": "BASE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "title": "upright-basin22",
+      "viewLabel": "MINERAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-world-creature-invention-seed718113/output.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "BASE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "title": "bulbous-radial-lirm02",
+      "viewLabel": "MINERAL"
+    }
+  ]
+}

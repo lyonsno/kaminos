@@ -1,0 +1,30 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/left/render.png",
+      "title": "UPRIGHT BASIN 10 / SEED 718113",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/front/render.png",
+      "title": "UPRIGHT BASIN 10 / SEED 718113",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/right/render.png",
+      "title": "UPRIGHT BASIN 10 / SEED 718113",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png",
+      "title": "UPRIGHT BASIN 10 / SEED 718113",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

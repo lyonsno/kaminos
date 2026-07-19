@@ -1,0 +1,54 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "spatially-coherent-new-gestalt",
+  "lastTrustworthyEvidence": "four route-validated witness frames visually inspected as one coherent organism with persistent asymmetric mass, radial feet, and completed unseen-side anatomy",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/trellis/witness-plan.json",
+    "bytes": 7376,
+    "sha256": "sha256:92f1504489f87708a5055211abdcfa673a6dddba81aa850e89d5ec51d2f46990"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/trellis/witness-completion-report.json",
+    "bytes": 11389,
+    "sha256": "sha256:75c46be8590d383b0a110e656ce4fb3a66f9bee525644e98ec4af31bc88b5c75"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 1359,
+    "sha256": "sha256:e479893da0c3dfc2c85e6ea1ffd5f37c293728870ca49a4279ce695663ddfa52"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/trellis/trellis-witness-contact-sheet.png",
+    "bytes": 755613,
+    "sha256": "sha256:e2113586a6bcd11a6c3f288379ac6cffdac06d261876123d5f05db2cc5d732e2"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/left/render.png",
+      "bytes": 804805,
+      "sha256": "sha256:0771a696000c003279bfaddd1185fe9efa9b69e2c88e56fef2821ff038fd6999"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/front/render.png",
+      "bytes": 803255,
+      "sha256": "sha256:5d86e487a8546a8736db165eca51a70d7d834ea305f30b49b87841c1d272c657"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/right/render.png",
+      "bytes": 794365,
+      "sha256": "sha256:f33ff695079e1d2e035876a03e202aac72b0da911025a2be69d171c045a6d71f"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png",
+      "bytes": 810707,
+      "sha256": "sha256:533b0abc441d0c35c3da9217d705d93544e03e89adada854ee3f8368bc530b35"
+    }
+  ]
+}

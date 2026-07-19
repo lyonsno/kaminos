@@ -1,0 +1,47 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-collection.v0",
+  "status": "complete-glbs-unwitnessed",
+  "requestedCount": 1,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-completion.v0",
+      "status": "accepted",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "upright-basin10",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "jobId": "50d46d5c773a",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "effectiveJobType": "trellis2mlx_fast",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "submittedAt": 1784451482.390796,
+      "startedAt": 1784451482.84682,
+      "finishedAt": 1784451590.546508,
+      "durationSeconds": 107.69968795776367,
+      "outputMtime": 1784451590.1794453,
+      "warnings": [],
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-imagegen-20260719/cells/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 230910,
+        "sha256": "sha256:3103849ec0d03f4cbd1405195db23649d4073b1c0524ac4a3946db033ef453d3"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 8737388,
+        "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+      },
+      "spatialCoherence": "unverified-pending-rendered-witness"
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "1/1 GLBs accepted; spatial coherence pending witness"
+}

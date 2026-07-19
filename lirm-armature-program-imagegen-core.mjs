@@ -418,6 +418,100 @@ function assertUniqueValues(values, label) {
   if (new Set(values).size !== values.length) throw new Error(`${label} must contain unique values`);
 }
 
+export async function buildArmatureGestaltFamilyTrellisPromotionPlan({
+  imagegenPlan,
+  imagegenCompletion,
+  selectionReceipt,
+  outputRoot,
+} = {}) {
+  if (imagegenPlan?.schema !== ARMATURE_GESTALT_FAMILY_IMAGEGEN_PLAN_SCHEMA) {
+    throw new Error(`unexpected family imagegen plan schema: ${imagegenPlan?.schema ?? 'missing'}`);
+  }
+  if (imagegenCompletion?.schema !== 'kaminos.lirm-armature-gestalt-family-imagegen-collection.v0'
+    || imagegenCompletion.status !== 'complete') {
+    throw new Error('family imagegen collection is not complete');
+  }
+  if (!outputRoot) throw new Error('Trellis outputRoot is required');
+  if (selectionReceipt?.kind !== 'single-inspected-structural-hit') {
+    throw new Error(`unsupported family Trellis selection contract: ${selectionReceipt?.kind ?? 'missing'}`);
+  }
+  if (typeof selectionReceipt.selectedCellId !== 'string' || selectionReceipt.selectedCellId.length === 0) {
+    throw new Error('family Trellis selection requires selectedCellId');
+  }
+  if (typeof selectionReceipt.rationale !== 'string' || selectionReceipt.rationale.length === 0) {
+    throw new Error('family Trellis selection requires rationale');
+  }
+  const adjudication = await fileEvidence(selectionReceipt.adjudication?.path);
+  if (adjudication.bytes !== selectionReceipt.adjudication?.bytes) {
+    throw new Error('adjudication byte evidence drift');
+  }
+  if (adjudication.sha256 !== selectionReceipt.adjudication?.sha256) {
+    throw new Error('adjudication hash drift');
+  }
+  const adjudicationReport = JSON.parse(await readFile(adjudication.path, 'utf8'));
+  if (adjudicationReport.schema !== 'kaminos.lirm-armature-gestalt-family-imagegen-assay.v0'
+    || adjudicationReport.status !== 'multi-gestalt-morphology-passed-inspected') {
+    throw new Error('family Trellis selection lacks inspected adjudication');
+  }
+
+  const sourceCell = imagegenPlan.cells.find(cell => cell.cellId === selectionReceipt.selectedCellId);
+  const sourceCompletion = imagegenCompletion.accepted.find(
+    entry => entry.cellId === selectionReceipt.selectedCellId,
+  );
+  if (!sourceCell || !sourceCompletion) {
+    throw new Error(`selected family imagegen cell is not accepted: ${selectionReceipt.selectedCellId}`);
+  }
+  const input = await fileEvidence(sourceCompletion.output.path);
+  if (input.bytes !== sourceCompletion.output.bytes || input.sha256 !== sourceCompletion.output.sha256) {
+    throw new Error(`imagegen output hash drift: ${selectionReceipt.selectedCellId}`);
+  }
+  const cellOutputDir = resolve(outputRoot, sourceCell.cellId);
+  const settings = {
+    seed: 42,
+    resolution: 512,
+    steps: 6,
+    cascade: false,
+    targetFaces: 200000,
+    textureSize: 1024,
+    simplifyFirst: true,
+  };
+  const cell = {
+    cellId: sourceCell.cellId,
+    jobType: GESTALT_TRELLIS_JOB_TYPE,
+    requestedRoute: `gpu-greenroom/${GESTALT_TRELLIS_JOB_TYPE}`,
+    expectedRunner: GESTALT_TRELLIS_RUNNER,
+    candidateId: sourceCell.candidateId,
+    armatureProgram: sourceCell.armatureProgram,
+    parameters: sourceCell.parameters,
+    conditioningRoute: sourceCell.conditioningRoute,
+    referenceSet: sourceCell.referenceSet,
+    stance: sourceCell.stance,
+    imagegenSeed: sourceCell.seed,
+    input,
+    outputDir: cellOutputDir,
+    outputPath: resolve(cellOutputDir, 'output.glb'),
+    settings,
+  };
+
+  return {
+    schema: GESTALT_TRELLIS_PLAN_SCHEMA,
+    status: 'planned',
+    selectionContract: {
+      ...selectionReceipt,
+      adjudication,
+      fixedSettings: settings,
+    },
+    evidencePredicate: {
+      routeFallbackAllowed: false,
+      missingGlbCountsAsSuccess: false,
+      sourceHashDriftAllowed: false,
+      inspectedSelectionRequired: true,
+      spatialCoherenceRequiresRenderedWitness: true,
+    },
+    cells: [cell],
+  };
+}
+
 export async function buildArmatureProgramTrellisPromotionPlan({
   imagegenPlan,
   imagegenCompletion,

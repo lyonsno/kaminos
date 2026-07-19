@@ -8,7 +8,14 @@ const {
   ARMATURE_GESTALT_FAMILY_IMAGEGEN_PLAN_SCHEMA,
   buildArmatureGestaltFamilyImagegenMatrix,
   buildArmatureGestaltFamilyImagegenContactSheetManifest,
+  buildArmatureGestaltFamilyTrellisPromotionPlan,
 } = await import('../lirm-armature-program-imagegen-core.mjs');
+
+assert.equal(
+  typeof buildArmatureGestaltFamilyTrellisPromotionPlan,
+  'function',
+  'single inspected family hit requires a dedicated Trellis promotion planner',
+);
 
 const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const root = await mkdtemp(join(tmpdir(), 'lirm-gestalt-family-imagegen-'));
@@ -131,6 +138,64 @@ assert.ok(contactSheetManifest.sheets.every(sheet => (
 assert.deepEqual(
   contactSheetManifest.sheets[0].sheet.cells.slice(0, 4).map(cell => cell.viewLabel),
   ['ARMATURE', 'NORMAL', 'CLAY', '3REF'],
+);
+
+const adjudicationReport = {
+  schema: 'kaminos.lirm-armature-gestalt-family-imagegen-assay.v0',
+  status: 'multi-gestalt-morphology-passed-inspected',
+  result: { answer: 'yes-with-reference-pressure-gradient' },
+};
+const adjudicationPath = join(root, 'imagegen-report.json');
+const adjudicationBytes = Buffer.from(`${JSON.stringify(adjudicationReport, null, 2)}\n`);
+await writeFile(adjudicationPath, adjudicationBytes);
+const selectedCellId = 'upright-basin10-clay-depth-normal-world-creature-invention-seed718113';
+const trellisPlan = await buildArmatureGestaltFamilyTrellisPromotionPlan({
+  imagegenPlan: plan,
+  imagegenCompletion: {
+    schema: 'kaminos.lirm-armature-gestalt-family-imagegen-collection.v0',
+    status: 'complete',
+    accepted,
+  },
+  selectionReceipt: {
+    kind: 'single-inspected-structural-hit',
+    selectedCellId,
+    rationale: 'clean novel compact creature with strong three-reference armature adherence',
+    adjudication: {
+      path: adjudicationPath,
+      bytes: adjudicationBytes.length,
+      sha256: sha256(adjudicationBytes),
+    },
+  },
+  outputRoot: join(root, 'trellis'),
+});
+assert.equal(trellisPlan.cells.length, 1);
+assert.equal(trellisPlan.cells[0].cellId, selectedCellId);
+assert.equal(trellisPlan.cells[0].settings.steps, 6);
+assert.equal(trellisPlan.cells[0].settings.targetFaces, 200000);
+assert.equal(trellisPlan.selectionContract.kind, 'single-inspected-structural-hit');
+assert.equal(trellisPlan.evidencePredicate.spatialCoherenceRequiresRenderedWitness, true);
+
+await assert.rejects(
+  () => buildArmatureGestaltFamilyTrellisPromotionPlan({
+    imagegenPlan: plan,
+    imagegenCompletion: {
+      schema: 'kaminos.lirm-armature-gestalt-family-imagegen-collection.v0',
+      status: 'complete',
+      accepted,
+    },
+    selectionReceipt: {
+      kind: 'single-inspected-structural-hit',
+      selectedCellId,
+      rationale: 'fixture',
+      adjudication: {
+        path: adjudicationPath,
+        bytes: adjudicationBytes.length,
+        sha256: 'sha256:stale-adjudication',
+      },
+    },
+    outputRoot: join(root, 'trellis-stale'),
+  }),
+  /adjudication hash drift/,
 );
 
 const driftedCompletion = {

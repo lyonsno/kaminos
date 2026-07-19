@@ -1,0 +1,7 @@
+Use the supplied render, depth map, and normal map as one exact three-dimensional body plan. Preserve its full-body silhouette, mass distribution, appendage placement, contact geometry, and viewing direction. Invent a compelling fictional organism that inhabits this structure rather than drawing a sculpture of the references.
+
+The organism is dry, pale, and mineral-organic: overlapping opaline ceramic plates, chalky calcified shell, translucent quartz-like edges, and sparse fibrous fungal tissue visible only in protected joints. Cool cyan-white bioluminescence leaks softly through a few seams and sensory pits. Surfaces are matte, powdery, weathered, and structurally specific, with fine fractures, thin shell lips, tension fibers, and believable functional articulation. It should feel ancient, quiet, alien, and physically inhabitable.
+
+Show one complete organism isolated in a neutral dark studio void, fully inside frame, three-quarter view, with restrained directional lighting and a faint grounding shadow. It must read as a tangible creature with coherent anatomy, not a concept icon, relief, toy, figurine, plant arrangement, pile of parts, or decorative sculpture.
+
+Avoid green or purple flesh, wet skin, exposed mammalian muscle, glossy candy material, generic reptile skin, humanoid anatomy, text, labels, frames, scenery, and multiple creatures.

@@ -1,0 +1,52 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-trellis-assay.v0",
+  "status": "new-gestalt-survived-to-spatial-cast-inspected",
+  "selectedCellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+  "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+  "effectiveJobType": "trellis2mlx_fast",
+  "settings": {
+    "seed": 42,
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "simplifyFirst": true
+  },
+  "timing": {
+    "trellisSeconds": 107.69968795776367,
+    "witnessSeconds": [1.6217241287231445, 0.9438521862030029, 0.9764530658721924, 0.9917333126068115]
+  },
+  "evidence": {
+    "input": {
+      "durablePath": "selected-source.png",
+      "bytes": 230910,
+      "sha256": "sha256:3103849ec0d03f4cbd1405195db23649d4073b1c0524ac4a3946db033ef453d3"
+    },
+    "glb": {
+      "durablePath": "output.glb",
+      "bytes": 8737388,
+      "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+    },
+    "witnessSheet": {
+      "bytes": 755613,
+      "sha256": "sha256:e2113586a6bcd11a6c3f288379ac6cffdac06d261876123d5f05db2cc5d732e2"
+    }
+  },
+  "visualVerdict": {
+    "spatialCoherence": "passed",
+    "lineagePreservation": "passed",
+    "visibleDelta": "The compact upright armature became a coherent asymmetric organism with persistent head/body mass, discrete radial feet, readable sensory anatomy, and plausible unseen-side completion across four views.",
+    "failureTexture": "The result remains aesthetically crude and somewhat plantlike; this assay proves scaffold-to-3D survival, not production creature quality."
+  },
+  "claimBoundary": {
+    "supported": "At least one newly introduced non-bulbous morphology can be steered through image generation and survive a fast Trellis cast as a coherent 3D organism.",
+    "unsupported": [
+      "arbitrary creature topology",
+      "production-quality creature casts",
+      "motion or rigging suitability",
+      "style independence"
+    ]
+  },
+  "nextPressure": "Adjudicate the controlled style-axis matrix, then widen topology within the strongest surviving program family."
+}

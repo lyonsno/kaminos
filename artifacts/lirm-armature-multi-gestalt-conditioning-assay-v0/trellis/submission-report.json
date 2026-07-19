@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-trellis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 1,
+  "submitted": [
+    {
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "50d46d5c773a",
+      "response": {
+        "job_id": "50d46d5c773a"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "1/1 jobs submitted"
+}

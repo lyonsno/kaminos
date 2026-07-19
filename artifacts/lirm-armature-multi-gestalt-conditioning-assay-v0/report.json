@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.lirm-armature-multi-gestalt-conditioning-assay.v0",
-  "status": "imagegen-multi-gestalt-passed-inspected",
+  "status": "imagegen-trellis-style-factorization-passed-inspected",
   "evidencePredicate": {
     "candidateCount": 5,
     "distinctArmatureProgramCount": 3,
@@ -11,7 +11,7 @@
       "semantic"
     ],
     "inferenceClaim": "20 Flux2 outputs accepted and inspected",
-    "nextGate": "one newly proven gestalt through Trellis plus an orthogonal style/material pressure firing",
+    "nextGate": "widen silhouette and gestalt variation within source-anchored 3D programs, then assay region-localized semantic handles",
     "imagegenClaim": "five-body morphology steering passed across two seeds and two reference regimes"
   },
   "familyReceipt": {

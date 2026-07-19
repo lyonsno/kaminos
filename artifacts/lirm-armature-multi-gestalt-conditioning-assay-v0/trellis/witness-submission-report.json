@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 4,
+  "submitted": [
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-left",
+      "jobId": "d13da3495eea",
+      "response": {
+        "job_id": "d13da3495eea"
+      }
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-front",
+      "jobId": "af183f69b47b",
+      "response": {
+        "job_id": "af183f69b47b"
+      }
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-right",
+      "jobId": "10c785e20820",
+      "response": {
+        "job_id": "10c785e20820"
+      }
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-opposite",
+      "jobId": "76f0eabdad90",
+      "response": {
+        "job_id": "76f0eabdad90"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 witness jobs submitted"
+}

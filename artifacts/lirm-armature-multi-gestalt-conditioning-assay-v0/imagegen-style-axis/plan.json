@@ -1,0 +1,2182 @@
+{
+  "schema": "kaminos.lirm-armature-gestalt-family-imagegen-plan.v0",
+  "createdAt": "2026-07-19T09:05:11.667Z",
+  "purpose": "Measure whether distinct source-anchored 3D creature gestalts recruit distinct model priors while preserving lineage.",
+  "requestedConditioningRoute": "kaminos/lirm-armature-gestalt-family/source-anchored-conditioning-v0",
+  "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "familyCandidateReceiptEvidence": [
+    {
+      "candidateId": "crawler-basin22",
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/receipt.json",
+      "bytes": 7577,
+      "sha256": "sha256:2c8ca4ef6923f38aabf510b1d3bcdfe1c45be26e68783f8da9dee6d870ab92a2"
+    },
+    {
+      "candidateId": "upright-basin03",
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/receipt.json",
+      "bytes": 7962,
+      "sha256": "sha256:d5ee520839b2e25659ea4cc7ab720464fed000620c30f7ca96e27f513a2b8fd1"
+    },
+    {
+      "candidateId": "upright-basin10",
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/receipt.json",
+      "bytes": 7990,
+      "sha256": "sha256:338e013a7f2eb921e7164023b7f087b8b1adbc218919a212353ab11ed3f6a22c"
+    },
+    {
+      "candidateId": "upright-basin22",
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/receipt.json",
+      "bytes": 7951,
+      "sha256": "sha256:5d70c9ea4dbdc4c21380e7f652db03e340d7db689fd1d668eb038df38590f0a0"
+    },
+    {
+      "candidateId": "bulbous-radial-lirm02",
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/receipt.json",
+      "bytes": 10793,
+      "sha256": "sha256:fa0c447a6b428f9f59c7ae021509c4b9e58f71698d392603832f58da00703424"
+    }
+  ],
+  "comparisonContract": {
+    "kind": "multi-gestalt-reference-seed-factorial",
+    "fixedCandidateIds": [
+      "crawler-basin22",
+      "upright-basin03",
+      "upright-basin10",
+      "upright-basin22",
+      "bulbous-radial-lirm02"
+    ],
+    "fixedStance": "mineral-ceramic-fungal",
+    "fixedModel": "flux2-klein-9b",
+    "fixedSteps": 8,
+    "fixedGuidance": 1,
+    "variedReferenceSets": [
+      "clay-depth-normal"
+    ],
+    "variedSeeds": [
+      718113,
+      718211
+    ],
+    "loadBearingDiscriminator": "The fixed invention prompt must recruit materially different creature priors from the five bodies while preserving recognizable lineage."
+  },
+  "falseClosureGuards": {
+    "directInferenceForbidden": true,
+    "fallbackRouteAccepted": false,
+    "missingOrEmptyPrimaryOutputAccepted": false,
+    "requestedRouteMustEqualEffectiveJobType": true,
+    "effectiveRunnerMustMatch": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "everyConditioningInputMustMatchWitnessHash": true,
+    "samePromptAcrossEveryCandidate": true,
+    "visuallyDistinctOutputWithoutLineage": "does_not_satisfy",
+    "visuallyAdherentOutputWithoutDistinctPriorRecruitment": "does_not_satisfy"
+  },
+  "cells": [
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "crawler-basin22",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.crawler.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0",
+        "parameterSpecs": [
+          {
+            "id": "bodyLength",
+            "semanticRole": "axialExtent",
+            "initial": 0.92,
+            "min": 0.58,
+            "max": 1.58,
+            "step": 0.18
+          },
+          {
+            "id": "bodyWidth",
+            "semanticRole": "lateralMass",
+            "initial": 0.46,
+            "min": 0.25,
+            "max": 0.92,
+            "step": 0.12
+          },
+          {
+            "id": "bodyHeight",
+            "semanticRole": "verticalMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "headScale",
+            "semanticRole": "headOrientation",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 1.18,
+            "step": 0.13
+          },
+          {
+            "id": "bellyScale",
+            "semanticRole": "bodyMass",
+            "initial": 0.72,
+            "min": 0.4,
+            "max": 1.42,
+            "step": 0.15
+          },
+          {
+            "id": "tailScale",
+            "semanticRole": "posteriorTaper",
+            "initial": 0.42,
+            "min": 0.18,
+            "max": 0.95,
+            "step": 0.12
+          },
+          {
+            "id": "dorsalLift",
+            "semanticRole": "dorsalProfile",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.36,
+            "step": 0.08
+          },
+          {
+            "id": "curveAmplitude",
+            "semanticRole": "axialCurvature",
+            "initial": 0.04,
+            "min": 0,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "limbLength",
+            "semanticRole": "contactLimb",
+            "initial": 0.28,
+            "min": 0.12,
+            "max": 0.68,
+            "step": 0.09
+          },
+          {
+            "id": "limbSpread",
+            "semanticRole": "contactFootprint",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "limbThickness",
+            "semanticRole": "contactLimb",
+            "initial": 0.09,
+            "min": 0.045,
+            "max": 0.22,
+            "step": 0.035
+          },
+          {
+            "id": "contactHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.25,
+            "min": -0.62,
+            "max": -0.08,
+            "step": 0.08
+          },
+          {
+            "id": "headLift",
+            "semanticRole": "headOrientation",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "bodyLength": 1.1,
+        "bodyWidth": 0.40735456000000003,
+        "bodyHeight": 0.44587119999999997,
+        "headScale": 0.34090344000000006,
+        "bellyScale": 0.8069999999999999,
+        "tailScale": 0.67338144,
+        "dorsalLift": 0.04,
+        "curveAmplitude": 0.00989016,
+        "limbLength": 0.19000000000000003,
+        "limbSpread": 0.38200000000000006,
+        "limbThickness": 0.125,
+        "contactHeight": -0.26799104,
+        "headLift": -0.010490160000000004
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718113,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3",
+        "role": "clay",
+        "sourceRelativePath": "crawler-basin22/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55",
+          "role": "depth",
+          "sourceRelativePath": "crawler-basin22/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7",
+          "role": "normal",
+          "sourceRelativePath": "crawler-basin22/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "crawler-basin22",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.crawler.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0",
+        "parameterSpecs": [
+          {
+            "id": "bodyLength",
+            "semanticRole": "axialExtent",
+            "initial": 0.92,
+            "min": 0.58,
+            "max": 1.58,
+            "step": 0.18
+          },
+          {
+            "id": "bodyWidth",
+            "semanticRole": "lateralMass",
+            "initial": 0.46,
+            "min": 0.25,
+            "max": 0.92,
+            "step": 0.12
+          },
+          {
+            "id": "bodyHeight",
+            "semanticRole": "verticalMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "headScale",
+            "semanticRole": "headOrientation",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 1.18,
+            "step": 0.13
+          },
+          {
+            "id": "bellyScale",
+            "semanticRole": "bodyMass",
+            "initial": 0.72,
+            "min": 0.4,
+            "max": 1.42,
+            "step": 0.15
+          },
+          {
+            "id": "tailScale",
+            "semanticRole": "posteriorTaper",
+            "initial": 0.42,
+            "min": 0.18,
+            "max": 0.95,
+            "step": 0.12
+          },
+          {
+            "id": "dorsalLift",
+            "semanticRole": "dorsalProfile",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.36,
+            "step": 0.08
+          },
+          {
+            "id": "curveAmplitude",
+            "semanticRole": "axialCurvature",
+            "initial": 0.04,
+            "min": 0,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "limbLength",
+            "semanticRole": "contactLimb",
+            "initial": 0.28,
+            "min": 0.12,
+            "max": 0.68,
+            "step": 0.09
+          },
+          {
+            "id": "limbSpread",
+            "semanticRole": "contactFootprint",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "limbThickness",
+            "semanticRole": "contactLimb",
+            "initial": 0.09,
+            "min": 0.045,
+            "max": 0.22,
+            "step": 0.035
+          },
+          {
+            "id": "contactHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.25,
+            "min": -0.62,
+            "max": -0.08,
+            "step": 0.08
+          },
+          {
+            "id": "headLift",
+            "semanticRole": "headOrientation",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "bodyLength": 1.1,
+        "bodyWidth": 0.40735456000000003,
+        "bodyHeight": 0.44587119999999997,
+        "headScale": 0.34090344000000006,
+        "bellyScale": 0.8069999999999999,
+        "tailScale": 0.67338144,
+        "dorsalLift": 0.04,
+        "curveAmplitude": 0.00989016,
+        "limbLength": 0.19000000000000003,
+        "limbSpread": 0.38200000000000006,
+        "limbThickness": 0.125,
+        "contactHeight": -0.26799104,
+        "headLift": -0.010490160000000004
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718211,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/clay-implicit.png",
+        "bytes": 20469,
+        "sha256": "sha256:68d69040a104372d9b2bd934e6b85154ed420ec71b08d030b64282c16f901df3",
+        "role": "clay",
+        "sourceRelativePath": "crawler-basin22/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/depth-implicit.png",
+          "bytes": 12291,
+          "sha256": "sha256:4b98e693fb535ce934ba307f37a4eb5926b306fc78470ce0b1a19f725be80a55",
+          "role": "depth",
+          "sourceRelativePath": "crawler-basin22/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/crawler-basin22/crawler-basin22/normal-implicit.png",
+          "bytes": 25217,
+          "sha256": "sha256:140e16ab119989aa21f1ae52bfda5ff6aed5bcc7c4081ecb5994533daa53d4a7",
+          "role": "normal",
+          "sourceRelativePath": "crawler-basin22/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/crawler-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin03",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.5588,
+        "trunkWidth": 0.25972400000000007,
+        "trunkDepth": 0.5780000000000001,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.4331512,
+        "crownDepth": 0.8333814399999999,
+        "crownLift": 0.09,
+        "waistScale": 0.66003608,
+        "crownForward": -0.07331199999999999,
+        "posteriorBulb": 0.20884879999999995,
+        "contactSpread": 0.472996,
+        "contactLength": 0.19747904,
+        "contactThickness": 0.10159000000000001,
+        "radialTwist": -0.06780584
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718113,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin03/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin03/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin03/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin03",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.5588,
+        "trunkWidth": 0.25972400000000007,
+        "trunkDepth": 0.5780000000000001,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.4331512,
+        "crownDepth": 0.8333814399999999,
+        "crownLift": 0.09,
+        "waistScale": 0.66003608,
+        "crownForward": -0.07331199999999999,
+        "posteriorBulb": 0.20884879999999995,
+        "contactSpread": 0.472996,
+        "contactLength": 0.19747904,
+        "contactThickness": 0.10159000000000001,
+        "radialTwist": -0.06780584
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718211,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/clay-implicit.png",
+        "bytes": 23917,
+        "sha256": "sha256:b034fc4d5bf6cae0fa1570d874cf73708ae2cd60f57c41f9b90779645e4fe313",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin03/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/depth-implicit.png",
+          "bytes": 14059,
+          "sha256": "sha256:8eff30b1cbf5cb766ca566675bb19f33e4337063aca1778c51d61b8cba463d2d",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin03/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin03/upright-basin03/normal-implicit.png",
+          "bytes": 29689,
+          "sha256": "sha256:f6b89e09b14e608f53b0db7e1f6b1fbe77335bb336bad0b9214d997db1d80c1b",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin03/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin03-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin10",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.5861156799999999,
+        "trunkWidth": 0.43220000000000003,
+        "trunkDepth": 0.6311512,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.2688488,
+        "crownDepth": 0.5003679999999999,
+        "crownLift": 0.012194159999999994,
+        "waistScale": 0.5121639200000001,
+        "crownForward": 0.24892096,
+        "posteriorBulb": 0.5638712,
+        "contactSpread": 0.48853768000000003,
+        "contactLength": 0.25560896,
+        "contactThickness": 0.060000000000000005,
+        "radialTwist": 0.009999999999999995
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718113,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin10/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin10/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin10/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin10",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.5861156799999999,
+        "trunkWidth": 0.43220000000000003,
+        "trunkDepth": 0.6311512,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.2688488,
+        "crownDepth": 0.5003679999999999,
+        "crownLift": 0.012194159999999994,
+        "waistScale": 0.5121639200000001,
+        "crownForward": 0.24892096,
+        "posteriorBulb": 0.5638712,
+        "contactSpread": 0.48853768000000003,
+        "contactLength": 0.25560896,
+        "contactThickness": 0.060000000000000005,
+        "radialTwist": 0.009999999999999995
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718211,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/clay-implicit.png",
+        "bytes": 21926,
+        "sha256": "sha256:4ee092886e229033097f5eff84904e8acca1e7bb23c0eb448c2ca2fe45c6171e",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin10/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/depth-implicit.png",
+          "bytes": 13728,
+          "sha256": "sha256:07bb267ecd4a6a2108df96285e0fb7a31abc979621a0d2b37891eb6f6042e625",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin10/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin10/upright-basin10/normal-implicit.png",
+          "bytes": 27258,
+          "sha256": "sha256:d5cbd027a656823084b07c064e6e1feba84fbc5ad8536ee9a23648560cfdaa66",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin10/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin10-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin22",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.6332116799999999,
+        "trunkWidth": 0.38,
+        "trunkDepth": 0.6311512,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.3268488,
+        "crownDepth": 0.5465545599999999,
+        "crownLift": 0.05279416,
+        "waistScale": 0.64563608,
+        "crownForward": 0.017991040000000007,
+        "posteriorBulb": 0.6311512,
+        "contactSpread": 0.51,
+        "contactLength": 0.17799104,
+        "contactThickness": 0.07891000000000001,
+        "radialTwist": 0.009999999999999995
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718113,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin22/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin22/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin22/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "upright-basin22",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+        "parameterSpecs": [
+          {
+            "id": "trunkHeight",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.78,
+            "min": 0.42,
+            "max": 1.24,
+            "step": 0.14
+          },
+          {
+            "id": "trunkWidth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.38,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.09
+          },
+          {
+            "id": "trunkDepth",
+            "semanticRole": "uprightTrunk",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.78,
+            "step": 0.1
+          },
+          {
+            "id": "crownWidth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.74,
+            "min": 0.38,
+            "max": 1.18,
+            "step": 0.14
+          },
+          {
+            "id": "crownHeight",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "crownDepth",
+            "semanticRole": "macrocephalicCrown",
+            "initial": 0.58,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.12
+          },
+          {
+            "id": "crownLift",
+            "semanticRole": "crownElevation",
+            "initial": 0.16,
+            "min": -0.04,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "waistScale",
+            "semanticRole": "waistCompression",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "crownForward",
+            "semanticRole": "anteriorProjection",
+            "initial": 0.08,
+            "min": -0.24,
+            "max": 0.38,
+            "step": 0.08
+          },
+          {
+            "id": "posteriorBulb",
+            "semanticRole": "posteriorCountermass",
+            "initial": 0.42,
+            "min": 0.16,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.02,
+            "step": 0.11
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.32,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.085,
+            "min": 0.045,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          }
+        ]
+      },
+      "parameters": {
+        "trunkHeight": 0.6332116799999999,
+        "trunkWidth": 0.38,
+        "trunkDepth": 0.6311512,
+        "crownWidth": 0.4443883199999999,
+        "crownHeight": 0.3268488,
+        "crownDepth": 0.5465545599999999,
+        "crownLift": 0.05279416,
+        "waistScale": 0.64563608,
+        "crownForward": 0.017991040000000007,
+        "posteriorBulb": 0.6311512,
+        "contactSpread": 0.51,
+        "contactLength": 0.17799104,
+        "contactThickness": 0.07891000000000001,
+        "radialTwist": 0.009999999999999995
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718211,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/clay-implicit.png",
+        "bytes": 23589,
+        "sha256": "sha256:cf3d1b0e8816390b666ced3ee51ce35026d81afaa5debc769a85ebbc8efd89de",
+        "role": "clay",
+        "sourceRelativePath": "upright-basin22/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/depth-implicit.png",
+          "bytes": 14281,
+          "sha256": "sha256:d679cd2e3fb86ca0bade505e6cd669d9d951ab0555a7b563e2db3f6584bd5252",
+          "role": "depth",
+          "sourceRelativePath": "upright-basin22/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/upright-basin22/upright-basin22/normal-implicit.png",
+          "bytes": 29564,
+          "sha256": "sha256:cae5380d2df6bb1226c9f1f2a2715b3248f8c8a0d6d5de2e575c42a91d1af8a0",
+          "role": "normal",
+          "sourceRelativePath": "upright-basin22/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/upright-basin22-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "bulbous-radial-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.bulbous-radial-upright.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.bulbous-radial-upright-26.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorBulbLength",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.92,
+            "min": 0.56,
+            "max": 1.46,
+            "step": 0.14
+          },
+          {
+            "id": "posteriorBulbWidth",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.72,
+            "min": 0.4,
+            "max": 1.12,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorBulbHeight",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.3,
+            "step": 0.07
+          },
+          {
+            "id": "bridgeLength",
+            "semanticRole": "bodyBridge",
+            "initial": 0.88,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.13
+          },
+          {
+            "id": "bridgeWidth",
+            "semanticRole": "bodyBridge",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.74,
+            "step": 0.08
+          },
+          {
+            "id": "bridgeHeight",
+            "semanticRole": "bodyBridge",
+            "initial": 0.32,
+            "min": 0.18,
+            "max": 0.58,
+            "step": 0.07
+          },
+          {
+            "id": "bridgeLift",
+            "semanticRole": "bridgeElevation",
+            "initial": 0.02,
+            "min": -0.16,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "chestWidth",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "chestHeight",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.6,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.1
+          },
+          {
+            "id": "chestDepth",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.5,
+            "min": 0.28,
+            "max": 0.86,
+            "step": 0.08
+          },
+          {
+            "id": "chestLift",
+            "semanticRole": "anteriorChestElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "neckHeight",
+            "semanticRole": "anteriorUprightNeck",
+            "initial": 0.86,
+            "min": 0.42,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "neckThickness",
+            "semanticRole": "anteriorUprightNeck",
+            "initial": 0.25,
+            "min": 0.13,
+            "max": 0.46,
+            "step": 0.06
+          },
+          {
+            "id": "neckForward",
+            "semanticRole": "anteriorNeckTrajectory",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.52,
+            "step": 0.08
+          },
+          {
+            "id": "neckCurve",
+            "semanticRole": "anteriorNeckTrajectory",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.3,
+            "step": 0.07
+          },
+          {
+            "id": "headWidth",
+            "semanticRole": "anteriorHead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "headHeight",
+            "semanticRole": "anteriorHead",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "headDepth",
+            "semanticRole": "anteriorHead",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.07
+          },
+          {
+            "id": "headForward",
+            "semanticRole": "anteriorHeadProjection",
+            "initial": 0.12,
+            "min": -0.16,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.66,
+            "min": 0.4,
+            "max": 1.08,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.17,
+            "step": 0.025
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "longitudinalContactDistribution",
+            "initial": 0.1,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "radialContactField",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.06,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorBulbLength": 0.62438832,
+        "posteriorBulbWidth": 0.4752855344,
+        "posteriorBulbHeight": 0.457532304,
+        "posteriorLift": -0.07852154720000001,
+        "bridgeLength": 0.64923544,
+        "bridgeWidth": 0.42892095999999996,
+        "bridgeHeight": 0.24660584,
+        "bridgeLift": 0.045200000000000004,
+        "chestWidth": 0.7602209263999999,
+        "chestHeight": 0.6756399999999999,
+        "chestDepth": 0.5065557632,
+        "chestLift": 0.019399999999999994,
+        "neckHeight": 0.5961565552,
+        "neckThickness": 0.13,
+        "neckForward": 0.09308800000000002,
+        "neckCurve": 0.05502645280000001,
+        "headWidth": 0.24202584319999998,
+        "headHeight": 0.23219415999999996,
+        "headDepth": 0.225852,
+        "headForward": 0.009399999999999985,
+        "contactSpread": 0.8180000000000001,
+        "contactLength": 0.2936,
+        "contactThickness": 0.10609,
+        "contactBias": -0.07797415679999997,
+        "radialTwist": 0.11070984000000002,
+        "asymmetry": 0.0583126176
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718113,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205",
+        "role": "clay",
+        "sourceRelativePath": "bulbous-radial-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b",
+          "role": "depth",
+          "sourceRelativePath": "bulbous-radial-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478",
+          "role": "normal",
+          "sourceRelativePath": "bulbous-radial-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718113/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    },
+    {
+      "cellId": "bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "bulbous-radial-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.bulbous-radial-upright.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.bulbous-radial-upright-26.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorBulbLength",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.92,
+            "min": 0.56,
+            "max": 1.46,
+            "step": 0.14
+          },
+          {
+            "id": "posteriorBulbWidth",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.72,
+            "min": 0.4,
+            "max": 1.12,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorBulbHeight",
+            "semanticRole": "posteriorBulbousMass",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.04,
+            "min": -0.18,
+            "max": 0.3,
+            "step": 0.07
+          },
+          {
+            "id": "bridgeLength",
+            "semanticRole": "bodyBridge",
+            "initial": 0.88,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.13
+          },
+          {
+            "id": "bridgeWidth",
+            "semanticRole": "bodyBridge",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.74,
+            "step": 0.08
+          },
+          {
+            "id": "bridgeHeight",
+            "semanticRole": "bodyBridge",
+            "initial": 0.32,
+            "min": 0.18,
+            "max": 0.58,
+            "step": 0.07
+          },
+          {
+            "id": "bridgeLift",
+            "semanticRole": "bridgeElevation",
+            "initial": 0.02,
+            "min": -0.16,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "chestWidth",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.56,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "chestHeight",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.6,
+            "min": 0.3,
+            "max": 0.98,
+            "step": 0.1
+          },
+          {
+            "id": "chestDepth",
+            "semanticRole": "anteriorChestMass",
+            "initial": 0.5,
+            "min": 0.28,
+            "max": 0.86,
+            "step": 0.08
+          },
+          {
+            "id": "chestLift",
+            "semanticRole": "anteriorChestElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "neckHeight",
+            "semanticRole": "anteriorUprightNeck",
+            "initial": 0.86,
+            "min": 0.42,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "neckThickness",
+            "semanticRole": "anteriorUprightNeck",
+            "initial": 0.25,
+            "min": 0.13,
+            "max": 0.46,
+            "step": 0.06
+          },
+          {
+            "id": "neckForward",
+            "semanticRole": "anteriorNeckTrajectory",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.52,
+            "step": 0.08
+          },
+          {
+            "id": "neckCurve",
+            "semanticRole": "anteriorNeckTrajectory",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.3,
+            "step": 0.07
+          },
+          {
+            "id": "headWidth",
+            "semanticRole": "anteriorHead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "headHeight",
+            "semanticRole": "anteriorHead",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "headDepth",
+            "semanticRole": "anteriorHead",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.07
+          },
+          {
+            "id": "headForward",
+            "semanticRole": "anteriorHeadProjection",
+            "initial": 0.12,
+            "min": -0.16,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "radialContactField",
+            "initial": 0.66,
+            "min": 0.4,
+            "max": 1.08,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "radialContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.17,
+            "step": 0.025
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "longitudinalContactDistribution",
+            "initial": 0.1,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "radialTwist",
+            "semanticRole": "radialContactField",
+            "initial": 0.08,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.06,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorBulbLength": 0.62438832,
+        "posteriorBulbWidth": 0.4752855344,
+        "posteriorBulbHeight": 0.457532304,
+        "posteriorLift": -0.07852154720000001,
+        "bridgeLength": 0.64923544,
+        "bridgeWidth": 0.42892095999999996,
+        "bridgeHeight": 0.24660584,
+        "bridgeLift": 0.045200000000000004,
+        "chestWidth": 0.7602209263999999,
+        "chestHeight": 0.6756399999999999,
+        "chestDepth": 0.5065557632,
+        "chestLift": 0.019399999999999994,
+        "neckHeight": 0.5961565552,
+        "neckThickness": 0.13,
+        "neckForward": 0.09308800000000002,
+        "neckCurve": 0.05502645280000001,
+        "headWidth": 0.24202584319999998,
+        "headHeight": 0.23219415999999996,
+        "headDepth": 0.225852,
+        "headForward": 0.009399999999999985,
+        "contactSpread": 0.8180000000000001,
+        "contactLength": 0.2936,
+        "contactThickness": 0.10609,
+        "contactBias": -0.07797415679999997,
+        "radialTwist": 0.11070984000000002,
+        "asymmetry": 0.0583126176
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "mineral-ceramic-fungal",
+      "seed": 718211,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/clay-implicit.png",
+        "bytes": 25339,
+        "sha256": "sha256:0a3b5a38601ce3c8b0df36bff9332aca3327071e12335596a19679791e100205",
+        "role": "clay",
+        "sourceRelativePath": "bulbous-radial-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/depth-implicit.png",
+          "bytes": 14772,
+          "sha256": "sha256:5848d9d04150e63b789ee84282c7900406f68d83a30c056a60690d52922eb13b",
+          "role": "depth",
+          "sourceRelativePath": "bulbous-radial-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/candidates/bulbous-radial-lirm02/bulbous-radial-lirm02/normal-implicit.png",
+          "bytes": 30859,
+          "sha256": "sha256:6a7a38e7e370258cc0d6485b2d8124851314610abcf202267c8d0e315d018478",
+          "role": "normal",
+          "sourceRelativePath": "bulbous-radial-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-multi-gestalt-conditioning-assay-v0/imagegen-style-axis/prompts/mineral-ceramic-fungal.txt",
+        "bytes": 1365,
+        "sha256": "sha256:f8791f15719b6497b0de91e3a9ddd8ebd2e1002b70ca12a026faef9a8e7ace39"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-style-axis-20260719/cells/bulbous-radial-lirm02-clay-depth-normal-mineral-ceramic-fungal-seed718211/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      }
+    }
+  ]
+}

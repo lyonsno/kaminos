@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-plan.v0",
+  "status": "planned",
+  "requiredViews": [
+    {
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ],
+  "evidencePredicate": {
+    "expectedWitnessCount": 4,
+    "blankOrMissingFrameCountsAsSuccess": false,
+    "routeFallbackAllowed": false,
+    "spatialClaimRequiresHumanVisualInspection": true
+  },
+  "cells": [
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-left",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "upright-basin10",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 8737388,
+        "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-front",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "upright-basin10",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 8737388,
+        "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-right",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "upright-basin10",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 8737388,
+        "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113-opposite",
+      "cellId": "upright-basin10-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "upright-basin10",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 8737388,
+        "sha256": "sha256:5ba5809e2dd01106ceff739b598f88f31b2595b12ea4173dbbda3fa4ef3470a5"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multi-gestalt-trellis-20260719/witness/upright-basin10-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ]
+}
