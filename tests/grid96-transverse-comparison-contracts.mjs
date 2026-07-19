@@ -12,6 +12,7 @@ assert.ok(existsSync(script), 'Grid96 transverse comparison assembler exists');
 const source = await readFile(script, 'utf8');
 assert.match(source, /kaminos\.volume\.grid96-transverse-comparison\.v0/, 'assembler pins its report schema');
 assert.match(source, /rank-one-tangent-plus-world-normal-binormal-symmetric-placement-v0/, 'assembler pins transverse placement identity');
+assert.match(source, /const TRANSVERSE_FOOTPRINT = TRANSVERSE_IDENTITY;/, 'assembler validates the exact effective transverse footprint identity');
 assert.match(source, /sha256:b424b2eeb4bc30b2210ab5a3c5e2aebd16eb9ff270c9add32802926fd8f5f9e1/, 'assembler pins the exact transverse socket identity');
 assert.match(source, /739d60e8965d923acd10761331b5d1310d4dba75a7484a006217032d185d14c0/, 'assembler pins the socket manifest hash');
 assert.match(source, /3713938c8e664cf746d10fe4ed2b9c8082d8673d887e595becabbc67b0cb3cf5/, 'assembler pins the basis payload hash');
