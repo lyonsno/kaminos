@@ -205,6 +205,16 @@ assert.match(
   /retirementEventEpoch ===\s*report\.liveBinding\.gpuResidentBinding\.eventEpoch/,
   'reattachment retirement must bind to its causal accepted Bind receipt rather than a later page epoch',
 );
+assert.match(
+  witnessSource,
+  /Math\.abs\(sample\.maxOffset - heldBindPreviewSamples\[index - 1\]\.maxOffset\) > 0\.000001/,
+  'held Bind evidence must require distinct continuous responses without inventing monotonic material load',
+);
+assert.doesNotMatch(
+  witnessSource,
+  /sample\.inputLoad > heldBindPreviewSamples\[index - 1\]\.inputLoad/,
+  'screen travel cannot be treated as a monotonic material-space load oracle',
+);
 assert.match(witnessSource, /detachedDynamicsSecondLaunchClock/, 'native witness must exercise a second launch episode');
 assert.match(greenroomSource, /detached-dynamics-greenroom-r1/, 'dynamics evidence needs a dedicated artifact identity');
 assert.match(greenroomSource, /bellTower=1/, 'dynamics Greenroom must request the structural bell route');

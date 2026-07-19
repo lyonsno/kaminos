@@ -968,10 +968,11 @@ try {
       JSON.stringify(sample.acceptedConnectivity) ===
         JSON.stringify(beforeCancelledBinding.gpuHotSidecar?.acceptedConnectivity)) &&
     heldBindPreviewSamples.every((sample, index) => index === 0 || (
-      sample.inputLoad > heldBindPreviewSamples[index - 1].inputLoad &&
-      sample.maxOffset > heldBindPreviewSamples[index - 1].maxOffset &&
-      sample.renderedMaxAcceptedDelta >
-        heldBindPreviewSamples[index - 1].renderedMaxAcceptedDelta
+      Math.abs(sample.maxOffset - heldBindPreviewSamples[index - 1].maxOffset) > 0.000001 &&
+      Math.abs(
+        sample.renderedMaxAcceptedDelta -
+          heldBindPreviewSamples[index - 1].renderedMaxAcceptedDelta,
+      ) > 0.000001
     )) &&
     heldBindPreviewSamples.at(-1).scheduler?.coalescedCount >
       heldBindPreviewSamples[0].scheduler?.coalescedCount;
