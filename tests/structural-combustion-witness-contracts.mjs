@@ -24,6 +24,16 @@ assert.match(
   /effectiveUrl = await evaluatePage\('location\.href'\)[\s\S]*initialState\.status === 'failed'/,
   'effective route identity is captured before a failed page state is reported',
 );
+assert.match(
+  witnessSource,
+  /meshAssetReceipt:\s*initialState\.meshAssetReceipt/,
+  'browser evidence must preserve the effective imported asset receipt',
+);
+assert.match(
+  witnessSource,
+  /presentationMode:\s*initialState\.gpuLoop\.presentationMode/,
+  'browser evidence must preserve the effective structural presentation mode',
+);
 
 const fixture = {
   requestedUrl: 'http://127.0.0.1:8178/structural-combustion.html',
@@ -32,6 +42,17 @@ const fixture = {
   effectiveBackend: 'WebGPU:apple',
   pageRoute: 'kaminos.structural-combustion-dimensional-witness.v0',
   authority: 'same-device-pyro-node-material-bond-strength-v0',
+  presentationMode: 'indexed-mesh-skin-resident-structural-proxy-v0',
+  meshAssetReceipt: {
+    status: 'loaded',
+    requestedUrl: './assets/structural-combustion/irregular-timber-two-island.glb',
+    effectiveUrl: 'http://127.0.0.1:8178/assets/structural-combustion/irregular-timber-two-island.glb',
+    assetIdentity: `sha256:${'a'.repeat(64)}`,
+    byteLength: 4084,
+    vertexCount: 84,
+    triangleCount: 96,
+    islandIds: ['free', 'root'],
+  },
   initial: {
     screenshot: { sha256: 'initial', nonDarkPixels: 2400, sampledPixels: 9216 },
     frame: 24,
@@ -68,10 +89,10 @@ const fixture = {
         propagationControlCool: true,
       },
       structures: [
-        { role: 'emitter' },
-        { role: 'control' },
-        { role: 'propagation-target' },
-        { role: 'propagation-control' },
+        { role: 'emitter', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
+        { role: 'control', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
+        { role: 'propagation-target', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
+        { role: 'propagation-control', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
       ],
       carriedAudit: { movedSourceRecords: 12, firstMovedSourceStep: 120, lastMovedSourceStep: 180 },
       dispatchCount: 900,
@@ -93,6 +114,36 @@ assert.throws(
 assert.throws(
   () => validateStructuralCombustionEvidence({ ...fixture, pageRoute: 'kaminos.structural-combustion-fallback.v0' }),
   /page route identity/i,
+);
+assert.throws(
+  () => validateStructuralCombustionEvidence({ ...fixture, presentationMode: 'solid-cell-surface-with-structural-overlay-v0' }),
+  /mesh presentation mode/i,
+);
+assert.throws(
+  () => validateStructuralCombustionEvidence({ ...fixture, meshAssetReceipt: null }),
+  /mesh asset receipt/i,
+);
+assert.throws(
+  () => validateStructuralCombustionEvidence({
+    ...fixture,
+    meshAssetReceipt: { ...fixture.meshAssetReceipt, islandIds: ['root'] },
+  }),
+  /authored island/i,
+);
+assert.throws(
+  () => validateStructuralCombustionEvidence({
+    ...fixture,
+    final: {
+      ...fixture.final,
+      terminalReceipt: {
+        ...fixture.final.terminalReceipt,
+        structures: fixture.final.terminalReceipt.structures.map((structure, index) => index === 0
+          ? { ...structure, meshAssetIdentity: `sha256:${'b'.repeat(64)}` }
+          : structure),
+      },
+    },
+  }),
+  /mesh asset identity continuity/i,
 );
 assert.throws(
   () => validateStructuralCombustionEvidence({

@@ -344,6 +344,8 @@ try {
     effectiveBackend: finalState.backend,
     pageRoute: finalState.effectiveRoute,
     authority: finalState.authority,
+    presentationMode: initialState.gpuLoop.presentationMode,
+    meshAssetReceipt: initialState.meshAssetReceipt,
     initial: {
       screenshot: screenshots.initial,
       frame: initialState.frameCount,

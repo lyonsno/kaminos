@@ -21,6 +21,8 @@ const COMPONENT_MOTION_BYTES = 32;
 const CARRIED_FIRE_AUDIT_BYTES = 32;
 const PARAMS_BYTES = 144;
 const PRESENTATION_BYTES = 112;
+const MESH_VERTEX_BYTES = 32;
+const MESH_BINDING_BYTES = 48;
 const SOURCE_FRAME_HASH = 0x53545243;
 const WORKGROUP_SIZE = 64;
 
@@ -233,6 +235,176 @@ export function createStructuralBurnFaceEmitter({
     end,
     radius: contactRadius,
   };
+}
+
+function structuralMeshVector(name, value, length) {
+  if ((!ArrayBuffer.isView(value) && !Array.isArray(value)) || value.length !== length) {
+    throw new Error(`structural mesh ${name} must contain ${length} numeric values`);
+  }
+  const values = Array.from(value, Number);
+  if (values.some(item => !Number.isFinite(item))) {
+    throw new Error(`structural mesh ${name} must be finite`);
+  }
+  return values;
+}
+
+function structuralMeshNodeBounds(island, islandIndex) {
+  const minimum = structuralMeshVector(`island ${islandIndex} node bounds minimum`, island?.nodeBounds?.min, 3);
+  const maximum = structuralMeshVector(`island ${islandIndex} node bounds maximum`, island?.nodeBounds?.max, 3);
+  const motionAnchor = structuralMeshVector(`island ${islandIndex} motion anchor`, island?.motionAnchor, 3);
+  if (minimum.some((value, axis) => value > maximum[axis])) {
+    throw new Error(`structural mesh island ${islandIndex} node bounds are inverted`);
+  }
+  if (motionAnchor.some((value, axis) => value < minimum[axis] || value > maximum[axis])) {
+    throw new Error(`structural mesh island ${islandIndex} motion anchor is outside its node bounds`);
+  }
+  return { minimum, maximum, motionAnchor };
+}
+
+export function createStructuralMeshSkinBinding({ mesh, state } = {}) {
+  if (mesh?.schema !== 'kaminos.structural-mesh-surface.v0') {
+    throw new Error('structural mesh surface schema mismatch');
+  }
+  if (typeof mesh.assetIdentity !== 'string' || mesh.assetIdentity.trim().length === 0) {
+    throw new Error('structural mesh requires an asset identity');
+  }
+  if (!ArrayBuffer.isView(mesh.positions) || mesh.positions.length < 9 || mesh.positions.length % 3 !== 0) {
+    throw new Error('structural mesh positions must contain typed triangle vertices');
+  }
+  const vertexCount = mesh.positions.length / 3;
+  const positions = structuralMeshVector('positions', mesh.positions, vertexCount * 3);
+  const normals = structuralMeshVector('normals', mesh.normals, vertexCount * 3);
+  if (!(mesh.indices instanceof Uint32Array) || mesh.indices.length < 3 || mesh.indices.length % 3 !== 0) {
+    throw new Error('structural mesh indices must be a Uint32Array of complete triangles');
+  }
+  if (!(mesh.vertexIslands instanceof Uint32Array) || mesh.vertexIslands.length !== vertexCount) {
+    throw new Error('structural mesh vertex islands must identify every vertex');
+  }
+  if (!Array.isArray(mesh.islands) || mesh.islands.length < 1) {
+    throw new Error('structural mesh requires authored surface islands');
+  }
+  if (!Array.isArray(state?.nodes) || state.nodes.length < 4) {
+    throw new Error('structural mesh binding requires at least four structural nodes');
+  }
+  const nodePositions = state.nodes.map((node, index) => {
+    const position = [Number(node?.x), Number(node?.y), Number(node?.z)];
+    if (position.some(value => !Number.isFinite(value))) {
+      throw new Error(`structural mesh binding node ${index} has invalid position`);
+    }
+    return position;
+  });
+  const islandBounds = mesh.islands.map(structuralMeshNodeBounds);
+  const candidatesByIsland = islandBounds.map(({ minimum, maximum }, islandIndex) => {
+    const candidates = nodePositions.flatMap((position, nodeIndex) => (
+      position.every((value, axis) => value >= minimum[axis] && value <= maximum[axis])
+        ? [{ nodeIndex, position }]
+        : []
+    ));
+    if (candidates.length < 4) {
+      throw new Error(`structural mesh island ${islandIndex} binds fewer than four structural nodes`);
+    }
+    return candidates;
+  });
+  const motionNodeByIsland = islandBounds.map(({ motionAnchor }, islandIndex) => {
+    return candidatesByIsland[islandIndex].map(candidate => ({
+      ...candidate,
+      distanceSquared: candidate.position.reduce((sum, value, axis) => {
+        const delta = value - motionAnchor[axis];
+        return sum + delta * delta;
+      }, 0),
+    })).sort((left, right) => left.distanceSquared - right.distanceSquared || left.nodeIndex - right.nodeIndex)[0].nodeIndex;
+  });
+  for (let triangle = 0; triangle < mesh.indices.length; triangle += 3) {
+    const triangleIndices = [mesh.indices[triangle], mesh.indices[triangle + 1], mesh.indices[triangle + 2]];
+    if (triangleIndices.some(index => index >= vertexCount)) {
+      throw new Error(`structural mesh triangle ${triangle / 3} index is out of range`);
+    }
+    const island = mesh.vertexIslands[triangleIndices[0]];
+    if (island >= mesh.islands.length || triangleIndices.some(index => mesh.vertexIslands[index] !== island)) {
+      throw new Error(`structural mesh triangle ${triangle / 3} spans more than one authored island`);
+    }
+  }
+  const nodeIndices = new Uint32Array(vertexCount * 4);
+  const nodeWeights = new Float32Array(vertexCount * 4);
+  const motionNodeIndices = new Uint32Array(vertexCount);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const islandIndex = mesh.vertexIslands[vertex];
+    if (islandIndex >= candidatesByIsland.length) {
+      throw new Error(`structural mesh vertex ${vertex} references unknown island ${islandIndex}`);
+    }
+    const position = positions.slice(vertex * 3, vertex * 3 + 3);
+    const nearest = candidatesByIsland[islandIndex].map(candidate => ({
+      ...candidate,
+      distanceSquared: candidate.position.reduce((sum, value, axis) => {
+        const delta = value - position[axis];
+        return sum + delta * delta;
+      }, 0),
+    })).sort((left, right) => left.distanceSquared - right.distanceSquared || left.nodeIndex - right.nodeIndex).slice(0, 4);
+    const inverseDistances = nearest.map(candidate => 1 / Math.max(1e-8, candidate.distanceSquared));
+    const inverseDistanceSum = inverseDistances.reduce((sum, value) => sum + value, 0);
+    nearest.forEach((candidate, offset) => {
+      nodeIndices[vertex * 4 + offset] = candidate.nodeIndex;
+      nodeWeights[vertex * 4 + offset] = inverseDistances[offset] / inverseDistanceSum;
+    });
+    motionNodeIndices[vertex] = motionNodeByIsland[islandIndex];
+  }
+  const normalizedNormals = new Float32Array(normals.length);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const length = Math.hypot(normals[offset], normals[offset + 1], normals[offset + 2]);
+    if (!(length > 1e-8)) throw new Error(`structural mesh normal ${vertex} has zero length`);
+    normalizedNormals[offset] = normals[offset] / length;
+    normalizedNormals[offset + 1] = normals[offset + 1] / length;
+    normalizedNormals[offset + 2] = normals[offset + 2] / length;
+  }
+  return {
+    schema: 'kaminos.structural-mesh-skin-binding.v0',
+    assetIdentity: mesh.assetIdentity,
+    vertexCount,
+    indexCount: mesh.indices.length,
+    triangleCount: mesh.indices.length / 3,
+    islandCount: mesh.islands.length,
+    nodesPerVertex: 4,
+    positions: new Float32Array(positions),
+    normals: normalizedNormals,
+    indices: new Uint32Array(mesh.indices),
+    vertexIslands: new Uint32Array(mesh.vertexIslands),
+    nodeIndices,
+    nodeWeights,
+    motionNodeIndices,
+  };
+}
+
+function packStructuralMeshVertices(meshSkin) {
+  const packed = new Float32Array(meshSkin.vertexCount * MESH_VERTEX_BYTES / Float32Array.BYTES_PER_ELEMENT);
+  for (let vertex = 0; vertex < meshSkin.vertexCount; vertex += 1) {
+    const target = vertex * 8;
+    const source = vertex * 3;
+    packed.set(meshSkin.positions.subarray(source, source + 3), target);
+    packed[target + 3] = meshSkin.vertexIslands[vertex];
+    packed.set(meshSkin.normals.subarray(source, source + 3), target + 4);
+  }
+  return packed;
+}
+
+function packStructuralMeshBindings(meshSkin) {
+  const bytes = new ArrayBuffer(meshSkin.vertexCount * MESH_BINDING_BYTES);
+  const integers = new Uint32Array(bytes);
+  const values = new Float32Array(bytes);
+  const wordsPerBinding = MESH_BINDING_BYTES / Uint32Array.BYTES_PER_ELEMENT;
+  for (let vertex = 0; vertex < meshSkin.vertexCount; vertex += 1) {
+    const target = vertex * wordsPerBinding;
+    const source = vertex * meshSkin.nodesPerVertex;
+    integers.set(meshSkin.nodeIndices.subarray(source, source + 4), target);
+    values.set(meshSkin.nodeWeights.subarray(source, source + 4), target + 4);
+    integers.set([
+      meshSkin.motionNodeIndices[vertex],
+      meshSkin.vertexIslands[vertex],
+      0,
+      0,
+    ], target + 8);
+  }
+  return new Uint32Array(bytes);
 }
 
 export function evaluateStructuralComponentMotion({
@@ -854,6 +1026,17 @@ struct ComponentMotion {
   identity: vec4<u32>,
 }
 
+struct MeshVertex {
+  position: vec4<f32>,
+  normal: vec4<f32>,
+}
+
+struct MeshBinding {
+  nodeIndices: vec4<u32>,
+  nodeWeights: vec4<f32>,
+  motion: vec4<u32>,
+}
+
 struct Presentation {
   viewProjection: mat4x4<f32>,
   world: vec4<f32>,
@@ -887,6 +1070,9 @@ struct WoodCharacter {
 @group(0) @binding(4) var<uniform> presentation: Presentation;
 @group(0) @binding(5) var<storage, read> bondBaselines: array<f32>;
 @group(0) @binding(6) var<storage, read> componentMotions: array<ComponentMotion>;
+@group(0) @binding(7) var<storage, read> meshVertices: array<MeshVertex>;
+@group(0) @binding(8) var<storage, read> meshBindings: array<MeshBinding>;
+@group(0) @binding(9) var<storage, read> meshIndices: array<u32>;
 
 fn carriedNodePosition(nodeIndex: u32) -> vec3<f32> {
   return nodes[nodeIndex].position.xyz + componentMotions[nodeIndex].translation.xyz;
@@ -1070,6 +1256,48 @@ fn surfaceFaceFrame(faceIndex: u32, fractureFace: bool) -> vec4<f32> {
   return vec4<f32>(axes[faceIndex], select(0.0, 1.0, fractureFace));
 }
 
+fn meshMaterial(binding: MeshBinding) -> NodeMaterial {
+  let material0 = materials[binding.nodeIndices.x];
+  let material1 = materials[binding.nodeIndices.y];
+  let material2 = materials[binding.nodeIndices.z];
+  let material3 = materials[binding.nodeIndices.w];
+  var material = materials[binding.motion.x];
+  material.thermal = material0.thermal * binding.nodeWeights.x +
+    material1.thermal * binding.nodeWeights.y +
+    material2.thermal * binding.nodeWeights.z +
+    material3.thermal * binding.nodeWeights.w;
+  material.rates = material0.rates * binding.nodeWeights.x +
+    material1.rates * binding.nodeWeights.y +
+    material2.rates * binding.nodeWeights.z +
+    material3.rates * binding.nodeWeights.w;
+  return material;
+}
+
+@vertex
+fn meshSurfaceVertex(@builtin(vertex_index) indexStreamOffset: u32) -> VertexOut {
+  let meshVertexIndex = meshIndices[indexStreamOffset];
+  let vertex = meshVertices[meshVertexIndex];
+  let binding = meshBindings[meshVertexIndex];
+  let material = meshMaterial(binding);
+  let motion = componentMotions[binding.motion.x].translation.xyz;
+  let nodeDisplacement = nodes[binding.motion.x].displacement.xyz;
+  let materialPosition = vertex.position.xyz;
+  let worldPosition = (materialPosition + motion - vec3<f32>(0.5)) * presentation.style.xyz +
+    nodeDisplacement + presentation.world.xyz;
+  let surfaceNormal = normalize(vertex.normal.xyz / max(abs(presentation.style.xyz), vec3<f32>(0.0001)));
+  var out: VertexOut;
+  out.position = presentation.viewProjection * vec4<f32>(worldPosition, 1.0);
+  out.color = vec4<f32>(vec3<f32>(1.0), 0.98);
+  out.normal = surfaceNormal;
+  out.surface = 1.0;
+  out.emissive = materialEmissive(material);
+  out.thermal = material.thermal;
+  out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
+  out.materialPosition = materialPosition;
+  out.faceFrame = vec4<f32>(surfaceNormal, select(0.0, 1.0, abs(surfaceNormal.x) > 0.82));
+  return out;
+}
+
 @vertex
 fn surfaceVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) cellIndex: u32) -> VertexOut {
   let cell = surfaceCell(cellIndex);
@@ -1212,6 +1440,13 @@ export async function createGpuStructuralCombustionAssembly({
     if (columns * rows * layers !== descriptor.nodeCount || columns < 2 || rows < 2 || layers < 2) {
       throw new Error(`structural combustion solid topology mismatch for ${structure.id}`);
     }
+    const meshRequested = structure.presentationMode === 'mesh-skin' || structure.meshSurface != null;
+    if (meshRequested && structure.meshSurface == null) {
+      throw new Error(`structural combustion mesh surface missing for ${structure.id}`);
+    }
+    const meshSkin = meshRequested
+      ? createStructuralMeshSkinBinding({ mesh: structure.meshSurface, state: structure.state })
+      : null;
     const flags = structureFlags(structure);
     return {
       ...structure,
@@ -1224,6 +1459,8 @@ export async function createGpuStructuralCombustionAssembly({
       rows,
       layers,
       surfaceCellCount: (columns - 1) * (rows - 1) * (layers - 1),
+      meshSkin,
+      showStructuralOverlay: structure.showStructuralOverlay === true || !meshSkin,
       descriptor,
       materialIndex: 0,
       bindGroups: [new Map(), new Map()],
@@ -1272,6 +1509,28 @@ export async function createGpuStructuralCombustionAssembly({
   ]));
 
   for (const socket of sockets) {
+    if (socket.meshSkin) {
+      const packedVertices = packStructuralMeshVertices(socket.meshSkin);
+      const packedBindings = packStructuralMeshBindings(socket.meshSkin);
+      socket.meshVertexBuffer = makeBuffer({
+        label: `structural combustion ${socket.id} mesh vertices ${socket.meshSkin.assetIdentity}`,
+        size: packedVertices.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      socket.meshBindingBuffer = makeBuffer({
+        label: `structural combustion ${socket.id} mesh bindings ${socket.meshSkin.assetIdentity}`,
+        size: packedBindings.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      socket.meshIndexBuffer = makeBuffer({
+        label: `structural combustion ${socket.id} mesh indices ${socket.meshSkin.assetIdentity}`,
+        size: socket.meshSkin.indices.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(socket.meshVertexBuffer, 0, packedVertices);
+      device.queue.writeBuffer(socket.meshBindingBuffer, 0, packedBindings);
+      device.queue.writeBuffer(socket.meshIndexBuffer, 0, socket.meshSkin.indices);
+    }
     const initialMaterials = packNodeMaterials(socket.state, socket.objectId, socket.flags);
     socket.materialBuffers = [0, 1].map(index => makeBuffer({
       label: `structural combustion ${socket.id} materials ${index}`,
@@ -1321,6 +1580,7 @@ export async function createGpuStructuralCombustionAssembly({
     motionPipeline,
     emitPipeline,
     finalizePipeline,
+    meshPresentationPipeline,
     surfacePresentationPipeline,
     bondPresentationPipeline,
     nodePresentationPipeline,
@@ -1415,9 +1675,25 @@ export async function createGpuStructuralCombustionAssembly({
         { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       ],
     });
+    const meshPresentationLayout = device.createBindGroupLayout({
+      label: 'structural combustion mesh presentation layout',
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+        { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 7, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 8, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 9, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      ],
+    });
     const presentationPipelineLayout = device.createPipelineLayout({
       label: 'structural combustion presentation pipeline layout',
       bindGroupLayouts: [presentationLayout],
+    });
+    const meshPresentationPipelineLayout = device.createPipelineLayout({
+      label: 'structural combustion mesh presentation pipeline layout',
+      bindGroupLayouts: [meshPresentationLayout],
     });
     const presentationTargets = [{
       format,
@@ -1426,10 +1702,16 @@ export async function createGpuStructuralCombustionAssembly({
         alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
       },
     }];
-    const renderPipeline = (label, entryPoint, primitive, depthWriteEnabled) => createShaderPipeline({
+    const renderPipeline = (
+      label,
+      entryPoint,
+      primitive,
+      depthWriteEnabled,
+      layout = presentationPipelineLayout,
+    ) => createShaderPipeline({
       create: () => device.createRenderPipelineAsync({
         label,
-        layout: presentationPipelineLayout,
+        layout,
         vertex: { module: presentationModule, entryPoint },
         fragment: { module: presentationModule, entryPoint: 'fragmentMain', targets: presentationTargets },
         primitive,
@@ -1443,7 +1725,11 @@ export async function createGpuStructuralCombustionAssembly({
       entryPoint,
       source: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
     });
-    const [surfacePresentationPipeline, bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
+    const [meshPresentationPipeline, surfacePresentationPipeline, bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
+      renderPipeline('structural combustion resident mesh surface', 'meshSurfaceVertex', {
+        topology: 'triangle-list',
+        cullMode: 'back',
+      }, true, meshPresentationPipelineLayout),
       renderPipeline('structural combustion resident solid surface', 'surfaceVertex', {
         topology: 'triangle-list',
         cullMode: 'back',
@@ -1471,6 +1757,21 @@ export async function createGpuStructuralCombustionAssembly({
           { binding: 6, resource: { buffer: socket.componentMotionBuffer } },
         ],
       }));
+      socket.meshPresentationBindGroups = socket.meshSkin
+        ? socket.materialBuffers.map((materialBuffer, index) => device.createBindGroup({
+          label: `structural combustion ${socket.id} mesh presentation ${index}`,
+          layout: meshPresentationLayout,
+          entries: [
+            { binding: 0, resource: { buffer: socket.descriptor.nodeBuffer } },
+            { binding: 2, resource: { buffer: materialBuffer } },
+            { binding: 4, resource: { buffer: socket.presentationBuffer } },
+            { binding: 6, resource: { buffer: socket.componentMotionBuffer } },
+            { binding: 7, resource: { buffer: socket.meshVertexBuffer } },
+            { binding: 8, resource: { buffer: socket.meshBindingBuffer } },
+            { binding: 9, resource: { buffer: socket.meshIndexBuffer } },
+          ],
+        }))
+        : null;
       socket.motionBindGroup = device.createBindGroup({
         label: `structural combustion ${socket.id} component motion`,
         layout: motionLayout,
@@ -1503,6 +1804,7 @@ export async function createGpuStructuralCombustionAssembly({
       motionPipeline,
       emitPipeline,
       finalizePipeline,
+      meshPresentationPipeline,
       surfacePresentationPipeline,
       bondPresentationPipeline,
       nodePresentationPipeline,
@@ -1685,13 +1987,22 @@ export async function createGpuStructuralCombustionAssembly({
       },
     });
     sockets.forEach(socket => {
-      pass.setBindGroup(0, socket.presentationBindGroups[socket.materialIndex]);
-      pass.setPipeline(surfacePresentationPipeline);
-      pass.draw(36, socket.surfaceCellCount);
-      pass.setPipeline(bondPresentationPipeline);
-      pass.draw(2, socket.descriptor.bondCount);
-      pass.setPipeline(nodePresentationPipeline);
-      pass.draw(6, socket.descriptor.nodeCount);
+      if (socket.meshSkin) {
+        pass.setBindGroup(0, socket.meshPresentationBindGroups[socket.materialIndex]);
+        pass.setPipeline(meshPresentationPipeline);
+        pass.draw(socket.meshSkin.indexCount);
+      } else {
+        pass.setBindGroup(0, socket.presentationBindGroups[socket.materialIndex]);
+        pass.setPipeline(surfacePresentationPipeline);
+        pass.draw(36, socket.surfaceCellCount);
+      }
+      if (socket.showStructuralOverlay) {
+        pass.setBindGroup(0, socket.presentationBindGroups[socket.materialIndex]);
+        pass.setPipeline(bondPresentationPipeline);
+        pass.draw(2, socket.descriptor.bondCount);
+        pass.setPipeline(nodePresentationPipeline);
+        pass.draw(6, socket.descriptor.nodeCount);
+      }
     });
     pass.end();
     presentationCount += 1;
@@ -1852,6 +2163,8 @@ export async function createGpuStructuralCombustionAssembly({
         exposureEnabled: socket.exposureEnabled,
         emissionEnabled: socket.emissionEnabled,
         motionEnabled: socket.motionEnabled,
+        meshAssetIdentity: socket.meshSkin?.assetIdentity ?? null,
+        meshTriangleCount: socket.meshSkin?.triangleCount ?? 0,
         nodes,
         bonds,
         componentLabels,
@@ -1941,7 +2254,11 @@ export async function createGpuStructuralCombustionAssembly({
       hostCausalFeedbackCount: 0,
       structureCount: sockets.length,
       surfaceCellCount: sockets.reduce((sum, socket) => sum + socket.surfaceCellCount, 0),
-      presentationMode: 'solid-cell-surface-with-structural-overlay-v0',
+      meshTriangleCount: sockets.reduce((sum, socket) => sum + (socket.meshSkin?.triangleCount ?? 0), 0),
+      meshAssetIdentities: sockets.flatMap(socket => socket.meshSkin ? [socket.meshSkin.assetIdentity] : []),
+      presentationMode: sockets.some(socket => socket.meshSkin)
+        ? 'indexed-mesh-skin-resident-structural-proxy-v0'
+        : 'solid-cell-surface-with-structural-overlay-v0',
       emittingObjectId: target.objectId,
       sourceCapacity,
       deviceOwnership: 'borrowed',
