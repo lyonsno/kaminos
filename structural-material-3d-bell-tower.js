@@ -94,7 +94,7 @@ export function advanceAcceptedStructuralBellTower(previousState, nextState, acc
   const current = deriveAcceptedBellTowerState(nextState);
   const relativeDelta = subtract(current.deflection, previous.deflection);
   const relativeMotion = magnitude(relativeDelta);
-  const threshold = Math.max(0.000001, finite(accepted.strikeThreshold, 0.012));
+  const threshold = Math.max(0.000001, finite(accepted.strikeThreshold, 0.004));
   const eventId = `bell-ring:${accepted.eventEpoch}`;
   const priorEvents = Array.isArray(nextState.sound?.events) ? nextState.sound.events : [];
   const duplicate = priorEvents.some(event => event.id === eventId);

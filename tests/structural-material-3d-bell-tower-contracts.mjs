@@ -56,8 +56,9 @@ assert.equal(
   1,
   'the authored bell consumes one stable graph anchor rather than replacing the tower',
 );
-assert.equal(nodeAt(6, 1, 1)?.structuralRole, 'bell-body', 'the bell hangs in the middle depth layer');
-assert.equal(nodeAt(6, 2, 1), undefined, 'structural air remains below the hanging bell');
+assert.equal(nodeAt(6, 1, 2)?.structuralRole, 'bell-body', 'the single bell hangs on the camera-facing depth layer');
+assert.equal(nodeAt(6, 1, 1), undefined, 'the middle depth layer cannot occlude or counterfeit the bell pick');
+assert.equal(nodeAt(6, 2, 2), undefined, 'structural air remains below the hanging bell');
 assert.equal(nodeAt(5, 2, 1)?.structuralRole, 'bell-frame', 'the left post reaches the center tower');
 assert.equal(nodeAt(7, 2, 1)?.structuralRole, 'bell-frame', 'the right post reaches the center tower');
 assert.equal(nodeAt(6, 3, 1)?.structuralRole, 'masonry', 'the center turret remains below the bell airspace');
@@ -67,12 +68,12 @@ assert.equal(hangerBonds.length, 1, 'the bell has exactly one mechanically intel
 assert.equal(hangerBonds[0].bondKind, 'hanger');
 assert.equal(hangerBonds[0].alive, true);
 assert.ok(
-  [hangerBonds[0].a, hangerBonds[0].b].includes(nodeAt(6, 1, 1).id),
+  [hangerBonds[0].a, hangerBonds[0].b].includes(nodeAt(6, 1, 2).id),
   'the crown hanger owns the bell-body node',
 );
 assert.equal(
   bellCitadel.bonds.filter(bond =>
-    [bond.a, bond.b].includes(nodeAt(6, 1, 1).id) && bond.geometryRole !== 'bell-hanger').length,
+    [bond.a, bond.b].includes(nodeAt(6, 1, 2).id) && bond.geometryRole !== 'bell-hanger').length,
   0,
   'frame braces cannot secretly give the bell extra attachments',
 );
@@ -91,10 +92,10 @@ assert.deepEqual(
 const geometry = buildEffigyTileGeometrySidecar(bellCitadel, { profile: 'rib-upper-v0' });
 assert.equal(geometry.status, 'passed', 'the bell manifold remains a valid topology-derived surface');
 assert.equal(geometry.cells.length, bellCitadel.nodes.length);
-assert.equal(geometry.cells.find(cell => cell.structuralNodeId === nodeAt(6, 1, 1).id)?.structuralRole, 'bell-body');
+assert.equal(geometry.cells.find(cell => cell.structuralNodeId === nodeAt(6, 1, 2).id)?.structuralRole, 'bell-body');
 assert.ok(
   geometry.faces
-    .filter(face => face.structuralNodeId === nodeAt(6, 1, 1).id)
+    .filter(face => face.structuralNodeId === nodeAt(6, 1, 2).id)
     .every(face => face.structuralRole === 'bell-body'),
   'bell surface faces preserve their structural role for authored-asset substitution',
 );
@@ -133,20 +134,29 @@ assert.deepEqual(
 
 const moved = structuredClone(bellCitadel);
 const movedBellNode = moved.nodes.find(node => node.structuralRole === 'bell-body');
-movedBellNode.displacement.x = 0.035;
+movedBellNode.displacement.x = 0.005;
 const ringing = advanceAcceptedStructuralBellTower(bellCitadel, moved, {
   accepted: true,
   eventEpoch: 7,
   operation: 'shear',
 });
 assert.equal(ringing.bellTower.ringEmitted, true, 'accepted attached bell motion emits a causal ring');
-assert.ok(ringing.bellTower.relativeMotion >= 0.035);
+assert.ok(ringing.bellTower.relativeMotion >= 0.005);
 const ringEvent = ringing.sound.events.find(event => event.id === 'bell-ring:7');
 assert.equal(ringEvent.authority, STRUCTURAL_BELL_RING_AUTHORITY);
 assert.equal(ringEvent.hangerBondId, hangerBonds[0].id);
 assert.equal(ringEvent.materialProfile, 'weathered-cast-bronze-v0');
 assert.ok(ringEvent.energy > 0 && ringEvent.pitchHz > 0);
 assert.ok(ringing.sound.resonance > 0, 'the material sound summary exposes bell resonance');
+
+const microMoved = structuredClone(bellCitadel);
+microMoved.nodes.find(node => node.structuralRole === 'bell-body').displacement.x = 0.002;
+const silentMicroMotion = advanceAcceptedStructuralBellTower(bellCitadel, microMoved, {
+  accepted: true,
+  eventEpoch: 6,
+  operation: 'shear',
+});
+assert.equal(silentMicroMotion.bellTower.ringEmitted, false, 'accepted micro-motion below the strike band stays silent');
 
 const replayed = advanceAcceptedStructuralBellTower(bellCitadel, ringing, {
   accepted: true,

@@ -128,7 +128,7 @@ function validateTopologyProfile(topologyProfile, columns, rows, layers) {
 
 function structuralRoleForTopologyNode(topologyProfile, x, y, z) {
   if (topologyProfile === 'three-turret-bell-citadel-v0') {
-    if (x === 6 && y === 1 && z === 1) return 'bell-body';
+    if (x === 6 && y === 1 && z === 2) return 'bell-body';
     const frameRoof = x >= 5 && x <= 7 && y === 0;
     const framePosts = (x === 5 || x === 7) && y >= 1 && y <= 2;
     if (frameRoof || framePosts) return 'bell-frame';
