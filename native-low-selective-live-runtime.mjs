@@ -36,7 +36,7 @@ export const NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING = 'native96-learned-front-a
 export const NATIVE96_F16_FRONT_TEACHER_CANDIDATES = 'native96-f16-front-teacher-candidates-v0';
 export const NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES = 'native96-front-authority-gated-f32-front-teacher-candidates-v0';
 export const NATIVE96_F32_FRONT_STUDENT_WIDTHS = Object.freeze([16, 24, 32]);
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v2';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
@@ -793,8 +793,9 @@ const HIGH_GRID: u32 = ${HIGH_GRID}u;
 
 @group(0) @binding(0) var<storage, read> lowFront: array<f32>;
 @group(0) @binding(1) var<storage, read> learnedFront: array<f32>;
-@group(0) @binding(2) var<storage, read_write> learnedActivityCue: array<f32>;
+@group(0) @binding(2) var<storage, read_write> learnedActivityCueTarget: array<f32>;
 @group(0) @binding(3) var<storage, read> learnedActivityParams: array<f32>;
+@group(0) @binding(4) var<storage, read_write> learnedActivityCue: array<f32>;
 
 fn index3(cell: vec3<u32>, grid: u32) -> u32 {
   return cell.x + cell.y * grid + cell.z * grid * grid;
@@ -818,7 +819,20 @@ fn collapseLearnedFrontResidualToNativeActivity(@builtin(global_invocation_id) g
       }
     }
   }
-  learnedActivityCue[lowIndex] = clamp(max(0.0, positiveResidual) * max(0.0, learnedActivityParams[0]), 0.0, 1.0);
+  let targetCue = clamp(max(0.0, positiveResidual) * max(0.0, learnedActivityParams[0]), 0.0, 1.0);
+  learnedActivityCueTarget[lowIndex] = targetCue;
+  learnedActivityCue[lowIndex] = mix(learnedActivityCue[lowIndex], targetCue, clamp(learnedActivityParams[1], 0.0, 1.0));
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn blendLearnedActivityCueTarget(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(LOW_GRID))) { return; }
+  let lowIndex = index3(gid, LOW_GRID);
+  learnedActivityCue[lowIndex] = mix(
+    learnedActivityCue[lowIndex],
+    learnedActivityCueTarget[lowIndex],
+    clamp(learnedActivityParams[1], 0.0, 1.0),
+  );
 }
 `;
 
@@ -1074,6 +1088,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const predictedFluid = makeBuffer('native-low shared-device predicted fluid 160^3', highFluidBytes);
   const predictedFront = makeBuffer('native-low shared-device predicted front 160^3', highFrontBytes);
   const nativeUpsampleFront = makeBuffer('native-low shared-device native-upsample front 160^3', highFrontBytes);
+  const learnedActivityCueTarget = makeBuffer('native96 learned activity cue target', lowFrontBytes);
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
   const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
   const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', SOURCE_HISTORY_STATS_BYTES);
@@ -1432,6 +1447,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const native96LearnedActivityCuePipeline = device.createComputePipeline({
@@ -1442,11 +1458,39 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     }),
     compute: { module: native96LearnedActivityCueShader, entryPoint: 'collapseLearnedFrontResidualToNativeActivity' },
   });
+  const native96LearnedActivityCueBlendPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue temporal blend`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue temporal blend layout`,
+      bindGroupLayouts: [native96LearnedActivityCueLayout],
+    }),
+    compute: { module: native96LearnedActivityCueShader, entryPoint: 'blendLearnedActivityCueTarget' },
+  });
   const learnedActivityCueParams = makeBuffer(
     'native96 learned activity cue params',
     4 * Float32Array.BYTES_PER_ELEMENT,
     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   );
+  function encodeLearnedActivityCueBlend(encoder, sourceFront, activeCueBuffer, temporalBlend) {
+    if (!activeCueBuffer) throw new Error('native96-learned-activity-cue-buffer-missing');
+    device.queue.writeBuffer(learnedActivityCueParams, 0, new Float32Array([0, temporalBlend, 0, 0]));
+    const bindGroup = device.createBindGroup({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue reuse blend bind group`,
+      layout: native96LearnedActivityCueLayout,
+      entries: [
+        { binding: 0, resource: { buffer: sourceFront } },
+        { binding: 1, resource: { buffer: nativeUpsampleFront } },
+        { binding: 2, resource: { buffer: learnedActivityCueTarget } },
+        { binding: 3, resource: { buffer: learnedActivityCueParams } },
+        { binding: 4, resource: { buffer: activeCueBuffer } },
+      ],
+    });
+    const pass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} blend learned native96 activity cue target` });
+    pass.setPipeline(native96LearnedActivityCueBlendPipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4));
+    pass.end();
+  }
   let encodedFrameCount = 0;
   let lastHistoryEpochIdentity = null;
   let lastSourceHistoryEpochReceipt = {
@@ -2114,6 +2158,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           failurePhase: null,
         };
         if (options.learnedActivityCueEnabled === true) {
+          const temporalBlend = Math.max(0.01, Math.min(1, Number(options.learnedActivityTemporalBlend ?? 0.35)));
+          encodeLearnedActivityCueBlend(encoder, sourceFront, options.learnedActivityCueBuffer, temporalBlend);
           lastLearnedActivityCue = {
             ...lastLearnedActivityCue,
             identity: NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
@@ -2121,6 +2167,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
             runtimeTruthUsed: false,
             fullGridModelIntermediary: true,
             modelRefreshDue: false,
+            cueBlendDue: options.learnedActivityCueBlendDue === true,
+            cueTemporalBlend: temporalBlend,
+            targetBufferIdentity: 'resident-learned-activity-cue-target-v0',
             cueReusedWithoutModelEvaluation: true,
             modelOutputGeneration: learnedActivityModelOutputGeneration,
             cueAgeSourceSteps: Number(options.learnedActivityCueAgeSourceSteps ?? 0),
@@ -2227,15 +2276,17 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         if (options.learnedActivityCueEnabled === true) {
           if (!options.learnedActivityCueBuffer) throw new Error('native96-learned-activity-cue-buffer-missing');
           const learnedActivityScale = Math.max(0, Number(options.learnedActivityScale ?? 1));
-          device.queue.writeBuffer(learnedActivityCueParams, 0, new Float32Array([learnedActivityScale, 0, 0, 0]));
+          const temporalBlend = Math.max(0.01, Math.min(1, Number(options.learnedActivityTemporalBlend ?? 0.35)));
+          device.queue.writeBuffer(learnedActivityCueParams, 0, new Float32Array([learnedActivityScale, temporalBlend, 0, 0]));
           const learnedActivityCueBindGroup = device.createBindGroup({
             label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue bind group`,
             layout: native96LearnedActivityCueLayout,
             entries: [
               { binding: 0, resource: { buffer: sourceFront } },
               { binding: 1, resource: { buffer: nativeUpsampleFront } },
-              { binding: 2, resource: { buffer: options.learnedActivityCueBuffer } },
+              { binding: 2, resource: { buffer: learnedActivityCueTarget } },
               { binding: 3, resource: { buffer: learnedActivityCueParams } },
+              { binding: 4, resource: { buffer: options.learnedActivityCueBuffer } },
             ],
           });
           const learnedActivityCuePass = encoder.beginComputePass({
@@ -2260,6 +2311,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
             nativeGridReceiver: `${lowGrid}^3-oracleActivityCueBuffer`,
             learnedActivityScale,
             modelRefreshDue: true,
+            cueBlendDue: options.learnedActivityCueBlendDue === true,
+            cueTemporalBlend: temporalBlend,
+            targetBufferIdentity: 'resident-learned-activity-cue-target-v0',
             cueReusedWithoutModelEvaluation: false,
             modelOutputGeneration: learnedActivityModelOutputGeneration,
             producedAtSourceStep: Number(options.sourceStep ?? 0),
@@ -2855,6 +2909,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       predictedFluid.destroy();
       predictedFront.destroy();
       nativeUpsampleFront.destroy();
+      learnedActivityCueTarget.destroy();
       residualDispatchArgs.destroy();
       sourceHistoryCandidates.destroy();
       sourceHistoryStats.destroy();

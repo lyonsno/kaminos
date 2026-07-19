@@ -8,6 +8,7 @@ const routePath = join(root, 'volume-native-low-selective-live.html');
 const witnessPath = join(root, 'volume-native-low-selective-live-witness.mjs');
 const native64WitnessPath = join(root, 'volume-native-low-cross-grid-64-witness.mjs');
 const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
+const forcingTemporalPath = join(root, 'native96-learned-forcing-temporal.mjs');
 const corePath = join(root, 'volume-core.js');
 const candidateHeadPackagePath = join(root, 'native-low-candidate-head-package.mjs');
 const modelManifestPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/manifest.json');
@@ -53,9 +54,15 @@ const vivisectorWidth32Package = readFileSync(vivisectorWidth32PackagePath, 'utf
 const vivisectorWidth32Generated = readFileSync(vivisectorWidth32GeneratedPath, 'utf8');
 const native96ExactFrontTeacherGenerated = readFileSync(native96ExactFrontTeacherGeneratedPath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}\n${vivisectorWidth32Package}\n${vivisectorWidth32Generated}\n${native96ExactFrontTeacherGenerated}`;
+assert.ok(existsSync(forcingTemporalPath), 'learned-forcing temporal planner module exists');
+const forcingTemporalModule = existsSync(forcingTemporalPath)
+  ? await import(new URL('../native96-learned-forcing-temporal.mjs', import.meta.url))
+  : {};
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-live-research-cockpit-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-live-research-cockpit-v2/, 'route and witness carry fail-loud runtime build identity');
+assert.match(runtime, /NATIVE_LOW_RUNTIME_BUILD_IDENTITY\s*=\s*'native-low-live-research-cockpit-v2'/, 'runtime names the current cockpit build');
+assert.match(witness, /REQUIRED_RUNTIME_BUILD_IDENTITY\s*=\s*'native-low-live-research-cockpit-v2'/, 'witness rejects stale cockpit builds');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -351,7 +358,36 @@ assert.match(core, /directSparseCandidateCount[\s\S]*directSparseInstanceCount[\
 assert.match(witness, /nativeLowDirectSparseCues[\s\S]*fullGridReceiverMaterialization[\s\S]*receiverCopyBytes[\s\S]*fullGridSidecarIntermediary/, 'witness preserves direct sparse route and honest intermediary identity');
 assert.match(witness, /simulationClockAuthority/, 'witness preserves the effective direct-route simulation clock authority');
 assert.match(route, /native96LearnedForcing/, 'cockpit exposes learned native-grid forcing as a distinct presentation role');
-assert.match(route, /learned_activity_cue[\s\S]*learned_activity_scale[\s\S]*learned_refresh_cadence[\s\S]*source_sim_cadence/, 'route exposes forcing gain and independent learned/simulator cadence controls');
+assert.match(route, /learned_activity_cue[\s\S]*learned_activity_scale[\s\S]*learned_activity_temporal_blend[\s\S]*learned_refresh_cadence/, 'route exposes forcing gain, temporal response, and learned-model refresh cadence controls');
+assert.doesNotMatch(route, /id="sourceSimCadence"|source_sim_cadence|sourceSimCadence/, 'live forcing cockpit cannot expose a simulator cadence that holds native state between presentations');
+assert.match(route, /advanceSourceStep:\s*true/, 'live cockpit advances the native simulator exactly once on every presented frame');
+assert.equal(typeof forcingTemporalModule.planNative96LearnedForcingTick, 'function', 'runtime exports its learned-forcing temporal planner for deterministic contract coverage');
+const cadenceOne = [0, 1, 2].map(sourceStepBefore => forcingTemporalModule.planNative96LearnedForcingTick({
+  sourceStepBefore,
+  learnedRefreshCadence: 1,
+  cueValid: sourceStepBefore > 0,
+  producedAtSourceStep: sourceStepBefore > 0 ? sourceStepBefore : null,
+}));
+assert.deepEqual(cadenceOne.map(step => step.sourceStepAfter), [1, 2, 3], 'cadence-one forcing advances one native source step per presentation');
+assert.deepEqual(cadenceOne.map(step => step.modelRefreshDue), [true, true, true], 'cadence-one forcing refreshes the model after every native source step');
+let cadenceTwoProducedAt = null;
+let cadenceTwoCueValid = false;
+const cadenceTwo = [0, 1, 2, 3].map(sourceStepBefore => {
+  const step = forcingTemporalModule.planNative96LearnedForcingTick({
+    sourceStepBefore,
+    learnedRefreshCadence: 2,
+    cueValid: cadenceTwoCueValid,
+    producedAtSourceStep: cadenceTwoProducedAt,
+  });
+  if (step.modelRefreshDue) {
+    cadenceTwoCueValid = true;
+    cadenceTwoProducedAt = step.sourceStepAfter;
+  }
+  return step;
+});
+assert.deepEqual(cadenceTwo.map(step => step.sourceStepAfter), [1, 2, 3, 4], 'cadence-two model refresh never reduces native simulator cadence');
+assert.deepEqual(cadenceTwo.map(step => step.modelRefreshDue), [true, false, true, false], 'cadence-two refresh reuses the resident target on intervening source steps');
+assert.ok(cadenceTwo.every(step => step.cueBlendDue), 'resident learned cue blends toward its target on every native source step');
 assert.match(route, /async function stepCaptureFrame\(\)[\s\S]*tick\(\{\s*forceSourceStep:\s*true\s*\}\)[\s\S]*cockpit-single-step-delta-mismatch/, 'manual cockpit step advances exactly one source step regardless of automatic simulator cadence');
 assert.match(route, /raymarch-only-v0[\s\S]*splat-only-v0/, 'cockpit exposes Raymarch and splat renderer choices');
 assert.match(core, /SUPPORTED_NATIVE_LOW_SHARED_DEVICE_COMPOSITIONS[\s\S]*raymarch-only-v0[\s\S]*splat-only-v0/, 'shared-device capture explicitly allowlists Raymarch and splat compositions');
@@ -363,8 +399,10 @@ assert.match(frozenCapture, /boundarySplatCompositionRequestedRaw\s*===\s*'rayma
 assert.match(combined, /native96-learned-front-activity-forcing-v0/, 'forcing route names its truth-free learned scalar authority');
 assert.match(runtime, /runtimeTruthUsed:\s*false/, 'learned activity forcing receipt explicitly excludes runtime truth');
 assert.match(combined, /learnedModelRefreshCadence[\s\S]*requestedCadence[\s\S]*effectiveCadence[\s\S]*modelRefreshDue[\s\S]*modelOutputGeneration[\s\S]*cueAgeSourceSteps/, 'forcing route records requested/effective refresh cadence, generation, and cue age');
-assert.match(combined, /nativeSourceSimulationCadence[\s\S]*requestedCadence[\s\S]*effectiveCadence[\s\S]*sourceStepAdvanced/, 'forcing route records requested/effective simulator cadence and actual advancement');
+assert.match(combined, /fixed-one-native-step-per-presentation-v0[\s\S]*sourceStepAdvanced/, 'forcing route records fixed full-rate native simulator advancement');
+assert.match(runtime, /learnedActivityCueTarget[\s\S]*blendLearnedActivityCueTarget[\s\S]*cueBlendDue/, 'forcing runtime keeps a resident target and blends the consumed cue on every source step');
 assert.match(combined, /learnedCueConsumption[\s\S]*oneSourceStepLag[\s\S]*producedAtSourceStep[\s\S]*firstConsumedAtSourceStep/, 'forcing route records the deliberate one-source-step cue consumption lag');
+assert.match(core, /consumedCueGeneration[\s\S]*consumedCueProducedAtSourceStep[\s\S]*targetGenerationAfterSourceStep[\s\S]*cueTemporalBlend/, 'forcing receipt distinguishes the cue generation consumed by the simulator from the target published afterward');
 assert.match(combined, /learnedCueReset[\s\S]*sourceControlSignature[\s\S]*historyEpochIdentity[\s\S]*resetReason/, 'forcing route invalidates stale cues across source-control and history discontinuities');
 assert.match(core, /oracleActivityCueBuffer/, 'forcing route writes the existing simulator-owned scalar activity receiver');
 assert.match(core, /learnedActivityCueRequested[\s\S]*native96SparseFrontContinuityEnabled[\s\S]*unsupported-native96-learned-activity-without-sparse-front-continuity/, 'forcing route cannot claim a learned cue unless its collapse dependency is active');
@@ -379,7 +417,7 @@ assert.match(witness, /forcingRefreshFrame:\s*forcingRefreshFrame\s*\?[\s\S]*nat
 assert.match(witness, /cockpitLearnedForcingRequested[\s\S]*sparseContinuityTreatmentRendererConsumed,\s*false[\s\S]*modelOutputConsumedBy,\s*'next-native96-simulator-step-v0'/, 'forcing witness distinguishes simulator cue consumption from direct renderer treatment consumption');
 assert.match(witness, /!directSparseCuesRequested\s*&&\s*!cockpitLearnedForcingRequested/, 'forcing witness does not perturb recurrent dynamics with the generic cockpit interaction assay');
 assert.match(witness, /preserveTrajectory[\s\S]*cockpitInteractionAssay[\s\S]*controlsMutated:\s*false/, 'witness supports an explicit unperturbed trajectory mode for honest visual controls');
-assert.match(witness, /requestedSourceSimulationCadence[\s\S]*sourceSimulationStepDelta[\s\S]*expectedSourceStepDelta[\s\S]*sourceSimulationStepRatio/, 'witness proves reduced simulator cadence across a continuous presentation window');
+assert.match(witness, /source_sim_cadence is retired[\s\S]*sourceSimulationStepDelta[\s\S]*expectedSourceStepDelta\s*=\s*frameDelta[\s\S]*sourceSimulationStepRatio/, 'witness rejects held simulator state and proves one native step per presented frame');
 assert.match(witness, /cockpitLearnedForcingRequested[\s\S]*values\?\.length,\s*8[\s\S]*totalLearnedForcingGpuMs/, 'forcing witness preserves the eight-query learned-cue timing profile');
 assert.match(native64Witness, /native-low-cross-grid-64-witness-v0/, 'native-64 witness names evidence authority');
 assert.match(native64Witness, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 witness preserves cross-grid discriminant and both panes');

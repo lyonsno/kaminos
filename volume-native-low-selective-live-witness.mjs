@@ -14,7 +14,7 @@ const MODEL_128_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3
 const MODEL_96 = 'exact-basin-selective-carrier-heads-160-to-96-v0';
 const MODEL_96_SHA256 = 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v2';
 const NATIVE96_F32_FRONT_STUDENTS = Object.freeze({
   16: Object.freeze({ identity: 'native96-front-student-width16-f32-v0', sha256: '165c72534e630f1b44ff1292034fc4ed3050c7457b90ffc3da3a96d14ede2e21', byteLength: 13460 }),
   24: Object.freeze({ identity: 'native96-front-student-width24-f32-v0', sha256: 'ad768f93e292bcce61fa33d3eec0271218309945e37e69863182cb13cfe3cdfc', byteLength: 19444 }),
@@ -141,6 +141,7 @@ class CdpSocket {
 
 try {
   assert.ok(requestedFrontStudentWidth === null || requestedFrontStudent, `unsupportedNative96FrontStudentWidth:${requestedFrontStudentWidthParam}`);
+  assert.equal(requestedSourceSimulationCadence, 1, 'source_sim_cadence is retired: native simulation must advance every presentation');
   assert.ok(minimumContinuousSeconds >= 5 && minimumContinuousSeconds <= 30, '--minimum-seconds must be within 5-30');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -912,7 +913,7 @@ try {
   const frameDelta = Number(endState?.frameIndex || 0) - Number(startState?.frameIndex || 0);
   const sourceSimulationStepDelta = Number(endState?.simulationSteppingReceipt?.sourceSimStepAfter || 0)
     - Number(startState?.simulationSteppingReceipt?.sourceSimStepAfter || 0);
-  const expectedSourceStepDelta = frameDelta / requestedSourceSimulationCadence;
+  const expectedSourceStepDelta = frameDelta;
   const sourceSimulationStepRatio = sourceSimulationStepDelta / Math.max(1, frameDelta);
   const observedPresentationFps = frameDelta / Math.max(0.001, observedSeconds);
   lastTrustworthyEvidence = { startState, endState, observedSeconds, frameDelta };
@@ -920,7 +921,7 @@ try {
   assert.ok(frameDelta >= 1, 'native-low treatment frames did not advance continuously');
   assert.ok(
     Math.abs(sourceSimulationStepDelta - expectedSourceStepDelta) <= 1,
-    `source simulator cadence drifted: ${sourceSimulationStepDelta} steps for ${frameDelta} frames at cadence ${requestedSourceSimulationCadence}`,
+    `source simulator cadence drifted: ${sourceSimulationStepDelta} steps for ${frameDelta} presented frames`,
   );
   if (cockpitRequested) {
     assert.ok(observedPresentationFps >= 5, `cockpit cadence below 5 fps: ${observedPresentationFps}`);

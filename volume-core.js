@@ -25,6 +25,10 @@ import {
   NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
   createNativeLowSelectiveSharedDeviceRuntime,
 } from './native-low-selective-live-runtime.mjs';
+import {
+  NATIVE96_LEARNED_FORCING_TEMPORAL_IDENTITY,
+  planNative96LearnedForcingTick,
+} from './native96-learned-forcing-temporal.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -13327,10 +13331,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const effectiveLearnedRefreshCadence = Number.isFinite(requestedLearnedRefreshCadence) && requestedLearnedRefreshCadence > 0
       ? Math.max(1, Math.floor(requestedLearnedRefreshCadence))
       : 1;
-    const requestedSourceSimulationCadence = Number(options.sourceSimulationCadence ?? 1);
-    const effectiveSourceSimulationCadence = Number.isFinite(requestedSourceSimulationCadence) && requestedSourceSimulationCadence > 0
-      ? Math.max(1, Math.floor(requestedSourceSimulationCadence))
-      : 1;
     const nativeLowDirectSparseCuesEnabled = options.nativeLowDirectSparseCuesEnabled === true;
     const nativeLowDirectSparseTelemetryRequested = options.nativeLowDirectSparseTelemetryRequested === true;
     const wholeFrameDiagnosticsRequested = !nativeLowDirectSparseCuesEnabled
@@ -13342,7 +13342,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const renderNativeControl = !cockpitPresentation || presentationRole === 'native96Control' || presentationRole === 'modelBypass' || presentationRole === 'native96LearnedForcing';
     const renderDeterministicMaterialization = presentationRole === 'deterministic96To160';
     let cockpitHistoryOnly = cockpitPresentation && presentationRole !== 'selectedLearnedPackage' && !learnedActivityCueEnabled;
-    const advanceSourceStep = options.advanceSourceStep !== false;
+    const advanceSourceStep = learnedActivityCueEnabled ? true : options.advanceSourceStep !== false;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const simulationClockAuthority = String(options.simulationClockAuthority || 'wall-clock-performance-now-v0');
     const simulationStepDeltaMs = Number.isFinite(Number(options.simulationStepDeltaMs))
@@ -13427,6 +13427,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
 
       failurePhase = 'native-low-source-step';
+      const consumedCueGeneration = learnedActivityCueEnabled && native96LearnedActivityForcingState.cueValid
+        ? native96LearnedActivityForcingState.modelOutputGeneration
+        : null;
+      const consumedCueProducedAtSourceStep = learnedActivityCueEnabled && native96LearnedActivityForcingState.cueValid
+        ? native96LearnedActivityForcingState.producedAtSourceStep
+        : null;
       const nativeStepStart = performance.now();
       if (advanceSourceStep) {
         updateUniforms(fixedNow);
@@ -13445,11 +13451,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const sourceFrameAfter = state.frameCount;
       const computedSourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrameAfter}`;
       const sourceStepIdentity = options.expectedSourceStepIdentity || computedSourceStepIdentity;
-      const learnedModelRefreshDue = learnedActivityCueEnabled && (
-        !native96LearnedActivityForcingState.cueValid
-        || native96LearnedActivityForcingState.producedAtSourceStep === null
-        || sourceStep - native96LearnedActivityForcingState.producedAtSourceStep >= effectiveLearnedRefreshCadence
-      );
+      const learnedForcingTickPlan = learnedActivityCueEnabled
+        ? planNative96LearnedForcingTick({
+            sourceStepBefore: sourceSimStepBefore,
+            learnedRefreshCadence: effectiveLearnedRefreshCadence,
+            cueValid: native96LearnedActivityForcingState.cueValid,
+            producedAtSourceStep: native96LearnedActivityForcingState.producedAtSourceStep,
+          })
+        : null;
+      if (learnedForcingTickPlan && learnedForcingTickPlan.sourceStepAfter !== sourceStep) {
+        throw new Error(`learned-forcing-source-step-drift:${sourceStep}:${learnedForcingTickPlan.sourceStepAfter}`);
+      }
+      const learnedModelRefreshDue = learnedForcingTickPlan?.modelRefreshDue === true;
       if (learnedActivityCueEnabled) cockpitHistoryOnly = !learnedModelRefreshDue;
       const simulationSteppingReceipt = {
         identity: 'native-low-simulation-stepping-receipt-v0',
@@ -13461,9 +13474,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         requiredSimStepDelta,
         advanceSourceStep,
         nativeSourceSimulationCadence: {
-          requestedCadence: requestedSourceSimulationCadence,
-          effectiveCadence: effectiveSourceSimulationCadence,
+          identity: 'fixed-one-native-step-per-presentation-v0',
+          requestedCadence: 1,
+          effectiveCadence: 1,
           sourceStepAdvanced: advanceSourceStep,
+          temporalAuthority: learnedForcingTickPlan?.identity || NATIVE96_LEARNED_FORCING_TEMPORAL_IDENTITY,
         },
         authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
       };
@@ -13585,6 +13600,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         learnedActivityCueAgeSourceSteps: native96LearnedActivityForcingState.producedAtSourceStep === null
           ? 0
           : Math.max(0, sourceStep - native96LearnedActivityForcingState.producedAtSourceStep),
+        learnedActivityCueBlendDue: learnedForcingTickPlan?.cueBlendDue === true,
+        learnedActivityTemporalBlend: Number(options.learnedActivityTemporalBlend ?? 0.35),
         sourceStep,
         historyOnly: cockpitHistoryOnly,
         vivisectorCandidateHeadReceiver: options.vivisectorCandidateHeadReceiver || null,
@@ -13827,9 +13844,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const learnedCueConsumption = {
         identity: 'native96-learned-cue-consumption-v0',
         oneSourceStepLag: true,
+        consumedCueGeneration,
+        consumedCueProducedAtSourceStep,
+        targetGenerationAfterSourceStep: native96LearnedActivityForcingState.modelOutputGeneration,
         producedAtSourceStep,
-        firstConsumedAtSourceStep: producedAtSourceStep === null ? null : producedAtSourceStep + 1,
-        consumedThisSourceStep: producedAtSourceStep !== null && advanceSourceStep && sourceStep > producedAtSourceStep,
+        firstConsumedAtSourceStep: consumedCueProducedAtSourceStep === null ? null : consumedCueProducedAtSourceStep + 1,
+        consumedThisSourceStep: consumedCueGeneration !== null && advanceSourceStep && sourceStep > consumedCueProducedAtSourceStep,
+        cueTemporalBlend: runtimeState.native96LearnedActivityCue?.cueTemporalBlend ?? null,
+        targetBufferIdentity: runtimeState.native96LearnedActivityCue?.targetBufferIdentity ?? null,
       };
       const learnedCueReset = {
         identity: 'native96-learned-cue-reset-v0',
@@ -13850,6 +13872,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             nativeGridReceiver: 'oracleActivityCueBuffer',
             modelOutputConsumedBy: 'next-native96-simulator-step-v0',
             learnedActivityScale: Number(options.learnedActivityScale ?? 1),
+            learnedActivityTemporalBlend: runtimeState.native96LearnedActivityCue?.cueTemporalBlend ?? null,
             learnedModelRefreshCadence,
             nativeSourceSimulationCadence: simulationSteppingReceipt.nativeSourceSimulationCadence,
             learnedCueConsumption,
