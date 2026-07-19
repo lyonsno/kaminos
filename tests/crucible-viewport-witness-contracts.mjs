@@ -109,6 +109,22 @@ const schedulerExpectationSource = witness.match(
 assert.ok(schedulerExpectationSource, 'witness must expose a testable scheduler expectation for each experimental run profile');
 const expectedSchedulerForProfile = vm.runInNewContext(`(${schedulerExpectationSource[0]})`);
 assert.deepEqual(
+  JSON.parse(JSON.stringify(expectedSchedulerForProfile('cooperative-spn-gaussian'))),
+  {
+    mode: 'cooperative',
+    spnPatchChunkSize: 1,
+    yieldMs: 3,
+    waitForSubmittedWorkDone: true,
+    gaussianPhaseYieldMs: 4,
+    vitBlockChunkSize: 1,
+    vitMicroduty: true,
+    cpuChunkItems: 16384,
+    routeTailYieldMs: 3,
+    spnFusionChunkItems: 524288,
+  },
+  'ordinary Friendly must exercise reviewed ViT microduties and tiled SPN fusion',
+);
+assert.deepEqual(
   JSON.parse(JSON.stringify(expectedSchedulerForProfile('cooperative-fixed-16ms-donation'))),
   {
     mode: 'cooperative',
@@ -116,9 +132,11 @@ assert.deepEqual(
     yieldMs: 16,
     waitForSubmittedWorkDone: true,
     gaussianPhaseYieldMs: 16,
-    vitBlockChunkSize: 2,
+    vitBlockChunkSize: 1,
+    vitMicroduty: true,
     cpuChunkItems: 16384,
     routeTailYieldMs: 16,
+    spnFusionChunkItems: 524288,
   },
   'fixed-boundary experiment must not change chunk granularity or silently inherit ordinary Friendly donations',
 );
@@ -130,7 +148,8 @@ assert.deepEqual(
     yieldMs: 3,
     waitForSubmittedWorkDone: true,
     gaussianPhaseYieldMs: 4,
-    vitBlockChunkSize: 2,
+    vitBlockChunkSize: 1,
+    vitMicroduty: true,
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
@@ -200,13 +219,18 @@ const validSpnFusionEvidence = {
 };
 assert.deepEqual(
   JSON.parse(JSON.stringify(validateSpnFusionTileEvidence({
-    profileId: 'cooperative-spn-fusion-tiles-524288',
+    profileId: 'cooperative-spn-gaussian',
     expectedChunkItems: 524288,
     fullRoute: validSpnFusionEvidence,
   }))),
   [],
   'verified requested/effective config and contiguous multi-range events must admit the experiment',
 );
+assert.ok(validateSpnFusionTileEvidence({
+  profileId: 'cooperative-spn-gaussian',
+  expectedChunkItems: 524288,
+  fullRoute: { schedulerBoundaryAssertions: [], spnFusionTileEvents: [] },
+}).includes('boundary-assertion-missing'), 'ordinary Friendly must fail loud when promoted SPN tiling evidence is absent');
 for (const [mutate, expectedFailure] of [
   [evidence => { evidence.schedulerBoundaryAssertions = []; }, 'boundary-assertion-missing'],
   [evidence => { evidence.schedulerBoundaryAssertions[0].status = 'unverified'; }, 'boundary-assertion-unverified'],

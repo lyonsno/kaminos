@@ -13172,9 +13172,11 @@ function sharpInlineSchedulerProfile(profileId) {
       yieldMs: 3,
       waitForSubmittedWorkDone: true,
       gaussianPhaseYieldMs: 4,
-      vitBlockChunkSize: 2,
+      vitBlockChunkSize: 1,
+      vitMicroduty: true,
       cpuChunkItems: 16384,
       routeTailYieldMs: 3,
+      spnFusionChunkItems: 524288,
     };
   }
   return { mode: 'default' };

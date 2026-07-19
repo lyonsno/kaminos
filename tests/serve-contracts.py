@@ -115,9 +115,12 @@ def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_e
     assert friendly_scheduler["yieldMs"] == 3
     assert friendly_scheduler["waitForSubmittedWorkDone"] is True
     assert friendly_scheduler["gaussianPhaseYieldMs"] == 4
-    assert friendly_scheduler["vitBlockChunkSize"] == 2
+    assert friendly_scheduler["vitBlockChunkSize"] == 1
+    assert friendly_scheduler["vitMicroduty"] is True
     assert friendly_scheduler["cpuChunkItems"] == 16384
     assert friendly_scheduler["routeTailYieldMs"] == 3
+    assert friendly_scheduler["spnFusionChunkItems"] == 524288
+    assert friendly["unsupportedFields"] == []
 
 
 def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
@@ -135,12 +138,14 @@ def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
         "routeTailYieldMs": 16,
     }
     assert fixed_scheduler["spnPatchChunkSize"] == 1
-    assert fixed_scheduler["vitBlockChunkSize"] == 2
+    assert fixed_scheduler["vitBlockChunkSize"] == 1
+    assert fixed_scheduler["vitMicroduty"] is True
     assert fixed_scheduler["waitForSubmittedWorkDone"] is True
     assert fixed_scheduler["cpuChunkItems"] == 16384
+    assert fixed_scheduler["spnFusionChunkItems"] == 524288
 
 
-def test_spn_fusion_tile_profile_changes_only_fusion_output_granularity():
+def test_spn_fusion_tile_profile_is_a_compatibility_alias_for_promoted_friendly_tiling():
     baseline = resolve_sharp_scheduler_profile("cooperative-spn-gaussian")
     tiled = resolve_sharp_scheduler_profile("cooperative-spn-fusion-tiles-524288")
 
@@ -148,10 +153,7 @@ def test_spn_fusion_tile_profile_changes_only_fusion_output_granularity():
     assert tiled["operatorVisible"] is False
     baseline_scheduler = json.loads(baseline["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
     tiled_scheduler = json.loads(tiled["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
-    assert tiled_scheduler == {
-        **baseline_scheduler,
-        "spnFusionChunkItems": 524288,
-    }
+    assert tiled_scheduler == baseline_scheduler
     assert tiled["proofExpectation"]["requiredBoundary"] == "phaseChunkSize.spnFusionOutputItems"
     assert tiled["proofExpectation"]["minimumRangeEvents"] == 2
 
@@ -173,8 +175,12 @@ def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile(
 
     assert profile["id"] == "cooperative-spn-gaussian"
     assert profile["operatorLabel"] == "Friendly"
-    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["mode"] == "cooperative"
-    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["gaussianPhaseYieldMs"] == 4
+    scheduler = json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    assert scheduler["mode"] == "cooperative"
+    assert scheduler["gaussianPhaseYieldMs"] == 4
+    assert scheduler["vitBlockChunkSize"] == 1
+    assert scheduler["vitMicroduty"] is True
+    assert scheduler["spnFusionChunkItems"] == 524288
 
 
 def test_image_inbox_webp_read_serves_bytes_without_json_fallback():

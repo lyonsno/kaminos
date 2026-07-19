@@ -233,7 +233,10 @@ assert.equal(profiles.profiles[1].scheduler.waitForSubmittedWorkDone, true);
 assert.equal(profiles.profiles[1].scheduler.gaussianPhaseYieldMs > 0, true);
 assert.equal(profiles.profiles[1].scheduler.cpuChunkItems, 16384);
 assert.equal(profiles.profiles[1].scheduler.routeTailYieldMs, 3);
-assert.equal(profiles.profiles[1].unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(profiles.profiles[1].scheduler.vitBlockChunkSize, 1);
+assert.equal(profiles.profiles[1].scheduler.vitMicroduty, true);
+assert.equal(profiles.profiles[1].scheduler.spnFusionChunkItems, 524288);
+assert.deepEqual(profiles.profiles[1].unsupportedFields, []);
 assert.equal(profiles.profiles[1].env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE, 'friendly');
 
 const friendlyProfile = sharpBreathingRoomSchedulerProfileForMode('friendly');
@@ -241,8 +244,10 @@ assert.equal(friendlyProfile.id, 'cooperative-spn-gaussian');
 assert.equal(friendlyProfile.scheduler.mode, 'cooperative');
 assert.equal(friendlyProfile.scheduler.spnPatchChunkSize, 1);
 assert.equal(friendlyProfile.scheduler.gaussianPhaseYieldMs, 4);
-assert.equal(friendlyProfile.scheduler.vitBlockChunkSize, 2);
-assert.equal(friendlyProfile.unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(friendlyProfile.scheduler.vitBlockChunkSize, 1);
+assert.equal(friendlyProfile.scheduler.vitMicroduty, true);
+assert.equal(friendlyProfile.scheduler.spnFusionChunkItems, 524288);
+assert.deepEqual(friendlyProfile.unsupportedFields, []);
 assert.equal(sharpBreathingRoomSchedulerProfileForMode('cooperative-spn-gaussian').schedulerMode, 'friendly');
 assert.throws(
   () => sharpBreathingRoomSchedulerProfileForMode('bogus-friendly'),
@@ -274,7 +279,7 @@ assert.equal(valid.outputEquivalence.status, 'same-output');
 assert.equal(valid.outputEquivalence.sha256, 'a'.repeat(64));
 assert.equal(valid.schedulerComparison.baseline.status, 'verified');
 assert.equal(valid.schedulerComparison.cooperative.status, 'verified');
-assert.equal(valid.schedulerComparison.cooperative.unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(valid.schedulerComparison.cooperative.unsupportedFields.includes('vitBlockChunkSize'), false);
 assert.equal(valid.schedulerComparison.cooperative.spnFusionCoverage.status, 'complete');
 assert.deepEqual(valid.schedulerComparison.cooperative.spnFusionCoverage.missingSpnFusionBlocks, []);
 assert.equal(valid.schedulerComparison.cooperative.monodepthPhaseCoverage.status, 'complete');

@@ -135,8 +135,10 @@ function expectedSchedulerForProfile(profileId) {
     mode: 'cooperative',
     spnPatchChunkSize: 1,
     waitForSubmittedWorkDone: true,
-    vitBlockChunkSize: 2,
+    vitBlockChunkSize: 1,
+    vitMicroduty: true,
     cpuChunkItems: 16384,
+    spnFusionChunkItems: 524288,
   };
   if (profileId === 'cooperative-spn-gaussian') {
     return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
@@ -145,13 +147,13 @@ function expectedSchedulerForProfile(profileId) {
     return { ...common, yieldMs: 16, gaussianPhaseYieldMs: 16, routeTailYieldMs: 16 };
   }
   if (profileId === 'cooperative-spn-fusion-tiles-524288') {
-    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3, spnFusionChunkItems: 524288 };
+    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
   }
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
 }
 
-function validateSpnFusionTileEvidence({ profileId, expectedChunkItems, fullRoute }) {
-  if (profileId !== 'cooperative-spn-fusion-tiles-524288') return [];
+function validateSpnFusionTileEvidence({ expectedChunkItems, fullRoute }) {
+  if (!Number.isInteger(expectedChunkItems) || expectedChunkItems <= 0) return [];
   const failures = [];
   const assertion = (fullRoute?.schedulerBoundaryAssertions || []).find(candidate =>
     candidate?.field === 'phaseChunkSize.spnFusionOutputItems'

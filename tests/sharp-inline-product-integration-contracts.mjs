@@ -1,7 +1,30 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+const schedulerProfileSource = page.match(
+  /function sharpInlineSchedulerProfile\([\s\S]*?\n}\n(?=\nasync function )/,
+);
+assert.ok(schedulerProfileSource, 'the inline product route must expose its scheduler profile as a testable contract');
+const sharpInlineSchedulerProfile = vm.runInNewContext(`(${schedulerProfileSource[0]})`);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(sharpInlineSchedulerProfile('cooperative-spn-gaussian'))),
+  {
+    mode: 'cooperative',
+    spnPatchChunkSize: 1,
+    yieldMs: 3,
+    waitForSubmittedWorkDone: true,
+    gaussianPhaseYieldMs: 4,
+    vitBlockChunkSize: 1,
+    vitMicroduty: true,
+    cpuChunkItems: 16384,
+    routeTailYieldMs: 3,
+    spnFusionChunkItems: 524288,
+  },
+  'the visible Friendly button must request the reviewed ViT microduty and SPN tiling controls',
+);
 
 assert.match(
   page,
