@@ -7070,6 +7070,104 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
 }
 `;
 
+const FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL = `
+struct FourArmHeldStateResolveVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var opticalBins: texture_2d_array<f32>;
+
+@vertex
+fn fourArmHeldStateResolveVs(@builtin(vertex_index) vertexIndex: u32) -> FourArmHeldStateResolveVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: FourArmHeldStateResolveVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn fourArmHeldStateResolveFs(in: FourArmHeldStateResolveVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(opticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  var totalOpticalDepth = 0.0;
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let accumulated = max(textureLoad(opticalBins, pixel, binIndex, 0), vec4<f32>(0.0));
+    let opticalDepth = accumulated.a;
+    let binAlpha = 1.0 - exp(-opticalDepth);
+    let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
+    color = binColor * binAlpha + color * (1.0 - binAlpha);
+    totalOpticalDepth += opticalDepth;
+  }
+  return vec4<f32>(color, totalOpticalDepth);
+}
+`;
+
+const FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL = `
+override OPTICAL_BIN: u32 = 0u;
+const OPTICAL_BIN_COUNT: u32 = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}u;
+const STEPS_PER_BIN: u32 = 4u;
+
+struct FourArmResidualParams {
+  invViewProj: mat4x4<f32>,
+  gridAndSteps: vec4<f32>,
+};
+
+struct FourArmResidualVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var<uniform> params: FourArmResidualParams;
+@group(0) @binding(1) var residualGrid: texture_3d<f32>;
+
+@vertex
+fn fourArmResidualVs(@builtin(vertex_index) vertexIndex: u32) -> FourArmResidualVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: FourArmResidualVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn fourArmResidualFs(in: FourArmResidualVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec3<i32>(textureDimensions(residualGrid));
+  let ndcXY = vec2<f32>(in.uv.x * 2.0 - 1.0, (1.0 - in.uv.y) * 2.0 - 1.0);
+  var integrated = vec4<f32>(0.0);
+  for (var localStep = 0u; localStep < STEPS_PER_BIN; localStep += 1u) {
+    let depth = (f32(OPTICAL_BIN) + (f32(localStep) + 0.5) / f32(STEPS_PER_BIN)) / f32(OPTICAL_BIN_COUNT);
+    let homogeneous = params.invViewProj * vec4<f32>(ndcXY, depth, 1.0);
+    let world = homogeneous.xyz / max(abs(homogeneous.w), 1e-6);
+    let coordinate = world * 0.5 + vec3<f32>(0.5);
+    if (all(coordinate >= vec3<f32>(0.0)) && all(coordinate <= vec3<f32>(1.0))) {
+      let texel = clamp(vec3<i32>(coordinate * vec3<f32>(dimensions)), vec3<i32>(0), dimensions - vec3<i32>(1));
+      integrated += max(textureLoad(residualGrid, texel, 0), vec4<f32>(0.0));
+    }
+  }
+  let stepLength = 2.0 / max(params.gridAndSteps.y, 1.0);
+  return integrated * stepLength;
+}
+`;
+
+const FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL = `
+@compute @workgroup_size(1)
+fn fourArmHeldStateTimestampMarker() {}
+`;
+
 export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
@@ -7098,6 +7196,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatPresentationModeEffective = 'current-additive-v0';
   let boundarySplatPresentationModeFallbackReason = null;
   let persistentSparseCohortGpuState = null;
+  let fourArmHeldStateRuntimeState = null;
+  let fourArmHeldStateResidualGrid = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
@@ -7694,14 +7794,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatBilinearOpticalPipelines = [];
   let boundarySplatPresentationShader = null;
   let boundarySplatOpticalPresentationShader = null;
+  let fourArmHeldStateLinearResolveShader = null;
+  let fourArmHeldStateResidualMarchShader = null;
+  let fourArmHeldStateTimestampMarkerShader = null;
   let boundarySplatPresentationRenderPipeline = null;
   let boundarySplatPresentationReadbackPipeline = null;
   let boundarySplatOpticalPresentationRenderPipeline = null;
   let boundarySplatOpticalPresentationReadbackPipeline = null;
+  let fourArmHeldStateLinearResolvePipeline = null;
+  let fourArmHeldStateResidualBindGroupLayout = null;
+  let fourArmHeldStateResidualPipelineLayout = null;
+  let fourArmHeldStateResidualMarchPipelines = [];
+  let fourArmHeldStateTimestampMarkerPipeline = null;
   let boundarySplatHdrTexture = null;
   let boundarySplatHdrTextureSize = '';
   let boundarySplatOpticalTexture = null;
   let boundarySplatOpticalTextureSize = '';
+  let fourArmHeldStateLinearTexture = null;
+  let fourArmHeldStateLinearTextureSize = '';
+  let fourArmHeldStateResidualTexture = null;
+  let fourArmHeldStateResidualParamsBuffer = null;
+  let fourArmHeldStateResidualBindGroup = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -9361,6 +9474,72 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatOpticalPresentationRenderPipeline = makeBoundarySplatOpticalPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} canvas resolve`);
     boundarySplatOpticalPresentationReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} witness resolve`);
+    fourArmHeldStateLinearResolvePipeline = device.createRenderPipeline({
+      label: 'kaminos four-arm held-state linear HDR resolve',
+      layout: 'auto',
+      vertex: { module: fourArmHeldStateLinearResolveShader, entryPoint: 'fourArmHeldStateResolveVs' },
+      fragment: {
+        module: fourArmHeldStateLinearResolveShader,
+        entryPoint: 'fourArmHeldStateResolveFs',
+        targets: [{ format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    fourArmHeldStateTimestampMarkerPipeline = device.createComputePipeline({
+      label: 'kaminos four-arm held-state timestamp marker',
+      layout: 'auto',
+      compute: {
+        module: fourArmHeldStateTimestampMarkerShader,
+        entryPoint: 'fourArmHeldStateTimestampMarker',
+      },
+    });
+    fourArmHeldStateResidualBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos four-arm positive-complement residual march bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'unfilterable-float', viewDimension: '3d' },
+        },
+      ],
+    });
+    fourArmHeldStateResidualPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos four-arm positive-complement residual march pipeline layout',
+      bindGroupLayouts: [fourArmHeldStateResidualBindGroupLayout],
+    });
+    fourArmHeldStateResidualMarchPipelines = Array.from(
+      { length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+      (_, binIndex) => device.createRenderPipeline({
+        label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
+        layout: fourArmHeldStateResidualPipelineLayout,
+        vertex: { module: fourArmHeldStateResidualMarchShader, entryPoint: 'fourArmResidualVs' },
+        fragment: {
+          module: fourArmHeldStateResidualMarchShader,
+          entryPoint: 'fourArmResidualFs',
+          constants: { OPTICAL_BIN: binIndex },
+          targets: [{
+            format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      }),
+    );
+    fourArmHeldStateResidualParamsBuffer?.destroy();
+    fourArmHeldStateResidualParamsBuffer = device.createBuffer({
+      label: 'kaminos four-arm positive-complement residual march params',
+      size: 80,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    if (fourArmHeldStateResidualGrid) uploadFourArmHeldStateResidualGrid(fourArmHeldStateResidualGrid);
     ensureBoundarySplatBuffers();
     if (persistentSparseCohortGpuState && !persistentSparseCohortGpuState.invalidatedReason) {
       uploadPersistentSparseCohortGpuRows(persistentSparseCohortGpuState.rows);
@@ -9629,6 +9808,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`Boundary splat optical presentation WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateLinearResolveShader = device.createShaderModule({
+      label: 'kaminos four-arm held-state linear HDR resolve wgsl',
+      code: FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL,
+    });
+    const fourArmResolveCompilationInfo = await fourArmHeldStateLinearResolveShader.getCompilationInfo();
+    const fourArmResolveCompilationErrors = fourArmResolveCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmResolveCompilationErrors.length > 0) {
+      const detail = fourArmResolveCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm held-state linear resolve WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateResidualMarchShader = device.createShaderModule({
+      label: 'kaminos four-arm positive-complement residual march wgsl',
+      code: FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL,
+    });
+    const fourArmResidualCompilationInfo = await fourArmHeldStateResidualMarchShader.getCompilationInfo();
+    const fourArmResidualCompilationErrors = fourArmResidualCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmResidualCompilationErrors.length > 0) {
+      const detail = fourArmResidualCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm positive-complement residual march WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateTimestampMarkerShader = device.createShaderModule({
+      label: 'kaminos four-arm held-state timestamp marker wgsl',
+      code: FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL,
+    });
+    const fourArmTimestampCompilationInfo = await fourArmHeldStateTimestampMarkerShader.getCompilationInfo();
+    const fourArmTimestampCompilationErrors = fourArmTimestampCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmTimestampCompilationErrors.length > 0) {
+      const detail = fourArmTimestampCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm held-state timestamp marker WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
@@ -10000,6 +10215,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
     boundarySplatOpticalTextureSize = key;
+  }
+
+  function ensureFourArmHeldStateLinearTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (fourArmHeldStateLinearTexture && fourArmHeldStateLinearTextureSize === key) return;
+    fourArmHeldStateLinearTexture?.destroy();
+    fourArmHeldStateLinearTexture = device.createTexture({
+      label: 'kaminos four-arm held-state linear HDR and optical-depth capture',
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    fourArmHeldStateLinearTextureSize = key;
   }
 
   function ensureBrowserResidualFeatureTexture() {
@@ -11918,8 +12146,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return profile;
   }
 
+  function isFloat32ArrayView(value) {
+    return ArrayBuffer.isView(value)
+      && value.BYTES_PER_ELEMENT === Float32Array.BYTES_PER_ELEMENT
+      && Object.prototype.toString.call(value) === '[object Float32Array]';
+  }
+
   function uploadPersistentSparseCohortGpuRows(rows) {
-    if (!boundarySplatBuffer || !(rows instanceof Float32Array)) {
+    if (!boundarySplatBuffer || !isFloat32ArrayView(rows)) {
       throw new Error('persistent-cohort-source-substitution:upload-buffer-or-rows-unavailable');
     }
     const uploadBytes = new Uint8Array(rows.buffer, rows.byteOffset, rows.byteLength);
@@ -11928,6 +12162,87 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const length = Math.min(chunkBytes, uploadBytes.byteLength - offset);
       device.queue.writeBuffer(boundarySplatBuffer, offset, uploadBytes, offset, length);
     }
+  }
+
+  function uploadFourArmHeldStateResidualGrid(residualGrid) {
+    if (!device || !fourArmHeldStateResidualMarchPipelines[0] || !fourArmHeldStateResidualParamsBuffer) {
+      throw new Error('four-arm-held-state:residual-march-admission:gpu-route-unavailable');
+    }
+    const gridSize = Number(residualGrid?.gridSize);
+    const raySteps = Number(residualGrid?.raySteps);
+    const data = residualGrid?.data;
+    if (!Number.isInteger(gridSize) || gridSize !== 16 || raySteps !== 64) {
+      throw new Error(`four-arm-held-state:residual-march-admission:grid-config-drift:${gridSize}:${raySteps}`);
+    }
+    if (!isFloat32ArrayView(data) || data.length !== gridSize ** 3 * 4) {
+      throw new Error(`four-arm-held-state:residual-march-admission:grid-payload-drift:${data?.length || 0}:${gridSize ** 3 * 4}`);
+    }
+    fourArmHeldStateResidualTexture?.destroy();
+    fourArmHeldStateResidualTexture = device.createTexture({
+      label: 'kaminos four-arm positive-complement coarse volume',
+      size: { width: gridSize, height: gridSize, depthOrArrayLayers: gridSize },
+      dimension: '3d',
+      format: 'rgba32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture(
+      { texture: fourArmHeldStateResidualTexture },
+      data,
+      { bytesPerRow: gridSize * 16, rowsPerImage: gridSize },
+      { width: gridSize, height: gridSize, depthOrArrayLayers: gridSize },
+    );
+    fourArmHeldStateResidualBindGroup = device.createBindGroup({
+      label: 'kaminos four-arm positive-complement residual march bind group',
+      layout: fourArmHeldStateResidualBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: fourArmHeldStateResidualParamsBuffer } },
+        { binding: 1, resource: fourArmHeldStateResidualTexture.createView({ dimension: '3d' }) },
+      ],
+    });
+    fourArmHeldStateResidualGrid = {
+      ...residualGrid,
+      data,
+      gpuUploadComplete: true,
+    };
+  }
+
+  function encodeFourArmHeldStateResidualMarch(encoder, options = {}) {
+    if (!fourArmHeldStateResidualGrid || !fourArmHeldStateResidualTexture || !fourArmHeldStateResidualBindGroup) return false;
+    const params = new Float32Array(20);
+    params.set(invViewProj.elements, 0);
+    params[16] = fourArmHeldStateResidualGrid.gridSize;
+    params[17] = fourArmHeldStateResidualGrid.raySteps;
+    device.queue.writeBuffer(fourArmHeldStateResidualParamsBuffer, 0, params);
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      const timestampWrites = { querySet: options.querySet };
+      if (binIndex === 0 && Number.isInteger(options.beginningOfPassWriteIndex)) {
+        timestampWrites.beginningOfPassWriteIndex = options.beginningOfPassWriteIndex;
+      }
+      if (binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1
+        && Number.isInteger(options.endOfPassWriteIndex)) {
+        timestampWrites.endOfPassWriteIndex = options.endOfPassWriteIndex;
+      }
+      const hasTimestampWrites = Number.isInteger(timestampWrites.beginningOfPassWriteIndex)
+        || Number.isInteger(timestampWrites.endOfPassWriteIndex);
+      const pass = encoder.beginRenderPass({
+        label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
+        ...(hasTimestampWrites ? { timestampWrites } : {}),
+        colorAttachments: [{
+          view: boundarySplatOpticalTexture.createView({
+            dimension: '2d',
+            baseArrayLayer: binIndex,
+            arrayLayerCount: 1,
+          }),
+          loadOp: 'load',
+          storeOp: 'store',
+        }],
+      });
+      pass.setPipeline(fourArmHeldStateResidualMarchPipelines[binIndex]);
+      pass.setBindGroup(0, fourArmHeldStateResidualBindGroup);
+      pass.draw(3);
+      pass.end();
+    }
+    return true;
   }
 
   async function applyPersistentSparseCohortGpuState(loadedState = {}) {
@@ -11961,6 +12276,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       invalidatedReason: null,
     };
     state.fullSupportDepositionRequested = FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+    setBoundarySplatPresentationMode(BOUNDARY_SPLAT_OPTICAL_MODE);
     state.boundarySplatSourceAuthority = PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY;
     state.boundarySplatSourceCandidateCount = rowCount;
     state.boundarySplatCandidateCount = rowCount;
@@ -11978,9 +12294,151 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ...state.persistentSparseCohortGpuReceipt };
   }
 
+  async function applyFourArmHeldStateApplication({ application, gpuRows, residualGrid = application?.residual?.grid } = {}) {
+    await ensureGpu();
+    if (application?.schema !== 'kaminos.integration.four-arm-held-state-application.v0'
+      || application?.status !== 'admitted') {
+      throw new Error('four-arm-held-state:runtime-admission:application-not-admitted');
+    }
+    if (application.requestedStateId !== application.effectiveStateId) {
+      throw new Error('four-arm-held-state:runtime-admission:state-substitution');
+    }
+    if (application.requestedArmId !== application.effectiveArmId) {
+      throw new Error('four-arm-held-state:runtime-admission:arm-substitution');
+    }
+    if (application.requestedRoute !== ROUTE_IDENTITY
+      || application.effectiveRoute !== ROUTE_IDENTITY
+      || application.fallbackReason !== null) {
+      throw new Error('four-arm-held-state:runtime-admission:route-substitution');
+    }
+    if (application.selectionRerun !== false || application.residualAwareRetargeting !== false) {
+      throw new Error('four-arm-held-state:runtime-admission:selector-or-residual-retargeting');
+    }
+    if (application.recurrenceIdentity !== 'ordered-emission-extinction-shared-transmittance-v0'
+      || application.recurrenceCount !== 1
+      || application.targetFormat !== BOUNDARY_SPLAT_HDR_TARGET_FORMAT) {
+      throw new Error('four-arm-held-state:runtime-admission:optical-recurrence-drift');
+    }
+    if (!isFloat32ArrayView(gpuRows)) {
+      throw new Error('four-arm-held-state:runtime-admission:gpu-rows-missing');
+    }
+    const rowCount = application.splatCandidateCount;
+    if (gpuRows.length !== rowCount * 24) {
+      throw new Error(`four-arm-held-state:runtime-admission:gpu-row-count-drift:${gpuRows.length}:${rowCount * 24}`);
+    }
+    if (application.residual?.enabled) uploadFourArmHeldStateResidualGrid(residualGrid);
+    else {
+      fourArmHeldStateResidualGrid = null;
+      fourArmHeldStateResidualBindGroup = null;
+      fourArmHeldStateResidualTexture?.destroy();
+      fourArmHeldStateResidualTexture = null;
+    }
+    if (rowCount > gridCellCount(gridSize)) {
+      throw new Error(`four-arm-held-state:runtime-admission:row-count-exceeds-native-grid:${rowCount}:${gridCellCount(gridSize)}`);
+    }
+    if (rowCount > boundarySplatCapacity) {
+      growBoundarySplatCapacity(rowCount, {
+        descriptorRowsRequested: false,
+        featureCaptureRequested: false,
+      });
+    }
+    if (!boundarySplatBuffer || boundarySplatCapacity < rowCount) {
+      throw new Error(`four-arm-held-state:runtime-admission:gpu-capacity-unavailable:${boundarySplatCapacity}:${rowCount}`);
+    }
+    uploadPersistentSparseCohortGpuRows(gpuRows);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const receipt = {
+      identity: 'four-arm-held-state-gpu-upload-v0',
+      status: 'complete',
+      stateId: application.effectiveStateId,
+      steps: application.sourceSimStepCount,
+      armId: application.effectiveArmId,
+      encodedRowCount: rowCount,
+      rowStrideFloats: 24,
+      uploadBytes: gpuRows.byteLength,
+      rowCap: null,
+      droppedRowCount: 0,
+      selectorRerun: false,
+      residualAwareRetargeting: false,
+      rendererRequested: true,
+      rendererEncoded: false,
+      rendererApplied: false,
+      fallbackReason: null,
+    };
+    persistentSparseCohortGpuState = {
+      rows: gpuRows,
+      rowCount,
+      stateId: application.effectiveStateId,
+      steps: application.sourceSimStepCount,
+      manifestUrl: null,
+      manifestSha256: null,
+      uploadBytes: gpuRows.byteLength,
+      receipt: { ...receipt },
+      invalidatedReason: null,
+    };
+    fourArmHeldStateRuntimeState = {
+      application: structuredClone(application),
+      uploadReceipt: { ...receipt },
+      appliedAtFrameCount: state.frameCount,
+      appliedAtSimStepCount: state.simStepCount,
+      residualGrid: application.residual?.enabled ? {
+        schema: residualGrid.schema,
+        status: residualGrid.status,
+        stateId: residualGrid.stateId,
+        sourceRowCount: residualGrid.sourceRowCount,
+        gridSize: residualGrid.gridSize,
+        gridScale: residualGrid.gridScale,
+        raySteps: residualGrid.raySteps,
+        dataSha256: residualGrid.dataSha256,
+        depositionIdentity: residualGrid.depositionIdentity,
+        gpuUploadComplete: true,
+      } : null,
+    };
+    state.fullSupportDepositionRequested = FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+    setBoundarySplatPresentationMode(BOUNDARY_SPLAT_OPTICAL_MODE);
+    state.boundarySplatSourceAuthority = 'authenticated-four-arm-held-state-gpu-source-v0';
+    state.boundarySplatSourceCandidateCount = rowCount;
+    state.boundarySplatCandidateCount = rowCount;
+    state.boundarySplatInstanceCount = rowCount;
+    state.boundarySplatOverflowCount = 0;
+    state.boundarySplatCountAuthority = 'authenticated-four-arm-held-state-upload-v0';
+    state.persistentSparseCohortGpuReceipt = { ...receipt };
+    state.fourArmHeldStateRuntimeReceipt = {
+      schema: 'kaminos.integration.four-arm-held-state-runtime.v0',
+      status: 'applied',
+      requestedStateId: application.requestedStateId,
+      effectiveStateId: application.effectiveStateId,
+      requestedArmId: application.requestedArmId,
+      effectiveArmId: application.effectiveArmId,
+      requestedRoute: application.requestedRoute,
+      effectiveRoute: application.effectiveRoute,
+      recurrenceIdentity: application.recurrenceIdentity,
+      recurrenceCount: application.recurrenceCount,
+      selectionRerun: false,
+      residualAwareRetargeting: false,
+      rowCap: null,
+      fallbackReason: null,
+      uploadReceipt: { ...receipt },
+      residual: application.residual?.enabled ? {
+        enabled: true,
+        mode: application.residual.mode,
+        gridSize: residualGrid.gridSize,
+        raySteps: residualGrid.raySteps,
+        dataSha256: residualGrid.dataSha256,
+        gpuUploadComplete: true,
+      } : { enabled: false, mode: 'disabled-by-arm-policy-v0' },
+    };
+    return structuredClone(state.fourArmHeldStateRuntimeReceipt);
+  }
+
   function clearPersistentSparseCohortGpuState(reason = 'operator-cleared') {
     const previous = persistentSparseCohortGpuState;
     persistentSparseCohortGpuState = null;
+    fourArmHeldStateRuntimeState = null;
+    fourArmHeldStateResidualGrid = null;
+    fourArmHeldStateResidualBindGroup = null;
+    fourArmHeldStateResidualTexture?.destroy();
+    fourArmHeldStateResidualTexture = null;
     state.boundarySplatSourceAuthority = BOUNDARY_SPLAT_SOURCE_AUTHORITY;
     state.fullSupportDepositionRequested = FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
       state.persistentSparseCohortGpuReceipt = previous ? {
@@ -12271,6 +12729,70 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
+  function encodeBoundarySplatOpticalAccumulation(encoder, options = {}) {
+    if (boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS) return false;
+    ensureBoundarySplatOpticalTexture();
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      const timestampWrites = {};
+      if (binIndex === 0 && Number.isInteger(options.beginningOfPassWriteIndex)) {
+        timestampWrites.querySet = options.querySet;
+        timestampWrites.beginningOfPassWriteIndex = options.beginningOfPassWriteIndex;
+      }
+      if (binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1 && Number.isInteger(options.endOfPassWriteIndex)) {
+        timestampWrites.querySet = options.querySet;
+        timestampWrites.endOfPassWriteIndex = options.endOfPassWriteIndex;
+      }
+      const accumulated = encodeBoundarySplatDraw(
+        encoder,
+        boundarySplatOpticalTexture.createView({
+          dimension: '2d',
+          baseArrayLayer: binIndex,
+          arrayLayerCount: 1,
+        }),
+        boundarySplatOpticalPipelines[binIndex],
+        {
+          loadOp: 'clear',
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          recordFrame: false,
+          ...(timestampWrites.querySet ? { timestampWrites } : {}),
+        },
+      );
+      if (!accumulated) return false;
+    }
+    return true;
+  }
+
+  function encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, options = {}) {
+    if (!targetPipeline || !boundarySplatOpticalTexture) return false;
+    const resolveBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} bind group`,
+      layout: targetPipeline.getBindGroupLayout(0),
+      entries: [{
+        binding: 0,
+        resource: boundarySplatOpticalTexture.createView({
+          dimension: '2d-array',
+          baseArrayLayer: 0,
+          arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+        }),
+      }],
+    });
+    const resolvePass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      colorAttachments: [{
+        view: targetView,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    resolvePass.setPipeline(targetPipeline);
+    resolvePass.setBindGroup(0, resolveBindGroup);
+    resolvePass.draw(3);
+    resolvePass.end();
+    return true;
+  }
+
   function encodeBoundarySplatOpticalRecurrence(encoder, targetView, targetPipeline, options = {}) {
     if (options.loadOp === 'load') {
       boundarySplatPresentationModeFallbackReason = 'matched-optical-recurrence-requires-splat-only-target';
@@ -12288,49 +12810,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
     }
-    ensureBoundarySplatOpticalTexture();
-    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
-      const accumulated = encodeBoundarySplatDraw(
-        encoder,
-        boundarySplatOpticalTexture.createView({
-          dimension: '2d',
-          baseArrayLayer: binIndex,
-          arrayLayerCount: 1,
-        }),
-        boundarySplatOpticalPipelines[binIndex],
-        {
-          loadOp: 'clear',
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
-          recordFrame: false,
-        },
-      );
-      if (!accumulated) return false;
+    if (!encodeBoundarySplatOpticalAccumulation(encoder)) return false;
+    if (fourArmHeldStateRuntimeState?.application?.residual?.enabled
+      && !encodeFourArmHeldStateResidualMarch(encoder)) {
+      boundarySplatPresentationModeFallbackReason = 'four-arm-positive-complement-residual-march-unavailable';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      return false;
     }
-    const resolveBindGroup = device.createBindGroup({
-      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} bind group`,
-      layout: targetPipeline.getBindGroupLayout(0),
-      entries: [{
-        binding: 0,
-        resource: boundarySplatOpticalTexture.createView({
-          dimension: '2d-array',
-          baseArrayLayer: 0,
-          arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
-        }),
-      }],
-    });
-    const resolvePass = encoder.beginRenderPass({
-      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} pass`,
-      colorAttachments: [{
-        view: targetView,
-        clearValue: { r: 0, g: 0, b: 0, a: 1 },
-        loadOp: 'clear',
-        storeOp: 'store',
-      }],
-    });
-    resolvePass.setPipeline(targetPipeline);
-    resolvePass.setBindGroup(0, resolveBindGroup);
-    resolvePass.draw(3);
-    resolvePass.end();
+    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline)) return false;
     state.boundarySplatFrameCount += 1;
     state.volumeReconstructionStyle = `${state.boundarySplatRendererIdentity}+${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY}`;
     boundarySplatPresentationModeFallbackReason = null;
@@ -12385,14 +12872,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return typeof probeEncoder.beginComputePass === 'function' && typeof probeEncoder.resolveQuerySet === 'function';
   }
 
-  function encodeBoundarySplatTimestampMarker(encoder, querySet, index, label) {
+  function encodeBoundarySplatTimestampMarker(encoder, querySet, beginningIndex, endIndexOrLabel, optionalLabel = null) {
+    const paired = Number.isInteger(endIndexOrLabel);
+    const label = paired ? optionalLabel : endIndexOrLabel;
+    const timestampWrites = paired
+      ? { querySet, beginningOfPassWriteIndex: beginningIndex, endOfPassWriteIndex: endIndexOrLabel }
+      : { querySet, endOfPassWriteIndex: beginningIndex };
     const pass = encoder.beginComputePass({
       label,
-      timestampWrites: {
-        querySet,
-        endOfPassWriteIndex: index,
-      },
+      timestampWrites,
     });
+    pass.setPipeline(fourArmHeldStateTimestampMarkerPipeline);
+    pass.dispatchWorkgroups(1);
     pass.end();
   }
 
@@ -16617,6 +17108,257 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return rgb;
   }
 
+  async function readFourArmHeldStateLinearTexture(buffer, width, height, bytesPerRow) {
+    await buffer.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(buffer.getMappedRange());
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const linearHdr = new Float32Array(width * height * 4);
+    const opticalDepth = new Float32Array(width * height);
+    const transmittance = new Float32Array(width * height);
+    let finitePixelCount = 0;
+    let litPixels = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const source = y * bytesPerRow + x * 8;
+        const pixel = y * width + x;
+        const target = pixel * 4;
+        const red = decodeFloat16(view.getUint16(source, true));
+        const green = decodeFloat16(view.getUint16(source + 2, true));
+        const blue = decodeFloat16(view.getUint16(source + 4, true));
+        const tau = decodeFloat16(view.getUint16(source + 6, true));
+        linearHdr[target] = red;
+        linearHdr[target + 1] = green;
+        linearHdr[target + 2] = blue;
+        linearHdr[target + 3] = tau;
+        opticalDepth[pixel] = tau;
+        transmittance[pixel] = Math.exp(-Math.max(0, tau));
+        if ([red, green, blue, tau].every(Number.isFinite)) finitePixelCount += 1;
+        if (Math.max(red, green, blue) > 0) litPixels += 1;
+      }
+    }
+    buffer.unmap();
+    return { linearHdr, opticalDepth, transmittance, finitePixelCount, litPixels };
+  }
+
+  async function sampleFourArmHeldStateLedger(options = {}) {
+    const application = fourArmHeldStateRuntimeState?.application || null;
+    const failure = (failurePhase, reason, lastTrustworthyEvidence = null) => ({
+      schema: 'kaminos.integration.four-arm-held-state-capture.v0',
+      status: 'failed',
+      failurePhase,
+      reason,
+      lastTrustworthyEvidence,
+      requestedStateId: application?.requestedStateId || null,
+      effectiveStateId: application?.effectiveStateId || null,
+      requestedArmId: application?.requestedArmId || null,
+      effectiveArmId: application?.effectiveArmId || null,
+      route: {
+        requestedRoute: application?.requestedRoute || ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute || null,
+        backend: state.backend || null,
+        fallbackReason: state.boundarySplatFallbackReason || null,
+      },
+    });
+    if (!state.active || !device) return failure('runtime-admission', 'volume-runtime-inactive');
+    if (!application) return failure('runtime-admission', 'four-arm-application-missing');
+    if (application.residual?.enabled
+      && (!fourArmHeldStateResidualGrid || !fourArmHeldStateResidualBindGroup)) {
+      return failure('residual-march-admission', 'positive-complement-runtime-grid-not-installed', {
+        residualMode: application.residual.mode,
+        residualGrid: application.residual.grid,
+      });
+    }
+    if (state.simStepCount !== application.sourceSimStepCount) {
+      return failure('held-state-admission', `held-state-step-mismatch:${state.simStepCount}:${application.sourceSimStepCount}`);
+    }
+    if (!timestampQueriesAvailable()) {
+      return failure('timestamp-admission', device?.features?.has?.('timestamp-query')
+        ? 'timestamp-query-write-api-unavailable'
+        : 'timestamp-query-not-supported');
+    }
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      return failure('recurrence-admission', `optical-mode-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const sameStateCaptureId = String(options.sameStateCaptureId || '');
+    if (!sameStateCaptureId) return failure('capture-admission', 'same-state-capture-id-missing');
+    const captureNonce = String(options.captureNonce || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const queryCount = 14;
+    const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const queryResolve = device.createBuffer({
+      label: 'kaminos four-arm held-state timestamp resolve',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const queryReadback = device.createBuffer({
+      label: 'kaminos four-arm held-state timestamp readback',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const bytesPerPixel = 8;
+    const bytesPerRow = Math.ceil(state.width * bytesPerPixel / 256) * 256;
+    const imageReadback = device.createBuffer({
+      label: 'kaminos four-arm held-state linear HDR readback',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let errorScopeOpen = false;
+    try {
+      updateUniforms(sampleNow);
+      ensureBoundarySplatOpticalTexture();
+      ensureFourArmHeldStateLinearTexture();
+      device.pushErrorScope('validation');
+      errorScopeOpen = true;
+      const encoder = device.createCommandEncoder({ label: 'kaminos four-arm held-state frozen ledger encoder' });
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 0, 1, 'kaminos held-state selection precomputed marker');
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 2, 3, 'kaminos held-state compaction precomputed marker');
+      const splatsEncoded = encodeBoundarySplats(encoder);
+      if (!splatsEncoded) {
+        throw new Error(`splat-application-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+      }
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 4, 5, 'kaminos held-state preuploaded deposition marker');
+      const splatsApplied = encodeBoundarySplatOpticalAccumulation(encoder, {
+        querySet,
+        beginningOfPassWriteIndex: 6,
+        endOfPassWriteIndex: 7,
+      });
+      if (!splatsApplied) throw new Error(`splat-raster-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+      if (application.residual.enabled) {
+        const residualApplied = encodeFourArmHeldStateResidualMarch(encoder, {
+          querySet,
+          beginningOfPassWriteIndex: 8,
+          endOfPassWriteIndex: 9,
+        });
+        if (!residualApplied) throw new Error('positive-complement-residual-march-failed');
+      } else {
+        encodeBoundarySplatTimestampMarker(encoder, querySet, 8, 9, 'kaminos held-state residual march disabled by arm policy');
+      }
+      const reconstructed = encodeBoundarySplatOpticalResolve(
+        encoder,
+        fourArmHeldStateLinearTexture.createView(),
+        fourArmHeldStateLinearResolvePipeline,
+        { timestampWrites: { querySet, beginningOfPassWriteIndex: 10, endOfPassWriteIndex: 11 } },
+      );
+      if (!reconstructed) throw new Error('linear-hdr-reconstruction-failed');
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 12, 13, 'kaminos held-state identity composition marker');
+      encoder.copyTextureToBuffer(
+        { texture: fourArmHeldStateLinearTexture },
+        { buffer: imageReadback, bytesPerRow, rowsPerImage: state.height },
+        { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      );
+      encoder.resolveQuerySet(querySet, 0, queryCount, queryResolve, 0);
+      encoder.copyBufferToBuffer(queryResolve, 0, queryReadback, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await queryReadback.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(queryReadback.getMappedRange().slice(0));
+      queryReadback.unmap();
+      const validationError = await device.popErrorScope();
+      errorScopeOpen = false;
+      if (validationError) throw new Error(`gpu-validation:${validationError.message || String(validationError)}`);
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      const pixels = await readFourArmHeldStateLinearTexture(imageReadback, state.width, state.height, bytesPerRow);
+      const stageRanges = {
+        selection: [0, 1],
+        compaction: [2, 3],
+        deposition: [4, 5],
+        splatRaster: [6, 7],
+        residualMarch: [8, 9],
+        reconstruction: [10, 11],
+        composition: [12, 13],
+      };
+      const stages = {};
+      let chargedTotal = 0;
+      for (const [name, [start, end]] of Object.entries(stageRanges)) {
+        if (timestamps[end] < timestamps[start]) {
+          throw new Error(`timestamp-stage-nonmonotonic:${name}:${timestamps[start]}:${timestamps[end]}`);
+        }
+        const ms = Number(timestamps[end] - timestamps[start]) / 1_000_000;
+        stages[name] = {
+          status: 'sampled',
+          ms,
+          ...(name === 'selection' ? { disposition: 'authenticated-preselected-membership-no-rerun-v0' } : {}),
+          ...(name === 'compaction' ? { disposition: 'authenticated-precompacted-payload-v0' } : {}),
+          ...(name === 'deposition' ? { disposition: 'authenticated-preuploaded-payload-indirect-setup-marker-v0' } : {}),
+          ...(name === 'residualMarch' ? {
+            disposition: application.residual.enabled
+              ? 'positive-complement-coarse-volume-raymarch-v0'
+              : 'disabled-by-arm-policy-v0',
+          } : {}),
+          ...(name === 'composition' ? { disposition: 'single-recurrence-identity-composition-v0' } : {}),
+        };
+        chargedTotal += ms;
+      }
+      stages.chargedTotal = { status: 'sampled', ms: chargedTotal };
+      const linearHdrBytes = new Uint8Array(pixels.linearHdr.buffer, pixels.linearHdr.byteOffset, pixels.linearHdr.byteLength);
+      const opticalDepthBytes = new Uint8Array(pixels.opticalDepth.buffer, pixels.opticalDepth.byteOffset, pixels.opticalDepth.byteLength);
+      const transmittanceBytes = new Uint8Array(pixels.transmittance.buffer, pixels.transmittance.byteOffset, pixels.transmittance.byteLength);
+      return {
+        schema: 'kaminos.integration.four-arm-held-state-capture.v0',
+        status: 'captured',
+        failurePhase: null,
+        requestedStateId: application.requestedStateId,
+        effectiveStateId: application.effectiveStateId,
+        requestedArmId: application.requestedArmId,
+        effectiveArmId: application.effectiveArmId,
+        route: {
+          requestedRoute: application.requestedRoute,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+          fallbackReason: null,
+        },
+        recurrenceIdentity: application.recurrenceIdentity,
+        recurrenceCount: 1,
+        sourceSimStepCount: application.sourceSimStepCount,
+        capturedSimStepCount: state.simStepCount,
+        baseFrameCount,
+        capturedFrameCount: state.frameCount,
+        baseSimStepCount,
+        selectorRerun: false,
+        residualAwareRetargeting: false,
+        sameStateCaptureId,
+        captureNonce,
+        freshnessStatus: 'live-controlled-capture',
+        captureAuthority: 'gpu-linear-hdr-readback-live-held-state-v0',
+        width: state.width,
+        height: state.height,
+        linearHdrFloatCount: pixels.linearHdr.length,
+        opticalDepthFloatCount: pixels.opticalDepth.length,
+        transmittanceFloatCount: pixels.transmittance.length,
+        finitePixelCount: pixels.finitePixelCount,
+        litPixels: pixels.litPixels,
+        hashes: {
+          linearHdrSha256: await sha256Bytes(linearHdrBytes),
+          opticalDepthSha256: await sha256Bytes(opticalDepthBytes),
+          transmittanceSha256: await sha256Bytes(transmittanceBytes),
+        },
+        timing: { timestampStatus: 'available', timeUnit: 'ms', stages },
+        payload: {
+          linearHdr: pixels.linearHdr,
+          opticalDepth: pixels.opticalDepth,
+          transmittance: pixels.transmittance,
+        },
+        fallbackUsed: false,
+        fallbackReason: null,
+      };
+    } catch (error) {
+      if (errorScopeOpen) await device.popErrorScope().catch(() => null);
+      return failure('gpu-capture', error?.message || String(error), {
+        sourceSimStepCount: application.sourceSimStepCount,
+        currentSimStepCount: state.simStepCount,
+        captureNonce,
+      });
+    } finally {
+      queryResolve.destroy();
+      queryReadback.destroy();
+      imageReadback.destroy();
+      querySet.destroy?.();
+    }
+  }
+
   async function sampleSharedTransmittanceContributions(options = {}) {
     const requiredMode = 'complete-flame-under-total-extinction';
     if (!state.active || !device || !opticalTransportContributionPipeline) {
@@ -18825,6 +19567,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setAppearanceDecompositionMode,
     setBoundarySplatPresentationMode,
     applyPersistentSparseCohortGpuState,
+    applyFourArmHeldStateApplication,
     clearPersistentSparseCohortGpuState,
     setControls(next) {
       const previousGrid = gridSize;
@@ -19163,6 +19906,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleFourArmHeldStateLedger,
     sampleBoundarySplatOpticalAdjudication,
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
@@ -19197,10 +19941,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     dispose() {
       this.setActive(false);
       persistentSparseCohortGpuState = null;
+      fourArmHeldStateRuntimeState = null;
+      fourArmHeldStateResidualGrid = null;
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
+      fourArmHeldStateLinearTexture?.destroy();
+      fourArmHeldStateResidualTexture?.destroy();
+      fourArmHeldStateResidualParamsBuffer?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();
