@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.volume.same-state-analytical-teacher-calibration-config.v0",
+  "assay": "same-state-analytical-calibration",
+  "route": {
+    "kaminos_volume_smoke": 1,
+    "volume_scene": "tall_plume",
+    "volume_resolution": 64,
+    "volume_render_scale": 1,
+    "volume_boundary_sidecar_source": "baked",
+    "volume_boundary_splat_mode": "analytic",
+    "volume_boundary_splat_instances": 2,
+    "volume_boundary_splat_candidate_budget": 4096,
+    "volume_boundary_splat_composition": "field",
+    "volume_boundary_splat_phase_mode": "offset-history",
+    "volume_boundary_splat_phase_stride": 1,
+    "volume_boundary_splat_history_depth": 8,
+    "volume_boundary_splat_history_frame_stride": 7,
+    "volume_canonical_content": "fire_smoke",
+    "volume_canonical_source_mode": "current",
+    "volume_canonical_injection": 1,
+    "volume_canonical_buoyancy": 1
+  },
+  "windowSize": "960,720",
+  "settleMs": 12000,
+  "initialStateSteps": 32,
+  "timeStepMs": 16.666666666666668,
+  "startTimeMs": 1000,
+  "chunkFloats": 65536,
+  "maximumAbsoluteLagErrorWorld": 0.02,
+  "teacherInitialField": {
+    "grid": 64,
+    "simStepCount": 32,
+    "fluidSha256": "2544beeb948a57016aac68046219809886ab85500a81a50037d8d13bb0afa812",
+    "frontSha256": "2dc3d98987d2f341cf94329edee6a2be5707f5db74ea50888891daf164382691"
+  },
+  "teacherResidual": {
+    "identity": "rigid-subtracted-low-frequency-field-projection-v0",
+    "residualName": "source-relative-upper-plume-inertial-lag-v0",
+    "requestedSteps": 8,
+    "horizonMs": 133.33333333333334,
+    "upperPlumeLagWorld": -0.14000125975996786,
+    "upperPlumeLagPx": -4.480040312318971,
+    "rigidDisplacementSubtraction": {
+      "identity": "source-centroid-aligned-rigid-displacement-subtraction-v0",
+      "applied": true,
+      "worldDisplacement": [0.14, 0, 0]
+    },
+    "sourceReportSha256": "3334c01bebc16e1849ac5280f6513560fd41b94580b742fe0058ffb0dace06ee"
+  },
+  "baselineResponse": {
+    "calibrationIdentity": "baseline-untuned-analytical-control-v0",
+    "relativeWindLocal": [-1.2, 0, 1],
+    "accelerationLagLocal": [-1.2, -0.22, 0],
+    "sourceAttachment": 0.9,
+    "dtSeconds": 0.016666666666666666,
+    "historyAgeFrames": 7,
+    "buoyancyGain": 0.42,
+    "windGain": 0.035,
+    "accelerationGain": 0.22,
+    "opacityDamping": 0.08
+  }
+}

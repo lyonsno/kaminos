@@ -1,6 +1,7 @@
 export const FORCED_SPLAT_RESPONSE_SCHEMA = 'kaminos.boundary-splat-forced-response.v0';
 export const FORCED_SPLAT_CONTROLS_SCHEMA = 'kaminos.boundary-splat-forced-controls.v0';
 export const FORCED_SPLAT_RESPONSE_COST_SCHEMA = 'kaminos.boundary-splat-forced-response-cost.v0';
+export const ANALYTICAL_TEACHER_CALIBRATION_SCHEMA = 'kaminos.boundary-splat.analytical-teacher-calibration.v0';
 export const ANALYTICAL_FORCED_RESPONSE_IDENTITY = 'boundary-splat-analytical-age-height-forcing-warp-v0';
 export const RIGID_TRANSFORMED_HISTORY_IDENTITY = 'boundary-splat-rigid-transformed-history-control-v0';
 export const MAX_INITIAL_RESIDUAL_SPLINE_KNOTS = 8;
@@ -9,6 +10,17 @@ export const FORCED_SPLAT_RESPONSE_FIRST_FRONTIER_MS = 1.5;
 export const FORCED_SPLAT_RESPONSE_STOP_CEILING_MS = 2.0;
 export const FORCED_SPLAT_RESPONSE_STRIDE_FLOATS = 16;
 export const FORCED_SPLAT_RESPONSE_STRIDE_BYTES = FORCED_SPLAT_RESPONSE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+export const ANALYTICAL_CANDIDATE_AUTHORITY = 'debug-full-field-boundary-splat-effective-output-readback-v0';
+export const ANALYTICAL_CANDIDATE_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
+export const ANALYTICAL_CANDIDATE_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
+export const ANALYTICAL_CANDIDATE_STRIDE_FLOATS = 12;
+
+const BASELINE_ANALYTICAL_GAINS = Object.freeze({
+  buoyancyGain: 0.42,
+  windGain: 0.035,
+  accelerationGain: 0.22,
+  opacityDamping: 0.08,
+});
 
 const FORBIDDEN_INFERENCE_FLAGS = Object.freeze({
   usesDenseGridInference: false,
@@ -23,6 +35,11 @@ function finiteNumber(value, fallback = 0) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, finiteNumber(value, min)));
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = clamp((finiteNumber(value) - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
 }
 
 function vec3(value, fallback = [0, 0, 0]) {
@@ -193,6 +210,218 @@ export function packBoundarySplatForcedResponses(responses = [], { maxInstances 
     requestedCount: rows.length,
     activeCount,
     packed,
+  };
+}
+
+function baselineGain(name, requested) {
+  const expected = BASELINE_ANALYTICAL_GAINS[name];
+  const effective = requested == null ? expected : finiteNumber(requested, Number.NaN);
+  if (effective !== expected) throw new Error(`baseline-analytical-gain-mutated:${name}:${effective}:${expected}`);
+  return effective;
+}
+
+function analyticalCandidateResponse(candidate, response) {
+  const height01 = clamp((candidate.position[1] + 1) * 0.5, 0, 1);
+  const historyAgeSeconds = Math.max(0, response.historyAgeFrames) * response.dtSeconds;
+  const effectiveAgeSeconds = Math.max(historyAgeSeconds, height01 * 0.24);
+  const ageResponse = smoothstep(0, 0.45, effectiveAgeSeconds);
+  const attachmentGate = smoothstep(0.04, 0.62, height01) * ageResponse;
+  const responseMaturity = response.sourceAttachment * attachmentGate * attachmentGate
+    + (1 - response.sourceAttachment) * attachmentGate;
+  const ageSquared = effectiveAgeSeconds * effectiveAgeSeconds;
+  const heightWind = 0.25 + height01 * 0.75;
+  const heightAcceleration = 0.3 + height01 * 0.7;
+  const relativeWind = scaleVec(
+    response.relativeWindLocal,
+    response.windGain * ageSquared * heightWind * responseMaturity,
+  );
+  const accelerationLag = scaleVec(
+    response.accelerationLagLocal,
+    response.accelerationGain * effectiveAgeSeconds * heightAcceleration * responseMaturity,
+  );
+  const responseSpeed = lengthVec(response.accelerationLagLocal) + lengthVec(response.relativeWindLocal) * 0.1;
+  const opacityRetention = clamp(
+    1 - response.opacityDamping * responseSpeed * effectiveAgeSeconds,
+    0.55,
+    1,
+  );
+  return { offset: add(relativeWind, accelerationLag), opacityRetention, effectiveAgeSeconds };
+}
+
+export function validateAnalyticalCandidateReadback({
+  candidateValues = [],
+  descriptor = {},
+  draw = {},
+  sourceAuthority = '',
+  rendererIdentity = '',
+} = {}) {
+  const values = candidateValues instanceof Float32Array
+    ? candidateValues
+    : Float32Array.from(candidateValues || []);
+  if (sourceAuthority !== ANALYTICAL_CANDIDATE_SOURCE_AUTHORITY) {
+    throw new Error(`analytical-candidate-source-authority-disagreement:${sourceAuthority || 'missing'}`);
+  }
+  if (rendererIdentity !== ANALYTICAL_CANDIDATE_RENDERER_IDENTITY) {
+    throw new Error(`analytical-candidate-renderer-identity-disagreement:${rendererIdentity || 'missing'}`);
+  }
+  if (draw.overflowCount !== 0) {
+    throw new Error(`analytical-candidate-overflow:${draw.overflowCount ?? 'missing'}`);
+  }
+  if (!Number.isInteger(draw.instanceCount) || draw.instanceCount <= 0) {
+    throw new Error(`analytical-candidate-instance-count-disagreement:${draw.instanceCount ?? 'missing'}`);
+  }
+  if (!Number.isInteger(draw.candidateCount) || draw.candidateCount <= 0 || draw.candidateCount > draw.instanceCount) {
+    throw new Error(`analytical-candidate-count-disagreement:${draw.candidateCount ?? 'missing'}:${draw.instanceCount}`);
+  }
+  if (descriptor.kind !== 'boundarySplat' || descriptor.dtype !== 'float32') {
+    throw new Error(`analytical-candidate-descriptor-identity-disagreement:${descriptor.kind || 'missing'}:${descriptor.dtype || 'missing'}`);
+  }
+  if (!Array.isArray(descriptor.shape)
+    || descriptor.shape.length !== 2
+    || descriptor.shape[0] !== draw.instanceCount
+    || descriptor.shape[1] !== ANALYTICAL_CANDIDATE_STRIDE_FLOATS) {
+    throw new Error(`analytical-candidate-shape-disagreement:${JSON.stringify(descriptor.shape || null)}:${draw.instanceCount}`);
+  }
+  if (descriptor.floatCount !== values.length
+    || descriptor.floatCount !== draw.instanceCount * ANALYTICAL_CANDIDATE_STRIDE_FLOATS) {
+    throw new Error(`analytical-candidate-float-count-disagreement:${descriptor.floatCount ?? 'missing'}:${values.length}:${draw.instanceCount}`);
+  }
+  if (descriptor.byteLength !== values.byteLength) {
+    throw new Error(`analytical-candidate-byte-length-disagreement:${descriptor.byteLength ?? 'missing'}:${values.byteLength}`);
+  }
+  return {
+    authority: ANALYTICAL_CANDIDATE_AUTHORITY,
+    sourceAuthority,
+    rendererIdentity,
+    draw,
+    descriptor,
+  };
+}
+
+export function evaluateAnalyticalTeacherBaseline({
+  teacherResidual = {},
+  candidateValues = [],
+  candidateAuthority = '',
+  response = {},
+  teacherGrid = 64,
+  maximumAbsoluteLagErrorWorld = 0.02,
+} = {}) {
+  if (teacherResidual.residualName !== 'source-relative-upper-plume-inertial-lag-v0') {
+    throw new Error(`teacher-residual-identity-disagreement:${teacherResidual.residualName || 'missing'}`);
+  }
+  if (teacherResidual.rigidDisplacementSubtraction?.applied !== true) {
+    throw new Error('teacher-rigid-displacement-subtraction-missing');
+  }
+  if (candidateAuthority !== ANALYTICAL_CANDIDATE_AUTHORITY) {
+    throw new Error(`candidate-authority-disagreement:${candidateAuthority || 'missing'}`);
+  }
+  const values = candidateValues instanceof Float32Array
+    ? candidateValues
+    : Float32Array.from(candidateValues || []);
+  if (values.length === 0 || values.length % 12 !== 0) {
+    throw new Error(`candidate-layout-disagreement:${values.length}`);
+  }
+  if (response.calibrationIdentity !== 'baseline-untuned-analytical-control-v0') {
+    throw new Error(`baseline-calibration-identity-disagreement:${response.calibrationIdentity || 'missing'}`);
+  }
+  const effectiveResponse = {
+    relativeWindLocal: vec3(response.relativeWindLocal),
+    accelerationLagLocal: vec3(response.accelerationLagLocal),
+    sourceAttachment: clamp(response.sourceAttachment ?? 0.9, 0, 1),
+    dtSeconds: clamp(response.dtSeconds ?? 1 / 60, 1 / 240, 1 / 10),
+    historyAgeFrames: Math.max(0, Math.trunc(finiteNumber(response.historyAgeFrames, 0))),
+    buoyancyGain: baselineGain('buoyancyGain', response.buoyancyGain),
+    windGain: baselineGain('windGain', response.windGain),
+    accelerationGain: baselineGain('accelerationGain', response.accelerationGain),
+    opacityDamping: baselineGain('opacityDamping', response.opacityDamping),
+  };
+  let rigidWeightedX = 0;
+  let rigidWeight = 0;
+  let analyticalWeightedX = 0;
+  let analyticalWeight = 0;
+  let upperCandidateCount = 0;
+  let supportedCandidateCount = 0;
+  let minimumSupportedY = Number.POSITIVE_INFINITY;
+  let maximumSupportedY = Number.NEGATIVE_INFINITY;
+  for (let offset = 0; offset < values.length; offset += 12) {
+    const candidate = {
+      position: [values[offset], values[offset + 1], values[offset + 2]],
+      support: Math.max(0, values[offset + 3]),
+      opacity: Math.max(0, values[offset + 7]),
+    };
+    if (candidate.support <= 0 || candidate.opacity <= 0) continue;
+    supportedCandidateCount += 1;
+    minimumSupportedY = Math.min(minimumSupportedY, candidate.position[1]);
+    maximumSupportedY = Math.max(maximumSupportedY, candidate.position[1]);
+    if (candidate.position[1] < 0) continue;
+    const weight = candidate.support * candidate.opacity;
+    const analytical = analyticalCandidateResponse(candidate, effectiveResponse);
+    const shiftedWeight = weight * analytical.opacityRetention;
+    rigidWeightedX += candidate.position[0] * weight;
+    rigidWeight += weight;
+    analyticalWeightedX += (candidate.position[0] + analytical.offset[0]) * shiftedWeight;
+    analyticalWeight += shiftedWeight;
+    upperCandidateCount += 1;
+  }
+  const candidateSupport = {
+    candidateCount: values.length / 12,
+    supportedCandidateCount,
+    upperCandidateCount,
+    upperPlumeMinimumY: 0,
+    minimumSupportedY: Number.isFinite(minimumSupportedY) ? minimumSupportedY : null,
+    maximumSupportedY: Number.isFinite(maximumSupportedY) ? maximumSupportedY : null,
+  };
+  const common = {
+    schema: ANALYTICAL_TEACHER_CALIBRATION_SCHEMA,
+    identity: 'analytical-control-versus-same-state-teacher-baseline-v0',
+    baselineIdentity: 'baseline-untuned-analytical-control-v0',
+    analyticalResponseIdentity: ANALYTICAL_FORCED_RESPONSE_IDENTITY,
+    teacherResidualName: teacherResidual.residualName,
+    candidateAuthority,
+    candidateSupport,
+    response: effectiveResponse,
+    modelIdentity: null,
+    splineAdmitted: false,
+    latticeAdmitted: false,
+    usesDenseGridInference: false,
+    usesPerSplatNeuralInference: false,
+    predictsLongHorizonTurbulence: false,
+  };
+  if (upperCandidateCount === 0 || rigidWeight <= 0 || analyticalWeight <= 0) {
+    return {
+      ...common,
+      status: 'candidate-support-miss',
+      reason: 'canonical-boundary-splat-population-has-no-upper-plume-support',
+      parameterCalibrationAdmitted: false,
+      baselineLagWorld: null,
+      baselineLagPx: null,
+      targetLagWorld: finiteNumber(teacherResidual.upperPlumeLagWorld, Number.NaN),
+      targetLagPx: finiteNumber(teacherResidual.upperPlumeLagPx, Number.NaN),
+      absoluteLagErrorWorld: null,
+      absoluteLagErrorPx: null,
+      maximumAbsoluteLagErrorWorld,
+      boundedRepairOwner: 'pyro-instance-fraud-cartel',
+      boundedRepair: 'Expose canonical upper-plume carrier candidates without changing the fixed teacher predicate; then rerun the untouched analytical baseline.',
+    };
+  }
+  const baselineLagWorld = analyticalWeightedX / analyticalWeight - rigidWeightedX / rigidWeight;
+  const targetLagWorld = finiteNumber(teacherResidual.upperPlumeLagWorld, Number.NaN);
+  if (!Number.isFinite(targetLagWorld)) throw new Error('teacher-upper-plume-lag-missing');
+  const absoluteLagErrorWorld = Math.abs(baselineLagWorld - targetLagWorld);
+  const pixelScale = Math.max(1, Math.trunc(finiteNumber(teacherGrid, 64))) * 0.5;
+  return {
+    ...common,
+    status: absoluteLagErrorWorld <= maximumAbsoluteLagErrorWorld
+      ? 'baseline-within-teacher-tolerance'
+      : 'named-analytical-miss',
+    parameterCalibrationAdmitted: false,
+    baselineLagWorld,
+    baselineLagPx: baselineLagWorld * pixelScale,
+    targetLagWorld,
+    targetLagPx: targetLagWorld * pixelScale,
+    absoluteLagErrorWorld,
+    absoluteLagErrorPx: absoluteLagErrorWorld * pixelScale,
+    maximumAbsoluteLagErrorWorld,
   };
 }
 

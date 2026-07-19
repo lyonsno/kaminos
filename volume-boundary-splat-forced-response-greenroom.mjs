@@ -65,7 +65,7 @@ try {
     origin: `http://127.0.0.1:${serverPort}`,
   };
 
-  if (config.assay === 'same-state-teacher') {
+  if (isSameStateAssay(config.assay)) {
     failurePhase = 'same-state-teacher-contracts';
     const contracts = await runChild(process.execPath, [resolve(repoRoot, 'tests/volume-same-state-teacher-contracts.mjs')], {
       cwd: repoRoot,
@@ -76,8 +76,8 @@ try {
     if (contracts.code !== 0) throw new Error(`same-state teacher contracts exited ${contracts.code}`);
   }
 
-  failurePhase = config.assay === 'same-state-teacher' ? 'same-state-teacher-witness' : 'forced-response-witness';
-  const witnessArgs = config.assay === 'same-state-teacher'
+  failurePhase = isSameStateAssay(config.assay) ? 'same-state-teacher-witness' : 'forced-response-witness';
+  const witnessArgs = isSameStateAssay(config.assay)
     ? [
       resolve(repoRoot, 'volume-same-state-teacher-witness.mjs'),
       '--config', configPath,
@@ -111,7 +111,7 @@ try {
   if (witnessReport) {
     lastTrustworthyEvidence.witness = compactWitnessEvidence(witnessReport);
   }
-  if (witness.code !== 0) throw new Error(`${config.assay === 'same-state-teacher' ? 'same-state teacher' : 'forced-response'} witness exited ${witness.code}`);
+  if (witness.code !== 0) throw new Error(`${isSameStateAssay(config.assay) ? 'same-state teacher' : 'forced-response'} witness exited ${witness.code}`);
   if (witnessReport?.status !== 'completed') {
     throw new Error(`forced-response witness did not complete: ${witnessReport?.status || 'missing-report'}`);
   }
@@ -128,6 +128,39 @@ try {
     }
     if (witnessReport.modelIdentity !== null || witnessReport.splineAdmitted !== false || witnessReport.latticeAdmitted !== false) {
       throw new Error('teacher assay admitted a forbidden model representation');
+    }
+  } else if (config.assay === 'same-state-analytical-calibration') {
+    if (!String(witnessReport.backend || '').startsWith('WebGPU:')) throw new Error(`analytical calibration backend disagreement: ${witnessReport.backend}`);
+    if (witnessReport.requestedRoute !== requestedRoute) {
+      throw new Error('analytical calibration requested route disagreement');
+    }
+    assertEffectiveRouteControls(witnessReport.lastTrustworthyEvidence?.route?.effectiveUrl, config.route);
+    if (witnessReport.effectiveRoute !== 'boundary-splat-analytical-teacher-calibration-baseline-v0') {
+      throw new Error(`effective analytical calibration route disagreement: ${witnessReport.effectiveRoute}`);
+    }
+    if (witnessReport.simulatorRoute !== 'native-3d-compute-fluid-raymarch-v0') {
+      throw new Error(`analytical calibration simulator route disagreement: ${witnessReport.simulatorRoute || 'missing'}`);
+    }
+    validateAnalyticalCandidateExport(witnessReport.candidateExport);
+    if (witnessReport.baseline?.teacherResidualName !== SAME_STATE_TEACHER_CONTRACT.residualName) {
+      throw new Error(`analytical calibration teacher identity disagreement: ${witnessReport.baseline?.teacherResidualName || 'missing'}`);
+    }
+    if (!['named-analytical-miss', 'candidate-support-miss'].includes(witnessReport.baseline?.status)) {
+      throw new Error(`untouched analytical baseline did not expose a named miss: ${witnessReport.baseline?.status || 'missing'}`);
+    }
+    if (witnessReport.baseline?.parameterCalibrationAdmitted !== false) {
+      throw new Error('untouched analytical baseline claimed parameter-calibration authority');
+    }
+    if (witnessReport.baseline?.status === 'candidate-support-miss'
+      && witnessReport.baseline.candidateSupport?.upperCandidateCount !== 0) {
+      throw new Error('analytical candidate-support miss did not block parameter calibration');
+    }
+    if (witnessReport.calibratedParametersApplied !== false
+      || witnessReport.analyticalWarpApplied !== true
+      || witnessReport.modelIdentity !== null
+      || witnessReport.splineAdmitted !== false
+      || witnessReport.latticeAdmitted !== false) {
+      throw new Error('analytical baseline admitted calibration or a forbidden representation');
     }
   } else {
     if (witnessReport.browser?.headless !== true || witnessReport.browser?.unsafeWebGpuEnabled !== true) {
@@ -183,7 +216,7 @@ function buildReport({ status, effectiveRoute, witnessReport, error = null }) {
     requestedBackend: {
       browser: 'chrome-headless-new',
       unsafeWebGpuEnabled: true,
-      timingAuthority: requestedAssay === 'same-state-teacher' ? 'not-requested-teacher-calibration' : 'gpu-timestamp-query',
+      timingAuthority: isSameStateAssay(requestedAssay) ? 'not-requested-teacher-calibration' : 'gpu-timestamp-query',
     },
     effectiveBackend: witnessReport ? {
       browser: witnessReport.browser || null,
@@ -213,10 +246,19 @@ function compactWitnessEvidence(report) {
     selectedArtifacts: report.selectedArtifacts || null,
     initialField: report.initialField || report.lastTrustworthyEvidence?.initialField || null,
     lastCompletedHorizon: report.lastTrustworthyEvidence?.lastCompletedHorizon || null,
+    baseline: report.baseline || null,
+    candidateExport: report.candidateExport || null,
   };
 }
 
 function validateConfig(config) {
+  if (config?.assay === 'same-state-analytical-calibration') {
+    if (config.schema !== 'kaminos.volume.same-state-analytical-teacher-calibration-config.v0') throw new Error(`analytical calibration config schema disagreement: ${config?.schema}`);
+    if (!config.teacherInitialField?.fluidSha256 || !config.teacherInitialField?.frontSha256) throw new Error('analytical calibration teacher field identity is missing');
+    if (config.teacherResidual?.residualName !== SAME_STATE_TEACHER_CONTRACT.residualName) throw new Error('analytical calibration residual identity disagreement');
+    if (!config.route || typeof config.route !== 'object') throw new Error('analytical calibration route controls are missing');
+    return;
+  }
   if (config?.assay === 'same-state-teacher') {
     if (config.schema !== 'kaminos.volume.same-state-forced-teacher-config.v0') throw new Error(`teacher config schema disagreement: ${config?.schema}`);
     if (!Array.isArray(config.horizons) || config.horizons.length < 1) throw new Error('teacher horizon ladder is missing');
@@ -228,6 +270,47 @@ function validateConfig(config) {
   if (config.costLadderInstances?.join(',') !== '1,16,100') throw new Error('cost ladder must be exactly 1,16,100');
   if (!config.route || typeof config.route !== 'object') throw new Error('route controls are missing');
   if (config.route.volume_boundary_splat_mode !== config.renderer) throw new Error('route renderer disagrees with requested renderer');
+}
+
+function isSameStateAssay(assay) {
+  return assay === 'same-state-teacher' || assay === 'same-state-analytical-calibration';
+}
+
+function validateAnalyticalCandidateExport(candidateExport) {
+  if (candidateExport?.authority !== 'debug-full-field-boundary-splat-effective-output-readback-v0') {
+    throw new Error(`analytical candidate authority disagreement: ${candidateExport?.authority || 'missing'}`);
+  }
+  if (candidateExport.sourceAuthority !== 'live-baked-sidecar-plus-fluid-material-v0') {
+    throw new Error(`analytical candidate source authority disagreement: ${candidateExport.sourceAuthority || 'missing'}`);
+  }
+  if (candidateExport.rendererIdentity !== 'live-boundary-sidecar-analytic-splats-v0') {
+    throw new Error(`analytical candidate renderer identity disagreement: ${candidateExport.rendererIdentity || 'missing'}`);
+  }
+  const { draw, descriptor } = candidateExport;
+  if (draw?.overflowCount !== 0) throw new Error(`analytical candidate overflow disagreement: ${draw?.overflowCount ?? 'missing'}`);
+  if (!Number.isInteger(draw.instanceCount) || draw.instanceCount <= 0) throw new Error('analytical candidate instance count is invalid');
+  if (!Number.isInteger(draw.candidateCount) || draw.candidateCount <= 0 || draw.candidateCount > draw.instanceCount) {
+    throw new Error('analytical candidate draw count is invalid');
+  }
+  if (descriptor?.kind !== 'boundarySplat'
+    || descriptor.dtype !== 'float32'
+    || descriptor.floatCount !== draw.instanceCount * 12
+    || descriptor.byteLength !== descriptor.floatCount * Float32Array.BYTES_PER_ELEMENT
+    || descriptor.shape?.[0] !== draw.instanceCount
+    || descriptor.shape?.[1] !== 12) {
+    throw new Error('analytical candidate descriptor disagrees with draw receipt');
+  }
+  if (!/^[0-9a-f]{64}$/.test(candidateExport.sha256 || '')) throw new Error('analytical candidate readback hash is missing');
+}
+
+function assertEffectiveRouteControls(effectiveUrl, requestedControls) {
+  if (!effectiveUrl) throw new Error('analytical calibration effective URL is missing');
+  const effective = new URL(effectiveUrl);
+  for (const [key, value] of Object.entries(requestedControls)) {
+    if (effective.searchParams.get(key) !== String(value)) {
+      throw new Error(`analytical calibration route control disagreement:${key}`);
+    }
+  }
 }
 
 function buildRoute(route) {

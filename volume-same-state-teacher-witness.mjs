@@ -10,9 +10,15 @@ import {
   selectShortestVisibleTeacherResidual,
   validateSameStateTeacherPair,
 } from './same-state-teacher-contract.mjs';
+import {
+  evaluateAnalyticalTeacherBaseline,
+  validateAnalyticalCandidateReadback,
+} from './boundary-splat-forced-response.mjs';
 
 const REPORT_SCHEMA = 'kaminos.volume.same-state-forced-teacher-witness.v0';
 const CONFIG_SCHEMA = 'kaminos.volume.same-state-forced-teacher-config.v0';
+const CALIBRATION_REPORT_SCHEMA = 'kaminos.volume.same-state-analytical-teacher-calibration-witness.v0';
+const CALIBRATION_CONFIG_SCHEMA = 'kaminos.volume.same-state-analytical-teacher-calibration-config.v0';
 const TEACHER_AUTHORITY = 'exact-same-state-forced-response-teacher-fork-v0';
 const TEACHER_APPLICATION = 'frame-current-emitter-wind-teacher-sequence-v0';
 const args = parseArgs(process.argv.slice(2));
@@ -69,14 +75,18 @@ try {
   const settled = await waitForVolumeRoute(cdp, config.settleMs);
   assert.equal(settled.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong simulator route');
   assert.match(String(settled.backend || ''), /^WebGPU:/, 'same-state teacher requires adapter-qualified WebGPU');
+  const effectiveUrl = await evaluate(cdp, 'location.href', 'effective-url');
   lastTrustworthyEvidence.route = {
     requestedUrl,
-    effectiveUrl: await evaluate(cdp, 'location.href', 'effective-url'),
+    effectiveUrl,
     browser: version.Browser,
     backend: settled.backend,
     effectiveRoute: settled.effectiveRoute,
     prototypeIdentity: settled.prototypeIdentity,
   };
+  if (config.assay === 'same-state-analytical-calibration') {
+    assertEffectiveRouteControls(effectiveUrl, config.route);
+  }
   const canvasMount = await mountRendererCanvas(cdp);
   lastTrustworthyEvidence.canvasMount = canvasMount;
 
@@ -89,6 +99,9 @@ try {
   assert.equal(initialBegin?.ok, true, `initial field export failed: ${JSON.stringify(initialBegin)}`);
   const initialFluid = await drainExport(cdp, initialBegin, 'fluid', config.chunkFloats);
   const initialFront = await drainExport(cdp, initialBegin, 'front', config.chunkFloats);
+  const initialBoundarySplats = config.assay === 'same-state-analytical-calibration'
+    ? await drainExport(cdp, initialBegin, 'boundarySplat', config.chunkFloats)
+    : null;
   await releaseExport(cdp, initialBegin.sessionId);
   const initialStep = Number(initialBegin.deterministicReplay?.simStepCount ?? initialBegin.deterministicReplay?.completedSteps);
   assert.ok(Number.isInteger(initialStep) && initialStep >= 0, 'initial export omitted simulator step identity');
@@ -101,6 +114,79 @@ try {
     frontByteLength: initialFront.bytes.byteLength,
   };
 
+  if (config.assay === 'same-state-analytical-calibration') {
+    failurePhase = 'analytical-teacher-baseline';
+    assert.equal(initialFluid.sha256, config.teacherInitialField.fluidSha256, 'calibration initial fluid checksum disagrees with teacher');
+    assert.equal(initialFront.sha256, config.teacherInitialField.frontSha256, 'calibration initial front checksum disagrees with teacher');
+    assert.equal(initialStep, config.teacherInitialField.simStepCount, 'calibration initial simulator step disagrees with teacher');
+    const candidateDescriptor = initialBegin.boundarySplats?.sidecars?.boundarySplats;
+    assert.ok(candidateDescriptor?.floatCount > 0, 'calibration boundary-splat candidate export is blank');
+    const candidateValues = new Float32Array(
+      initialBoundarySplats.bytes.buffer,
+      initialBoundarySplats.bytes.byteOffset,
+      initialBoundarySplats.bytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    ).slice();
+    const sourceAuthority = initialBegin.boundarySplats?.sourceAuthority || null;
+    const rendererIdentity = initialBegin.boundarySplats?.identity || null;
+    const draw = initialBegin.boundarySplats?.draw || null;
+    lastTrustworthyEvidence.candidateExport = {
+      authority: null,
+      sourceAuthority,
+      rendererIdentity,
+      draw,
+      descriptor: candidateDescriptor,
+      sha256: initialBoundarySplats.sha256,
+      validationStatus: 'unverified',
+    };
+    const validatedCandidate = validateAnalyticalCandidateReadback({
+      candidateValues,
+      descriptor: candidateDescriptor,
+      draw,
+      sourceAuthority,
+      rendererIdentity,
+    });
+    lastTrustworthyEvidence.candidateExport = {
+      ...lastTrustworthyEvidence.candidateExport,
+      authority: validatedCandidate.authority,
+      validationStatus: 'validated',
+    };
+    const baseline = evaluateAnalyticalTeacherBaseline({
+      teacherResidual: config.teacherResidual,
+      candidateValues,
+      candidateAuthority: validatedCandidate.authority,
+      response: config.baselineResponse,
+      teacherGrid: initialBegin.grid,
+      maximumAbsoluteLagErrorWorld: config.maximumAbsoluteLagErrorWorld,
+    });
+    const report = {
+      schema: CALIBRATION_REPORT_SCHEMA,
+      status: 'completed',
+      failurePhase: null,
+      error: null,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      requestedRoute: requestedUrl,
+      effectiveRoute: 'boundary-splat-analytical-teacher-calibration-baseline-v0',
+      simulatorRoute: settled.effectiveRoute,
+      backend: settled.backend,
+      browser: version.Browser,
+      initialField: lastTrustworthyEvidence.initialField,
+      teacherInitialField: config.teacherInitialField,
+      teacherResidual: config.teacherResidual,
+      candidateExport: {
+        ...lastTrustworthyEvidence.candidateExport,
+      },
+      baseline,
+      modelIdentity: null,
+      analyticalWarpApplied: true,
+      calibratedParametersApplied: false,
+      splineAdmitted: false,
+      latticeAdmitted: false,
+      lastTrustworthyEvidence,
+    };
+    writeReport(report);
+    console.log(JSON.stringify(report));
+  } else {
   failurePhase = 'teacher-horizon-capture';
   const rows = [];
   for (const steps of config.horizons) {
@@ -183,9 +269,10 @@ try {
   };
   writeReport(report);
   console.log(JSON.stringify(report));
+  }
 } catch (error) {
   const report = {
-    schema: REPORT_SCHEMA,
+    schema: lastTrustworthyEvidence.config?.schema === CALIBRATION_CONFIG_SCHEMA ? CALIBRATION_REPORT_SCHEMA : REPORT_SCHEMA,
     status: 'failed',
     failurePhase,
     error: error?.stack || error?.message || String(error),
@@ -455,7 +542,9 @@ function visibleWeight(cell) {
 }
 
 async function drainExport(cdp, begin, kind, chunkFloats) {
-  const descriptor = begin[kind];
+  const descriptor = kind === 'boundarySplat'
+    ? begin.boundarySplats?.sidecars?.boundarySplats
+    : begin[kind];
   assert.ok(descriptor?.floatCount > 0 && descriptor?.byteLength > 0, `missing ${kind} export descriptor`);
   const chunks = [];
   for (let startFloat = 0; startFloat < descriptor.floatCount; startFloat += chunkFloats) {
@@ -731,11 +820,30 @@ function writeRgbaPng(path, width, height, rgba) {
 }
 
 function validateConfig(config) {
+  if (config?.assay === 'same-state-analytical-calibration') {
+    assert.equal(config.schema, CALIBRATION_CONFIG_SCHEMA, 'analytical calibration config schema disagreement');
+    assert.ok(config.teacherInitialField?.fluidSha256 && config.teacherInitialField?.frontSha256, 'calibration teacher initial field is missing');
+    assert.equal(config.teacherResidual?.residualName, SAME_STATE_TEACHER_CONTRACT.residualName, 'calibration teacher residual identity disagreement');
+    assert.equal(config.teacherResidual?.rigidDisplacementSubtraction?.applied, true, 'calibration teacher rigid subtraction is missing');
+    assert.equal(config.baselineResponse?.calibrationIdentity, 'baseline-untuned-analytical-control-v0', 'calibration baseline identity disagreement');
+    return;
+  }
   assert.equal(config?.schema, CONFIG_SCHEMA, 'teacher config schema disagreement');
   assert.ok(Array.isArray(config.horizons) && config.horizons.length > 0, 'teacher horizons are missing');
   assert.ok(config.horizons.every((value, index) => Number.isInteger(value) && value > 0 && (index === 0 || value > config.horizons[index - 1])), 'teacher horizons must increase');
   assert.ok(config.source?.center?.length === 3 && config.source?.velocity?.length === 3, 'teacher source path is missing');
   assert.ok(config.controlControls && config.teacherControls, 'teacher controls are missing');
+}
+
+function assertEffectiveRouteControls(effectiveUrl, requestedControls) {
+  const effective = new URL(effectiveUrl);
+  for (const [key, value] of Object.entries(requestedControls)) {
+    assert.equal(
+      effective.searchParams.get(key),
+      String(value),
+      `analytical calibration route control disagreement:${key}`,
+    );
+  }
 }
 
 function writeReport(report) {
