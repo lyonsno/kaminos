@@ -156,6 +156,8 @@ function faceVisibility(neighbor, bond, authoredOpening) {
 function surfaceRole(visibility, node) {
   if (visibility === 'fracture-surface') return 'fracture';
   if (visibility === 'authored-opening') return 'notch';
+  if (node.structuralRole === 'bell-body') return 'bell-shell';
+  if (node.structuralRole === 'bell-frame') return 'bell-frame';
   if (node.pinned) return 'support';
   return 'clay-shell';
 }
@@ -247,6 +249,7 @@ export function buildEffigyTileGeometrySidecar(state, options = {}) {
       id: cellId,
       structuralNodeId: node.id,
       componentId: node.componentId,
+      structuralRole: node.structuralRole || 'masonry',
       pinned: Boolean(node.pinned),
       restCenter: roundedPoint(restCenter),
       currentCenter: roundedPoint(add(restCenter, displacement)),
@@ -273,6 +276,7 @@ export function buildEffigyTileGeometrySidecar(state, options = {}) {
         cellId,
         structuralNodeId: node.id,
         componentId: node.componentId,
+        structuralRole: node.structuralRole || 'masonry',
         pinned: Boolean(node.pinned),
         direction: direction.key,
         axis: direction.axis,

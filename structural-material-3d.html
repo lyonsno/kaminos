@@ -227,6 +227,11 @@
       STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE,
       buildSympatheticCitadelProjection,
     } from './structural-material-3d-sympathetic-citadel.js';
+    import { buildStructuralAssetSidecar } from './structural-material-3d-asset-sidecar.js';
+    import {
+      advanceAcceptedStructuralBellTower,
+      deriveAcceptedBellTowerState,
+    } from './structural-material-3d-bell-tower.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -236,7 +241,8 @@
     const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
     const EFFIGY_TILE_PROFILE = 'rib-upper-v0';
     const pageUrl = new URL(window.location.href);
-    const sympatheticCitadelMode = pageUrl.searchParams.get('sympatheticCitadel') === '1';
+    const bellTowerMode = pageUrl.searchParams.get('bellTower') === '1';
+    const sympatheticCitadelMode = pageUrl.searchParams.get('sympatheticCitadel') === '1' || bellTowerMode;
     const showStructuralOverlay = pageUrl.searchParams.get('structuralOverlay') === '1';
     const hapticCompanionParameter = pageUrl.searchParams.get('hapticCompanion');
     const nativeHapticCompanionUrl = hapticCompanionParameter === 'off'
@@ -317,8 +323,29 @@
     const tileStressedMaterial = new THREE.MeshStandardMaterial({ color: 0xd9bd61, roughness: 0.8, metalness: 0.02, side: THREE.DoubleSide });
     const tileLooseMaterial = new THREE.MeshStandardMaterial({ color: 0xe2d49c, roughness: 0.84, metalness: 0.02, side: THREE.DoubleSide });
     const tileSupportMaterial = new THREE.MeshStandardMaterial({ color: 0x7185a6, roughness: 0.78, metalness: 0.03, side: THREE.DoubleSide });
-    const tileFractureMaterial = new THREE.MeshStandardMaterial({ color: 0xb63a2d, roughness: 0.96, metalness: 0, side: THREE.DoubleSide });
+    const tileFractureMaterial = new THREE.MeshStandardMaterial({
+      color: 0xb63a2d,
+      roughness: 0.96,
+      metalness: 0,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
     const tileNotchMaterial = new THREE.MeshStandardMaterial({ color: 0x403a36, roughness: 0.98, metalness: 0, side: THREE.DoubleSide });
+    const bellFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x87968c, roughness: 0.9, metalness: 0.03, side: THREE.DoubleSide });
+    const bellMaterial = new THREE.MeshStandardMaterial({ color: 0xb88a32, roughness: 0.34, metalness: 0.72, side: THREE.DoubleSide });
+    const bellHangerMaterial = new THREE.LineBasicMaterial({ color: 0xd1aa52, transparent: true, opacity: 0.96 });
+    const bellFallbackGeometry = new THREE.LatheGeometry([
+      new THREE.Vector2(0.025, 0.13),
+      new THREE.Vector2(0.06, 0.09),
+      new THREE.Vector2(0.085, 0.035),
+      new THREE.Vector2(0.105, -0.07),
+      new THREE.Vector2(0.14, -0.12),
+      new THREE.Vector2(0.145, -0.14),
+      new THREE.Vector2(0.11, -0.145),
+    ], 24);
+    const structuralBlockGeometry = new THREE.BoxGeometry(1, 1, 1);
     const forceMaterial = new THREE.LineBasicMaterial({ color: 0xf1cc62, transparent: true, opacity: 0.96 });
     const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
     const structuralRaycaster = new THREE.Raycaster();
@@ -326,7 +353,16 @@
     const structuralPointerNdc = new THREE.Vector2();
 
     function createProductMaterial() {
-      return sympatheticCitadelMode
+      return bellTowerMode
+        ? createLayeredStructuralMaterial({
+            columns: 13,
+            rows: 10,
+            layers: 3,
+            notch: true,
+            profile: EFFIGY_TILE_PROFILE,
+            topologyProfile: 'three-turret-bell-citadel-v0',
+          })
+        : sympatheticCitadelMode
         ? createLayeredStructuralMaterial({
             columns: 13,
             rows: 7,
@@ -346,6 +382,7 @@
 
     let material = createProductMaterial();
     let geometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
+    let structuralAssetSidecar = buildStructuralAssetSidecar(material, geometrySidecar);
     const geometryTransitionLedger = [];
     let materialPointerId = null;
     let dragStart = null;
@@ -420,7 +457,12 @@
     function clearStructuralGroup(group) {
       while (group.children.length > 0) {
         const child = group.children.pop();
-        if (child.geometry && child.geometry !== nodeGeometry) child.geometry.dispose?.();
+        if (
+          child.geometry &&
+          child.geometry !== nodeGeometry &&
+          child.geometry !== bellFallbackGeometry &&
+          child.geometry !== structuralBlockGeometry
+        ) child.geometry.dispose?.();
       }
     }
 
@@ -486,7 +528,7 @@
     function populateStructuralConsumer(
       targetGroup,
       contactPreviewOffsetByNodeId,
-      { consumerId, pickable, structuralOverlay },
+      { consumerId, pickable, structuralOverlay, assetComposition = false },
     ) {
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
       const bondsByNode = new Map(material.nodes.map(node => [node.id, []]));
@@ -502,8 +544,70 @@
       targetGroup.userData.sympatheticConsumer = consumerId;
       targetGroup.userData.topologyEpoch = material.topologyEpoch;
       targetGroup.userData.connectivityEpoch = material.connectivityEpoch;
+      if (assetComposition) {
+        const blockBatches = new Map();
+        for (const anchor of structuralAssetSidecar.anchors) {
+          if (anchor.prototype.instancePolicy !== 'shared-instanced-prototype') continue;
+          const node = nodeById.get(anchor.structuralNodeId);
+          const nodeStress = Math.max(
+            0,
+            ...(bondsByNode.get(anchor.structuralNodeId) || []).map(bond => bond.lastStress || 0),
+          );
+          const materialKey = anchor.structuralRole === 'bell-frame'
+            ? 'frame'
+            : node.pinned
+              ? 'support'
+              : anchor.componentId !== anchoredComponentId
+                ? 'loose'
+                : nodeStress / maxStress > 0.42
+                  ? 'stressed'
+                  : 'shell';
+          const entry = blockBatches.get(materialKey) || [];
+          entry.push(anchor);
+          blockBatches.set(materialKey, entry);
+        }
+        const instanceMaterials = {
+          frame: bellFrameMaterial,
+          support: tileSupportMaterial,
+          loose: tileLooseMaterial,
+          stressed: tileStressedMaterial,
+          shell: tileShellMaterial,
+        };
+        const matrix = new THREE.Matrix4();
+        const quaternion = new THREE.Quaternion();
+        for (const [materialKey, anchors] of blockBatches) {
+          const instances = new THREE.InstancedMesh(
+            structuralBlockGeometry,
+            instanceMaterials[materialKey],
+            anchors.length,
+          );
+          anchors.forEach((anchor, index) => {
+            matrix.compose(
+              worldCoordinate(anchor.acceptedBodyCenter),
+              quaternion,
+              new THREE.Vector3(
+                anchor.scale.x * 2.35,
+                anchor.scale.y * 1.25,
+                anchor.scale.z * 0.95,
+              ),
+            );
+            instances.setMatrixAt(index, matrix);
+          });
+          instances.instanceMatrix.needsUpdate = true;
+          instances.userData.sympatheticProjection = {
+            consumerId,
+            kind: 'instanced-structural-blocks',
+            materialKey,
+            instanceCount: anchors.length,
+            prototypeAssetIds: [...new Set(anchors.map(anchor => anchor.prototype.assetId))],
+          };
+          targetGroup.add(instances);
+        }
+      }
       for (const face of geometrySidecar.faces) {
         if (face.visibility === 'hidden-live-adjacency') continue;
+        if (face.structuralRole === 'bell-body') continue;
+        if (assetComposition && face.visibility !== 'fracture-surface') continue;
         const nodeStress = Math.max(
           0,
           ...(bondsByNode.get(face.structuralNodeId) || []).map(bond => bond.lastStress || 0),
@@ -512,6 +616,8 @@
           ? tileFractureMaterial
           : face.visibility === 'authored-opening'
             ? tileNotchMaterial
+            : face.structuralRole === 'bell-frame'
+              ? bellFrameMaterial
             : face.pinned
               ? tileSupportMaterial
               : face.componentId !== anchoredComponentId
@@ -556,13 +662,15 @@
           z: nodeB.z + nodeB.displacement.z + (offsetB?.z || 0),
         });
         const stress = (bond.lastStress || 0) / maxStress;
-        const lineMaterial = bond.alive
-          ? bond.bondKind === 'depth'
-            ? depthMaterial
-            : stress > 0.58
-              ? stressedMaterial
-              : liveMaterial
-          : brokenMaterial;
+        const lineMaterial = !bond.alive
+          ? brokenMaterial
+          : bond.geometryRole === 'bell-hanger'
+            ? bellHangerMaterial
+            : bond.bondKind === 'depth'
+              ? depthMaterial
+              : stress > 0.58
+                ? stressedMaterial
+                : liveMaterial;
         const line = lineBetween(a, b, lineMaterial);
         line.userData.sympatheticProjection = {
           consumerId,
@@ -571,7 +679,7 @@
           alive: bond.alive,
         };
         if (pickable) line.userData.structuralPick = { kind: 'bond', id: bond.id };
-        line.visible = structuralOverlay;
+        line.visible = structuralOverlay || bond.geometryRole === 'bell-hanger';
         if (!bond.alive) line.computeLineDistances?.();
         targetGroup.add(line);
       }
@@ -595,6 +703,39 @@
         if (pickable) mesh.userData.structuralPick = { kind: 'node', id: node.id };
         mesh.visible = structuralOverlay;
         targetGroup.add(mesh);
+      }
+      const bellAnchor = structuralAssetSidecar.anchors
+        .find(anchor => anchor.structuralRole === 'bell-body');
+      if (bellAnchor) {
+        const bellMesh = new THREE.Mesh(bellFallbackGeometry, bellMaterial);
+        const previewOffset = contactPreviewOffsetByNodeId.get(bellAnchor.structuralNodeId);
+        const renderedBodyCenter = {
+          x: bellAnchor.acceptedBodyCenter.x + (previewOffset?.x || 0),
+          y: bellAnchor.acceptedBodyCenter.y + (previewOffset?.y || 0),
+          z: bellAnchor.acceptedBodyCenter.z + (previewOffset?.z || 0),
+        };
+        const crownWorld = worldCoordinate(bellAnchor.acceptedCrownPoint);
+        const bodyWorld = worldCoordinate(renderedBodyCenter);
+        const renderedAxis = bodyWorld.clone().sub(crownWorld);
+        bellMesh.position.copy(bodyWorld);
+        if (renderedAxis.lengthSq() > 0.000001) {
+          bellMesh.quaternion.setFromUnitVectors(
+            new THREE.Vector3(0, -1, 0),
+            renderedAxis.normalize(),
+          );
+        }
+        bellMesh.userData.sympatheticProjection = {
+          consumerId,
+          kind: 'authored-asset-fallback',
+          assetId: bellAnchor.prototype.assetId,
+          assetAnchorId: bellAnchor.id,
+          structuralNodeId: bellAnchor.structuralNodeId,
+          attached: bellAnchor.attached,
+          visualStatus: bellAnchor.prototype.visualStatus,
+        };
+        bellMesh.userData.structuralAssetAnchor = structuredClone(bellAnchor);
+        if (pickable) bellMesh.userData.structuralPick = { kind: 'node', id: bellAnchor.structuralNodeId };
+        targetGroup.add(bellMesh);
       }
     }
 
@@ -633,6 +774,7 @@
         }
       }
       geometrySidecar = nextGeometrySidecar;
+      structuralAssetSidecar = buildStructuralAssetSidecar(material, geometrySidecar);
       populateStructuralConsumer(world, contactPreviewOffsetByNodeId, {
         consumerId: 'operator-effigy',
         pickable: true,
@@ -643,6 +785,7 @@
           consumerId: 'represented-citadel',
           pickable: false,
           structuralOverlay: false,
+          assetComposition: bellTowerMode,
         });
       }
       updateForceIndicator();
@@ -1201,6 +1344,7 @@
           return {
             kind: child.userData.structuralPick.kind,
             id: child.userData.structuralPick.id,
+            structuralRole: node.structuralRole || 'masonry',
             restPoint: { x: node.x, y: node.y, z: node.z },
             displayPoint: {
               x: node.x + node.displacement.x,
@@ -1224,7 +1368,10 @@
     }
 
     function projectedStructuralPickTarget() {
-      return projectedStructuralPickTargets()[0] || null;
+      const candidates = projectedStructuralPickTargets();
+      return bellTowerMode
+        ? candidates.find(candidate => candidate.structuralRole === 'bell-body') || null
+        : candidates[0] || null;
     }
 
     function applyDrag(point) {
@@ -1376,6 +1523,13 @@
           let nextMaterial;
           runStructuralMutation('gpu-sympathetic-tear', () => {
             nextMaterial = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
+            if (bellTowerMode) {
+              nextMaterial = advanceAcceptedStructuralBellTower(effectiveSourceState, nextMaterial, {
+                accepted: true,
+                eventEpoch: receipt.eventEpoch,
+                operation: 'shear',
+              });
+            }
             material = nextMaterial;
             gpuBindingReceipt = null;
           });
@@ -1483,7 +1637,14 @@
         gpuBindingReceipt = receipt;
         if (receipt.status === 'passed') {
           runStructuralMutation('gpu-resident-binding', () => {
-            material = buildLayeredStructuralGpuBindingMaterial(effectiveSourceState, receipt);
+            const boundMaterial = buildLayeredStructuralGpuBindingMaterial(effectiveSourceState, receipt);
+            material = bellTowerMode
+              ? advanceAcceptedStructuralBellTower(effectiveSourceState, boundMaterial, {
+                  accepted: true,
+                  eventEpoch: receipt.eventEpoch,
+                  operation: 'bind',
+                })
+              : boundMaterial;
             gpuTearReceipt = null;
           });
         } else {
@@ -1682,6 +1843,7 @@
         renderedMotionLedger.length = 0;
         renderedMotionAuditErrors.length = 0;
         geometrySidecar = null;
+        structuralAssetSidecar = null;
         geometryTransitionLedger.length = 0;
       });
       synchronizeHotSidecar(material);
@@ -1702,6 +1864,11 @@
         .map(projection => `${projection.faceId}:${projection.visibility}:${projection.governingBondId || 'outer'}`)
         .sort()
         .join('|');
+      const fractureFaceIdentityFingerprint = projections
+        .filter(projection => projection.kind === 'face' && projection.visibility === 'fracture-surface')
+        .map(projection => `${projection.faceId}:${projection.governingBondId || 'missing-governor'}`)
+        .sort()
+        .join('|');
       return {
         consumerId: group.userData.sympatheticConsumer || null,
         topologyEpoch: group.userData.topologyEpoch ?? null,
@@ -1713,9 +1880,13 @@
         ).length,
         structuralNodeCount: projections.filter(projection => projection.kind === 'node').length,
         structuralBondCount: projections.filter(projection => projection.kind === 'bond').length,
+        instancedBlockCount: projections
+          .filter(projection => projection.kind === 'instanced-structural-blocks')
+          .reduce((sum, projection) => sum + projection.instanceCount, 0),
         pickableObjectCount: group.children.filter(child =>
           child.userData.effigySurfacePick || child.userData.structuralPick).length,
         faceIdentityFingerprint,
+        fractureFaceIdentityFingerprint,
       };
     }
 
@@ -1728,11 +1899,24 @@
       const citadel = renderedSympatheticConsumer(citadelWorld);
       return {
         ...projection,
+        bellTower: bellTowerMode ? deriveAcceptedBellTowerState(material) : null,
+        structuralAssetSidecar: bellTowerMode ? {
+          schema: structuralAssetSidecar.schema,
+          route: structuralAssetSidecar.route,
+          authority: structuralAssetSidecar.authority,
+          status: structuralAssetSidecar.status,
+          topologyEpoch: structuralAssetSidecar.topologyEpoch,
+          connectivityEpoch: structuralAssetSidecar.connectivityEpoch,
+          summary: { ...structuralAssetSidecar.summary },
+          bellAnchor: structuredClone(structuralAssetSidecar.anchors.find(anchor =>
+            anchor.structuralRole === 'bell-body') || null),
+        } : null,
+        bellRingEvents: material.sound.events.filter(event => event.kind === 'ring').map(event => ({ ...event })),
         rendered: { effigy, citadel },
         acceptedSurfaceCorrespondence:
           effigy.topologyEpoch === citadel.topologyEpoch &&
           effigy.connectivityEpoch === citadel.connectivityEpoch &&
-          effigy.faceIdentityFingerprint === citadel.faceIdentityFingerprint,
+          effigy.fractureFaceIdentityFingerprint === citadel.fractureFaceIdentityFingerprint,
         effigyPickable: effigy.pickableObjectCount > 0,
         citadelPickable: citadel.pickableObjectCount > 0,
       };

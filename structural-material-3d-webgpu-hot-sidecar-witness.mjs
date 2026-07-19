@@ -18,6 +18,15 @@ import {
   STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE,
   STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE,
 } from './structural-material-3d-sympathetic-citadel.js';
+import {
+  STRUCTURAL_ASSET_SIDECAR_AUTHORITY,
+  STRUCTURAL_ASSET_SIDECAR_ROUTE,
+} from './structural-material-3d-asset-sidecar.js';
+import {
+  STRUCTURAL_BELL_RING_AUTHORITY,
+  STRUCTURAL_BELL_TOWER_AUTHORITY,
+  STRUCTURAL_BELL_TOWER_ROUTE,
+} from './structural-material-3d-bell-tower.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-hot-sidecar-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
@@ -283,8 +292,10 @@ if (config.help) {
   console.log(usage());
   process.exit(0);
 }
+const requestedUrl = new URL(config.url);
+const bellTowerRequested = requestedUrl.searchParams.get('bellTower') === '1';
 const sympatheticCitadelRequested =
-  new URL(config.url).searchParams.get('sympatheticCitadel') === '1';
+  requestedUrl.searchParams.get('sympatheticCitadel') === '1' || bellTowerRequested;
 
 const report = {
   schema: SCHEMA,
@@ -310,9 +321,12 @@ const report = {
   shearPreviewScreenshot: null,
   shearAcceptedScreenshot: null,
   sympatheticCitadelRequested,
+  bellTowerRequested,
   sympatheticCitadelInitial: null,
   sympatheticCitadelHeld: null,
   sympatheticCitadelAccepted: null,
+  bellTowerInitial: null,
+  bellTowerAccepted: null,
   modeSelection: null,
   liveBinding: null,
   checks: {},
@@ -365,10 +379,13 @@ try {
   if (sympatheticCitadelRequested) {
     report.sympatheticCitadelInitial = pageBefore.sympatheticCitadel;
     const projection = pageBefore.sympatheticCitadel;
+    const expectedTopologyProfile = bellTowerRequested
+      ? 'three-turret-bell-citadel-v0'
+      : 'three-turret-citadel-v0';
     report.checks.sympatheticCitadelInitialIdentity =
       projection?.status === 'passed' &&
       projection.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE &&
-      projection.topologyProfile === 'three-turret-citadel-v0' &&
+      projection.topologyProfile === expectedTopologyProfile &&
       projection.consumers?.effigy?.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE &&
       projection.consumers?.citadel?.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_CONSUMER_ROUTE &&
       projection.consumers.effigy.acceptedState.structuralFingerprint ===
@@ -380,6 +397,35 @@ try {
     assertCheck(
       report.checks.sympatheticCitadelInitialIdentity,
       'sympathetic citadel route exposed missing, fallback, or divergent consumer identity',
+    );
+  }
+  if (bellTowerRequested) {
+    report.bellTowerInitial = {
+      bellTower: pageBefore.sympatheticCitadel?.bellTower,
+      structuralAssetSidecar: pageBefore.sympatheticCitadel?.structuralAssetSidecar,
+    };
+    const bellTower = report.bellTowerInitial.bellTower;
+    const assetSidecar = report.bellTowerInitial.structuralAssetSidecar;
+    report.checks.bellTowerInitialIdentity =
+      bellTower?.status === 'passed' &&
+      bellTower.route === STRUCTURAL_BELL_TOWER_ROUTE &&
+      bellTower.authority === STRUCTURAL_BELL_TOWER_AUTHORITY &&
+      bellTower.attached === true &&
+      bellTower.deflectionMagnitude === 0 &&
+      assetSidecar?.status === 'passed' &&
+      assetSidecar.route === STRUCTURAL_ASSET_SIDECAR_ROUTE &&
+      assetSidecar.authority === STRUCTURAL_ASSET_SIDECAR_AUTHORITY &&
+      assetSidecar.summary?.anchorCount === 217 &&
+      assetSidecar.summary?.instancedAnchorCount === 216 &&
+      assetSidecar.summary?.authoredAnchorCount === 1 &&
+      pageBefore.sympatheticCitadel?.rendered?.citadel?.instancedBlockCount === 216 &&
+      assetSidecar.bellAnchor?.structuralRole === 'bell-body' &&
+      assetSidecar.bellAnchor?.prototype?.assetId === 'citadel-bell-v0' &&
+      assetSidecar.bellAnchor?.prototype?.visualStatus === 'awaiting-handy-candyman-cast' &&
+      pageBefore.sympatheticCitadel?.bellCrownSocket?.id === 'bell-crown-v0';
+    assertCheck(
+      report.checks.bellTowerInitialIdentity,
+      'bell route exposed fallback topology, stale asset anchors, or missing structural crown identity',
     );
   }
   const cameraBefore = await evaluate('window.__structuralMaterial3dCameraWitness().state');
@@ -610,6 +656,11 @@ try {
   const livePage = await evaluate('window.__structuralMaterial3dWitness()');
   report.liveTearAcceptance = livePage.gpuTearAcceptance;
   report.sympatheticCitadelAccepted = livePage.sympatheticCitadel;
+  report.bellTowerAccepted = bellTowerRequested ? {
+    bellTower: livePage.sympatheticCitadel?.bellTower,
+    structuralAssetSidecar: livePage.sympatheticCitadel?.structuralAssetSidecar,
+    ringEvents: livePage.sympatheticCitadel?.bellRingEvents,
+  } : null;
   const shearAcceptedCapture = await send('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: false,
@@ -679,6 +730,26 @@ try {
     assertCheck(
       report.checks.sympatheticCitadelAcceptedCorrespondence,
       'accepted fracture did not produce one matching effigy/citadel structural projection',
+    );
+  }
+  if (bellTowerRequested) {
+    const acceptedBell = report.bellTowerAccepted.bellTower;
+    const acceptedAsset = report.bellTowerAccepted.structuralAssetSidecar;
+    const acceptedRings = report.bellTowerAccepted.ringEvents || [];
+    report.checks.bellTowerAcceptedMotionAndRing =
+      acceptedBell?.status === 'passed' &&
+      acceptedBell.deflectionMagnitude > 0.000001 &&
+      acceptedAsset?.status === 'passed' &&
+      acceptedAsset.bellAnchor?.acceptedBodyCenter &&
+      acceptedAsset.bellAnchor.structuralNodeId === acceptedBell.bellNodeId &&
+      acceptedRings.some(event =>
+        event.authority === STRUCTURAL_BELL_RING_AUTHORITY &&
+        event.bellNodeId === acceptedBell.bellNodeId &&
+        event.energy > 0 &&
+        event.pitchHz > 0);
+    assertCheck(
+      report.checks.bellTowerAcceptedMotionAndRing,
+      'accepted bell drag did not couple graph motion, asset anchor motion, and a material-derived ring event',
     );
   }
 

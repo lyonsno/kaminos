@@ -33,8 +33,8 @@ export function sympatheticCitadelStructuralFingerprint(state) {
 }
 
 export function buildSympatheticCitadelProjection(state, geometrySidecar, options = {}) {
-  if (state?.topologyProfile !== 'three-turret-citadel-v0') {
-    throw new Error('sympathetic citadel projection requires three-turret-citadel-v0 topology');
+  if (!['three-turret-citadel-v0', 'three-turret-bell-citadel-v0'].includes(state?.topologyProfile)) {
+    throw new Error('sympathetic citadel projection requires a supported three-turret topology');
   }
   if (geometrySidecar?.status !== 'passed' || geometrySidecar.topologyProfile !== state.topologyProfile) {
     throw new Error('sympathetic citadel projection requires matching validated geometry');
@@ -58,6 +58,8 @@ export function buildSympatheticCitadelProjection(state, geometrySidecar, option
   };
   const bellTowerSocket = geometrySidecar.authoredSockets
     .find(socket => socket.id === 'center-bell-tower-v0') || null;
+  const bellCrownSocket = geometrySidecar.authoredSockets
+    .find(socket => socket.id === 'bell-crown-v0') || null;
   return {
     schema: STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_SCHEMA,
     route: STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE,
@@ -68,6 +70,7 @@ export function buildSympatheticCitadelProjection(state, geometrySidecar, option
     topologyProfile: state.topologyProfile,
     acceptedState,
     bellTowerSocket,
+    bellCrownSocket,
     consumers: {
       effigy: {
         id: 'operator-effigy',

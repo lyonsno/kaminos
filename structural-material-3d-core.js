@@ -117,11 +117,38 @@ function validateTopologyProfile(topologyProfile, columns, rows, layers) {
     }
     return;
   }
+  if (topologyProfile === 'three-turret-bell-citadel-v0') {
+    if (columns !== 13 || rows !== 10 || layers !== 3) {
+      throw new Error('three-turret bell citadel topology requires a 13x10x3 structural lattice');
+    }
+    return;
+  }
   throw new Error(`unknown layered structural topology profile: ${topologyProfile}`);
 }
 
-function includesTopologyNode(topologyProfile, x, y) {
+function structuralRoleForTopologyNode(topologyProfile, x, y, z) {
+  if (topologyProfile === 'three-turret-bell-citadel-v0') {
+    if (x === 6 && y === 1 && z === 1) return 'bell-body';
+    const frameRoof = x >= 5 && x <= 7 && y === 0;
+    const framePosts = (x === 5 || x === 7) && y >= 1 && y <= 2;
+    if (frameRoof || framePosts) return 'bell-frame';
+    const leftTurret = x >= 0 && x <= 2 && y >= 4;
+    const centerTurret = x >= 5 && x <= 7 && y >= 3;
+    const rightTurret = x >= 10 && x <= 12 && y >= 4;
+    const leftBridge = x >= 3 && x <= 4 && y >= 5 && y <= 6;
+    const rightBridge = x >= 8 && x <= 9 && y >= 5 && y <= 6;
+    return leftTurret || centerTurret || rightTurret || leftBridge || rightBridge
+      ? 'masonry'
+      : null;
+  }
+  return 'masonry';
+}
+
+function includesTopologyNode(topologyProfile, x, y, z) {
   if (topologyProfile === 'layered-slab-v0') return true;
+  if (topologyProfile === 'three-turret-bell-citadel-v0') {
+    return structuralRoleForTopologyNode(topologyProfile, x, y, z) !== null;
+  }
   const leftTurret = x >= 0 && x <= 2 && y >= 1;
   const centerTurret = x >= 5 && x <= 7;
   const rightTurret = x >= 10 && x <= 12 && y >= 1;
@@ -188,20 +215,28 @@ export function buildLayeredStructuralSound(events, brokenCount, repairedCount) 
   const impulseEnergy = events.reduce((sum, event) => sum + finite(event.energy), 0);
   const crackEvents = events.filter(event => event.kind === 'crack');
   const bindEvents = events.filter(event => event.kind === 'bind');
+  const ringEvents = events.filter(event => event.kind === 'ring');
   const depthCracks = crackEvents.filter(event => event.bondKind === 'depth').length;
   const brightness = clamp(
     crackEvents.reduce((sum, event) => sum + finite(event.strain), 0) / Math.max(1, crackEvents.length) +
       depthCracks * 0.08 +
-      bindEvents.length * 0.18,
+      bindEvents.length * 0.18 +
+      ringEvents.reduce((sum, event) => sum + finite(event.strain) * 0.34, 0),
     0,
     4,
   );
   const roughness = clamp((crackEvents.length * 0.22 + brokenCount * 0.065 + depthCracks * 0.11) / Math.max(1, events.length), 0, 2.5);
+  const resonance = clamp(
+    ringEvents.reduce((sum, event) => sum + Math.sqrt(Math.max(0, finite(event.energy))) * 2.4, 0),
+    0,
+    4,
+  );
   const sound = {
     authority: STRUCTURAL_MATERIAL_3D_SOUND_AUTHORITY,
     impulseEnergy: round(impulseEnergy, 5),
     brightness: round(brightness, 5),
     roughness: round(roughness, 5),
+    resonance: round(resonance, 5),
     events,
   };
   sound.signature = [
@@ -209,6 +244,7 @@ export function buildLayeredStructuralSound(events, brokenCount, repairedCount) 
     `e${round(sound.impulseEnergy, 4)}`,
     `b${round(sound.brightness, 4)}`,
     `r${round(sound.roughness, 4)}`,
+    `q${round(sound.resonance, 4)}`,
     `c${brokenCount}`,
     `m${repairedCount}`,
   ].join(':');
@@ -257,13 +293,14 @@ export function createLayeredStructuralMaterial(options = {}) {
   for (let z = 0; z < layers; z += 1) {
     for (let y = 0; y < rows; y += 1) {
       for (let x = 0; x < columns; x += 1) {
-        if (!includesTopologyNode(topologyProfile, x, y)) continue;
+        if (!includesTopologyNode(topologyProfile, x, y, z)) continue;
         nodes.push({
           id: nodeIdAt(x, y, z, columns, rows),
           x: round(x / (columns - 1)),
           y: round(y / (rows - 1)),
           z: round(z / (layers - 1)),
           layer: z,
+          structuralRole: structuralRoleForTopologyNode(topologyProfile, x, y, z),
           pinned: x === 0,
           componentId: 'c0',
           displacement: { x: 0, y: 0, z: 0 },
@@ -275,7 +312,7 @@ export function createLayeredStructuralMaterial(options = {}) {
   const pairs = new Set();
   const bonds = [];
   const authoredOpeningNodePairs = [];
-  const addBond = (x0, y0, z0, x1, y1, z1, bondKind = 'in-plane') => {
+  const addBond = (x0, y0, z0, x1, y1, z1, requestedBondKind = 'in-plane') => {
     if (
       x0 < 0 || x0 >= columns || y0 < 0 || y0 >= rows || z0 < 0 || z0 >= layers ||
       x1 < 0 || x1 >= columns || y1 < 0 || y1 >= rows || z1 < 0 || z1 >= layers
@@ -283,10 +320,23 @@ export function createLayeredStructuralMaterial(options = {}) {
     const a = byId.get(nodeIdAt(x0, y0, z0, columns, rows));
     const b = byId.get(nodeIdAt(x1, y1, z1, columns, rows));
     if (!a || !b) return;
+    const bellEndpoint = a.structuralRole === 'bell-body' || b.structuralRole === 'bell-body';
+    const bellHanger = bellEndpoint &&
+      [a.structuralRole, b.structuralRole].includes('bell-frame') &&
+      Math.abs(a.x - b.x) < 0.000001 &&
+      Math.abs(a.z - b.z) < 0.000001 &&
+      Math.abs(a.y - b.y) > 0.000001;
+    if (bellEndpoint && !bellHanger) {
+      authoredOpeningNodePairs.push({ a: a.id, b: b.id, kind: 'bell-clearance' });
+      return;
+    }
+    const bondKind = bellHanger ? 'hanger' : requestedBondKind;
     const key = bondKey(a.id, b.id);
     if (pairs.has(key)) return;
     pairs.add(key);
-    if (shouldSkipNotchBond(a, b, notch)) {
+    const bellSubsystemBond = [a.structuralRole, b.structuralRole]
+      .some(role => role === 'bell-frame' || role === 'bell-body');
+    if (!bellSubsystemBond && shouldSkipNotchBond(a, b, notch)) {
       authoredOpeningNodePairs.push({ a: a.id, b: b.id, kind: 'notch' });
       return;
     }
@@ -295,13 +345,15 @@ export function createLayeredStructuralMaterial(options = {}) {
     const dz = b.z - a.z;
     const changedAxisCount = [dx, dy, dz].filter(delta => Math.abs(delta) > 0.000001).length;
     const rest = Math.hypot(dx, dy, dz);
-    const role = geometryRoleForBond(a, b, bondKind, notch);
+    const role = bellHanger ? 'bell-hanger' : geometryRoleForBond(a, b, bondKind, notch);
     const profileInfluence = effigyProfileInfluence({
       x: (a.x + b.x) * 0.5,
       y: (a.y + b.y) * 0.5,
       z: (a.z + b.z) * 0.5,
     }, effigyProfile);
-    const strengthScale = role === 'notch-depth-tie'
+    const strengthScale = role === 'bell-hanger'
+      ? 0.68
+      : role === 'notch-depth-tie'
       ? 0.42
       : role === 'notch-bridge'
         ? 0.36
@@ -319,7 +371,7 @@ export function createLayeredStructuralMaterial(options = {}) {
       midpoint: { x: round((a.x + b.x) * 0.5), y: round((a.y + b.y) * 0.5), z: round((a.z + b.z) * 0.5) },
       strength: round(1.58 * strengthScale * (1 + profileInfluence * 0.08)),
       stiffness: round(
-        (role === 'notch-depth-tie' ? 0.72 : role === 'notch-bridge' ? 0.82 : 1) *
+        (role === 'bell-hanger' ? 0.62 : role === 'notch-depth-tie' ? 0.72 : role === 'notch-bridge' ? 0.82 : 1) *
           (1 + profileInfluence * 0.18),
       ),
       effigyProfile,
@@ -345,6 +397,33 @@ export function createLayeredStructuralMaterial(options = {}) {
       }
     }
   }
+  const authoredSockets = topologyProfile === 'three-turret-bell-citadel-v0'
+    ? (() => {
+        const bellHanger = bonds.find(bond => bond.geometryRole === 'bell-hanger');
+        return [
+          {
+            id: 'center-bell-tower-v0',
+            kind: 'structural-subsystem-root',
+            nodeIds: nodes
+              .filter(node => Math.abs(node.y - 3 / 9) < 0.00001 && node.x >= 5 / 12 && node.x <= 7 / 12)
+              .map(node => node.id),
+          },
+          {
+            id: 'bell-crown-v0',
+            kind: 'authored-asset-attachment',
+            nodeIds: bellHanger ? [bellHanger.a, bellHanger.b] : [],
+          },
+        ];
+      })()
+    : topologyProfile === 'three-turret-citadel-v0'
+      ? [{
+          id: 'center-bell-tower-v0',
+          kind: 'future-structural-extension',
+          nodeIds: nodes
+            .filter(node => node.y === 0 && node.x >= 5 / 12 && node.x <= 7 / 12)
+            .map(node => node.id),
+        }]
+      : [];
   const initial = {
     schema: STRUCTURAL_MATERIAL_3D_SCHEMA,
     route: STRUCTURAL_MATERIAL_3D_ROUTE,
@@ -362,15 +441,7 @@ export function createLayeredStructuralMaterial(options = {}) {
     nodes,
     bonds,
     authoredOpeningNodePairs,
-    authoredSockets: topologyProfile === 'three-turret-citadel-v0'
-      ? [{
-          id: 'center-bell-tower-v0',
-          kind: 'future-structural-extension',
-          nodeIds: nodes
-            .filter(node => node.y === 0 && node.x >= 5 / 12 && node.x <= 7 / 12)
-            .map(node => node.id),
-        }]
-      : [],
+    authoredSockets,
     components: [],
     appliedInteractions: [],
     sound: buildLayeredStructuralSound([], 0, 0),
