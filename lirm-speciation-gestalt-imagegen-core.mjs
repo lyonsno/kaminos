@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 export const GESTALT_IMAGEGEN_PLAN_SCHEMA = 'kaminos.lirm-speciation-gestalt-imagegen-plan.v0';
 export const GESTALT_IMAGEGEN_COMPLETION_SCHEMA = 'kaminos.lirm-speciation-gestalt-imagegen-completion.v0';
 export const GESTALT_IMAGEGEN_JOB_TYPE = 'mflux_flux2_edit_promptfile';
+export const GESTALT_IMAGEGEN_JOB_TYPE_2REF = 'mflux_flux2_edit_promptfile_2ref';
+export const GESTALT_IMAGEGEN_JOB_TYPE_3REF = 'mflux_flux2_edit_promptfile_3ref';
 export const GESTALT_IMAGEGEN_RUNNER = '/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit';
 export const GESTALT_TRELLIS_PLAN_SCHEMA = 'kaminos.lirm-speciation-gestalt-trellis-plan.v0';
 export const GESTALT_TRELLIS_COMPLETION_SCHEMA = 'kaminos.lirm-speciation-gestalt-trellis-completion.v0';
@@ -358,13 +360,25 @@ export async function buildGestaltImagegenMatrix({
 }
 
 export function buildGreenroomSubmitArgs(cell) {
-  if (cell?.jobType !== GESTALT_IMAGEGEN_JOB_TYPE) throw new Error(`unsupported job type: ${cell?.jobType}`);
+  const referenceCounts = new Map([
+    [GESTALT_IMAGEGEN_JOB_TYPE, 0],
+    [GESTALT_IMAGEGEN_JOB_TYPE_2REF, 1],
+    [GESTALT_IMAGEGEN_JOB_TYPE_3REF, 2],
+  ]);
+  if (!referenceCounts.has(cell?.jobType)) throw new Error(`unsupported job type: ${cell?.jobType}`);
+  const references = cell.references ?? [];
+  const expectedReferenceCount = referenceCounts.get(cell.jobType);
+  if (!Array.isArray(references) || references.length !== expectedReferenceCount) {
+    throw new Error(`${cell.jobType} requires exactly ${expectedReferenceCount} secondary reference(s)`);
+  }
+  for (const [index, reference] of references.entries()) {
+    if (!reference?.path || !reference?.role || !reference?.sha256) {
+      throw new Error(`secondary reference ${index + 2} requires role, path, and hash evidence`);
+    }
+  }
   const settings = cell.settings;
-  return [
-    cell.jobType,
-    cell.input.path,
-    cell.outputDir,
-    '-p',
+  const params = [
+    ...references.map((reference, index) => `reference_path_${index + 2}=${reference.path}`),
     `prompt_file=${cell.prompt.path}`,
     `model=${settings.model}`,
     `quantize=${settings.quantize}`,
@@ -374,6 +388,13 @@ export function buildGreenroomSubmitArgs(cell) {
     `guidance=${Number(settings.guidance).toFixed(1)}`,
     `seed=${cell.seed}`,
     `mlx_cache_limit_gb=${settings.mlxCacheLimitGb}`,
+  ];
+  return [
+    cell.jobType,
+    cell.input.path,
+    cell.outputDir,
+    '-p',
+    ...params,
   ];
 }
 
@@ -400,6 +421,10 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
   if (resolve(status.output_dir) !== resolve(cell.outputDir)) throw new Error('effective output directory mismatch');
   assertEffectiveRunner(status.effective_route, cell.expectedRunner, 'imagegen');
   const expectedParams = {
+    ...(cell.references ?? []).reduce((params, reference, index) => ({
+      ...params,
+      [`reference_path_${index + 2}`]: reference.path,
+    }), {}),
     prompt_file: cell.prompt.path,
     model: cell.settings.model,
     quantize: String(cell.settings.quantize),
@@ -417,6 +442,14 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
   }
   const input = await fileEvidence(cell.input.path);
   if (input.sha256 !== cell.input.sha256) throw new Error(`imagegen input hash drift: ${cell.cellId}`);
+  const references = [];
+  for (const reference of cell.references ?? []) {
+    const observed = await fileEvidence(reference.path);
+    if (observed.sha256 !== reference.sha256) {
+      throw new Error(`imagegen secondary reference hash drift (${reference.role}): ${cell.cellId}`);
+    }
+    references.push({ ...observed, role: reference.role });
+  }
   const prompt = await fileEvidence(cell.prompt.path);
   if (prompt.sha256 !== cell.prompt.sha256) throw new Error(`imagegen prompt hash drift: ${cell.cellId}`);
   let outputStat;
@@ -440,6 +473,7 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
     ...timing,
     warnings: status.warnings ?? [],
     input,
+    references,
     prompt,
     output,
   };

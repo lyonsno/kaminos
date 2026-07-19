@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -263,6 +264,24 @@ assert.equal(args.filter(value => value === '-p').length, 1, 'Greenroom params m
 assert.ok(args.includes('steps=8'));
 assert.ok(args.includes('guidance=1.0'));
 assert.ok(args.includes('mlx_cache_limit_gb=48'));
+const multirefArgs = buildGreenroomSubmitArgs({
+  ...plan.cells[0],
+  jobType: 'mflux_flux2_edit_promptfile_3ref',
+  references: [
+    { role: 'depth', path: '/fixture/depth.png', bytes: 10, sha256: 'sha256:depth' },
+    { role: 'normal', path: '/fixture/normal.png', bytes: 10, sha256: 'sha256:normal' },
+  ],
+});
+assert.ok(multirefArgs.includes('reference_path_2=/fixture/depth.png'));
+assert.ok(multirefArgs.includes('reference_path_3=/fixture/normal.png'));
+assert.throws(
+  () => buildGreenroomSubmitArgs({ ...plan.cells[0], jobType: 'mflux_flux2_edit_promptfile_3ref', references: [] }),
+  /requires exactly 2 secondary reference/,
+);
+assert.throws(
+  () => buildGreenroomSubmitArgs({ ...plan.cells[0], references: [{ role: 'depth', path: '/fixture/depth.png', sha256: 'sha256:depth' }] }),
+  /requires exactly 0 secondary reference/,
+);
 assert.deepEqual(parseGreenroomCliOutput('Submitted job b0477c32760d\n'), { job_id: 'b0477c32760d' });
 assert.deepEqual(parseGreenroomCliOutput('Submitted job e15c1652b02c\n  Type: mflux_flux2_edit_promptfile\n  Input: fixture.png\n'), { job_id: 'e15c1652b02c' });
 assert.deepEqual(parseGreenroomCliOutput('{"status":"done","job_id":"abc123"}\n'), { status: 'done', job_id: 'abc123' });
@@ -299,6 +318,77 @@ const status = {
 const completion = await validateGestaltImagegenCompletion({ cell, status });
 assert.equal(completion.status, 'accepted');
 assert.ok(completion.output.sha256.startsWith('sha256:'));
+const multirefOutputDir = join(root, 'multiref-output');
+const multirefOutputPath = join(multirefOutputDir, 'output.png');
+const depthReferencePath = join(root, 'multiref-depth.png');
+const normalReferencePath = join(root, 'multiref-normal.png');
+const depthReferenceBytes = Buffer.from('depth-reference');
+const normalReferenceBytes = Buffer.from('normal-reference');
+await import('node:fs/promises').then(({ mkdir }) => mkdir(multirefOutputDir, { recursive: true }));
+await Promise.all([
+  writeFile(depthReferencePath, depthReferenceBytes),
+  writeFile(normalReferencePath, normalReferenceBytes),
+  writeFile(multirefOutputPath, 'generated-multiref-image'),
+]);
+const multirefCell = {
+  ...cell,
+  cellId: `${cell.cellId}-multiref`,
+  jobType: 'mflux_flux2_edit_promptfile_3ref',
+  requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+  outputDir: multirefOutputDir,
+  outputPath: multirefOutputPath,
+  references: [
+    {
+      role: 'depth',
+      path: depthReferencePath,
+      bytes: depthReferenceBytes.length,
+      sha256: `sha256:${createHash('sha256').update(depthReferenceBytes).digest('hex')}`,
+    },
+    {
+      role: 'normal',
+      path: normalReferencePath,
+      bytes: normalReferenceBytes.length,
+      sha256: `sha256:${createHash('sha256').update(normalReferenceBytes).digest('hex')}`,
+    },
+  ],
+};
+const multirefStatus = {
+  ...status,
+  job_id: 'multiref123',
+  job_type: multirefCell.jobType,
+  output_dir: multirefOutputDir,
+  params: {
+    ...status.params,
+    reference_path_2: depthReferencePath,
+    reference_path_3: normalReferencePath,
+  },
+  effective_route: `${cell.expectedRunner} --image-paths ${cell.input.path} ${depthReferencePath} ${normalReferencePath} --prompt-file ${cell.prompt.path} --output ${multirefOutputPath}`,
+};
+const multirefCompletion = await validateGestaltImagegenCompletion({ cell: multirefCell, status: multirefStatus });
+assert.deepEqual(multirefCompletion.references.map(reference => reference.role), ['depth', 'normal']);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({
+    cell: {
+      ...multirefCell,
+      references: [
+        { ...multirefCell.references[0], sha256: 'sha256:wrong-depth' },
+        multirefCell.references[1],
+      ],
+    },
+    status: multirefStatus,
+  }),
+  /secondary reference hash drift \(depth\)/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({
+    cell: multirefCell,
+    status: {
+      ...multirefStatus,
+      params: { ...multirefStatus.params, reference_path_3: '/wrong/normal.png' },
+    },
+  }),
+  /effective param mismatch for reference_path_3/,
+);
 await assert.rejects(
   () => validateGestaltImagegenCompletion({ cell, status: { ...status, job_type: 'fallback-route' } }),
   /job type/,
