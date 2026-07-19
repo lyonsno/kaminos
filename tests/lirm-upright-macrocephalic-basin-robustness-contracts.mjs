@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 
 import {
   loadFrozenCrawlerBasinManifest,
+  recordCrawlerBasinVisualInspection,
   validateCrawlerBasinMatrixReport,
 } from '../lirm-crawler-basin-robustness-core.mjs';
 import { CRAWLER_ARMATURE_PROGRAM } from '../lirm-reference-fitted-armature-core.mjs';
@@ -93,6 +94,53 @@ assert.throws(
   () => validateCrawlerBasinMatrixReport(fallbackLie, { requireFiles: false }),
   /matrix armature program receipt mismatch/,
   'an upright matrix must reject a crawler fallback even when donor metrics are green',
+);
+
+const preinspectionReport = structuredClone(programAwareReport);
+preinspectionReport.status = 'basin-passed-uninspected';
+preinspectionReport.visualInspection = 'pending';
+const preinspectionPath = join(temporaryRoot, 'upright-program-preinspection.json');
+await writeFile(preinspectionPath, `${JSON.stringify(preinspectionReport, null, 2)}\n`);
+const edgeInspected = await recordCrawlerBasinVisualInspection({
+  reportPath: preinspectionPath,
+  disposition: 'accepted',
+  visibleDelta: 'Three donors preserve the upright family; LIRM 02 remains a disconnected bulbous-radial topology edge.',
+  missClassifications: { 'lirm-02-bulbous-radial-upright': 'topology-family-mismatch' },
+});
+assert.equal(edgeInspected.rows[3].outcome, 'inspected-edge-miss');
+assert.equal(edgeInspected.rows[3].numericOutcome, 'recovered');
+assert.equal(edgeInspected.rows[3].missClassification, 'topology-family-mismatch');
+assert.deepEqual(edgeInspected.acceptance, {
+  donorCount: 4,
+  recoveredDonorCount: 3,
+  missedDonorCount: 1,
+  failedDonorCount: 0,
+  passed: true,
+});
+assert.doesNotThrow(() => validateCrawlerBasinMatrixReport(edgeInspected));
+
+const recoveredClassificationLie = structuredClone(edgeInspected);
+recoveredClassificationLie.rows[3].outcome = 'recovered';
+delete recoveredClassificationLie.rows[3].numericOutcome;
+delete recoveredClassificationLie.rows[3].missClassification;
+recoveredClassificationLie.acceptance = {
+  donorCount: 4,
+  recoveredDonorCount: 4,
+  missedDonorCount: 0,
+  failedDonorCount: 0,
+  passed: true,
+};
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(recoveredClassificationLie, { requireFiles: false }),
+  /visual miss classification disagrees with matrix row outcome/,
+  'an accepted inspection cannot hide a topology miss behind a recovered row',
+);
+const missingEdgeClassification = structuredClone(edgeInspected);
+delete missingEdgeClassification.visualInspection.missClassifications['lirm-02-bulbous-radial-upright'];
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(missingEdgeClassification, { requireFiles: false }),
+  /missing visual miss classification for lirm-02-bulbous-radial-upright/,
+  'every inspected edge miss must retain an exact visual classification',
 );
 
 console.log('lirm upright macrocephalic basin robustness contracts passed');

@@ -169,9 +169,9 @@
     "az315"
   ],
   "timing": {
-    "startedAt": "2026-07-19T03:49:32.223Z",
-    "finishedAt": "2026-07-19T03:49:40.955Z",
-    "durationSeconds": 8.732
+    "startedAt": "2026-07-19T04:28:22.471Z",
+    "finishedAt": "2026-07-19T04:28:29.603Z",
+    "durationSeconds": 7.132
   },
   "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
   "outputInventory": {

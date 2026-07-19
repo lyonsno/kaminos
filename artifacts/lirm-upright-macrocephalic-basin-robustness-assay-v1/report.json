@@ -560,9 +560,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T03:49:23.508Z",
-          "finishedAt": "2026-07-19T03:49:32.221Z",
-          "durationSeconds": 8.713
+          "startedAt": "2026-07-19T04:28:15.374Z",
+          "finishedAt": "2026-07-19T04:28:22.470Z",
+          "durationSeconds": 7.096
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -1891,9 +1891,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T03:49:32.223Z",
-          "finishedAt": "2026-07-19T03:49:40.955Z",
-          "durationSeconds": 8.732
+          "startedAt": "2026-07-19T04:28:22.471Z",
+          "finishedAt": "2026-07-19T04:28:29.603Z",
+          "durationSeconds": 7.132
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -3222,9 +3222,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T03:49:40.957Z",
-          "finishedAt": "2026-07-19T03:49:50.330Z",
-          "durationSeconds": 9.373
+          "startedAt": "2026-07-19T04:28:29.604Z",
+          "finishedAt": "2026-07-19T04:28:36.582Z",
+          "durationSeconds": 6.978
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -4380,7 +4380,7 @@
       "donorId": "lirm-02-bulbous-radial-upright",
       "donorPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm02-hallucinate-beyond-trellis-fast4/output.glb",
       "donorSha256": "sha256:2ada08fd300ec58fb9acdd33668043a866af150919e7f751b2002fed234ffd69",
-      "outcome": "recovered",
+      "outcome": "inspected-edge-miss",
       "reportPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/donors/lirm-02-bulbous-radial-upright/report.json",
       "subreport": {
         "schema": "kaminos.lirm-reference-fitted-armature-assay.v0",
@@ -4553,9 +4553,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T03:49:50.334Z",
-          "finishedAt": "2026-07-19T03:50:00.719Z",
-          "durationSeconds": 10.385
+          "startedAt": "2026-07-19T04:28:36.584Z",
+          "finishedAt": "2026-07-19T04:28:43.662Z",
+          "durationSeconds": 7.078
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -5705,13 +5705,15 @@
           "learnedPriorClaim": "not_trained",
           "topologySelectionClaim": "not_assayed"
         }
-      }
+      },
+      "numericOutcome": "recovered",
+      "missClassification": "topology-family-mismatch"
     }
   ],
   "acceptance": {
     "donorCount": 4,
-    "recoveredDonorCount": 4,
-    "missedDonorCount": 0,
+    "recoveredDonorCount": 3,
+    "missedDonorCount": 1,
     "failedDonorCount": 0,
     "passed": true
   },
@@ -5734,9 +5736,9 @@
     }
   },
   "timing": {
-    "startedAt": "2026-07-19T03:49:23.506Z",
-    "finishedAt": "2026-07-19T03:50:00.877Z",
-    "durationSeconds": 37.371
+    "startedAt": "2026-07-19T04:28:15.372Z",
+    "finishedAt": "2026-07-19T04:28:43.761Z",
+    "durationSeconds": 28.389
   },
   "lastTrustworthyEvidence": "all four precommitted donors and aggregate residual witness visually inspected",
   "visualInspection": {

@@ -314,7 +314,7 @@ export function validateCrawlerBasinSubreport(report, { manifest, donor, require
 
 export function evaluateCrawlerBasinRows(rows, basinAcceptance) {
   const recoveredDonorCount = rows.filter(row => row.outcome === 'recovered').length;
-  const missedDonorCount = rows.filter(row => row.outcome === 'missed').length;
+  const missedDonorCount = rows.filter(row => ['missed', 'inspected-edge-miss'].includes(row.outcome)).length;
   const failedDonorCount = rows.filter(row => row.outcome === 'failed').length;
   return {
     donorCount: rows.length,
@@ -475,6 +475,28 @@ function validateInspectionWitnessIdentity(receipt, artifact, label) {
   }
 }
 
+function validateVisualMissClassifications(report) {
+  const classifications = report.visualInspection?.missClassifications ?? {};
+  const donorIds = new Set(report.rows.map(row => row.donorId));
+  for (const [donorId, classification] of Object.entries(classifications)) {
+    if (!donorIds.has(donorId)) throw new Error(`visual miss classification names unknown donor ${donorId}`);
+    if (!report.manifest.missClassifications.includes(classification)) {
+      throw new Error(`invalid visual miss classification for ${donorId}`);
+    }
+  }
+  for (const row of report.rows) {
+    const classification = classifications[row.donorId];
+    if (row.outcome === 'recovered') {
+      if (classification !== undefined) throw new Error('visual miss classification disagrees with matrix row outcome');
+    } else {
+      if (classification === undefined) throw new Error(`missing visual miss classification for ${row.donorId}`);
+      if (row.outcome === 'inspected-edge-miss' && classification !== row.missClassification) {
+        throw new Error(`visual edge-miss classification drift for ${row.donorId}`);
+      }
+    }
+  }
+}
+
 export function validateCrawlerBasinMatrixReport(report, { requireFiles = true } = {}) {
   const manifest = report.manifest;
   if (report?.schema !== matrixSchemaForManifest(manifest)) throw new Error('unexpected morphology basin matrix schema');
@@ -497,6 +519,17 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
     if (row.outcome === 'recovered' || row.outcome === 'missed') {
       validateCrawlerBasinSubreport(row.subreport, { manifest, donor, requireFiles });
       if ((row.outcome === 'recovered') !== donorRecovered(row.subreport, manifest)) throw new Error(`matrix outcome mismatch for ${row.donorId}`);
+    } else if (row.outcome === 'inspected-edge-miss') {
+      if (manifest.schema !== UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1) {
+        throw new Error(`inspected edge miss is unsupported by matrix schema for ${row.donorId}`);
+      }
+      validateCrawlerBasinSubreport(row.subreport, { manifest, donor, requireFiles });
+      if (row.numericOutcome !== 'recovered' || !donorRecovered(row.subreport, manifest)) {
+        throw new Error(`inspected edge miss lacks recovered numeric provenance for ${row.donorId}`);
+      }
+      if (!manifest.missClassifications.includes(row.missClassification)) {
+        throw new Error(`inspected edge miss lacks valid classification for ${row.donorId}`);
+      }
     } else if (row.outcome === 'failed') {
       if (!row.error || !row.failurePhase || !row.subreport) throw new Error(`failed row lacks durable failure report for ${row.donorId}`);
     } else throw new Error(`unknown matrix outcome for ${row.donorId}: ${row.outcome}`);
@@ -511,6 +544,7 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
   } else if (report.visualInspection && typeof report.visualInspection === 'object') {
     if (!['accepted', 'rejected'].includes(report.visualInspection.disposition)) throw new Error('invalid matrix visual inspection disposition');
     if (!report.visualInspection.visibleDelta?.trim()) throw new Error('matrix visual inspection lacks visible delta');
+    validateVisualMissClassifications(report);
     validateInspectionWitnessIdentity(
       report.visualInspection.comparisonWitness,
       report.outputInventory.comparisonWitness,
@@ -649,11 +683,28 @@ export async function recordCrawlerBasinVisualInspection({ reportPath, dispositi
   if (!visibleDelta?.trim()) throw new Error('visual inspection requires visible delta');
   const report = JSON.parse(await readFile(resolve(reportPath), 'utf8'));
   validateCrawlerBasinMatrixReport(report);
-  for (const row of report.rows.filter(item => item.outcome !== 'recovered')) {
-    if (!report.manifest.missClassifications.includes(missClassifications[row.donorId])) {
-      throw new Error(`missing valid visual classification for ${row.donorId}`);
+  const donorIds = new Set(report.rows.map(row => row.donorId));
+  for (const [donorId, classification] of Object.entries(missClassifications)) {
+    if (!donorIds.has(donorId)) throw new Error(`visual miss classification names unknown donor ${donorId}`);
+    if (!report.manifest.missClassifications.includes(classification)) {
+      throw new Error(`missing valid visual classification for ${donorId}`);
     }
   }
+  for (const row of report.rows) {
+    const classification = missClassifications[row.donorId];
+    if (row.outcome !== 'recovered' && classification === undefined) {
+      throw new Error(`missing valid visual classification for ${row.donorId}`);
+    }
+    if (row.outcome === 'recovered' && classification !== undefined) {
+      if (report.manifest.schema !== UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1) {
+        throw new Error('visual miss classification disagrees with matrix row outcome');
+      }
+      row.numericOutcome = 'recovered';
+      row.outcome = 'inspected-edge-miss';
+      row.missClassification = classification;
+    }
+  }
+  report.acceptance = evaluateCrawlerBasinRows(report.rows, report.manifest.acceptance.basin);
   const artifact = report.outputInventory.comparisonWitness;
   const depthArtifact = report.outputInventory.depthComparisonWitness;
   verifyFileIdentity({ absolutePath: artifact.path, bytes: artifact.bytes, sha256: artifact.sha256 }, 'comparison witness');
