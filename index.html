@@ -2695,7 +2695,10 @@ import {
   createFingerFluidBenchState,
 } from './finger-fluid-bench-core.js';
 import {
+  KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
+  KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
+  KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
@@ -2704,6 +2707,9 @@ import {
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidSupportFriction,
   resolveFingerFluidChemistryDiffusion,
+  resolveFingerFluidCapillaryStrength,
+  resolveFingerFluidThinSheetVorticityAttenuation,
+  resolveFingerFluidFreeFlightViscosityBoost,
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -2820,6 +2826,7 @@ let fingerFluidBenchLastFrameMs = 26.5;
 let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
+let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
@@ -2847,6 +2854,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
+  const requestedCapillaryStrength = Number(params.get('finger_fluid_capillary_strength') ?? KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH);
+  const requestedThinSheetVorticityAttenuation = Number(params.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION);
+  const requestedFreeFlightViscosityBoost = Number(params.get('finger_fluid_free_flight_viscosity_boost') ?? KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST);
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
     requestedTruthScene,
@@ -2865,6 +2875,12 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveSupportFriction: resolveFingerFluidSupportFriction(requestedSupportFriction),
     requestedChemistryDiffusion,
     effectiveChemistryDiffusion: resolveFingerFluidChemistryDiffusion(requestedChemistryDiffusion),
+    requestedCapillaryStrength,
+    effectiveCapillaryStrength: resolveFingerFluidCapillaryStrength(requestedCapillaryStrength),
+    requestedThinSheetVorticityAttenuation,
+    effectiveThinSheetVorticityAttenuation: resolveFingerFluidThinSheetVorticityAttenuation(requestedThinSheetVorticityAttenuation),
+    requestedFreeFlightViscosityBoost,
+    effectiveFreeFlightViscosityBoost: resolveFingerFluidFreeFlightViscosityBoost(requestedFreeFlightViscosityBoost),
   };
 }
 let fingerFluidBenchState = createFingerFluidBenchState({
@@ -10168,7 +10184,9 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
     return;
   }
-  fingerFluidBenchSolver.step(Math.min(1 / 30, Math.max(1 / 120, (now - (drawFingerFluidBenchFrame.lastNow || now - 16.7)) / 1000)));
+  if (!fingerFluidBenchSimulationPaused) {
+    fingerFluidBenchSolver.step(Math.min(1 / 30, Math.max(1 / 120, (now - (drawFingerFluidBenchFrame.lastNow || now - 16.7)) / 1000)));
+  }
   drawFingerFluidBenchFrame.lastNow = now;
   fingerFluidBenchSolver.render({
     width: canvas.clientWidth,
@@ -10193,6 +10211,12 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveSupportFriction = gpuState.supportFriction;
   gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
   gpuState.effectiveChemistryDiffusion = gpuState.chemistryDiffusion;
+  gpuState.requestedCapillaryStrength = fingerFluidBenchConfig.requestedCapillaryStrength;
+  gpuState.effectiveCapillaryStrength = gpuState.capillaryStrength;
+  gpuState.requestedThinSheetVorticityAttenuation = fingerFluidBenchConfig.requestedThinSheetVorticityAttenuation;
+  gpuState.effectiveThinSheetVorticityAttenuation = gpuState.thinSheetVorticityAttenuation;
+  gpuState.requestedFreeFlightViscosityBoost = fingerFluidBenchConfig.requestedFreeFlightViscosityBoost;
+  gpuState.effectiveFreeFlightViscosityBoost = gpuState.freeFlightViscosityBoost;
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
   fingerFluidBenchState = createFingerFluidBenchState({
     status: 'running',
@@ -10234,6 +10258,10 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     chemistryContract: gpuState.chemistryContract,
     chemistryDiffusion: gpuState.chemistryDiffusion,
     chemistryDiffusionPassCount: gpuState.chemistryDiffusionPassCount,
+    waterfallContinuityContract: gpuState.waterfallContinuityContract,
+    capillaryStrength: gpuState.capillaryStrength,
+    thinSheetVorticityAttenuation: gpuState.thinSheetVorticityAttenuation,
+    freeFlightViscosityBoost: gpuState.freeFlightViscosityBoost,
     colorMode: gpuState.colorMode,
     config: fingerFluidBenchConfig,
     playgroundContract: gpuState.playgroundContract,
@@ -10258,6 +10286,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     playground: gpuState.playground,
     playgroundZoneDiagnostics: gpuState.playgroundZoneDiagnostics,
     laminarInletDiagnostics: gpuState.laminarInletDiagnostics,
+    waterfallContinuityDiagnostics: gpuState.waterfallContinuityDiagnostics,
     interfaceCarrier: gpuState.interfaceCarrier,
     activeExtent3d: gpuState.diagnostics?.activeExtent3d || null,
   });
@@ -10300,6 +10329,9 @@ async function startFingerFluidBench() {
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
+      capillaryStrength: fingerFluidBenchConfig.effectiveCapillaryStrength,
+      thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
+      freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });
     fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
@@ -10342,6 +10374,13 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
+  window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
+    fingerFluidBenchSimulationPaused = paused === true;
+    return {
+      paused: fingerFluidBenchSimulationPaused,
+      stepCount: fingerFluidBenchSolver?.getDebugState?.().stepCount ?? null,
+    };
+  };
   window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
