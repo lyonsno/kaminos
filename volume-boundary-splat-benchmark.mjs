@@ -394,7 +394,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArmIds, swe
   };
 }
 
-export function summarizeRun(testCase, reportPath, screenshotPath, report) {
+export function summarizeRun(testCase, reportPath, screenshotPath, report, options = {}) {
   const wrapper = report;
   report = report?.state && typeof report.state === 'object'
     ? {
@@ -442,7 +442,7 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report) {
     || footprintSweep?.arms?.length !== FOOTPRINT_SWEEP_RADII.length
   );
   Object.assign(falseClosureChecks, footprintTierSweepReceiptChecks({
-    requested: FOOTPRINT_TIER_SWEEP_REQUESTED,
+    requested: options.footprintTierSweepRequested ?? FOOTPRINT_TIER_SWEEP_REQUESTED,
     expectedArmIds: DEFAULT_FOOTPRINT_TIER_ARMS.map(arm => arm.id),
     sweep: footprintTierSweep,
   }));

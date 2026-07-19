@@ -2358,6 +2358,7 @@ async function main() {
   let boundarySplatGpuProfileSeries = null;
   let boundarySplatFootprintAudit = null;
   let boundarySplatFootprintSweep = null;
+  let boundarySplatFootprintTierSweep = null;
   try {
     await waitForCdp();
     phase = 'target';
@@ -3330,8 +3331,8 @@ async function main() {
         awaitPromise: true,
         returnByValue: true,
       });
-      boundarySplatFootprintSweep = tierSweepEval.result.value;
-      const arms = boundarySplatFootprintSweep?.arms;
+      boundarySplatFootprintTierSweep = tierSweepEval.result.value;
+      const arms = boundarySplatFootprintTierSweep?.arms;
       if (!Array.isArray(arms) || arms.length !== boundarySplatFootprintTierArms.length) {
         throw new Error(`footprint-tier-sweep-incomplete:${arms?.length ?? 'missing'}:${boundarySplatFootprintTierArms.length}`);
       }
@@ -3379,9 +3380,9 @@ async function main() {
           throw new Error(`footprint-tier-energy-conservation-failed:${arm.id}:${arm.audit.relativeError}`);
         }
       }
-      boundarySplatFootprintSweep.ok = true;
-      boundarySplatFootprintSweep.candidatePayloadSha256 = baseline.audit.candidatePayloadSha256;
-      boundarySplatFootprintSweep.simStepCount = baseline.simStepCount;
+      boundarySplatFootprintTierSweep.ok = true;
+      boundarySplatFootprintTierSweep.candidatePayloadSha256 = baseline.audit.candidatePayloadSha256;
+      boundarySplatFootprintTierSweep.simStepCount = baseline.simStepCount;
     }
     const boundarySplatFeatureCapture = sample.boundarySplatFeatureCaptureRequested
       ? materializeBoundarySplatFeatureCapture(sample.boundarySplatFeatureCapture)
@@ -4801,6 +4802,7 @@ async function main() {
       boundarySplatGpuProfileSeries,
       boundarySplatFootprintAudit,
       boundarySplatFootprintSweep,
+      boundarySplatFootprintTierSweep,
       boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame ?? state.boundarySplatCopyBytesThisFrame,
       boundarySplatCopyDisposition: sample.boundarySplatCopyDisposition ?? state.boundarySplatCopyDisposition,
       volumeResidualMode: sample.volumeResidualMode ?? state.volumeResidualMode ?? null,
@@ -4963,6 +4965,7 @@ async function main() {
       boundarySplatGpuProfileSeries,
       boundarySplatFootprintAudit,
       boundarySplatFootprintSweep,
+      boundarySplatFootprintTierSweep,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {

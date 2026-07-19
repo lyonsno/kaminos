@@ -68,6 +68,11 @@ assert.match(
 );
 assert.match(
   witness,
+  /let boundarySplatFootprintTierSweep = null;[\s\S]*boundarySplatFootprintTierSweep = tierSweepEval\.result\.value;[\s\S]*boundarySplatFootprintTierSweep,/,
+  'the witness emits a tier-specific receipt instead of aliasing the radius-sweep field',
+);
+assert.match(
+  witness,
   /footprint-tier-effective-control-mismatch[\s\S]*footprint-tier-candidate-identity-changed[\s\S]*footprint-tier-energy-conservation-failed/,
   'tier sweep fails loud on fallback controls, candidate drift, or broken optical conservation',
 );
@@ -446,6 +451,34 @@ assert.equal(
   'a truthful hybrid composition identity cannot impersonate a splat renderer disagreement',
 );
 assert.equal(composedConservedSummary.economicsClaimAllowed, true, 'truthful hybrid composition preserves analytical splat economics authority');
+const completeFootprintTierSweep = {
+  ok: true,
+  arms: [
+    { id: 'base-056' },
+    { id: 'importance-070-098' },
+    { id: 'random-070-098' },
+  ],
+};
+const completeTierWitnessReport = structuredClone(composedConservedWitnessReport);
+completeTierWitnessReport.boundarySplatFootprintTierSweep = completeFootprintTierSweep;
+const completeTierSummary = summarizeRun(
+  { ...testCase96, boundarySplatMode: 'analytic_conserved' },
+  '/tmp/report.json',
+  '/tmp/frame.png',
+  completeTierWitnessReport,
+  { footprintTierSweepRequested: true },
+);
+assert.equal(completeTierSummary.falseClosureChecks.incompleteFootprintTierSweep, false, 'a successful witness-shaped tier receipt survives benchmark summarization');
+const aliasedTierWitnessReport = structuredClone(composedConservedWitnessReport);
+aliasedTierWitnessReport.boundarySplatFootprintSweep = completeFootprintTierSweep;
+const aliasedTierSummary = summarizeRun(
+  { ...testCase96, boundarySplatMode: 'analytic_conserved' },
+  '/tmp/report.json',
+  '/tmp/frame.png',
+  aliasedTierWitnessReport,
+  { footprintTierSweepRequested: true },
+);
+assert.equal(aliasedTierSummary.falseClosureChecks.incompleteFootprintTierSweep, true, 'a tier sweep aliased through the radius receipt is rejected at the producer-consumer boundary');
 const retinaScaledWitnessReport = structuredClone(completeWitnessReport);
 retinaScaledWitnessReport.nativeDevicePixelRatio = 2;
 retinaScaledWitnessReport.canvasDevicePixelRatio = 2;
