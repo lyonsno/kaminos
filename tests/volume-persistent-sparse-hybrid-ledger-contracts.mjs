@@ -16,8 +16,10 @@ const source = readFileSync(modulePath, 'utf8');
 const {
   ARM_IDS,
   EXPECTED_COHORT_MANIFEST_SHA256,
+  aggregateCoefficientTotalsExact,
   auditFullCandidateCountContract,
   buildCoefficientLedger,
+  buildComplementRowIndices,
   buildExpectedLedgerContract,
   buildFailedLedgerReport,
   requireCapturedEvidence,
@@ -40,12 +42,12 @@ test('ledger identity is pinned to the immutable producer artifact', () => {
     schema: 'persistent-sparse-cohort-export-v0',
     authority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
     source: { implementationBundle: { sha256: '603398858e2c8dac638f82a43a13f45d5e8f72c88ae1d2eb0d96f761e5e0853f' } },
-    states: [114, 116, 118, 120].map(steps => ({
+    states: [114, 116, 118, 120].map((steps, index) => ({
       stateId: `coefficient-state-${steps}`,
       rowCount: 481447,
       arrays: { nativeCellIndices: { sha256: `${steps}`.padStart(64, '0') } },
       sourceRows: {
-        count: 1925788,
+        count: [1924725, 1926470, 1927051, 1925788][index],
         nativeCellIndices: { sha256: `${steps + 1}`.padStart(64, '0') },
       },
       camera: { width: 900, height: 960, cameraPose: { position: [1, 2, 3] } },
@@ -54,23 +56,29 @@ test('ledger identity is pinned to the immutable producer artifact', () => {
   assert.equal(expected.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
   assert.equal(expected.rendererIdentity, 'shared-linear-hdr-sparse-splat-positive-residual-v0');
   assert.equal(expected.recurrenceIdentity, 'ordered-emission-extinction-shared-transmittance-v0');
+  assert.deepEqual(expected.fullCandidateCountByState, {
+    'coefficient-state-114': 1924725,
+    'coefficient-state-116': 1926470,
+    'coefficient-state-118': 1927051,
+    'coefficient-state-120': 1925788,
+  });
+  assert.equal(expected.fullCandidateCount, undefined);
   assert.equal(expected.residualGridScale, 0.10);
   assert.equal(expected.residualRaySteps, 64);
   assert.equal(expected.width, 900);
   assert.equal(expected.height, 960);
 });
 
-test('one scalar full count cannot impersonate state-varying authenticated populations', () => {
+test('state-keyed full populations are exact and scalar aliases stay forbidden', () => {
   const states = [
     ['coefficient-state-114', 1924725],
     ['coefficient-state-116', 1926470],
     ['coefficient-state-118', 1927051],
     ['coefficient-state-120', 1925788],
   ].map(([stateId, count]) => ({ stateId, sourceRows: { count } }));
-  assert.throws(
-    () => auditFullCandidateCountContract({ states }, 1925788),
-    /state-varying authenticated full populations.*114=1924725.*116=1926470.*118=1927051.*120=1925788/,
-  );
+  const expectedCounts = Object.fromEntries(states.map(state => [state.stateId, state.sourceRows.count]));
+  assert.deepEqual(auditFullCandidateCountContract({ states }, expectedCounts), expectedCounts);
+  assert.throws(() => auditFullCandidateCountContract({ states }, 1925788), /state-keyed/);
   const manifest = {
     schema: 'persistent-sparse-cohort-export-v0',
     authority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
@@ -83,11 +91,36 @@ test('one scalar full count cannot impersonate state-varying authenticated popul
       camera: { width: 900, height: 960, cameraPose: { position: [1, 2, 3] } },
     })),
   };
-  assert.throws(
-    () => buildExpectedLedgerContract(manifest),
-    /state-varying authenticated full populations/,
-    'the exported expected-contract builder must not bypass the full-population audit',
+  const expected = buildExpectedLedgerContract(manifest);
+  assert.deepEqual(expected.fullCandidateCountByState, expectedCounts);
+  assert.equal(Object.hasOwn(expected, 'fullCandidateCount'), false);
+});
+
+test('positive complement is the disjoint source-order set difference', () => {
+  assert.deepEqual(
+    buildComplementRowIndices(7, new Uint32Array([1, 3, 6])),
+    new Uint32Array([0, 2, 4, 5]),
   );
+  assert.throws(() => buildComplementRowIndices(4, new Uint32Array([1, 1])), /duplicate/);
+  assert.throws(() => buildComplementRowIndices(4, new Uint32Array([4])), /escaped/);
+  assert.throws(() => buildComplementRowIndices(4, new Uint32Array([2, 1])), /source row order/);
+});
+
+test('binary32 coefficient ownership closes exactly before JSON projection', () => {
+  const source = new Float32Array([
+    1, 2, 3, 4, 5, 6, 7, 8,
+    0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625, 0.0078125, 0.00390625,
+  ]);
+  const sparse = source.slice(0, 8);
+  const sourceTotals = aggregateCoefficientTotalsExact(source);
+  const sparseTotals = aggregateCoefficientTotalsExact(sparse);
+  for (const channel of ['emission', 'extinction']) {
+    const sourceUnits = BigInt(sourceTotals[channel].binary32UnitSum);
+    const sparseUnits = BigInt(sparseTotals[channel].binary32UnitSum);
+    assert.ok(sourceUnits >= sparseUnits);
+    assert.equal(sparseUnits + (sourceUnits - sparseUnits), sourceUnits);
+    assert.equal(sourceTotals[channel].binary32UnitExponent, -149);
+  }
 });
 
 test('coefficient ownership stays nonnegative and exact in every arm', () => {
@@ -189,7 +222,12 @@ test('failed receipts remain route, cohort, and requested-config bound', () => {
     coefficientAuthority: 'exact-local-layer-emission-extinction',
     implementationBundleSha256: '603398858e2c8dac638f82a43a13f45d5e8f72c88ae1d2eb0d96f761e5e0853f',
     ownershipAuthority: 'complementary-local-optical-coefficient-ownership-v0',
-    fullCandidateCount: 1925788,
+    fullCandidateCountByState: {
+      'coefficient-state-114': 1924725,
+      'coefficient-state-116': 1926470,
+      'coefficient-state-118': 1927051,
+      'coefficient-state-120': 1925788,
+    },
     sparseCandidateCount: 481447,
     stateIds: ['coefficient-state-114', 'coefficient-state-116', 'coefficient-state-118', 'coefficient-state-120'],
     armIds: EXPECTED_ARMS,
@@ -212,5 +250,7 @@ test('failed receipts remain route, cohort, and requested-config bound', () => {
   assert.equal(failure.route.requestedRoute, expected.effectiveRoute);
   assert.equal(failure.source.cohortManifestSha256, EXPECTED_SHA256);
   assert.deepEqual(failure.request.stateIds, expected.stateIds);
+  assert.deepEqual(failure.request.fullCandidateCountByState, expected.fullCandidateCountByState);
+  assert.equal(Object.hasOwn(failure.request, 'fullCandidateCount'), false);
   assert.equal(failure.failureContext.sourceBindingStatus, 'authenticated');
 });
