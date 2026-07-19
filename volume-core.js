@@ -633,6 +633,40 @@ function summarizeBoundarySplatFootprintScores(samples) {
   };
 }
 
+export function matchRandomBoundarySplatFootprintTierThresholds(scores, counts = {}) {
+  const sorted = scores.map(Number).filter(Number.isFinite).sort((left, right) => left - right);
+  const mediumCount = Number(counts.medium);
+  const heroCount = Number(counts.hero);
+  if (!Number.isInteger(mediumCount)
+    || !Number.isInteger(heroCount)
+    || mediumCount < 0
+    || heroCount < 0
+    || mediumCount + heroCount > sorted.length) {
+    throw new Error(`boundary-splat-random-tier-counts-invalid:${mediumCount}:${heroCount}:${sorted.length}`);
+  }
+  const thresholdForTopCount = topCount => {
+    if (topCount === 0) return 1;
+    if (topCount === sorted.length) return 0;
+    const rejected = sorted[sorted.length - topCount - 1];
+    const selected = sorted[sorted.length - topCount];
+    if (!(selected > rejected)) {
+      throw new Error(`boundary-splat-random-tier-score-tie:${topCount}:${selected}`);
+    }
+    return selected;
+  };
+  return {
+    identity: 'boundary-splat-held-cohort-random-tier-count-match-v0',
+    candidateCount: sorted.length,
+    requestedCounts: {
+      base: sorted.length - mediumCount - heroCount,
+      medium: mediumCount,
+      hero: heroCount,
+    },
+    mediumThreshold: thresholdForTopCount(mediumCount + heroCount),
+    heroThreshold: thresholdForTopCount(heroCount),
+  };
+}
+
 export function resolveBoundarySplatFootprintTier({
   policy = 'off',
   cellIndex = 0,
@@ -11377,6 +11411,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const footprintTierControl = boundarySplatFootprintTierControls(controlsSnapshot);
       const footprintTierCounts = { base: 0, medium: 0, hero: 0 };
       const footprintTierScores = [];
+      const randomFootprintTierScores = [];
       for (let index = 0; index < draw.instanceCount; index += 1) {
         const offset = index * strideFloats;
         const opacity = values[offset + 7];
@@ -11405,9 +11440,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         });
         footprintTierCounts[footprintTier.tier] += 1;
         footprintTierScores.push(footprintTier.score);
+        randomFootprintTierScores.push(resolveBoundarySplatFootprintTier({
+          policy: 'random',
+          cellIndex: values[offset + 20],
+        }).score);
         baseIntegratedAlphaSum += values[offset + 15];
         effectiveIntegratedAlphaSum += radiusX * radiusY * opacity * kernelIntegral * energyCompensation;
       }
+      const matchedRandomTierThresholds = options.randomTierCounts
+        ? matchRandomBoundarySplatFootprintTierThresholds(randomFootprintTierScores, options.randomTierCounts)
+        : null;
       const digest = await crypto.subtle.digest('SHA-256', identity);
       const candidatePayloadSha256 = Array.from(
         new Uint8Array(digest),
@@ -11803,6 +11845,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           counts: footprintTierCounts,
           chargedCount: footprintTierCounts.medium + footprintTierCounts.hero,
           scoreDistribution: summarizeBoundarySplatFootprintScores(footprintTierScores),
+          matchedRandomTierThresholds,
         },
         descriptorFrameMetrics,
         projectionMetrics,

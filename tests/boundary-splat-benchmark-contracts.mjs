@@ -35,8 +35,8 @@ assert.match(benchmark, /--footprint-tier-sweep/, 'bounded Grid96 quadrature pro
 assert.match(benchmark, /boundary-splat-footprint-tier-arms/, 'tier probe delegates to the same held-state browser witness instead of inventing a second render path');
 assert.match(
   benchmark,
-  /base-056[\s\S]*policy:\s*'off'[\s\S]*importance-070-098[\s\S]*policy:\s*'importance'[\s\S]*random-070-098[\s\S]*policy:\s*'random'/,
-  'tier sweep contains the exact base, appearance-charged, and random-control arms',
+  /base-056[\s\S]*policy:\s*'off'[\s\S]*importance-070-098[\s\S]*policy:\s*'importance'[\s\S]*random-070-098[\s\S]*policy:\s*'random'[\s\S]*matchCountsFrom:\s*'importance-070-098'/,
+  'tier sweep contains the exact base, appearance-charged, and held-population-matched random-control arms',
 );
 assert.match(benchmark, /analytic_conserved/, 'footprint sweep uses the renderer area-opacity conservation path');
 assert.match(
@@ -84,18 +84,40 @@ assert.equal(
 assert.deepEqual(
   benchmarkModule.footprintTierSweepReceiptChecks({
     requested: true,
-    expectedArmIds: ['base-056', 'importance-070-098', 'random-070-098'],
+    expectedArms: [
+      { id: 'base-056' },
+      { id: 'importance-070-098' },
+      { id: 'random-070-098', matchCountsFrom: 'importance-070-098' },
+    ],
     sweep: {
       ok: true,
       arms: [
         { id: 'base-056' },
-        { id: 'importance-070-098' },
-        { id: 'random-070-098' },
+        { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+        { id: 'random-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
       ],
     },
   }),
-  { incompleteFootprintTierSweep: false },
-  'a complete exact tier sweep preserves bounded optimization authority',
+  { incompleteFootprintTierSweep: false, mismatchedFootprintTierPopulation: false },
+  'a complete exact count-matched tier sweep preserves bounded optimization authority',
+);
+assert.equal(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArms: [
+      { id: 'importance-070-098' },
+      { id: 'random-070-098', matchCountsFrom: 'importance-070-098' },
+    ],
+    sweep: {
+      ok: true,
+      arms: [
+        { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+        { id: 'random-070-098', audit: { footprintTier: { counts: { base: 332, medium: 151, hero: 29 } } } },
+      ],
+    },
+  }).mismatchedFootprintTierPopulation,
+  true,
+  'a random arm that overspends the importance population is denied even when all expected arm ids exist',
 );
 for (const sweep of [
   null,
@@ -106,7 +128,11 @@ for (const sweep of [
   assert.equal(
     benchmarkModule.footprintTierSweepReceiptChecks({
       requested: true,
-      expectedArmIds: ['base-056', 'importance-070-098', 'random-070-098'],
+      expectedArms: [
+        { id: 'base-056' },
+        { id: 'importance-070-098' },
+        { id: 'random-070-098', matchCountsFrom: 'importance-070-098' },
+      ],
       sweep,
     }).incompleteFootprintTierSweep,
     true,

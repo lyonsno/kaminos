@@ -169,6 +169,8 @@ function parseBoundarySplatFootprintTierArms(value) {
       || arm.id.length === 0
       || candidates.findIndex(candidate => candidate?.id === arm.id) !== index
       || !['off', 'importance', 'random'].includes(arm.policy)
+      || (arm.matchCountsFrom !== undefined
+        && (arm.policy !== 'random' || typeof arm.matchCountsFrom !== 'string' || arm.matchCountsFrom.length === 0))
       || ![arm.baseRadius, arm.mediumRadius, arm.heroRadius, arm.mediumThreshold, arm.heroThreshold].every(Number.isFinite)
       || arm.baseRadius < 0.35
       || arm.heroRadius > 1.5
@@ -3245,16 +3247,42 @@ async function main() {
           await new Promise(resolve => setTimeout(resolve, 100));
           try {
             for (const tierArm of tierArms) {
+              let effectiveTierArm = { ...tierArm };
+              if (tierArm.matchCountsFrom) {
+                const matchedArm = arms.find(arm => arm.id === tierArm.matchCountsFrom);
+                const matchedCounts = matchedArm?.audit?.footprintTier?.counts;
+                if (!matchedCounts) {
+                  throw new Error('footprint-tier-match-source-missing:' + tierArm.id + ':' + tierArm.matchCountsFrom);
+                }
+                const calibrationAudit = await prototype.sampleBoundarySplatFootprintAudit({
+                  randomTierCounts: {
+                    medium: matchedCounts.medium,
+                    hero: matchedCounts.hero,
+                  },
+                });
+                const calibration = calibrationAudit?.footprintTier?.matchedRandomTierThresholds;
+                if (!calibration) {
+                  throw new Error('footprint-tier-random-calibration-missing:' + tierArm.id);
+                }
+                effectiveTierArm = {
+                  ...tierArm,
+                  requestedMediumThreshold: tierArm.mediumThreshold,
+                  requestedHeroThreshold: tierArm.heroThreshold,
+                  mediumThreshold: calibration.mediumThreshold,
+                  heroThreshold: calibration.heroThreshold,
+                  matchedRandomTierThresholds: calibration,
+                };
+              }
               prototype.setControls({
                 ...controlsBefore,
                 lookFreeze: 1,
                 boundarySplatMode: 'analytic_conserved',
-                boundarySplatRadius: tierArm.baseRadius,
-                boundarySplatFootprintTierPolicy: tierArm.policy,
-                boundarySplatFootprintMediumRadius: tierArm.mediumRadius,
-                boundarySplatFootprintHeroRadius: tierArm.heroRadius,
-                boundarySplatFootprintMediumThreshold: tierArm.mediumThreshold,
-                boundarySplatFootprintHeroThreshold: tierArm.heroThreshold,
+                boundarySplatRadius: effectiveTierArm.baseRadius,
+                boundarySplatFootprintTierPolicy: effectiveTierArm.policy,
+                boundarySplatFootprintMediumRadius: effectiveTierArm.mediumRadius,
+                boundarySplatFootprintHeroRadius: effectiveTierArm.heroRadius,
+                boundarySplatFootprintMediumThreshold: effectiveTierArm.mediumThreshold,
+                boundarySplatFootprintHeroThreshold: effectiveTierArm.heroThreshold,
               });
               await new Promise(resolve => setTimeout(resolve, 40));
               const samples = [];
@@ -3283,7 +3311,7 @@ async function main() {
               const audit = await prototype.sampleBoundarySplatFootprintAudit();
               const state = prototype.debugState();
               arms.push({
-                ...tierArm,
+                ...effectiveTierArm,
                 effectiveMode: state.boundarySplatMode,
                 effectiveRadius: state.boundarySplatRadius,
                 effectiveTier: state.boundarySplatFootprintTier,
@@ -3378,6 +3406,18 @@ async function main() {
         if (Number(arm.overflowCount) !== 0) throw new Error(`footprint-tier-overflow:${arm.id}:${arm.overflowCount}`);
         if (!Number.isFinite(Number(arm.audit.relativeError)) || Number(arm.audit.relativeError) > 1e-5) {
           throw new Error(`footprint-tier-energy-conservation-failed:${arm.id}:${arm.audit.relativeError}`);
+        }
+        if (arm.matchCountsFrom) {
+          const matchedArm = arms.find(candidate => candidate.id === arm.matchCountsFrom);
+          const counts = arm.audit?.footprintTier?.counts;
+          const matchedCounts = matchedArm?.audit?.footprintTier?.counts;
+          if (!counts
+            || !matchedCounts
+            || counts.base !== matchedCounts.base
+            || counts.medium !== matchedCounts.medium
+            || counts.hero !== matchedCounts.hero) {
+            throw new Error(`footprint-tier-population-mismatch:${arm.id}:${arm.matchCountsFrom}:${JSON.stringify({ counts, matchedCounts })}`);
+          }
         }
       }
       boundarySplatFootprintTierSweep.ok = true;

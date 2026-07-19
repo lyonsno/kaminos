@@ -103,6 +103,7 @@ const DEFAULT_FOOTPRINT_TIER_ARMS = Object.freeze([
   {
     id: 'random-070-098',
     policy: 'random',
+    matchCountsFrom: 'importance-070-098',
     baseRadius: 0.56,
     mediumRadius: 0.70,
     heroRadius: 0.98,
@@ -276,6 +277,7 @@ function initialFalseClosureChecks() {
     incompleteFootprintAudit: false,
     incompleteFootprintSweep: false,
     incompleteFootprintTierSweep: false,
+    mismatchedFootprintTierPopulation: false,
     incompleteWorkloadReceipt: false,
     staleCountAuthority: false,
     capacityTruncatedWorkload: false,
@@ -384,13 +386,32 @@ export function basinReceiptChecks(report) {
   return { missingAcceptedBasinReceipt, mismatchedAcceptedBasinReceipt };
 }
 
-export function footprintTierSweepReceiptChecks({ requested, expectedArmIds, sweep }) {
-  if (!requested) return { incompleteFootprintTierSweep: false };
+export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep }) {
+  if (!requested) {
+    return {
+      incompleteFootprintTierSweep: false,
+      mismatchedFootprintTierPopulation: false,
+    };
+  }
+  const expectedArmIds = expectedArms.map(arm => arm.id);
   const receivedArmIds = Array.isArray(sweep?.arms) ? sweep.arms.map(arm => arm?.id ?? null) : [];
+  const mismatchedFootprintTierPopulation = expectedArms.some(expectedArm => {
+    if (!expectedArm.matchCountsFrom) return false;
+    const treatment = sweep?.arms?.find(arm => arm?.id === expectedArm.id);
+    const control = sweep?.arms?.find(arm => arm?.id === expectedArm.matchCountsFrom);
+    const treatmentCounts = treatment?.audit?.footprintTier?.counts;
+    const controlCounts = control?.audit?.footprintTier?.counts;
+    return !treatmentCounts
+      || !controlCounts
+      || treatmentCounts.base !== controlCounts.base
+      || treatmentCounts.medium !== controlCounts.medium
+      || treatmentCounts.hero !== controlCounts.hero;
+  });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true
       || receivedArmIds.length !== expectedArmIds.length
       || receivedArmIds.some((id, index) => id !== expectedArmIds[index]),
+    mismatchedFootprintTierPopulation,
   };
 }
 
@@ -443,7 +464,7 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report, optio
   );
   Object.assign(falseClosureChecks, footprintTierSweepReceiptChecks({
     requested: options.footprintTierSweepRequested ?? FOOTPRINT_TIER_SWEEP_REQUESTED,
-    expectedArmIds: DEFAULT_FOOTPRINT_TIER_ARMS.map(arm => arm.id),
+    expectedArms: DEFAULT_FOOTPRINT_TIER_ARMS,
     sweep: footprintTierSweep,
   }));
   falseClosureChecks.mismatchedRaymarchQuality = !profile?.stages?.matchedRaymarchRaster;

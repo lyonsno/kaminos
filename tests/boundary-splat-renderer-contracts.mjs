@@ -7,6 +7,7 @@ const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url)
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
 const {
   canonicalizeBoundarySplatAuditRows,
+  matchRandomBoundarySplatFootprintTierThresholds,
   resolveBoundarySplatFootprintTier,
   resolveBoundarySplatRenderComposition,
 } = await import('../volume-core.js');
@@ -19,6 +20,29 @@ assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.feat
 assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
 assert.equal(typeof resolveBoundarySplatFootprintTier, 'function', 'candidate-local footprint tier resolution is exported for exact witness replay');
+assert.equal(
+  typeof matchRandomBoundarySplatFootprintTierThresholds,
+  'function',
+  'the random control can calibrate exact medium and hero populations from the held candidate cohort',
+);
+const randomControlScores = Array.from({ length: 512 }, (_, cellIndex) => (
+  resolveBoundarySplatFootprintTier({ policy: 'random', cellIndex }).score
+));
+const matchedRandomThresholds = matchRandomBoundarySplatFootprintTierThresholds(
+  randomControlScores,
+  { medium: 61, hero: 29 },
+);
+const matchedRandomCounts = randomControlScores.reduce((counts, score) => {
+  if (score >= matchedRandomThresholds.heroThreshold) counts.hero += 1;
+  else if (score >= matchedRandomThresholds.mediumThreshold) counts.medium += 1;
+  else counts.base += 1;
+  return counts;
+}, { base: 0, medium: 0, hero: 0 });
+assert.deepEqual(
+  matchedRandomCounts,
+  { base: 422, medium: 61, hero: 29 },
+  'held-cohort random calibration matches the importance arm population exactly rather than merely matching expected probability',
+);
 const baseFootprintTier = resolveBoundarySplatFootprintTier({
   policy: 'importance',
   cellIndex: 41,
