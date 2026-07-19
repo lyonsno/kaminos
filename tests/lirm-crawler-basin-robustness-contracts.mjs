@@ -241,9 +241,56 @@ assert.doesNotThrow(() => validateCrawlerBasinMatrixReport(matrix));
 const routeLie = structuredClone(matrix);
 routeLie.rows[0].subreport.effectiveRoute = 'fallback/route';
 assert.throws(() => validateCrawlerBasinMatrixReport(routeLie, { requireFiles: false }), /effective route mismatch/);
+const matrixRequestedRouteLie = structuredClone(matrix);
+matrixRequestedRouteLie.requestedRoute = 'fallback/route';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(matrixRequestedRouteLie, { requireFiles: false }),
+  /matrix requested route mismatch/,
+);
+const matrixEffectiveRouteLie = structuredClone(matrix);
+matrixEffectiveRouteLie.effectiveRoute = 'fallback/route';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(matrixEffectiveRouteLie, { requireFiles: false }),
+  /matrix effective route mismatch/,
+);
+const unknownStatus = structuredClone(matrix);
+unknownStatus.status = 'basin-passed-definitely-trust-me';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(unknownStatus, { requireFiles: false }),
+  /matrix status\/inspection mismatch/,
+);
 const missingRow = structuredClone(matrix);
 missingRow.rows.pop();
 assert.throws(() => validateCrawlerBasinMatrixReport(missingRow, { requireFiles: false }), /exactly 4 matrix rows/);
+
+const corruptedEmbeddedSource = structuredClone(matrix);
+corruptedEmbeddedSource.manifest.sourceWitness.sha256 = `sha256:${'0'.repeat(64)}`;
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(corruptedEmbeddedSource),
+  /embedded manifest identity mismatch|source witness hash mismatch/,
+  'matrix validation must bind the embedded frozen manifest to its original source evidence',
+);
+const corruptedEmbeddedDonor = structuredClone(matrix);
+corruptedEmbeddedDonor.manifest.donors[0].bytes += 1;
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(corruptedEmbeddedDonor),
+  /embedded donor .* byte count mismatch/,
+  'matrix validation must revalidate every frozen donor file identity',
+);
+const rewrittenEmbeddedManifest = structuredClone(matrix);
+rewrittenEmbeddedManifest.manifest.donors[0].visualSelectionRationale = 'outcome-dependent replacement rationale';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(rewrittenEmbeddedManifest),
+  /embedded manifest identity mismatch/,
+  'matrix validation must reject an embedded manifest that diverges from the frozen manifest bytes',
+);
+const escapedEmbeddedDonor = structuredClone(matrix);
+escapedEmbeddedDonor.manifest.donors[0].path = '../outside.glb';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(escapedEmbeddedDonor, { requireFiles: false }),
+  /escapes repo root/,
+  'embedded donor path containment must not depend on external file reads',
+);
 
 const persisted = JSON.parse(await readFile(join(runOut, 'report.json'), 'utf8'));
 assert.equal(persisted.rows.length, 4);
@@ -264,6 +311,27 @@ assert.throws(
   () => validateCrawlerBasinMatrixReport(corruptedInspection),
   /visual inspection depth witness identity mismatch/,
   'inspected matrix must reject a receipt bound to different aggregate depth evidence',
+);
+const inspectedPending = structuredClone(inspected);
+inspectedPending.visualInspection = 'pending';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(inspectedPending),
+  /matrix status\/inspection mismatch/,
+  'inspected green status must require an inspection receipt',
+);
+const inspectedMissing = structuredClone(inspected);
+delete inspectedMissing.visualInspection;
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(inspectedMissing),
+  /matrix status\/inspection mismatch/,
+  'inspected green status must not survive a missing inspection receipt',
+);
+const uninspectedWithReceipt = structuredClone(inspected);
+uninspectedWithReceipt.status = 'basin-passed-uninspected';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(uninspectedWithReceipt),
+  /matrix status\/inspection mismatch/,
+  'an inspection receipt must not coexist with uninspected status',
 );
 
 console.log('LIRM crawler basin robustness contracts passed');

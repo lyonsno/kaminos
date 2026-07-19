@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { deflateSync, inflateSync } from 'node:zlib';
 
 import {
@@ -62,6 +63,66 @@ function assertFixedRoute(manifest) {
   }
   for (const key of ['width', 'height', 'passes']) {
     if (!Number.isInteger(manifest.fixedRoute?.[key]) || manifest.fixedRoute[key] <= 0) throw new Error(`invalid fixed route ${key}`);
+  }
+}
+
+function frozenManifestSourceView(manifest) {
+  const {
+    absoluteManifestPath,
+    manifestSha256,
+    repoRoot,
+    ...source
+  } = manifest;
+  const { absolutePath: sourceWitnessAbsolutePath, ...sourceWitness } = source.sourceWitness ?? {};
+  void sourceWitnessAbsolutePath;
+  return {
+    ...source,
+    sourceWitness,
+    donors: (source.donors ?? []).map(donor => {
+      const { absolutePath, ...frozenDonor } = donor;
+      void absolutePath;
+      return frozenDonor;
+    }),
+  };
+}
+
+function validateEmbeddedFrozenManifest(manifest, { requireFiles }) {
+  if (manifest?.schema !== CRAWLER_BASIN_MANIFEST_SCHEMA || manifest.fitOutcomesObserved !== false) {
+    throw new Error('matrix lost frozen manifest identity');
+  }
+  if (manifest.acceptance?.basin?.donorCount !== 4 || manifest.donors?.length !== 4) {
+    throw new Error('embedded manifest requires exactly 4 donors');
+  }
+  if (manifest.acceptance.basin.minimumRecoveredDonors !== 3) throw new Error('embedded manifest requires a 3-of-4 basin predicate');
+  if (manifest.acceptance.basin.allowDonorReplacement !== false) throw new Error('embedded manifest must forbid donor replacement');
+  assertFixedRoute(manifest);
+
+  const repoRoot = resolve(manifest.repoRoot ?? '');
+  if (!manifest.repoRoot || manifest.repoRoot !== repoRoot) throw new Error('embedded manifest repo root mismatch');
+  const ids = new Set();
+  const paths = new Set();
+  const hashes = new Set();
+  for (const donor of manifest.donors) {
+    if (!donor.id || ids.has(donor.id)) throw new Error(`duplicate embedded donor id: ${donor.id}`);
+    if (!donor.path || paths.has(donor.path)) throw new Error(`duplicate embedded donor path: ${donor.path}`);
+    if (!donor.sha256 || hashes.has(donor.sha256)) throw new Error(`duplicate embedded donor hash: ${donor.sha256}`);
+    ids.add(donor.id); paths.add(donor.path); hashes.add(donor.sha256);
+    const absolutePath = assertRepoLocalPath(donor.path, repoRoot, `embedded donor ${donor.id}`);
+    if (donor.absolutePath !== absolutePath) throw new Error(`embedded donor absolute path mismatch for ${donor.id}`);
+    if (requireFiles) verifyFileIdentity({ ...donor, absolutePath }, `embedded donor ${donor.id}`);
+  }
+  const sourceWitnessAbsolutePath = assertRepoLocalPath(manifest.sourceWitness?.path, repoRoot, 'embedded source witness');
+  if (manifest.sourceWitness?.absolutePath !== sourceWitnessAbsolutePath) throw new Error('embedded source witness absolute path mismatch');
+  if (requireFiles) verifyFileIdentity({ ...manifest.sourceWitness, absolutePath: sourceWitnessAbsolutePath }, 'embedded source witness');
+
+  if (requireFiles) {
+    const absoluteManifestPath = assertRepoLocalPath(manifest.absoluteManifestPath, repoRoot, 'embedded manifest');
+    const manifestBytes = readFileSync(absoluteManifestPath);
+    if (sha256(manifestBytes) !== manifest.manifestSha256) throw new Error('embedded manifest file hash mismatch');
+    const sourceManifest = JSON.parse(manifestBytes);
+    if (!isDeepStrictEqual(frozenManifestSourceView(manifest), sourceManifest)) {
+      throw new Error('embedded manifest identity mismatch');
+    }
   }
 }
 
@@ -305,7 +366,9 @@ function validateInspectionWitnessIdentity(receipt, artifact, label) {
 export function validateCrawlerBasinMatrixReport(report, { requireFiles = true } = {}) {
   if (report?.schema !== CRAWLER_BASIN_MATRIX_SCHEMA) throw new Error('unexpected crawler basin matrix schema');
   const manifest = report.manifest;
-  if (manifest?.schema !== CRAWLER_BASIN_MANIFEST_SCHEMA || manifest.fitOutcomesObserved !== false) throw new Error('matrix lost frozen manifest identity');
+  validateEmbeddedFrozenManifest(manifest, { requireFiles });
+  if (report.requestedRoute !== manifest.requestedRoute) throw new Error('matrix requested route mismatch');
+  if (report.effectiveRoute !== manifest.requestedRoute) throw new Error('matrix effective route mismatch');
   if (report.rows?.length !== 4) throw new Error('matrix requires exactly 4 matrix rows');
   if (!exactArray(report.rows.map(row => row.donorId), manifest.donors.map(donor => donor.id))) throw new Error('matrix donor order or identity mismatch');
   for (const row of report.rows) {
@@ -322,7 +385,12 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
   if (JSON.stringify(evaluated) !== JSON.stringify(report.acceptance)) throw new Error('matrix acceptance summary mismatch');
   validateComparisonWitness(report.outputInventory?.comparisonWitness, requireFiles);
   validateComparisonWitness(report.outputInventory?.depthComparisonWitness, requireFiles);
-  if (report.visualInspection && report.visualInspection !== 'pending') {
+  let expectedStatus;
+  if (report.visualInspection === 'pending') {
+    expectedStatus = report.acceptance.passed ? 'basin-passed-uninspected' : 'basin-missed-threshold-uninspected';
+  } else if (report.visualInspection && typeof report.visualInspection === 'object') {
+    if (!['accepted', 'rejected'].includes(report.visualInspection.disposition)) throw new Error('invalid matrix visual inspection disposition');
+    if (!report.visualInspection.visibleDelta?.trim()) throw new Error('matrix visual inspection lacks visible delta');
     validateInspectionWitnessIdentity(
       report.visualInspection.comparisonWitness,
       report.outputInventory.comparisonWitness,
@@ -333,7 +401,11 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
       report.outputInventory.depthComparisonWitness,
       'depth',
     );
-  }
+    expectedStatus = report.visualInspection.disposition === 'accepted'
+      ? (report.acceptance.passed ? 'basin-passed-inspected' : 'basin-missed-threshold-inspected')
+      : 'basin-visual-rejected';
+  } else throw new Error('matrix status/inspection mismatch');
+  if (report.status !== expectedStatus) throw new Error(`matrix status/inspection mismatch: expected ${expectedStatus}, got ${report.status}`);
   return report;
 }
 
@@ -472,6 +544,7 @@ export async function recordCrawlerBasinVisualInspection({ reportPath, dispositi
   report.lastTrustworthyEvidence = disposition === 'accepted'
     ? 'all four precommitted donors and aggregate residual witness visually inspected'
     : 'aggregate residual witness visually inspected and rejected';
+  validateCrawlerBasinMatrixReport(report);
   await writeJsonAtomic(resolve(reportPath), report);
   return report;
 }
