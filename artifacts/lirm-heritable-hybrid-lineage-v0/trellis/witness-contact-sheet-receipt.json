@@ -1,0 +1,119 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "inspected",
+  "lastTrustworthyEvidence": "sixteen unchanged route-validated witness frames assembled and inspected; receipt refreshed against effective job type metadata",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness-plan.json",
+    "bytes": 28104,
+    "sha256": "sha256:f5f627675eeced5b4154aba6f515c4e6ab4b02c8e6bd5471f9390fa6974a88ef"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness-completion-report.json",
+    "bytes": 51992,
+    "sha256": "sha256:f788b9a903be4392d66ae1b7013465a97b7bc0105bf4c6f0149f92f4972c6acc"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 4887,
+    "sha256": "sha256:1d5295dc755739ef79b5e0c4ec4c74fdd8eeb43aa7d1c4eac39c697c42bc2cf1"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/trellis-witness-contact-sheet.png",
+    "bytes": 2895213,
+    "sha256": "sha256:50caa49ff5f218061fe126675bbc67b64feba4d41a77c246d4f25e36e3b232e2"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "bytes": 810903,
+      "sha256": "sha256:c94f625ac20f2d1b8ea306b6712cc9284565f11df37aedc7cf50fae5389377c7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "bytes": 843072,
+      "sha256": "sha256:02351e3af6d3587c76069bc23fafe5617df1e9a2e3cda9458260fde301a296e3"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "bytes": 804721,
+      "sha256": "sha256:e98ae5d84767259bdd381c8fbbe3e5a01f0d6016da144b382d935b7c926db02f"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "bytes": 802187,
+      "sha256": "sha256:7953115fff534c85618649151191e76a92e0ef6582e3723b45933dc9514976e7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "bytes": 761912,
+      "sha256": "sha256:b1175c43d1cda1930b985fa031f4b0eab5641c94bf90ea2d70d9e3107ce39dd6"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "bytes": 795139,
+      "sha256": "sha256:f1125b9484c20658095a37c81a866424c0f774893b0c9d5ef68c2c780199a7e4"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "bytes": 773680,
+      "sha256": "sha256:8371c718d9979e823b43ca71251a61b2b4b0a609a9137831f9979dfcfbc4bada"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "bytes": 783481,
+      "sha256": "sha256:1e8d9d59e1b3f86c1289d7ec35fbb8cb500f1e00d472e27431d41a802a061eba"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "bytes": 773631,
+      "sha256": "sha256:a1e7e0cbc8ac10ab766b9508043e5fd6929ed34cc439b36fe2d49998f37ab961"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "bytes": 805275,
+      "sha256": "sha256:b3a5dad00bc10d1b51a711adbb2f42bd43fd57e073a263646de10bc1f720578f"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "bytes": 779434,
+      "sha256": "sha256:eaeb4bec3ba0ef9a98b3c47ae589b666f4858ff538bdfffa0066719e6c24c573"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "bytes": 772635,
+      "sha256": "sha256:e68bdaac764a3aef9c0b670477f0678921e6a27735c2df08bb333e0f513421a5"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "bytes": 693697,
+      "sha256": "sha256:ef2a337fcc7341c51aff590868d168daaa63f354bbc3a0265161f36d0bc0e7a8"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "bytes": 729604,
+      "sha256": "sha256:75d54dc15fd8cabb6e6d0e993745a8361fed84c7f64c37a9e657816aeb6bdf4f"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "bytes": 739448,
+      "sha256": "sha256:169629b1f9e37fe11bee26c807daa56732328f6bdd7ec3931598ded0c21f872e"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "bytes": 696858,
+      "sha256": "sha256:6f2cb9b431bb45dbada0fbc29ef5a6b62f06281a6b203a790ef7c01178ee4ed7"
+    }
+  ],
+  "falseClosureGuards": {
+    "partialFrameSetAccepted": false,
+    "routeValidatedFramesImplySpatialSuccess": false,
+    "frontViewOnlyAccepted": false
+  }
+}

@@ -1,0 +1,4036 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-plan.v0",
+  "status": "planned",
+  "createdAt": "2026-07-19T15:04:29.129Z",
+  "purpose": "Test whether one fixed Flux prior can preserve shared ancestry while metabolizing three heritable morphology branches into distinct creature lineages.",
+  "sourceEvidence": {
+    "witnessSchema": "kaminos.lirm-heritable-hybrid-lineage-witness.v0",
+    "controlSheet": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/heritable-hybrid-lineage-control-sheet.png",
+      "bytes": 526298,
+      "sha256": "sha256:89e7be99a3389c753937cc91ed693db32ef076832264f019bafe810f8e2f6ccc"
+    },
+    "controlAdjudication": {
+      "path": "control-adjudication.json",
+      "bytes": 1699,
+      "sha256": "sha256:57b9291a1321e63c4c988b3778b02314943e71c10c8220c48347fe69366281ed"
+    },
+    "witnessReceipt": {
+      "path": "receipt.json",
+      "bytes": 165721,
+      "sha256": "sha256:cb76c986baddc9778d422d91049343b917c0e39ebb4abf0091bbd02a117aed04"
+    },
+    "controlSheetReceipt": {
+      "path": "control-contact-sheet-receipt.json",
+      "bytes": 5856,
+      "sha256": "sha256:49f711d2e71d1ff2b979c3034d43bb465635b60a4107a65838811f89b73b2070"
+    }
+  },
+  "comparisonContract": {
+    "kind": "founder-plus-three-three-generation-lineages-fixed-causal-firing",
+    "founderId": "annular-canopy-founder",
+    "lineageIds": [
+      "cleft-crown-twins",
+      "stilted-ventral-keel",
+      "lateral-sail-radiant"
+    ],
+    "terminalIds": [
+      "cleft-crown-twins-g3",
+      "stilted-ventral-keel-g3",
+      "lateral-sail-radiant-g3"
+    ],
+    "candidateIds": [
+      "annular-canopy-founder",
+      "cleft-crown-twins-g1",
+      "cleft-crown-twins-g2",
+      "cleft-crown-twins-g3",
+      "stilted-ventral-keel-g1",
+      "stilted-ventral-keel-g2",
+      "stilted-ventral-keel-g3",
+      "lateral-sail-radiant-g1",
+      "lateral-sail-radiant-g2",
+      "lateral-sail-radiant-g3"
+    ],
+    "fixedPromptStance": "lineage-metabolizer",
+    "fixedPromptSha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a",
+    "fixedSeed": 718501,
+    "fixedReferenceSet": "clay-depth-normal",
+    "fixedModel": "flux2-klein-9b",
+    "fixedSteps": 8,
+    "fixedGuidance": 1,
+    "variedAxis": "heritable-3d-armature-only",
+    "loadBearingDiscriminators": [
+      "all descendants remain recognizably descended from the shared annular-canopy-tripod founder",
+      "each branch preserves its cumulative inherited structures across three generations",
+      "terminal descendants recruit materially different creature gestalts rather than cosmetic variants",
+      "the model invents coherent connective anatomy without erasing load-bearing negative space"
+    ]
+  },
+  "evidencePredicate": {
+    "allTenRouteValidatedOutputsRequired": true,
+    "originalResolutionContactSheetInspectionRequired": true,
+    "ancestryRequiresCrossGenerationComparison": true,
+    "divergenceRequiresCrossLineageComparison": true,
+    "spatialInheritanceRequiresTrellisWitness": true
+  },
+  "falseClosureGuards": {
+    "directInferenceForbidden": true,
+    "fallbackRouteAccepted": false,
+    "missingOrEmptyPrimaryOutputAccepted": false,
+    "promptVariationAccepted": false,
+    "seedVariationAccepted": false,
+    "referenceHashDriftAccepted": false,
+    "visuallyInterestingWithoutAncestry": "does_not_satisfy",
+    "visuallyAdherentWithoutTerminalDivergence": "does_not_satisfy",
+    "imagegenSheetProvesSpatialInheritance": false
+  },
+  "cells": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-canopy-founder",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.72,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png",
+        "bytes": 46482,
+        "sha256": "sha256:53eab81f9e7aab1ffd241153f8a8d36659be994d40c8c372ce2fe9d29d8a4f00",
+        "role": "clay",
+        "sourceRelativePath": "annular-canopy-founder/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/depth-implicit.png",
+          "bytes": 26970,
+          "sha256": "sha256:b4a23065222c8dcbdd56ae44f128a87ec75ff5879f8d724dda39db3df1d18fc8",
+          "role": "depth",
+          "sourceRelativePath": "annular-canopy-founder/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/normal-implicit.png",
+          "bytes": 56881,
+          "sha256": "sha256:a69aad42893300b164cdd4d866420ff705ffd6d1d9c33b5fb6fec0bd5c40ec9a",
+          "role": "normal",
+          "sourceRelativePath": "annular-canopy-founder/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "founder",
+      "generation": 0,
+      "parentId": null,
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [],
+      "lineagePressure": "open annular creature with an independent dorsal canopy, articulated tripod stance, and suspended interior sensory anatomy",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/receipt.json"
+    },
+    {
+      "cellId": "cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "cleft-crown-twins-g1",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.72,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0.13,
+        "canopyHornRise": 0.08,
+        "pendantForkSpread": 0.1,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/clay-implicit.png",
+        "bytes": 47531,
+        "sha256": "sha256:87e82508052a61e7475ef8e01401a339c5e48fb581311168b20fdc28fe52bd59",
+        "role": "clay",
+        "sourceRelativePath": "cleft-crown-twins-g1/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/depth-implicit.png",
+          "bytes": 27478,
+          "sha256": "sha256:d14a15d92ee6e0877b6249556fdd5ce43dbce6417c06aa33e384f0b3b8309e0b",
+          "role": "depth",
+          "sourceRelativePath": "cleft-crown-twins-g1/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/normal-implicit.png",
+          "bytes": 58666,
+          "sha256": "sha256:4a16e84ad7db0c5ba779ddb67a039f3d310ae3de744747be0d99582355bbe08d",
+          "role": "normal",
+          "sourceRelativePath": "cleft-crown-twins-g1/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork"
+      ],
+      "lineagePressure": "incipient split crown with paired hanging sensory lobes while preserving the open annulus and tripod stance",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/receipt.json"
+    },
+    {
+      "cellId": "cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "cleft-crown-twins-g2",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.92,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0.27,
+        "canopyHornRise": 0.24,
+        "pendantForkSpread": 0.23,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/clay-implicit.png",
+        "bytes": 51246,
+        "sha256": "sha256:5f0fabb32382eb5f3b83e2c5aed9824aee927caef10036095cfcfa5691a6f390",
+        "role": "clay",
+        "sourceRelativePath": "cleft-crown-twins-g2/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/depth-implicit.png",
+          "bytes": 29476,
+          "sha256": "sha256:d8e21ef837cdede9dc1d6f2617e8e940c46bdc8856c62e60acfc589bf733ed49",
+          "role": "depth",
+          "sourceRelativePath": "cleft-crown-twins-g2/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/normal-implicit.png",
+          "bytes": 63292,
+          "sha256": "sha256:1a4a009bbb9604c845712369b99f5d51f76ab4adefa5e6c1e39832335a7e149f",
+          "role": "normal",
+          "sourceRelativePath": "cleft-crown-twins-g2/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "parentId": "cleft-crown-twins-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork",
+        "paired-crown-horns"
+      ],
+      "lineagePressure": "deeply cleft crown canopy with paired horns and clearly bifurcated suspended anatomy",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/receipt.json"
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "cleft-crown-twins-g3",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.96,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0.4,
+        "canopyHornRise": 0.28,
+        "pendantForkSpread": 0.34,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/clay-implicit.png",
+        "bytes": 51578,
+        "sha256": "sha256:425d8b4ede381ae2509a5dc7d411a2e7e08461b8b04193447237d671b4069a37",
+        "role": "clay",
+        "sourceRelativePath": "cleft-crown-twins-g3/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/depth-implicit.png",
+          "bytes": 30087,
+          "sha256": "sha256:b973221298896e58984bb060d89122e4468c1fd11c4f5226702665b6e0f9c163",
+          "role": "depth",
+          "sourceRelativePath": "cleft-crown-twins-g3/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/normal-implicit.png",
+          "bytes": 64026,
+          "sha256": "sha256:136df7b22948c60092b49ec26023b6d5cff2e7213086b1dd78fd7c5292d7cc8c",
+          "role": "normal",
+          "sourceRelativePath": "cleft-crown-twins-g3/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "parentId": "cleft-crown-twins-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork",
+        "paired-crown-horns",
+        "towering-bifid-crown"
+      ],
+      "lineagePressure": "towering bifid crown organism with twin suspended organs and a load-bearing open annular torso",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/receipt.json"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "stilted-ventral-keel-g1",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.72,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.82,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.1,
+        "ventralKeelLength": 0.18,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/clay-implicit.png",
+        "bytes": 47341,
+        "sha256": "sha256:47db4a9b63debb9e8e053b574279cb2602a8d49587181c5bec0528d40af338b7",
+        "role": "clay",
+        "sourceRelativePath": "stilted-ventral-keel-g1/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/depth-implicit.png",
+          "bytes": 27460,
+          "sha256": "sha256:3de07fe9a3cf7d99a262db11ae665e15e50f0d492595472a3e88ce23653de921",
+          "role": "depth",
+          "sourceRelativePath": "stilted-ventral-keel-g1/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/normal-implicit.png",
+          "bytes": 58172,
+          "sha256": "sha256:5e7340b38b0c4d490871587ce398ee695e9d69f57ffae8f481b62871464975ed",
+          "role": "normal",
+          "sourceRelativePath": "stilted-ventral-keel-g1/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud"
+      ],
+      "lineagePressure": "high annular body on articulated tripod stilts with an emerging ventral keel beneath the aperture",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/receipt.json"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "stilted-ventral-keel-g2",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 1.01,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.72,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.96,
+        "supportForeAft": 0.52,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.22,
+        "ventralKeelLength": 0.38,
+        "ventralKeelSweep": -0.18,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/clay-implicit.png",
+        "bytes": 48454,
+        "sha256": "sha256:b6cf6fe22462b2be9ad198c5f165cc597351973c93dc32f8fcf1d694674e90b1",
+        "role": "clay",
+        "sourceRelativePath": "stilted-ventral-keel-g2/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/depth-implicit.png",
+          "bytes": 28162,
+          "sha256": "sha256:b355ee22bce399463ba68f6b3ea9807ec711d234866d2afe74199430bfc2c79b",
+          "role": "depth",
+          "sourceRelativePath": "stilted-ventral-keel-g2/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/normal-implicit.png",
+          "bytes": 59394,
+          "sha256": "sha256:6de8505565e806e811b73e63892e8e6ac90e26c841b9598c127cbe2bff619287",
+          "role": "normal",
+          "sourceRelativePath": "stilted-ventral-keel-g2/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "parentId": "stilted-ventral-keel-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud",
+        "swept-ventral-keel"
+      ],
+      "lineagePressure": "long-jointed tripod strider with a swept ventral keel and suspended sensory anatomy inside the annulus",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/receipt.json"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "stilted-ventral-keel-g3",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.92,
+        "apertureHeight": 0.86,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.96,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.72,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 1.08,
+        "supportForeAft": 0.62,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.33,
+        "ventralKeelLength": 0.58,
+        "ventralKeelSweep": -0.38,
+        "lateralSailSpan": 0,
+        "lateralSailSweep": 0
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/clay-implicit.png",
+        "bytes": 50184,
+        "sha256": "sha256:40d21bd19aed4d7f6d4aee3cb633104ef4103c8ce5082beb1fcc6770ecccd3ca",
+        "role": "clay",
+        "sourceRelativePath": "stilted-ventral-keel-g3/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/depth-implicit.png",
+          "bytes": 28955,
+          "sha256": "sha256:538296c1fdef45c12323f1884671b48eed7114bfb5830d219c2ab9a3ea1aafaa",
+          "role": "depth",
+          "sourceRelativePath": "stilted-ventral-keel-g3/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/normal-implicit.png",
+          "bytes": 61520,
+          "sha256": "sha256:5b7a10968ca19f51e72653c1e6bfe34c69988b0eff09940cd055ce72cd5106c4",
+          "role": "normal",
+          "sourceRelativePath": "stilted-ventral-keel-g3/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "parentId": "stilted-ventral-keel-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud",
+        "swept-ventral-keel",
+        "high-stilt-keel-strider"
+      ],
+      "lineagePressure": "towering three-stilt portal organism with a long rear-swept keel, high open body, and independent canopy",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/receipt.json"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "lateral-sail-radiant-g1",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 1.04,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.54,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": 0.14,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": 0.08,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0.2,
+        "lateralSailSweep": 0.1
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/clay-implicit.png",
+        "bytes": 47193,
+        "sha256": "sha256:a8262e31d31712099bd155ac299344baba3d7e04e23d72754a63821423254e54",
+        "role": "clay",
+        "sourceRelativePath": "lateral-sail-radiant-g1/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/depth-implicit.png",
+          "bytes": 27445,
+          "sha256": "sha256:fc3d8bac76cf6cc96ba502b46efccf2f10fc67d29eb0e4e5c80ef3d143607ea5",
+          "role": "depth",
+          "sourceRelativePath": "lateral-sail-radiant-g1/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/normal-implicit.png",
+          "bytes": 58362,
+          "sha256": "sha256:47849adddcaa29d52ace7d8193e4a6d8ae15dafeb66d744ce66f3b93b46edf7d",
+          "role": "normal",
+          "sourceRelativePath": "lateral-sail-radiant-g1/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds"
+      ],
+      "lineagePressure": "annular tripod creature with small lateral sail buds and a compact asymmetric canopy",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/receipt.json"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "lateral-sail-radiant-g2",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 1.2,
+        "apertureHeight": 0.82,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.38,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": -0.2,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.42,
+        "pendantLateral": -0.28,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0.43,
+        "lateralSailSweep": 0.28
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/clay-implicit.png",
+        "bytes": 48401,
+        "sha256": "sha256:d81c0b0ec6bba14b130d8e3e187ac67cb6d5c419cf9d8e33cfbeec307e8a4371",
+        "role": "clay",
+        "sourceRelativePath": "lateral-sail-radiant-g2/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/depth-implicit.png",
+          "bytes": 28217,
+          "sha256": "sha256:ab52bcba64016455d53a57ad04df57824ea352686eef020b42cbd656e3b80b8e",
+          "role": "depth",
+          "sourceRelativePath": "lateral-sail-radiant-g2/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/normal-implicit.png",
+          "bytes": 59967,
+          "sha256": "sha256:168276ec302bf46da6764dc17511b59c80ec1e8944610232efd8b569383b5508",
+          "role": "normal",
+          "sourceRelativePath": "lateral-sail-radiant-g2/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "parentId": "lateral-sail-radiant-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds",
+        "swept-lateral-sails"
+      ],
+      "lineagePressure": "wide portal organism with swept bilateral sails, offset suspended anatomy, and a narrow dorsal canopy",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/receipt.json"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "lateral-sail-radiant-g3",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+        "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.92,
+            "min": 0.54,
+            "max": 1.46,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.42,
+            "step": 0.11
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.14,
+            "min": 0.085,
+            "max": 0.26,
+            "step": 0.03
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.2,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.98,
+            "min": 0.68,
+            "max": 1.34,
+            "step": 0.09
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.28,
+            "max": 0.28,
+            "step": 0.06
+          },
+          {
+            "id": "canopySpan",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.72,
+            "min": 1.04,
+            "max": 2.42,
+            "step": 0.17
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.28,
+            "min": 0.16,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.76,
+            "min": 0.4,
+            "max": 1.28,
+            "step": 0.11
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyLift",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.08,
+            "min": -0.08,
+            "max": 0.34,
+            "step": 0.055
+          },
+          {
+            "id": "canopyOffset",
+            "semanticRole": "canopyPlacement",
+            "initial": -0.04,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.1,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.54,
+            "step": 0.055
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.64,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.06
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.075
+          },
+          {
+            "id": "pendantLateral",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.24,
+            "min": -0.46,
+            "max": 0.46,
+            "step": 0.085
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.22,
+            "min": -0.12,
+            "max": 0.54,
+            "step": 0.075
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.18,
+            "min": 0.08,
+            "max": 0.34,
+            "step": 0.045
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.76,
+            "min": 0.44,
+            "max": 1.14,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.075,
+            "min": 0.045,
+            "max": 0.15,
+            "step": 0.02
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.15,
+            "min": 0.08,
+            "max": 0.28,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.9,
+            "min": -1.08,
+            "max": -0.5,
+            "step": 0.06
+          },
+          {
+            "id": "canopyCleft",
+            "semanticRole": "heritableCanopyCleavage",
+            "initial": 0,
+            "min": 0,
+            "max": 0.5,
+            "step": 0.08
+          },
+          {
+            "id": "canopyHornRise",
+            "semanticRole": "heritableDorsalHorn",
+            "initial": 0,
+            "min": 0,
+            "max": 0.56,
+            "step": 0.08
+          },
+          {
+            "id": "pendantForkSpread",
+            "semanticRole": "heritableSuspendedOrganFork",
+            "initial": 0,
+            "min": 0,
+            "max": 0.42,
+            "step": 0.07
+          },
+          {
+            "id": "supportKneeBend",
+            "semanticRole": "heritableSupportArticulation",
+            "initial": 0.02,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "ventralKeelLength",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": 0,
+            "max": 0.62,
+            "step": 0.1
+          },
+          {
+            "id": "ventralKeelSweep",
+            "semanticRole": "heritableVentralKeel",
+            "initial": 0,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "lateralSailSpan",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": 0,
+            "max": 0.72,
+            "step": 0.11
+          },
+          {
+            "id": "lateralSailSweep",
+            "semanticRole": "heritableLateralSail",
+            "initial": 0,
+            "min": -0.48,
+            "max": 0.48,
+            "step": 0.08
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 1.24,
+        "apertureHeight": 0.64,
+        "ringThickness": 0.14,
+        "ringDepth": 0.2,
+        "ringRise": 0.98,
+        "ringTwist": 0.08,
+        "ringSkew": 0.08,
+        "canopySpan": 1.12,
+        "canopyHeight": 0.28,
+        "canopyDepth": 0.76,
+        "canopyArch": 0.2,
+        "canopyLift": 0.08,
+        "canopyOffset": -0.04,
+        "canopyAsymmetry": -0.34,
+        "pendantWidth": 0.3,
+        "pendantHeight": 0.36,
+        "pendantDepth": 0.3,
+        "pendantDrop": 0.62,
+        "pendantLateral": -0.4,
+        "pendantForward": 0.22,
+        "suspensorSpread": 0.18,
+        "supportSpread": 0.76,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.075,
+        "footWidth": 0.15,
+        "footDepth": 0.22,
+        "groundHeight": -0.9,
+        "canopyCleft": 0,
+        "canopyHornRise": 0,
+        "pendantForkSpread": 0,
+        "supportKneeBend": 0.02,
+        "ventralKeelLength": 0,
+        "ventralKeelSweep": 0,
+        "lateralSailSpan": 0.5,
+        "lateralSailSweep": 0.42
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 288,
+        "pixelHeight": 256,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "lineage-metabolizer",
+      "seed": 718501,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/clay-implicit.png",
+        "bytes": 47479,
+        "sha256": "sha256:37a54af758ebfc1de0ecd8b25ea6020f0d2dc87e5c08f8c8e8dbf8c62a91314f",
+        "role": "clay",
+        "sourceRelativePath": "lateral-sail-radiant-g3/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/depth-implicit.png",
+          "bytes": 27671,
+          "sha256": "sha256:4af6729c1a62c626237be3c6b47cb5171eb90671016ae25ec3847aced3460e4f",
+          "role": "depth",
+          "sourceRelativePath": "lateral-sail-radiant-g3/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/normal-implicit.png",
+          "bytes": 58785,
+          "sha256": "sha256:297de92f1cf111261c7f2f2e643c5bb6b5aaf88125c3ea995ea3baff3f5b014b",
+          "role": "normal",
+          "sourceRelativePath": "lateral-sail-radiant-g3/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "parentId": "lateral-sail-radiant-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds",
+        "swept-lateral-sails",
+        "radiant-winged-portal"
+      ],
+      "lineagePressure": "extremely wide low annular portal with radiant swept side sails, compact canopy, and a low eccentric pendant",
+      "conditioningReceiptPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/receipt.json"
+    }
+  ]
+}

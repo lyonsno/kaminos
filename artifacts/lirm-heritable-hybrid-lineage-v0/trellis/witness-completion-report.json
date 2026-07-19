@@ -1,0 +1,780 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-trellis-witness-collection.v0",
+  "status": "complete-frames-inspected",
+  "requestedCount": 16,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "6c95e1abe9da",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.500582,
+      "startedAt": 1784476036.376273,
+      "finishedAt": 1784476038.609478,
+      "durationSeconds": 2.2332050800323486,
+      "outputMtime": 1784476038.3824925,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 10702020,
+        "sha256": "sha256:ca86b6abf3cd67f28d9e8948d58c76f0b2bbe9c180b859f95839f5892646ecc7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+        "bytes": 810903,
+        "sha256": "sha256:c94f625ac20f2d1b8ea306b6712cc9284565f11df37aedc7cf50fae5389377c7"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "founder-spatial-baseline",
+      "lineageId": "founder",
+      "generation": 0,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png",
+        "bytes": 810903,
+        "sha256": "sha256:c94f625ac20f2d1b8ea306b6712cc9284565f11df37aedc7cf50fae5389377c7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "835aa624fc52",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.528455,
+      "startedAt": 1784476038.6143858,
+      "finishedAt": 1784476039.9916701,
+      "durationSeconds": 1.377284288406372,
+      "outputMtime": 1784476039.9321916,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 10702020,
+        "sha256": "sha256:ca86b6abf3cd67f28d9e8948d58c76f0b2bbe9c180b859f95839f5892646ecc7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+        "bytes": 843072,
+        "sha256": "sha256:02351e3af6d3587c76069bc23fafe5617df1e9a2e3cda9458260fde301a296e3"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "founder-spatial-baseline",
+      "lineageId": "founder",
+      "generation": 0,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png",
+        "bytes": 843072,
+        "sha256": "sha256:02351e3af6d3587c76069bc23fafe5617df1e9a2e3cda9458260fde301a296e3"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "42cb6ad51604",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.5560498,
+      "startedAt": 1784476039.995138,
+      "finishedAt": 1784476041.337068,
+      "durationSeconds": 1.3419301509857178,
+      "outputMtime": 1784476041.2415035,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 10702020,
+        "sha256": "sha256:ca86b6abf3cd67f28d9e8948d58c76f0b2bbe9c180b859f95839f5892646ecc7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+        "bytes": 804721,
+        "sha256": "sha256:e98ae5d84767259bdd381c8fbbe3e5a01f0d6016da144b382d935b7c926db02f"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "founder-spatial-baseline",
+      "lineageId": "founder",
+      "generation": 0,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png",
+        "bytes": 804721,
+        "sha256": "sha256:e98ae5d84767259bdd381c8fbbe3e5a01f0d6016da144b382d935b7c926db02f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "2c6030ad1e41",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.5837069,
+      "startedAt": 1784476041.3455849,
+      "finishedAt": 1784476042.69407,
+      "durationSeconds": 1.3484852313995361,
+      "outputMtime": 1784476042.647185,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 10702020,
+        "sha256": "sha256:ca86b6abf3cd67f28d9e8948d58c76f0b2bbe9c180b859f95839f5892646ecc7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+        "bytes": 802187,
+        "sha256": "sha256:7953115fff534c85618649151191e76a92e0ef6582e3723b45933dc9514976e7"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "founder-spatial-baseline",
+      "lineageId": "founder",
+      "generation": 0,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png",
+        "bytes": 802187,
+        "sha256": "sha256:7953115fff534c85618649151191e76a92e0ef6582e3723b45933dc9514976e7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "a571504b8679",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.610913,
+      "startedAt": 1784476042.696408,
+      "finishedAt": 1784476044.008182,
+      "durationSeconds": 1.3117740154266357,
+      "outputMtime": 1784476043.8913486,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9114736,
+        "sha256": "sha256:a7218ba340d374cd3d20056f1d9ea6ff93de13c44799d53998207f58d10700ec"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+        "bytes": 761912,
+        "sha256": "sha256:b1175c43d1cda1930b985fa031f4b0eab5641c94bf90ea2d70d9e3107ce39dd6"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "cleft-crown-terminal",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png",
+        "bytes": 761912,
+        "sha256": "sha256:b1175c43d1cda1930b985fa031f4b0eab5641c94bf90ea2d70d9e3107ce39dd6"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "c0e143f65ab2",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.638006,
+      "startedAt": 1784476044.010334,
+      "finishedAt": 1784476045.321571,
+      "durationSeconds": 1.311237096786499,
+      "outputMtime": 1784476045.2227292,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9114736,
+        "sha256": "sha256:a7218ba340d374cd3d20056f1d9ea6ff93de13c44799d53998207f58d10700ec"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+        "bytes": 795139,
+        "sha256": "sha256:f1125b9484c20658095a37c81a866424c0f774893b0c9d5ef68c2c780199a7e4"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "cleft-crown-terminal",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png",
+        "bytes": 795139,
+        "sha256": "sha256:f1125b9484c20658095a37c81a866424c0f774893b0c9d5ef68c2c780199a7e4"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "84eaa9cdc2c3",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.6645539,
+      "startedAt": 1784476045.323599,
+      "finishedAt": 1784476046.599964,
+      "durationSeconds": 1.276364803314209,
+      "outputMtime": 1784476046.5082095,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9114736,
+        "sha256": "sha256:a7218ba340d374cd3d20056f1d9ea6ff93de13c44799d53998207f58d10700ec"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+        "bytes": 773680,
+        "sha256": "sha256:8371c718d9979e823b43ca71251a61b2b4b0a609a9137831f9979dfcfbc4bada"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "cleft-crown-terminal",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png",
+        "bytes": 773680,
+        "sha256": "sha256:8371c718d9979e823b43ca71251a61b2b4b0a609a9137831f9979dfcfbc4bada"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "7154f0ef39f0",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.691267,
+      "startedAt": 1784476046.602231,
+      "finishedAt": 1784476047.985146,
+      "durationSeconds": 1.3829150199890137,
+      "outputMtime": 1784476047.8758132,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9114736,
+        "sha256": "sha256:a7218ba340d374cd3d20056f1d9ea6ff93de13c44799d53998207f58d10700ec"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+        "bytes": 783481,
+        "sha256": "sha256:1e8d9d59e1b3f86c1289d7ec35fbb8cb500f1e00d472e27431d41a802a061eba"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "cleft-crown-terminal",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png",
+        "bytes": 783481,
+        "sha256": "sha256:1e8d9d59e1b3f86c1289d7ec35fbb8cb500f1e00d472e27431d41a802a061eba"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "3562c5e2e248",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.7178829,
+      "startedAt": 1784476047.987516,
+      "finishedAt": 1784476049.360193,
+      "durationSeconds": 1.3726770877838135,
+      "outputMtime": 1784476049.2715976,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 11178360,
+        "sha256": "sha256:01e50c4c74dbf91f9c4cf049b0b431551f682e8739cbb9bf7b0fc33e67db39ba"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+        "bytes": 773631,
+        "sha256": "sha256:a1e7e0cbc8ac10ab766b9508043e5fd6929ed34cc439b36fe2d49998f37ab961"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "stilted-keel-terminal",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png",
+        "bytes": 773631,
+        "sha256": "sha256:a1e7e0cbc8ac10ab766b9508043e5fd6929ed34cc439b36fe2d49998f37ab961"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "333cd81d8f83",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.745461,
+      "startedAt": 1784476049.362419,
+      "finishedAt": 1784476050.737039,
+      "durationSeconds": 1.3746201992034912,
+      "outputMtime": 1784476050.6324728,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 11178360,
+        "sha256": "sha256:01e50c4c74dbf91f9c4cf049b0b431551f682e8739cbb9bf7b0fc33e67db39ba"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+        "bytes": 805275,
+        "sha256": "sha256:b3a5dad00bc10d1b51a711adbb2f42bd43fd57e073a263646de10bc1f720578f"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "stilted-keel-terminal",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png",
+        "bytes": 805275,
+        "sha256": "sha256:b3a5dad00bc10d1b51a711adbb2f42bd43fd57e073a263646de10bc1f720578f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "6b3a96e37cca",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.773786,
+      "startedAt": 1784476050.738883,
+      "finishedAt": 1784476052.1369011,
+      "durationSeconds": 1.3980181217193604,
+      "outputMtime": 1784476052.003065,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 11178360,
+        "sha256": "sha256:01e50c4c74dbf91f9c4cf049b0b431551f682e8739cbb9bf7b0fc33e67db39ba"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+        "bytes": 779434,
+        "sha256": "sha256:eaeb4bec3ba0ef9a98b3c47ae589b666f4858ff538bdfffa0066719e6c24c573"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "stilted-keel-terminal",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png",
+        "bytes": 779434,
+        "sha256": "sha256:eaeb4bec3ba0ef9a98b3c47ae589b666f4858ff538bdfffa0066719e6c24c573"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "b186554f8438",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.808657,
+      "startedAt": 1784476052.1389492,
+      "finishedAt": 1784476053.47953,
+      "durationSeconds": 1.340580940246582,
+      "outputMtime": 1784476053.4046948,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 11178360,
+        "sha256": "sha256:01e50c4c74dbf91f9c4cf049b0b431551f682e8739cbb9bf7b0fc33e67db39ba"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+        "bytes": 772635,
+        "sha256": "sha256:e68bdaac764a3aef9c0b670477f0678921e6a27735c2df08bb333e0f513421a5"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "stilted-keel-terminal",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png",
+        "bytes": 772635,
+        "sha256": "sha256:e68bdaac764a3aef9c0b670477f0678921e6a27735c2df08bb333e0f513421a5"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "d3bc56886cab",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.8366542,
+      "startedAt": 1784476053.482013,
+      "finishedAt": 1784476054.852671,
+      "durationSeconds": 1.3706579208374023,
+      "outputMtime": 1784476054.6923814,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9525228,
+        "sha256": "sha256:baea5ef918832942298d7ef7ef6332baffe5ec597a4da55776204c6eda968284"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+        "bytes": 693697,
+        "sha256": "sha256:ef2a337fcc7341c51aff590868d168daaa63f354bbc3a0265161f36d0bc0e7a8"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "lateral-sail-terminal",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/left/render.png",
+        "bytes": 693697,
+        "sha256": "sha256:ef2a337fcc7341c51aff590868d168daaa63f354bbc3a0265161f36d0bc0e7a8"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "cc6613bd0013",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.864736,
+      "startedAt": 1784476054.854738,
+      "finishedAt": 1784476056.2836401,
+      "durationSeconds": 1.4289021492004395,
+      "outputMtime": 1784476056.1890824,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9525228,
+        "sha256": "sha256:baea5ef918832942298d7ef7ef6332baffe5ec597a4da55776204c6eda968284"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+        "bytes": 729604,
+        "sha256": "sha256:75d54dc15fd8cabb6e6d0e993745a8361fed84c7f64c37a9e657816aeb6bdf4f"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "lateral-sail-terminal",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/front/render.png",
+        "bytes": 729604,
+        "sha256": "sha256:75d54dc15fd8cabb6e6d0e993745a8361fed84c7f64c37a9e657816aeb6bdf4f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "658aeaec9fbd",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.89296,
+      "startedAt": 1784476056.285376,
+      "finishedAt": 1784476057.7214038,
+      "durationSeconds": 1.4360277652740479,
+      "outputMtime": 1784476057.5657015,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9525228,
+        "sha256": "sha256:baea5ef918832942298d7ef7ef6332baffe5ec597a4da55776204c6eda968284"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+        "bytes": 739448,
+        "sha256": "sha256:169629b1f9e37fe11bee26c807daa56732328f6bdd7ec3931598ded0c21f872e"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "lateral-sail-terminal",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/right/render.png",
+        "bytes": 739448,
+        "sha256": "sha256:169629b1f9e37fe11bee26c807daa56732328f6bdd7ec3931598ded0c21f872e"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "c755657101e4",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveJobType": "kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784476035.920579,
+      "startedAt": 1784476057.72331,
+      "finishedAt": 1784476059.122338,
+      "durationSeconds": 1.3990280628204346,
+      "outputMtime": 1784476058.9794168,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.glb",
+        "bytes": 9525228,
+        "sha256": "sha256:baea5ef918832942298d7ef7ef6332baffe5ec597a4da55776204c6eda968284"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+        "bytes": 696858,
+        "sha256": "sha256:6f2cb9b431bb45dbada0fbc29ef5a6b62f06281a6b203a790ef7c01178ee4ed7"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "lateral-sail-terminal",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/witness/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/opposite/render.png",
+        "bytes": 696858,
+        "sha256": "sha256:6f2cb9b431bb45dbada0fbc29ef5a6b62f06281a6b203a790ef7c01178ee4ed7"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "visualInspectionClaim": "inspected",
+  "lastTrustworthyEvidence": "16/16 unchanged route-validated witness frames retain prior joint visual inspection"
+}

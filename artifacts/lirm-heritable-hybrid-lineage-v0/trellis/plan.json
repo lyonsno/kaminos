@@ -1,0 +1,225 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-trellis-promotion-plan.v0",
+  "status": "planned",
+  "comparisonContract": {
+    "kind": "founder-versus-three-heritable-terminal-spatial-survival-probes",
+    "evidenceRoles": [
+      {
+        "role": "founder-spatial-baseline",
+        "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "annular-canopy-founder",
+        "lineageId": "founder",
+        "generation": 0,
+        "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+      },
+      {
+        "role": "cleft-crown-terminal",
+        "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "cleft-crown-twins-g3",
+        "lineageId": "cleft-crown-twins",
+        "generation": 3,
+        "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+      },
+      {
+        "role": "stilted-keel-terminal",
+        "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "stilted-ventral-keel-g3",
+        "lineageId": "stilted-ventral-keel",
+        "generation": 3,
+        "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+      },
+      {
+        "role": "lateral-sail-terminal",
+        "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "lateral-sail-radiant-g3",
+        "lineageId": "lateral-sail-radiant",
+        "generation": 3,
+        "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+      }
+    ],
+    "fixedSettings": {
+      "seed": 42,
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true
+    },
+    "loadBearingDiscriminators": [
+      "the founder annular aperture remains open through opposite views",
+      "the suspended interior organ remains spatially distinct from the annular body",
+      "the cleft terminal retains a split horned crown and multiplied suspended organs",
+      "the stilt terminal retains its widened articulated support field and ventral keel",
+      "the sail terminal retains its widened annulus and lateral sensory spars",
+      "all terminals remain recognizably descended from the founder while occupying distinct spatial gestalts"
+    ]
+  },
+  "evidencePredicate": {
+    "directInferenceForbidden": true,
+    "routeFallbackAllowed": false,
+    "missingGlbCountsAsSuccess": false,
+    "sourceHashDriftAllowed": false,
+    "spatialCoherenceRequiresRenderedWitness": true,
+    "frontViewOnlyDoesNotSatisfy": true,
+    "imageSpaceInheritanceDoesNotSatisfy": true
+  },
+  "cells": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "evidenceRole": "founder-spatial-baseline",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "founder",
+      "generation": 0,
+      "parentId": null,
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [],
+      "imagegenSeed": 718501,
+      "referenceSet": "clay-depth-normal",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 302498,
+        "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "evidenceRole": "cleft-crown-terminal",
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "parentId": "cleft-crown-twins-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork",
+        "paired-crown-horns",
+        "towering-bifid-crown"
+      ],
+      "imagegenSeed": 718501,
+      "referenceSet": "clay-depth-normal",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 311881,
+        "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "evidenceRole": "stilted-keel-terminal",
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "parentId": "stilted-ventral-keel-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud",
+        "swept-ventral-keel",
+        "high-stilt-keel-strider"
+      ],
+      "imagegenSeed": 718501,
+      "referenceSet": "clay-depth-normal",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 324658,
+        "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "evidenceRole": "lateral-sail-terminal",
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "parentId": "lateral-sail-radiant-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds",
+        "swept-lateral-sails",
+        "radiant-winged-portal"
+      ],
+      "imagegenSeed": 718501,
+      "referenceSet": "clay-depth-normal",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 285141,
+        "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-trellis-20260718/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    }
+  ]
+}

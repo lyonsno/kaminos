@@ -1,0 +1,135 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-contact-sheet-receipt.v0",
+  "status": "complete-inspected",
+  "requestedRoute": "kaminos/local-swift-contact-sheet-v0",
+  "effectiveRoute": "swift/AppKit",
+  "manifestPath": "imagegen-contact-sheet-manifest.json",
+  "contactSheet": {
+    "path": "heritable-hybrid-lineage-imagegen-sheet.png",
+    "byteSize": 2760033,
+    "sha256": "sha256:0dd03c15b054a7b5fa65f8ea2a201903b1bf99f4c8b124c81eef3f54178f55de",
+    "width": 1536,
+    "height": 1266
+  },
+  "sources": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "cleft-crown-twins",
+      "generation": 0,
+      "path": "imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 302498,
+      "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+    },
+    {
+      "cellId": "cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g1",
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "path": "imagegen-outputs/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 299180,
+      "sha256": "sha256:ce28d1ee9796ac745ab42398bea49db1136913719718aa47e612d456def2a23c"
+    },
+    {
+      "cellId": "cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g2",
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "path": "imagegen-outputs/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 304633,
+      "sha256": "sha256:e931feb442ad90e0ec795c7779f25117c3544e4cf22a9077ccfa6ede706c896c"
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "path": "imagegen-outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 311881,
+      "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+    },
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 0,
+      "path": "imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 302498,
+      "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g1",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "path": "imagegen-outputs/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 308953,
+      "sha256": "sha256:9f8b874ce419f7ca0582f0e2c2a2ffb833de031ef7be328bac2cc5554dc3001a"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g2",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "path": "imagegen-outputs/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 316894,
+      "sha256": "sha256:3526f71164c0f764132d1d8a6b7dd5e238981f6ff789fb73f0bcd168747edb77"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "path": "imagegen-outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 324658,
+      "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+    },
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 0,
+      "path": "imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 302498,
+      "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g1",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "path": "imagegen-outputs/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 306073,
+      "sha256": "sha256:334648d5ca2ae46c5d6bde9b5dacfdc65dd07512e2054cc16f54ef993eae36ba"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g2",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "path": "imagegen-outputs/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 312992,
+      "sha256": "sha256:9e1b994af4b9c521ccbf5b59cbef24107a912f16bdd3ceed1c738b5147fef59e"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "path": "imagegen-outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "byteSize": 285141,
+      "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+    }
+  ],
+  "visualInspectionVerified": true,
+  "visualInspectionClaim": "inspected",
+  "falseClosureGuards": {
+    "missingOrPartialCollectionAccepted": false,
+    "duplicateOrMisorderedGenerationAccepted": false,
+    "sourceHashDriftAccepted": false,
+    "blankOrImplausiblySmallRasterAccepted": false,
+    "contactSheetImpliesInheritanceSuccess": false,
+    "contactSheetImpliesSpatialInheritance": false
+  },
+  "lastTrustworthyEvidence": "1536x1266 lineage sheet and founder plus three G3 terminals inspected at original resolution; image-space inheritance accepted, spatial inheritance pending"
+}

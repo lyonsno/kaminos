@@ -1,0 +1,466 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "lateral-sail-radiant-g2",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+    "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 288,
+    "pixelHeight": 256
+  },
+  "effectiveConfig": {
+    "pixelWidth": 288,
+    "pixelHeight": 256,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "lateral-sail-radiant-g2/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "lateral-sail-radiant-g2/clay-implicit.svg",
+        "rasterPath": "lateral-sail-radiant-g2/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "lateral-sail-radiant-g2/depth-implicit.svg",
+        "rasterPath": "lateral-sail-radiant-g2/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "lateral-sail-radiant-g2/normal-implicit.svg",
+        "rasterPath": "lateral-sail-radiant-g2/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "lateral-sail-radiant-g2/mask-implicit.svg",
+        "rasterPath": "lateral-sail-radiant-g2/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "lateral-sail-radiant-g2/semantic-implicit.svg",
+        "rasterPath": "lateral-sail-radiant-g2/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "lateral-sail-radiant-g2/trellis-source.svg",
+      "rasterPath": "lateral-sail-radiant-g2/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "lateral-sail-radiant-g2/bundle.json",
+      "byteSize": 9673,
+      "sha256": "sha256:19397d1c2dd15bbe3348ff69e189acafd6f6e07745d1f6a2abb23327235430e4"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/clay-implicit.svg",
+      "byteSize": 2000225,
+      "sha256": "sha256:dc2867d37a642aae2b85aa09c72bef8f4afc25a32dad5c4aab12d49fe046fa02"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/clay-implicit.png",
+      "byteSize": 48401,
+      "sha256": "sha256:d81c0b0ec6bba14b130d8e3e187ac67cb6d5c419cf9d8e33cfbeec307e8a4371"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/depth-implicit.svg",
+      "byteSize": 2058359,
+      "sha256": "sha256:88884b5a08972cf8bb4805fcfafeb49e2889e94715812652830c809819b10cc1"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/depth-implicit.png",
+      "byteSize": 28217,
+      "sha256": "sha256:ab52bcba64016455d53a57ad04df57824ea352686eef020b42cbd656e3b80b8e"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/normal-implicit.svg",
+      "byteSize": 2032873,
+      "sha256": "sha256:73b408723e15de5a1997942d5aee0a41a0778918b6aa04b61803d24b6217c367"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/normal-implicit.png",
+      "byteSize": 59967,
+      "sha256": "sha256:168276ec302bf46da6764dc17511b59c80ec1e8944610232efd8b569383b5508"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/mask-implicit.svg",
+      "byteSize": 2058876,
+      "sha256": "sha256:8ada0fcefafaf847d542dfe8099cabaa7879246bdf6bbdaa39880849549d9c8e"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/mask-implicit.png",
+      "byteSize": 17295,
+      "sha256": "sha256:72c43791b2560e3356431f6efc8213c117994d7bd82440907176a5b107c4abf7"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/semantic-implicit.svg",
+      "byteSize": 2228194,
+      "sha256": "sha256:566749db4189ffe7bbbd2b32b1f1d7b0059d6655b0021c0f1516c6aed9cc9371"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/semantic-implicit.png",
+      "byteSize": 20947,
+      "sha256": "sha256:3a146636cfc18b384a11f4a3d4fd3b25e053cdb3845915b210eb9997cc06c385"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/trellis-source.svg",
+      "byteSize": 2004587,
+      "sha256": "sha256:761373673af362a2edbedaaf313677ce247ae9816a98059009551a3d82351630"
+    },
+    {
+      "path": "lateral-sail-radiant-g2/trellis-source.png",
+      "byteSize": 204454,
+      "sha256": "sha256:50cbb77bf5eb0252ca23e408f26f152ea2a3fa83b20cde04cf8a48708df046fc"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.heritable-annular-canopy.v0",
+    "parameterVocabulary": "kaminos.lirm-armature.heritable-annular-canopy-35.v0",
+    "parameterSpecs": [
+      {
+        "id": "apertureWidth",
+        "semanticRole": "loadBearingAperture",
+        "initial": 0.92,
+        "min": 0.54,
+        "max": 1.46,
+        "step": 0.12
+      },
+      {
+        "id": "apertureHeight",
+        "semanticRole": "loadBearingAperture",
+        "initial": 0.82,
+        "min": 0.48,
+        "max": 1.42,
+        "step": 0.11
+      },
+      {
+        "id": "ringThickness",
+        "semanticRole": "annularBody",
+        "initial": 0.14,
+        "min": 0.085,
+        "max": 0.26,
+        "step": 0.03
+      },
+      {
+        "id": "ringDepth",
+        "semanticRole": "annularBody",
+        "initial": 0.2,
+        "min": 0.11,
+        "max": 0.38,
+        "step": 0.045
+      },
+      {
+        "id": "ringRise",
+        "semanticRole": "annularElevation",
+        "initial": 0.98,
+        "min": 0.68,
+        "max": 1.34,
+        "step": 0.09
+      },
+      {
+        "id": "ringTwist",
+        "semanticRole": "controlledDepthAsymmetry",
+        "initial": 0.08,
+        "min": -0.3,
+        "max": 0.3,
+        "step": 0.065
+      },
+      {
+        "id": "ringSkew",
+        "semanticRole": "controlledLateralAsymmetry",
+        "initial": 0.08,
+        "min": -0.28,
+        "max": 0.28,
+        "step": 0.06
+      },
+      {
+        "id": "canopySpan",
+        "semanticRole": "dorsalCanopy",
+        "initial": 1.72,
+        "min": 1.04,
+        "max": 2.42,
+        "step": 0.17
+      },
+      {
+        "id": "canopyHeight",
+        "semanticRole": "dorsalCanopy",
+        "initial": 0.28,
+        "min": 0.16,
+        "max": 0.52,
+        "step": 0.055
+      },
+      {
+        "id": "canopyDepth",
+        "semanticRole": "dorsalCanopy",
+        "initial": 0.76,
+        "min": 0.4,
+        "max": 1.28,
+        "step": 0.11
+      },
+      {
+        "id": "canopyArch",
+        "semanticRole": "dorsalCanopyArch",
+        "initial": 0.2,
+        "min": -0.08,
+        "max": 0.48,
+        "step": 0.07
+      },
+      {
+        "id": "canopyLift",
+        "semanticRole": "dorsalCanopyElevation",
+        "initial": 0.08,
+        "min": -0.08,
+        "max": 0.34,
+        "step": 0.055
+      },
+      {
+        "id": "canopyOffset",
+        "semanticRole": "canopyPlacement",
+        "initial": -0.04,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "canopyAsymmetry",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.1,
+        "min": -0.38,
+        "max": 0.38,
+        "step": 0.075
+      },
+      {
+        "id": "pendantWidth",
+        "semanticRole": "suspendedSensoryMass",
+        "initial": 0.3,
+        "min": 0.16,
+        "max": 0.54,
+        "step": 0.055
+      },
+      {
+        "id": "pendantHeight",
+        "semanticRole": "suspendedSensoryMass",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.64,
+        "step": 0.065
+      },
+      {
+        "id": "pendantDepth",
+        "semanticRole": "suspendedSensoryMass",
+        "initial": 0.3,
+        "min": 0.16,
+        "max": 0.58,
+        "step": 0.06
+      },
+      {
+        "id": "pendantDrop",
+        "semanticRole": "sensorySuspension",
+        "initial": 0.42,
+        "min": 0.24,
+        "max": 0.78,
+        "step": 0.075
+      },
+      {
+        "id": "pendantLateral",
+        "semanticRole": "sensorySuspension",
+        "initial": 0.24,
+        "min": -0.46,
+        "max": 0.46,
+        "step": 0.085
+      },
+      {
+        "id": "pendantForward",
+        "semanticRole": "sensorySuspension",
+        "initial": 0.22,
+        "min": -0.12,
+        "max": 0.54,
+        "step": 0.075
+      },
+      {
+        "id": "suspensorSpread",
+        "semanticRole": "sensorySuspensor",
+        "initial": 0.18,
+        "min": 0.08,
+        "max": 0.34,
+        "step": 0.045
+      },
+      {
+        "id": "supportSpread",
+        "semanticRole": "tripodSupportField",
+        "initial": 0.76,
+        "min": 0.44,
+        "max": 1.14,
+        "step": 0.09
+      },
+      {
+        "id": "supportForeAft",
+        "semanticRole": "tripodSupportField",
+        "initial": 0.38,
+        "min": 0.18,
+        "max": 0.68,
+        "step": 0.07
+      },
+      {
+        "id": "supportThickness",
+        "semanticRole": "tripodSupport",
+        "initial": 0.075,
+        "min": 0.045,
+        "max": 0.15,
+        "step": 0.02
+      },
+      {
+        "id": "footWidth",
+        "semanticRole": "groundContact",
+        "initial": 0.15,
+        "min": 0.08,
+        "max": 0.28,
+        "step": 0.035
+      },
+      {
+        "id": "footDepth",
+        "semanticRole": "groundContact",
+        "initial": 0.22,
+        "min": 0.11,
+        "max": 0.38,
+        "step": 0.045
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.9,
+        "min": -1.08,
+        "max": -0.5,
+        "step": 0.06
+      },
+      {
+        "id": "canopyCleft",
+        "semanticRole": "heritableCanopyCleavage",
+        "initial": 0,
+        "min": 0,
+        "max": 0.5,
+        "step": 0.08
+      },
+      {
+        "id": "canopyHornRise",
+        "semanticRole": "heritableDorsalHorn",
+        "initial": 0,
+        "min": 0,
+        "max": 0.56,
+        "step": 0.08
+      },
+      {
+        "id": "pendantForkSpread",
+        "semanticRole": "heritableSuspendedOrganFork",
+        "initial": 0,
+        "min": 0,
+        "max": 0.42,
+        "step": 0.07
+      },
+      {
+        "id": "supportKneeBend",
+        "semanticRole": "heritableSupportArticulation",
+        "initial": 0.02,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.06
+      },
+      {
+        "id": "ventralKeelLength",
+        "semanticRole": "heritableVentralKeel",
+        "initial": 0,
+        "min": 0,
+        "max": 0.62,
+        "step": 0.1
+      },
+      {
+        "id": "ventralKeelSweep",
+        "semanticRole": "heritableVentralKeel",
+        "initial": 0,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "lateralSailSpan",
+        "semanticRole": "heritableLateralSail",
+        "initial": 0,
+        "min": 0,
+        "max": 0.72,
+        "step": 0.11
+      },
+      {
+        "id": "lateralSailSweep",
+        "semanticRole": "heritableLateralSail",
+        "initial": 0,
+        "min": -0.48,
+        "max": 0.48,
+        "step": 0.08
+      }
+    ]
+  },
+  "parameters": {
+    "apertureWidth": 1.2,
+    "apertureHeight": 0.82,
+    "ringThickness": 0.14,
+    "ringDepth": 0.2,
+    "ringRise": 0.98,
+    "ringTwist": 0.08,
+    "ringSkew": 0.08,
+    "canopySpan": 1.38,
+    "canopyHeight": 0.28,
+    "canopyDepth": 0.76,
+    "canopyArch": 0.2,
+    "canopyLift": 0.08,
+    "canopyOffset": -0.04,
+    "canopyAsymmetry": -0.2,
+    "pendantWidth": 0.3,
+    "pendantHeight": 0.36,
+    "pendantDepth": 0.3,
+    "pendantDrop": 0.42,
+    "pendantLateral": -0.28,
+    "pendantForward": 0.22,
+    "suspensorSpread": 0.18,
+    "supportSpread": 0.76,
+    "supportForeAft": 0.38,
+    "supportThickness": 0.075,
+    "footWidth": 0.15,
+    "footDepth": 0.22,
+    "groundHeight": -0.9,
+    "canopyCleft": 0,
+    "canopyHornRise": 0,
+    "pendantForkSpread": 0,
+    "supportKneeBend": 0.02,
+    "ventralKeelLength": 0,
+    "ventralKeelSweep": 0,
+    "lateralSailSpan": 0.43,
+    "lateralSailSweep": 0.28
+  },
+  "implicitPrimitiveCount": 51,
+  "semanticRoles": [
+    "annularBody",
+    "dorsalCanopy",
+    "sensorySuspensor",
+    "suspendedSensoryMass",
+    "groundContact",
+    "tripodSupport",
+    "lateralSail"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

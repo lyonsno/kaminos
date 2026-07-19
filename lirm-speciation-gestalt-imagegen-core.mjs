@@ -835,6 +835,7 @@ export async function validateGestaltWitnessCompletion({ cell, status }) {
     pitch: cell.pitch,
     jobId: status.job_id,
     requestedRoute: cell.requestedRoute,
+    effectiveJobType: status.job_type,
     effectiveRoute: status.effective_route,
     effectiveParams: status.params,
     ...timing,

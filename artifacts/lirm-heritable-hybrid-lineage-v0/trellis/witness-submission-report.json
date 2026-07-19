@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 16,
+  "submitted": [
+    {
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "submissionFingerprint": "sha256:e4167a0bb70344420301058ef3f450a70add6f6b1ec76df1f6ea37103c5664e0",
+      "jobId": "6c95e1abe9da",
+      "response": {
+        "job_id": "6c95e1abe9da"
+      }
+    },
+    {
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "submissionFingerprint": "sha256:9391a76961b10e5619b428d4f44f65238d2b743dec674086083c65a5cbf06dc6",
+      "jobId": "835aa624fc52",
+      "response": {
+        "job_id": "835aa624fc52"
+      }
+    },
+    {
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "submissionFingerprint": "sha256:a740d31f5b380451a5ec81c0291d28a96259c0e4863c4fc955d81a8953a5df22",
+      "jobId": "42cb6ad51604",
+      "response": {
+        "job_id": "42cb6ad51604"
+      }
+    },
+    {
+      "witnessId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "submissionFingerprint": "sha256:a32543dd66e8eca04055c4d16d4483d946ed8778b91a0f6264651dd5e65c1acf",
+      "jobId": "2c6030ad1e41",
+      "response": {
+        "job_id": "2c6030ad1e41"
+      }
+    },
+    {
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "submissionFingerprint": "sha256:1669505524fbedffb8be6c0f7a418de4da7e6d28a837759e5dffbef2d5da6dc6",
+      "jobId": "a571504b8679",
+      "response": {
+        "job_id": "a571504b8679"
+      }
+    },
+    {
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "submissionFingerprint": "sha256:6c437d3b41378960956a696fe1f03bd2887eda1c81425114e30fc62a16a0a28c",
+      "jobId": "c0e143f65ab2",
+      "response": {
+        "job_id": "c0e143f65ab2"
+      }
+    },
+    {
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "submissionFingerprint": "sha256:ad4dcd1962069484002fbd71acb8abe9f5f9e8c3094a7a6507d9f1e221c3c2d0",
+      "jobId": "84eaa9cdc2c3",
+      "response": {
+        "job_id": "84eaa9cdc2c3"
+      }
+    },
+    {
+      "witnessId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "submissionFingerprint": "sha256:fa4af351fb7f47544676aa1bae3a94d1fa9a640440081ed0b1f456592c038c65",
+      "jobId": "7154f0ef39f0",
+      "response": {
+        "job_id": "7154f0ef39f0"
+      }
+    },
+    {
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "submissionFingerprint": "sha256:e90ecfcb1cfb448d533ad4b6c84608083271fd96e3df0a58dae43110482aa759",
+      "jobId": "3562c5e2e248",
+      "response": {
+        "job_id": "3562c5e2e248"
+      }
+    },
+    {
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "submissionFingerprint": "sha256:f8ff3076c39ca5c007b746974ef6910a16837a8c934aff1a06974962cfb57f2f",
+      "jobId": "333cd81d8f83",
+      "response": {
+        "job_id": "333cd81d8f83"
+      }
+    },
+    {
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "submissionFingerprint": "sha256:a201b7945956e29902d2172f221e62eda375d131f7899e2c61c0c6da002ab647",
+      "jobId": "6b3a96e37cca",
+      "response": {
+        "job_id": "6b3a96e37cca"
+      }
+    },
+    {
+      "witnessId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "submissionFingerprint": "sha256:eb32aaf514cacbd80c8d278053e7f968e11652e621cf0558ef01d76ce9003616",
+      "jobId": "b186554f8438",
+      "response": {
+        "job_id": "b186554f8438"
+      }
+    },
+    {
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-left",
+      "submissionFingerprint": "sha256:6e3a5d57b75dc36c3af9e33a9ef57e403d8d59cab1b8b1cbc415c0ba5476cff4",
+      "jobId": "d3bc56886cab",
+      "response": {
+        "job_id": "d3bc56886cab"
+      }
+    },
+    {
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-front",
+      "submissionFingerprint": "sha256:a82b03f8e9102c4f05228dfb859a955e722498701059e7774bd80fb76a110644",
+      "jobId": "cc6613bd0013",
+      "response": {
+        "job_id": "cc6613bd0013"
+      }
+    },
+    {
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-right",
+      "submissionFingerprint": "sha256:8211386eb365e8886cf0cf32e689ceb3e82ecaa9bf9c3492a2e090e0b93b407e",
+      "jobId": "658aeaec9fbd",
+      "response": {
+        "job_id": "658aeaec9fbd"
+      }
+    },
+    {
+      "witnessId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite",
+      "submissionFingerprint": "sha256:460e948510b4fee03fbe750fa2323559ef2e403109e0490f785a88c9ab9a9c2e",
+      "jobId": "c755657101e4",
+      "response": {
+        "job_id": "c755657101e4"
+      }
+    }
+  ],
+  "staleRecoveredSubmissions": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "16/16 witness jobs submitted through Greenroom"
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-control-adjudication.v0",
+  "status": "accepted-for-imagegen-pressure",
+  "inspectedArtifact": {
+    "path": "heritable-hybrid-lineage-control-sheet.png",
+    "sha256": "sha256:89e7be99a3389c753937cc91ed693db32ef076832264f019bafe810f8e2f6ccc",
+    "width": 1280,
+    "height": 888
+  },
+  "visualInspectionClaim": "inspected",
+  "sharedFounderRead": "open annular torso, broad independent dorsal canopy, three ground contacts, and suspended interior anatomy",
+  "lineageVerdicts": [
+    {
+      "lineageId": "cleft-crown-twins",
+      "verdict": "accepted",
+      "visibleDelta": "the canopy cleaves into a paired horned crown while the suspended organ bifurcates; the annulus and tripod remain legible"
+    },
+    {
+      "lineageId": "stilted-ventral-keel",
+      "verdict": "accepted",
+      "visibleDelta": "the supports articulate and spread into a taller strider stance while a ventral keel develops beneath the annulus"
+    },
+    {
+      "lineageId": "lateral-sail-radiant",
+      "verdict": "accepted",
+      "visibleDelta": "lateral sails widen the organism into a low radiant portal while canopy and suspended anatomy remain distinct"
+    }
+  ],
+  "terminalSilhouetteVerdict": "all three terminal descendants are materially distinguishable from each other and from the shared founder",
+  "limitations": [
+    "the first generation in each row is deliberately subtle",
+    "this witness proves procedural lineage structure only; imagegen adherence and spatial cast inheritance remain unproved"
+  ],
+  "nextGate": "fire all ten unique candidates through one fixed prompt, seed, model route, and clay-depth-normal reference composition"
+}

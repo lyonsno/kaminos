@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-trellis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 4,
+  "submitted": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "submissionFingerprint": "sha256:aa3c1ed31a9877b017dd42585c72c0a3b2f291e6f8acfe161e527ed52bbc6579",
+      "jobId": "1f895bfb9259",
+      "response": {
+        "job_id": "1f895bfb9259"
+      }
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "submissionFingerprint": "sha256:86f048feb1fc54c9f6f6f700640047c04324f328e78d197a74a84c1ca73f86bd",
+      "jobId": "a1aba22ec6c8",
+      "response": {
+        "job_id": "a1aba22ec6c8"
+      }
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "submissionFingerprint": "sha256:1088a281cec4a4a383b895580fb631194f9351b417e0603fd6d1ab3e5f4dd4d9",
+      "jobId": "c0d92d98cb39",
+      "response": {
+        "job_id": "c0d92d98cb39"
+      }
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "submissionFingerprint": "sha256:5c0cbffe5f912affefea9bf6a9c82b0c87b7c96032d9ba048be18c29e03ae7f4",
+      "jobId": "728ff953b36f",
+      "response": {
+        "job_id": "728ff953b36f"
+      }
+    }
+  ],
+  "staleRecoveredSubmissions": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 Trellis jobs submitted through Greenroom"
+}

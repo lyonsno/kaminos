@@ -1,0 +1,81 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-adjudication.v0",
+  "status": "visually-inspected-promotion-selected",
+  "comparisonClass": "one founder and three cumulative three-generation lineages under fixed prompt, seed, route, and imagegen settings",
+  "contactSheet": {
+    "path": "heritable-hybrid-lineage-imagegen-sheet.png",
+    "sha256": "sha256:0dd03c15b054a7b5fa65f8ea2a201903b1bf99f4c8b124c81eef3f54178f55de",
+    "width": 1536,
+    "height": 1266,
+    "inspectedAtOriginalResolution": true
+  },
+  "founderRead": {
+    "candidateId": "annular-canopy-founder",
+    "visibleCommitments": [
+      "open annular torso",
+      "independent dorsal canopy mass",
+      "sparse articulated locomotor base",
+      "spatially distinct suspended interior organ"
+    ]
+  },
+  "lineageReads": [
+    {
+      "lineageId": "cleft-crown-twins",
+      "progression": "The crown cleft and organ fork strengthen cumulatively from a subtle G1 split through a bifurcated G2 canopy to a paired horned G3 crown with tripled suspended organs.",
+      "terminalDivergence": "Strong crown and interior-organ divergence with the founder annulus and stance still legible."
+    },
+    {
+      "lineageId": "stilted-ventral-keel",
+      "progression": "The locomotor supports progressively lengthen, articulate, and spread while the ventral keel becomes independently visible beneath the annulus.",
+      "terminalDivergence": "Strong stance and lower-body divergence with upper-body ancestry preserved."
+    },
+    {
+      "lineageId": "lateral-sail-radiant",
+      "progression": "The annulus widens while lateral buds become long sensory spars and the canopy attenuates into a radial crown around a retained suspended core.",
+      "terminalDivergence": "Strongest gestalt divergence in the family while retaining the annulus, suspended organ, and sparse support ancestry."
+    }
+  ],
+  "causalRead": "With prompt, seed, route, model, guidance, and step count fixed, the ordered lineage-specific visible changes track the inherited procedural armature changes strongly enough to accept image-space inheritance as the current explanation.",
+  "trellisPromotion": {
+    "status": "selected",
+    "evidenceRoles": [
+      {
+        "role": "founder-spatial-baseline",
+        "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "annular-canopy-founder",
+        "lineageId": "founder",
+        "generation": 0,
+        "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+      },
+      {
+        "role": "cleft-crown-terminal",
+        "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "cleft-crown-twins-g3",
+        "lineageId": "cleft-crown-twins",
+        "generation": 3,
+        "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+      },
+      {
+        "role": "stilted-keel-terminal",
+        "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "stilted-ventral-keel-g3",
+        "lineageId": "stilted-ventral-keel",
+        "generation": 3,
+        "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+      },
+      {
+        "role": "lateral-sail-terminal",
+        "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+        "candidateId": "lateral-sail-radiant-g3",
+        "lineageId": "lateral-sail-radiant",
+        "generation": 3,
+        "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+      }
+    ]
+  },
+  "limitations": [
+    "Image-space inheritance does not prove that the annulus, canopy, support field, or suspended organs are coherent behind the visible projection.",
+    "Only rendered multi-view spatial witnesses can establish whether terminal divergence survives Trellis as ancestry-preserving 3D structure.",
+    "Material consistency is useful causal control in this assay and is not evidence of geometric inheritance by itself."
+  ]
+}

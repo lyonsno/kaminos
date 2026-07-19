@@ -1,0 +1,120 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-control-sheet-manifest.v0",
+  "columns": 4,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 320,
+  "cellHeight": 296,
+  "imageHeight": 256,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "cleft-crown-twins",
+      "generation": 0,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png",
+      "sourceSha256": "sha256:53eab81f9e7aab1ffd241153f8a8d36659be994d40c8c372ce2fe9d29d8a4f00",
+      "title": "FOUNDER",
+      "viewLabel": "shared ancestor / cleft-crown-twins"
+    },
+    {
+      "candidateId": "cleft-crown-twins-g1",
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/clay-implicit.png",
+      "sourceSha256": "sha256:87e82508052a61e7475ef8e01401a339c5e48fb581311168b20fdc28fe52bd59",
+      "title": "cleft-crown-twins G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "candidateId": "cleft-crown-twins-g2",
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/clay-implicit.png",
+      "sourceSha256": "sha256:5f0fabb32382eb5f3b83e2c5aed9824aee927caef10036095cfcfa5691a6f390",
+      "title": "cleft-crown-twins G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/clay-implicit.png",
+      "sourceSha256": "sha256:425d8b4ede381ae2509a5dc7d411a2e7e08461b8b04193447237d671b4069a37",
+      "title": "cleft-crown-twins G3",
+      "viewLabel": "inherited generation 3"
+    },
+    {
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 0,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png",
+      "sourceSha256": "sha256:53eab81f9e7aab1ffd241153f8a8d36659be994d40c8c372ce2fe9d29d8a4f00",
+      "title": "FOUNDER",
+      "viewLabel": "shared ancestor / stilted-ventral-keel"
+    },
+    {
+      "candidateId": "stilted-ventral-keel-g1",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/clay-implicit.png",
+      "sourceSha256": "sha256:47db4a9b63debb9e8e053b574279cb2602a8d49587181c5bec0528d40af338b7",
+      "title": "stilted-ventral-keel G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "candidateId": "stilted-ventral-keel-g2",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/clay-implicit.png",
+      "sourceSha256": "sha256:b6cf6fe22462b2be9ad198c5f165cc597351973c93dc32f8fcf1d694674e90b1",
+      "title": "stilted-ventral-keel G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/clay-implicit.png",
+      "sourceSha256": "sha256:40d21bd19aed4d7f6d4aee3cb633104ef4103c8ce5082beb1fcc6770ecccd3ca",
+      "title": "stilted-ventral-keel G3",
+      "viewLabel": "inherited generation 3"
+    },
+    {
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 0,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png",
+      "sourceSha256": "sha256:53eab81f9e7aab1ffd241153f8a8d36659be994d40c8c372ce2fe9d29d8a4f00",
+      "title": "FOUNDER",
+      "viewLabel": "shared ancestor / lateral-sail-radiant"
+    },
+    {
+      "candidateId": "lateral-sail-radiant-g1",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/clay-implicit.png",
+      "sourceSha256": "sha256:a8262e31d31712099bd155ac299344baba3d7e04e23d72754a63821423254e54",
+      "title": "lateral-sail-radiant G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "candidateId": "lateral-sail-radiant-g2",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/clay-implicit.png",
+      "sourceSha256": "sha256:d81c0b0ec6bba14b130d8e3e187ac67cb6d5c419cf9d8e33cfbeec307e8a4371",
+      "title": "lateral-sail-radiant G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/clay-implicit.png",
+      "sourceSha256": "sha256:37a54af758ebfc1de0ecd8b25ea6020f0d2dc87e5c08f8c8e8dbf8c62a91314f",
+      "title": "lateral-sail-radiant G3",
+      "viewLabel": "inherited generation 3"
+    }
+  ]
+}

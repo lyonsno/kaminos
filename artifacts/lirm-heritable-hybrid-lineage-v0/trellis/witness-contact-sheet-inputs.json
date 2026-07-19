@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "title": "FOUNDER / G0",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "title": "FOUNDER / G0",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "title": "FOUNDER / G0",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "title": "FOUNDER / G0",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "title": "CLEFT CROWN / G3",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "title": "CLEFT CROWN / G3",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "title": "CLEFT CROWN / G3",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "title": "CLEFT CROWN / G3",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "title": "STILTED KEEL / G3",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "title": "STILTED KEEL / G3",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "title": "STILTED KEEL / G3",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "title": "STILTED KEEL / G3",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-left.png",
+      "title": "LATERAL SAIL / G3",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-front.png",
+      "title": "LATERAL SAIL / G3",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-right.png",
+      "title": "LATERAL SAIL / G3",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/trellis/witness/frames/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501-opposite.png",
+      "title": "LATERAL SAIL / G3",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

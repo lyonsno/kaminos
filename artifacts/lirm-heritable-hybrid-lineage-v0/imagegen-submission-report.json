@@ -1,0 +1,130 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-submission.v0",
+  "status": "submitted",
+  "requestedCount": 10,
+  "submitted": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "founder",
+      "generation": 0,
+      "parentId": null,
+      "submissionFingerprint": "sha256:c739cd6346b5de2ebe6a79a17237968a7df1522009e77735e1148a099eef381a",
+      "jobId": "104b25d84ca4",
+      "response": {
+        "job_id": "104b25d84ca4"
+      }
+    },
+    {
+      "cellId": "cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g1",
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "submissionFingerprint": "sha256:2425b6cb59e8763246a0d231d5c9be49dee8ef0fb7b0dd488c57e38b4132b8f1",
+      "jobId": "c85418ea354f",
+      "response": {
+        "job_id": "c85418ea354f"
+      }
+    },
+    {
+      "cellId": "cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g2",
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "parentId": "cleft-crown-twins-g1",
+      "submissionFingerprint": "sha256:2a1b6386eae2d9d22f8b276c47eabc9e620ebf9dd70a3b0126cbbdc9a5acbdf6",
+      "jobId": "51c97dbf3479",
+      "response": {
+        "job_id": "51c97dbf3479"
+      }
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "parentId": "cleft-crown-twins-g2",
+      "submissionFingerprint": "sha256:afd2ae3e229f8ba20d9c8f4984f1e8d22a6a62894a4d30b906840be68b1cf402",
+      "jobId": "1ae01132c581",
+      "response": {
+        "job_id": "1ae01132c581"
+      }
+    },
+    {
+      "cellId": "stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g1",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "submissionFingerprint": "sha256:674accf31bfa9ad6b2ef8959b51dd6c0304fecdc7acaae41e4bb01fbcfc55e96",
+      "jobId": "38310b4fb6e5",
+      "response": {
+        "job_id": "38310b4fb6e5"
+      }
+    },
+    {
+      "cellId": "stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g2",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "parentId": "stilted-ventral-keel-g1",
+      "submissionFingerprint": "sha256:2128f22988a1f4d9edc55d55891d26c9891df324801ebab9448db49dfc95e008",
+      "jobId": "a455a767539c",
+      "response": {
+        "job_id": "a455a767539c"
+      }
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "parentId": "stilted-ventral-keel-g2",
+      "submissionFingerprint": "sha256:6a11e523118b1ed4bcea6fe06541488c7585815fe07a5ca8f62997a44ddfaaea",
+      "jobId": "24aca425e493",
+      "response": {
+        "job_id": "24aca425e493"
+      }
+    },
+    {
+      "cellId": "lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g1",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "submissionFingerprint": "sha256:de9b53f6dfaee35ccf5d46d2fb7cff7b930aae75dcaec0b76280965675bc1756",
+      "jobId": "1187d359c5cf",
+      "response": {
+        "job_id": "1187d359c5cf"
+      }
+    },
+    {
+      "cellId": "lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g2",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "parentId": "lateral-sail-radiant-g1",
+      "submissionFingerprint": "sha256:d7d4b93046e12c2e81bf5d4c0b4ed15802f4d709a9c38cad91d59e3600835656",
+      "jobId": "d89196d817d1",
+      "response": {
+        "job_id": "d89196d817d1"
+      }
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "parentId": "lateral-sail-radiant-g2",
+      "submissionFingerprint": "sha256:8830a86f1b3537fbf311faaac33812080f6a0bd320f69500a1802adda1663112",
+      "jobId": "e2436612993c",
+      "response": {
+        "job_id": "e2436612993c"
+      }
+    }
+  ],
+  "staleRecoveredSubmissions": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "10/10 lineage imagegen jobs submitted through Greenroom"
+}

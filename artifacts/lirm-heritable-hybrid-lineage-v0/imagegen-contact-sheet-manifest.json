@@ -1,0 +1,144 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-contact-sheet-manifest.v0",
+  "columns": 4,
+  "rows": 3,
+  "width": 1536,
+  "cellWidth": 384,
+  "cellHeight": 422,
+  "imageHeight": 384,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "cleft-crown-twins",
+      "generation": 0,
+      "parentId": null,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51",
+      "title": "SHARED FOUNDER",
+      "viewLabel": "ancestor repeated for cleft-crown-twins"
+    },
+    {
+      "cellId": "cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g1",
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:ce28d1ee9796ac745ab42398bea49db1136913719718aa47e612d456def2a23c",
+      "title": "cleft-crown-twins / G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "cellId": "cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g2",
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "parentId": "cleft-crown-twins-g1",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:e931feb442ad90e0ec795c7779f25117c3544e4cf22a9077ccfa6ede706c896c",
+      "title": "cleft-crown-twins / G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "parentId": "cleft-crown-twins-g2",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8",
+      "title": "cleft-crown-twins / G3",
+      "viewLabel": "inherited generation 3"
+    },
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 0,
+      "parentId": null,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51",
+      "title": "SHARED FOUNDER",
+      "viewLabel": "ancestor repeated for stilted-ventral-keel"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g1",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:9f8b874ce419f7ca0582f0e2c2a2ffb833de031ef7be328bac2cc5554dc3001a",
+      "title": "stilted-ventral-keel / G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g2",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "parentId": "stilted-ventral-keel-g1",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:3526f71164c0f764132d1d8a6b7dd5e238981f6ff789fb73f0bcd168747edb77",
+      "title": "stilted-ventral-keel / G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "parentId": "stilted-ventral-keel-g2",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4",
+      "title": "stilted-ventral-keel / G3",
+      "viewLabel": "inherited generation 3"
+    },
+    {
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 0,
+      "parentId": null,
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51",
+      "title": "SHARED FOUNDER",
+      "viewLabel": "ancestor repeated for lateral-sail-radiant"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g1",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:334648d5ca2ae46c5d6bde9b5dacfdc65dd07512e2054cc16f54ef993eae36ba",
+      "title": "lateral-sail-radiant / G1",
+      "viewLabel": "inherited generation 1"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g2",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "parentId": "lateral-sail-radiant-g1",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:9e1b994af4b9c521ccbf5b59cbef24107a912f16bdd3ceed1c738b5147fef59e",
+      "title": "lateral-sail-radiant / G2",
+      "viewLabel": "inherited generation 2"
+    },
+    {
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "parentId": "lateral-sail-radiant-g2",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/imagegen-outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+      "sourceSha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3",
+      "title": "lateral-sail-radiant / G3",
+      "viewLabel": "inherited generation 3"
+    }
+  ]
+}

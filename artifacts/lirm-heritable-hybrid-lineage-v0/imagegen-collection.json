@@ -1,0 +1,779 @@
+{
+  "schema": "kaminos.lirm-heritable-hybrid-lineage-imagegen-collection.v0",
+  "status": "complete-inspected",
+  "requestedCount": 10,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "104b25d84ca4",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.70222,
+      "startedAt": 1784473555.543658,
+      "finishedAt": 1784473613.522528,
+      "durationSeconds": 57.978869915008545,
+      "outputMtime": 1784473613.0308912,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/clay-implicit.png",
+        "bytes": 46482,
+        "sha256": "sha256:53eab81f9e7aab1ffd241153f8a8d36659be994d40c8c372ce2fe9d29d8a4f00"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/depth-implicit.png",
+          "bytes": 26970,
+          "sha256": "sha256:b4a23065222c8dcbdd56ae44f128a87ec75ff5879f8d724dda39db3df1d18fc8",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/annular-canopy-founder/annular-canopy-founder/normal-implicit.png",
+          "bytes": 56881,
+          "sha256": "sha256:a69aad42893300b164cdd4d866420ff705ffd6d1d9c33b5fb6fec0bd5c40ec9a",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 302498,
+        "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+      },
+      "candidateId": "annular-canopy-founder",
+      "lineageId": "founder",
+      "generation": 0,
+      "parentId": null,
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [],
+      "lineagePressure": "open annular creature with an independent dorsal canopy, articulated tripod stance, and suspended interior sensory anatomy",
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-canopy-founder-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 302498,
+        "sha256": "sha256:0bbf71a3bc31b01ae57cab9b4908d749b18e8d67f5190b63a36c5f8f2465aa51"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "c85418ea354f",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.7292001,
+      "startedAt": 1784473613.5261571,
+      "finishedAt": 1784473671.212651,
+      "durationSeconds": 57.68649387359619,
+      "outputMtime": 1784473670.6451797,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/clay-implicit.png",
+        "bytes": 47531,
+        "sha256": "sha256:87e82508052a61e7475ef8e01401a339c5e48fb581311168b20fdc28fe52bd59"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/depth-implicit.png",
+          "bytes": 27478,
+          "sha256": "sha256:d14a15d92ee6e0877b6249556fdd5ce43dbce6417c06aa33e384f0b3b8309e0b",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g1/cleft-crown-twins-g1/normal-implicit.png",
+          "bytes": 58666,
+          "sha256": "sha256:4a16e84ad7db0c5ba779ddb67a039f3d310ae3de744747be0d99582355bbe08d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 299180,
+        "sha256": "sha256:ce28d1ee9796ac745ab42398bea49db1136913719718aa47e612d456def2a23c"
+      },
+      "candidateId": "cleft-crown-twins-g1",
+      "lineageId": "cleft-crown-twins",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork"
+      ],
+      "lineagePressure": "incipient split crown with paired hanging sensory lobes while preserving the open annulus and tripod stance",
+      "durableOutput": {
+        "path": "imagegen-outputs/cleft-crown-twins-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 299180,
+        "sha256": "sha256:ce28d1ee9796ac745ab42398bea49db1136913719718aa47e612d456def2a23c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "51c97dbf3479",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.757247,
+      "startedAt": 1784473671.21908,
+      "finishedAt": 1784473730.148297,
+      "durationSeconds": 58.92921710014343,
+      "outputMtime": 1784473729.5895276,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/clay-implicit.png",
+        "bytes": 51246,
+        "sha256": "sha256:5f0fabb32382eb5f3b83e2c5aed9824aee927caef10036095cfcfa5691a6f390"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/depth-implicit.png",
+          "bytes": 29476,
+          "sha256": "sha256:d8e21ef837cdede9dc1d6f2617e8e940c46bdc8856c62e60acfc589bf733ed49",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g2/cleft-crown-twins-g2/normal-implicit.png",
+          "bytes": 63292,
+          "sha256": "sha256:1a4a009bbb9604c845712369b99f5d51f76ab4adefa5e6c1e39832335a7e149f",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 304633,
+        "sha256": "sha256:e931feb442ad90e0ec795c7779f25117c3544e4cf22a9077ccfa6ede706c896c"
+      },
+      "candidateId": "cleft-crown-twins-g2",
+      "lineageId": "cleft-crown-twins",
+      "generation": 2,
+      "parentId": "cleft-crown-twins-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork",
+        "paired-crown-horns"
+      ],
+      "lineagePressure": "deeply cleft crown canopy with paired horns and clearly bifurcated suspended anatomy",
+      "durableOutput": {
+        "path": "imagegen-outputs/cleft-crown-twins-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 304633,
+        "sha256": "sha256:e931feb442ad90e0ec795c7779f25117c3544e4cf22a9077ccfa6ede706c896c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "1ae01132c581",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.785443,
+      "startedAt": 1784473730.15088,
+      "finishedAt": 1784473792.1927621,
+      "durationSeconds": 62.041882038116455,
+      "outputMtime": 1784473791.6728315,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/clay-implicit.png",
+        "bytes": 51578,
+        "sha256": "sha256:425d8b4ede381ae2509a5dc7d411a2e7e08461b8b04193447237d671b4069a37"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/depth-implicit.png",
+          "bytes": 30087,
+          "sha256": "sha256:b973221298896e58984bb060d89122e4468c1fd11c4f5226702665b6e0f9c163",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/cleft-crown-twins-g3/cleft-crown-twins-g3/normal-implicit.png",
+          "bytes": 64026,
+          "sha256": "sha256:136df7b22948c60092b49ec26023b6d5cff2e7213086b1dd78fd7c5292d7cc8c",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 311881,
+        "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+      },
+      "candidateId": "cleft-crown-twins-g3",
+      "lineageId": "cleft-crown-twins",
+      "generation": 3,
+      "parentId": "cleft-crown-twins-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "incipient-cleft-and-sensory-fork",
+        "paired-crown-horns",
+        "towering-bifid-crown"
+      ],
+      "lineagePressure": "towering bifid crown organism with twin suspended organs and a load-bearing open annular torso",
+      "durableOutput": {
+        "path": "imagegen-outputs/cleft-crown-twins-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 311881,
+        "sha256": "sha256:7060a2fb45ccd2caf7f6561df9a1f88b66e9355caede71accf55d46db81f7be8"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "38310b4fb6e5",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.8136902,
+      "startedAt": 1784473792.19569,
+      "finishedAt": 1784473878.522471,
+      "durationSeconds": 86.3267810344696,
+      "outputMtime": 1784473877.9339693,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/clay-implicit.png",
+        "bytes": 47341,
+        "sha256": "sha256:47db4a9b63debb9e8e053b574279cb2602a8d49587181c5bec0528d40af338b7"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/depth-implicit.png",
+          "bytes": 27460,
+          "sha256": "sha256:3de07fe9a3cf7d99a262db11ae665e15e50f0d492595472a3e88ce23653de921",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g1/stilted-ventral-keel-g1/normal-implicit.png",
+          "bytes": 58172,
+          "sha256": "sha256:5e7340b38b0c4d490871587ce398ee695e9d69f57ffae8f481b62871464975ed",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 308953,
+        "sha256": "sha256:9f8b874ce419f7ca0582f0e2c2a2ffb833de031ef7be328bac2cc5554dc3001a"
+      },
+      "candidateId": "stilted-ventral-keel-g1",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud"
+      ],
+      "lineagePressure": "high annular body on articulated tripod stilts with an emerging ventral keel beneath the aperture",
+      "durableOutput": {
+        "path": "imagegen-outputs/stilted-ventral-keel-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 308953,
+        "sha256": "sha256:9f8b874ce419f7ca0582f0e2c2a2ffb833de031ef7be328bac2cc5554dc3001a"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "a455a767539c",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.8464482,
+      "startedAt": 1784473878.530251,
+      "finishedAt": 1784473971.503716,
+      "durationSeconds": 92.97346496582031,
+      "outputMtime": 1784473971.0255764,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/clay-implicit.png",
+        "bytes": 48454,
+        "sha256": "sha256:b6cf6fe22462b2be9ad198c5f165cc597351973c93dc32f8fcf1d694674e90b1"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/depth-implicit.png",
+          "bytes": 28162,
+          "sha256": "sha256:b355ee22bce399463ba68f6b3ea9807ec711d234866d2afe74199430bfc2c79b",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g2/stilted-ventral-keel-g2/normal-implicit.png",
+          "bytes": 59394,
+          "sha256": "sha256:6de8505565e806e811b73e63892e8e6ac90e26c841b9598c127cbe2bff619287",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 316894,
+        "sha256": "sha256:3526f71164c0f764132d1d8a6b7dd5e238981f6ff789fb73f0bcd168747edb77"
+      },
+      "candidateId": "stilted-ventral-keel-g2",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 2,
+      "parentId": "stilted-ventral-keel-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud",
+        "swept-ventral-keel"
+      ],
+      "lineagePressure": "long-jointed tripod strider with a swept ventral keel and suspended sensory anatomy inside the annulus",
+      "durableOutput": {
+        "path": "imagegen-outputs/stilted-ventral-keel-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 316894,
+        "sha256": "sha256:3526f71164c0f764132d1d8a6b7dd5e238981f6ff789fb73f0bcd168747edb77"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "24aca425e493",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.874506,
+      "startedAt": 1784473971.515043,
+      "finishedAt": 1784474056.080692,
+      "durationSeconds": 84.56564903259277,
+      "outputMtime": 1784474055.5812242,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/clay-implicit.png",
+        "bytes": 50184,
+        "sha256": "sha256:40d21bd19aed4d7f6d4aee3cb633104ef4103c8ce5082beb1fcc6770ecccd3ca"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/depth-implicit.png",
+          "bytes": 28955,
+          "sha256": "sha256:538296c1fdef45c12323f1884671b48eed7114bfb5830d219c2ab9a3ea1aafaa",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/stilted-ventral-keel-g3/stilted-ventral-keel-g3/normal-implicit.png",
+          "bytes": 61520,
+          "sha256": "sha256:5b7a10968ca19f51e72653c1e6bfe34c69988b0eff09940cd055ce72cd5106c4",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 324658,
+        "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+      },
+      "candidateId": "stilted-ventral-keel-g3",
+      "lineageId": "stilted-ventral-keel",
+      "generation": 3,
+      "parentId": "stilted-ventral-keel-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "articulated-stilts-and-keel-bud",
+        "swept-ventral-keel",
+        "high-stilt-keel-strider"
+      ],
+      "lineagePressure": "towering three-stilt portal organism with a long rear-swept keel, high open body, and independent canopy",
+      "durableOutput": {
+        "path": "imagegen-outputs/stilted-ventral-keel-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 324658,
+        "sha256": "sha256:905635fba13e49f39c402094db8493104598ed510e1dd8b0af99af4874ad77a4"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "1187d359c5cf",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.902487,
+      "startedAt": 1784474056.083839,
+      "finishedAt": 1784474139.581028,
+      "durationSeconds": 83.49718904495239,
+      "outputMtime": 1784474139.0936472,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/clay-implicit.png",
+        "bytes": 47193,
+        "sha256": "sha256:a8262e31d31712099bd155ac299344baba3d7e04e23d72754a63821423254e54"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/depth-implicit.png",
+          "bytes": 27445,
+          "sha256": "sha256:fc3d8bac76cf6cc96ba502b46efccf2f10fc67d29eb0e4e5c80ef3d143607ea5",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g1/lateral-sail-radiant-g1/normal-implicit.png",
+          "bytes": 58362,
+          "sha256": "sha256:47849adddcaa29d52ace7d8193e4a6d8ae15dafeb66d744ce66f3b93b46edf7d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 306073,
+        "sha256": "sha256:334648d5ca2ae46c5d6bde9b5dacfdc65dd07512e2054cc16f54ef993eae36ba"
+      },
+      "candidateId": "lateral-sail-radiant-g1",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 1,
+      "parentId": "annular-canopy-founder",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds"
+      ],
+      "lineagePressure": "annular tripod creature with small lateral sail buds and a compact asymmetric canopy",
+      "durableOutput": {
+        "path": "imagegen-outputs/lateral-sail-radiant-g1-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 306073,
+        "sha256": "sha256:334648d5ca2ae46c5d6bde9b5dacfdc65dd07512e2054cc16f54ef993eae36ba"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "d89196d817d1",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.930471,
+      "startedAt": 1784474139.5841548,
+      "finishedAt": 1784474221.706468,
+      "durationSeconds": 82.1223132610321,
+      "outputMtime": 1784474221.1180425,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/clay-implicit.png",
+        "bytes": 48401,
+        "sha256": "sha256:d81c0b0ec6bba14b130d8e3e187ac67cb6d5c419cf9d8e33cfbeec307e8a4371"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/depth-implicit.png",
+          "bytes": 28217,
+          "sha256": "sha256:ab52bcba64016455d53a57ad04df57824ea352686eef020b42cbd656e3b80b8e",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g2/lateral-sail-radiant-g2/normal-implicit.png",
+          "bytes": 59967,
+          "sha256": "sha256:168276ec302bf46da6764dc17511b59c80ec1e8944610232efd8b569383b5508",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 312992,
+        "sha256": "sha256:9e1b994af4b9c521ccbf5b59cbef24107a912f16bdd3ceed1c738b5147fef59e"
+      },
+      "candidateId": "lateral-sail-radiant-g2",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 2,
+      "parentId": "lateral-sail-radiant-g1",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds",
+        "swept-lateral-sails"
+      ],
+      "lineagePressure": "wide portal organism with swept bilateral sails, offset suspended anatomy, and a narrow dorsal canopy",
+      "durableOutput": {
+        "path": "imagegen-outputs/lateral-sail-radiant-g2-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 312992,
+        "sha256": "sha256:9e1b994af4b9c521ccbf5b59cbef24107a912f16bdd3ceed1c738b5147fef59e"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501",
+      "jobId": "e2436612993c",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718501 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718501",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784473554.9590468,
+      "startedAt": 1784474221.715748,
+      "finishedAt": 1784474304.986003,
+      "durationSeconds": 83.27025485038757,
+      "outputMtime": 1784474304.489827,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/clay-implicit.png",
+        "bytes": 47479,
+        "sha256": "sha256:37a54af758ebfc1de0ecd8b25ea6020f0d2dc87e5c08f8c8e8dbf8c62a91314f"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/depth-implicit.png",
+          "bytes": 27671,
+          "sha256": "sha256:4af6729c1a62c626237be3c6b47cb5171eb90671016ae25ec3847aced3460e4f",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/candidates/lateral-sail-radiant-g3/lateral-sail-radiant-g3/normal-implicit.png",
+          "bytes": 58785,
+          "sha256": "sha256:297de92f1cf111261c7f2f2e643c5bb6b5aaf88125c3ea995ea3baff3f5b014b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-lineage-v0/prompts/lineage-metabolizer.txt",
+        "bytes": 1049,
+        "sha256": "sha256:3e01648af92ea65d6c55df2c10eefcf6cd0b00a0c85c0c738a42306fd0b5155a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-heritable-lineage-imagegen-20260718/cells/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501/output.png",
+        "bytes": 285141,
+        "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+      },
+      "candidateId": "lateral-sail-radiant-g3",
+      "lineageId": "lateral-sail-radiant",
+      "generation": 3,
+      "parentId": "lateral-sail-radiant-g2",
+      "inheritedCommitments": [
+        "open-annular-aperture",
+        "independent-dorsal-canopy",
+        "sparse-tripod-support-field",
+        "spatially-distinct-suspended-anatomy"
+      ],
+      "inheritedMutations": [
+        "lateral-sail-buds",
+        "swept-lateral-sails",
+        "radiant-winged-portal"
+      ],
+      "lineagePressure": "extremely wide low annular portal with radiant swept side sails, compact canopy, and a low eccentric pendant",
+      "durableOutput": {
+        "path": "imagegen-outputs/lateral-sail-radiant-g3-clay-depth-normal-lineage-metabolizer-seed718501.png",
+        "bytes": 285141,
+        "sha256": "sha256:0792e569ded7e0bd227ff2573115bee2dd87797c3ddd90899f0e29c56a12b8d3"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "visualInspectionClaim": "inspected",
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "10/10 exact-route outputs inspected as a fixed-seed lineage family; spatial inheritance remains unproven pending Trellis witnesses"
+}
