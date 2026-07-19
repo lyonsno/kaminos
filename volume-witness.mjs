@@ -113,7 +113,9 @@ const url = captureReplay?.route || args.get('--url') || 'http://127.0.0.1:8095/
 function parseNumberList(value) {
   return String(value || '')
     .split(',')
-    .map(entry => Number(entry.trim()))
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => Number(entry))
     .filter(entry => Number.isFinite(entry));
 }
 

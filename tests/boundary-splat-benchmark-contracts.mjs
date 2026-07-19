@@ -45,6 +45,11 @@ assert.match(benchmark, /optimizationClaimAllowed:\s*false/, 'benchmark can expl
 assert.match(benchmark, /boundarySplatGpuProfile[\s\S]*boundarySplatCopyDisposition[\s\S]*boundarySplatCandidateCount[\s\S]*boundarySplatOverflowCount/, 'benchmark summarizes timing, copy, candidate, and overflow evidence');
 assert.match(benchmark, /boundarySplatGpuProfileSeries[\s\S]*boundarySplatFootprintAudit/, 'benchmark preserves warm timing distributions and footprint evidence');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+assert.match(
+  witness,
+  /String\(value \|\| ''\)\s*\.split\(','\)\s*\.map\(entry => entry\.trim\(\)\)\s*\.filter\(Boolean\)\s*\.map\(entry => Number\(entry\)\)/,
+  'an absent numeric-list argument remains empty instead of silently becoming the radius zero',
+);
 assert.match(witness, /await prototype\.setActive\(false\)[\s\S]*liveLoopSuspended: true[\s\S]*await prototype\.setActive\(true\)/, 'warm GPU profiling suspends and restores the live RAF loop');
 assert.match(
   witness,
