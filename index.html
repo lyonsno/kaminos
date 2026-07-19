@@ -2697,6 +2697,9 @@ import {
 import {
   KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+  KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   createWebGPUFingerFluidSolver,
@@ -2710,6 +2713,7 @@ import {
   resolveFingerFluidCapillaryStrength,
   resolveFingerFluidThinSheetVorticityAttenuation,
   resolveFingerFluidFreeFlightViscosityBoost,
+  resolveFingerFluidParticleCount,
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -2857,6 +2861,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedCapillaryStrength = Number(params.get('finger_fluid_capillary_strength') ?? KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH);
   const requestedThinSheetVorticityAttenuation = Number(params.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION);
   const requestedFreeFlightViscosityBoost = Number(params.get('finger_fluid_free_flight_viscosity_boost') ?? KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST);
+  const requestedParticleCount = Number(params.get('finger_fluid_particle_count') ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
     requestedTruthScene,
@@ -2881,6 +2886,10 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveThinSheetVorticityAttenuation: resolveFingerFluidThinSheetVorticityAttenuation(requestedThinSheetVorticityAttenuation),
     requestedFreeFlightViscosityBoost,
     effectiveFreeFlightViscosityBoost: resolveFingerFluidFreeFlightViscosityBoost(requestedFreeFlightViscosityBoost),
+    requestedParticleCount,
+    effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
+    timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
+    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
   };
 }
 let fingerFluidBenchState = createFingerFluidBenchState({
@@ -10185,7 +10194,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     return;
   }
   if (!fingerFluidBenchSimulationPaused) {
-    fingerFluidBenchSolver.step(Math.min(1 / 30, Math.max(1 / 120, (now - (drawFingerFluidBenchFrame.lastNow || now - 16.7)) / 1000)));
+    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
   }
   drawFingerFluidBenchFrame.lastNow = now;
   fingerFluidBenchSolver.render({
@@ -10217,11 +10226,15 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveThinSheetVorticityAttenuation = gpuState.thinSheetVorticityAttenuation;
   gpuState.requestedFreeFlightViscosityBoost = fingerFluidBenchConfig.requestedFreeFlightViscosityBoost;
   gpuState.effectiveFreeFlightViscosityBoost = gpuState.freeFlightViscosityBoost;
+  gpuState.requestedParticleCount = fingerFluidBenchConfig.requestedParticleCount;
+  gpuState.effectiveParticleCount = gpuState.particleCount;
+  gpuState.timeIntegrationContract = KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT;
+  gpuState.fixedTimeStepSeconds = KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
   fingerFluidBenchState = createFingerFluidBenchState({
     status: 'running',
     viewport: { width, height },
-    timeSeconds: t,
+    timeSeconds: gpuState.stepCount * KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
     basinFillRatio: 0.44,
     activeRatio: 0.34,
     frameTimeMsEstimate: gpuState.lastFrameCpuMs || fingerFluidBenchLastFrameMs,
@@ -10320,7 +10333,7 @@ async function startFingerFluidBench() {
     updateFingerFluidBenchReadout();
     fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
       canvas,
-      particleCount: 24576,
+      particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       densityIterations: 3,
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
@@ -10343,7 +10356,15 @@ async function startFingerFluidBench() {
         renderBackend: fingerFluidBenchSolver.render_backend,
         downgrades: [`webgpu_solver_unavailable_no_fallback_accepted:${fingerFluidBenchSolver.reason}`],
       });
-      fingerFluidBenchState.runtime = { available: false, reason: fingerFluidBenchSolver.reason };
+      fingerFluidBenchState.runtime = {
+        available: false,
+        reason: fingerFluidBenchSolver.reason,
+        requestedParticleCount: fingerFluidBenchSolver.requestedParticleCount
+          ?? fingerFluidBenchConfig.requestedParticleCount,
+        effectiveParticleCount: fingerFluidBenchSolver.effectiveParticleCount ?? null,
+        particleAllocationCapacity: fingerFluidBenchSolver.particleAllocationCapacity || null,
+        particleAllocationPreflight: fingerFluidBenchSolver.particleAllocationPreflight || null,
+      };
       updateFingerFluidBenchReadout();
       return;
     }

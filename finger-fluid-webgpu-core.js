@@ -22,9 +22,14 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-dis
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT = 'wgsl-unilateral-free-surface-pressure-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webgpu-device-limit-derived-particle-allocation-preflight-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
 export const KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST = 0.17;
+export const KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT = 49_152;
+export const KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS = 1 / 60;
+export const KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT = 'fixed-step-60hz-one-simulation-step-per-render-frame-v0';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA = 'kaminos.liquid-fire-contact-descriptor.v1';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING = 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
@@ -55,7 +60,7 @@ const LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID = 'kaminos/finger-fluid-bench:gpu-simu
 const LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH = 0x6c2673d1;
 const INTERFACE_SAMPLE_COUNT = 16;
 const WORKGROUP_SIZE = 64;
-const DEFAULT_PARTICLE_COUNT = 24_576;
+const DEFAULT_PARTICLE_COUNT = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT;
 const LAMINAR_SOURCE_REFERENCE_FPS = 60;
 const LAMINAR_SOURCE_AXIAL_SPACING = 0.055;
 const LAMINAR_SOURCE_PARTICLE_VOLUME = LAMINAR_SOURCE_AXIAL_SPACING ** 3;
@@ -129,6 +134,91 @@ export function resolveFingerFluidTruthScene(value = 'multi_regime_playground') 
     throw new RangeError(`Unsupported finger fluid truth scene: ${scene}`);
   }
   return scene;
+}
+
+export function resolveFingerFluidParticleCount(value = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT) {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count)) {
+    throw new TypeError(`Finger fluid particle count must be a safe integer: ${value}`);
+  }
+  if (count < 1024) {
+    throw new RangeError(`Finger fluid particle count must be at least 1024: ${count}`);
+  }
+  return count;
+}
+
+const PARTICLE_ALLOCATION_BUFFER_DESCRIPTORS = Object.freeze([
+  { label: 'liquid-fire-contact-records', bytesPerParticle: LIQUID_FIRE_CONTACT_RECORD_BYTES, storage: true },
+  { label: 'interface-records', bytesPerParticle: INTERFACE_RECORD_BYTES, storage: true },
+  { label: 'particles', bytesPerParticle: PARTICLE_BYTES, storage: true },
+  { label: 'neighbor-topology', bytesPerParticle: NEIGHBOR_TOPOLOGY_BYTES, storage: true },
+  { label: 'energy-diagnostics', bytesPerParticle: ENERGY_RECORD_BYTES, storage: true },
+  { label: 'rest-state', bytesPerParticle: REST_STATE_BYTES, storage: true },
+  { label: 'material-tracers', bytesPerParticle: MATERIAL_TRACER_BYTES, storage: true },
+  { label: 'particle-next', bytesPerParticle: 4, storage: true },
+  { label: 'diagnostics-readback', bytesPerParticle: PARTICLE_BYTES, storage: false },
+  { label: 'interface-records-readback', bytesPerParticle: INTERFACE_RECORD_BYTES, storage: false },
+  { label: 'neighbor-topology-readback', bytesPerParticle: NEIGHBOR_TOPOLOGY_BYTES, storage: false },
+  { label: 'energy-diagnostics-readback', bytesPerParticle: ENERGY_RECORD_BYTES, storage: false },
+  { label: 'rest-state-readback', bytesPerParticle: REST_STATE_BYTES, storage: false },
+  { label: 'material-tracers-readback', bytesPerParticle: MATERIAL_TRACER_BYTES, storage: false },
+]);
+
+export function measureFingerFluidParticleAllocationCapacity(limits = {}) {
+  const maxBufferSize = Number(limits.maxBufferSize);
+  const maxStorageBufferBindingSize = Number(limits.maxStorageBufferBindingSize);
+  if (!Number.isSafeInteger(maxBufferSize) || maxBufferSize <= 0) {
+    throw new TypeError(`Finger fluid allocation preflight requires a positive safe maxBufferSize: ${limits.maxBufferSize}`);
+  }
+  if (!Number.isSafeInteger(maxStorageBufferBindingSize) || maxStorageBufferBindingSize <= 0) {
+    throw new TypeError(`Finger fluid allocation preflight requires a positive safe maxStorageBufferBindingSize: ${limits.maxStorageBufferBindingSize}`);
+  }
+  const buffers = PARTICLE_ALLOCATION_BUFFER_DESCRIPTORS.map(descriptor => {
+    const bindingLimitBytes = descriptor.storage
+      ? Math.min(maxBufferSize, maxStorageBufferBindingSize)
+      : maxBufferSize;
+    return {
+      ...descriptor,
+      bindingLimitBytes,
+      maximumParticleCount: Math.floor(bindingLimitBytes / descriptor.bytesPerParticle),
+    };
+  });
+  const limiting = buffers.reduce((minimum, buffer) => (
+    buffer.maximumParticleCount < minimum.maximumParticleCount ? buffer : minimum
+  ));
+  return {
+    contract: KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT,
+    maxBufferSize,
+    maxStorageBufferBindingSize,
+    maximumSupportedParticleCount: limiting.maximumParticleCount,
+    limitingBuffer: limiting.label,
+    limitingBytesPerParticle: limiting.bytesPerParticle,
+    buffers,
+  };
+}
+
+export function evaluateFingerFluidParticleAllocationRequest(particleCount, capacity) {
+  const requestedParticleCount = resolveFingerFluidParticleCount(particleCount);
+  if (capacity?.contract !== KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT
+    || !Number.isSafeInteger(capacity?.maximumSupportedParticleCount)
+    || capacity.maximumSupportedParticleCount <= 0) {
+    throw new TypeError(`Finger fluid allocation request requires measured device capacity: ${JSON.stringify(capacity)}`);
+  }
+  const ok = requestedParticleCount <= capacity.maximumSupportedParticleCount;
+  return {
+    contract: KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT,
+    requestedParticleCount,
+    effectiveParticleCount: ok ? requestedParticleCount : null,
+    maximumSupportedParticleCount: capacity.maximumSupportedParticleCount,
+    limitingBuffer: capacity.limitingBuffer,
+    limitingBytesPerParticle: capacity.limitingBytesPerParticle,
+    maxBufferSize: capacity.maxBufferSize,
+    maxStorageBufferBindingSize: capacity.maxStorageBufferBindingSize,
+    ok,
+    reason: ok
+      ? null
+      : `Finger fluid particle count ${requestedParticleCount} exceeds device-derived maximum ${capacity.maximumSupportedParticleCount} (${capacity.limitingBuffer}, ${capacity.limitingBytesPerParticle} bytes per particle)`,
+  };
 }
 
 function normalizeFingerFluidInletVector(vector, label) {
@@ -3564,6 +3654,22 @@ export function measureFingerFluidWaterfallContinuity(
   }
   const waterfalls = rows.map(row => {
     const sorted = [...row.samples].sort((a, b) => b.position[1] - a.position[1]);
+    const closeNeighborRadius = 0.185 * 0.55;
+    const closeNeighborCounts = row.samples.map((sample, sampleIndex) => {
+      let closeNeighborCount = 0;
+      for (let neighborIndex = 0; neighborIndex < row.samples.length; neighborIndex += 1) {
+        if (neighborIndex === sampleIndex) continue;
+        const neighbor = row.samples[neighborIndex];
+        const distance = Math.hypot(
+          sample.position[0] - neighbor.position[0],
+          sample.position[1] - neighbor.position[1],
+          sample.position[2] - neighbor.position[2],
+        );
+        if (distance <= closeNeighborRadius) closeNeighborCount += 1;
+      }
+      return closeNeighborCount;
+    });
+    const closeNeighborSupportedParticleCount = closeNeighborCounts.filter(count => count >= 4).length;
     const components = [];
     const maximumConnectedGap = 0.13;
     for (const sample of sorted) {
@@ -3589,6 +3695,10 @@ export function measureFingerFluidWaterfallContinuity(
       largestComponentParticleRatio: Number((largest.length / Math.max(1, row.samples.length)).toFixed(5)),
       connectedSurvivalLength: Number(connectedSurvivalLength.toFixed(5)),
       connectedSurvivalWidths: Number((connectedSurvivalLength / Math.max(0.001, row.apertureWidth)).toFixed(5)),
+      closeNeighborRadius,
+      averageCloseNeighborCount: Number((closeNeighborCounts.reduce((sum, value) => sum + value, 0) / Math.max(1, closeNeighborCounts.length)).toFixed(5)),
+      closeNeighborSupportedParticleCount,
+      closeNeighborSupportedParticleRatio: Number((closeNeighborSupportedParticleCount / Math.max(1, row.samples.length)).toFixed(5)),
       transverseVelocityStdDev: Number(Math.sqrt(transverseVariance).toFixed(5)),
       averageDensityRatio: Number((row.samples.reduce((sum, sample) => sum + sample.densityRatio, 0) / Math.max(1, row.samples.length)).toFixed(5)),
       averageSurfaceFactor: Number((row.samples.reduce((sum, sample) => sum + sample.surfaceFactor, 0) / Math.max(1, row.samples.length)).toFixed(5)),
@@ -3610,6 +3720,7 @@ export function measureFingerFluidWaterfallContinuity(
 export function evaluateFingerFluidWaterfallContinuityAcceptance({
   diagnostics,
   sourceParticleCounts,
+  activeSourceParticleCounts = sourceParticleCounts,
 } = {}) {
   if (diagnostics?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA
     || diagnostics?.contract !== KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT
@@ -3622,19 +3733,31 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
     || sourceParticleCounts.some(count => !Number.isSafeInteger(count) || count <= 0)) {
     throw new TypeError(`Waterfall acceptance requires positive source particle counts: ${JSON.stringify(sourceParticleCounts)}`);
   }
+  if (!Array.isArray(activeSourceParticleCounts)
+    || activeSourceParticleCounts.length !== diagnostics.waterfalls.length
+    || activeSourceParticleCounts.some((count, sourceIndex) => (
+      !Number.isSafeInteger(count)
+      || count <= 0
+      || count > sourceParticleCounts[sourceIndex]
+    ))) {
+    throw new TypeError(`Waterfall acceptance requires active source particle counts bounded by total allocation: ${JSON.stringify({ sourceParticleCounts, activeSourceParticleCounts })}`);
+  }
   const minimumSurvivalWidths = [0.75, 0.75, 0.25];
   const waterfalls = diagnostics.waterfalls.map((waterfall, sourceIndex) => {
     const sourceParticleCount = sourceParticleCounts[sourceIndex];
-    const fallingCoverageRatio = waterfall.particleCount / sourceParticleCount;
+    const activeSourceParticleCount = activeSourceParticleCounts[sourceIndex];
+    const fallingCoverageRatio = waterfall.particleCount / activeSourceParticleCount;
     const coverageAccepted = fallingCoverageRatio >= 0.08;
     const componentAccepted = waterfall.largestComponentParticleRatio >= 0.75;
     const survivalAccepted = waterfall.connectedSurvivalWidths >= minimumSurvivalWidths[sourceIndex];
+    const closeNeighborSupportAccepted = waterfall.closeNeighborSupportedParticleRatio >= 0.65;
     const transverseVelocityAccepted = Number.isFinite(waterfall.transverseVelocityStdDev)
       && waterfall.transverseVelocityStdDev <= 0.75;
     return {
       sourceIndex,
       sourceId: waterfall.sourceId,
       sourceParticleCount,
+      activeSourceParticleCount,
       fallingParticleCount: waterfall.particleCount,
       fallingCoverageRatio: Number(fallingCoverageRatio.toFixed(5)),
       minimumFallingCoverageRatio: 0.08,
@@ -3645,10 +3768,14 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
       connectedSurvivalWidths: waterfall.connectedSurvivalWidths,
       minimumConnectedSurvivalWidths: minimumSurvivalWidths[sourceIndex],
       survivalAccepted,
+      averageCloseNeighborCount: waterfall.averageCloseNeighborCount,
+      closeNeighborSupportedParticleRatio: waterfall.closeNeighborSupportedParticleRatio,
+      minimumCloseNeighborSupportedParticleRatio: 0.65,
+      closeNeighborSupportAccepted,
       transverseVelocityStdDev: waterfall.transverseVelocityStdDev,
       maximumTransverseVelocityStdDev: 0.75,
       transverseVelocityAccepted,
-      ok: coverageAccepted && componentAccepted && survivalAccepted && transverseVelocityAccepted,
+      ok: coverageAccepted && componentAccepted && survivalAccepted && closeNeighborSupportAccepted && transverseVelocityAccepted,
     };
   });
   return {
@@ -3656,8 +3783,195 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
     diagnosticsSchema: diagnostics.schema,
     contract: diagnostics.contract,
     sourcePopulationCount: sourceParticleCounts.reduce((sum, count) => sum + count, 0),
+    activeSourcePopulationCount: activeSourceParticleCounts.reduce((sum, count) => sum + count, 0),
     waterfalls,
     ok: waterfalls.every(waterfall => waterfall.ok),
+  };
+}
+
+function matchingWaterfallEvidenceIdentityValue(runtime, requestedKey, effectiveKey, label) {
+  const requested = runtime?.[requestedKey];
+  const effective = runtime?.[effectiveKey];
+  if (requested === undefined || effective === undefined || !Object.is(requested, effective)) {
+    throw new TypeError(`Waterfall soak evidence requires matching requested/effective ${label}: ${JSON.stringify({ requested, effective })}`);
+  }
+  return effective;
+}
+
+export function createFingerFluidWaterfallSoakEvidenceIdentity(runtime) {
+  if (!runtime || typeof runtime !== 'object') {
+    throw new TypeError('Waterfall soak evidence identity requires runtime route/config truth');
+  }
+  const particleCount = matchingWaterfallEvidenceIdentityValue(
+    runtime,
+    'requestedParticleCount',
+    'effectiveParticleCount',
+    'particle count',
+  );
+  if (particleCount !== runtime.particleCount) {
+    throw new TypeError(`Waterfall soak evidence particle-count runtime disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount })}`);
+  }
+  return normalizeFingerFluidWaterfallSoakEvidenceIdentity({
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
+    truthScene: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedTruthScene', 'effectiveTruthScene', 'truth scene'),
+    colorMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedColorMode', 'effectiveColorMode', 'color mode'),
+    rendererMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedRendererMode', 'effectiveRendererMode', 'renderer mode'),
+    rendererRoute: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedRenderer', 'effectiveRenderer', 'renderer route'),
+    solverBackend: runtime.solver_backend,
+    renderBackend: runtime.render_backend,
+    adapterVendor: runtime.adapterInfo?.vendor,
+    adapterArchitecture: runtime.adapterInfo?.architecture,
+    opticalDebugMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedOpticalDebugMode', 'effectiveOpticalDebugMode', 'optical debug mode'),
+    particleCount,
+    timeIntegrationContract: runtime.timeIntegrationContract,
+    fixedTimeStepSeconds: runtime.fixedTimeStepSeconds,
+    solverRoute: runtime.solverRoute,
+    shaderRoute: runtime.shaderRoute,
+    waterfallContinuityContract: runtime.waterfallContinuityContract,
+    supportFriction: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedSupportFriction', 'effectiveSupportFriction', 'support friction'),
+    particleShiftStrength: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedParticleShiftStrength', 'effectiveParticleShiftStrength', 'particle shift'),
+    chemistryDiffusion: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedChemistryDiffusion', 'effectiveChemistryDiffusion', 'chemistry diffusion'),
+    capillaryStrength: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedCapillaryStrength', 'effectiveCapillaryStrength', 'capillary strength'),
+    thinSheetVorticityAttenuation: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedThinSheetVorticityAttenuation', 'effectiveThinSheetVorticityAttenuation', 'thin-sheet vorticity attenuation'),
+    freeFlightViscosityBoost: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedFreeFlightViscosityBoost', 'effectiveFreeFlightViscosityBoost', 'free-flight viscosity boost'),
+    densityIterationsPerStep: runtime.densityIterationsPerStep,
+    substeps: runtime.substeps,
+  });
+}
+
+function normalizeFingerFluidWaterfallSoakEvidenceIdentity(identity) {
+  const stringFields = [
+    'truthScene',
+    'colorMode',
+    'rendererMode',
+    'rendererRoute',
+    'solverBackend',
+    'renderBackend',
+    'adapterVendor',
+    'adapterArchitecture',
+    'opticalDebugMode',
+    'timeIntegrationContract',
+    'solverRoute',
+    'shaderRoute',
+    'waterfallContinuityContract',
+  ];
+  const numericFields = [
+    'fixedTimeStepSeconds',
+    'supportFriction',
+    'particleShiftStrength',
+    'chemistryDiffusion',
+    'capillaryStrength',
+    'thinSheetVorticityAttenuation',
+    'freeFlightViscosityBoost',
+    'densityIterationsPerStep',
+    'substeps',
+  ];
+  if (identity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA) {
+    throw new TypeError(`Waterfall soak evidence identity schema mismatch: ${identity?.schema}`);
+  }
+  for (const field of stringFields) {
+    if (typeof identity[field] !== 'string' || identity[field].length === 0) {
+      throw new TypeError(`Waterfall soak evidence identity requires ${field}: ${JSON.stringify(identity[field])}`);
+    }
+  }
+  if (!Number.isSafeInteger(identity.particleCount) || identity.particleCount < 1024) {
+    throw new TypeError(`Waterfall soak evidence identity requires a valid particleCount: ${identity.particleCount}`);
+  }
+  for (const field of numericFields) {
+    if (!Number.isFinite(identity[field])) {
+      throw new TypeError(`Waterfall soak evidence identity requires finite ${field}: ${identity[field]}`);
+    }
+  }
+  return {
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
+    ...Object.fromEntries(stringFields.map(field => [field, identity[field]])),
+    particleCount: identity.particleCount,
+    ...Object.fromEntries(numericFields.map(field => [field, identity[field]])),
+  };
+}
+
+export function evaluateFingerFluidWaterfallSoakAcceptance({
+  requiredTargetSteps,
+  horizons,
+} = {}) {
+  if (!Array.isArray(requiredTargetSteps)
+    || requiredTargetSteps.length === 0
+    || requiredTargetSteps.some(step => !Number.isSafeInteger(step) || step <= 0)) {
+    throw new TypeError(`Waterfall soak acceptance requires positive integer target steps: ${JSON.stringify(requiredTargetSteps)}`);
+  }
+  if (!Array.isArray(horizons)) throw new TypeError('Waterfall soak acceptance requires horizon evidence');
+  if (new Set(requiredTargetSteps).size !== requiredTargetSteps.length) {
+    throw new TypeError(`Waterfall soak acceptance requires unique target steps: ${JSON.stringify(requiredTargetSteps)}`);
+  }
+  const targetStepCounts = new Map();
+  const byTargetStep = new Map();
+  for (const horizon of horizons) {
+    const targetStep = horizon?.requestedTargetStep;
+    targetStepCounts.set(targetStep, (targetStepCounts.get(targetStep) || 0) + 1);
+    if (!byTargetStep.has(targetStep)) byTargetStep.set(targetStep, horizon);
+  }
+  const duplicateTargetSteps = requiredTargetSteps.filter(step => (targetStepCounts.get(step) || 0) > 1);
+  const missingTargetSteps = requiredTargetSteps.filter(step => !byTargetStep.has(step));
+  let commonEvidenceIdentity = null;
+  let commonEvidenceIdentityKey = null;
+  const evaluatedHorizons = requiredTargetSteps
+    .filter(step => byTargetStep.has(step))
+    .map(requestedTargetStep => {
+      const horizon = byTargetStep.get(requestedTargetStep);
+      let evidenceIdentity = null;
+      let identityError = null;
+      try {
+        evidenceIdentity = normalizeFingerFluidWaterfallSoakEvidenceIdentity(
+          horizon?.evidenceIdentity ?? horizon?.waterfallSoakEvidenceIdentity,
+        );
+      } catch (error) {
+        identityError = error.message || String(error);
+      }
+      const evidenceIdentityKey = evidenceIdentity ? JSON.stringify(evidenceIdentity) : null;
+      if (evidenceIdentity && commonEvidenceIdentity === null) {
+        commonEvidenceIdentity = evidenceIdentity;
+        commonEvidenceIdentityKey = evidenceIdentityKey;
+      }
+      const identityAccepted = evidenceIdentity !== null && evidenceIdentityKey === commonEvidenceIdentityKey;
+      if (evidenceIdentity && !identityAccepted) identityError = 'evidence identity differs from the common soak identity';
+      const capturedTargetStep = horizon?.capturedTargetStep;
+      const captureAccepted = Number.isSafeInteger(capturedTargetStep)
+        && capturedTargetStep >= requestedTargetStep
+        && capturedTargetStep <= requestedTargetStep + 8;
+      const continuityAccepted = horizon?.waterfallContinuityAcceptance?.ok === true
+        && Array.isArray(horizon?.waterfallContinuityAcceptance?.waterfalls)
+        && horizon.waterfallContinuityAcceptance.waterfalls.length === 3
+        && horizon.waterfallContinuityAcceptance.waterfalls.every(waterfall => waterfall?.closeNeighborSupportAccepted === true);
+      const imageAccepted = horizon?.waterfallImageContinuity?.ok === true;
+      return {
+        requestedTargetStep,
+        capturedTargetStep,
+        evidenceIdentity,
+        identityAccepted,
+        identityError,
+        captureAccepted,
+        continuityAccepted,
+        imageAccepted,
+        ok: identityAccepted && captureAccepted && continuityAccepted && imageAccepted,
+      };
+    });
+  const rejectedTargetSteps = evaluatedHorizons.filter(horizon => !horizon.ok).map(horizon => horizon.requestedTargetStep);
+  const identityRejectedTargetSteps = evaluatedHorizons
+    .filter(horizon => !horizon.identityAccepted)
+    .map(horizon => horizon.requestedTargetStep);
+  return {
+    schema: 'kaminos.finger-fluid.waterfall-soak-acceptance.v0',
+    requiredTargetSteps: [...requiredTargetSteps],
+    commonEvidenceIdentity,
+    missingTargetSteps,
+    duplicateTargetSteps,
+    identityRejectedTargetSteps,
+    rejectedTargetSteps,
+    horizons: evaluatedHorizons,
+    ok: missingTargetSteps.length === 0
+      && duplicateTargetSteps.length === 0
+      && identityRejectedTargetSteps.length === 0
+      && rejectedTargetSteps.length === 0,
   };
 }
 
@@ -3675,42 +3989,58 @@ export function measureFingerFluidWaterfallImageContinuity(rgbData, width, heigh
   const maxY = Math.max(minY + 1, Math.floor(height * 0.64));
   const corridorWidth = maxX - minX;
   const rowLiquidWidthRatios = [];
+  const rowLargestRunRatios = [];
   for (let y = minY; y < maxY; y += 1) {
     let liquidPixelCount = 0;
+    let currentRun = 0;
+    let largestRun = 0;
     for (let x = minX; x < maxX; x += 1) {
       const offset = (y * width + x) * 3;
       const r = rgbData[offset];
       const g = rgbData[offset + 1];
       const b = rgbData[offset + 2];
       const liquid = b >= 58 && b >= r * 1.28 && b >= g * 0.92 && g >= r * 1.02;
-      if (liquid) liquidPixelCount += 1;
+      if (liquid) {
+        liquidPixelCount += 1;
+        currentRun += 1;
+        largestRun = Math.max(largestRun, currentRun);
+      } else {
+        currentRun = 0;
+      }
     }
     rowLiquidWidthRatios.push(liquidPixelCount / corridorWidth);
+    rowLargestRunRatios.push(largestRun / corridorWidth);
   }
   const sortedRatios = [...rowLiquidWidthRatios].sort((a, b) => a - b);
+  const sortedRunRatios = [...rowLargestRunRatios].sort((a, b) => a - b);
   const percentile10 = sortedRatios[Math.floor((sortedRatios.length - 1) * 0.10)] || 0;
+  const percentile10LargestRun = sortedRunRatios[Math.floor((sortedRunRatios.length - 1) * 0.10)] || 0;
   const minimumRowWidthRatio = sortedRatios[0] || 0;
   const occupiedRowRatio = rowLiquidWidthRatios.filter(ratio => ratio >= 0.08).length / rowLiquidWidthRatios.length;
-  const percentileAccepted = percentile10 >= 0.20;
+  const percentileAccepted = percentile10 >= 0.25;
   const minimumRowAccepted = minimumRowWidthRatio >= 0.08;
   const occupiedRowsAccepted = occupiedRowRatio >= 0.95;
+  const largestRunAccepted = percentile10LargestRun >= 0.04;
   return {
-    schema: 'kaminos.finger-fluid.waterfall-image-continuity.v0',
-    measurement: 'same_camera_sphere_debug_rgb24_row_coverage_v0',
+    schema: 'kaminos.finger-fluid.waterfall-image-continuity.v1',
+    measurement: 'same_camera_sphere_debug_rgb24_row_coverage_and_run_v1',
     width,
     height,
     corridor: { minX, maxX, minY, maxY },
     rowCount: rowLiquidWidthRatios.length,
     percentile10LiquidWidthRatio: Number(percentile10.toFixed(5)),
-    minimumRequiredPercentile10LiquidWidthRatio: 0.20,
+    minimumRequiredPercentile10LiquidWidthRatio: 0.25,
     minimumRowLiquidWidthRatio: Number(minimumRowWidthRatio.toFixed(5)),
     minimumRequiredRowLiquidWidthRatio: 0.08,
+    percentile10LargestRunRatio: Number(percentile10LargestRun.toFixed(5)),
+    minimumRequiredPercentile10LargestRunRatio: 0.04,
     occupiedRowRatio: Number(occupiedRowRatio.toFixed(5)),
     minimumOccupiedRowRatio: 0.95,
     percentileAccepted,
     minimumRowAccepted,
     occupiedRowsAccepted,
-    ok: percentileAccepted && minimumRowAccepted && occupiedRowsAccepted,
+    largestRunAccepted,
+    ok: percentileAccepted && minimumRowAccepted && occupiedRowsAccepted && largestRunAccepted,
   };
 }
 
@@ -4209,12 +4539,13 @@ function createInitialMaterialTracers(particleData, particleCount) {
   return data;
 }
 
-function createUnavailableSolver(reason) {
+function createUnavailableSolver(reason, details = {}) {
   return {
     available: false,
     solver_backend: 'webgpu_unavailable',
     render_backend: 'webgpu_unavailable',
     reason,
+    ...details,
     destroy() {},
   };
 }
@@ -4250,7 +4581,17 @@ export async function createWebGPUFingerFluidSolver({
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
 
-  const safeParticleCount = Math.max(1024, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
+  const safeParticleCount = resolveFingerFluidParticleCount(particleCount);
+  const particleAllocationCapacity = measureFingerFluidParticleAllocationCapacity(device.limits);
+  const particleAllocationPreflight = evaluateFingerFluidParticleAllocationRequest(safeParticleCount, particleAllocationCapacity);
+  if (!particleAllocationPreflight.ok) {
+    return createUnavailableSolver(particleAllocationPreflight.reason, {
+      requestedParticleCount: safeParticleCount,
+      effectiveParticleCount: null,
+      particleAllocationCapacity,
+      particleAllocationPreflight,
+    });
+  }
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
@@ -5550,6 +5891,8 @@ export async function createWebGPUFingerFluidSolver({
       analyticSupportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
       analyticSupportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
       particleCount: safeParticleCount,
+      particleAllocationCapacity,
+      particleAllocationPreflight,
       gridDimensions: [...GRID_DIMS],
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: safeDensityIterations,

@@ -3,8 +3,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
+  KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+  KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  createFingerFluidWaterfallSoakEvidenceIdentity,
   evaluateFingerFluidWaterfallContinuityAcceptance,
   measureFingerFluidWaterfallImageContinuity,
+  resolveFingerFluidParticleCount,
 } from './finger-fluid-webgpu-core.js';
 
 const args = new Map();
@@ -52,6 +57,7 @@ let lastDebugState = null;
 let canvasActivity = null;
 let waterfallContinuityAcceptance = null;
 let waterfallImageContinuity = null;
+let waterfallSoakEvidenceIdentity = null;
 let screenSpaceSurfaceEvidence = null;
 let refractionEvidence = null;
 let sameStateRendererComparison = null;
@@ -113,6 +119,7 @@ function writeReport(report = {}) {
     canvasActivity,
     waterfallContinuityAcceptance,
     waterfallImageContinuity,
+    waterfallSoakEvidenceIdentity,
     cadenceProbe,
     automaticDiagnosticsRequestCount,
     explicitDiagnosticsReceipt,
@@ -615,6 +622,10 @@ async function main() {
     }
     if (lastDebugState?.schema !== 'kaminos.finger-fluid-bench.state.v0') {
       throw new Error(`finger fluid bench debug hook did not become authoritative: ${JSON.stringify(lastDebugState)}`);
+    }
+    if (lastDebugState.status === 'error') {
+      phase = 'route_rejected';
+      throw new Error(`finger fluid bench route rejected before primary output: ${lastDebugState.runtime?.reason || lastDebugState.runtime?.configError || 'unknown route rejection'}`);
     }
 
     if (compositionRequested) {
@@ -1186,6 +1197,9 @@ async function main() {
     const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
     const requestedThinSheetVorticityAttenuation = Number(requestedRoute.searchParams.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? 0.88);
     const requestedFreeFlightViscosityBoost = Number(requestedRoute.searchParams.get('finger_fluid_free_flight_viscosity_boost') ?? 0.17);
+    const requestedParticleCount = resolveFingerFluidParticleCount(
+      requestedRoute.searchParams.get('finger_fluid_particle_count') ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+    );
     const effectiveTruthScene = lastDebugState.runtime?.truthScene;
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
@@ -1195,6 +1209,7 @@ async function main() {
     const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
     const effectiveThinSheetVorticityAttenuation = lastDebugState.runtime?.effectiveThinSheetVorticityAttenuation;
     const effectiveFreeFlightViscosityBoost = lastDebugState.runtime?.effectiveFreeFlightViscosityBoost;
+    const effectiveParticleCount = lastDebugState.runtime?.effectiveParticleCount;
     if (requestedTruthScene !== effectiveTruthScene) throw new Error(`silent truth-scene fallback rejected: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
@@ -1238,6 +1253,16 @@ async function main() {
     if (requestedCapillaryStrength !== effectiveCapillaryStrength) throw new Error(`silent capillary-strength fallback rejected: ${JSON.stringify({ requestedCapillaryStrength, effectiveCapillaryStrength })}`);
     if (requestedThinSheetVorticityAttenuation !== effectiveThinSheetVorticityAttenuation) throw new Error(`silent thin-sheet-vorticity fallback rejected: ${JSON.stringify({ requestedThinSheetVorticityAttenuation, effectiveThinSheetVorticityAttenuation })}`);
     if (requestedFreeFlightViscosityBoost !== effectiveFreeFlightViscosityBoost) throw new Error(`silent free-flight-viscosity fallback rejected: ${JSON.stringify({ requestedFreeFlightViscosityBoost, effectiveFreeFlightViscosityBoost })}`);
+    if (requestedParticleCount !== effectiveParticleCount || effectiveParticleCount !== lastDebugState.runtime?.particleCount) {
+      throw new Error(`particle-count disagreement rejected: ${JSON.stringify({ requestedParticleCount, effectiveParticleCount, runtimeParticleCount: lastDebugState.runtime?.particleCount })}`);
+    }
+    if (
+      lastDebugState.runtime?.timeIntegrationContract !== KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT
+      || lastDebugState.runtime?.fixedTimeStepSeconds !== KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS
+    ) {
+      throw new Error(`fixed-step integration disagreement rejected: ${JSON.stringify({ expectedContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT, expectedStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS, runtimeContract: lastDebugState.runtime?.timeIntegrationContract, runtimeStepSeconds: lastDebugState.runtime?.fixedTimeStepSeconds })}`);
+    }
+    waterfallSoakEvidenceIdentity = createFingerFluidWaterfallSoakEvidenceIdentity(lastDebugState.runtime);
     if (effectiveParticleShiftStrength === 0 && lastDebugState.runtime?.particleShiftPassCount !== 0) throw new Error(`zero-strength route dispatched hidden particle shifting: ${lastDebugState.runtime?.particleShiftPassCount}`);
     if (effectiveParticleShiftStrength > 0 && lastDebugState.runtime?.particleShiftPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled particle shifting missed required passes: ${JSON.stringify({ particleShiftPassCount: lastDebugState.runtime?.particleShiftPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (effectiveChemistryDiffusion === 0 && lastDebugState.runtime?.chemistryDiffusionPassCount !== 0) throw new Error(`zero diffusion dispatched hidden chemistry work: ${lastDebugState.runtime?.chemistryDiffusionPassCount}`);
@@ -1441,6 +1466,7 @@ async function main() {
       waterfallContinuityAcceptance = evaluateFingerFluidWaterfallContinuityAcceptance({
         diagnostics: waterfallDiagnostics,
         sourceParticleCounts: inletDiagnostics.inlets.map(inlet => inlet.expectedParticleCount),
+        activeSourceParticleCounts: inletDiagnostics.inlets.map(inlet => inlet.activeParticleCount),
       });
       if (!waterfallContinuityAcceptance.ok) {
         const incoherentWaterfalls = waterfallContinuityAcceptance.waterfalls.filter(waterfall => !waterfall.ok);
