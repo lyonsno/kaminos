@@ -7,6 +7,7 @@ const baselineManifestSource = readFileSync(new URL('../volume-stage-b-provision
 const moduleUrl = new URL('../volume-stage-b-analytical-rebake.mjs', import.meta.url);
 const cockpitUrl = new URL('../volume-stage-b-rebake-cockpit.html', import.meta.url);
 const serverUrl = new URL('../volume-stage-b-rebake-server.mjs', import.meta.url);
+const queueUrl = new URL('../volume-stage-b-rebake-queue.mjs', import.meta.url);
 const witnessUrl = new URL('../volume-stage-b-rebake-witness.mjs', import.meta.url);
 const ledgerGeneratorUrl = new URL('../volume-stage-b-rebake-ledger.mjs', import.meta.url);
 
@@ -136,6 +137,38 @@ assert.deepEqual(
 );
 assert.equal(baseline.receipt.opticalLayers, 16);
 assert.equal(baseline.receipt.appliedPasses.includes('shared-optics-recurrence'), true);
+
+assert.ok(
+  existsSync(queueUrl),
+  'stale-response falsifier: Stage B server lacks a serialized request-local rebake runner',
+);
+const { createSerializedRebakeRunner } = await import(queueUrl.href);
+const queueEvents = [];
+const queuedRunner = createSerializedRebakeRunner({
+  rebake: async controls => {
+    queueEvents.push(`start:${controls.id}`);
+    await Promise.resolve();
+    queueEvents.push(`rebaked:${controls.id}`);
+    return { receipt: { requestedControls: { ...controls } }, pixels: new Uint8ClampedArray([controls.id]) };
+  },
+  persist: async ({ result }) => {
+    queueEvents.push(`persist:${result.receipt.requestedControls.id}`);
+    await Promise.resolve();
+  },
+});
+const queuedRequests = [{ id: 1 }, { id: 2 }, { id: 3 }];
+const queuedResults = await Promise.all(queuedRequests.map(controls => queuedRunner.run(controls)));
+assert.deepEqual(
+  queuedResults.map(result => result.receipt.requestedControls.id),
+  [1, 2, 3],
+  'overlapping callers must each receive their request-local rebake result',
+);
+assert.deepEqual(queueEvents, [
+  'start:1', 'rebaked:1', 'persist:1',
+  'start:2', 'rebaked:2', 'persist:2',
+  'start:3', 'rebaked:3', 'persist:3',
+]);
+assert.equal(queuedRunner.completedCount, 3);
 
 await assert.rejects(
   rebakeAnalyticalStageB({ state: { ...state, front: null }, controls: baselineControls }),

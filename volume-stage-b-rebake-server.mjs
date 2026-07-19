@@ -9,6 +9,7 @@ import {
   defaultStageBControls,
   rebakeAnalyticalStageB,
 } from './volume-stage-b-analytical-rebake.mjs';
+import { createSerializedRebakeRunner } from './volume-stage-b-rebake-queue.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MANIFEST = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/artifacts/coefficient-state-120-source-field-manifest.json';
@@ -135,7 +136,6 @@ async function main() {
   }
 
   let latest = null;
-  let rebakePromise = null;
   let rebakeCount = 0;
   const baseReport = {
     schema: 'kaminos.volume.stage-b-rebake-server-report.v0',
@@ -161,17 +161,17 @@ async function main() {
   };
   await writeReport(baseReport);
 
-  async function runRebake(controls) {
-    if (rebakePromise) await rebakePromise;
-    rebakePromise = rebakeAnalyticalStageB({ state, controls, width, height });
-    try {
-      latest = await rebakePromise;
-      rebakeCount += 1;
-      await writeReport({ ...baseReport, rebakeCount, latestReceipt: latest.receipt });
-      return latest;
-    } finally {
-      rebakePromise = null;
-    }
+  const rebakeRunner = createSerializedRebakeRunner({
+    rebake: controls => rebakeAnalyticalStageB({ state, controls, width, height }),
+    persist: async ({ result, completedCount }) => {
+      await writeReport({ ...baseReport, rebakeCount: completedCount, latestReceipt: result.receipt });
+      latest = result;
+      rebakeCount = completedCount;
+    },
+  });
+
+  function runRebake(controls) {
+    return rebakeRunner.run({ ...controls });
   }
 
   const server = createServer(async (request, response) => {
