@@ -560,9 +560,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T04:28:15.374Z",
-          "finishedAt": "2026-07-19T04:28:22.470Z",
-          "durationSeconds": 7.096
+          "startedAt": "2026-07-19T05:09:50.781Z",
+          "finishedAt": "2026-07-19T05:09:58.172Z",
+          "durationSeconds": 7.391
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -1891,9 +1891,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T04:28:22.471Z",
-          "finishedAt": "2026-07-19T04:28:29.603Z",
-          "durationSeconds": 7.132
+          "startedAt": "2026-07-19T05:09:58.173Z",
+          "finishedAt": "2026-07-19T05:10:05.786Z",
+          "durationSeconds": 7.613
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -3222,9 +3222,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T04:28:29.604Z",
-          "finishedAt": "2026-07-19T04:28:36.582Z",
-          "durationSeconds": 6.978
+          "startedAt": "2026-07-19T05:10:05.787Z",
+          "finishedAt": "2026-07-19T05:10:13.216Z",
+          "durationSeconds": 7.429
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -4553,9 +4553,9 @@
           "az315"
         ],
         "timing": {
-          "startedAt": "2026-07-19T04:28:36.584Z",
-          "finishedAt": "2026-07-19T04:28:43.662Z",
-          "durationSeconds": 7.078
+          "startedAt": "2026-07-19T05:10:13.217Z",
+          "finishedAt": "2026-07-19T05:10:20.705Z",
+          "durationSeconds": 7.488
         },
         "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
         "outputInventory": {
@@ -5724,7 +5724,9 @@
       "sha256": "sha256:9a75a82274005b80d81b99d80898510e4f8ed6b86e25be0a7e3240ed89830298",
       "width": 1272,
       "height": 1752,
-      "mappingPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/comparison-witness-inputs.json"
+      "mappingPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/comparison-witness-inputs.json",
+      "mappingBytes": 1036,
+      "mappingSha256": "sha256:ed5e0af9b2d723c2f45fae03f29e6491b0a4a7a3a009f5a629de19d336b3fb47"
     },
     "depthComparisonWitness": {
       "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/depth-comparison-witness.png",
@@ -5732,13 +5734,15 @@
       "sha256": "sha256:fd13271c0cc4a0f715425a9ab74ceea1aa6e7da55e0dfa8acd2eb163616ca173",
       "width": 1272,
       "height": 1752,
-      "mappingPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/depth-comparison-witness-inputs.json"
+      "mappingPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/depth-comparison-witness-inputs.json",
+      "mappingBytes": 1034,
+      "mappingSha256": "sha256:fa81afd67a96312c52cb8701bc8dbd3b0896c5d13020ed000823236c3eeeb25e"
     }
   },
   "timing": {
-    "startedAt": "2026-07-19T04:28:15.372Z",
-    "finishedAt": "2026-07-19T04:28:43.761Z",
-    "durationSeconds": 28.389
+    "startedAt": "2026-07-19T05:09:50.775Z",
+    "finishedAt": "2026-07-19T05:10:20.809Z",
+    "durationSeconds": 30.034
   },
   "lastTrustworthyEvidence": "all four precommitted donors and aggregate residual witness visually inspected",
   "visualInspection": {

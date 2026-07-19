@@ -39,7 +39,9 @@
     },
     {
       "donorId": "lirm-02-bulbous-radial-upright",
-      "outcome": "recovered",
+      "outcome": "inspected-edge-miss",
+      "numericOutcome": "recovered",
+      "missClassification": "topology-family-mismatch",
       "column": 1,
       "row": 1,
       "bandColor": [

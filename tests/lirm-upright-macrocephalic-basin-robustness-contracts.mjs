@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,6 +28,17 @@ assert.ok(frozen.sourceWitnesses.every(witness => witness.mapping.absolutePath.s
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'kaminos-upright-basin-contract-'));
+
+async function attachTemporaryMappingReceipt(report, witnessKey, fileName, mutate = mapping => mapping) {
+  const witness = report.outputInventory[witnessKey];
+  const mapping = mutate(JSON.parse(await readFile(witness.mappingPath, 'utf8')));
+  const path = join(temporaryRoot, fileName);
+  const bytes = Buffer.from(`${JSON.stringify(mapping, null, 2)}\n`);
+  await writeFile(path, bytes);
+  witness.mappingPath = path;
+  witness.mappingBytes = bytes.length;
+  witness.mappingSha256 = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
 
 const mappingLie = structuredClone(manifest);
 mappingLie.sourceWitnesses[0].mapping.sha256 = `sha256:${'0'.repeat(64)}`;
@@ -88,6 +100,84 @@ const programAwareReport = JSON.parse(await readFile(resolve(
 ), 'utf8'));
 assert.equal(programAwareReport.status, 'basin-passed-inspected');
 assert.doesNotThrow(() => validateCrawlerBasinMatrixReport(programAwareReport));
+const staleMappingReport = structuredClone(programAwareReport);
+await attachTemporaryMappingReceipt(
+  staleMappingReport,
+  'comparisonWitness',
+  'stale-comparison-mapping.json',
+  mapping => {
+    const cell = mapping.cells.find(item => item.donorId === 'lirm-02-bulbous-radial-upright');
+    cell.outcome = 'recovered';
+    delete cell.numericOutcome;
+    delete cell.missClassification;
+    return mapping;
+  },
+);
+await attachTemporaryMappingReceipt(staleMappingReport, 'depthComparisonWitness', 'stale-depth-mapping.json');
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(staleMappingReport),
+  /comparison witness mapping outcome mismatch for lirm-02-bulbous-radial-upright/,
+  'a hash-valid mapping cannot preserve the preinspection recovered label after an authoritative topology-family miss',
+);
+const mutatedMappingReport = structuredClone(programAwareReport);
+await attachTemporaryMappingReceipt(mutatedMappingReport, 'comparisonWitness', 'mutated-comparison-mapping.json');
+await attachTemporaryMappingReceipt(mutatedMappingReport, 'depthComparisonWitness', 'mutated-depth-mapping.json');
+await writeFile(mutatedMappingReport.outputInventory.comparisonWitness.mappingPath, '{}\n');
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(mutatedMappingReport),
+  /comparison witness mapping for primaryWitness .* mismatch/,
+  'mapping bytes changed after the report receipt must fail before their contents are trusted',
+);
+const reorderedMappingReport = structuredClone(programAwareReport);
+await attachTemporaryMappingReceipt(
+  reorderedMappingReport,
+  'comparisonWitness',
+  'reordered-comparison-mapping.json',
+  mapping => {
+    [mapping.cells[0], mapping.cells[1]] = [mapping.cells[1], mapping.cells[0]];
+    return mapping;
+  },
+);
+await attachTemporaryMappingReceipt(reorderedMappingReport, 'depthComparisonWitness', 'reordered-depth-mapping.json');
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(reorderedMappingReport),
+  /comparison witness mapping donor order or identity mismatch for primaryWitness/,
+  'a hash-valid mapping cannot reorder, duplicate, omit, or substitute donor cells',
+);
+const missingProvenanceReport = structuredClone(programAwareReport);
+await attachTemporaryMappingReceipt(
+  missingProvenanceReport,
+  'comparisonWitness',
+  'missing-provenance-comparison-mapping.json',
+  mapping => {
+    const cell = mapping.cells.find(item => item.donorId === 'lirm-02-bulbous-radial-upright');
+    delete cell.numericOutcome;
+    return mapping;
+  },
+);
+await attachTemporaryMappingReceipt(missingProvenanceReport, 'depthComparisonWitness', 'missing-provenance-depth-mapping.json');
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(missingProvenanceReport),
+  /comparison witness mapping numeric provenance mismatch for lirm-02-bulbous-radial-upright/,
+  'an inspected edge mapping cell must retain its recovered numeric provenance',
+);
+const missingMappingClassification = structuredClone(programAwareReport);
+await attachTemporaryMappingReceipt(
+  missingMappingClassification,
+  'comparisonWitness',
+  'missing-classification-comparison-mapping.json',
+  mapping => {
+    const cell = mapping.cells.find(item => item.donorId === 'lirm-02-bulbous-radial-upright');
+    delete cell.missClassification;
+    return mapping;
+  },
+);
+await attachTemporaryMappingReceipt(missingMappingClassification, 'depthComparisonWitness', 'missing-classification-depth-mapping.json');
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(missingMappingClassification),
+  /comparison witness mapping miss classification mismatch for lirm-02-bulbous-radial-upright/,
+  'an inspected edge mapping cell must retain its exact miss classification',
+);
 const fallbackLie = structuredClone(programAwareReport);
 fallbackLie.effectiveArmatureProgramId = CRAWLER_ARMATURE_PROGRAM.id;
 assert.throws(
@@ -99,6 +189,8 @@ assert.throws(
 const preinspectionReport = structuredClone(programAwareReport);
 preinspectionReport.status = 'basin-passed-uninspected';
 preinspectionReport.visualInspection = 'pending';
+await attachTemporaryMappingReceipt(preinspectionReport, 'comparisonWitness', 'preinspection-comparison-mapping.json');
+await attachTemporaryMappingReceipt(preinspectionReport, 'depthComparisonWitness', 'preinspection-depth-mapping.json');
 const preinspectionPath = join(temporaryRoot, 'upright-program-preinspection.json');
 await writeFile(preinspectionPath, `${JSON.stringify(preinspectionReport, null, 2)}\n`);
 const edgeInspected = await recordCrawlerBasinVisualInspection({

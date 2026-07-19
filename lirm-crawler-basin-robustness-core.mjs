@@ -37,10 +37,16 @@ function sha256(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-async function writeJsonAtomic(path, value) {
+async function writeJsonReceiptAtomic(path, value) {
   const temporary = `${path}.tmp-${process.pid}`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+  await writeFile(temporary, bytes);
   await rename(temporary, path);
+  return { path, bytes: bytes.length, sha256: sha256(bytes) };
+}
+
+async function writeJsonAtomic(path, value) {
+  await writeJsonReceiptAtomic(path, value);
 }
 
 function assertRepoLocalPath(path, repoRoot, label) {
@@ -430,19 +436,28 @@ async function composeComparisonWitness({ rows, path, sourceKey, mappingName }) 
       const target = ((y0 + band + y) * width + x0) * 3;
       image.pixels.copy(pixels, target, source, source + image.width * 3);
     }
-    cells.push({ donorId: rows[index].donorId, outcome: rows[index].outcome, column, row: rowIndex, bandColor: color });
+    cells.push(comparisonWitnessMappingCell(rows[index], { column, row: rowIndex, bandColor: color }));
   }
   const bytes = encodeRgbPng(width, height, pixels);
   await writeFile(path, bytes);
   const mappingPath = resolve(dirname(path), mappingName);
-  await writeJsonAtomic(mappingPath, {
+  const mappingReceipt = await writeJsonReceiptAtomic(mappingPath, {
     schema: 'kaminos.lirm-crawler-basin-comparison-witness-inputs.v0',
     sourceKey,
     width,
     height,
     cells,
   });
-  return { path, bytes: bytes.length, sha256: sha256(bytes), width, height, mappingPath };
+  return {
+    path,
+    bytes: bytes.length,
+    sha256: sha256(bytes),
+    width,
+    height,
+    mappingPath,
+    mappingBytes: mappingReceipt.bytes,
+    mappingSha256: mappingReceipt.sha256,
+  };
 }
 
 async function buildDefaultComparisonWitness({ rows, path, depthPath }) {
@@ -462,9 +477,87 @@ async function buildDefaultComparisonWitness({ rows, path, depthPath }) {
   };
 }
 
-function validateComparisonWitness(artifact, requireFiles) {
+function comparisonWitnessMappingCell(row, layout) {
+  return {
+    donorId: row.donorId,
+    outcome: row.outcome,
+    ...(row.numericOutcome === undefined ? {} : { numericOutcome: row.numericOutcome }),
+    ...(row.missClassification === undefined ? {} : { missClassification: row.missClassification }),
+    ...layout,
+  };
+}
+
+function validateComparisonWitnessMapping(mapping, artifact, rows, sourceKey) {
+  if (mapping?.schema !== 'kaminos.lirm-crawler-basin-comparison-witness-inputs.v0') {
+    throw new Error('unexpected comparison witness mapping schema');
+  }
+  if (mapping.sourceKey !== sourceKey) throw new Error(`comparison witness mapping source mismatch for ${sourceKey}`);
+  if (mapping.width !== artifact.width || mapping.height !== artifact.height) {
+    throw new Error(`comparison witness mapping dimensions mismatch for ${sourceKey}`);
+  }
+  if (!exactArray(mapping.cells?.map(cell => cell.donorId), rows.map(row => row.donorId))) {
+    throw new Error(`comparison witness mapping donor order or identity mismatch for ${sourceKey}`);
+  }
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const cell = mapping.cells[index];
+    if (cell.outcome !== row.outcome) {
+      throw new Error(`comparison witness mapping outcome mismatch for ${row.donorId}`);
+    }
+    if (cell.numericOutcome !== row.numericOutcome) {
+      throw new Error(`comparison witness mapping numeric provenance mismatch for ${row.donorId}`);
+    }
+    if (cell.missClassification !== row.missClassification) {
+      throw new Error(`comparison witness mapping miss classification mismatch for ${row.donorId}`);
+    }
+    const expectedColumn = index % 2;
+    const expectedRow = Math.floor(index / 2);
+    if (cell.column !== expectedColumn || cell.row !== expectedRow) {
+      throw new Error(`comparison witness mapping cell position mismatch for ${row.donorId}`);
+    }
+    if (!Array.isArray(cell.bandColor) || cell.bandColor.length !== 3
+        || cell.bandColor.some(channel => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+      throw new Error(`comparison witness mapping band color invalid for ${row.donorId}`);
+    }
+  }
+}
+
+function validateComparisonWitness(artifact, requireFiles, { rows, sourceKey, requireMapping = false } = {}) {
   if (!artifact?.path || !artifact?.bytes || !artifact?.sha256) throw new Error('missing comparison witness identity');
   if (requireFiles) verifyFileIdentity({ absolutePath: artifact.path, bytes: artifact.bytes, sha256: artifact.sha256 }, 'comparison witness');
+  const hasMappingReceipt = artifact?.mappingPath && artifact?.mappingBytes && artifact?.mappingSha256;
+  if (requireMapping && !hasMappingReceipt) throw new Error(`missing comparison witness mapping identity for ${sourceKey}`);
+  if (!hasMappingReceipt) return;
+  if (requireFiles) {
+    verifyFileIdentity({
+      absolutePath: artifact.mappingPath,
+      bytes: artifact.mappingBytes,
+      sha256: artifact.mappingSha256,
+    }, `comparison witness mapping for ${sourceKey}`);
+    const mapping = JSON.parse(readFileSync(artifact.mappingPath, 'utf8'));
+    validateComparisonWitnessMapping(mapping, artifact, rows, sourceKey);
+  }
+}
+
+async function rewriteComparisonWitnessMapping(artifact, rows, sourceKey) {
+  const mapping = JSON.parse(await readFile(artifact.mappingPath, 'utf8'));
+  const cellsByDonorId = new Map(mapping.cells.map(cell => [cell.donorId, cell]));
+  const rewritten = {
+    ...mapping,
+    cells: rows.map(row => {
+      const previous = cellsByDonorId.get(row.donorId);
+      if (!previous) throw new Error(`comparison witness mapping missing donor ${row.donorId}`);
+      return comparisonWitnessMappingCell(row, {
+        column: previous.column,
+        row: previous.row,
+        bandColor: previous.bandColor,
+      });
+    }),
+  };
+  const receipt = await writeJsonReceiptAtomic(artifact.mappingPath, rewritten);
+  artifact.mappingBytes = receipt.bytes;
+  artifact.mappingSha256 = receipt.sha256;
+  validateComparisonWitnessMapping(rewritten, artifact, rows, sourceKey);
 }
 
 function validateInspectionWitnessIdentity(receipt, artifact, label) {
@@ -536,8 +629,17 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
   }
   const evaluated = evaluateCrawlerBasinRows(report.rows, manifest.acceptance.basin);
   if (JSON.stringify(evaluated) !== JSON.stringify(report.acceptance)) throw new Error('matrix acceptance summary mismatch');
-  validateComparisonWitness(report.outputInventory?.comparisonWitness, requireFiles);
-  validateComparisonWitness(report.outputInventory?.depthComparisonWitness, requireFiles);
+  const requireMapping = manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1;
+  validateComparisonWitness(report.outputInventory?.comparisonWitness, requireFiles, {
+    rows: report.rows,
+    sourceKey: 'primaryWitness',
+    requireMapping,
+  });
+  validateComparisonWitness(report.outputInventory?.depthComparisonWitness, requireFiles, {
+    rows: report.rows,
+    sourceKey: 'depthWitness',
+    requireMapping,
+  });
   let expectedStatus;
   if (report.visualInspection === 'pending') {
     expectedStatus = report.acceptance.passed ? 'basin-passed-uninspected' : 'basin-missed-threshold-uninspected';
@@ -652,8 +754,16 @@ export async function runCrawlerBasinMatrix({
     });
     report.outputInventory.comparisonWitness = comparisonArtifacts.comparisonWitness;
     report.outputInventory.depthComparisonWitness = comparisonArtifacts.depthComparisonWitness;
-    validateComparisonWitness(report.outputInventory.comparisonWitness, true);
-    validateComparisonWitness(report.outputInventory.depthComparisonWitness, true);
+    validateComparisonWitness(report.outputInventory.comparisonWitness, true, {
+      rows: report.rows,
+      sourceKey: 'primaryWitness',
+      requireMapping: manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1,
+    });
+    validateComparisonWitness(report.outputInventory.depthComparisonWitness, true, {
+      rows: report.rows,
+      sourceKey: 'depthWitness',
+      requireMapping: manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1,
+    });
     report.status = report.acceptance.passed ? 'basin-passed-uninspected' : 'basin-missed-threshold-uninspected';
     report.effectiveRoute = manifest.requestedRoute;
     report.effectiveArmatureProgramId = programReceipt.id;
@@ -707,8 +817,13 @@ export async function recordCrawlerBasinVisualInspection({ reportPath, dispositi
   report.acceptance = evaluateCrawlerBasinRows(report.rows, report.manifest.acceptance.basin);
   const artifact = report.outputInventory.comparisonWitness;
   const depthArtifact = report.outputInventory.depthComparisonWitness;
-  verifyFileIdentity({ absolutePath: artifact.path, bytes: artifact.bytes, sha256: artifact.sha256 }, 'comparison witness');
-  verifyFileIdentity({ absolutePath: depthArtifact.path, bytes: depthArtifact.bytes, sha256: depthArtifact.sha256 }, 'depth comparison witness');
+  const requireMapping = report.manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1;
+  if (requireMapping) {
+    await rewriteComparisonWitnessMapping(artifact, report.rows, 'primaryWitness');
+    await rewriteComparisonWitnessMapping(depthArtifact, report.rows, 'depthWitness');
+  }
+  validateComparisonWitness(artifact, true, { rows: report.rows, sourceKey: 'primaryWitness', requireMapping });
+  validateComparisonWitness(depthArtifact, true, { rows: report.rows, sourceKey: 'depthWitness', requireMapping });
   report.visualInspection = {
     disposition,
     visibleDelta: visibleDelta.trim(),
