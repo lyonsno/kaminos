@@ -77,6 +77,11 @@ assert metrics["topMassFractions"]["0.10"] > metrics["topMassFractions"]["0.01"]
 assert len(metrics["weightedCentroidGrid"]) == 3
 assert len(metrics["weightedCovarianceGrid"]) == 6
 
+asymmetric_centroid = [8.0, 4.0, 2.0]
+assert module.centroid_slice_index(asymmetric_centroid, "x", grid=10) == 8
+assert module.centroid_slice_index(asymmetric_centroid, "y", grid=10) == 4
+assert module.centroid_slice_index(asymmetric_centroid, "z", grid=10) == 2
+
 
 same = module.compare_fields(smooth, smooth)
 assert np.isclose(same["cosineSimilarity"], 1.0, atol=1e-7)
@@ -97,6 +102,32 @@ assert integral.shape == (9, 9, 3) and integral.dtype == np.uint8
 assert slice_image.shape == (9, 9, 3) and slice_image.dtype == np.uint8
 assert int(np.max(projection)) > 0 and int(np.max(integral)) > 0 and int(np.max(slice_image)) > 0
 assert np.array_equal(module._colorize(np.zeros((3, 3), dtype=np.float32)), np.zeros((3, 3, 3), dtype=np.uint8))
+
+with tempfile.TemporaryDirectory() as directory:
+    image_path = Path(directory) / "projection.png"
+    receipt = module.write_png(
+        image_path,
+        projection,
+        semantic_role="test-maximum-projection",
+        require_nonflat=True,
+    )
+    assert receipt["path"] == str(image_path)
+    assert receipt["shape"] == [9, 9, 3]
+    assert receipt["sha256"] == module.sha256_file(image_path)
+    assert receipt["uniqueColorCount"] > 1
+    assert receipt["flat"] is False
+
+    try:
+        module.write_png(
+            Path(directory) / "flat.png",
+            np.zeros((9, 9, 3), dtype=np.uint8),
+            semantic_role="test-maximum-projection",
+            require_nonflat=True,
+        )
+    except ValueError as error:
+        assert "flat" in str(error)
+    else:
+        raise AssertionError("flat maximum projection did not fail loud")
 
 
 rows = [

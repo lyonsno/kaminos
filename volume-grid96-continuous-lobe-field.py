@@ -45,6 +45,7 @@ FIELD_ORDER = (
 )
 DEFAULT_BANDWIDTHS = (0.0, 1.0, 2.0, 4.0)
 AXES = {"x": 2, "y": 1, "z": 0}
+WORLD_COORDINATE_INDEX = {"x": 0, "y": 1, "z": 2}
 CLAIM_BOUNDARY = {
     "projectionRelevanceOnly": True,
     "continuousImportanceTeacherOnly": True,
@@ -196,6 +197,14 @@ def field_metrics(field: np.ndarray) -> dict[str, Any]:
     }
 
 
+def centroid_slice_index(centroid: list[float], axis_name: str, *, grid: int) -> int:
+    require(axis_name in WORLD_COORDINATE_INDEX, "centroid slice axis is invalid")
+    require(len(centroid) == 3 and grid > 0, "centroid slice input is invalid")
+    coordinate = float(centroid[WORLD_COORDINATE_INDEX[axis_name]])
+    require(math.isfinite(coordinate), "centroid slice coordinate is invalid")
+    return int(np.clip(round(coordinate), 0, grid - 1))
+
+
 def compare_fields(first: np.ndarray, second: np.ndarray) -> dict[str, float]:
     left = np.asarray(first, dtype=np.float64).reshape(-1)
     right = np.asarray(second, dtype=np.float64).reshape(-1)
@@ -261,13 +270,35 @@ def render_projection(
     return _colorize(projected)
 
 
-def write_png(path: Path, image: np.ndarray) -> None:
+def write_png(
+    path: Path,
+    image: np.ndarray,
+    *,
+    semantic_role: str,
+    require_nonflat: bool,
+) -> dict[str, Any]:
     from PIL import Image
 
     pixels = np.asarray(image, dtype=np.uint8)
     require(pixels.ndim == 3 and pixels.shape[2] == 3 and pixels.size > 0, "visual output is blank")
     Image.fromarray(pixels, mode="RGB").save(path)
-    require(path.is_file() and path.stat().st_size > 100, f"visual output is partial: {path}")
+    require(path.is_file() and path.stat().st_size > 0, f"visual output is partial: {path}")
+    with Image.open(path) as decoded_image:
+        decoded = np.asarray(decoded_image.convert("RGB"), dtype=np.uint8)
+    require(decoded.shape == pixels.shape, f"visual output dimensions drifted: {path}")
+    unique_color_count = int(np.unique(decoded.reshape(-1, 3), axis=0).shape[0])
+    flat = unique_color_count <= 1
+    if require_nonflat:
+        require(not flat, f"visual output is flat: {path}")
+    return {
+        "path": str(path),
+        "bytes": path.stat().st_size,
+        "sha256": sha256_file(path),
+        "shape": list(decoded.shape),
+        "uniqueColorCount": unique_color_count,
+        "flat": flat,
+        "semanticRole": semantic_role,
+    }
 
 
 def gallery_html(
@@ -463,13 +494,13 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             }
             field_rows.append(row)
             for axis_name, axis in AXES.items():
-                slice_index = int(np.clip(round(centroid[axis]), 0, EXPECTED_GRID - 1))
+                slice_index = centroid_slice_index(centroid, axis_name, grid=EXPECTED_GRID)
                 for mode in ("maximum", "integral", "slice"):
                     image_name = (
                         field_name.replace(".", "-")
                         + f"-bw{bandwidth:g}-{axis_name}-{mode}.png"
                     )
-                    write_png(
+                    visual_receipt = write_png(
                         output_dir / image_name,
                         render_projection(
                             smooth,
@@ -477,6 +508,8 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
                             mode=mode,
                             slice_index=slice_index if mode == "slice" else None,
                         ),
+                        semantic_role=f"{field_name}-{bandwidth:g}-{axis_name}-{mode}",
+                        require_nonflat=mode != "slice",
                     )
                     visual_rows.append(
                         {
@@ -486,6 +519,7 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
                             "mode": mode,
                             "sliceIndex": slice_index if mode == "slice" else None,
                             "image": image_name,
+                            "artifact": visual_receipt,
                         }
                     )
     output_fields.flush()
@@ -548,6 +582,10 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     }
     require(artifacts["nativeCellIndex"]["sha256"] == (attribution.get("artifacts") or {})["nativeCellIndex"]["sha256"], "output native-id hash drifted")
     require(len(visual_rows) == len(FIELD_ORDER) * len(bandwidths) * len(AXES) * 3, "visual output is incomplete")
+    require(
+        all(row["artifact"]["sha256"] == sha256_file(Path(row["artifact"]["path"])) for row in visual_rows),
+        "visual output receipt drifted",
+    )
 
     args._phase["value"] = "gallery-write"
     gallery_path = output_dir / "index.html"
