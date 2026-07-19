@@ -14,7 +14,14 @@ import {
 
 export const CRAWLER_BASIN_MANIFEST_SCHEMA = 'kaminos.lirm-crawler-basin-robustness-manifest.v0';
 export const CRAWLER_BASIN_MATRIX_SCHEMA = 'kaminos.lirm-crawler-basin-robustness-matrix.v0';
+export const UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA = 'kaminos.lirm-upright-macrocephalic-basin-robustness-manifest.v0';
+export const UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA = 'kaminos.lirm-upright-macrocephalic-basin-robustness-matrix.v0';
 export const CRAWLER_BASIN_PARAMETER_VOCABULARY = 'kaminos.reference-fitted-armature.13-semantic-parameters.v0';
+
+const matrixSchemaByManifestSchema = new Map([
+  [CRAWLER_BASIN_MANIFEST_SCHEMA, CRAWLER_BASIN_MATRIX_SCHEMA],
+  [UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA, UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA],
+]);
 
 const exactArray = (actual, expected) => (
   Array.isArray(actual)
@@ -49,6 +56,62 @@ function verifyFileIdentity({ absolutePath, bytes, sha256: expectedSha }, label)
   if (actualSha !== expectedSha) throw new Error(`${label} hash mismatch: expected ${expectedSha}, got ${actualSha}`);
 }
 
+function matrixSchemaForManifest(manifest) {
+  const matrixSchema = matrixSchemaByManifestSchema.get(manifest?.schema);
+  if (!matrixSchema) throw new Error(`unexpected manifest schema: ${manifest?.schema}`);
+  if (manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA
+      && manifest.familyId !== 'upright-macrocephalic-low-multicontact-v0') {
+    throw new Error(`unexpected upright basin family: ${manifest.familyId}`);
+  }
+  return matrixSchema;
+}
+
+function sourceWitnessesForManifest(manifest) {
+  if (manifest.sourceWitness && manifest.sourceWitnesses) {
+    throw new Error('manifest cannot mix sourceWitness and sourceWitnesses');
+  }
+  if (Array.isArray(manifest.sourceWitnesses) && manifest.sourceWitnesses.length > 0) {
+    return manifest.sourceWitnesses;
+  }
+  if (manifest.sourceWitness) return [manifest.sourceWitness];
+  throw new Error('manifest requires source selection witness evidence');
+}
+
+function stripRuntimeWitnessPaths(witness) {
+  const { absolutePath, mapping, ...sourceWitness } = witness;
+  void absolutePath;
+  if (!mapping) return sourceWitness;
+  const { absolutePath: mappingAbsolutePath, ...sourceMapping } = mapping;
+  void mappingAbsolutePath;
+  return { ...sourceWitness, mapping: sourceMapping };
+}
+
+function admitSourceWitnesses(manifest, repoRoot, { requireFiles, embedded }) {
+  const witnesses = sourceWitnessesForManifest(manifest);
+  const paths = new Set();
+  const hashes = new Set();
+  return witnesses.map((witness, index) => {
+    const label = `${embedded ? 'embedded ' : ''}source witness${witnesses.length > 1 ? ` ${index + 1}` : ''}`;
+    if (!witness.path || paths.has(witness.path)) throw new Error(`duplicate ${label} path: ${witness.path}`);
+    if (!witness.sha256 || hashes.has(witness.sha256)) throw new Error(`duplicate ${label} hash: ${witness.sha256}`);
+    paths.add(witness.path);
+    hashes.add(witness.sha256);
+    const absolutePath = assertRepoLocalPath(witness.path, repoRoot, label);
+    if (embedded && witness.absolutePath !== absolutePath) throw new Error(`${label} absolute path mismatch`);
+    if (requireFiles) verifyFileIdentity({ ...witness, absolutePath }, label);
+
+    let mapping = witness.mapping;
+    if (mapping) {
+      const mappingLabel = `${label} mapping`;
+      const mappingAbsolutePath = assertRepoLocalPath(mapping.path, repoRoot, mappingLabel);
+      if (embedded && mapping.absolutePath !== mappingAbsolutePath) throw new Error(`${mappingLabel} absolute path mismatch`);
+      if (requireFiles) verifyFileIdentity({ ...mapping, absolutePath: mappingAbsolutePath }, mappingLabel);
+      mapping = { ...mapping, absolutePath: mappingAbsolutePath };
+    }
+    return { ...witness, absolutePath, ...(mapping ? { mapping } : {}) };
+  });
+}
+
 function assertFixedRoute(manifest) {
   const cameraIds = REFERENCE_FIT_CAMERAS.map(camera => camera.id);
   if (manifest.requestedRoute !== REFERENCE_FIT_ROUTE) throw new Error('manifest requested route mismatch');
@@ -73,11 +136,12 @@ function frozenManifestSourceView(manifest) {
     repoRoot,
     ...source
   } = manifest;
-  const { absolutePath: sourceWitnessAbsolutePath, ...sourceWitness } = source.sourceWitness ?? {};
-  void sourceWitnessAbsolutePath;
+  const sourceWitness = source.sourceWitness ? stripRuntimeWitnessPaths(source.sourceWitness) : undefined;
+  const sourceWitnesses = source.sourceWitnesses?.map(stripRuntimeWitnessPaths);
   return {
     ...source,
-    sourceWitness,
+    ...(sourceWitness ? { sourceWitness } : {}),
+    ...(sourceWitnesses ? { sourceWitnesses } : {}),
     donors: (source.donors ?? []).map(donor => {
       const { absolutePath, ...frozenDonor } = donor;
       void absolutePath;
@@ -87,7 +151,8 @@ function frozenManifestSourceView(manifest) {
 }
 
 function validateEmbeddedFrozenManifest(manifest, { requireFiles }) {
-  if (manifest?.schema !== CRAWLER_BASIN_MANIFEST_SCHEMA || manifest.fitOutcomesObserved !== false) {
+  matrixSchemaForManifest(manifest);
+  if (manifest.fitOutcomesObserved !== false) {
     throw new Error('matrix lost frozen manifest identity');
   }
   if (manifest.acceptance?.basin?.donorCount !== 4 || manifest.donors?.length !== 4) {
@@ -111,9 +176,7 @@ function validateEmbeddedFrozenManifest(manifest, { requireFiles }) {
     if (donor.absolutePath !== absolutePath) throw new Error(`embedded donor absolute path mismatch for ${donor.id}`);
     if (requireFiles) verifyFileIdentity({ ...donor, absolutePath }, `embedded donor ${donor.id}`);
   }
-  const sourceWitnessAbsolutePath = assertRepoLocalPath(manifest.sourceWitness?.path, repoRoot, 'embedded source witness');
-  if (manifest.sourceWitness?.absolutePath !== sourceWitnessAbsolutePath) throw new Error('embedded source witness absolute path mismatch');
-  if (requireFiles) verifyFileIdentity({ ...manifest.sourceWitness, absolutePath: sourceWitnessAbsolutePath }, 'embedded source witness');
+  admitSourceWitnesses(manifest, repoRoot, { requireFiles, embedded: true });
 
   if (requireFiles) {
     const absoluteManifestPath = assertRepoLocalPath(manifest.absoluteManifestPath, repoRoot, 'embedded manifest');
@@ -131,7 +194,7 @@ export async function loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot })
   const absoluteRepoRoot = resolve(repoRoot);
   const manifestBytes = await readFile(absoluteManifestPath);
   const manifest = JSON.parse(manifestBytes);
-  if (manifest.schema !== CRAWLER_BASIN_MANIFEST_SCHEMA) throw new Error(`unexpected manifest schema: ${manifest.schema}`);
+  matrixSchemaForManifest(manifest);
   if (manifest.fitOutcomesObserved !== false) throw new Error('manifest must state that fit outcomes were not observed at donor selection');
   if (manifest.acceptance?.basin?.donorCount !== 4 || manifest.donors?.length !== 4) throw new Error('manifest requires exactly 4 donors');
   if (manifest.acceptance.basin.minimumRecoveredDonors !== 3) throw new Error('manifest requires a 3-of-4 basin predicate');
@@ -152,15 +215,14 @@ export async function loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot })
     return { ...donor, absolutePath };
   });
 
-  const sourceWitnessAbsolutePath = assertRepoLocalPath(manifest.sourceWitness?.path, absoluteRepoRoot, 'source witness');
-  verifyFileIdentity({ ...manifest.sourceWitness, absolutePath: sourceWitnessAbsolutePath }, 'source witness');
+  const sourceWitnesses = admitSourceWitnesses(manifest, absoluteRepoRoot, { requireFiles: true, embedded: false });
   return {
     ...manifest,
     absoluteManifestPath,
     manifestSha256: sha256(manifestBytes),
     repoRoot: absoluteRepoRoot,
     donors,
-    sourceWitness: { ...manifest.sourceWitness, absolutePath: sourceWitnessAbsolutePath },
+    ...(manifest.sourceWitness ? { sourceWitness: sourceWitnesses[0] } : { sourceWitnesses }),
   };
 }
 
@@ -364,8 +426,8 @@ function validateInspectionWitnessIdentity(receipt, artifact, label) {
 }
 
 export function validateCrawlerBasinMatrixReport(report, { requireFiles = true } = {}) {
-  if (report?.schema !== CRAWLER_BASIN_MATRIX_SCHEMA) throw new Error('unexpected crawler basin matrix schema');
   const manifest = report.manifest;
+  if (report?.schema !== matrixSchemaForManifest(manifest)) throw new Error('unexpected morphology basin matrix schema');
   validateEmbeddedFrozenManifest(manifest, { requireFiles });
   if (report.requestedRoute !== manifest.requestedRoute) throw new Error('matrix requested route mismatch');
   if (report.effectiveRoute !== manifest.requestedRoute) throw new Error('matrix effective route mismatch');
@@ -422,7 +484,7 @@ export async function runCrawlerBasinMatrix({
   const manifest = await loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot });
   const startedAtMs = Date.now();
   const report = {
-    schema: CRAWLER_BASIN_MATRIX_SCHEMA,
+    schema: matrixSchemaForManifest(manifest),
     status: 'running',
     failurePhase: null,
     requestedRoute: manifest.requestedRoute,
