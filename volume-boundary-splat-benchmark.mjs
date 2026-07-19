@@ -437,12 +437,12 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
   });
   const target = sweep?.target;
   const targetVisual = target?.visual;
-  const targetPassReceipt = targetVisual?.selectiveHeadLivePassReceipt;
+  const targetPassReceipt = targetVisual?.volumePresentationApplication;
   const targetPreview = targetVisual?.preview;
   const baselineVisual = sweep?.arms?.find(arm => arm?.id === expectedArmIds[0])?.visual;
   const missingFootprintTierTargetComparison = target?.effectiveMode !== 'off'
     || target?.fallbackReason != null
-    || target?.volumeReconstructionStyle !== 'native-3d-compute-fluid-raymarch-v0'
+    || target?.volumeReconstructionStyle !== 'native-resolution'
     || targetVisual?.sampleAuthority !== 'render-only-frozen-sim-state'
     || targetVisual?.simAdvanced !== false
     || targetVisual?.sameStateCaptureId !== 'footprint-tier-raymarch-target'
@@ -453,19 +453,39 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
     || Number(targetPreview?.width) <= 0
     || !Number.isInteger(Number(targetPreview?.height))
     || Number(targetPreview?.height) <= 0
+    || targetPassReceipt?.identity !== 'volume-presentation-applied-pass-receipt-v0'
+    || targetPassReceipt?.compositionEffective !== 'raymarch-only-v0'
     || targetPassReceipt?.raymarchApplied !== true
-    || targetPassReceipt?.splatApplied !== false
+    || targetPassReceipt?.splatsApplied !== false
+    || targetPassReceipt?.fallbackReason != null
     || expectedArms.some(expectedArm => {
       const arm = sweep?.arms?.find(candidate => candidate?.id === expectedArm.id);
       const comparison = arm?.targetComparison;
+      const comparisonWidth = Number(comparison?.width);
+      const comparisonHeight = Number(comparison?.height);
+      const comparisonPixelCount = Number(comparison?.pixelCount);
+      const targetPeakPixelCount = Number(comparison?.targetPeakPixelCount);
+      const rgbMaeNormalized = Number(comparison?.rgbMaeNormalized);
+      const targetWeightedRgbMaeNormalized = Number(comparison?.targetWeightedRgbMaeNormalized);
+      const targetPeakLumaRetention = Number(comparison?.targetPeakLumaRetention);
       return comparison?.identity !== 'same-state-rgba8-target-relative-footprint-tier-metrics-v0'
         || arm?.visual?.simStepCount !== targetVisual?.simStepCount
         || arm?.visual?.effectiveRoute !== targetVisual?.effectiveRoute
-        || Number(comparison?.width) !== Number(targetPreview?.width)
-        || Number(comparison?.height) !== Number(targetPreview?.height)
-        || !Number.isFinite(Number(comparison?.rgbMaeNormalized))
-        || !Number.isFinite(Number(comparison?.targetWeightedRgbMaeNormalized))
-        || !Number.isFinite(Number(comparison?.targetPeakLumaRetention));
+        || comparisonWidth !== Number(targetPreview?.width)
+        || comparisonHeight !== Number(targetPreview?.height)
+        || !Number.isInteger(comparisonPixelCount)
+        || comparisonPixelCount !== comparisonWidth * comparisonHeight
+        || !Number.isInteger(targetPeakPixelCount)
+        || targetPeakPixelCount < 0
+        || targetPeakPixelCount > comparisonPixelCount
+        || !Number.isFinite(rgbMaeNormalized)
+        || rgbMaeNormalized < 0
+        || rgbMaeNormalized > 1
+        || !Number.isFinite(targetWeightedRgbMaeNormalized)
+        || targetWeightedRgbMaeNormalized < 0
+        || targetWeightedRgbMaeNormalized > 1
+        || !Number.isFinite(targetPeakLumaRetention)
+        || targetPeakLumaRetention < 0;
     });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true

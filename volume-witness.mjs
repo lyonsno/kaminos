@@ -3373,7 +3373,7 @@ async function main() {
                 frameCount: targetVisual.frameCount,
                 simStepCount: targetVisual.simStepCount,
                 effectiveRoute: targetVisual.effectiveRoute,
-                selectiveHeadLivePassReceipt: targetVisual.selectiveHeadLivePassReceipt,
+                volumePresentationApplication: targetVisual.volumePresentationApplication,
                 litPixels: targetVisual.litPixels,
                 meanLuma: targetVisual.meanLuma,
                 fireLikePixels: targetVisual.fireLikePixels,
@@ -3417,13 +3417,17 @@ async function main() {
       writeRgbaPng(targetPreviewPath, targetPreview.width, targetPreview.height, targetPreview.rgba);
       if (target.effectiveMode !== 'off'
         || target.fallbackReason != null
+        || target.volumeReconstructionStyle !== 'native-resolution'
         || target.visual?.sampleAuthority !== 'render-only-frozen-sim-state'
         || target.visual?.simAdvanced !== false
         || target.visual?.sameStateCaptureId !== 'footprint-tier-raymarch-target'
         || target.visual?.simStepCount !== baseline.simStepCount
         || target.visual?.effectiveRoute !== baseline.visual?.effectiveRoute
-        || target.visual?.selectiveHeadLivePassReceipt?.raymarchApplied !== true
-        || target.visual?.selectiveHeadLivePassReceipt?.splatApplied !== false
+        || target.visual?.volumePresentationApplication?.identity !== 'volume-presentation-applied-pass-receipt-v0'
+        || target.visual?.volumePresentationApplication?.compositionEffective !== 'raymarch-only-v0'
+        || target.visual?.volumePresentationApplication?.raymarchApplied !== true
+        || target.visual?.volumePresentationApplication?.splatsApplied !== false
+        || target.visual?.volumePresentationApplication?.fallbackReason != null
         || !Number.isFinite(Number(target.visual?.meanLuma))
         || Number(target.visual?.litPixels) <= 0) {
         throw new Error(`footprint-tier-raymarch-target-invalid:${JSON.stringify(target)}`);

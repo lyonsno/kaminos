@@ -92,8 +92,8 @@ assert.doesNotMatch(
 );
 assert.match(
   footprintTierSweepSource,
-  /boundarySplatMode:\s*'off'[\s\S]*footprint-tier-raymarch-target[\s\S]*footprint-tier-target-comparison/,
-  'tier sweep captures one exact same-state native raymarch target and compares every splat arm against it',
+  /boundarySplatMode:\s*'off'[\s\S]*footprint-tier-raymarch-target[\s\S]*volumePresentationApplication[\s\S]*footprint-tier-target-comparison/,
+  'tier sweep captures one same-state raymarch target with a fresh applied-pass receipt and compares every splat arm against it',
 );
 assert.equal(
   typeof benchmarkModule.footprintTierSweepReceiptChecks,
@@ -111,23 +111,29 @@ const authenticTierSweepFixture = {
       ok: true,
       target: {
         effectiveMode: 'off',
-        volumeReconstructionStyle: 'native-3d-compute-fluid-raymarch-v0',
+        volumeReconstructionStyle: 'native-resolution',
         visual: {
           sampleAuthority: 'render-only-frozen-sim-state',
           simAdvanced: false,
           sameStateCaptureId: 'footprint-tier-raymarch-target',
           simStepCount: 61,
           effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
-          selectiveHeadLivePassReceipt: { raymarchApplied: true, splatApplied: false },
+          volumePresentationApplication: {
+            identity: 'volume-presentation-applied-pass-receipt-v0',
+            compositionEffective: 'raymarch-only-v0',
+            raymarchApplied: true,
+            splatsApplied: false,
+            fallbackReason: null,
+          },
           preview: { width: 2, height: 1 },
         },
       },
       arms: [
-        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRetention: 0.9 } },
+        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRetention: 0.9 } },
         {
           id: 'importance-070-098',
           visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
-          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRetention: 0.95 },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRetention: 0.95 },
           audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
         {
@@ -143,7 +149,7 @@ const authenticTierSweepFixture = {
             mediumThreshold: 0.82,
             heroThreshold: 0.94,
           },
-          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.11, targetWeightedRgbMaeNormalized: 0.12, targetPeakLumaRetention: 0.91 },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.11, targetWeightedRgbMaeNormalized: 0.12, targetPeakLumaRetention: 0.91 },
           audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
       ],
@@ -174,6 +180,42 @@ for (const malformedTarget of [
     }).missingFootprintTierTargetComparison,
     true,
     'stale target capture identity, simulator step, or route denies optimization authority',
+  );
+}
+for (const malformedApplication of [
+  { identity: 'stale-selective-head-receipt', compositionEffective: 'raymarch-only-v0', raymarchApplied: true, splatsApplied: false, fallbackReason: null },
+  { identity: 'volume-presentation-applied-pass-receipt-v0', compositionEffective: 'smoke-raymarch-under-splats-v0', raymarchApplied: true, splatsApplied: true, fallbackReason: null },
+  { identity: 'volume-presentation-applied-pass-receipt-v0', compositionEffective: 'raymarch-only-v0', raymarchApplied: true, splatsApplied: false, fallbackReason: 'fallback-route' },
+]) {
+  const sweep = structuredClone(authenticTierSweepFixture.sweep);
+  sweep.target.visual.volumePresentationApplication = malformedApplication;
+  assert.equal(
+    benchmarkModule.footprintTierSweepReceiptChecks({
+      requested: true,
+      expectedArms: authenticTierSweepFixture.expectedArms,
+      sweep,
+    }).missingFootprintTierTargetComparison,
+    true,
+    'stale, hybrid, or fallback applied-pass receipts deny exact raymarch-target authority',
+  );
+}
+for (const malformedComparison of [
+  { rgbMaeNormalized: -1 },
+  { targetWeightedRgbMaeNormalized: 1.01 },
+  { targetPeakLumaRetention: -0.01 },
+  { pixelCount: 1 },
+  { targetPeakPixelCount: 3 },
+]) {
+  const sweep = structuredClone(authenticTierSweepFixture.sweep);
+  Object.assign(sweep.arms[0].targetComparison, malformedComparison);
+  assert.equal(
+    benchmarkModule.footprintTierSweepReceiptChecks({
+      requested: true,
+      expectedArms: authenticTierSweepFixture.expectedArms,
+      sweep,
+    }).missingFootprintTierTargetComparison,
+    true,
+    'impossible target-relative metrics deny optimization authority even when every value is finite',
   );
 }
 assert.equal(
