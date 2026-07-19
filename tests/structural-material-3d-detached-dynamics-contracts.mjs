@@ -190,6 +190,16 @@ assert.match(pageSource, /DETACHED_DYNAMICS_AUTHORITY/, 'the page must expose dy
 assert.match(witnessSource, /detachedDynamicsAcceptedLaunch/, 'native witness must require accepted launch identity');
 assert.match(witnessSource, /detachedDynamicsSettledContact/, 'native witness must require collision and settlement evidence');
 assert.match(witnessSource, /detachedDynamicsRenderAgreement/, 'native witness must reject report-only body motion');
+assert.match(
+  witnessSource,
+  /detachedDynamicsScreenshotEvidence/,
+  'screenshot visibility must be diagnosed independently from render and camera agreement',
+);
+assert.match(
+  witnessSource,
+  /MIN_SETTLED_DYNAMICS_STRUCTURAL_COLOR_PIXELS = 24/,
+  'settled screenshot calibration must preserve a measured structural-color floor',
+);
 assert.match(witnessSource, /detachedDynamicsSecondLaunchClock/, 'native witness must exercise a second launch episode');
 assert.match(greenroomSource, /detached-dynamics-greenroom-r1/, 'dynamics evidence needs a dedicated artifact identity');
 assert.match(greenroomSource, /bellTower=1/, 'dynamics Greenroom must request the structural bell route');

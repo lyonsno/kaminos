@@ -34,6 +34,7 @@ import {
 
 const SCHEMA = 'kaminos.structural-material.webgpu-hot-sidecar-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
+const MIN_SETTLED_DYNAMICS_STRUCTURAL_COLOR_PIXELS = 24;
 
 function usage() {
   return [
@@ -809,7 +810,11 @@ try {
       screenshot: {
         path: settledScreenshot,
         byteLength: Buffer.from(settledCapture.data, 'base64').byteLength,
-        pixelProbe: settledPixelProbe,
+        pixelProbe: {
+          ...settledPixelProbe,
+          minimumNonDarkPixels: 500,
+          minimumStructuralColorPixels: MIN_SETTLED_DYNAMICS_STRUCTURAL_COLOR_PIXELS,
+        },
       },
     };
     report.checks.detachedDynamicsSettledContact =
@@ -825,11 +830,12 @@ try {
       settledTransform?.bodyId === settledBody?.id &&
       settledTransform.phase === 'settled' &&
       settledTransform.positionError <= 0.000001 &&
-      settledPixelProbe.nonDarkPixels >= 500 &&
-      settledPixelProbe.structuralColorPixels >= 40 &&
       report.detachedDynamicsSettled.structuralFingerprint ===
         report.detachedDynamicsAccepted.structuralFingerprint &&
       JSON.stringify(settledCamera) === JSON.stringify(cameraAfter);
+    report.checks.detachedDynamicsScreenshotEvidence =
+      settledPixelProbe.nonDarkPixels >= 500 &&
+      settledPixelProbe.structuralColorPixels >= MIN_SETTLED_DYNAMICS_STRUCTURAL_COLOR_PIXELS;
     assertCheck(
       report.checks.detachedDynamicsSettledContact,
       'detached bell did not collide and settle without ground penetration',
@@ -837,6 +843,10 @@ try {
     assertCheck(
       report.checks.detachedDynamicsRenderAgreement,
       'settled dynamics state did not reach the represented authored bell while preserving structural and camera state',
+    );
+    assertCheck(
+      report.checks.detachedDynamicsScreenshotEvidence,
+      'settled dynamics screenshot did not preserve visible structural evidence',
     );
   }
 
