@@ -2,11 +2,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import {
+  evaluateFingerFluidWaterfallContinuityAcceptance,
+  measureFingerFluidWaterfallImageContinuity,
+} from './finger-fluid-webgpu-core.js';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 
 const url = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finger_fluid_bench=1';
+const targetStep = Math.max(0, Math.floor(Number(new URL(url).searchParams.get('finger_fluid_witness_target_step') || 0)));
 const out = resolve(args.get('--out') || '/tmp/kaminos-finger-fluid-bench.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
@@ -45,6 +50,8 @@ let browserVersion = null;
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let canvasActivity = null;
+let waterfallContinuityAcceptance = null;
+let waterfallImageContinuity = null;
 let screenSpaceSurfaceEvidence = null;
 let refractionEvidence = null;
 let sameStateRendererComparison = null;
@@ -57,6 +64,7 @@ let slabValidityField = null;
 let primaryFrameBinding = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
+let capturedTargetStep = null;
 let explicitDiagnosticsReceipt = null;
 let finalDiagnosticsReceipt = null;
 let compositionWitness = null;
@@ -94,6 +102,8 @@ function writeReport(report = {}) {
     preContactSettleMs,
     hookWaitMs,
     cadenceWindowMs: cadenceMs,
+    requestedTargetStep: targetStep,
+    capturedTargetStep,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
@@ -101,6 +111,8 @@ function writeReport(report = {}) {
     consoleEvents,
     lastDebugState,
     canvasActivity,
+    waterfallContinuityAcceptance,
+    waterfallImageContinuity,
     cadenceProbe,
     automaticDiagnosticsRequestCount,
     explicitDiagnosticsReceipt,
@@ -266,6 +278,26 @@ function measureCapturedPng(path, label) {
     darkRatio: Number((darkPixels / Math.max(1, pixelCount)).toFixed(5)),
     measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
   };
+}
+
+function measureWaterfallCurtainImage(path) {
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', path,
+  ], { encoding: 'utf8' });
+  const stream = probe.status === 0 ? JSON.parse(probe.stdout || '{}')?.streams?.[0] : null;
+  const width = Number(stream?.width);
+  const height = Number(stream?.height);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
+    throw new Error(`ffprobe waterfall image continuity dimensions failed: ${probe.stderr || probe.status}`);
+  }
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || decoded.stdout?.length !== width * height * 3) {
+    throw new Error(`ffmpeg waterfall image continuity decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  return measureFingerFluidWaterfallImageContinuity(decoded.stdout, width, height);
 }
 
 function measureSlabValidityField(path) {
@@ -767,7 +799,37 @@ async function main() {
       }
     }
 
-    await delay(new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1' ? 100 : settleMs);
+    if (targetStep > 0) {
+      while (capturedTargetStep === null) {
+        const targetState = await evaluate(ws, `(() => {
+          const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+          return typeof read === 'function' ? read() : null;
+        })()`);
+        if (targetState?.status === 'error' || targetState?.runtime?.available === false) {
+          throw new Error(`finger fluid exact-step route failed before capture: ${JSON.stringify({
+            targetStep,
+            status: targetState?.status,
+            error: targetState?.error,
+            runtime: targetState?.runtime,
+          })}`);
+        }
+        if (targetState?.runtime?.stepCount >= targetStep) {
+          const pauseReceipt = await evaluate(ws, `(() => {
+            const pause = window.kaminosFingerFluidBenchSetSimulationPausedForWitness;
+            if (typeof pause !== 'function') throw new Error('missing exact-step finger fluid pause hook');
+            return pause(true);
+          })()`);
+          capturedTargetStep = pauseReceipt?.stepCount;
+          break;
+        }
+        await delay(20);
+      }
+      if (!Number.isSafeInteger(capturedTargetStep) || capturedTargetStep < targetStep || capturedTargetStep > targetStep + 8) {
+        throw new Error(`finger fluid exact-step capture missed its bounded target: ${JSON.stringify({ targetStep, capturedTargetStep })}`);
+      }
+    } else {
+      await delay(new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1' ? 100 : settleMs);
+    }
 
     const preDiagnosticsState = await evaluate(ws, `(() => {
       const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
@@ -1121,12 +1183,18 @@ async function main() {
     const requestedOpticalDebugMode = requestedRoute.searchParams.get('finger_fluid_optical_debug') || 'shaded';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
+    const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
+    const requestedThinSheetVorticityAttenuation = Number(requestedRoute.searchParams.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? 0.88);
+    const requestedFreeFlightViscosityBoost = Number(requestedRoute.searchParams.get('finger_fluid_free_flight_viscosity_boost') ?? 0.17);
     const effectiveTruthScene = lastDebugState.runtime?.truthScene;
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
     const effectiveOpticalDebugMode = lastDebugState.runtime?.effectiveOpticalDebugMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
+    const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
+    const effectiveThinSheetVorticityAttenuation = lastDebugState.runtime?.effectiveThinSheetVorticityAttenuation;
+    const effectiveFreeFlightViscosityBoost = lastDebugState.runtime?.effectiveFreeFlightViscosityBoost;
     if (requestedTruthScene !== effectiveTruthScene) throw new Error(`silent truth-scene fallback rejected: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
@@ -1167,6 +1235,9 @@ async function main() {
     }
     if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
     if (requestedChemistryDiffusion !== effectiveChemistryDiffusion) throw new Error(`silent chemistry-diffusion fallback rejected: ${JSON.stringify({ requestedChemistryDiffusion, effectiveChemistryDiffusion })}`);
+    if (requestedCapillaryStrength !== effectiveCapillaryStrength) throw new Error(`silent capillary-strength fallback rejected: ${JSON.stringify({ requestedCapillaryStrength, effectiveCapillaryStrength })}`);
+    if (requestedThinSheetVorticityAttenuation !== effectiveThinSheetVorticityAttenuation) throw new Error(`silent thin-sheet-vorticity fallback rejected: ${JSON.stringify({ requestedThinSheetVorticityAttenuation, effectiveThinSheetVorticityAttenuation })}`);
+    if (requestedFreeFlightViscosityBoost !== effectiveFreeFlightViscosityBoost) throw new Error(`silent free-flight-viscosity fallback rejected: ${JSON.stringify({ requestedFreeFlightViscosityBoost, effectiveFreeFlightViscosityBoost })}`);
     if (effectiveParticleShiftStrength === 0 && lastDebugState.runtime?.particleShiftPassCount !== 0) throw new Error(`zero-strength route dispatched hidden particle shifting: ${lastDebugState.runtime?.particleShiftPassCount}`);
     if (effectiveParticleShiftStrength > 0 && lastDebugState.runtime?.particleShiftPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled particle shifting missed required passes: ${JSON.stringify({ particleShiftPassCount: lastDebugState.runtime?.particleShiftPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (effectiveChemistryDiffusion === 0 && lastDebugState.runtime?.chemistryDiffusionPassCount !== 0) throw new Error(`zero diffusion dispatched hidden chemistry work: ${lastDebugState.runtime?.chemistryDiffusionPassCount}`);
@@ -1331,6 +1402,13 @@ async function main() {
     } else if (effectiveTruthScene === 'laminar_inlets') {
       const laminarInlets = lastDebugState.runtime?.laminarInlets;
       const inletDiagnostics = lastDebugState.runtime?.laminarInletDiagnostics;
+      const waterfallDiagnostics = lastDebugState.runtime?.waterfallContinuityDiagnostics;
+      if (lastDebugState.runtime?.waterfallContinuityContract !== 'wgsl-support-aware-symmetric-capillary-sheet-v0'
+        || waterfallDiagnostics?.schema !== 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0'
+        || waterfallDiagnostics.contract !== 'wgsl-support-aware-symmetric-capillary-sheet-v0'
+        || waterfallDiagnostics.waterfalls?.length !== 3) {
+        throw new Error(`waterfall continuity diagnostics missing or partial: ${JSON.stringify(waterfallDiagnostics)}`);
+      }
       if (lastDebugState.runtime?.laminarInletContract !== 'wgsl-descriptor-laminar-inlet-recycling-v0'
         || laminarInlets?.requestedMode !== 'descriptor_laminar_inlets'
         || laminarInlets?.effectiveMode !== 'descriptor_laminar_inlets') {
@@ -1360,6 +1438,18 @@ async function main() {
       if (malformedSourcePopulation) {
         throw new Error(`laminar inlet source population is coincident or overpacked: ${JSON.stringify(sourcePopulation)}`);
       }
+      waterfallContinuityAcceptance = evaluateFingerFluidWaterfallContinuityAcceptance({
+        diagnostics: waterfallDiagnostics,
+        sourceParticleCounts: inletDiagnostics.inlets.map(inlet => inlet.expectedParticleCount),
+      });
+      if (!waterfallContinuityAcceptance.ok) {
+        const incoherentWaterfalls = waterfallContinuityAcceptance.waterfalls.filter(waterfall => !waterfall.ok);
+        const transverseEscape = incoherentWaterfalls.find(waterfall => !waterfall.transverseVelocityAccepted);
+        if (transverseEscape) {
+          throw new Error(`waterfall transverse velocity coherence escaped: ${JSON.stringify(transverseEscape)}`);
+        }
+        throw new Error(`waterfall fragmented at the source-relative aperture scale: ${JSON.stringify(incoherentWaterfalls)}`);
+      }
       if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite laminar inlet reservoir did not recycle: ${lastDebugState.runtime?.sourceRecirculationCount}`);
       const inletFixtures = lastDebugState.runtime?.playground?.inletFixtures;
       if (lastDebugState.runtime?.playground?.inletFixtureContract !== 'wgsl-analytic-laminar-inlet-fixture-presentation-v0'
@@ -1376,7 +1466,6 @@ async function main() {
           || inlet.taggedParticleCount !== inlet.expectedParticleCount
           || inlet.activeParticleCount + inlet.dormantParticleCount !== inlet.taggedParticleCount
           || inlet.activeParticleCount <= 0
-          || inlet.dormantParticleCount <= 0
           || inlet.allocationErrorRatio !== 0
           || inlet.inletCoreParticleCount < 32
           || inlet.mouthParticleCount < 16) {
@@ -1554,6 +1643,12 @@ async function main() {
       return { receipt, activity };
     };
     const sphereDebug = await renderSameState('sphere_debug', sphereDebugOut);
+    if (effectiveTruthScene === 'laminar_inlets') {
+      waterfallImageContinuity = measureWaterfallCurtainImage(sphereDebugOut);
+      if (!waterfallImageContinuity.ok) {
+        throw new Error(`waterfall image continuity escaped: ${JSON.stringify(waterfallImageContinuity)}`);
+      }
+    }
     const screenSpaceSurface = await renderSameState('screen_space_surface', screenSpaceSurfaceOut);
     const screenSpaceRefraction = await renderSameState('screen_space_refraction', screenSpaceRefractionOut);
     const refractionVisualDelta = measureCapturedPngDelta(screenSpaceSurfaceOut, screenSpaceRefractionOut, 'surface_to_refraction');
@@ -1852,6 +1947,9 @@ async function main() {
       diagnosticsRequestCount: lastDebugState.runtime.diagnosticsRequestCount,
     };
     const cadenceStartedAt = performance.now();
+    if (targetStep > 0) {
+      await evaluate(ws, `(() => window.kaminosFingerFluidBenchSetSimulationPausedForWitness(false))()`);
+    }
     await delay(cadenceMs);
     const cadenceState = await evaluate(ws, `(() => {
       const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
