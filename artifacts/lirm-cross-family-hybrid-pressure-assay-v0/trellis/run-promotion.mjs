@@ -53,6 +53,7 @@ async function createPlan() {
     imagegenCollection: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-collection.json'), 'utf8')),
     adjudication: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-adjudication.json'), 'utf8')),
     contactSheetReceipt: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-contact-sheet-receipt.json'), 'utf8')),
+    contactSheetRoot: artifactRoot,
     durableImageRoot: resolve(artifactRoot, 'imagegen-outputs'),
     outputRoot: greenroomOutputRoot,
   });

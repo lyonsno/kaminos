@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 
 import {
   GESTALT_TRELLIS_JOB_TYPE,
@@ -110,6 +110,7 @@ export async function buildCrossFamilyHybridTrellisPromotionPlan({
   imagegenCollection,
   adjudication,
   contactSheetReceipt,
+  contactSheetRoot,
   durableImageRoot,
   outputRoot,
 }) {
@@ -133,6 +134,24 @@ export async function buildCrossFamilyHybridTrellisPromotionPlan({
   if (!contactSheetReceipt.contactSheet?.sha256
       || adjudication.contactSheet?.sha256 !== contactSheetReceipt.contactSheet.sha256) {
     throw new Error('adjudication contact sheet hash drift');
+  }
+  if (!contactSheetRoot || !contactSheetReceipt.contactSheet?.path) {
+    throw new Error('contact sheet live path is missing');
+  }
+  const resolvedContactSheetRoot = resolve(contactSheetRoot);
+  const contactSheetPath = resolve(resolvedContactSheetRoot, contactSheetReceipt.contactSheet.path);
+  const contactSheetRelativePath = relative(resolvedContactSheetRoot, contactSheetPath);
+  if (contactSheetRelativePath.startsWith('..') || isAbsolute(contactSheetRelativePath)) {
+    throw new Error('contact sheet live path escapes the artifact root');
+  }
+  let liveContactSheet;
+  try {
+    liveContactSheet = await fileEvidence(contactSheetPath);
+  } catch (error) {
+    throw new Error(`contact sheet live file is missing: ${contactSheetPath}`, { cause: error });
+  }
+  if (liveContactSheet.sha256 !== contactSheetReceipt.contactSheet.sha256) {
+    throw new Error('contact sheet live file hash drift');
   }
   const sourceReceipts = new Map((contactSheetReceipt.sources ?? []).map(item => [item.cellId, item]));
   if (sourceReceipts.size !== imagegenCollection.accepted.length) {

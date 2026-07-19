@@ -52,11 +52,12 @@ const imagegenCollection = {
   accepted,
 };
 const contactSheetSha256 = `sha256:${createHash('sha256').update('inspected-sheet').digest('hex')}`;
+await writeFile(join(root, 'inspected-sheet.png'), 'inspected-sheet');
 const contactSheetReceipt = {
   schema: 'kaminos.lirm-cross-family-hybrid-imagegen-contact-sheet-receipt.v0',
   status: 'complete-inspected',
   visualInspectionVerified: true,
-  contactSheet: { sha256: contactSheetSha256 },
+  contactSheet: { path: 'inspected-sheet.png', sha256: contactSheetSha256 },
   sources: accepted.map(item => ({
     cellId: item.cellId,
     sha256: item.durableOutput.sha256,
@@ -74,6 +75,7 @@ const trellisPlan = await buildCrossFamilyHybridTrellisPromotionPlan({
   imagegenCollection,
   adjudication,
   contactSheetReceipt,
+  contactSheetRoot: root,
   durableImageRoot,
   outputRoot: join(root, 'trellis-runtime'),
 });
@@ -115,10 +117,29 @@ await assert.rejects(
     imagegenCollection: { ...imagegenCollection, status: 'complete-uninspected' },
     adjudication,
     contactSheetReceipt,
+    contactSheetRoot: root,
     durableImageRoot,
     outputRoot: join(root, 'invalid-runtime'),
   }),
   /complete and inspected/,
+);
+await assert.rejects(
+  buildCrossFamilyHybridTrellisPromotionPlan({
+    imagegenPlan,
+    imagegenCollection,
+    adjudication: {
+      ...adjudication,
+      contactSheet: { ...adjudication.contactSheet, sha256: `sha256:${'f'.repeat(64)}` },
+    },
+    contactSheetReceipt: {
+      ...contactSheetReceipt,
+      contactSheet: { path: 'does-not-exist.png', sha256: `sha256:${'f'.repeat(64)}` },
+    },
+    contactSheetRoot: root,
+    durableImageRoot,
+    outputRoot: join(root, 'missing-live-sheet-runtime'),
+  }),
+  /contact sheet.*missing|contact sheet.*hash drift|ENOENT/,
 );
 await assert.rejects(
   buildCrossFamilyHybridTrellisPromotionPlan({
@@ -132,6 +153,7 @@ await assert.rejects(
       },
     },
     contactSheetReceipt,
+    contactSheetRoot: root,
     durableImageRoot,
     outputRoot: join(root, 'stale-adjudication-runtime'),
   }),
