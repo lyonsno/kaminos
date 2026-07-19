@@ -314,11 +314,22 @@ export function buildEffigyTileGeometrySidecar(state, options = {}) {
     topologyEpoch: Number.isInteger(state.topologyEpoch) ? state.topologyEpoch : null,
     connectivityEpoch: Number.isInteger(state.connectivityEpoch) ? state.connectivityEpoch : null,
     profile,
-    assetIdentity: `effigy-tile:${profile}:${coordinatesByAxis.x.length}x${coordinatesByAxis.y.length}x${coordinatesByAxis.z.length}`,
+    topologyProfile: state.topologyProfile || 'layered-slab-v0',
+    assetIdentity: [
+      'effigy-tile',
+      profile,
+      state.topologyProfile || 'layered-slab-v0',
+      `${coordinatesByAxis.x.length}x${coordinatesByAxis.y.length}x${coordinatesByAxis.z.length}`,
+      `n${cells.length}`,
+    ].join(':'),
     cells,
     faces,
     structuralBondLiveness,
     authoredOpeningNodePairs: (state.authoredOpeningNodePairs || []).map(pair => ({ ...pair })),
+    authoredSockets: (state.authoredSockets || []).map(socket => ({
+      ...socket,
+      nodeIds: [...socket.nodeIds],
+    })),
   };
   sidecar.validation = validateSidecar(sidecar);
   sidecar.status = sidecar.validation.status;

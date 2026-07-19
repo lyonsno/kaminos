@@ -221,6 +221,12 @@
       buildLayeredStructuralResidentSolverInteraction,
       solveLayeredStructuralCpuConstraints,
     } from './structural-material-3d-resident-solver.js';
+    import {
+      STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_CONSUMER_ROUTE,
+      STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE,
+      STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE,
+      buildSympatheticCitadelProjection,
+    } from './structural-material-3d-sympathetic-citadel.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -229,8 +235,10 @@
     const gesture = document.querySelector('#gesture');
     const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
     const EFFIGY_TILE_PROFILE = 'rib-upper-v0';
-    const showStructuralOverlay = new URL(window.location.href).searchParams.get('structuralOverlay') === '1';
-    const hapticCompanionParameter = new URL(window.location.href).searchParams.get('hapticCompanion');
+    const pageUrl = new URL(window.location.href);
+    const sympatheticCitadelMode = pageUrl.searchParams.get('sympatheticCitadel') === '1';
+    const showStructuralOverlay = pageUrl.searchParams.get('structuralOverlay') === '1';
+    const hapticCompanionParameter = pageUrl.searchParams.get('hapticCompanion');
     const nativeHapticCompanionUrl = hapticCompanionParameter === 'off'
       ? null
       : hapticCompanionParameter || DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL;
@@ -240,7 +248,11 @@
     const initialStageRect = stage.getBoundingClientRect();
     const initialAspect = initialStageRect.width / Math.max(1, initialStageRect.height);
     const camera = new THREE.PerspectiveCamera(42, initialAspect, 0.01, 100);
-    camera.position.set(0.2, 1.2, initialAspect < 0.75 ? 8.5 : 3.35);
+    camera.position.set(
+      sympatheticCitadelMode ? 0 : 0.2,
+      sympatheticCitadelMode ? 1.35 : 1.2,
+      initialAspect < 0.75 ? 8.5 : sympatheticCitadelMode ? 5.4 : 3.35,
+    );
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGPURenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -273,6 +285,21 @@
     const world = new THREE.Group();
     world.rotation.set(-0.18, -0.45, 0);
     scene.add(world);
+    const citadelWorld = new THREE.Group();
+    citadelWorld.rotation.copy(world.rotation);
+    citadelWorld.visible = sympatheticCitadelMode;
+    scene.add(citadelWorld);
+    if (sympatheticCitadelMode && initialAspect < 0.75) {
+      world.position.set(-0.52, -0.82, 0.55);
+      world.scale.setScalar(0.42);
+      citadelWorld.position.set(0.18, 0.42, -0.7);
+      citadelWorld.scale.setScalar(0.9);
+    } else if (sympatheticCitadelMode) {
+      world.position.set(-1.62, -0.52, 0.62);
+      world.scale.setScalar(0.48);
+      citadelWorld.position.set(0.62, 0.14, -0.72);
+      citadelWorld.scale.setScalar(1.16);
+    }
     scene.add(new THREE.HemisphereLight(0xe8f3ff, 0x1d2530, 2.3));
     const key = new THREE.DirectionalLight(0xffffff, 2.1);
     key.position.set(1.5, 2.2, 2.4);
@@ -298,7 +325,26 @@
     structuralRaycaster.params.Line.threshold = 0.075;
     const structuralPointerNdc = new THREE.Vector2();
 
-    let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
+    function createProductMaterial() {
+      return sympatheticCitadelMode
+        ? createLayeredStructuralMaterial({
+            columns: 13,
+            rows: 7,
+            layers: 3,
+            notch: true,
+            profile: EFFIGY_TILE_PROFILE,
+            topologyProfile: 'three-turret-citadel-v0',
+          })
+        : createLayeredStructuralMaterial({
+            columns: 9,
+            rows: 5,
+            layers: 4,
+            notch: true,
+            profile: EFFIGY_TILE_PROFILE,
+          });
+    }
+
+    let material = createProductMaterial();
     let geometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
     const geometryTransitionLedger = [];
     let materialPointerId = null;
@@ -371,11 +417,16 @@
       });
     }
 
-    function clearWorld() {
-      while (world.children.length > 0) {
-        const child = world.children.pop();
-        child.geometry?.dispose?.();
+    function clearStructuralGroup(group) {
+      while (group.children.length > 0) {
+        const child = group.children.pop();
+        if (child.geometry && child.geometry !== nodeGeometry) child.geometry.dispose?.();
       }
+    }
+
+    function clearWorld() {
+      clearStructuralGroup(world);
+      clearStructuralGroup(citadelWorld);
     }
 
     function lineBetween(a, b, lineMaterial) {
@@ -432,6 +483,121 @@
       forceContact.visible = true;
     }
 
+    function populateStructuralConsumer(
+      targetGroup,
+      contactPreviewOffsetByNodeId,
+      { consumerId, pickable, structuralOverlay },
+    ) {
+      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const bondsByNode = new Map(material.nodes.map(node => [node.id, []]));
+      for (const bond of material.bonds) {
+        bondsByNode.get(bond.a)?.push(bond);
+        bondsByNode.get(bond.b)?.push(bond);
+      }
+      const structuralMutation = material.sympatheticBinding || material.sympatheticTear;
+      const anchoredComponentId = structuralMutation
+        ? `g${structuralMutation.anchoredComponentLabel}`
+        : 'c0';
+      const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
+      targetGroup.userData.sympatheticConsumer = consumerId;
+      targetGroup.userData.topologyEpoch = material.topologyEpoch;
+      targetGroup.userData.connectivityEpoch = material.connectivityEpoch;
+      for (const face of geometrySidecar.faces) {
+        if (face.visibility === 'hidden-live-adjacency') continue;
+        const nodeStress = Math.max(
+          0,
+          ...(bondsByNode.get(face.structuralNodeId) || []).map(bond => bond.lastStress || 0),
+        );
+        const faceMaterial = face.visibility === 'fracture-surface'
+          ? tileFractureMaterial
+          : face.visibility === 'authored-opening'
+            ? tileNotchMaterial
+            : face.pinned
+              ? tileSupportMaterial
+              : face.componentId !== anchoredComponentId
+                ? tileLooseMaterial
+                : nodeStress / maxStress > 0.42
+                  ? tileStressedMaterial
+                  : tileShellMaterial;
+        const mesh = new THREE.Mesh(
+          geometryForEffigyFace(face, contactPreviewOffsetByNodeId.get(face.structuralNodeId)),
+          faceMaterial,
+        );
+        mesh.userData.sympatheticProjection = {
+          consumerId,
+          kind: 'face',
+          faceId: face.id,
+          structuralNodeId: face.structuralNodeId,
+          visibility: face.visibility,
+          governingBondId: face.governingBondId,
+        };
+        if (pickable) {
+          mesh.userData.effigySurfacePick = {
+            authority: EFFIGY_TILE_GEOMETRY_AUTHORITY,
+            faceId: face.id,
+            structuralNodeId: face.structuralNodeId,
+          };
+        }
+        targetGroup.add(mesh);
+      }
+      for (const bond of material.bonds) {
+        const nodeA = nodeById.get(bond.a);
+        const nodeB = nodeById.get(bond.b);
+        const offsetA = contactPreviewOffsetByNodeId.get(bond.a);
+        const offsetB = contactPreviewOffsetByNodeId.get(bond.b);
+        const a = worldCoordinate({
+          x: nodeA.x + nodeA.displacement.x + (offsetA?.x || 0),
+          y: nodeA.y + nodeA.displacement.y + (offsetA?.y || 0),
+          z: nodeA.z + nodeA.displacement.z + (offsetA?.z || 0),
+        });
+        const b = worldCoordinate({
+          x: nodeB.x + nodeB.displacement.x + (offsetB?.x || 0),
+          y: nodeB.y + nodeB.displacement.y + (offsetB?.y || 0),
+          z: nodeB.z + nodeB.displacement.z + (offsetB?.z || 0),
+        });
+        const stress = (bond.lastStress || 0) / maxStress;
+        const lineMaterial = bond.alive
+          ? bond.bondKind === 'depth'
+            ? depthMaterial
+            : stress > 0.58
+              ? stressedMaterial
+              : liveMaterial
+          : brokenMaterial;
+        const line = lineBetween(a, b, lineMaterial);
+        line.userData.sympatheticProjection = {
+          consumerId,
+          kind: 'bond',
+          structuralBondId: bond.id,
+          alive: bond.alive,
+        };
+        if (pickable) line.userData.structuralPick = { kind: 'bond', id: bond.id };
+        line.visible = structuralOverlay;
+        if (!bond.alive) line.computeLineDistances?.();
+        targetGroup.add(line);
+      }
+      for (const node of material.nodes) {
+        const mesh = new THREE.Mesh(
+          nodeGeometry,
+          node.pinned ? pinnedMaterial : node.componentId === anchoredComponentId ? nodeMaterial : looseMaterial,
+        );
+        const previewOffset = contactPreviewOffsetByNodeId.get(node.id);
+        mesh.position.copy(worldCoordinate({
+          x: node.x + node.displacement.x + (previewOffset?.x || 0),
+          y: node.y + node.displacement.y + (previewOffset?.y || 0),
+          z: node.z + node.displacement.z + (previewOffset?.z || 0),
+        }));
+        mesh.scale.setScalar(node.pinned ? 1.32 : 1);
+        mesh.userData.sympatheticProjection = {
+          consumerId,
+          kind: 'node',
+          structuralNodeId: node.id,
+        };
+        if (pickable) mesh.userData.structuralPick = { kind: 'node', id: node.id };
+        mesh.visible = structuralOverlay;
+        targetGroup.add(mesh);
+      }
+    }
+
     function renderMaterial() {
       clearWorld();
       bindContactPreview = forceEnvelope?.operationMode === 'bind' && materialPointerId !== null
@@ -467,86 +633,17 @@
         }
       }
       geometrySidecar = nextGeometrySidecar;
-      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
-      const bondsByNode = new Map(material.nodes.map(node => [node.id, []]));
-      for (const bond of material.bonds) {
-        bondsByNode.get(bond.a)?.push(bond);
-        bondsByNode.get(bond.b)?.push(bond);
-      }
-      const structuralMutation = material.sympatheticBinding || material.sympatheticTear;
-      const anchoredComponentId = structuralMutation
-        ? `g${structuralMutation.anchoredComponentLabel}`
-        : 'c0';
-      const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
-      for (const face of geometrySidecar.faces) {
-        if (face.visibility === 'hidden-live-adjacency') continue;
-        const nodeStress = Math.max(0, ...(bondsByNode.get(face.structuralNodeId) || []).map(bond => bond.lastStress || 0));
-        const faceMaterial = face.visibility === 'fracture-surface'
-          ? tileFractureMaterial
-          : face.visibility === 'authored-opening'
-            ? tileNotchMaterial
-            : face.pinned
-              ? tileSupportMaterial
-              : face.componentId !== anchoredComponentId
-                ? tileLooseMaterial
-                : nodeStress / maxStress > 0.42
-                  ? tileStressedMaterial
-                  : tileShellMaterial;
-        const mesh = new THREE.Mesh(
-          geometryForEffigyFace(face, contactPreviewOffsetByNodeId.get(face.structuralNodeId)),
-          faceMaterial,
-        );
-        mesh.userData.effigySurfacePick = {
-          authority: EFFIGY_TILE_GEOMETRY_AUTHORITY,
-          faceId: face.id,
-          structuralNodeId: face.structuralNodeId,
-        };
-        world.add(mesh);
-      }
-      for (const bond of material.bonds) {
-        const nodeA = nodeById.get(bond.a);
-        const nodeB = nodeById.get(bond.b);
-        const offsetA = contactPreviewOffsetByNodeId.get(bond.a);
-        const offsetB = contactPreviewOffsetByNodeId.get(bond.b);
-        const a = worldCoordinate({
-          x: nodeA.x + nodeA.displacement.x + (offsetA?.x || 0),
-          y: nodeA.y + nodeA.displacement.y + (offsetA?.y || 0),
-          z: nodeA.z + nodeA.displacement.z + (offsetA?.z || 0),
+      populateStructuralConsumer(world, contactPreviewOffsetByNodeId, {
+        consumerId: 'operator-effigy',
+        pickable: true,
+        structuralOverlay: showStructuralOverlay,
+      });
+      if (sympatheticCitadelMode) {
+        populateStructuralConsumer(citadelWorld, new Map(), {
+          consumerId: 'represented-citadel',
+          pickable: false,
+          structuralOverlay: false,
         });
-        const b = worldCoordinate({
-          x: nodeB.x + nodeB.displacement.x + (offsetB?.x || 0),
-          y: nodeB.y + nodeB.displacement.y + (offsetB?.y || 0),
-          z: nodeB.z + nodeB.displacement.z + (offsetB?.z || 0),
-        });
-        const stress = (bond.lastStress || 0) / maxStress;
-        const lineMaterial = bond.alive
-          ? bond.bondKind === 'depth'
-            ? depthMaterial
-            : stress > 0.58
-              ? stressedMaterial
-              : liveMaterial
-          : brokenMaterial;
-        const line = lineBetween(a, b, lineMaterial);
-        line.userData.structuralPick = { kind: 'bond', id: bond.id };
-        line.visible = showStructuralOverlay;
-        if (!bond.alive) line.computeLineDistances?.();
-        world.add(line);
-      }
-      for (const node of material.nodes) {
-        const mesh = new THREE.Mesh(
-          nodeGeometry,
-          node.pinned ? pinnedMaterial : node.componentId === anchoredComponentId ? nodeMaterial : looseMaterial,
-        );
-        const previewOffset = contactPreviewOffsetByNodeId.get(node.id);
-        mesh.position.copy(worldCoordinate({
-          x: node.x + node.displacement.x + (previewOffset?.x || 0),
-          y: node.y + node.displacement.y + (previewOffset?.y || 0),
-          z: node.z + node.displacement.z + (previewOffset?.z || 0),
-        }));
-        mesh.scale.setScalar(node.pinned ? 1.32 : 1);
-        mesh.userData.structuralPick = { kind: 'node', id: node.id };
-        mesh.visible = showStructuralOverlay;
-        world.add(mesh);
       }
       updateForceIndicator();
     }
@@ -584,7 +681,9 @@
       const summary = summarizeLayeredStructuralState(material);
       const interactionMode = structuralInteractionMode.snapshot().mode;
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
-      route.textContent = `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
+      route.textContent = sympatheticCitadelMode
+        ? `${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | shared accepted state`
+        : `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
       const latestGpuReceipt = latestGpuOperation?.receipt;
       const latestWarmTotal = latestGpuReceipt?.timingsMs?.warmTotal;
@@ -1572,7 +1671,7 @@
         liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
         gpuTearAcceptanceGate.clear();
-        material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
+        material = createProductMaterial();
         dragStart = null;
         latestStructuralPick = null;
         forceEnvelope = null;
@@ -1594,6 +1693,51 @@
       selectStructuralInteractionMode('bind');
     });
 
+    function renderedSympatheticConsumer(group) {
+      const projections = group.children
+        .map(child => child.userData.sympatheticProjection)
+        .filter(Boolean);
+      const faceIdentityFingerprint = projections
+        .filter(projection => projection.kind === 'face')
+        .map(projection => `${projection.faceId}:${projection.visibility}:${projection.governingBondId || 'outer'}`)
+        .sort()
+        .join('|');
+      return {
+        consumerId: group.userData.sympatheticConsumer || null,
+        topologyEpoch: group.userData.topologyEpoch ?? null,
+        connectivityEpoch: group.userData.connectivityEpoch ?? null,
+        projectionCount: projections.length,
+        visibleFaceCount: projections.filter(projection => projection.kind === 'face').length,
+        fractureFaceCount: projections.filter(
+          projection => projection.kind === 'face' && projection.visibility === 'fracture-surface',
+        ).length,
+        structuralNodeCount: projections.filter(projection => projection.kind === 'node').length,
+        structuralBondCount: projections.filter(projection => projection.kind === 'bond').length,
+        pickableObjectCount: group.children.filter(child =>
+          child.userData.effigySurfacePick || child.userData.structuralPick).length,
+        faceIdentityFingerprint,
+      };
+    }
+
+    function sympatheticCitadelWitness() {
+      if (!sympatheticCitadelMode) return null;
+      const projection = buildSympatheticCitadelProjection(material, geometrySidecar, {
+        effigyPreviewActive: bindContactPreview?.status === 'active' || shearContactPreview?.status === 'active',
+      });
+      const effigy = renderedSympatheticConsumer(world);
+      const citadel = renderedSympatheticConsumer(citadelWorld);
+      return {
+        ...projection,
+        rendered: { effigy, citadel },
+        acceptedSurfaceCorrespondence:
+          effigy.topologyEpoch === citadel.topologyEpoch &&
+          effigy.connectivityEpoch === citadel.connectivityEpoch &&
+          effigy.faceIdentityFingerprint === citadel.faceIdentityFingerprint,
+        effigyPickable: effigy.pickableObjectCount > 0,
+        citadelPickable: citadel.pickableObjectCount > 0,
+      };
+    }
+
     window.__structuralMaterial3dWitness = () => {
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
       return {
@@ -1607,6 +1751,7 @@
         route: geometrySidecar.route,
         authority: geometrySidecar.authority,
         profile: geometrySidecar.profile,
+        topologyProfile: geometrySidecar.topologyProfile,
         assetIdentity: geometrySidecar.assetIdentity,
         topologyEpoch: geometrySidecar.topologyEpoch,
         connectivityEpoch: geometrySidecar.connectivityEpoch,
@@ -1615,6 +1760,7 @@
         validation: geometrySidecar.validation,
       },
       geometryTransitionLedger: structuredClone(geometryTransitionLedger),
+      sympatheticCitadel: sympatheticCitadelWitness(),
       visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       summary: summarizeLayeredStructuralState(material),
       forceEnvelope,

@@ -109,6 +109,27 @@ function effigyProfileInfluence(midpoint, profile) {
   return Math.exp(-(dx * dx) / 0.035 - (dy * dy) / 0.055);
 }
 
+function validateTopologyProfile(topologyProfile, columns, rows, layers) {
+  if (topologyProfile === 'layered-slab-v0') return;
+  if (topologyProfile === 'three-turret-citadel-v0') {
+    if (columns !== 13 || rows !== 7 || layers !== 3) {
+      throw new Error('three-turret citadel topology requires a 13x7x3 structural lattice');
+    }
+    return;
+  }
+  throw new Error(`unknown layered structural topology profile: ${topologyProfile}`);
+}
+
+function includesTopologyNode(topologyProfile, x, y) {
+  if (topologyProfile === 'layered-slab-v0') return true;
+  const leftTurret = x >= 0 && x <= 2 && y >= 1;
+  const centerTurret = x >= 5 && x <= 7;
+  const rightTurret = x >= 10 && x <= 12 && y >= 1;
+  const leftBridge = x >= 3 && x <= 4 && y >= 2 && y <= 3;
+  const rightBridge = x >= 8 && x <= 9 && y >= 2 && y <= 3;
+  return leftTurret || centerTurret || rightTurret || leftBridge || rightBridge;
+}
+
 function computeComponents(nodes, bonds) {
   const adjacency = new Map(nodes.map(node => [node.id, []]));
   for (const bond of bonds) {
@@ -230,10 +251,13 @@ export function createLayeredStructuralMaterial(options = {}) {
   const layers = Math.max(2, Math.floor(finite(options.layers, 4)));
   const notch = options.notch !== false;
   const effigyProfile = options.profile || 'uniform-v0';
+  const topologyProfile = options.topologyProfile || 'layered-slab-v0';
+  validateTopologyProfile(topologyProfile, columns, rows, layers);
   const nodes = [];
   for (let z = 0; z < layers; z += 1) {
     for (let y = 0; y < rows; y += 1) {
       for (let x = 0; x < columns; x += 1) {
+        if (!includesTopologyNode(topologyProfile, x, y)) continue;
         nodes.push({
           id: nodeIdAt(x, y, z, columns, rows),
           x: round(x / (columns - 1)),
@@ -258,6 +282,7 @@ export function createLayeredStructuralMaterial(options = {}) {
     ) return;
     const a = byId.get(nodeIdAt(x0, y0, z0, columns, rows));
     const b = byId.get(nodeIdAt(x1, y1, z1, columns, rows));
+    if (!a || !b) return;
     const key = bondKey(a.id, b.id);
     if (pairs.has(key)) return;
     pairs.add(key);
@@ -333,9 +358,19 @@ export function createLayeredStructuralMaterial(options = {}) {
     rows,
     layers,
     effigyProfile,
+    topologyProfile,
     nodes,
     bonds,
     authoredOpeningNodePairs,
+    authoredSockets: topologyProfile === 'three-turret-citadel-v0'
+      ? [{
+          id: 'center-bell-tower-v0',
+          kind: 'future-structural-extension',
+          nodeIds: nodes
+            .filter(node => node.y === 0 && node.x >= 5 / 12 && node.x <= 7 / 12)
+            .map(node => node.id),
+        }]
+      : [],
     components: [],
     appliedInteractions: [],
     sound: buildLayeredStructuralSound([], 0, 0),

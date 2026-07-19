@@ -13,6 +13,11 @@ import {
   STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_AUTHORITY,
   STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_ROUTE,
 } from './structural-material-3d-resident-solver.js';
+import {
+  STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_CONSUMER_ROUTE,
+  STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE,
+  STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE,
+} from './structural-material-3d-sympathetic-citadel.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-hot-sidecar-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
@@ -278,6 +283,8 @@ if (config.help) {
   console.log(usage());
   process.exit(0);
 }
+const sympatheticCitadelRequested =
+  new URL(config.url).searchParams.get('sympatheticCitadel') === '1';
 
 const report = {
   schema: SCHEMA,
@@ -302,6 +309,10 @@ const report = {
   shearPreviewDuringHeldGpuExecution: null,
   shearPreviewScreenshot: null,
   shearAcceptedScreenshot: null,
+  sympatheticCitadelRequested,
+  sympatheticCitadelInitial: null,
+  sympatheticCitadelHeld: null,
+  sympatheticCitadelAccepted: null,
   modeSelection: null,
   liveBinding: null,
   checks: {},
@@ -351,6 +362,26 @@ try {
   report.checks.pageRouteIdentity = pageBefore.effectiveRoute === STRUCTURAL_MATERIAL_3D_ROUTE;
   assertCheck(report.checks.bodyIdentity, 'effective body identity mismatch');
   assertCheck(report.checks.pageRouteIdentity, 'effective page route mismatch');
+  if (sympatheticCitadelRequested) {
+    report.sympatheticCitadelInitial = pageBefore.sympatheticCitadel;
+    const projection = pageBefore.sympatheticCitadel;
+    report.checks.sympatheticCitadelInitialIdentity =
+      projection?.status === 'passed' &&
+      projection.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE &&
+      projection.topologyProfile === 'three-turret-citadel-v0' &&
+      projection.consumers?.effigy?.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE &&
+      projection.consumers?.citadel?.route === STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_CONSUMER_ROUTE &&
+      projection.consumers.effigy.acceptedState.structuralFingerprint ===
+        projection.consumers.citadel.acceptedState.structuralFingerprint &&
+      projection.acceptedSurfaceCorrespondence === true &&
+      projection.effigyPickable === true &&
+      projection.citadelPickable === false &&
+      projection.bellTowerSocket?.id === 'center-bell-tower-v0';
+    assertCheck(
+      report.checks.sympatheticCitadelInitialIdentity,
+      'sympathetic citadel route exposed missing, fallback, or divergent consumer identity',
+    );
+  }
   const cameraBefore = await evaluate('window.__structuralMaterial3dCameraWitness().state');
 
   report.failurePhase = 'held-shear-preview';
@@ -403,10 +434,12 @@ try {
       latestGpuOperation: sample.latestGpuOperation,
       scheduler: sample.liveDrag?.scheduler,
       renderTiming: sample.renderTiming,
+      sympatheticCitadel: sample.sympatheticCitadel,
     });
   }
   const heldShearPreview = await evaluate('window.__structuralMaterial3dWitness()');
   report.shearPreviewDuringHeldGpuExecution = heldShearPreview.shearContactPreview;
+  report.sympatheticCitadelHeld = heldShearPreview.sympatheticCitadel;
   report.checks.shearPreviewPrecededGpuExecution =
     heldShearPreview.latestGpuOperation?.kind === 'tear' &&
     heldShearPreview.latestGpuOperation?.status === 'pending' &&
@@ -443,6 +476,25 @@ try {
     heldShearPreview.shearContactPreview?.sourceTopologyEpoch === shearPreviewBaseline.geometrySidecar?.topologyEpoch &&
     heldShearPreview.shearContactPreview?.sourceConnectivityEpoch === shearPreviewBaseline.geometrySidecar?.connectivityEpoch &&
     heldShearPreview.shearContactPreview?.structuralMutationAuthority === false;
+  if (sympatheticCitadelRequested) {
+    const baselineProjection = shearPreviewBaseline.sympatheticCitadel;
+    const heldProjection = heldShearPreview.sympatheticCitadel;
+    report.checks.sympatheticCitadelPreviewIsolation =
+      heldProjection?.consumers?.effigy?.previewActive === true &&
+      heldProjection?.consumers?.citadel?.previewActive === false &&
+      heldProjection?.consumers?.citadel?.acceptedStateOnly === true &&
+      heldProjection.acceptedState.structuralFingerprint ===
+        baselineProjection?.acceptedState?.structuralFingerprint &&
+      heldProjection.rendered?.citadel?.fractureFaceCount ===
+        baselineProjection?.rendered?.citadel?.fractureFaceCount &&
+      heldProjection.acceptedSurfaceCorrespondence === true &&
+      heldProjection.effigyPickable === true &&
+      heldProjection.citadelPickable === false;
+    assertCheck(
+      report.checks.sympatheticCitadelPreviewIsolation,
+      'held Shear preview leaked provisional motion or authority into the represented citadel',
+    );
+  }
   assertCheck(report.checks.shearPreviewPrecededGpuExecution, 'held GPU tear did not expose immediate Shear compliance');
   assertCheck(report.checks.shearPreviewAdvancedWhileGpuHeld, 'Shear preview did not advance while GPU tear was held');
   assertCheck(report.checks.shearPreviewRenderWithinFrameBudget, 'Shear preview missed one 60 Hz frame');
@@ -557,6 +609,7 @@ try {
   );
   const livePage = await evaluate('window.__structuralMaterial3dWitness()');
   report.liveTearAcceptance = livePage.gpuTearAcceptance;
+  report.sympatheticCitadelAccepted = livePage.sympatheticCitadel;
   const shearAcceptedCapture = await send('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: false,
@@ -610,6 +663,24 @@ try {
     !component.pinned && component.maxDisplacement > 0.000001) &&
     livePage.visibleTear.components.filter(component => component.pinned)
       .every(component => component.maxPinnedDisplacement < 0.000001);
+  if (sympatheticCitadelRequested) {
+    const projection = livePage.sympatheticCitadel;
+    report.checks.sympatheticCitadelAcceptedCorrespondence =
+      projection?.status === 'passed' &&
+      projection.acceptedSurfaceCorrespondence === true &&
+      projection.rendered?.effigy?.fractureFaceCount > 0 &&
+      projection.rendered.effigy.fractureFaceCount === projection.rendered.citadel.fractureFaceCount &&
+      projection.rendered.effigy.topologyEpoch === projection.acceptedState.topologyEpoch &&
+      projection.rendered.citadel.topologyEpoch === projection.acceptedState.topologyEpoch &&
+      projection.rendered.effigy.connectivityEpoch === projection.acceptedState.connectivityEpoch &&
+      projection.rendered.citadel.connectivityEpoch === projection.acceptedState.connectivityEpoch &&
+      projection.consumers.effigy.acceptedState.structuralFingerprint ===
+        projection.consumers.citadel.acceptedState.structuralFingerprint;
+    assertCheck(
+      report.checks.sympatheticCitadelAcceptedCorrespondence,
+      'accepted fracture did not produce one matching effigy/citadel structural projection',
+    );
+  }
 
   report.failurePhase = 'bind-mode-selection';
   const bindSelectionBefore = await evaluate(`(() => {
