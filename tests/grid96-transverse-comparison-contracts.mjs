@@ -26,6 +26,8 @@ assert.match(source, /imageLedger/, 'assembler binds every displayed image');
 assert.match(source, /artifactLedger/, 'assembler binds the page, cohort, and displayed images');
 assert.match(source, /lastTrustworthyEvidence/, 'assembler preserves evidence on pre-output failure');
 assert.match(source, /--verify-bundle/, 'assembler exposes reusable final-bundle verification');
+assert.match(source, /structureRanking/, 'assembler distinguishes structure ranking from MAE ranking');
+assert.match(source, /targetWispUnderfit/, 'structure ranking is grounded in held wisp underfit');
 
 const root = await mkdtemp(join(tmpdir(), 'grid96-transverse-comparison-'));
 const invoke = async cohort => {
