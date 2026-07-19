@@ -2,6 +2,10 @@
 import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  SAME_STATE_TEACHER_CONTRACT,
+  validateSameStateTeacherWitnessIdentity,
+} from './same-state-teacher-contract.mjs';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-forced-response-greenroom.v0';
 const CONFIG_SCHEMA = 'kaminos.volume.boundary-splat-forced-response-greenroom-config.v0';
@@ -18,6 +22,7 @@ const startedAt = new Date().toISOString();
 let server = null;
 let failurePhase = 'startup';
 let requestedRoute = null;
+let requestedAssay = 'analytical-response';
 const lastTrustworthyEvidence = {};
 
 mkdirSync(outDir, { recursive: true });
@@ -27,11 +32,14 @@ try {
   if (!configPath || !existsSync(configPath)) throw new Error(`missing Greenroom config: ${configPath}`);
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   validateConfig(config);
+  requestedAssay = config.assay || 'analytical-response';
   lastTrustworthyEvidence.config = {
     path: configPath,
     schema: config.schema,
-    renderer: config.renderer,
-    costLadderInstances: config.costLadderInstances,
+    assay: config.assay || 'analytical-response',
+    renderer: config.renderer || null,
+    costLadderInstances: config.costLadderInstances || null,
+    horizons: config.horizons || null,
   };
 
   requestedRoute = buildRoute(config.route);
@@ -57,20 +65,41 @@ try {
     origin: `http://127.0.0.1:${serverPort}`,
   };
 
-  failurePhase = 'forced-response-witness';
-  const witnessArgs = [
-    resolve(repoRoot, 'volume-boundary-splat-motion-witness.mjs'),
-    '--forced-response-assay',
-    '--forced-response-renderer', config.renderer,
-    '--headless',
-    '--url', requestedRoute,
-    '--out-dir', resolve(outDir, 'captures'),
-    '--report', witnessReportPath,
-    '--chrome-port', String(chromePort),
-    '--settle-ms', String(config.settleMs),
-    '--window-size', config.windowSize,
-    '--user-data-dir', resolve(outDir, 'chrome-profile'),
-  ];
+  if (config.assay === 'same-state-teacher') {
+    failurePhase = 'same-state-teacher-contracts';
+    const contracts = await runChild(process.execPath, [resolve(repoRoot, 'tests/volume-same-state-teacher-contracts.mjs')], {
+      cwd: repoRoot,
+      stdoutPath: resolve(outDir, 'contracts.stdout.log'),
+      stderrPath: resolve(outDir, 'contracts.stderr.log'),
+    });
+    lastTrustworthyEvidence.contracts = contracts;
+    if (contracts.code !== 0) throw new Error(`same-state teacher contracts exited ${contracts.code}`);
+  }
+
+  failurePhase = config.assay === 'same-state-teacher' ? 'same-state-teacher-witness' : 'forced-response-witness';
+  const witnessArgs = config.assay === 'same-state-teacher'
+    ? [
+      resolve(repoRoot, 'volume-same-state-teacher-witness.mjs'),
+      '--config', configPath,
+      '--url', requestedRoute,
+      '--out-dir', resolve(outDir, 'captures'),
+      '--report', witnessReportPath,
+      '--chrome-port', String(chromePort),
+      '--user-data-dir', resolve(outDir, 'chrome-profile'),
+    ]
+    : [
+      resolve(repoRoot, 'volume-boundary-splat-motion-witness.mjs'),
+      '--forced-response-assay',
+      '--forced-response-renderer', config.renderer,
+      '--headless',
+      '--url', requestedRoute,
+      '--out-dir', resolve(outDir, 'captures'),
+      '--report', witnessReportPath,
+      '--chrome-port', String(chromePort),
+      '--settle-ms', String(config.settleMs),
+      '--window-size', config.windowSize,
+      '--user-data-dir', resolve(outDir, 'chrome-profile'),
+    ];
   const witness = await runChild(process.execPath, witnessArgs, {
     cwd: repoRoot,
     stdoutPath: resolve(outDir, 'witness.stdout.log'),
@@ -82,20 +111,34 @@ try {
   if (witnessReport) {
     lastTrustworthyEvidence.witness = compactWitnessEvidence(witnessReport);
   }
-  if (witness.code !== 0) throw new Error(`forced-response witness exited ${witness.code}`);
+  if (witness.code !== 0) throw new Error(`${config.assay === 'same-state-teacher' ? 'same-state teacher' : 'forced-response'} witness exited ${witness.code}`);
   if (witnessReport?.status !== 'completed') {
     throw new Error(`forced-response witness did not complete: ${witnessReport?.status || 'missing-report'}`);
   }
 
   failurePhase = 'evidence-validation';
-  if (witnessReport.browser?.headless !== true || witnessReport.browser?.unsafeWebGpuEnabled !== true) {
-    throw new Error('timestamp-capable headless WebGPU route was not effective');
-  }
-  if (witnessReport.effectiveRoute !== 'boundary-splat-analytical-age-height-forcing-warp-v0') {
-    throw new Error(`effective response route disagreement: ${witnessReport.effectiveRoute}`);
-  }
-  if (witnessReport.timing?.rows?.map(row => row.instanceCount).join(',') !== '1,16,100') {
-    throw new Error('complete response ladder is missing 1/16/100 rows');
+  if (config.assay === 'same-state-teacher') {
+    if (!String(witnessReport.backend || '').startsWith('WebGPU:')) throw new Error(`same-state teacher backend disagreement: ${witnessReport.backend}`);
+    if (witnessReport.effectiveRoute !== 'exact-same-state-forced-response-teacher-sequence-v0') {
+      throw new Error(`effective teacher route disagreement: ${witnessReport.effectiveRoute}`);
+    }
+    const selectedRow = validateSameStateTeacherWitnessIdentity(witnessReport);
+    if (selectedRow.residual.residualName !== SAME_STATE_TEACHER_CONTRACT.residualName) {
+      throw new Error('validated teacher residual identity disagreement');
+    }
+    if (witnessReport.modelIdentity !== null || witnessReport.splineAdmitted !== false || witnessReport.latticeAdmitted !== false) {
+      throw new Error('teacher assay admitted a forbidden model representation');
+    }
+  } else {
+    if (witnessReport.browser?.headless !== true || witnessReport.browser?.unsafeWebGpuEnabled !== true) {
+      throw new Error('timestamp-capable headless WebGPU route was not effective');
+    }
+    if (witnessReport.effectiveRoute !== 'boundary-splat-analytical-age-height-forcing-warp-v0') {
+      throw new Error(`effective response route disagreement: ${witnessReport.effectiveRoute}`);
+    }
+    if (witnessReport.timing?.rows?.map(row => row.instanceCount).join(',') !== '1,16,100') {
+      throw new Error('complete response ladder is missing 1/16/100 rows');
+    }
   }
 
   const report = buildReport({
@@ -140,10 +183,11 @@ function buildReport({ status, effectiveRoute, witnessReport, error = null }) {
     requestedBackend: {
       browser: 'chrome-headless-new',
       unsafeWebGpuEnabled: true,
-      timingAuthority: 'gpu-timestamp-query',
+      timingAuthority: requestedAssay === 'same-state-teacher' ? 'not-requested-teacher-calibration' : 'gpu-timestamp-query',
     },
     effectiveBackend: witnessReport ? {
       browser: witnessReport.browser || null,
+      backend: witnessReport.backend || null,
       renderer: witnessReport.forcedResponseRendererIdentity || witnessReport.rendererIdentity || null,
       timingAuthority: witnessReport.timing?.authority
         || witnessReport.lastTrustworthyEvidence?.forcedResponseAssay?.timingAuthority
@@ -165,10 +209,20 @@ function compactWitnessEvidence(report) {
     visualDeltas: report.visualDeltas || report.lastTrustworthyEvidence?.forcedResponseAssay?.visualDeltas || null,
     inspectedArtifacts: report.inspectedArtifacts || report.lastTrustworthyEvidence?.forcedResponseAssay?.inspectedArtifacts || [],
     stopCeilingExceeded: report.stopCeilingExceeded ?? report.lastTrustworthyEvidence?.forcedResponseAssay?.stopCeilingExceeded ?? null,
+    shortestVisibleResidual: report.shortestVisibleResidual || null,
+    selectedArtifacts: report.selectedArtifacts || null,
+    initialField: report.initialField || report.lastTrustworthyEvidence?.initialField || null,
+    lastCompletedHorizon: report.lastTrustworthyEvidence?.lastCompletedHorizon || null,
   };
 }
 
 function validateConfig(config) {
+  if (config?.assay === 'same-state-teacher') {
+    if (config.schema !== 'kaminos.volume.same-state-forced-teacher-config.v0') throw new Error(`teacher config schema disagreement: ${config?.schema}`);
+    if (!Array.isArray(config.horizons) || config.horizons.length < 1) throw new Error('teacher horizon ladder is missing');
+    if (!config.route || typeof config.route !== 'object') throw new Error('teacher route controls are missing');
+    return;
+  }
   if (config?.schema !== CONFIG_SCHEMA) throw new Error(`config schema disagreement: ${config?.schema}`);
   if (!['analytic', 'learned'].includes(config.renderer)) throw new Error(`unsupported renderer: ${config.renderer}`);
   if (config.costLadderInstances?.join(',') !== '1,16,100') throw new Error('cost ladder must be exactly 1,16,100');

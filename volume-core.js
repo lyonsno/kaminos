@@ -73,6 +73,8 @@ const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-con
 const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
 const CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
 const EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
+const FORCED_TEACHER_INITIALIZATION_AUTHORITY = 'exact-same-state-forced-response-teacher-fork-v0';
+const FORCED_TEACHER_APPLICATION_IDENTITY = 'frame-current-emitter-wind-teacher-sequence-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -14404,8 +14406,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY;
     const isLiveReplay = payload.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY
       && payload.filterIdentity === EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY;
+    const isForcedTeacher = payload.initializationAuthority === FORCED_TEACHER_INITIALIZATION_AUTHORITY
+      && payload.filterIdentity === FORCED_TEACHER_APPLICATION_IDENTITY;
     if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld
-      && !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective && !isLiveReplay) {
+      && !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective
+      && !isLiveReplay && !isForcedTeacher) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -14705,6 +14710,148 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.fullFieldImportReceipt = { ...receipt, importedAdvance };
     return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, sessionId: receipt.sessionId, ...importedAdvance };
+  }
+
+  function advanceDebugForcedTeacherSequence(payload = {}) {
+    const receipt = state.fullFieldImportReceipt;
+    const reject = (reason, extra = {}) => ({
+      ok: false,
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'forced-response-teacher-sequence-rejected-v0',
+      status: 'rejected',
+      failurePhase: 'forced-teacher-advance',
+      reason,
+      sessionId: receipt?.sessionId || null,
+      priorAppliedReceipt: receipt || null,
+      ...extra,
+    });
+    if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
+      return reject('session-id-mismatch', { requestedSessionId: payload.sessionId || null });
+    }
+    if (receipt.initializationAuthority !== FORCED_TEACHER_INITIALIZATION_AUTHORITY
+      || receipt.filterIdentity !== FORCED_TEACHER_APPLICATION_IDENTITY) {
+      return reject('teacher-import-authority-required', {
+        requestedInitializationAuthority: receipt.initializationAuthority,
+        requiredInitializationAuthority: FORCED_TEACHER_INITIALIZATION_AUTHORITY,
+      });
+    }
+    if (receipt.importedAdvance || receipt.forcedTeacherSequence) return reject('already-advanced');
+    const arm = String(payload.arm || '');
+    if (arm !== 'stationary-source-control' && arm !== 'moving-source-wind-teacher') {
+      return reject('unsupported-teacher-arm', { requestedArm: arm });
+    }
+    const frames = Array.isArray(payload.frames) ? payload.frames : [];
+    if (frames.length === 0) return reject('missing-teacher-frames');
+    const timeStepMs = Number(payload.timeStepMs);
+    const startTimeMs = Number(payload.startTimeMs);
+    if (!Number.isFinite(timeStepMs) || timeStepMs <= 0 || !Number.isFinite(startTimeMs)) {
+      return reject('invalid-teacher-clock', { timeStepMs, startTimeMs });
+    }
+    const finiteTriplet = value => Array.isArray(value)
+      && value.length === 3
+      && value.every(component => Number.isFinite(Number(component)));
+    if (!finiteTriplet(payload.rigidDisplacement)) return reject('missing-rigid-displacement-subtraction');
+    const emitterCenter = frame => {
+      const emitter = frame?.externalEmitters?.emitters?.[0];
+      if (!emitter || !finiteTriplet(emitter.start) || !finiteTriplet(emitter.end)) return null;
+      return emitter.start.map((component, axis) => (Number(component) + Number(emitter.end[axis])) * 0.5);
+    };
+    const firstCenter = emitterCenter(frames[0]);
+    const lastCenter = emitterCenter(frames[frames.length - 1]);
+    if (!firstCenter || !lastCenter) return reject('missing-teacher-source-path');
+    const measuredRigidDisplacement = lastCenter.map((component, axis) => component - firstCenter[axis]);
+    const requestedRigidDisplacement = payload.rigidDisplacement.map(Number);
+    if (measuredRigidDisplacement.some((component, axis) => Math.abs(component - requestedRigidDisplacement[axis]) > 1e-6)) {
+      return reject('rigid-displacement-mismatch', { requestedRigidDisplacement, measuredRigidDisplacement });
+    }
+    const initialField = {
+      identity: 'same-state-teacher-initial-field-v0',
+      grid: receipt.grid,
+      simStepCount: receipt.receiverInitialSimStepCount,
+      fluidSha256: receipt.fluidSha256,
+      frontSha256: receipt.frontSha256,
+    };
+    const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
+    const preparedFrames = [];
+    for (let index = 0; index < frames.length; index += 1) {
+      const frame = frames[index] || {};
+      const expectedFrameId = before.simStepCount + index;
+      const expectedTimestampMs = startTimeMs + index * timeStepMs;
+      const externalEmitters = frame.externalEmitters || {};
+      if (Number(frame.frameId) !== expectedFrameId
+        || Number(externalEmitters.frameId) !== expectedFrameId
+        || Math.abs(Number(externalEmitters.timestampMs) - expectedTimestampMs) > 1e-6) {
+        return reject('stale-emitter-frame', {
+          frameIndex: index,
+          expectedFrameId,
+          requestedFrameId: frame.frameId ?? null,
+          requestedEmitterFrameId: externalEmitters.frameId ?? null,
+          expectedTimestampMs,
+          requestedTimestampMs: externalEmitters.timestampMs ?? null,
+        });
+      }
+      const controls = frame.controls || {};
+      const effectiveControls = {
+        flowRate: Math.max(0, Math.min(2.5, Number(controls.flowRate) || 0)),
+        windStrength: normalizeWindStrength(controls.windStrength),
+        windAngle: normalizeWindAngle(controls.windAngle),
+        windHeight: normalizeWindHeight(controls.windHeight),
+        canonicalBuoyancy: Math.max(0, Math.min(1.5, Number(controls.canonicalBuoyancy) || 0)),
+      };
+      const normalizedEmitters = normalizeExternalEmitters(externalEmitters, expectedTimestampMs);
+      if (normalizedEmitters.count < 1) return reject('blank-emitter-frame', { frameIndex: index });
+      preparedFrames.push({ frame, expectedFrameId, expectedTimestampMs, effectiveControls, normalizedEmitters });
+    }
+    const effectiveFrames = [];
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    for (let index = 0; index < preparedFrames.length; index += 1) {
+      const { frame, expectedFrameId, expectedTimestampMs, effectiveControls, normalizedEmitters } = preparedFrames[index];
+      controlsSnapshot = { ...controlsSnapshot, ...effectiveControls };
+      state.windStrength = effectiveControls.windStrength;
+      state.windAngle = effectiveControls.windAngle;
+      state.windHeight = effectiveControls.windHeight;
+      externalEmitterState = normalizedEmitters;
+      updateExternalEmitterDebug(expectedTimestampMs);
+      writeExternalEmitterBuffer();
+      updateUniforms(expectedTimestampMs);
+      const encoder = device.createCommandEncoder({ label: `kaminos forced teacher ${arm} step ${index + 1}/${frames.length}` });
+      encodeSim(encoder);
+      if (index === frames.length - 1) encodeMajorant(encoder, { force: true });
+      device.queue.submit([encoder.finish()]);
+      state.frameCount += 1;
+      effectiveFrames.push({
+        frameId: expectedFrameId,
+        timestampMs: expectedTimestampMs,
+        emitterCount: externalEmitterState.count,
+        emitterCenter: emitterCenter(frame),
+        controls: effectiveControls,
+      });
+    }
+    const forcedTeacherSequence = {
+      identity: 'exact-same-state-forced-response-teacher-sequence-v0',
+      authority: FORCED_TEACHER_INITIALIZATION_AUTHORITY,
+      applicationIdentity: FORCED_TEACHER_APPLICATION_IDENTITY,
+      arm,
+      initialField,
+      requestedSteps: frames.length,
+      completedSteps: state.simStepCount - before.simStepCount,
+      timeStepMs,
+      startTimeMs,
+      before,
+      after: { frameCount: state.frameCount, simStepCount: state.simStepCount },
+      requestedRigidDisplacement,
+      measuredRigidDisplacement,
+      rigidDisplacementSubtraction: 'required-before-teacher-residual-v0',
+      effectiveFrames,
+      renderLoopPaused: true,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+    state.fullFieldImportReceipt = { ...receipt, forcedTeacherSequence };
+    return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, sessionId: receipt.sessionId, ...forcedTeacherSequence };
   }
 
   function resumeDebugImportedFieldLive(payload = {}) {
@@ -20304,6 +20451,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
     advanceDebugImportedFieldSteps,
+    advanceDebugForcedTeacherSequence,
     resumeDebugImportedFieldLive,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,

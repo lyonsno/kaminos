@@ -38,7 +38,8 @@ assert.match(fullGridFieldExport, /native-low-simulator-state-no-synthetic-downs
 assert.match(fullGridFieldExport, /native-low-selective-composition-held-only/, 'native-low learned fields cannot silently advance as initialized truth');
 assert.match(core, /NATIVE_LOW_HELD_INITIALIZATION_AUTHORITY\s*=\s*'native-low-simulator-held-control-v0'/, 'browser importer names native-low control authority');
 assert.match(core, /NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY\s*=\s*'frozen-exact-basin-heads-applied-to-native-low-state-v0'/, 'browser importer names native-low learned treatment authority');
-assert.match(core, /isNativeLowHeld[\s\S]*isNativeLowSelective[\s\S]*isNativeLowCrossGridSelective[\s\S]*!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld[\s\S]*&& !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective && !isLiveReplay/, 'browser importer explicitly admits native-low held, selective, cross-grid, and checksum replay authorities without broad fallback');
+assert.match(core, /FORCED_TEACHER_INITIALIZATION_AUTHORITY\s*=\s*'exact-same-state-forced-response-teacher-fork-v0'/, 'browser importer names exact same-state teacher authority');
+assert.match(core, /isNativeLowHeld[\s\S]*isNativeLowSelective[\s\S]*isNativeLowCrossGridSelective[\s\S]*isLiveReplay[\s\S]*isForcedTeacher[\s\S]*!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld[\s\S]*&& !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective[\s\S]*&& !isLiveReplay && !isForcedTeacher/, 'browser importer explicitly admits native-low held, selective, cross-grid, checksum replay, and exact forced-teacher authorities without broad fallback');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');

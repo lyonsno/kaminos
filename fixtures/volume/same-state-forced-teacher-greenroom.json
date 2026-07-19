@@ -1,0 +1,57 @@
+{
+  "schema": "kaminos.volume.same-state-forced-teacher-config.v0",
+  "assay": "same-state-teacher",
+  "route": {
+    "kaminos_volume_smoke": 1,
+    "volume_scene": "tall_plume",
+    "volume_resolution": 64,
+    "volume_render_scale": 1,
+    "volume_boundary_splat_mode": "off",
+    "volume_canonical_content": "fire_smoke",
+    "volume_canonical_source_mode": "current",
+    "volume_canonical_injection": 1,
+    "volume_canonical_buoyancy": 1
+  },
+  "windowSize": "960,720",
+  "settleMs": 12000,
+  "initialStateSteps": 32,
+  "horizons": [1, 2, 4, 8, 16],
+  "timeStepMs": 16.666666666666668,
+  "startTimeMs": 1000,
+  "teacherStartTimeMs": 2000,
+  "renderScale": 1,
+  "chunkFloats": 65536,
+  "chunkBytes": 262144,
+  "minimumRenderLitPixelFraction": 0.005,
+  "thresholds": {
+    "minimumChangedPixelFraction": 0.01,
+    "minimumUpperPlumeLagPx": 2
+  },
+  "source": {
+    "center": [-0.24, -0.66, 0],
+    "length": 0.12,
+    "radius": 0.055,
+    "strength": 1.4,
+    "velocity": [1.2, 0.22, 0],
+    "smoke": 0.55,
+    "heat": 1.8,
+    "fuel": 1.1,
+    "flame": 1.8,
+    "detail": 1,
+    "lifetime": 0.9
+  },
+  "controlControls": {
+    "flowRate": 0,
+    "windStrength": 0,
+    "windAngle": 0,
+    "windHeight": 0.15,
+    "canonicalBuoyancy": 1
+  },
+  "teacherControls": {
+    "flowRate": 0,
+    "windStrength": 1,
+    "windAngle": 90,
+    "windHeight": 0.15,
+    "canonicalBuoyancy": 1
+  }
+}
