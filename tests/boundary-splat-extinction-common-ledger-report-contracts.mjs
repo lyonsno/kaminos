@@ -25,7 +25,12 @@ const EXPECTED = {
   coefficientAuthority: 'exact-local-layer-emission-extinction',
   implementationBundleSha256: '603398858e2c8dac638f82a43a13f45d5e8f72c88ae1d2eb0d96f761e5e0853f',
   ownershipAuthority: 'complementary-local-optical-coefficient-ownership-v0',
-  fullCandidateCount: 1_925_788,
+  fullCandidateCountByState: {
+    'coefficient-state-114': 1_924_725,
+    'coefficient-state-116': 1_926_470,
+    'coefficient-state-118': 1_927_051,
+    'coefficient-state-120': 1_925_788,
+  },
   sparseCandidateCount: 481_447,
   stateIds: ['coefficient-state-114', 'coefficient-state-116', 'coefficient-state-118', 'coefficient-state-120'],
   armIds: ['full-correct', 'sparse-drop', 'sparse-conservative', 'sparse-positive-complement'],
@@ -92,8 +97,8 @@ function validArm(armId, stateId) {
     armId,
     stateId,
     role: full ? 'reference' : 'comparison',
-    requestedCandidateCount: full ? EXPECTED.fullCandidateCount : EXPECTED.sparseCandidateCount,
-    effectiveCandidateCount: full ? EXPECTED.fullCandidateCount : EXPECTED.sparseCandidateCount,
+    requestedCandidateCount: full ? EXPECTED.fullCandidateCountByState[stateId] : EXPECTED.sparseCandidateCount,
+    effectiveCandidateCount: full ? EXPECTED.fullCandidateCountByState[stateId] : EXPECTED.sparseCandidateCount,
     membershipSha256: full
       ? EXPECTED.fullMembershipSha256ByState[stateId]
       : EXPECTED.sparseMembershipSha256ByState[stateId],
@@ -194,7 +199,7 @@ function validReport() {
     request: {
       stateIds: [...EXPECTED.stateIds],
       armIds: [...EXPECTED.armIds],
-      fullCandidateCount: EXPECTED.fullCandidateCount,
+      fullCandidateCountByState: { ...EXPECTED.fullCandidateCountByState },
       sparseCandidateCount: EXPECTED.sparseCandidateCount,
       residualGridScale: EXPECTED.residualGridScale,
       residualRaySteps: EXPECTED.residualRaySteps,
@@ -204,7 +209,7 @@ function validReport() {
     effective: {
       stateIds: [...EXPECTED.stateIds],
       armIds: [...EXPECTED.armIds],
-      fullCandidateCount: EXPECTED.fullCandidateCount,
+      fullCandidateCountByState: { ...EXPECTED.fullCandidateCountByState },
       sparseCandidateCount: EXPECTED.sparseCandidateCount,
       residualGridScale: EXPECTED.residualGridScale,
       residualRaySteps: EXPECTED.residualRaySteps,
@@ -256,6 +261,18 @@ expectRejected('radiance retune', report => { report.source.radianceRetuned = tr
 expectRejected('camera redefinition', report => { report.source.cameraRedefined = true; }, 'camera-redefined');
 expectRejected('stale effective states', report => { report.effective.stateIds.pop(); }, 'effective-state-set-mismatch');
 expectRejected('stale effective arms', report => { report.effective.armIds.pop(); }, 'effective-arm-set-mismatch');
+expectRejected('stale requested full population', report => {
+  report.request.fullCandidateCountByState['coefficient-state-114'] -= 1;
+}, 'requested-full-count-map-mismatch');
+expectRejected('stale effective full population', report => {
+  report.effective.fullCandidateCountByState['coefficient-state-116'] -= 1;
+}, 'requested-effective-full-count-map-mismatch');
+expectRejected('requested scalar full population alias', report => {
+  report.request.fullCandidateCount = EXPECTED.fullCandidateCountByState['coefficient-state-120'];
+}, 'requested-scalar-full-count-alias');
+expectRejected('effective scalar full population alias', report => {
+  report.effective.fullCandidateCount = EXPECTED.fullCandidateCountByState['coefficient-state-120'];
+}, 'effective-scalar-full-count-alias');
 expectRejected('stale effective sparse budget', report => { report.effective.sparseCandidateCount -= 1; }, 'requested-effective-sparse-count-mismatch');
 expectRejected('hidden resolution substitution', report => { report.effective.width = 450; }, 'requested-effective-resolution-mismatch');
 expectRejected('hidden residual grid substitution', report => { report.effective.residualGridScale = 0.2; }, 'requested-effective-grid-scale-mismatch');
