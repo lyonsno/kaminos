@@ -160,7 +160,8 @@ for contract in (
     "sha256:test-attribution",
 ):
     assert contract in page
-assert "grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr)" in page
+assert "dl{display:block}" in page
+assert "word-break:break-all" in page
 assert "$('axis').value='y'" in page
 assert "$('mode').value='integral'" in page
 assert "bandwidths.includes(1)" in page
