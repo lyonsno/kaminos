@@ -1,0 +1,52 @@
+{
+  "schema": "kaminos.lirm-crawler-basin-comparison-witness-inputs.v0",
+  "sourceKey": "depthWitness",
+  "width": 1272,
+  "height": 1752,
+  "cells": [
+    {
+      "donorId": "basin-03-preserve",
+      "outcome": "recovered",
+      "column": 0,
+      "row": 0,
+      "bandColor": [
+        194,
+        140,
+        61
+      ]
+    },
+    {
+      "donorId": "basin-10-lineage",
+      "outcome": "recovered",
+      "column": 1,
+      "row": 0,
+      "bandColor": [
+        74,
+        148,
+        126
+      ]
+    },
+    {
+      "donorId": "basin-15-lineage",
+      "outcome": "recovered",
+      "column": 0,
+      "row": 1,
+      "bandColor": [
+        112,
+        104,
+        174
+      ]
+    },
+    {
+      "donorId": "basin-22-lineage-control",
+      "outcome": "recovered",
+      "column": 1,
+      "row": 1,
+      "bandColor": [
+        183,
+        81,
+        92
+      ]
+    }
+  ]
+}

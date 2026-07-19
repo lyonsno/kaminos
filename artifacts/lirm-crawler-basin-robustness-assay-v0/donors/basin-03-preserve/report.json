@@ -1,0 +1,1035 @@
+{
+  "schema": "kaminos.lirm-reference-fitted-armature-assay.v0",
+  "status": "assay-passed-uninspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "effectiveRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "requestedCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "effectiveCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "requestedFitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "requestedHeldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "fitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "heldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "timing": {
+    "startedAt": "2026-07-18T23:47:09.987Z",
+    "finishedAt": "2026-07-18T23:47:19.634Z",
+    "durationSeconds": 9.647
+  },
+  "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
+  "outputInventory": {
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-crawler-basin-robustness-assay-v0/donors/basin-03-preserve/silhouette-residual-witness.png",
+      "bytes": 13691,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-overlay",
+        "initial-overlay"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-crawler-basin-robustness-assay-v0/donors/basin-03-preserve/depth-residual-witness.png",
+      "bytes": 24550,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-depth-error",
+        "initial-depth-error"
+      ]
+    },
+    "donorEvidence": [
+      {
+        "cameraId": "az000",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az045",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az090",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az135",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az180",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az225",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az270",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az315",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      }
+    ]
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046.glb",
+    "bytes": 9723692,
+    "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8",
+    "triangleCount": 156193,
+    "sourceBounds": {
+      "min": {
+        "x": -0.2659655809402466,
+        "y": -0.2995108664035797,
+        "z": -0.49083518981933594
+      },
+      "max": {
+        "x": 0.2664795517921448,
+        "y": 0.2980329692363739,
+        "z": 0.5004081726074219
+      },
+      "center": {
+        "x": 0.0002569854259490967,
+        "y": -0.0007389485836029053,
+        "z": 0.004786491394042969
+      },
+      "diagonal": 1.2740172127710152
+    },
+    "normalization": {
+      "kind": "bbox-center-diagonal-scale",
+      "targetDiagonal": 2.15,
+      "scale": 1.6875753156613191
+    }
+  },
+  "plan": {
+    "schema": "kaminos.lirm-reference-fitted-armature-plan.v0",
+    "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+    "donor": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046.glb",
+      "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8"
+    },
+    "requestedCameraIds": [
+      "az000",
+      "az045",
+      "az090",
+      "az135",
+      "az180",
+      "az225",
+      "az270",
+      "az315"
+    ],
+    "fitViewIds": [
+      "az000",
+      "az090",
+      "az180",
+      "az270"
+    ],
+    "heldOutViewIds": [
+      "az045",
+      "az135",
+      "az225",
+      "az315"
+    ],
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "initial": 0.92,
+        "min": 0.58,
+        "max": 1.58,
+        "step": 0.18
+      },
+      {
+        "id": "bodyWidth",
+        "semanticRole": "lateralMass",
+        "initial": 0.46,
+        "min": 0.25,
+        "max": 0.92,
+        "step": 0.12
+      },
+      {
+        "id": "bodyHeight",
+        "semanticRole": "verticalMass",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "headScale",
+        "semanticRole": "headOrientation",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.18,
+        "step": 0.13
+      },
+      {
+        "id": "bellyScale",
+        "semanticRole": "bodyMass",
+        "initial": 0.72,
+        "min": 0.4,
+        "max": 1.42,
+        "step": 0.15
+      },
+      {
+        "id": "tailScale",
+        "semanticRole": "posteriorTaper",
+        "initial": 0.42,
+        "min": 0.18,
+        "max": 0.95,
+        "step": 0.12
+      },
+      {
+        "id": "dorsalLift",
+        "semanticRole": "dorsalProfile",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.36,
+        "step": 0.08
+      },
+      {
+        "id": "curveAmplitude",
+        "semanticRole": "axialCurvature",
+        "initial": 0.04,
+        "min": 0,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "limbLength",
+        "semanticRole": "contactLimb",
+        "initial": 0.28,
+        "min": 0.12,
+        "max": 0.68,
+        "step": 0.09
+      },
+      {
+        "id": "limbSpread",
+        "semanticRole": "contactFootprint",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "limbThickness",
+        "semanticRole": "contactLimb",
+        "initial": 0.09,
+        "min": 0.045,
+        "max": 0.22,
+        "step": 0.035
+      },
+      {
+        "id": "contactHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.25,
+        "min": -0.62,
+        "max": -0.08,
+        "step": 0.08
+      },
+      {
+        "id": "headLift",
+        "semanticRole": "headOrientation",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ],
+    "evidencePredicate": {
+      "allowCameraFallback": false,
+      "allowMissingOrPartialDonorEvidence": false,
+      "heldOutViewsMayInfluenceOptimization": false,
+      "requireHeldOutSilhouetteImprovementCount": 3,
+      "requireHeldOutMeanDepthImprovement": true
+    },
+    "falseClosureGuards": {
+      "productionCreatureClaim": "forbidden",
+      "meshCopyClaim": "forbidden",
+      "learnedPriorClaim": "not_trained",
+      "topologySelectionClaim": "not_assayed"
+    }
+  },
+  "initialParameters": {
+    "bodyLength": 0.92,
+    "bodyWidth": 0.46,
+    "bodyHeight": 0.36,
+    "headScale": 0.54,
+    "bellyScale": 0.72,
+    "tailScale": 0.42,
+    "dorsalLift": 0.04,
+    "curveAmplitude": 0.04,
+    "limbLength": 0.28,
+    "limbSpread": 0.54,
+    "limbThickness": 0.09,
+    "contactHeight": -0.25,
+    "headLift": 0.04
+  },
+  "fittedParameters": {
+    "bodyLength": 1.1692798400000002,
+    "bodyWidth": 0.5396320000000001,
+    "bodyHeight": 0.5711512,
+    "headScale": 0.60909656,
+    "bellyScale": 0.66954,
+    "tailScale": 0.62655456,
+    "dorsalLift": -0.066912,
+    "curveAmplitude": 0.03720584,
+    "limbLength": 0.15536008000000004,
+    "limbSpread": 0.36248880000000006,
+    "limbThickness": 0.11817108,
+    "contactHeight": -0.41892096,
+    "headLift": 0.11989016
+  },
+  "parameterSpecs": [
+    {
+      "id": "bodyLength",
+      "semanticRole": "axialExtent",
+      "initial": 0.92,
+      "min": 0.58,
+      "max": 1.58,
+      "step": 0.18
+    },
+    {
+      "id": "bodyWidth",
+      "semanticRole": "lateralMass",
+      "initial": 0.46,
+      "min": 0.25,
+      "max": 0.92,
+      "step": 0.12
+    },
+    {
+      "id": "bodyHeight",
+      "semanticRole": "verticalMass",
+      "initial": 0.36,
+      "min": 0.2,
+      "max": 0.78,
+      "step": 0.1
+    },
+    {
+      "id": "headScale",
+      "semanticRole": "headOrientation",
+      "initial": 0.54,
+      "min": 0.3,
+      "max": 1.18,
+      "step": 0.13
+    },
+    {
+      "id": "bellyScale",
+      "semanticRole": "bodyMass",
+      "initial": 0.72,
+      "min": 0.4,
+      "max": 1.42,
+      "step": 0.15
+    },
+    {
+      "id": "tailScale",
+      "semanticRole": "posteriorTaper",
+      "initial": 0.42,
+      "min": 0.18,
+      "max": 0.95,
+      "step": 0.12
+    },
+    {
+      "id": "dorsalLift",
+      "semanticRole": "dorsalProfile",
+      "initial": 0.04,
+      "min": -0.18,
+      "max": 0.36,
+      "step": 0.08
+    },
+    {
+      "id": "curveAmplitude",
+      "semanticRole": "axialCurvature",
+      "initial": 0.04,
+      "min": 0,
+      "max": 0.34,
+      "step": 0.07
+    },
+    {
+      "id": "limbLength",
+      "semanticRole": "contactLimb",
+      "initial": 0.28,
+      "min": 0.12,
+      "max": 0.68,
+      "step": 0.09
+    },
+    {
+      "id": "limbSpread",
+      "semanticRole": "contactFootprint",
+      "initial": 0.54,
+      "min": 0.3,
+      "max": 1.02,
+      "step": 0.1
+    },
+    {
+      "id": "limbThickness",
+      "semanticRole": "contactLimb",
+      "initial": 0.09,
+      "min": 0.045,
+      "max": 0.22,
+      "step": 0.035
+    },
+    {
+      "id": "contactHeight",
+      "semanticRole": "groundContact",
+      "initial": -0.25,
+      "min": -0.62,
+      "max": -0.08,
+      "step": 0.08
+    },
+    {
+      "id": "headLift",
+      "semanticRole": "headOrientation",
+      "initial": 0.04,
+      "min": -0.18,
+      "max": 0.34,
+      "step": 0.07
+    }
+  ],
+  "optimization": {
+    "kind": "deterministic-bounded-coordinate-search",
+    "passes": 4,
+    "objective": 0.22749157688891036,
+    "trace": [
+      {
+        "pass": -1,
+        "parameterId": null,
+        "direction": 0,
+        "score": 0.5195046185007705,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "bodyLength",
+        "direction": 1,
+        "value": 1.1,
+        "score": 0.4977533667217612,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "bodyWidth",
+        "direction": 1,
+        "value": 0.5800000000000001,
+        "score": 0.49231198553078404,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "bodyHeight",
+        "direction": 1,
+        "value": 0.45999999999999996,
+        "score": 0.4174157985800303,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "headScale",
+        "direction": 0,
+        "value": 0.54,
+        "score": 0.4174157985800303,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "bellyScale",
+        "direction": 0,
+        "value": 0.72,
+        "score": 0.4174157985800303,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "tailScale",
+        "direction": 1,
+        "value": 0.54,
+        "score": 0.4098020203807968,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "dorsalLift",
+        "direction": -1,
+        "value": -0.04,
+        "score": 0.39166458704435203,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "curveAmplitude",
+        "direction": -1,
+        "value": 0,
+        "score": 0.38972078045841196,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "limbLength",
+        "direction": -1,
+        "value": 0.19000000000000003,
+        "score": 0.37806522712547114,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "limbSpread",
+        "direction": -1,
+        "value": 0.44000000000000006,
+        "score": 0.3666066447108845,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "limbThickness",
+        "direction": 1,
+        "value": 0.125,
+        "score": 0.3655861185198631,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactHeight",
+        "direction": -1,
+        "value": -0.33,
+        "score": 0.3387869827643727,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "headLift",
+        "direction": 1,
+        "value": 0.11000000000000001,
+        "score": 0.33109861564158377,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "bodyLength",
+        "direction": 1,
+        "value": 1.2044000000000001,
+        "score": 0.32711708789730537,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "bodyWidth",
+        "direction": 0,
+        "value": 0.5800000000000001,
+        "score": 0.32711708789730537,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "bodyHeight",
+        "direction": 1,
+        "value": 0.518,
+        "score": 0.29181963518048687,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "headScale",
+        "direction": 0,
+        "value": 0.54,
+        "score": 0.29181963518048687,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "bellyScale",
+        "direction": 0,
+        "value": 0.72,
+        "score": 0.29181963518048687,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "tailScale",
+        "direction": 1,
+        "value": 0.6096,
+        "score": 0.28895670329056755,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "dorsalLift",
+        "direction": 0,
+        "value": -0.04,
+        "score": 0.28895670329056755,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "curveAmplitude",
+        "direction": 0,
+        "value": 0,
+        "score": 0.28895670329056755,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "limbLength",
+        "direction": -1,
+        "value": 0.13780000000000003,
+        "score": 0.28359079705761386,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "limbSpread",
+        "direction": -1,
+        "value": 0.38200000000000006,
+        "score": 0.2683091309061459,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "limbThickness",
+        "direction": 0,
+        "value": 0.125,
+        "score": 0.2683091309061459,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactHeight",
+        "direction": -1,
+        "value": -0.3764,
+        "score": 0.2632395760344826,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "headLift",
+        "direction": 0,
+        "value": 0.11000000000000001,
+        "score": 0.2632395760344826,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "bodyLength",
+        "direction": 0,
+        "value": 1.2044000000000001,
+        "score": 0.2632395760344826,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "bodyWidth",
+        "direction": -1,
+        "value": 0.5396320000000001,
+        "score": 0.2568417187773842,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "bodyHeight",
+        "direction": 1,
+        "value": 0.55164,
+        "score": 0.25427177403850226,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "headScale",
+        "direction": 1,
+        "value": 0.583732,
+        "score": 0.2538020196016346,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "bellyScale",
+        "direction": -1,
+        "value": 0.66954,
+        "score": 0.2523989986134853,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "tailScale",
+        "direction": 1,
+        "value": 0.649968,
+        "score": 0.25079916525423057,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "dorsalLift",
+        "direction": -1,
+        "value": -0.066912,
+        "score": 0.2477759515768566,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "curveAmplitude",
+        "direction": 1,
+        "value": 0.023548,
+        "score": 0.2463927066129531,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "limbLength",
+        "direction": 0,
+        "value": 0.13780000000000003,
+        "score": 0.2463927066129531,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "limbSpread",
+        "direction": 0,
+        "value": 0.38200000000000006,
+        "score": 0.2463927066129531,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "limbThickness",
+        "direction": 0,
+        "value": 0.125,
+        "score": 0.2463927066129531,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactHeight",
+        "direction": -1,
+        "value": -0.403312,
+        "score": 0.24634076742929556,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "headLift",
+        "direction": 1,
+        "value": 0.133548,
+        "score": 0.24287680633117467,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "bodyLength",
+        "direction": -1,
+        "value": 1.1692798400000002,
+        "score": 0.24287223672116567,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "bodyWidth",
+        "direction": 0,
+        "value": 0.5396320000000001,
+        "score": 0.24287223672116567,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "bodyHeight",
+        "direction": 1,
+        "value": 0.5711512,
+        "score": 0.24006149265063584,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "headScale",
+        "direction": 1,
+        "value": 0.60909656,
+        "score": 0.23766237434755266,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "bellyScale",
+        "direction": 0,
+        "value": 0.66954,
+        "score": 0.23766237434755266,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "tailScale",
+        "direction": -1,
+        "value": 0.62655456,
+        "score": 0.2360073752374226,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "dorsalLift",
+        "direction": 0,
+        "value": -0.066912,
+        "score": 0.2360073752374226,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "curveAmplitude",
+        "direction": 1,
+        "value": 0.03720584,
+        "score": 0.23429315441651957,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "limbLength",
+        "direction": 1,
+        "value": 0.15536008000000004,
+        "score": 0.2327504218216075,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "limbSpread",
+        "direction": -1,
+        "value": 0.36248880000000006,
+        "score": 0.22935376595867862,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "limbThickness",
+        "direction": -1,
+        "value": 0.11817108,
+        "score": 0.22847251716490127,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactHeight",
+        "direction": -1,
+        "value": -0.41892096,
+        "score": 0.22842089968017593,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "headLift",
+        "direction": -1,
+        "value": 0.11989016,
+        "score": 0.22749157688891036,
+        "accepted": true
+      }
+    ]
+  },
+  "metrics": {
+    "initial": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.5460526315789473,
+            "depthMae": 0.041557942646283,
+            "occupancyError": 0.2196969696969697,
+            "donorPixels": 132,
+            "armaturePixels": 103
+          },
+          "az090": {
+            "iou": 0.5307017543859649,
+            "depthMae": 0.030331675648291884,
+            "occupancyError": 0.4557522123893805,
+            "donorPixels": 226,
+            "armaturePixels": 123
+          },
+          "az180": {
+            "iou": 0.5380116959064327,
+            "depthMae": 0.05889697795139742,
+            "occupancyError": 0.24666666666666667,
+            "donorPixels": 150,
+            "armaturePixels": 113
+          },
+          "az270": {
+            "iou": 0.5394736842105263,
+            "depthMae": 0.0310610695886002,
+            "occupancyError": 0.4469026548672566,
+            "donorPixels": 226,
+            "armaturePixels": 125
+          }
+        },
+        "meanIou": 0.5385599415204678,
+        "meanDepthMae": 0.040461916458643124,
+        "meanOccupancyError": 0.3422546259050684
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.6335078534031413,
+            "depthMae": 0.04164985998130706,
+            "occupancyError": 0.35789473684210527,
+            "donorPixels": 190,
+            "armaturePixels": 122
+          },
+          "az135": {
+            "iou": 0.5885167464114832,
+            "depthMae": 0.05104504807005743,
+            "occupancyError": 0.3645320197044335,
+            "donorPixels": 203,
+            "armaturePixels": 129
+          },
+          "az225": {
+            "iou": 0.5893719806763285,
+            "depthMae": 0.05385228171962455,
+            "occupancyError": 0.3872549019607843,
+            "donorPixels": 204,
+            "armaturePixels": 125
+          },
+          "az315": {
+            "iou": 0.6256410256410256,
+            "depthMae": 0.04203133083473106,
+            "occupancyError": 0.33157894736842103,
+            "donorPixels": 190,
+            "armaturePixels": 127
+          }
+        },
+        "meanIou": 0.6092594015329946,
+        "meanDepthMae": 0.04714463015143003,
+        "meanOccupancyError": 0.360315151468936
+      }
+    },
+    "fitted": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.8231292517006803,
+            "depthMae": 0.05536744549566653,
+            "occupancyError": 0.030303030303030304,
+            "donorPixels": 132,
+            "armaturePixels": 136
+          },
+          "az090": {
+            "iou": 0.749034749034749,
+            "depthMae": 0.026686820645321928,
+            "occupancyError": 0.004424778761061947,
+            "donorPixels": 226,
+            "armaturePixels": 227
+          },
+          "az180": {
+            "iou": 0.84472049689441,
+            "depthMae": 0.05766693423322328,
+            "occupancyError": 0.02,
+            "donorPixels": 150,
+            "armaturePixels": 147
+          },
+          "az270": {
+            "iou": 0.749034749034749,
+            "depthMae": 0.024057951247719145,
+            "occupancyError": 0.004424778761061947,
+            "donorPixels": 226,
+            "armaturePixels": 227
+          }
+        },
+        "meanIou": 0.791479811666147,
+        "meanDepthMae": 0.04094478790548272,
+        "meanOccupancyError": 0.014788146956288549
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.7870370370370371,
+            "depthMae": 0.037821887631365986,
+            "occupancyError": 0.031578947368421054,
+            "donorPixels": 190,
+            "armaturePixels": 196
+          },
+          "az135": {
+            "iou": 0.7253218884120172,
+            "depthMae": 0.03416220502999609,
+            "occupancyError": 0.019704433497536946,
+            "donorPixels": 203,
+            "armaturePixels": 199
+          },
+          "az225": {
+            "iou": 0.7555555555555555,
+            "depthMae": 0.034631435592129986,
+            "occupancyError": 0.06372549019607843,
+            "donorPixels": 204,
+            "armaturePixels": 191
+          },
+          "az315": {
+            "iou": 0.7909090909090909,
+            "depthMae": 0.03373233225358926,
+            "occupancyError": 0.07368421052631578,
+            "donorPixels": 190,
+            "armaturePixels": 204
+          }
+        },
+        "meanIou": 0.7647058929784252,
+        "meanDepthMae": 0.03508696512677033,
+        "meanOccupancyError": 0.04717327039708805
+      }
+    }
+  },
+  "acceptance": {
+    "heldOutSilhouetteImprovementCount": 4,
+    "requiredHeldOutSilhouetteImprovementCount": 3,
+    "heldOutDepthImproved": true,
+    "boundPinnedParameters": [],
+    "semanticParameterIdsStable": true,
+    "visualInspection": "pending"
+  },
+  "falseClosureGuards": {
+    "productionCreatureClaim": "forbidden",
+    "meshCopyClaim": "forbidden",
+    "learnedPriorClaim": "not_trained",
+    "topologySelectionClaim": "not_assayed"
+  }
+}
