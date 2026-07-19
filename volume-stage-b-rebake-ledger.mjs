@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
   MANDATORY_STAGE_B_CONTROLS,
+  PRODUCTION_STAGE_B_FIXED,
   defaultStageBControls,
 } from './volume-stage-b-analytical-rebake.mjs';
 
@@ -13,6 +15,9 @@ function option(name, fallback) {
 
 const route = option('--route', 'http://127.0.0.1:18791/api/rebake');
 const outputPath = resolve(option('--out', 'artifacts/pyro-control-path-parity-audit/stage-b-control-coupling-ledger.json'));
+const expectedFixedProductionControlsIdentity = createHash('sha256')
+  .update(JSON.stringify(PRODUCTION_STAGE_B_FIXED))
+  .digest('hex');
 const alternatives = Object.freeze({
   volume_reaction_boundary_fire_tip: 0,
   volume_reaction_boundary_topology: 2.5,
@@ -43,9 +48,16 @@ async function requestRebake(controls) {
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `stage-b-ledger-http-${response.status}`);
+  if (response.url !== new URL(route).href) throw new Error(`stage-b-ledger-route-mismatch:${route}:${response.url}`);
   if (result.receipt?.status !== 'effective') throw new Error('stage-b-ledger-receipt-not-effective');
   if (result.receipt.fallback !== null) throw new Error(`stage-b-ledger-fallback:${result.receipt.fallback}`);
-  return result;
+  if (JSON.stringify(result.receipt.fixedProductionControls) !== JSON.stringify(PRODUCTION_STAGE_B_FIXED)) {
+    throw new Error('fixed-production-controls-drift:values');
+  }
+  if (result.receipt.fixedProductionControlsIdentity !== expectedFixedProductionControlsIdentity) {
+    throw new Error('fixed-production-controls-drift:identity');
+  }
+  return { ...result, effectiveRoute: response.url };
 }
 
 function meanAbsoluteChannelDelta(leftBase64, rightBase64) {
@@ -68,6 +80,8 @@ function compactReceipt(receipt) {
     requestedControls: receipt.requestedControls,
     effectiveControls: receipt.effectiveControls,
     controlsIdentity: receipt.controlsIdentity,
+    fixedProductionControls: receipt.fixedProductionControls,
+    fixedProductionControlsIdentity: receipt.fixedProductionControlsIdentity,
     sourceStateIdentity: receipt.sourceStateIdentity,
     stageBIdentity: receipt.stageBIdentity,
     candidateIdentity: receipt.candidateIdentity,
@@ -103,6 +117,8 @@ try {
     const treatmentResult = await requestRebake(requestedControls);
     const treatment = compactReceipt(treatmentResult.receipt);
     if (treatment.sourceStateIdentity !== baseline.sourceStateIdentity) throw new Error(`source-state-drift:${control}`);
+    if (treatmentResult.effectiveRoute !== baselineResult.effectiveRoute) throw new Error(`effective-route-drift:${control}`);
+    if (treatment.fixedProductionControlsIdentity !== baseline.fixedProductionControlsIdentity) throw new Error(`fixed-production-controls-drift:${control}`);
     if (treatment.requestedControls[control] !== requestedControls[control]) throw new Error(`requested-control-drift:${control}`);
     if (treatment.effectiveControls[control] !== requestedControls[control]) throw new Error(`effective-control-drift:${control}`);
     const deltas = {
@@ -142,7 +158,9 @@ try {
     status: missingInputs.length ? 'failed' : 'completed',
     failurePhase: missingInputs.length ? 'control-coupling-classification' : null,
     requestedRoute: route,
-    effectiveRoute: route,
+    effectiveRoute: baselineResult.effectiveRoute,
+    fixedProductionControls: baseline.fixedProductionControls,
+    fixedProductionControlsIdentity: baseline.fixedProductionControlsIdentity,
     sourceStateIdentity: baseline.sourceStateIdentity,
     mandatoryControlCount: MANDATORY_STAGE_B_CONTROLS.length,
     baseline,

@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  PRODUCTION_STAGE_B_FIXED,
   defaultStageBControls,
   rebakeAnalyticalStageB,
 } from './volume-stage-b-analytical-rebake.mjs';
@@ -16,6 +17,13 @@ const DEFAULT_MANIFEST = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/ka
 const DEFAULT_REPORT = resolve(root, 'scratch/stage-b-rebake-server-report.json');
 const COCKPIT_PATH = resolve(root, 'volume-stage-b-rebake-cockpit.html');
 const CAMERA_IDENTITY = 'state120-cockpit-fixed-camera-v0';
+const EXPECTED_FLUID_CHANNEL_ORDER = Object.freeze([
+  'velocityX', 'velocityY', 'velocityZ', 'densityCarrier',
+  'smokeDensity', 'heat', 'fuel', 'detail',
+  'flame', 'ember', 'visibleFireCarrier', 'combustionFront',
+  'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+]);
+const EXPECTED_FRONT_CHANNEL_ORDER = Object.freeze(['frontTopology']);
 
 function option(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -58,20 +66,31 @@ async function loadState120() {
   if (manifest.schema !== 'kaminos.volume.full-grid-field-export.v0') throw stageBMissing('sourceFieldManifest.schema');
   if (manifest.status !== 'captured' || manifest.completeFieldCoverage !== true) throw stageBMissing('sourceFieldManifest.completeFieldCoverage');
   if (manifest.grid !== 160 || manifest.cellCount !== 4_096_000 || manifest.fluidComponents !== 16) throw stageBMissing('sourceFieldManifest.state120Shape');
+  if (JSON.stringify(manifest.fluidChannelOrder) !== JSON.stringify(EXPECTED_FLUID_CHANNEL_ORDER)) throw stageBMissing('sourceFieldManifest.fluidChannelOrder');
+  if (JSON.stringify(manifest.frontChannelOrder) !== JSON.stringify(EXPECTED_FRONT_CHANNEL_ORDER)) throw stageBMissing('sourceFieldManifest.frontChannelOrder');
   const fluidDescriptor = manifest.sidecars?.fluid;
   const frontDescriptor = manifest.sidecars?.front;
+  const boundaryDescriptor = manifest.boundarySidecar?.sidecars?.boundary;
   if (!fluidDescriptor?.path) throw stageBMissing('fluid.path');
   if (!frontDescriptor?.path) throw stageBMissing('front.path');
-  const [fluidStat, frontStat, fluidSha256, frontSha256] = await Promise.all([
+  if (!boundaryDescriptor?.path) throw stageBMissing('boundary.path');
+  const [fluidStat, frontStat, boundaryStat, fluidSha256, frontSha256, boundarySha256] = await Promise.all([
     stat(fluidDescriptor.path).catch(() => null),
     stat(frontDescriptor.path).catch(() => null),
+    stat(boundaryDescriptor.path).catch(() => null),
     sha256File(fluidDescriptor.path).catch(() => null),
     sha256File(frontDescriptor.path).catch(() => null),
+    sha256File(boundaryDescriptor.path).catch(() => null),
   ]);
   if (!fluidStat || fluidStat.size !== fluidDescriptor.byteLength) throw stageBMissing('fluid.byteLength');
   if (!frontStat || frontStat.size !== frontDescriptor.byteLength) throw stageBMissing('front.byteLength');
+  if (!boundaryStat || boundaryStat.size !== boundaryDescriptor.byteLength) throw stageBMissing('boundary.byteLength');
   if (fluidSha256 !== fluidDescriptor.sha256) throw new Error('stage-b-rebake-source-hash-mismatch:fluid');
   if (frontSha256 !== frontDescriptor.sha256) throw new Error('stage-b-rebake-source-hash-mismatch:front');
+  if (boundarySha256 !== boundaryDescriptor.sha256
+    || boundarySha256 !== PRODUCTION_STAGE_B_FIXED.authority.integrationBaselineBoundarySidecarSha256) {
+    throw new Error('stage-b-rebake-source-hash-mismatch:integrationBaselineBoundarySidecar');
+  }
   const [fluidBytes, frontBytes] = await Promise.all([
     readFile(fluidDescriptor.path),
     readFile(frontDescriptor.path),
@@ -87,6 +106,7 @@ async function loadState120() {
       sourceFieldManifestSha256: await sha256File(manifestPath),
       fluidSha256,
       frontSha256,
+      integrationBaselineBoundarySidecarSha256: boundarySha256,
       cameraIdentity: CAMERA_IDENTITY,
       camera: {
         position: [0, 0.6, 3],

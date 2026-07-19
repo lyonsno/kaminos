@@ -40,11 +40,59 @@ assert.ok(
 
 const {
   MANDATORY_STAGE_B_CONTROLS,
+  PRODUCTION_STAGE_B_FIXED,
+  boundarySupportFromFrozenCell,
   defaultStageBControls,
+  productionBoundaryGradient,
   rebakeAnalyticalStageB,
 } = await import(moduleUrl.href);
 
 assert.deepEqual(MANDATORY_STAGE_B_CONTROLS, mandatoryControls);
+assert.deepEqual(PRODUCTION_STAGE_B_FIXED, {
+  identity: 'state120-integration-c5367d2a-boundary-fixed-v0',
+  authority: {
+    integrationCommit: 'c5367d2a76bbc3c90b32cbbb04764b6c6cda568b',
+    cockpitManifestSha256: '8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9',
+    controlsSha256: '4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7',
+    integrationBaselineBoundarySidecarSha256: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+  },
+  analyticalBoundarySource: 'live-recomputed-from-frozen-fluid-front',
+  integrationBaselineBoundarySource: 'baked',
+  gradientGain: 1.05,
+  sidecarStepFootprintWidth: 0,
+  displayContrast: 0.6,
+  displayGamma: 3,
+  displayOpacity: 3,
+  inspectBoundaryFireMask: 1,
+  cleanBlue: 0.3,
+  sootYield: 0.64,
+  sootYellowing: 0.44,
+  thermalWarmth: 0.16,
+  fireLuma: 5,
+});
+assert.equal(productionBoundaryGradient(3, 1, 0, 0, 0, 0, 160), 80, 'production gradient must include 0.5 / boundaryCellStep');
+
+const supportChannels = new Float32Array(16);
+const supportFrontField = new Float32Array(1);
+const interfaceOnly = {
+  ...defaultStageBControls(),
+  volume_reaction_boundary_support_thermal: 0,
+  volume_reaction_boundary_support_reaction: 0,
+  volume_reaction_boundary_support_front: 0,
+  volume_reaction_boundary_support_interface: 2,
+};
+supportChannels[7] = 1;
+assert.equal(
+  boundarySupportFromFrozenCell(supportChannels, supportFrontField, 0, interfaceOnly),
+  0,
+  'material.w/channel 7 must not impersonate production microLayer.w interface support',
+);
+supportChannels[7] = 0;
+supportChannels[15] = 1;
+assert.ok(
+  boundarySupportFromFrozenCell(supportChannels, supportFrontField, 0, interfaceOnly) > 0,
+  'production microLayer.w/channel 15 must reach interface support',
+);
 
 function tinyFrozenState(grid = 7) {
   const cellCount = grid ** 3;
@@ -137,6 +185,8 @@ assert.deepEqual(
 );
 assert.equal(baseline.receipt.opticalLayers, 16);
 assert.equal(baseline.receipt.appliedPasses.includes('shared-optics-recurrence'), true);
+assert.deepEqual(baseline.receipt.fixedProductionControls, PRODUCTION_STAGE_B_FIXED);
+assert.match(baseline.receipt.fixedProductionControlsIdentity, /^[0-9a-f]{64}$/);
 
 assert.ok(
   existsSync(queueUrl),
@@ -195,7 +245,11 @@ assert.match(cockpit, /depositionIdentity/, 'cockpit must expose deposition iden
 assert.match(cockpit, /pixelIdentity/, 'cockpit must expose shared-optics pixel identity');
 assert.match(server, /stage-b-rebake-missing-input/, 'server must preserve fail-loud input diagnostics');
 assert.match(server, /coefficient-state-120-source-field-manifest\.json/, 'server must bind the exact State-120 source manifest');
+assert.match(server, /EXPECTED_FLUID_CHANNEL_ORDER[^]*fluidChannelOrder/, 'server must reject source-field channel-order drift');
+assert.match(server, /integrationBaselineBoundarySidecarSha256/, 'server must bind the original baked boundary-sidecar identity');
 assert.match(witness, /effectiveRoute[^]*requestedRoute/, 'witness must record requested and effective routes');
+assert.match(witness, /requestedRouteUrl/, 'witness target selection must derive from the requested route');
+assert.match(witness, /assert\.equal\(effectiveRoute, requestedRouteUrl\.href/, 'witness must reject requested/effective route mismatch');
 assert.match(witness, /sourceStateIdentity[^]*source-state-drift/, 'witness must reject frozen source-state drift');
 assert.match(witness, /nonblank[^]*blank-frame/, 'witness must reject blank captures');
 assert.match(witness, /meanAbsoluteChannelDelta/, 'witness must calculate treatment pixel deltas');
@@ -205,5 +259,10 @@ assert.match(ledgerGenerator, /MANDATORY_STAGE_B_CONTROLS/, 'ledger must enumera
 assert.match(ledgerGenerator, /sourceStateIdentity[^]*source-state-drift/, 'ledger must reject per-control source drift');
 assert.match(ledgerGenerator, /meanAbsoluteChannelDelta/, 'ledger must record per-control pixel deltas');
 assert.match(ledgerGenerator, /requestedControls[^]*effectiveControls/, 'ledger must preserve requested/effective control identity');
+assert.match(
+  ledgerGenerator,
+  /fixedProductionControlsIdentity[^]*fixed-production-controls-drift/,
+  'ledger must preserve and compare the production fixed-control identity for every perturbation',
+);
 
 console.log('Stage B analytical rebake contracts passed');

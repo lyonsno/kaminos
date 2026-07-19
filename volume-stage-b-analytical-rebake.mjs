@@ -39,6 +39,29 @@ const TAP_OFFSETS = Object.freeze([-1, -0.5, 0, 0.5, 1]);
 const TAP_WEIGHTS = Object.freeze([0.075, 0.225, 0.4, 0.225, 0.075]);
 const HEX_64 = /^[0-9a-f]{64}$/;
 
+export const PRODUCTION_STAGE_B_FIXED = Object.freeze({
+  identity: 'state120-integration-c5367d2a-boundary-fixed-v0',
+  authority: Object.freeze({
+    integrationCommit: 'c5367d2a76bbc3c90b32cbbb04764b6c6cda568b',
+    cockpitManifestSha256: '8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9',
+    controlsSha256: '4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7',
+    integrationBaselineBoundarySidecarSha256: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+  }),
+  analyticalBoundarySource: 'live-recomputed-from-frozen-fluid-front',
+  integrationBaselineBoundarySource: 'baked',
+  gradientGain: 1.05,
+  sidecarStepFootprintWidth: 0,
+  displayContrast: 0.6,
+  displayGamma: 3,
+  displayOpacity: 3,
+  inspectBoundaryFireMask: 1,
+  cleanBlue: 0.3,
+  sootYield: 0.64,
+  sootYellowing: 0.44,
+  thermalWarmth: 0.16,
+  fireLuma: 5,
+});
+
 function clamp(value, low, high) {
   return Math.max(low, Math.min(high, Number(value)));
 }
@@ -110,7 +133,7 @@ function cellIndex(x, y, z, grid) {
   return cx + cy * grid + cz * grid * grid;
 }
 
-function supportAt(fluid, front, cell, controls) {
+export function boundarySupportFromFrozenCell(fluid, front, cell, controls) {
   const offset = cell * 16;
   const vx = fluid[offset];
   const vy = fluid[offset + 1];
@@ -118,7 +141,6 @@ function supportAt(fluid, front, cell, controls) {
   const smoke = fluid[offset + 4];
   const heat = fluid[offset + 5];
   const fuel = fluid[offset + 6];
-  const detail = fluid[offset + 7];
   const flame = fluid[offset + 8];
   const ember = fluid[offset + 9];
   const flameDetail = fluid[offset + 10];
@@ -137,7 +159,7 @@ function supportAt(fluid, front, cell, controls) {
   const thermal = smoothstep(0.018, 0.62, rawTemp + flame * 0.16 + heat * 0.24 + ember * 0.12);
   const reaction = smoothstep(0.004, 0.30, flameDetail * 0.72 + fireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
   const frontSupport = smoothstep(0.001, 0.088, front[cell] * 1.08 + combustionFront * 0.54 + fireLick * 0.12);
-  const interfaceSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + smoke * 0.08 + detail * 0.06);
+  const interfaceSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + smoke * 0.08 + emberFleck * 0.06);
   const weights = [
     controls.volume_reaction_boundary_support_thermal,
     controls.volume_reaction_boundary_support_reaction,
@@ -146,6 +168,11 @@ function supportAt(fluid, front, cell, controls) {
   ];
   const weightSum = Math.max(0.001, weights.reduce((sum, weight) => sum + weight, 0));
   return clamp((thermal * weights[0] + reaction * weights[1] + frontSupport * weights[2] + interfaceSupport * weights[3]) / weightSum, 0, 1.35);
+}
+
+export function productionBoundaryGradient(px, nx, py, ny, pz, nz, grid) {
+  const boundaryCellStep = 2 / grid;
+  return Math.hypot(px - nx, py - ny, pz - nz) * (0.5 / boundaryCellStep);
 }
 
 function velocityDifferentials(fluid, x, y, z, grid) {
@@ -303,7 +330,7 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
   const effectiveControls = normalizeStageBControls(requestedControls);
   const { grid, fluid, front } = state;
   const support = new Float32Array(cellCount);
-  for (let cell = 0; cell < cellCount; cell += 1) support[cell] = supportAt(fluid, front, cell, effectiveControls);
+  for (let cell = 0; cell < cellCount; cell += 1) support[cell] = boundarySupportFromFrozenCell(fluid, front, cell, effectiveControls);
 
   const layers = new Float32Array(width * height * OPTICAL_LAYERS * 4);
   let candidateCount = 0;
@@ -337,10 +364,14 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
         const ny = support[cellIndex(x, y - 1, z, grid)];
         const pz = support[cellIndex(x, y, z + 1, grid)];
         const nz = support[cellIndex(x, y, z - 1, grid)];
-        const gradient = Math.hypot(px - nx, py - ny, pz - nz) * 0.5;
+        const gradient = productionBoundaryGradient(px, nx, py, ny, pz, nz, grid);
         const laplacian = Math.abs(px + nx + py + ny + pz + nz - 6 * center);
         const ridge = smoothstep(ridgeCut, ridgeCut + 0.14, laplacian * ridgeGain);
-        const gradientGate = smoothstep(cut, cut + softness, gradient * 1.05);
+        const gradientGate = smoothstep(
+          cut,
+          cut + softness + PRODUCTION_STAGE_B_FIXED.sidecarStepFootprintWidth,
+          gradient * PRODUCTION_STAGE_B_FIXED.gradientGain,
+        );
         const velocity = velocityDifferentials(fluid, x, y, z, grid);
         const curlActivity = smoothstep(0.006, 0.16, velocity.curl);
         const divergenceActivity = smoothstep(0.010, 0.18, Math.abs(velocity.divergence));
@@ -373,8 +404,14 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
         const topology = clamp(1 + topologyGain * (edgeSupport * 0.50 + frontSupport * 0.24) + curlGain * curlActivity + divergenceGain * divSupport, 0, 3.5);
         const erosion = clamp(erosionGain * (curlActivity * 0.36 + edgeSupport * 0.34 + divSupport * 0.18 + tipGate * 0.48), 0, 0.92);
         const boundaryRaw = clamp(center * gradientGate * coreGate * topology, 0, 2);
-        const boundaryScalar = clamp(Math.pow(clamp(boundaryRaw * 0.6, 0, 1.8), 3) * 3, 0, 1.65);
-        const boundaryCandidate = boundaryScalar * mix(1, clamp(ridge + tipGate * tipBreakup, 0, 1), 0.62) * (1 - erosion);
+        const boundaryScalar = clamp(
+          Math.pow(clamp(boundaryRaw * PRODUCTION_STAGE_B_FIXED.displayContrast, 0, 1.8), PRODUCTION_STAGE_B_FIXED.displayGamma)
+            * PRODUCTION_STAGE_B_FIXED.displayOpacity,
+          0,
+          1.65,
+        );
+        const boundaryFireCandidate = boundaryScalar * mix(1, clamp(ridge + tipGate * tipBreakup, 0, 1), 0.62) * (1 - erosion);
+        const boundaryCandidate = mix(boundaryScalar, boundaryFireCandidate, PRODUCTION_STAGE_B_FIXED.inspectBoundaryFireMask);
         if (boundaryCandidate <= 1e-6) continue;
         const projection = fixedCameraProject(x, y, z, grid, width, height);
         if (!projection) continue;
@@ -385,12 +422,24 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
           curlActivity,
         );
         const sootSupport = smoothstep(0.012, 0.42, smoke + microSmoke * 0.50 + rawExtinction * 0.32 + detail * 0.16);
-        const cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1 - smoothstep(0.20, 0.86, sootSupport * 0.64));
-        const sootMaturity = clamp((sootSupport * 0.56 + fuelDepletion * 0.30 + tipGate * 0.30) * 0.64, 0, 1);
-        const clean = [0.12 * 0.3 * cleanBurnGate, 0.42 * 0.3 * cleanBurnGate, 1.75 * 0.3 * cleanBurnGate];
-        const thermal = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * 0.16);
-        const sootThermal = thermal.map((value, index) => mix(value, [1.55, 0.86, 0.18][index], clamp(sootMaturity * 0.44, 0, 1)));
-        const color = clean.map((value, index) => mix(value, sootThermal[index], sootMaturity) * 5);
+        const cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38)
+          * (1 - smoothstep(0.20, 0.86, sootSupport * PRODUCTION_STAGE_B_FIXED.sootYield));
+        const sootMaturity = clamp(
+          (sootSupport * 0.56 + fuelDepletion * 0.30 + tipGate * 0.30) * PRODUCTION_STAGE_B_FIXED.sootYield,
+          0,
+          1,
+        );
+        const clean = [0.12, 0.42, 1.75].map(value => value * PRODUCTION_STAGE_B_FIXED.cleanBlue * cleanBurnGate);
+        const thermal = fireColor(
+          (rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28)
+            * Math.max(0.18, PRODUCTION_STAGE_B_FIXED.thermalWarmth),
+        );
+        const sootThermal = thermal.map((value, index) => mix(
+          value,
+          [1.55, 0.86, 0.18][index],
+          clamp(sootMaturity * PRODUCTION_STAGE_B_FIXED.sootYellowing, 0, 1),
+        ));
+        const color = clean.map((value, index) => mix(value, sootThermal[index], sootMaturity) * PRODUCTION_STAGE_B_FIXED.fireLuma);
         const extinction = Math.max(1e-5, boundaryCandidate * (0.035 + rawExtinction * 0.08));
         const emission = color.map(value => Math.max(0, value * boundaryCandidate * 0.055));
         const depthBin = Math.floor(projection.depth * OPTICAL_LAYERS);
@@ -432,13 +481,16 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
   });
   const pixelIdentity = hashBytes(pixels);
   const controlsIdentity = hashJson(effectiveControls);
-  const stageBIdentity = hashJson({ sourceStateIdentity, controlsIdentity, candidateIdentity, coefficientIdentity, covarianceIdentity, depositionIdentity, pixelIdentity });
+  const fixedProductionControlsIdentity = hashJson(PRODUCTION_STAGE_B_FIXED);
+  const stageBIdentity = hashJson({ sourceStateIdentity, controlsIdentity, fixedProductionControlsIdentity, candidateIdentity, coefficientIdentity, covarianceIdentity, depositionIdentity, pixelIdentity });
   const receipt = {
     schema: 'kaminos.volume.stage-b-analytical-rebake-receipt.v0',
     status: 'effective',
     requestedControls,
     effectiveControls,
     controlsIdentity,
+    fixedProductionControls: PRODUCTION_STAGE_B_FIXED,
+    fixedProductionControlsIdentity,
     sourceStateIdentity,
     source: { ...state.source, grid },
     stageBIdentity,
@@ -460,6 +512,7 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
     controlStatus: MANDATORY_STAGE_B_CONTROLS.map(control => ({ control, status: 'rebake-coupled' })),
     appliedPasses: [
       'source-validation',
+      'production-fixed-control-binding',
       'boundary-support-rebake',
       'candidate-membership-rebuild',
       'coefficient-rebuild',

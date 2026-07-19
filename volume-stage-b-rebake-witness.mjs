@@ -73,6 +73,8 @@ mkdirSync(outputDir, { recursive: true });
 
 let browser = null;
 let cdp = null;
+let requestedRouteUrl = null;
+let effectiveRoute = null;
 let failurePhase = 'browser-launch';
 let lastTrustworthyEvidence = { requestedRoute };
 const captures = [];
@@ -88,7 +90,14 @@ async function waitForTarget() {
     try {
       const response = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
       const targets = await response.json();
-      const target = targets.find(row => row.type === 'page' && row.url.startsWith('http://127.0.0.1:18791/'));
+      const target = targets.find(row => {
+        if (row.type !== 'page') return false;
+        try {
+          return new URL(row.url).href === requestedRouteUrl.href;
+        } catch {
+          return false;
+        }
+      });
       if (target?.webSocketDebuggerUrl) return target;
     } catch (error) {
       lastError = error;
@@ -106,6 +115,22 @@ async function evaluate(expression) {
   });
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   return result.result?.value;
+}
+
+async function waitForRequestedRoute() {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      effectiveRoute = await evaluate('location.href');
+      lastTrustworthyEvidence = { requestedRoute, effectiveRoute };
+      if (effectiveRoute === requestedRouteUrl.href) return effectiveRoute;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(accept => setTimeout(accept, 100));
+  }
+  throw new Error(`route-mismatch:${requestedRouteUrl.href}:${effectiveRoute || lastError?.message || 'unobserved'}`);
 }
 
 async function waitForReceipt(previousPixelIdentity = null) {
@@ -185,6 +210,9 @@ async function captureTreatment(name, previousPixelIdentity = null) {
 }
 
 try {
+  failurePhase = 'route-validation';
+  requestedRouteUrl = new URL(requestedRoute);
+  assert.ok(['http:', 'https:'].includes(requestedRouteUrl.protocol), `unsupported-route-protocol:${requestedRouteUrl.protocol}`);
   browser = spawn(chromePath, [
     '--headless=new',
     `--remote-debugging-port=${debugPort}`,
@@ -200,6 +228,8 @@ try {
   cdp = new CdpSocket(target.webSocketDebuggerUrl, timeoutMs);
   await cdp.open();
   await Promise.all([cdp.call('Runtime.enable'), cdp.call('Page.enable'), cdp.call('Log.enable')]);
+  failurePhase = 'route-identity';
+  await waitForRequestedRoute();
   failurePhase = 'baseline-capture';
   const baseline = await captureTreatment('baseline');
   failurePhase = 'sparse-capture';
@@ -224,7 +254,8 @@ try {
   failurePhase = 'cockpit-screenshot';
   const cockpitScreenshotPath = resolve(outputDir, 'cockpit.png');
   await capturePng(cockpitScreenshotPath);
-  const effectiveRoute = await evaluate('location.href');
+  effectiveRoute = await evaluate('location.href');
+  assert.equal(effectiveRoute, requestedRouteUrl.href, `route-mismatch-after-capture:${requestedRouteUrl.href}:${effectiveRoute}`);
   const report = {
     schema: 'kaminos.volume.stage-b-rebake-live-smoke.v0',
     status: 'completed',
@@ -244,7 +275,7 @@ try {
     schema: 'kaminos.volume.stage-b-rebake-live-smoke.v0',
     status: 'failed',
     failurePhase,
-    effectiveRoute: null,
+    effectiveRoute,
     requestedRoute,
     error: error?.message || String(error),
     lastTrustworthyEvidence,

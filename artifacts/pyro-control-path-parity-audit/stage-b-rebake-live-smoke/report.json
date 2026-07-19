@@ -2,8 +2,8 @@
   "schema": "kaminos.volume.stage-b-rebake-live-smoke.v0",
   "status": "completed",
   "failurePhase": null,
-  "effectiveRoute": "http://127.0.0.1:18791/volume-stage-b-rebake-cockpit.html",
-  "requestedRoute": "http://127.0.0.1:18791/volume-stage-b-rebake-cockpit.html",
+  "effectiveRoute": "http://127.0.0.1:18888/volume-stage-b-rebake-cockpit.html",
+  "requestedRoute": "http://127.0.0.1:18888/volume-stage-b-rebake-cockpit.html",
   "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
   "viewport": {
     "width": 1400,
@@ -48,6 +48,29 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "f9a272c6536ef869d0c1573867a939a2cc8f83f84b9c6106392bc902420cb234",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
         "source": {
           "stateId": "coefficient-state-120",
@@ -56,6 +79,7 @@
           "sourceFieldManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
           "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
           "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+          "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
           "cameraIdentity": "state120-cockpit-fixed-camera-v0",
           "camera": {
             "position": [
@@ -73,41 +97,41 @@
           },
           "grid": 160
         },
-        "stageBIdentity": "930a32388cc2daf8ff9f7acf3366dcc9ed3fb2dd446d88c297d10b10049018c6",
-        "candidateIdentity": "e8dc7b065c3617ee7a74e20cbbef96c2952dd6cdf9c8bb4911c7272b3b8ff54e",
-        "coefficientIdentity": "9df57193b659af42456d83476e15df6f02f639a07f00b842ed93345210b8cc85",
-        "covarianceIdentity": "ae1aa0188a9412c54010c7ab881edfcd21c02a61539da2a5a99ba50aaf0dc6e9",
-        "depositionIdentity": "e504e82cddf015bbb4f7df5d508b976c6b1635cb1cd5e6c9730e7f1945f9e43c",
-        "pixelIdentity": "3658a17e80f849ae178513fda36283e31e7b113831cb45b1f850c389b2c6ac02",
-        "candidateCount": 15842,
+        "stageBIdentity": "c791af35e16047fd7867aa46378e81d9022dc0bdbbe4de5109263cfbe8291636",
+        "candidateIdentity": "379a92f3354ea967df7566d6d12dd00e85178eed642f6f7a5d31e1cdbd21f677",
+        "coefficientIdentity": "964e3af94ef47729de67ee73cf176e3dce23abaa1bf265c96a5ea98c2a3c91af",
+        "covarianceIdentity": "dbc54d37648b5c016b8d64e44cde6dd8cb82054c66938f03ea2293bc4ee41829",
+        "depositionIdentity": "dcc9d0ace7827cb6d77a3263331ce648d44805290e5715714d6f96ae5d4df6bf",
+        "pixelIdentity": "d0fc22f75eb0ec823d78e0ffaae4522a1bd7faa316e5b864fcf65e9b2738eccd",
+        "candidateCount": 1333376,
         "coefficientSummary": {
-          "coefficientSum": 1590.1945087648153,
-          "weightedCoefficientSum": 3340704042.577368
+          "coefficientSum": 116324.17765835425,
+          "weightedCoefficientSum": 227553886633.8867
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.5491450798651933,
-            0.6091033994641355,
-            -0.16292882079216156,
-            4.987875431844801,
-            -0.9766806264564138,
-            3.524793445574898
+            234.24284587432427,
+            54.33550792084265,
+            -37.021912111324674,
+            360.77093340253725,
+            -81.69075064034472,
+            194.67388158468918
           ],
           "weightedCovarianceSum": [
-            6931627.703689758,
-            -266863.45796503575,
-            38597.6213431933,
-            10789332.668070696,
-            -2102300.471055413,
-            7567208.414754153
+            378366374.0498323,
+            -25080901.071583033,
+            -2170013.9677636037,
+            729526866.2023057,
+            -121695201.19390756,
+            373098165.2170813
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 5528.979947730108,
-          "weightedCandidateSum": 11527626503.813105
+          "candidateWeightSum": 362292.9128135531,
+          "weightedCandidateSum": 705306784291.9127
         },
         "opticalLayers": 16,
-        "depositCount": 316840,
+        "depositCount": 26667520,
         "output": {
           "width": 320,
           "height": 320,
@@ -173,6 +197,7 @@
         ],
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -183,14 +208,14 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 816.5401669999992
+        "elapsedMs": 1891.6841249999998
       },
       "metrics": {
         "width": 320,
         "height": 320,
-        "coloredPixels": 19292,
+        "coloredPixels": 69428,
         "nonblank": true,
-        "meanRgb": 1.5318229166666666,
+        "meanRgb": 40.50811848958333,
         "meanAbsoluteChannelDelta": 0
       },
       "screenshotPath": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/stage-b-rebake-live-smoke/baseline.png"
@@ -233,6 +258,29 @@
           "volume_reaction_boundary_divergence": 0.05
         },
         "controlsIdentity": "d98f2124d269e5bda9d9b60eee659cc3e717630de4da7132e40b94765921095e",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
         "source": {
           "stateId": "coefficient-state-120",
@@ -241,6 +289,7 @@
           "sourceFieldManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
           "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
           "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+          "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
           "cameraIdentity": "state120-cockpit-fixed-camera-v0",
           "camera": {
             "position": [
@@ -258,41 +307,41 @@
           },
           "grid": 160
         },
-        "stageBIdentity": "b684f77aeed51fe1158b7d9a521571ec954ac87b56a0b4257b21802f01970bbc",
-        "candidateIdentity": "18491ee10e7b7d92b3673876f2fc959074fb9a59c5a7bf8d28d50c9f9887194e",
-        "coefficientIdentity": "9d43d96226dd8a1eb8bf54e97b5c2a3328a9b3850608965b307eff40c14e30f3",
-        "covarianceIdentity": "9ab3487f1ffe8abb7b50cfb807e78eb7925461b192f4746c042ea25a979c85fc",
-        "depositionIdentity": "b61eba1d943b352dd4d50636c1c41e150d6d33c6ab0e79d6fa8e14994c0613ab",
-        "pixelIdentity": "66dad7012e3bd97d56d74af6b2d6257e4c52970a20ac7db092908e0b16200747",
-        "candidateCount": 6228,
+        "stageBIdentity": "aae0a7251164b89820fb1104a53f2d011de5f0c7b7e5d1aacc90a63b2841d391",
+        "candidateIdentity": "1a2c1ea2f4d2101c456ffe7cea1e3da67f832b6b874922f6243193b0b2d5c5c2",
+        "coefficientIdentity": "b95628b3bcbd33c760ea032f54d479b6f22620277f578b8a8c77eaaeb2dc9c19",
+        "covarianceIdentity": "132eadf19d3883c3ae4069ef6cd5974a61307ebb7889ac6b7e86b3ebe687e05b",
+        "depositionIdentity": "e80b3b7fb2825cbc1b98a8b7c005a89cc8a529e52d3eb403e955536c3515e4bb",
+        "pixelIdentity": "5d049ee61e446ffdfa602e04f12bdbbdb307c8beed25da036ede05088f3ed35a",
+        "candidateCount": 1227152,
         "coefficientSummary": {
-          "coefficientSum": 216.36365278883926,
-          "weightedCoefficientSum": 466992044.9799451
+          "coefficientSum": 13236.504903504092,
+          "weightedCoefficientSum": 25297768178.114178
         },
         "covarianceSummary": {
           "covarianceSum": [
-            1.435688406297861,
-            0.3702664635032726,
-            -0.08127564843205491,
-            2.2506302385870347,
-            -0.43506407987463824,
-            1.4516348487843265
+            215.29516177531062,
+            48.48285379157733,
+            -33.1619835022629,
+            334.95056962908626,
+            -75.38241684540814,
+            179.98375663708615
           ],
           "weightedCovarianceSum": [
-            2739187.899821586,
-            19422.727333212086,
-            54850.81994528243,
-            4717920.528145565,
-            -956848.4800617414,
-            3223348.9356355937
+            350292894.72982454,
+            -25899493.350795623,
+            -1182821.7297698013,
+            680080071.4549505,
+            -112595578.99082276,
+            346556482.81183255
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 720.5312668374247,
-          "weightedCandidateSum": 1538708779.3176215
+          "candidateWeightSum": 42276.05710075585,
+          "weightedCandidateSum": 80671053242.16168
         },
         "opticalLayers": 16,
-        "depositCount": 124560,
+        "depositCount": 24543040,
         "output": {
           "width": 320,
           "height": 320,
@@ -358,6 +407,7 @@
         ],
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -368,15 +418,15 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 744.1414590000059
+        "elapsedMs": 1854.5625409999993
       },
       "metrics": {
         "width": 320,
         "height": 320,
-        "coloredPixels": 11653,
+        "coloredPixels": 66467,
         "nonblank": true,
-        "meanRgb": 0.270078125,
-        "meanAbsoluteChannelDelta": 1.2617578125
+        "meanRgb": 10.421819661458333,
+        "meanAbsoluteChannelDelta": 30.086298828125
       },
       "screenshotPath": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/stage-b-rebake-live-smoke/sparse.png"
     },
@@ -418,6 +468,29 @@
           "volume_reaction_boundary_divergence": 0.85
         },
         "controlsIdentity": "052bc019aa8e945533ead2090d7d892891249f16a5b59d98ed0078f38a45d4be",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
         "source": {
           "stateId": "coefficient-state-120",
@@ -426,6 +499,7 @@
           "sourceFieldManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
           "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
           "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+          "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
           "cameraIdentity": "state120-cockpit-fixed-camera-v0",
           "camera": {
             "position": [
@@ -443,41 +517,41 @@
           },
           "grid": 160
         },
-        "stageBIdentity": "707497d8a1bdc659d5b12c22d084f73c77ddf26ad16be21c7d4846899f5ecd27",
-        "candidateIdentity": "353242df17ebcf4ad2f6aa20a6bf5e327529b3fd8acc1aff5014aee1e426c2e3",
-        "coefficientIdentity": "5a13422c18aa2fd57bf77b9040d4e25a7f00f57487447dce407cba45c5e28d3c",
-        "covarianceIdentity": "02a216a0b40d138a867c481f639b3184600c01c5c150b8790fdc4c557d03bd73",
-        "depositionIdentity": "17a5f8ef76587c24cfe575d0bf03516e870e3e5d983fd698772b0667f8a7d34c",
-        "pixelIdentity": "9ba6cc0190d6edf09e04093380b29ce472cb32766eed85f8c8149f10a2b633e9",
-        "candidateCount": 218815,
+        "stageBIdentity": "722dc40e6524e8e04df939d628388b97cbd2f8dd42eace72df032b3a3353c019",
+        "candidateIdentity": "98dc31756eeb785ed267bc5daf5bd6da7e5af063ea870a07a3694283f1cb9962",
+        "coefficientIdentity": "82babf86b7b8492ae597b88431c8ac5f946f709c942de39e7a4caa789dc6529e",
+        "covarianceIdentity": "0d25b02e6a6e82f1a1f8e2d2ed6f9213c988debfdbfdd8ccc9ccce58463188a8",
+        "depositionIdentity": "5c6b21a02be23f6a7b1de33113621c6d5c7a2ad84f128b315512adb0dd81c147",
+        "pixelIdentity": "4d1a06f8594d8262fe701a317a175669cda2fd6ddf99906fc4c89a54cccb13cd",
+        "candidateCount": 1657696,
         "coefficientSummary": {
-          "coefficientSum": 21462.697546975643,
-          "weightedCoefficientSum": 43850318182.184235
+          "coefficientSum": 336779.75764800655,
+          "weightedCoefficientSum": 630534611316.7335
         },
         "covarianceSummary": {
           "covarianceSum": [
-            43.80456465757835,
-            11.28769493376831,
-            -1.7599143309349772,
-            85.01017742331587,
-            -13.518677227016928,
-            36.99640319706633
+            294.1801105626093,
+            74.90162955682,
+            -47.89717450798446,
+            425.8090470382026,
+            -99.02828859075045,
+            235.09221598792993
           ],
           "weightedCovarianceSum": [
-            75010213.86324057,
-            -8350745.076713244,
-            4255813.8048370425,
-            172881908.3743919,
-            -22631213.927365284,
-            77220325.55024412
+            472952997.1376665,
+            -8738136.711259456,
+            -8692380.267346948,
+            847263119.7313815,
+            -145334825.37236992,
+            442904228.1015589
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 70449.84867572006,
-          "weightedCandidateSum": 143665137261.7457
+          "candidateWeightSum": 1053747.6828622124,
+          "weightedCandidateSum": 1963033914828.003
         },
         "opticalLayers": 16,
-        "depositCount": 4376300,
+        "depositCount": 33153920,
         "output": {
           "width": 320,
           "height": 320,
@@ -543,6 +617,7 @@
         ],
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -553,15 +628,15 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 978.0769169999985
+        "elapsedMs": 2234.1413749999992
       },
       "metrics": {
         "width": 320,
         "height": 320,
-        "coloredPixels": 49361,
+        "coloredPixels": 71106,
         "nonblank": true,
-        "meanRgb": 12.831881510416666,
-        "meanAbsoluteChannelDelta": 11.300071614583333
+        "meanRgb": 62.528876953125,
+        "meanAbsoluteChannelDelta": 22.021123046875
       },
       "screenshotPath": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/stage-b-rebake-live-smoke/dense.png"
     }

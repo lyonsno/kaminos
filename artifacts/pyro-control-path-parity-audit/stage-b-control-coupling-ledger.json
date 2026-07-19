@@ -2,8 +2,31 @@
   "schema": "kaminos.volume.stage-b-control-coupling-ledger.v0",
   "status": "completed",
   "failurePhase": null,
-  "requestedRoute": "http://127.0.0.1:18791/api/rebake",
-  "effectiveRoute": "http://127.0.0.1:18791/api/rebake",
+  "requestedRoute": "http://127.0.0.1:18888/api/rebake",
+  "effectiveRoute": "http://127.0.0.1:18888/api/rebake",
+  "fixedProductionControls": {
+    "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+    "authority": {
+      "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+      "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+      "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+      "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+    },
+    "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+    "integrationBaselineBoundarySource": "baked",
+    "gradientGain": 1.05,
+    "sidecarStepFootprintWidth": 0,
+    "displayContrast": 0.6,
+    "displayGamma": 3,
+    "displayOpacity": 3,
+    "inspectBoundaryFireMask": 1,
+    "cleanBlue": 0.3,
+    "sootYield": 0.64,
+    "sootYellowing": 0.44,
+    "thermalWarmth": 0.16,
+    "fireLuma": 5
+  },
+  "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
   "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
   "mandatoryControlCount": 14,
   "baseline": {
@@ -40,44 +63,68 @@
       "volume_reaction_boundary_divergence": 0.22
     },
     "controlsIdentity": "f9a272c6536ef869d0c1573867a939a2cc8f83f84b9c6106392bc902420cb234",
+    "fixedProductionControls": {
+      "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+      "authority": {
+        "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+        "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+        "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+        "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+      },
+      "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+      "integrationBaselineBoundarySource": "baked",
+      "gradientGain": 1.05,
+      "sidecarStepFootprintWidth": 0,
+      "displayContrast": 0.6,
+      "displayGamma": 3,
+      "displayOpacity": 3,
+      "inspectBoundaryFireMask": 1,
+      "cleanBlue": 0.3,
+      "sootYield": 0.64,
+      "sootYellowing": 0.44,
+      "thermalWarmth": 0.16,
+      "fireLuma": 5
+    },
+    "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
     "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-    "stageBIdentity": "930a32388cc2daf8ff9f7acf3366dcc9ed3fb2dd446d88c297d10b10049018c6",
-    "candidateIdentity": "e8dc7b065c3617ee7a74e20cbbef96c2952dd6cdf9c8bb4911c7272b3b8ff54e",
-    "coefficientIdentity": "9df57193b659af42456d83476e15df6f02f639a07f00b842ed93345210b8cc85",
-    "covarianceIdentity": "ae1aa0188a9412c54010c7ab881edfcd21c02a61539da2a5a99ba50aaf0dc6e9",
-    "depositionIdentity": "e504e82cddf015bbb4f7df5d508b976c6b1635cb1cd5e6c9730e7f1945f9e43c",
-    "pixelIdentity": "3658a17e80f849ae178513fda36283e31e7b113831cb45b1f850c389b2c6ac02",
-    "candidateCount": 15842,
-    "depositCount": 316840,
+    "stageBIdentity": "c791af35e16047fd7867aa46378e81d9022dc0bdbbe4de5109263cfbe8291636",
+    "candidateIdentity": "379a92f3354ea967df7566d6d12dd00e85178eed642f6f7a5d31e1cdbd21f677",
+    "coefficientIdentity": "964e3af94ef47729de67ee73cf176e3dce23abaa1bf265c96a5ea98c2a3c91af",
+    "covarianceIdentity": "dbc54d37648b5c016b8d64e44cde6dd8cb82054c66938f03ea2293bc4ee41829",
+    "depositionIdentity": "dcc9d0ace7827cb6d77a3263331ce648d44805290e5715714d6f96ae5d4df6bf",
+    "pixelIdentity": "d0fc22f75eb0ec823d78e0ffaae4522a1bd7faa316e5b864fcf65e9b2738eccd",
+    "candidateCount": 1333376,
+    "depositCount": 26667520,
     "coefficientSummary": {
-      "coefficientSum": 1590.1945087648153,
-      "weightedCoefficientSum": 3340704042.577368
+      "coefficientSum": 116324.17765835425,
+      "weightedCoefficientSum": 227553886633.8867
     },
     "covarianceSummary": {
       "covarianceSum": [
-        3.5491450798651933,
-        0.6091033994641355,
-        -0.16292882079216156,
-        4.987875431844801,
-        -0.9766806264564138,
-        3.524793445574898
+        234.24284587432427,
+        54.33550792084265,
+        -37.021912111324674,
+        360.77093340253725,
+        -81.69075064034472,
+        194.67388158468918
       ],
       "weightedCovarianceSum": [
-        6931627.703689758,
-        -266863.45796503575,
-        38597.6213431933,
-        10789332.668070696,
-        -2102300.471055413,
-        7567208.414754153
+        378366374.0498323,
+        -25080901.071583033,
+        -2170013.9677636037,
+        729526866.2023057,
+        -121695201.19390756,
+        373098165.2170813
       ]
     },
     "geometrySummary": {
-      "candidateWeightSum": 5528.979947730108,
-      "weightedCandidateSum": 11527626503.813105
+      "candidateWeightSum": 362292.9128135531,
+      "weightedCandidateSum": 705306784291.9127
     },
     "opticalLayers": 16,
     "appliedPasses": [
       "source-validation",
+      "production-fixed-control-binding",
       "boundary-support-rebake",
       "candidate-membership-rebuild",
       "coefficient-rebuild",
@@ -88,7 +135,7 @@
     "fallback": null,
     "postLoadMutation": "analytical-rebake-only",
     "simulatorAdvanced": false,
-    "elapsedMs": 1181.328791
+    "elapsedMs": 2171.256874999999
   },
   "rows": [
     {
@@ -100,14 +147,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 0,
+        "candidateCount": -10477,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -39.84675951531108,
-        "covarianceIdentityChanged": false,
+        "coefficientSum": -41651.437073976456,
+        "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 0,
+        "depositCount": -209540,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.033046875
+        "meanAbsoluteChannelDelta": 7.490559895833333
       },
       "treatment": {
         "requestedControls": {
@@ -143,44 +190,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "4e12e49e7ae3c9af794265181cadf7cb4ab85adeffce21dcb6eccb7f2f0d40c8",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "694ff8d677cbf519dd7af8a09bd1d3470a86ebbd9669024e171fe3d05ffba5b3",
-        "candidateIdentity": "b96c4a6705da1eeba51f067fcebf6d570bd3b356ca5b0e8d60a25b3f72cab164",
-        "coefficientIdentity": "afba93952bcfd4e15a013412b7a5cdd70daf4fb86f3f443427595481eda184bf",
-        "covarianceIdentity": "ae1aa0188a9412c54010c7ab881edfcd21c02a61539da2a5a99ba50aaf0dc6e9",
-        "depositionIdentity": "c32ba3ec1e997d59cc1ed6413a9f063c626bb9e0b59dd4c905dbe7c2412f2f9a",
-        "pixelIdentity": "b065622a23a33456f87ac66818e42c792380e03b427be21e7d055b9f9de963d4",
-        "candidateCount": 15842,
-        "depositCount": 316840,
+        "stageBIdentity": "53f0393423c6df8fe2f8ca8356a28edd503b419b84eab516d0ac028e926cf15a",
+        "candidateIdentity": "fe37039f83e4bcd74d5124822052647d346ade014ff9280c210aefe799ad50c3",
+        "coefficientIdentity": "bb09f0c14ef407256dd732f133ad64f487be554622a4dc7d9aa99050616b577e",
+        "covarianceIdentity": "f11d803ae875e184a8034f24f72c28ef2865983281eb44425db43a0c2cc064af",
+        "depositionIdentity": "ab125f72aedddd08a6bca621d1e65a5abe1c3c31ae2828071af459c72c69f9ee",
+        "pixelIdentity": "6cf01b4aac0ff44a08d20e2f0c4854117482f3f5f05996f9b9e1b39ffd8461f5",
+        "candidateCount": 1322899,
+        "depositCount": 26457980,
         "coefficientSummary": {
-          "coefficientSum": 1550.3477492495042,
-          "weightedCoefficientSum": 3261499430.5166664
+          "coefficientSum": 74672.7405843778,
+          "weightedCoefficientSum": 147672839139.63284
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.5491450798651933,
-            0.6091033994641355,
-            -0.16292882079216156,
-            4.987875431844801,
-            -0.9766806264564138,
-            3.524793445574898
+            232.39565580272006,
+            53.998560043502046,
+            -36.77913299047387,
+            358.46305589622204,
+            -81.21412440328284,
+            192.88362287093585
           ],
           "weightedCovarianceSum": [
-            6931627.703689758,
-            -266863.45796503575,
-            38597.6213431933,
-            10789332.668070696,
-            -2102300.471055413,
-            7567208.414754153
+            375501587.94403064,
+            -24685977.807851933,
+            -2354474.713095275,
+            724729390.4383781,
+            -120918978.63942973,
+            369523274.2860012
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 5377.5060102479965,
-          "weightedCandidateSum": 11226665314.669004
+          "candidateWeightSum": 232502.3246563238,
+          "weightedCandidateSum": 457790190939.33606
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -191,7 +262,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 818.1744580000013
+        "elapsedMs": 1887.762208
       }
     },
     {
@@ -203,14 +274,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 185,
+        "candidateCount": 5585,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 426.7720854814229,
+        "coefficientSum": 94925.50657227525,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 3700,
+        "depositCount": 111700,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.34936197916666667
+        "meanAbsoluteChannelDelta": 12.28486328125
       },
       "treatment": {
         "requestedControls": {
@@ -246,44 +317,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "a581cc75595187c10b9f1ebd080a464f46dd9d9984e1060e2e6731c12ef0589a",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "16f03c158b9234c0c8862402c1067f9bec84c09ebb1932bde8ca54f15491006d",
-        "candidateIdentity": "05a8ee0574ff6e59472fbfbe5640180a1140a51ed317ade61086cac02503d6f4",
-        "coefficientIdentity": "58099385a1eb640a8ab67380d5be4a7a811a9864f1be4614aa8fe8f065e4c8b8",
-        "covarianceIdentity": "d400e5319d80e0ea9d48cd99e28889125b800c9a725b7e5bcd8c9cf91c3a4043",
-        "depositionIdentity": "cbd4508dbccd2f57237a00d67548fe8f4efeaf52ad862d6bef4a4bec99a722df",
-        "pixelIdentity": "ad61ef3bc24f8ab4215b9a434904853500cf3c78b0db88586e89fb975234a29d",
-        "candidateCount": 16027,
-        "depositCount": 320540,
+        "stageBIdentity": "5f30101ceda883701060bd28d926fe22c6efbf5d05f663c855383762f4f42a40",
+        "candidateIdentity": "487ac7822d08f1cb02da85d5b5a895a41ec930bf46340636c548fc286d085c8e",
+        "coefficientIdentity": "5ac4e2c66a26f1274b026d7737b6315495999bd6ba5b72547e2558d3d8a91dcd",
+        "covarianceIdentity": "72b3971c0f216fc8b7ea4b9980343a14053b48cd16fadd5dbe9e8a9847c7f699",
+        "depositionIdentity": "39057472274d7af2122e8e6521bc9c802b9ea1d62edc85f975755bcac0d7fe8e",
+        "pixelIdentity": "7339505af340f234f58a8fd1a0120f7a12e3ea26e7a72a356c79447f3a7f8494",
+        "candidateCount": 1338961,
+        "depositCount": 26779220,
         "coefficientSummary": {
-          "coefficientSum": 2016.9665942462382,
-          "weightedCoefficientSum": 4229912968.210955
+          "coefficientSum": 211249.6842306295,
+          "weightedCoefficientSum": 396888801169.5956
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.5823783282286272,
-            0.6123636677375459,
-            -0.16244227563414249,
-            5.0400471011601615,
-            -0.9843674412428401,
-            3.561213870551595
+            235.26421866466197,
+            54.55873259115253,
+            -37.17865922988503,
+            361.99307176811726,
+            -81.94695080383204,
+            195.55791211577852
           ],
           "weightedCovarianceSum": [
-            6994639.010790457,
-            -276889.29872739,
-            42700.57465713808,
-            10910085.3870268,
-            -2120698.798552093,
-            7642407.72305135
+            380022365.6383324,
+            -25158578.781254847,
+            -2165394.7981210626,
+            732034666.0354005,
+            -122097310.79939099,
+            374874666.56312597
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 7213.798646412747,
-          "weightedCandidateSum": 15038442514.301605
+          "candidateWeightSum": 671507.486303533,
+          "weightedCandidateSum": 1256294744777.844
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -294,7 +389,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 749.6623749999999
+        "elapsedMs": 1919.7374170000003
       }
     },
     {
@@ -306,14 +401,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -124,
+        "candidateCount": -4934,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -1140.8469700074024,
+        "coefficientSum": -66338.0275460768,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -2480,
+        "depositCount": -98680,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.9875227864583334
+        "meanAbsoluteChannelDelta": 14.647080078125
       },
       "treatment": {
         "requestedControls": {
@@ -349,44 +444,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "534d1f0b49845caedbfca483740894203e9eb3fca1fa4801f8f11847629d6e4a",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "322c94d36e6b46c3a1a360685f635201f9f56ff13a80c1590dcc3a4cd20df605",
-        "candidateIdentity": "af6ef33f4690227bac024b26e240ad27cc59bb48a9ab13e970bffa28a6c7dd31",
-        "coefficientIdentity": "c4ac73f64a96acf5b2cf23e5f4dd6193d3920354c7009340810b84866f580dbb",
-        "covarianceIdentity": "733cdd9e851b3cb18034f3ee80dd00c40c8fb90e97589b53875ad54e150804f8",
-        "depositionIdentity": "bc3715d7a9456f651ad82ce1334caecbcbf54f7780f8b7321d6928e1e128b2f4",
-        "pixelIdentity": "6a13ee47d98b0a167e4b538e5c22dda90de3ecde68b3e39fb906fd45a15e6bfe",
-        "candidateCount": 15718,
-        "depositCount": 314360,
+        "stageBIdentity": "7cdd2963943743dcda7fc67b8bd8817ef05172a054ada1a276ec220749b3c1dd",
+        "candidateIdentity": "5c97f37e9edbf1e9c709c904b7bd6f4636570a1647cf082c60e25abf6489f408",
+        "coefficientIdentity": "ec51e4ceaaa60f36b07f4b3f05aa91a3ae6cb48e773c173ee38c8ec8db88fd9b",
+        "covarianceIdentity": "75e2bd515e547b50920c1b1ac27ce721df1ab14f2da53ba9c02020eded8037f5",
+        "depositionIdentity": "6e95e407d540f90202f6da015ee2c36d4d6da78a5d0aa74ea058deea9a5ab2f2",
+        "pixelIdentity": "d57a587736c1b74a973b0e7c1040b0d547da96c504074bfac3a66d014521a4dd",
+        "candidateCount": 1328442,
+        "depositCount": 26568840,
         "coefficientSummary": {
-          "coefficientSum": 449.34753875741274,
-          "weightedCoefficientSum": 940939235.6303602
+          "coefficientSum": 49986.15011227745,
+          "weightedCoefficientSum": 94633615520.93236
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.521554682321199,
-            0.6096355672688913,
-            -0.16442993290203053,
-            4.9289437826833575,
-            -0.9670484747045482,
-            3.499648832156112
+            233.07636245136484,
+            54.01404204633119,
+            -36.77013127050759,
+            359.4007419696051,
+            -81.4348192528361,
+            193.79512227881384
           ],
           "weightedCovarianceSum": [
-            6871998.681805855,
-            -248825.92812340567,
-            30991.418286238146,
-            10642307.42864981,
-            -2075388.0825575124,
-            7508076.691708
+            376918462.34317166,
+            -24969120.84705118,
+            -2175321.8951624283,
+            727021825.7569612,
+            -121308021.35808815,
+            371498281.5934359
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 1605.6214377833046,
-          "weightedCandidateSum": 3348340461.6403613
+          "candidateWeightSum": 159509.96583020294,
+          "weightedCandidateSum": 301460156908.0225
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -397,7 +516,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 739.7762500000008
+        "elapsedMs": 2104.4636249999967
       }
     },
     {
@@ -409,14 +528,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 219786,
+        "candidateCount": 295655,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 21432.124122408248,
+        "coefficientSum": 23916.314679895382,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 4395720,
+        "depositCount": 5913100,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 11.841829427083333
+        "meanAbsoluteChannelDelta": 4.017203776041667
       },
       "treatment": {
         "requestedControls": {
@@ -452,44 +571,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "e6d88641b165d4c3517cdc97e49e8de1b18248c39f5f7bb3ddb59e3e0ec01ecc",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "01529996ee7e791fc1f1486ea8a8462e18a3f4571c7fece56698c2f04b7a36b9",
-        "candidateIdentity": "2ee697231cbcf6d8fec76f1f6b2819dd6342d96327eefd720a06f4d706ff869a",
-        "coefficientIdentity": "8805bc100c09396e293c67614cc5d3dff3f7e185b6046ebd9b70eff1e0c8b9f6",
-        "covarianceIdentity": "b5cdc2f3cdb41d4808b21cfb58886d085016346cf10bf79df50d76c7f9b50fa2",
-        "depositionIdentity": "ef95ba343f08feed668f5a45c69c3c10dda3cc6c88b71d112545b1429e9c467f",
-        "pixelIdentity": "c36c4c86cbe28bd82a34cf307e1cec3e3f3b8282c182229dc7a3a7d7b8fb1e4a",
-        "candidateCount": 235628,
-        "depositCount": 4712560,
+        "stageBIdentity": "6633ada46d255d928b5e7841b430ba79ee9bec246f9148419dac7f4f50141b1b",
+        "candidateIdentity": "75fe7eda050760a71360e0468efd841d39d10c0ceabdc9b52f147491786b10f4",
+        "coefficientIdentity": "e6101ce05c0ef949b33c2ce062ecd0f44ddf9e426653ff3c84073d3e67f6a48c",
+        "covarianceIdentity": "6a2a9a2e869038b8b11ed479c96440a49b3da313f46cf37d275a1bd1fe88ae7a",
+        "depositionIdentity": "17dbdf6b97633a1b8c6c19e52b0280b3584f58e29e9593a66d9c0b86b1a91f82",
+        "pixelIdentity": "52f1d991797a7a1674db48427560edaef50fc1c09a7f8a547eb9d43cccc5d828",
+        "candidateCount": 1629031,
+        "depositCount": 32580620,
         "coefficientSummary": {
-          "coefficientSum": 23022.318631173064,
-          "weightedCoefficientSum": 46608702625.62975
+          "coefficientSum": 140240.49233824963,
+          "weightedCoefficientSum": 270721534045.8881
         },
         "covarianceSummary": {
           "covarianceSum": [
-            47.54410157550364,
-            11.835760370527384,
-            -2.4568914071195755,
-            90.55021840198935,
-            -14.675312613948698,
-            39.95017716650548
+            286.5727334964629,
+            73.42438820039332,
+            -47.27437189209055,
+            421.64187934452343,
+            -98.43277619615417,
+            230.46813183267787
           ],
           "weightedCovarianceSum": [
-            80629501.43474819,
-            -9358202.61289535,
-            4318310.732741139,
-            183914104.84708795,
-            -24534497.02607152,
-            82871372.3962265
+            460709304.41789347,
+            -9301479.971979527,
+            -8851030.21920012,
+            839734279.0665741,
+            -144118685.63912442,
+            433156228.5195818
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 70353.05825645763,
-          "weightedCandidateSum": 141999478470.62628
+          "candidateWeightSum": 435830.05037624727,
+          "weightedCandidateSum": 837675130090.7936
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -500,7 +643,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 933.1659170000003
+        "elapsedMs": 2144.445541000001
       }
     },
     {
@@ -512,14 +655,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -2715,
+        "candidateCount": -28242,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -1191.056543183844,
+        "coefficientSum": -11076.999417754923,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -54300,
+        "depositCount": -564840,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 1.0909440104166668
+        "meanAbsoluteChannelDelta": 1.9283821614583334
       },
       "treatment": {
         "requestedControls": {
@@ -555,44 +698,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "c9e53b67b6ea06b64b56b707e2a2d7a01cd9c7446c765e5dc94e329ad0327102",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "9ff8f52cfcfaed246169aca46fc1b016681abfb6012ef6a70db3aa526d353d4e",
-        "candidateIdentity": "7e105f9af4f60e8ce69fd688ee961cce5365da638104c8589d5688b40c210748",
-        "coefficientIdentity": "f4a630fd826ddd766cd758365f0e8322385489f527b0bea9a6cb8a93dbe68f93",
-        "covarianceIdentity": "03b5b4c259a557d9ee3b357261939b4dff4c4bb3684f745c2d0d6b8db8e21035",
-        "depositionIdentity": "fefefcd81cbdc56e108289f45d2ba1301d442a708a979ff6e00be686c8ddeebf",
-        "pixelIdentity": "87936f39494f7b8fba2c96b38ae2380250fbee0d0644c7cb87f125a806920514",
-        "candidateCount": 13127,
-        "depositCount": 262540,
+        "stageBIdentity": "8e7fd39137d21aeba0c9dd23c785a05af5b20ad6f591165424e477ee7a355ba3",
+        "candidateIdentity": "8246a91e38d9cf262a4de3cc405424b435ea0076d1c140a63d896a313f100c35",
+        "coefficientIdentity": "101296bf36698c26ae9528b4f494193b7788d321dc3de4a5ab45a5ab0dc4a1e1",
+        "covarianceIdentity": "e87c0ca2b87386c21c194f4a03e9a62987285e2619dc088ae47da3dd278fcb74",
+        "depositionIdentity": "ee71663ee6418907e3c4622e8594906f74c710b10f9f48477121c31af282a1ee",
+        "pixelIdentity": "3b8a453f9988921b080e42a34026f82e140e758e095bd767ca1738578f88b257",
+        "candidateCount": 1305134,
+        "depositCount": 26102680,
         "coefficientSummary": {
-          "coefficientSum": 399.1379655809713,
-          "weightedCoefficientSum": 859314730.8865807
+          "coefficientSum": 105247.17824059933,
+          "weightedCoefficientSum": 206698614631.5559
         },
         "covarianceSummary": {
           "covarianceSum": [
-            2.996872996675185,
-            0.5746685559070148,
-            -0.16409026538736501,
-            4.26418075459831,
-            -0.840323488937075,
-            2.9629537146431693
+            230.06700947954113,
+            52.92911494061289,
+            -36.09520356773302,
+            354.61131588098795,
+            -79.82380930940987,
+            190.8345448579541
           ],
           "weightedCovarianceSum": [
-            5816432.355583452,
-            -132280.26911029618,
-            -17158.344258204106,
-            9159495.487887915,
-            -1791653.400789413,
-            6389612.032396611
+            371659987.2053115,
+            -25150178.67201356,
+            -1989432.8746573406,
+            717276721.3133415,
+            -119364906.46610956,
+            366503822.6341048
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 1375.880852382937,
-          "weightedCandidateSum": 2929684095.327293
+          "candidateWeightSum": 328632.25693215197,
+          "weightedCandidateSum": 642136208003.7623
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -603,7 +770,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 747.5181249999987
+        "elapsedMs": 2085.037250000001
       }
     },
     {
@@ -615,14 +782,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 2,
+        "candidateCount": 64,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 20.72437382110411,
+        "coefficientSum": 3368.6996354719304,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 40,
+        "depositCount": 1280,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.016409505208333335
+        "meanAbsoluteChannelDelta": 0.719931640625
       },
       "treatment": {
         "requestedControls": {
@@ -658,44 +825,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "daac2079408a453f28eaa6f81f72e53e5c0477d865907bdf974d1e4aae348f40",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "5017ac0f015d13f701aed57de9dcdd1042b87e2ecb2aa15ecbc6e8539b34c0de",
-        "candidateIdentity": "2a1a9c2d2c0f31be05366c26d851e18afaa1581f3bcbd2f8ce349cd02e85e90e",
-        "coefficientIdentity": "86cddeddc1c42a450eec6f8d27dda2067f64bb378b6d350d1c3636e41a0407da",
-        "covarianceIdentity": "8a0fe566fdbdef89cfd45c643e779a7680ec6bc5252bc3e59babc80bcdb88d89",
-        "depositionIdentity": "b066fe54f5f4591f089d9abeb519130a09e4523dca7364dc2d983f5868d513c9",
-        "pixelIdentity": "5b00a635ad0092da5981d0f9f572174d429adc66397fd7d92f708d2bbcaa135a",
-        "candidateCount": 15844,
-        "depositCount": 316880,
+        "stageBIdentity": "53d5df97f0cd366cb91ba6d708ce10c57716f70fbd5a3616a7183b6f5bca9b4f",
+        "candidateIdentity": "31a1a9a12e4a1fced33509007f8d177894e1d528f4a2ab5a8eccf7a19f9fa507",
+        "coefficientIdentity": "e96f1076d01a797127788a8290f97c504f93673bb418faabf8fd244206da51ed",
+        "covarianceIdentity": "40ecdaa57fc86092c772b4e73883f59ccea0b424cd4015543086eb10445e54a9",
+        "depositionIdentity": "4f1dda7ff0a3abcab73dc3615c6d7f2311718fc89233c7b888e1b9f9a2f4bf70",
+        "pixelIdentity": "7f30a7881a37f0d7f833f7e5e73e7638ac1abb9552c65a85c4c8549a047a570c",
+        "candidateCount": 1333440,
+        "depositCount": 26668800,
         "coefficientSummary": {
-          "coefficientSum": 1610.9188825859194,
-          "weightedCoefficientSum": 3384131299.4091997
+          "coefficientSum": 119692.87729382618,
+          "weightedCoefficientSum": 233944984498.04565
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.5492182607978475,
-            0.609354057936369,
-            -0.16285194052352495,
-            4.989434394993587,
-            -0.9759497602300955,
-            3.5251863014934575
+            234.2553660828787,
+            54.34205277764166,
+            -37.02539953887356,
+            360.7846526381203,
+            -81.69536921459621,
+            194.68069425506104
           ],
           "weightedCovarianceSum": [
-            6931749.826273828,
-            -266445.1651223751,
-            38725.917290367666,
-            10792723.947013982,
-            -2100553.667519501,
-            7568215.886476797
+            378384582.19564956,
+            -25074152.161714092,
+            -2173239.9260443086,
+            729550423.3319018,
+            -121702007.24764374,
+            373110270.1317268
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 5595.2386007203095,
-          "weightedCandidateSum": 11664641884.236843
+          "candidateWeightSum": 373629.92598530004,
+          "weightedCandidateSum": 727054144047.6012
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -706,7 +897,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 2060.6003329999985
+        "elapsedMs": 2119.3230419999963
       }
     },
     {
@@ -718,14 +909,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 5855,
+        "candidateCount": -18946,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 410.18147032145976,
+        "coefficientSum": 18103.038619139028,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 117100,
+        "depositCount": -378920,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.40810546875
+        "meanAbsoluteChannelDelta": 4.027757161458333
       },
       "treatment": {
         "requestedControls": {
@@ -761,44 +952,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "aed62e4cf7145161300ff91d7479adefef76f3057235d7d1eeb2867eb58772d0",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "4038159b88a1adf1fe07d2fa2820df7de2b979b0f765ce5b218ad57c4307e015",
-        "candidateIdentity": "f3bc75145a5d3af452a47b1bde3924c5cb183664cde3cecd07cce738a177d2bd",
-        "coefficientIdentity": "972aa7aa6d9c315c6f9fe8b6796421ef450c0ce5de9407519b598fbad310b2ef",
-        "covarianceIdentity": "d1578630aa1fb543406776ab768cb7ab48181304f0fee4a8d9d80b9ca037731d",
-        "depositionIdentity": "884a4b4d7e641285d0dcf5383730dd025d973dc727e2fb317dd7b05ffd7f03af",
-        "pixelIdentity": "8278391fe6793c782e309aaab89f22055eb205936b803f49ee76fc794a4aef1a",
-        "candidateCount": 21697,
-        "depositCount": 433940,
+        "stageBIdentity": "0c72988104a111c3130e865725651dc622582954ddd85a3dbfb085820c644eba",
+        "candidateIdentity": "99a6253c3c19979f3e80a83b9cf4bd121df8faba944d1f0b77a7c7bb0bb4b943",
+        "coefficientIdentity": "e53506545e19f193a18d87ecea4c077216ff10ad0c225cce25de36917dc8dad4",
+        "covarianceIdentity": "8245595cccc08ff5e8dab52a28cb848995ab119a85f01ce69255236d4e7e7787",
+        "depositionIdentity": "dadad48c763bcd3167616f587ed0d42c150acca924e11eccf64c70ecdb43ed0f",
+        "pixelIdentity": "2439950a0c7a7003ef667b81682ead47a3a677b5fdbbd9f66b5308791e26e1e5",
+        "candidateCount": 1314430,
+        "depositCount": 26288600,
         "coefficientSummary": {
-          "coefficientSum": 2000.375979086275,
-          "weightedCoefficientSum": 4224258949.744373
+          "coefficientSum": 134427.21627749328,
+          "weightedCoefficientSum": 260415979478.04868
         },
         "covarianceSummary": {
           "covarianceSum": [
-            4.6800105016885905,
-            0.560703557964149,
-            -0.11567529462417123,
-            6.80507103744993,
-            -1.3618937047022261,
-            4.691536246785491
+            228.97602538482292,
+            53.103074632976835,
+            -36.9238596853029,
+            360.2763200874289,
+            -81.28186203548749,
+            192.01283131503578
           ],
           "weightedCovarianceSum": [
-            9253200.276857268,
-            -907856.5852723392,
-            288375.34491340007,
-            15165323.497235814,
-            -3002117.110661599,
-            10130601.317280198
+            366316276.03565544,
+            -27508841.047356006,
+            -996535.6152346042,
+            730010751.9630343,
+            -120638722.75093248,
+            365564565.98900855
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 6980.155030376687,
-          "weightedCandidateSum": 14598343038.256495
+          "candidateWeightSum": 419790.5163255597,
+          "weightedCandidateSum": 808384979898.4633
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -809,7 +1024,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 852.2320839999993
+        "elapsedMs": 2085.2156659999964
       }
     },
     {
@@ -821,14 +1036,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 10978,
+        "candidateCount": -98604,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 1111.7893218282509,
+        "coefficientSum": -45720.116443212566,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 219560,
+        "depositCount": -1972080,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 1.014501953125
+        "meanAbsoluteChannelDelta": 9.347174479166666
       },
       "treatment": {
         "requestedControls": {
@@ -864,44 +1079,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "ba05d3eb466d2bdd7159465c948936cecebc8ddf33595984a55f6b83db4e54e7",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "2ab3cd9e96996f8c150923647277a81a492af93b65b1f00c876a2b205be8a362",
-        "candidateIdentity": "c46703044ef259567072a3a0d50f39d2b49c848cc74844f60ead27a6abfe73f4",
-        "coefficientIdentity": "753e7b6d027f5bbdc2425cdb0fdcc035f6aed1274238d714c7137f22818ac9f4",
-        "covarianceIdentity": "7d28648728216798454243d71d9dd9a4bc1765d072ac3bf2a60b601051e3b3d5",
-        "depositionIdentity": "382b41a4d283059c326d11cba53a34aff47ce03cbba0f12ee8e6757b6d03ff0b",
-        "pixelIdentity": "ef740bf5f67cfe378f4b2cde424f9f92ad8535f9a19df4aa7859832a976daedb",
-        "candidateCount": 26820,
-        "depositCount": 536400,
+        "stageBIdentity": "99da6c8d64c3f2b9abca83a266b30aa4c40c69a72282f5e7ecdb63750cd1e181",
+        "candidateIdentity": "8ce93e804a564da24be36cbc11abd8601a6bdd72d1914030048434d59167b50c",
+        "coefficientIdentity": "5515bfd23a346922a096f3a41fb8e63cb09a3b78872492693b84ca0653a0108d",
+        "covarianceIdentity": "50ecd7954d1883a941bd1d204fcc1b255f3a154301a636ba98a71af648cf7780",
+        "depositionIdentity": "ba495d80fdfbd60f20e04e073db5931d4a8406a648bcbd86cd70e79cf4ffa2fe",
+        "pixelIdentity": "b2b76e64d29c179d7de7b42719cc2da8be219ec2920b544ba9ce3e597f1672a0",
+        "candidateCount": 1234772,
+        "depositCount": 24695440,
         "coefficientSummary": {
-          "coefficientSum": 2701.983830593066,
-          "weightedCoefficientSum": 5489198799.308039
+          "coefficientSum": 70604.06121514169,
+          "weightedCoefficientSum": 140343833954.1044
         },
         "covarianceSummary": {
           "covarianceSum": [
-            6.143805594285321,
-            1.3396629959575508,
-            -0.4813954000849232,
-            8.235291707226308,
-            -1.730694711845747,
-            5.747911389641283
+            218.01762909671058,
+            49.3310807646991,
+            -33.991151131150595,
+            338.8424850488686,
+            -75.91335260876473,
+            181.45862808753893
           ],
           "weightedCovarianceSum": [
-            11754304.319206122,
-            392239.2711439004,
-            -418343.03147977317,
-            17056872.74972243,
-            -3449739.7712197616,
-            11847492.497912357
+            352237675.4988184,
+            -26476111.425925344,
+            -1313218.4981958978,
+            686891429.224715,
+            -113615982.79555951,
+            348733758.7822136
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 8700.624122260524,
-          "weightedCandidateSum": 17622604522.514076
+          "candidateWeightSum": 219131.51559659003,
+          "weightedCandidateSum": 434059426553.8885
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -912,7 +1151,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 1985.9424580000014
+        "elapsedMs": 2042.7015410000022
       }
     },
     {
@@ -924,14 +1163,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -847,
+        "candidateCount": 93579,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -124.96158100981506,
+        "coefficientSum": -2359.2876675869047,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -16940,
+        "depositCount": 1871580,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.58162109375
+        "meanAbsoluteChannelDelta": 4.5754622395833335
       },
       "treatment": {
         "requestedControls": {
@@ -967,44 +1206,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "d857186ff63ffac62cf82be64a3b3a4d7dd57355415b3827ec1e12b1dbd9ee89",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "8367ca5792ae4512a43d2f031e6cbe84afb76884baa09ea8d120f5d76245d90c",
-        "candidateIdentity": "ffe25fa4f8192bf89789c6ac8320e8cc439f89af3fdaddd3ef04bbbee9b47ae8",
-        "coefficientIdentity": "0810700645cf09ea960dd92f1105d2918e0bd4efaea5443a6a047b05a24ca5e6",
-        "covarianceIdentity": "b68b988126c740b0c7b7aeece2eb3a9e6d25c929457ea95b4f8a6bf55b30bd78",
-        "depositionIdentity": "811354dc43ba638cfafec2aecdfb3ab11d981ec06d3a0b7f511252256a09f724",
-        "pixelIdentity": "731a2963017c66e54df87b4e2fefd9cde38e3631b298fd51f499377143f4fbc8",
-        "candidateCount": 14995,
-        "depositCount": 299900,
+        "stageBIdentity": "3b949fff661f637c73fa9c74cd5a9cacca1c2410d7ccbc1f356286019eea4c0e",
+        "candidateIdentity": "4aedd5b97e65ef4b1d1f1783469290f9aa5d0cb61494fb807ac9132a2fa67812",
+        "coefficientIdentity": "2c8c903d85fb2e273d1605968d2646f5a0271b89266d4503b1e46e5a84623a15",
+        "covarianceIdentity": "7b0cf8a17d072706db122ebb6d989fc7e88d99a36cf8f7a878c55e3d84fc8d49",
+        "depositionIdentity": "0331c2d8781ac10a8e0ae0f1d5bde3195ac644a8b6f9ec80cd33dec3b808f16c",
+        "pixelIdentity": "db1fba9f6970102afbbab857a0f723047301f7ca08ed437fd06aea2adbfe3e26",
+        "candidateCount": 1426955,
+        "depositCount": 28539100,
         "coefficientSummary": {
-          "coefficientSum": 1465.2329277550002,
-          "weightedCoefficientSum": 3120064671.9302506
+          "coefficientSum": 113964.88999076735,
+          "weightedCoefficientSum": 221351541663.86667
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.3712428715612037,
-            0.6758626367501631,
-            -0.11580071875209096,
-            5.311596523627451,
-            -0.9159657774425906,
-            3.3518319298468686
+            253.97420870798493,
+            61.44554824097999,
+            -39.826965100129065,
+            376.073509621428,
+            -86.20640361135693,
+            205.5624043094261
           ],
           "weightedCovarianceSum": [
-            6502253.01491856,
-            -226987.36721286044,
-            114217.74834583775,
-            11725997.4909245,
-            -2142109.781156185,
-            7314671.986385712
+            411432666.80183315,
+            -16895156.562449515,
+            -4584817.13569933,
+            755934794.475764,
+            -127840898.75651719,
+            392323111.1131587
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 4984.833208837621,
-          "weightedCandidateSum": 10488593829.517487
+          "candidateWeightSum": 353371.55019372946,
+          "weightedCandidateSum": 682637808377.1124
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1015,7 +1278,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 733.1654170000002
+        "elapsedMs": 2185.6726249999992
       }
     },
     {
@@ -1027,14 +1290,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -3259,
+        "candidateCount": -33106,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -501.6100552403759,
+        "coefficientSum": 29559.084238443,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -65180,
+        "depositCount": -662120,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.6947591145833333
+        "meanAbsoluteChannelDelta": 6.770511067708333
       },
       "treatment": {
         "requestedControls": {
@@ -1070,44 +1333,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "cc2b183c892deb21a5f562e12515a86c56cf7fd7ff715f61b032ad537273eac9",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "9a73bd8a9b16009f65fb1bd975c91b80a8efce8c667f1a2db59176337563dfd9",
-        "candidateIdentity": "cd80243aaa3618a288e679d07d9faa8d6e1a15d6c6275525b4515b2976f1d39f",
-        "coefficientIdentity": "0494fb4b77173c48ca820fd3021f5cb239a12abbbbaf4caf7af9427eb3c6b3e2",
-        "covarianceIdentity": "abd72303ab071f755d154de00be6b83a7a48e32a00098b376e3884ec4147d3f0",
-        "depositionIdentity": "90862a9f4392c41f499f75cda35f5cd694bf8d6349359ffe41776218e088f1d1",
-        "pixelIdentity": "d9edee8a13a117c65bb394c80e2aff73972024dafd24fa64f4e1587a5bd41b98",
-        "candidateCount": 12583,
-        "depositCount": 251660,
+        "stageBIdentity": "ab41d65a8d514b76dfe1240a4260f54a96047e6ff5d3879bf2430a72a3b7f465",
+        "candidateIdentity": "5dad5c1e84be51a53f83dc8b75e40af032d272180db76e4c41a9c953709d05c2",
+        "coefficientIdentity": "703de5fa1744b59b09200cc70eec6b2db68284eea34c60acf8aa02adfe3681ef",
+        "covarianceIdentity": "c836535edb40b1adfe1ebba0c7e5ca8f25ad99287a143bc0c0c8b7d100ea0bfc",
+        "depositionIdentity": "5e8fb6f525001fd7523e9487800c0d9099e800a22fd66ea970169a40f1912f6a",
+        "pixelIdentity": "dec7b27807b87cf418e2f047bcb557b2f31180f179b84f13acf35f43432f6280",
+        "candidateCount": 1300270,
+        "depositCount": 26005400,
         "coefficientSummary": {
-          "coefficientSum": 1088.5844535244394,
-          "weightedCoefficientSum": 2361734116.915345
+          "coefficientSum": 145883.26189679725,
+          "weightedCoefficientSum": 282319865531.0559
         },
         "covarianceSummary": {
           "covarianceSum": [
-            2.7720181097716705,
-            0.35800506479772776,
-            0.08211892954732236,
-            4.494633770994367,
-            -0.9884155622506199,
-            2.8033138902537713
+            228.85674993097712,
+            51.673013212027115,
+            -35.242297236184264,
+            350.67133121935586,
+            -78.7185156693171,
+            191.95167836471987
           ],
           "weightedCovarianceSum": [
-            5621089.574937082,
-            -779890.0128041101,
-            592679.0847096827,
-            10243481.054315964,
-            -2456667.2887537773,
-            6417071.906933076
+            372374357.57477707,
+            -26429112.96597446,
+            -1572522.8689930157,
+            710770027.8715742,
+            -117393507.51531893,
+            370578118.32942164
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 4035.689757989399,
-          "weightedCandidateSum": 8734879211.671162
+          "candidateWeightSum": 475236.3521432814,
+          "weightedCandidateSum": 918142201602.906
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1118,7 +1405,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 727.3990000000013
+        "elapsedMs": 2073.2839170000007
       }
     },
     {
@@ -1130,14 +1417,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -201,
+        "candidateCount": -435,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -234.27577414879352,
+        "coefficientSum": -12061.419412137766,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -4020,
+        "depositCount": -8700,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.20495442708333333
+        "meanAbsoluteChannelDelta": 3.238212890625
       },
       "treatment": {
         "requestedControls": {
@@ -1173,44 +1460,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "11671c49aa898681e21cec9a1ea627e4078c80f6b828fa4a8c98bf784c312555",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "19eab3c6704dbb72dee726e52efa17bb561e3492540343b73ca58fdfc95f7942",
-        "candidateIdentity": "30d1f963788b348bbec5b053472b9618fcb91257f138f30a1f94576e11824436",
-        "coefficientIdentity": "e15433323bb6bf9df54fe9940873d381eb71e3f39c3d42e9a4e45d318d6d810f",
-        "covarianceIdentity": "ea25645a8fe5358bf885727964376d46eb9be493ea511596c25a0555cfc8b54d",
-        "depositionIdentity": "a7b2e645bc79f7595cf8512a71479c62b970affe1f097ee32ec4b779140107e3",
-        "pixelIdentity": "cbcc874b100f235d6d6448245b245939897ce918ac157d6ffb3261c183872bee",
-        "candidateCount": 15641,
-        "depositCount": 312820,
+        "stageBIdentity": "9ba745363aa1e48cb4fa92c563177942b623d3fac8800334ffe7eb8c1c922983",
+        "candidateIdentity": "338226b20558c4ec2dc07751999d1ea9e1392e8893d33c0a2d6153c8a054629a",
+        "coefficientIdentity": "7cbcc270dd3bf7800853d26c20509e608f25b266a5fdd31b822d55bf4fae8903",
+        "covarianceIdentity": "9556d817a25871deab1fdcf0f734df625b9d05eaf43305737fd5de1ccfaa8026",
+        "depositionIdentity": "c9a4bf4a2841589603693d82770934bf04f944a3b52cd586a8ecc2b9f0c57da0",
+        "pixelIdentity": "e56dd80c96e32b8b1ee917c8451f7acc8b8ce6131f36c26420b37f1749acd899",
+        "candidateCount": 1332941,
+        "depositCount": 26658820,
         "coefficientSummary": {
-          "coefficientSum": 1355.9187346160218,
-          "weightedCoefficientSum": 2857311723.7954216
+          "coefficientSum": 104262.75824621649,
+          "weightedCoefficientSum": 203245737837.0641
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.506109671767265,
-            0.60501149327517,
-            -0.16405602054267046,
-            4.940942496058998,
-            -0.9706941101848936,
-            3.4870540399902246
+            234.15593565086863,
+            54.31684707332691,
+            -37.023635450685155,
+            360.6597869133955,
+            -81.68115357398494,
+            194.59413411307312
           ],
           "weightedCovarianceSum": [
-            6847007.2171054585,
-            -262319.01986211754,
-            33896.274318565804,
-            10682475.059309475,
-            -2085274.542044315,
-            7489076.156771343
+            378198428.6538854,
+            -25079541.78702515,
+            -2181556.878692449,
+            729294773.0780867,
+            -121668254.77511638,
+            372910916.3164348
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 4753.916375240105,
-          "weightedCandidateSum": 9928640578.37565
+          "candidateWeightSum": 329625.6533031256,
+          "weightedCandidateSum": 640000988693.6034
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1221,7 +1532,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 728.4382499999992
+        "elapsedMs": 2104.570292000004
       }
     },
     {
@@ -1233,14 +1544,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": -57,
+        "candidateCount": -387,
         "coefficientIdentityChanged": true,
-        "coefficientSum": -74.329886622387,
+        "coefficientSum": -6903.424479478723,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": -1140,
+        "depositCount": -7740,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.06587565104166666
+        "meanAbsoluteChannelDelta": 1.9410091145833333
       },
       "treatment": {
         "requestedControls": {
@@ -1276,44 +1587,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "add8fa218312717c5462f3c32d71e268cebe2cf60940fba525d686f85784bcab",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "f753e435cbd606dc40365b4866283cd95cf398122d735de5e7874c795f2cb617",
-        "candidateIdentity": "83f3b4d10cb7b6543df6db737ede4afed8f101deffd92c851272828a894030da",
-        "coefficientIdentity": "969a885fadefebfa00b84a453a90afa5317d7f93dde557d99c704d43c24ef62e",
-        "covarianceIdentity": "eb5db3c5b17a17729eeaba1b691098ed718c5175ec215d724d6a9341f3c11d54",
-        "depositionIdentity": "d8c6ff2a6b4732a4d341450037e10f9c980ccf587cd347786d42586b405bb817",
-        "pixelIdentity": "c07fd6b83bc5cbb26b2b7947d800ba73aba02b87744d65d9098c4e02bc87ef0c",
-        "candidateCount": 15785,
-        "depositCount": 315700,
+        "stageBIdentity": "30b44f13a643ca828c62ff4b9b76648d6aa966d07b7589c069270a13b6359e18",
+        "candidateIdentity": "72ce66525f879a8d0b58985b157798832378b7018ee57b13b2fd3783ba78d849",
+        "coefficientIdentity": "e470447ac89a2d3b06d835d39090a2efd06a5cbf6fa641ea72ffe848fc457ec3",
+        "covarianceIdentity": "a7c1745d94f0751da8e491ae1c3f2ce408f64eafa94a9d1899fc2d7edf793b48",
+        "depositionIdentity": "1fb1ff08f1d6b7b3b08032199f2f8d7ca900c84b237b5753665f678009273c1d",
+        "pixelIdentity": "fca7c97289ef264ed6f5f8a43f381d8310c7beec88296d648a2387721f482eaa",
+        "candidateCount": 1332989,
+        "depositCount": 26659780,
         "coefficientSummary": {
-          "coefficientSum": 1515.8646221424283,
-          "weightedCoefficientSum": 3184547569.540098
+          "coefficientSum": 109420.75317887553,
+          "weightedCoefficientSum": 213507540769.8883
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.538403562275076,
-            0.6067799569706703,
-            -0.1629675416953853,
-            4.973493729077179,
-            -0.9737121931879243,
-            3.5142717849823657
+            234.16469299690658,
+            54.31815708816157,
+            -37.0221243573237,
+            360.6783577562899,
+            -81.68498258128525,
+            194.60374415365885
           ],
           "weightedCovarianceSum": [
-            6913174.574613185,
-            -268636.2384535082,
-            37628.86308561369,
-            10758991.27634851,
-            -2095304.0989317703,
-            7549020.579838757
+            378222066.542547,
+            -25079861.25084277,
+            -2178135.2050890345,
+            729343046.9953425,
+            -121679694.21747285,
+            372936639.44412667
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 5280.148401288186,
-          "weightedCandidateSum": 11008133434.755033
+          "candidateWeightSum": 342946.9710897402,
+          "weightedCandidateSum": 666320941625.4707
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1324,7 +1659,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 732.5298340000008
+        "elapsedMs": 2107.426625
       }
     },
     {
@@ -1336,14 +1671,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 82,
+        "candidateCount": 7798,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 243.8381241297193,
+        "coefficientSum": 14040.305078971753,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 1640,
+        "depositCount": 155960,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.19656901041666666
+        "meanAbsoluteChannelDelta": 2.6787434895833333
       },
       "treatment": {
         "requestedControls": {
@@ -1379,44 +1714,68 @@
           "volume_reaction_boundary_divergence": 0.22
         },
         "controlsIdentity": "da8bb7735a6e7d58aeb1d28d692025ef6cf99ea8ebd8edc9c3291dd190503122",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "37a56a4e4095877ded84e1505617d2febc5e100bb3f3e8c418d1b3fec60d5119",
-        "candidateIdentity": "ee3c232adf73fde89a0926a978458da9bb6407e768c461ea1901ec186bc3804c",
-        "coefficientIdentity": "48eabaa2c67a8b0fa84607cdd4ed9b41df1e8f0195850cd667bd4173f18752ce",
-        "covarianceIdentity": "cf1c54e93c9c7223fa1752337f39860cec608bbbeba5b48588ee54f2425f3db5",
-        "depositionIdentity": "37d30477f106e92eee12b68938a709dd191d548746527d6c80ee72ad5f906658",
-        "pixelIdentity": "c5955009c000fd7dd5421f188ba46cce7f19a35413adb9582e79ce3f480d59df",
-        "candidateCount": 15924,
-        "depositCount": 318480,
+        "stageBIdentity": "9ef8ce0d886c022c6912c7f5c5d9406e8a22d5429566d768942f3e8f0123c74b",
+        "candidateIdentity": "ef8830ec01ca73e0c976fa513fefbc6ceb8569755acdff3dd357572ee22a5300",
+        "coefficientIdentity": "51b49313da2f1ee791e9b5f2b04c66f9841dc0f03bf76b125fddad1a744ac547",
+        "covarianceIdentity": "00fee79d853781351e8836f18d9700f982755cd147ef71c4892b3be1b2ab6335",
+        "depositionIdentity": "8e5df7711e53b5d99fb45b9fa6e79f7b518516f99c11025edeaf1bbce43c48e8",
+        "pixelIdentity": "09d83ce6f46588e03d79239a1f92008f2f7d691f23151e4d3a42c433ff43c3f9",
+        "candidateCount": 1341174,
+        "depositCount": 26823480,
         "coefficientSummary": {
-          "coefficientSum": 1834.0326328945346,
-          "weightedCoefficientSum": 3853043938.5951457
+          "coefficientSum": 130364.482737326,
+          "weightedCoefficientSum": 257020034714.65454
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.5653094537598697,
-            0.6090926604974304,
-            -0.15987440657866658,
-            5.024165223356351,
-            -0.9825069211769849,
-            3.5427574647794926
+            236.21255181751891,
+            54.7876186778446,
+            -37.433227299499805,
+            362.8732881703247,
+            -82.04078044623203,
+            196.1572079507599
           ],
           "weightedCovarianceSum": [
-            6964821.884557554,
-            -278861.06141072675,
-            49237.85770017424,
-            10876295.203263588,
-            -2118472.8278792594,
-            7608204.239134568
+            380881736.6654241,
+            -25338190.42033592,
+            -2120472.6661017807,
+            733436122.2901857,
+            -122207501.82638241,
+            375810526.71700686
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 6484.547766223486,
-          "weightedCandidateSum": 13532213012.565868
+          "candidateWeightSum": 411178.3857984513,
+          "weightedCandidateSum": 807069877659.2133
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1427,7 +1786,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 725.1987079999999
+        "elapsedMs": 2099.836875000001
       }
     },
     {
@@ -1439,14 +1798,14 @@
       "deltas": {
         "stageBIdentityChanged": true,
         "candidateIdentityChanged": true,
-        "candidateCount": 7,
+        "candidateCount": 51,
         "coefficientIdentityChanged": true,
-        "coefficientSum": 40.7260324828369,
+        "coefficientSum": 1521.9342222133855,
         "covarianceIdentityChanged": true,
         "depositionIdentityChanged": true,
-        "depositCount": 140,
+        "depositCount": 1020,
         "pixelIdentityChanged": true,
-        "meanAbsoluteChannelDelta": 0.03309244791666666
+        "meanAbsoluteChannelDelta": 0.272275390625
       },
       "treatment": {
         "requestedControls": {
@@ -1482,44 +1841,68 @@
           "volume_reaction_boundary_divergence": 1
         },
         "controlsIdentity": "525c23856c647bf55e438bf047cb44134d850cacc18ccf36f216deda751bf84c",
+        "fixedProductionControls": {
+          "identity": "state120-integration-c5367d2a-boundary-fixed-v0",
+          "authority": {
+            "integrationCommit": "c5367d2a76bbc3c90b32cbbb04764b6c6cda568b",
+            "cockpitManifestSha256": "8eaab98dc8591038d169063ac52e3c467eeaaa0aa8386b6f90ef494cc13f10f9",
+            "controlsSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+            "integrationBaselineBoundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+          },
+          "analyticalBoundarySource": "live-recomputed-from-frozen-fluid-front",
+          "integrationBaselineBoundarySource": "baked",
+          "gradientGain": 1.05,
+          "sidecarStepFootprintWidth": 0,
+          "displayContrast": 0.6,
+          "displayGamma": 3,
+          "displayOpacity": 3,
+          "inspectBoundaryFireMask": 1,
+          "cleanBlue": 0.3,
+          "sootYield": 0.64,
+          "sootYellowing": 0.44,
+          "thermalWarmth": 0.16,
+          "fireLuma": 5
+        },
+        "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
         "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
-        "stageBIdentity": "f3a5c2bcd013c78d930ab7d8441adbde051ff4ab4daa9038d6f4191f22cfe85a",
-        "candidateIdentity": "38c1020ed34f9cae55cadac8a21028f204b9c126cb1ba6ec3059bd224e1f13d4",
-        "coefficientIdentity": "b9526230adab49c993c1106ad340f3672a32cfd1c89d3b5ad5e01426f7705bf8",
-        "covarianceIdentity": "06f3a0616ba9e4c021fde58171151ae2fdba48246ac0e4ab618eaa576f70e03c",
-        "depositionIdentity": "f31be6873e8e6772e702c7f2bb041e67a1efd0705a26bb48a636a3c419fedee4",
-        "pixelIdentity": "2362af98b511fd612f83f4d03fae070d72ef9cd445e2bf4a9b115e3b4600b0a9",
-        "candidateCount": 15849,
-        "depositCount": 316980,
+        "stageBIdentity": "f8960f129fd256753ba7d0193c5d9a6208ab26fa225787e933784230af76de6c",
+        "candidateIdentity": "306a677918fe51b99246cf48bf12af4715d17eade218bf0147050f1cacf529d3",
+        "coefficientIdentity": "ab3c64c14353614f08943a7974dd6b50e1d180d924191dcdebac35e844482d0e",
+        "covarianceIdentity": "9fea637afbe684dd7e4be3d1f8288f98410d4e48c6c96ca8df8abd55107b746e",
+        "depositionIdentity": "d4c8ac87febf9ba11c52230a97869fc12a8f96b7a3e2fc9a5f971b5719237807",
+        "pixelIdentity": "e0724e4343a86a7ed4635787c221e8627aa84af7f57371f00c5aec17ba830924",
+        "candidateCount": 1333427,
+        "depositCount": 26668540,
         "coefficientSummary": {
-          "coefficientSum": 1630.9205412476522,
-          "weightedCoefficientSum": 3431933694.4497013
+          "coefficientSum": 117846.11188056764,
+          "weightedCoefficientSum": 230852157028.87787
         },
         "covarianceSummary": {
           "covarianceSum": [
-            3.550061091888703,
-            0.6095657060075466,
-            -0.16288819308470073,
-            4.991751460673526,
-            -0.9772702085478312,
-            3.5268221539560636
+            234.25716536267007,
+            54.336653692816206,
+            -37.025446051200475,
+            360.78036857262526,
+            -81.69192863688177,
+            194.6859336716255
           ],
           "weightedCovarianceSum": [
-            6933715.53449216,
-            -266494.77346793015,
-            38866.51696422832,
-            10798422.124882238,
-            -2105423.9027007753,
-            7572572.667786134
+            378385914.8460432,
+            -25080799.335510805,
+            -2171300.496784852,
+            729545420.211521,
+            -121697243.96511632,
+            373120635.49429476
           ]
         },
         "geometrySummary": {
-          "candidateWeightSum": 5672.475612143507,
-          "weightedCandidateSum": 11845058922.629341
+          "candidateWeightSum": 367090.7030794223,
+          "weightedCandidateSum": 715611120415.3801
         },
         "opticalLayers": 16,
         "appliedPasses": [
           "source-validation",
+          "production-fixed-control-binding",
           "boundary-support-rebake",
           "candidate-membership-rebuild",
           "coefficient-rebuild",
@@ -1530,7 +1913,7 @@
         "fallback": null,
         "postLoadMutation": "analytical-rebake-only",
         "simulatorAdvanced": false,
-        "elapsedMs": 721.8385830000007
+        "elapsedMs": 2105.4776249999995
       }
     }
   ],
