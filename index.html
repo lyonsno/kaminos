@@ -100,10 +100,13 @@ canvas { display: block; }
 #volume-full-support-receipt { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
 #volume-full-support-receipt[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
 #volume-full-support-receipt[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
-#volume-stage-b-status { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+#volume-stage-b-status, #volume-persistent-cohort-status { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
 #volume-stage-b-status[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
 #volume-stage-b-status[data-status="disabled"] { border-color: #8b773a; color: #d8c98f; }
 #volume-stage-b-status[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
+#volume-persistent-cohort-status[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
+#volume-persistent-cohort-status[data-status="loading"] { border-color: #4c7891; color: #b9d9e8; }
+#volume-persistent-cohort-status[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
@@ -2652,6 +2655,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button id="volume-full-support-apply" type="button">Apply source</button>
       </div>
       <div id="volume-full-support-receipt" data-status="idle">No Stage A source requested.</div>
+      <div class="volume-full-support-heading" style="margin-top:12px"><strong>Persistent sparse cohort</strong><span>Stage B source</span></div>
+      <div id="volume-persistent-cohort-status" data-status="idle">No persistent cohort requested.</div>
       <div class="volume-full-support-heading" style="margin-top:12px"><strong>Matched optical recurrence</strong><span>Stage B</span></div>
       <div class="volume-full-support-row">
         <label for="volume-stage-b-view">View</label>
@@ -2687,6 +2692,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=full-support-stage-a-0717';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
+import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   resolveVolumeSettingsPresetVisualView,
@@ -17998,6 +18004,148 @@ async function initKaminosVolumeRoute() {
   });
   window.__kaminosApplyFullSupportSource = applyFullSupportSource;
   window.__kaminosBootstrapFullSupportStageAState = bootstrapFullSupportStageAState;
+  const persistentCohortStatus = document.getElementById('volume-persistent-cohort-status');
+  const renderPersistentCohortReceipt = receipt => {
+    window.__kaminosPersistentSparseCohortReceipt = receipt;
+    if (!persistentCohortStatus) return;
+    persistentCohortStatus.dataset.status = receipt?.status || 'failed';
+    const failures = receipt?.failures?.length ? ` | ${receipt.failures.join(', ')}` : '';
+    if (receipt?.status === 'effective') {
+      persistentCohortStatus.textContent = `${receipt.stateId} | ${Number(receipt.appliedRowCount).toLocaleString()} rows | ${Number(receipt.appliedDepositCount).toLocaleString()} charged deposits | requested ${receipt.rendererRequested ? 'yes' : 'no'} | encoded ${receipt.rendererEncoded ? 'yes' : 'no'} | applied ${receipt.rendererApplied ? 'yes' : 'no'} | no cap, reselection, copy, or fallback`;
+      return;
+    }
+    persistentCohortStatus.textContent = `${receipt?.status || 'failed'} | requested ${receipt?.requestedStateId || 'none'} | renderer requested ${receipt?.rendererRequested ? 'yes' : 'no'} | encoded ${receipt?.rendererEncoded ? 'yes' : 'no'} | applied ${receipt?.rendererApplied ? 'yes' : 'no'}${failures}`;
+  };
+  const bootstrapPersistentSparseCohort = async () => {
+    const requestedManifestUrl = params.get('full_support_persistent_cohort_manifest');
+    const requestedManifestSha256 = params.get('full_support_persistent_cohort_manifest_sha256');
+    const requestedStateId = params.get('full_support_persistent_cohort_state');
+    if (!requestedManifestUrl && !requestedManifestSha256 && !requestedStateId) {
+      const idle = {
+        status: 'idle',
+        requestedStateId: null,
+        rendererRequested: false,
+        rendererEncoded: false,
+        rendererApplied: false,
+        failures: [],
+      };
+      renderPersistentCohortReceipt(idle);
+      return idle;
+    }
+    if (!requestedManifestUrl || !requestedManifestSha256) {
+      const failure = {
+        status: 'failed',
+        requestedStateId,
+        rendererRequested: true,
+        rendererEncoded: false,
+        rendererApplied: false,
+        failures: ['persistent-cohort-route-hash-pair-incomplete'],
+      };
+      renderPersistentCohortReceipt(failure);
+      return failure;
+    }
+    if (!requestedStateId) {
+      const failure = {
+        status: 'failed',
+        requestedStateId: null,
+        rendererRequested: true,
+        rendererEncoded: false,
+        rendererApplied: false,
+        failures: ['persistent-cohort-state-identity-missing'],
+      };
+      renderPersistentCohortReceipt(failure);
+      return failure;
+    }
+    const effectiveManifestUrl = new URL(requestedManifestUrl, window.location.href).href;
+    renderPersistentCohortReceipt({
+      status: 'loading',
+      requestedStateId,
+      rendererRequested: true,
+      rendererEncoded: false,
+      rendererApplied: false,
+      failures: [],
+    });
+    const admissionPauseReceipt = volumePrototype.setSelectiveHeadLiveCapturePaused(true);
+    if (admissionPauseReceipt?.paused !== true) {
+      const failure = {
+        status: 'failed',
+        requestedStateId,
+        rendererRequested: true,
+        rendererEncoded: false,
+        rendererApplied: false,
+        failures: ['persistent-cohort-renderer-pause-failed'],
+      };
+      renderPersistentCohortReceipt(failure);
+      return failure;
+    }
+    try {
+      const loaded = await loadPersistentSparseCohortState({
+        manifestUrl: effectiveManifestUrl,
+        expectedManifestSha256: requestedManifestSha256,
+        stateId: requestedStateId,
+      });
+      const splatMode = document.getElementById('volume-boundary-splat-mode');
+      splatMode.value = 'kernel_moment_full_flame_union';
+      syncControls({ target: splatMode });
+      volumePrototype.setFullSupportDepositionMode(FULL_SUPPORT_STAGE_A.deposition.identity);
+      volumePrototype.setBoundarySplatPresentationMode(FULL_SUPPORT_STAGE_A.stageB.identity);
+      const uploadReceipt = await volumePrototype.applyPersistentSparseCohortGpuState(loaded);
+      const sample = await volumePrototype.sampleFrame({ advanceSim: false, includeRgba: false });
+      const runtimeState = volumePrototype.debugState();
+      const persistentSparseCohortGpuReceipt = sample?.persistentSparseCohortGpuReceipt
+        || runtimeState.persistentSparseCohortGpuReceipt;
+      const rendererRequested = persistentSparseCohortGpuReceipt?.rendererRequested === true;
+      const rendererEncoded = persistentSparseCohortGpuReceipt?.rendererEncoded === true;
+      const rendererApplied = persistentSparseCohortGpuReceipt?.rendererApplied === true;
+      if (!sample?.ok || !rendererRequested || !rendererEncoded || !rendererApplied) {
+        throw new Error(`persistent-cohort-renderer-not-applied:sample=${Boolean(sample?.ok)}:requested=${rendererRequested}:encoded=${rendererEncoded}:applied=${rendererApplied}:fallback=${persistentSparseCohortGpuReceipt?.fallbackReason || runtimeState.boundarySplatFallbackReason || 'none'}`);
+      }
+      const receipt = {
+        schema: 'kaminos.pyro.persistent-sparse-cohort-cockpit.v0',
+        status: 'effective',
+        authority: 'operator-exploration-only',
+        decisionBearing: false,
+        requestedManifestUrl: effectiveManifestUrl,
+        effectiveManifestUrl,
+        requestedManifestSha256,
+        effectiveManifestSha256: loaded.receipt.manifestSha256,
+        requestedStateId,
+        stateId: loaded.receipt.stateId,
+        loaderReceipt: structuredClone(loaded.receipt),
+        uploadReceipt: structuredClone(uploadReceipt),
+        admissionPauseReceipt: structuredClone(admissionPauseReceipt),
+        persistentSparseCohortGpuReceipt: structuredClone(persistentSparseCohortGpuReceipt),
+        rendererRequested,
+        rendererEncoded,
+        rendererApplied,
+        appliedRowCount: persistentSparseCohortGpuReceipt.appliedCandidateCount,
+        appliedDepositCount: persistentSparseCohortGpuReceipt.appliedDepositCount,
+        fallbackUsed: false,
+        failures: [],
+      };
+      receipt.presentationResumeReceipt = volumePrototype.setSelectiveHeadLiveCapturePaused(false);
+      renderPersistentCohortReceipt(receipt);
+      return receipt;
+    } catch (error) {
+      const runtimeReceipt = volumePrototype.debugState()?.persistentSparseCohortGpuReceipt || null;
+      const failure = {
+        schema: 'kaminos.pyro.persistent-sparse-cohort-cockpit.v0',
+        status: 'failed',
+        requestedManifestUrl: effectiveManifestUrl,
+        requestedManifestSha256,
+        requestedStateId,
+        persistentSparseCohortGpuReceipt: runtimeReceipt ? structuredClone(runtimeReceipt) : null,
+        rendererRequested: true,
+        rendererEncoded: runtimeReceipt?.rendererEncoded === true,
+        rendererApplied: runtimeReceipt?.rendererApplied === true,
+        fallbackUsed: false,
+        failures: [error?.message || String(error)],
+      };
+      renderPersistentCohortReceipt(failure);
+      return failure;
+    }
+  };
+  window.__kaminosBootstrapPersistentSparseCohort = bootstrapPersistentSparseCohort;
   const stageBStatus = document.getElementById('volume-stage-b-status');
   const stageBView = document.getElementById('volume-stage-b-view');
   const stageBApply = document.getElementById('volume-full-support-stage-b');
@@ -18453,9 +18601,13 @@ async function initKaminosVolumeRoute() {
       setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
     }
   }
-  bootstrapFullSupportStageAState().then(stageAReceipt => {
+  bootstrapFullSupportStageAState().then(async stageAReceipt => {
     if (stageAReceipt?.status !== 'effective') {
       throw new Error(`stage-a-bootstrap-required:${stageAReceipt?.failures?.join(',') || stageAReceipt?.status || 'unknown'}`);
+    }
+    const cohortReceipt = await bootstrapPersistentSparseCohort();
+    if (cohortReceipt?.status === 'failed') {
+      throw new Error(`persistent-cohort-bootstrap-failed:${cohortReceipt.failures?.join(',') || 'unknown'}`);
     }
     return bootstrapStageBConsumer();
   }).catch(error => {

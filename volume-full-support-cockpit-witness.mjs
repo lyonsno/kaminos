@@ -9,6 +9,8 @@ const SCHEMA = 'kaminos.pyro.full-support-cockpit-witness.v0';
 const SOURCES = Object.freeze(['analytical-exact', 'learned-baseline', 'learned-flow']);
 const EXPECTED_ROW_COUNT = 1_899_742;
 const EXPECTED_SIM_STEP = 120;
+const EXPECTED_PERSISTENT_COHORT_ROWS = 481_447;
+const EXPECTED_PERSISTENT_COHORT_DEPOSITS = 7_221_705;
 
 class CdpSocket {
   constructor(url, timeoutMs) {
@@ -89,6 +91,8 @@ let lastTrustworthyEvidence = { schema: SCHEMA, routeReceiptPath };
 let producerMediaVisualState = null;
 let stageBTreatmentReentryReceipt = null;
 let browserProcessTelemetry = null;
+let persistentCohortReceipt = null;
+let persistentCohortVisualProbe = null;
 const browserProfilePath = `/tmp/kaminos-full-support-cockpit-witness-${process.pid}-${Date.now()}`;
 mkdirSync(dirname(reportPath), { recursive: true });
 mkdirSync(dirname(screenshotPath), { recursive: true });
@@ -155,6 +159,99 @@ try {
   assert.equal(bootstrap.presentedState?.simStepCount, EXPECTED_SIM_STEP, 'bootstrap drifted from state 120');
   assert.equal(bootstrap.presentedState?.lookFreeze, 1, 'bootstrap did not pin the imported state');
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, bootstrap };
+
+  const persistentCohortManifestArtifact = routeReceipt.artifacts?.persistentCohortManifest;
+  if (persistentCohortManifestArtifact) {
+    failurePhase = 'persistent-cohort-source-and-renderer-admission';
+    persistentCohortReceipt = await waitForValue(socket, timeoutMs, `(() => {
+      const runtime = document.querySelector('#basin')?.contentWindow || window;
+      const receipt = runtime.__kaminosPersistentSparseCohortReceipt;
+      if (!receipt || receipt.status === 'idle' || receipt.status === 'loading') return null;
+      return receipt;
+    })()`);
+    const routedManifestPath = new URL(routeReceipt.effectiveRoute).searchParams.get('full_support_persistent_cohort_manifest');
+    const requestedStateId = new URL(routeReceipt.effectiveRoute).searchParams.get('full_support_persistent_cohort_state');
+    assert.ok(routedManifestPath, 'effective route omitted its persistent cohort manifest mount');
+    assert.ok(requestedStateId, 'effective route omitted its persistent cohort state');
+    const routedManifestUrl = new URL(routedManifestPath, routeReceipt.effectiveRoute).href;
+    assert.equal(persistentCohortReceipt.status, 'effective', `persistent cohort failed: ${JSON.stringify(persistentCohortReceipt)}`);
+    assert.equal(persistentCohortReceipt.authority, 'operator-exploration-only', 'persistent cohort authority was inflated');
+    assert.equal(persistentCohortReceipt.decisionBearing, false, 'persistent cohort became decision-bearing');
+    assert.equal(persistentCohortReceipt.requestedManifestUrl, routedManifestUrl, 'persistent cohort requested route drifted');
+    assert.equal(persistentCohortReceipt.effectiveManifestUrl, routedManifestUrl, 'persistent cohort effective route was substituted');
+    assert.equal(persistentCohortReceipt.requestedManifestSha256, persistentCohortManifestArtifact.sha256, 'persistent cohort requested hash drifted');
+    assert.equal(persistentCohortReceipt.effectiveManifestSha256, persistentCohortManifestArtifact.sha256, 'persistent cohort effective hash was substituted');
+    assert.equal(persistentCohortReceipt.requestedStateId, requestedStateId, 'persistent cohort requested state drifted');
+    assert.equal(persistentCohortReceipt.stateId, requestedStateId, 'persistent cohort effective state was substituted');
+    assert.equal(persistentCohortReceipt.appliedRowCount, EXPECTED_PERSISTENT_COHORT_ROWS, 'persistent cohort row count was capped or substituted');
+    assert.equal(persistentCohortReceipt.appliedDepositCount, EXPECTED_PERSISTENT_COHORT_DEPOSITS, 'persistent cohort charged deposit count drifted');
+    assert.equal(persistentCohortReceipt.rendererRequested, true, 'persistent cohort renderer request was unreported');
+    assert.equal(persistentCohortReceipt.rendererEncoded, true, 'persistent cohort renderer did not encode');
+    assert.equal(persistentCohortReceipt.rendererApplied, true, 'persistent cohort renderer did not apply');
+    assert.equal(persistentCohortReceipt.fallbackUsed, false, 'persistent cohort fallback looked authoritative');
+    assert.equal(persistentCohortReceipt.persistentSparseCohortGpuReceipt?.rowCap, null, 'persistent cohort installed a hidden row cap');
+    assert.equal(persistentCohortReceipt.persistentSparseCohortGpuReceipt?.selectorRerun, false, 'persistent cohort reran selection');
+    const expectedOpticalPasses = Array.from(
+      { length: 16 },
+      (_, binIndex) => `kaminos depth-binned-emission-optical-depth-v0 flow-tangent-five-tap-bilinear-v0 bin ${binIndex}`,
+    );
+    const appliedOpticalPasses = persistentCohortReceipt.persistentSparseCohortGpuReceipt?.appliedPasses
+      ?.filter(identity => identity.includes('depth-binned-emission-optical-depth-v0')) || [];
+    assert.deepEqual(appliedOpticalPasses, expectedOpticalPasses, 'persistent cohort optical pass ledger drifted');
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, persistentCohortReceipt };
+
+    failurePhase = 'persistent-cohort-pixel-admission';
+    persistentCohortVisualProbe = await evaluate(socket, `(async () => {
+      const runtime = document.querySelector('#basin')?.contentWindow || window;
+      const prototype = runtime.__kaminosVolumePrototype;
+      if (!prototype?.sampleFrame || !prototype?.setSelectiveHeadLiveCapturePaused) {
+        throw new Error('persistent-cohort-pixel-probe-api-missing');
+      }
+      prototype.setSelectiveHeadLiveCapturePaused(true);
+      try {
+        const sample = await prototype.sampleFrame({ advanceSim: false, includeRgba: true });
+        if (!sample?.ok || !sample.image?.rgba?.length) {
+          throw new Error('persistent-cohort-pixel-probe-readback-failed:' + (sample?.reason || 'missing-rgba'));
+        }
+        let litPixels = 0;
+        let lumaSum = 0;
+        let maximumLuma = 0;
+        for (let index = 0; index < sample.image.rgba.length; index += 4) {
+          const luma = (0.2126 * sample.image.rgba[index])
+            + (0.7152 * sample.image.rgba[index + 1])
+            + (0.0722 * sample.image.rgba[index + 2]);
+          litPixels += luma > 3 ? 1 : 0;
+          lumaSum += luma;
+          maximumLuma = Math.max(maximumLuma, luma);
+        }
+        const pixelCount = sample.image.rgba.length / 4;
+        const runtimeReceipt = sample.persistentSparseCohortGpuReceipt
+          || prototype.debugState()?.persistentSparseCohortGpuReceipt;
+        return {
+          width: sample.image.width,
+          height: sample.image.height,
+          pixelCount,
+          litPixels,
+          litFraction: litPixels / Math.max(1, pixelCount),
+          meanLuma: lumaSum / Math.max(1, pixelCount),
+          maximumLuma,
+          nonblank: litPixels > 64 && maximumLuma > 3,
+          rendererRequested: runtimeReceipt?.rendererRequested === true,
+          rendererEncoded: runtimeReceipt?.rendererEncoded === true,
+          rendererApplied: runtimeReceipt?.rendererApplied === true,
+          fallbackReason: runtimeReceipt?.fallbackReason || null,
+        };
+      } finally {
+        prototype.setSelectiveHeadLiveCapturePaused(false);
+      }
+    })()`);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, persistentCohortVisualProbe };
+    assert.equal(persistentCohortVisualProbe.nonblank, true, 'persistent cohort frame was blank');
+    assert.equal(persistentCohortVisualProbe.rendererRequested, true, 'persistent cohort pixel probe lost its renderer request');
+    assert.equal(persistentCohortVisualProbe.rendererEncoded, true, 'persistent cohort pixel probe was not encoded');
+    assert.equal(persistentCohortVisualProbe.rendererApplied, true, 'persistent cohort pixel probe was not applied');
+    assert.equal(persistentCohortVisualProbe.fallbackReason, null, 'persistent cohort pixel probe used fallback');
+  }
 
   failurePhase = 'stage-b-resource-and-renderer-admission';
   const stageBReceipt = await waitForValue(socket, timeoutMs, `(() => {
@@ -328,6 +425,8 @@ try {
     requestedRoute: routeReceipt.requestedRoute,
     effectiveRoute: expectedUrl,
     bootstrap,
+    persistentCohortReceipt,
+    persistentCohortVisualProbe,
     stageBReceipt,
     stageBTreatmentReentryReceipt,
     browserProcessTelemetry,

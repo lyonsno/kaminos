@@ -21,6 +21,21 @@ const stageBAcceptanceSha256 = args.get('--stage-b-acceptance-sha256');
 assert.equal(Boolean(stageBAcceptanceArgument), Boolean(stageBAcceptanceSha256), '--stage-b-acceptance-receipt and --stage-b-acceptance-sha256 must be provided together');
 assert.ok(!stageBAcceptanceArgument || stageBManifestPath, 'Stage B acceptance requires an explicit Stage B manifest');
 const stageBAcceptancePath = stageBAcceptanceArgument ? requiredPath('--stage-b-acceptance-receipt') : null;
+const persistentCohortManifestArgument = args.get('--persistent-cohort-manifest');
+const persistentCohortManifestSha256 = args.get('--persistent-cohort-manifest-sha256');
+const persistentCohortStateId = args.get('--persistent-cohort-state');
+const persistentCohortArgumentCount = [persistentCohortManifestArgument, persistentCohortManifestSha256, persistentCohortStateId]
+  .filter(Boolean).length;
+assert.ok(
+  persistentCohortArgumentCount === 0 || persistentCohortArgumentCount === 3,
+  '--persistent-cohort-manifest, --persistent-cohort-manifest-sha256, and --persistent-cohort-state must be provided together',
+);
+const persistentCohortManifestPath = persistentCohortManifestArgument
+  ? requiredPath('--persistent-cohort-manifest')
+  : null;
+if (persistentCohortStateId) {
+  assert.match(String(persistentCohortStateId), /^coefficient-state-(114|116|118|120)$/, 'unsupported persistent cohort state');
+}
 const port = normalizePort(args.get('--port') || 18782);
 const requestedSource = String(args.get('--source') || 'analytical-exact');
 assert.ok(['analytical-exact', 'learned-baseline', 'learned-flow'].includes(requestedSource), `unsupported --source: ${requestedSource}`);
@@ -43,6 +58,7 @@ const mounts = {
 };
 if (stageBManifestPath) mounts.stageB = dirname(stageBManifestPath);
 if (stageBAcceptancePath) mounts.stageBAcceptance = dirname(stageBAcceptancePath);
+if (persistentCohortManifestPath) mounts.persistentCohort = dirname(persistentCohortManifestPath);
 for (const [name, target] of Object.entries(mounts)) ensureMount(join(mountRoot, name), target);
 
 const origin = `http://127.0.0.1:${port}`;
@@ -69,6 +85,17 @@ if (stageBAcceptancePath) {
   route.searchParams.set('full_support_stage_b_acceptance', `/scratch/${mountSlug}/stageBAcceptance/${basename(stageBAcceptancePath)}`);
   route.searchParams.set('full_support_stage_b_acceptance_sha256', String(stageBAcceptanceSha256));
 }
+if (persistentCohortManifestPath) {
+  const cohortArtifact = artifact(persistentCohortManifestPath);
+  assert.equal(
+    cohortArtifact.sha256,
+    persistentCohortManifestSha256,
+    'persistent cohort manifest hash does not match --persistent-cohort-manifest-sha256',
+  );
+  route.searchParams.set('full_support_persistent_cohort_manifest', `/scratch/${mountSlug}/persistentCohort/${basename(persistentCohortManifestPath)}`);
+  route.searchParams.set('full_support_persistent_cohort_manifest_sha256', String(persistentCohortManifestSha256));
+  route.searchParams.set('full_support_persistent_cohort_state', String(persistentCohortStateId));
+}
 
 const routeReceipt = {
   schema: 'kaminos.pyro.full-support-cockpit-session.v0',
@@ -87,6 +114,7 @@ const routeReceipt = {
     flowOverlayManifest: artifact(flowOverlayManifestPath),
     stageBManifest: stageBManifestPath ? artifact(stageBManifestPath) : null,
     stageBAcceptance: stageBAcceptancePath ? artifact(stageBAcceptancePath) : null,
+    persistentCohortManifest: persistentCohortManifestPath ? artifact(persistentCohortManifestPath) : null,
   },
 };
 const receiptPath = join(mountRoot, 'route-receipt.json');
