@@ -12,8 +12,8 @@ assert.ok(existsSync(script), 'native-grid causal comparison assembler exists');
 const root = await mkdtemp(join(tmpdir(), 'native-grid-causal-comparison-'));
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const sha256 = value => createHash('sha256').update(value).digest('hex');
-const exactGrid96Adapter = '/private/tmp/kaminos-grid96-full-flame-companion-0717/grid96-oracle-adapter-r1/training-manifest.json';
-assert.ok(existsSync(exactGrid96Adapter), 'exact source-owned Grid96 adapter is mounted');
+const exactGrid96Adapter = '/private/tmp/kaminos-grid96-full-flame-companion-0717/grid96-oracle-r7/training-manifest.json';
+assert.ok(existsSync(exactGrid96Adapter), 'corrected source-owned Grid96 r7 manifest is mounted');
 const writeJson = async (path, value) => {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -72,7 +72,7 @@ const makeReport = async (grid, name, cohortIdentity, fixedManifestPath = null) 
       manifest: {
         path: manifestPath,
         sha256: sha256(await readFile(manifestPath)),
-        identity: grid === 96 ? 'sha256:1291de8309826aa62e967fc75b1838575d88c91b03fc5123dbee5de297abcd9e' : null,
+        identity: grid === 96 ? 'sha256:bbb2618c9769a495a01372a129397f8e8682cae21dd7743b93c4addd9cb9e588' : null,
       },
       captureReport: { path: capturePath, sha256: sha256(await readFile(capturePath)) },
       cameraCohort: {
