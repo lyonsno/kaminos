@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -17,11 +18,13 @@ const {
   ARM_IDS,
   EXPECTED_COHORT_MANIFEST_SHA256,
   aggregateCoefficientTotalsExact,
+  authenticateDerivedComplementDescriptor,
   auditFullCandidateCountContract,
   buildCoefficientLedger,
   buildComplementRowIndices,
   buildExpectedLedgerContract,
   buildFailedLedgerReport,
+  buildSourceAuthenticationFailureReport,
   requireCapturedEvidence,
   requireExactCoefficientOwnership,
 } = await import(pathToFileURL(modulePath));
@@ -120,6 +123,48 @@ test('binary32 coefficient ownership closes exactly before JSON projection', () 
     assert.ok(sourceUnits >= sparseUnits);
     assert.equal(sparseUnits + (sourceUnits - sparseUnits), sourceUnits);
     assert.equal(sourceTotals[channel].binary32UnitExponent, -149);
+  }
+});
+
+test('derived complement descriptors are rehashed and confined to the artifact root', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'kaminos-bailiff-complement-'));
+  try {
+    const artifactPath = join(directory, 'hybrid-artifact.json');
+    const payloadPath = join(directory, 'states', 'complement.u32');
+    const payload = Buffer.from(new Uint32Array([0, 2, 4]).buffer);
+    mkdirSync(join(directory, 'states'));
+    writeFileSync(payloadPath, payload);
+    const descriptor = {
+      path: 'states/complement.u32',
+      bytes: payload.byteLength,
+      sha256: '5c4f0026a5866967334fd37912b9c876b024f0b17f5fac1252ad635a96848b51',
+      dtype: '<u4',
+      shape: [3],
+      semanticRole: 'source-order-positive-complement-row-indices',
+      authentication: 'derived-from-authenticated-disjoint-source-row-partition-v0',
+    };
+    assert.equal(await authenticateDerivedComplementDescriptor({ artifactPath, descriptor, expectedRows: 3 }), true);
+    await assert.rejects(
+      authenticateDerivedComplementDescriptor({
+        artifactPath,
+        descriptor: { ...descriptor, sha256: 'f'.repeat(64) },
+        expectedRows: 3,
+      }),
+      /SHA-256 drifted/,
+    );
+    const escapedPath = join(directory, '..', 'escaped-complement.u32');
+    writeFileSync(escapedPath, payload);
+    await assert.rejects(
+      authenticateDerivedComplementDescriptor({
+        artifactPath,
+        descriptor: { ...descriptor, path: '../escaped-complement.u32' },
+        expectedRows: 3,
+      }),
+      /escaped the artifact root/,
+    );
+    rmSync(escapedPath);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
@@ -253,4 +298,39 @@ test('failed receipts remain route, cohort, and requested-config bound', () => {
   assert.deepEqual(failure.request.fullCandidateCountByState, expected.fullCandidateCountByState);
   assert.equal(Object.hasOwn(failure.request, 'fullCandidateCount'), false);
   assert.equal(failure.failureContext.sourceBindingStatus, 'authenticated');
+});
+
+test('source authentication failures preserve phase and cannot claim authenticated arrays', () => {
+  const expected = {
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    cohortSchema: 'persistent-sparse-cohort-export-v0',
+    cohortManifestSha256: EXPECTED_SHA256,
+    cohortAuthority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
+    coefficientAuthority: 'exact-local-layer-emission-extinction',
+    implementationBundleSha256: '603398858e2c8dac638f82a43a13f45d5e8f72c88ae1d2eb0d96f761e5e0853f',
+    ownershipAuthority: 'complementary-local-optical-coefficient-ownership-v0',
+    fullCandidateCountByState: Object.fromEntries([114, 116, 118, 120].map((step, index) => [
+      `coefficient-state-${step}`,
+      [1924725, 1926470, 1927051, 1925788][index],
+    ])),
+    sparseCandidateCount: 481447,
+    stateIds: [114, 116, 118, 120].map(step => `coefficient-state-${step}`),
+    armIds: EXPECTED_ARMS,
+    residualGridScale: 0.10,
+    residualRaySteps: 64,
+    width: 900,
+    height: 960,
+  };
+  const error = new Error('coefficient SHA-256 drifted');
+  error.failurePhase = 'source-array-authentication';
+  const failure = buildSourceAuthenticationFailureReport({
+    expected,
+    durableReportPath: '/durable/report.json',
+    error,
+    sourcePopulationCountsByState: expected.fullCandidateCountByState,
+  });
+  assert.equal(failure.failurePhase, 'source-array-authentication');
+  assert.equal(failure.failureContext.sourceBindingStatus, 'unresolved-before-source-binding');
+  assert.doesNotMatch(failure.lastTrustworthyEvidence, /all arrays authenticated/i);
+  assert.match(failure.reason, /SHA-256 drifted/);
 });
