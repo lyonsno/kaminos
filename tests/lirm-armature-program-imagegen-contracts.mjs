@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 const {
   ARMATURE_PROGRAM_IMAGEGEN_PLAN_SCHEMA,
   buildArmatureProgramImagegenMatrix,
+  buildArmatureProgramTrellisPromotionPlan,
 } = await import('../lirm-armature-program-imagegen-core.mjs');
 
 const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -127,5 +128,68 @@ const planRoundTrip = JSON.parse(JSON.stringify(plan));
 assert.deepEqual(planRoundTrip.comparisonContract.variedReferenceSets, ['clay-only', 'clay-depth-normal']);
 assert.equal(resolve(plan.cells[0].input.path), resolve(conditioningRoot, relativePaths.clay));
 assert.equal((await readFile(plan.cells[0].prompt.path)).length > 0, true);
+
+const accepted = await Promise.all(plan.cells.map(async cell => ({
+  schema: 'kaminos.lirm-speciation-gestalt-imagegen-completion.v0',
+  status: 'accepted',
+  cellId: cell.cellId,
+  output: {
+    path: cell.input.path,
+    bytes: cell.input.bytes,
+    sha256: cell.input.sha256,
+  },
+})));
+const promotedCellIds = plan.cells
+  .filter(cell => cell.stance === 'world-creature-invention')
+  .map(cell => cell.cellId);
+const trellisPlan = await buildArmatureProgramTrellisPromotionPlan({
+  imagegenPlan: plan,
+  imagegenCompletion: {
+    schema: 'kaminos.lirm-armature-program-imagegen-collection.v0',
+    status: 'complete',
+    accepted,
+  },
+  promotedCellIds,
+  outputRoot: join(root, 'trellis'),
+  comparisonContract: {
+    kind: 'armature-reference-seed-factorial',
+    fixedStance: 'world-creature-invention',
+    referenceSets: ['clay-only', 'clay-depth-normal'],
+    imagegenSeeds: [718021, 718113],
+  },
+});
+assert.equal(trellisPlan.schema, 'kaminos.lirm-speciation-gestalt-trellis-plan.v0');
+assert.equal(trellisPlan.cells.length, 4);
+assert.deepEqual(
+  trellisPlan.cells.map(cell => `${cell.referenceSet}:${cell.imagegenSeed}`).sort(),
+  [
+    'clay-depth-normal:718021',
+    'clay-depth-normal:718113',
+    'clay-only:718021',
+    'clay-only:718113',
+  ],
+);
+assert.ok(trellisPlan.cells.every(cell => cell.stance === 'world-creature-invention'));
+assert.ok(trellisPlan.cells.every(cell => cell.settings.steps === 6));
+assert.ok(trellisPlan.cells.every(cell => cell.settings.targetFaces === 200000));
+await assert.rejects(
+  () => buildArmatureProgramTrellisPromotionPlan({
+    imagegenPlan: plan,
+    imagegenCompletion: {
+      schema: 'kaminos.lirm-armature-program-imagegen-collection.v0',
+      status: 'complete',
+      accepted,
+    },
+    promotedCellIds: promotedCellIds.slice(0, 3),
+    outputRoot: join(root, 'trellis-incomplete'),
+    comparisonContract: {
+      kind: 'armature-reference-seed-factorial',
+      fixedStance: 'world-creature-invention',
+      referenceSets: ['clay-only', 'clay-depth-normal'],
+      imagegenSeeds: [718021, 718113],
+    },
+  }),
+  /factorial cell coverage mismatch/,
+);
 
 console.log('lirm armature program imagegen contracts passed');

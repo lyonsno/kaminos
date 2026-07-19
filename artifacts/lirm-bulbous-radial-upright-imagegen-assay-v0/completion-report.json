@@ -1,0 +1,407 @@
+{
+  "schema": "kaminos.lirm-armature-program-imagegen-collection.v0",
+  "status": "complete",
+  "requestedCount": 8,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718021",
+      "jobId": "00ee20c20084",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.470857,
+      "startedAt": 1784443648.647949,
+      "finishedAt": 1784443685.692806,
+      "durationSeconds": 37.044857025146484,
+      "outputMtime": 1784443685.4032521,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "bytes": 1358,
+        "sha256": "sha256:5930c94cc0fd6d5991da62bebed7243a58b8e0f02241b4f3c021d27914ed3178"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718021/output.png",
+        "bytes": 286526,
+        "sha256": "sha256:d1a8365fe5708892dfcb1a619028ddb72463114af81c84c676db27920debd51d"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718113",
+      "jobId": "fd4e7c63627a",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.497838,
+      "startedAt": 1784443685.6965399,
+      "finishedAt": 1784443717.336295,
+      "durationSeconds": 31.63975501060486,
+      "outputMtime": 1784443716.8003278,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "bytes": 1358,
+        "sha256": "sha256:5930c94cc0fd6d5991da62bebed7243a58b8e0f02241b4f3c021d27914ed3178"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718113/output.png",
+        "bytes": 243581,
+        "sha256": "sha256:b5e4dc8063918ac146f77f4211b0853208b56cf0dd866710390b95395f6917bb"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "jobId": "5c3626758742",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.525568,
+      "startedAt": 1784443717.339562,
+      "finishedAt": 1784443748.848472,
+      "durationSeconds": 31.508910179138184,
+      "outputMtime": 1784443748.3427305,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "bytes": 1302,
+        "sha256": "sha256:494da909e9a3a466279b9a025a06b2b434685b9ca7109a57cea802857bfa3599"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 299967,
+        "sha256": "sha256:a1121dbb8e6df00d4289c9abf6338026f80ca6e2a78bfe79f38a0201a2474787"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "jobId": "15cb72dc507b",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveJobType": "mflux_flux2_edit_promptfile",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.552276,
+      "startedAt": 1784443748.851486,
+      "finishedAt": 1784443781.3601558,
+      "durationSeconds": 32.50866985321045,
+      "outputMtime": 1784443780.903886,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "bytes": 1302,
+        "sha256": "sha256:494da909e9a3a466279b9a025a06b2b434685b9ca7109a57cea802857bfa3599"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 268153,
+        "sha256": "sha256:492abdf7e52a76d3e86f2e28602c1db8793e113be45eaee8d7932594c0eb399e"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718021",
+      "jobId": "3ec636f9f44f",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.5799181,
+      "startedAt": 1784443781.362599,
+      "finishedAt": 1784443841.029378,
+      "durationSeconds": 59.66677904129028,
+      "outputMtime": 1784443840.5170534,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+          "bytes": 17376,
+          "sha256": "sha256:7418dbb3608748c7b305d4c5e7b86b66ea4179569aa55fe1647fd790ef42f497",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+          "bytes": 32821,
+          "sha256": "sha256:6eea1ea64092c47eeadf50ac3dba7c00077fe28bce0eff3f3e2290e49aeea43b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "bytes": 1358,
+        "sha256": "sha256:5930c94cc0fd6d5991da62bebed7243a58b8e0f02241b4f3c021d27914ed3178"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718021/output.png",
+        "bytes": 278415,
+        "sha256": "sha256:0f49ea32776ae125ccc78c77c6161503ad2461b3fd093e4210befcdd77e66380"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718113",
+      "jobId": "7d2f1d6d50a1",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.6067588,
+      "startedAt": 1784443841.031848,
+      "finishedAt": 1784443909.489353,
+      "durationSeconds": 68.45750498771667,
+      "outputMtime": 1784443908.936308,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+          "bytes": 17376,
+          "sha256": "sha256:7418dbb3608748c7b305d4c5e7b86b66ea4179569aa55fe1647fd790ef42f497",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+          "bytes": 32821,
+          "sha256": "sha256:6eea1ea64092c47eeadf50ac3dba7c00077fe28bce0eff3f3e2290e49aeea43b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/controlled-organism.txt",
+        "bytes": 1358,
+        "sha256": "sha256:5930c94cc0fd6d5991da62bebed7243a58b8e0f02241b4f3c021d27914ed3178"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718113/output.png",
+        "bytes": 241848,
+        "sha256": "sha256:9204ebc5df746d65a7d3a8ee50ff8711895b3bf1e67c451351781c9d773f9442"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "748d0c174efd",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718021 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718021",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.633996,
+      "startedAt": 1784443909.4920902,
+      "finishedAt": 1784443985.2003698,
+      "durationSeconds": 75.70827960968018,
+      "outputMtime": 1784443984.6544225,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+          "bytes": 17376,
+          "sha256": "sha256:7418dbb3608748c7b305d4c5e7b86b66ea4179569aa55fe1647fd790ef42f497",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+          "bytes": 32821,
+          "sha256": "sha256:6eea1ea64092c47eeadf50ac3dba7c00077fe28bce0eff3f3e2290e49aeea43b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "bytes": 1302,
+        "sha256": "sha256:494da909e9a3a466279b9a025a06b2b434685b9ca7109a57cea802857bfa3599"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 286467,
+        "sha256": "sha256:0776e33b8adea8c1cfbe0c345f4bcab19d99be12c358d4ce8f32b8bd9ff4ad3a"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "be1a232d349e",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718113 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718113",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784443647.660831,
+      "startedAt": 1784443985.203093,
+      "finishedAt": 1784444059.845643,
+      "durationSeconds": 74.64254999160767,
+      "outputMtime": 1784444059.330783,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+        "bytes": 28068,
+        "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+          "bytes": 17376,
+          "sha256": "sha256:7418dbb3608748c7b305d4c5e7b86b66ea4179569aa55fe1647fd790ef42f497",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-conditioning-package-v0/lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+          "bytes": 32821,
+          "sha256": "sha256:6eea1ea64092c47eeadf50ac3dba7c00077fe28bce0eff3f3e2290e49aeea43b",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/prompts/world-creature-invention.txt",
+        "bytes": 1302,
+        "sha256": "sha256:494da909e9a3a466279b9a025a06b2b434685b9ca7109a57cea802857bfa3599"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 264611,
+        "sha256": "sha256:d9be37c7ffd8e630c2e700e5deda8e0e07c59dc99973b94a898192d0a6736d4e"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "8/8 primary outputs accepted"
+}

@@ -7,6 +7,9 @@ import {
   GESTALT_IMAGEGEN_JOB_TYPE_2REF,
   GESTALT_IMAGEGEN_JOB_TYPE_3REF,
   GESTALT_IMAGEGEN_RUNNER,
+  GESTALT_TRELLIS_JOB_TYPE,
+  GESTALT_TRELLIS_PLAN_SCHEMA,
+  GESTALT_TRELLIS_RUNNER,
 } from './lirm-speciation-gestalt-imagegen-core.mjs';
 
 export const ARMATURE_PROGRAM_IMAGEGEN_PLAN_SCHEMA = 'kaminos.lirm-armature-program-imagegen-plan.v0';
@@ -191,6 +194,106 @@ export async function buildArmatureProgramImagegenMatrix({
       requestedRouteMustEqualEffectiveJobType: true,
       effectiveRunnerMustMatch: GESTALT_IMAGEGEN_RUNNER,
       everyConditioningInputMustMatchWitnessHash: true,
+    },
+    cells,
+  };
+}
+
+function assertUniqueValues(values, label) {
+  if (!Array.isArray(values) || values.length === 0) throw new Error(`${label} must be a non-empty array`);
+  if (new Set(values).size !== values.length) throw new Error(`${label} must contain unique values`);
+}
+
+export async function buildArmatureProgramTrellisPromotionPlan({
+  imagegenPlan,
+  imagegenCompletion,
+  promotedCellIds,
+  outputRoot,
+  comparisonContract,
+} = {}) {
+  if (imagegenPlan?.schema !== ARMATURE_PROGRAM_IMAGEGEN_PLAN_SCHEMA) {
+    throw new Error(`unexpected armature imagegen plan schema: ${imagegenPlan?.schema ?? 'missing'}`);
+  }
+  if (imagegenCompletion?.schema !== 'kaminos.lirm-armature-program-imagegen-collection.v0'
+    || imagegenCompletion.status !== 'complete') {
+    throw new Error('armature imagegen collection is not complete');
+  }
+  if (!outputRoot) throw new Error('Trellis outputRoot is required');
+  assertUniqueValues(promotedCellIds, 'promotedCellIds');
+  if (comparisonContract?.kind !== 'armature-reference-seed-factorial') {
+    throw new Error(`unsupported armature Trellis comparison contract: ${comparisonContract?.kind ?? 'missing'}`);
+  }
+  if (typeof comparisonContract.fixedStance !== 'string' || comparisonContract.fixedStance.length === 0) {
+    throw new Error('armature Trellis comparison requires fixedStance');
+  }
+  assertUniqueValues(comparisonContract.referenceSets, 'comparison referenceSets');
+  assertUniqueValues(comparisonContract.imagegenSeeds, 'comparison imagegenSeeds');
+  for (const seed of comparisonContract.imagegenSeeds) {
+    if (!Number.isSafeInteger(seed) || seed < 0) throw new Error(`invalid comparison imagegen seed: ${seed}`);
+  }
+
+  const planned = new Map(imagegenPlan.cells.map(cell => [cell.cellId, cell]));
+  const accepted = new Map(imagegenCompletion.accepted.map(entry => [entry.cellId, entry]));
+  const expectedFactorialKeys = comparisonContract.referenceSets.flatMap(referenceSet => (
+    comparisonContract.imagegenSeeds.map(seed => `${referenceSet}\u0000${seed}`)
+  ));
+  const observedFactorialKeys = [];
+  const cells = [];
+  for (const cellId of promotedCellIds) {
+    const sourceCell = planned.get(cellId);
+    const sourceCompletion = accepted.get(cellId);
+    if (!sourceCell || !sourceCompletion) throw new Error(`promoted cell is not accepted: ${cellId}`);
+    if (sourceCell.stance !== comparisonContract.fixedStance) {
+      throw new Error(`promoted cell violates fixed stance: ${cellId}`);
+    }
+    observedFactorialKeys.push(`${sourceCell.referenceSet}\u0000${sourceCell.seed}`);
+    const input = await fileEvidence(sourceCompletion.output.path);
+    if (input.sha256 !== sourceCompletion.output.sha256) throw new Error(`imagegen output hash drift: ${cellId}`);
+    const cellOutputDir = resolve(outputRoot, cellId);
+    cells.push({
+      cellId,
+      jobType: GESTALT_TRELLIS_JOB_TYPE,
+      requestedRoute: `gpu-greenroom/${GESTALT_TRELLIS_JOB_TYPE}`,
+      expectedRunner: GESTALT_TRELLIS_RUNNER,
+      candidateId: sourceCell.candidateId,
+      armatureProgram: sourceCell.armatureProgram,
+      parameters: sourceCell.parameters,
+      conditioningRoute: sourceCell.conditioningRoute,
+      referenceSet: sourceCell.referenceSet,
+      stance: sourceCell.stance,
+      imagegenSeed: sourceCell.seed,
+      input,
+      outputDir: cellOutputDir,
+      outputPath: resolve(cellOutputDir, 'output.glb'),
+      settings: {
+        seed: 42,
+        resolution: 512,
+        steps: 6,
+        cascade: false,
+        targetFaces: 200000,
+        textureSize: 1024,
+        simplifyFirst: true,
+      },
+    });
+  }
+  if (new Set(observedFactorialKeys).size !== observedFactorialKeys.length
+    || expectedFactorialKeys.length !== observedFactorialKeys.length
+    || expectedFactorialKeys.some(key => !observedFactorialKeys.includes(key))) {
+    throw new Error(`factorial cell coverage mismatch: expected ${expectedFactorialKeys.length}, observed ${observedFactorialKeys.length}`);
+  }
+
+  return {
+    schema: GESTALT_TRELLIS_PLAN_SCHEMA,
+    status: 'planned',
+    comparisonContract: {
+      ...comparisonContract,
+      fixedSettings: cells[0].settings,
+    },
+    evidencePredicate: {
+      routeFallbackAllowed: false,
+      missingGlbCountsAsSuccess: false,
+      sourceHashDriftAllowed: false,
+      spatialCoherenceRequiresRenderedWitness: true,
     },
     cells,
   };

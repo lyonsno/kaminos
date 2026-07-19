@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.lirm-armature-program-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/plan.json",
+  "requestedCount": 8,
+  "submitted": [
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718021",
+      "jobId": "00ee20c20084",
+      "response": {
+        "job_id": "00ee20c20084"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-controlled-organism-seed718113",
+      "jobId": "fd4e7c63627a",
+      "response": {
+        "job_id": "fd4e7c63627a"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "jobId": "5c3626758742",
+      "response": {
+        "job_id": "5c3626758742"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "jobId": "15cb72dc507b",
+      "response": {
+        "job_id": "15cb72dc507b"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718021",
+      "jobId": "3ec636f9f44f",
+      "response": {
+        "job_id": "3ec636f9f44f"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-controlled-organism-seed718113",
+      "jobId": "7d2f1d6d50a1",
+      "response": {
+        "job_id": "7d2f1d6d50a1"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "748d0c174efd",
+      "response": {
+        "job_id": "748d0c174efd"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "be1a232d349e",
+      "response": {
+        "job_id": "be1a232d349e"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "8/8 jobs submitted"
+}
