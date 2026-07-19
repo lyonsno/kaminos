@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -19,6 +20,8 @@ assert.match(source, /geometryRowsDropped/, 'assembler rejects dropped geometry 
 assert.match(source, /selectedNativeCellArtifact/, 'assembler binds retained native ids');
 assert.match(source, /imageLedger/, 'assembler binds every displayed image');
 assert.match(source, /lastTrustworthyEvidence/, 'assembler preserves a failure receipt before primary output');
+assert.match(source, /artifactLedger/, 'assembler binds its final page, cohort copy, and displayed images');
+assert.match(source, /--verify-bundle/, 'assembler exposes reusable final-bundle verification');
 assert.match(source, /--cohort-manifest/, 'assembler accepts a caller-owned cohort manifest path');
 assert.match(source, /--out-dir/, 'assembler accepts a caller-owned output path');
 assert.match(source, /--report/, 'assembler writes a caller-owned report path');
@@ -61,5 +64,54 @@ assert.notEqual(repeated.result.status, 0, 'repeated cohort coordinate must fail
 const repeatedFailure = JSON.parse(await readFile(join(repeated.out, 'report.json'), 'utf8'));
 assert.equal(repeatedFailure.failurePhase, 'cohort-validation');
 assert.match(repeatedFailure.error, /keys repeat/i);
+
+const bundle = join(root, 'bundle');
+const imageDir = join(bundle, 'images');
+await mkdir(imageDir, { recursive: true });
+const gallery = Buffer.from('<!doctype html><title>fixture</title>');
+const cohort = Buffer.from('{"schema":"fixture"}\n');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+const galleryPath = join(bundle, 'index.html');
+const cohortPath = join(bundle, 'cohort-manifest.json');
+const imagePath = join(imageDir, 'fixture.png');
+await writeFile(galleryPath, gallery);
+await writeFile(cohortPath, cohort);
+await writeFile(imagePath, png);
+const descriptor = (path, bytes) => ({
+  path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'),
+});
+const artifactLedger = {
+  'index.html': descriptor('index.html', gallery),
+  'cohort-manifest.json': descriptor('cohort-manifest.json', cohort),
+  'images/fixture.png': descriptor('images/fixture.png', png),
+};
+const bundleReportPath = join(bundle, 'report.json');
+await writeFile(bundleReportPath, `${JSON.stringify({
+  schema: 'kaminos.volume.grid96-layer-retention-comparison.v0', status: 'complete',
+  artifacts: {
+    gallery: artifactLedger['index.html'], cohortManifest: artifactLedger['cohort-manifest.json'],
+    copiedImageCount: 1, imageLedger: { 'images/fixture.png': artifactLedger['images/fixture.png'] },
+    artifactLedger,
+  },
+})}\n`);
+const verify = () => spawnSync(process.execPath, [script.pathname, '--verify-bundle', bundleReportPath], { encoding: 'utf8' });
+const validBundle = verify();
+assert.equal(validBundle.status, 0, validBundle.stderr || validBundle.stdout || 'valid final bundle verification failed');
+
+await writeFile(imagePath, Buffer.from(png).fill(0, png.length - 1));
+const driftedBundle = verify();
+assert.notEqual(driftedBundle.status, 0, 'hash-drifted displayed image must fail verification');
+assert.match(driftedBundle.stderr, /hash drifted/i);
+
+await writeFile(imagePath, Buffer.alloc(0));
+const blankBundle = verify();
+assert.notEqual(blankBundle.status, 0, 'blank displayed image must fail verification');
+assert.match(blankBundle.stderr, /blank|partial/i);
+
+await writeFile(imagePath, png);
+await rename(imagePath, `${imagePath}.missing`);
+const missingBundle = verify();
+assert.notEqual(missingBundle.status, 0, 'missing displayed image must fail verification');
+assert.match(missingBundle.stderr, /missing/i);
 
 console.log('grid96 layer-retention comparison contracts passed');

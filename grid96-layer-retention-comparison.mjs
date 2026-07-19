@@ -16,7 +16,7 @@ const FOOTPRINT = 'flow-tangent-five-tap-bilinear-v0';
 const PATH_SCALE = 3.8845837491755066;
 const ROW_COUNT = 370194;
 const ORACLE_CWD = dirname(fileURLToPath(import.meta.url));
-const USAGE = '--cohort-manifest <path> --out-dir <path> --report <out-dir/report.json>';
+const USAGE = '--cohort-manifest <path> --out-dir <path> --report <out-dir/report.json> | --verify-bundle <report.json>';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const levels = [['p50', 0.5], ['p75', 0.75], ['p90', 0.9], ['p95', 0.95], ['p99', 0.99]];
 const expectedArmCoordinates = new Map(
@@ -75,6 +75,52 @@ function validatePng(path, descriptor, label) {
   require(descriptor?.path === basename(path), `${label} imageLedger path drifted`);
   require(descriptor?.bytes === statSync(path).size, `${label} imageLedger byte count drifted`);
   require(descriptor?.sha256 === sha256File(path), `${label} imageLedger hash drifted`);
+}
+
+function bundleDescriptor(root, relative, label) {
+  require(typeof relative === 'string' && relative && !relative.startsWith('/'), `${label} path must be relative`);
+  const path = resolve(root, relative);
+  require(path.startsWith(`${resolve(root)}/`), `${label} path escaped the comparison root`);
+  require(existsSync(path) && statSync(path).isFile(), `${label} is missing: ${path}`);
+  const bytes = statSync(path).size;
+  require(bytes > 0, `${label} is blank or partial`);
+  return { path: relative, bytes, sha256: sha256File(path) };
+}
+
+function verifyComparisonBundle(reportPath) {
+  const path = resolve(reportPath);
+  const root = dirname(path);
+  const report = readJson(path, 'comparison bundle report');
+  require(report.schema === SCHEMA && report.status === 'complete', 'comparison bundle report is incomplete or wrong-schema');
+  const artifacts = report.artifacts || {};
+  const ledger = artifacts.artifactLedger;
+  const imageLedger = artifacts.imageLedger;
+  require(ledger && typeof ledger === 'object' && !Array.isArray(ledger), 'comparison artifactLedger is missing');
+  require(imageLedger && typeof imageLedger === 'object' && !Array.isArray(imageLedger), 'comparison imageLedger is missing');
+  const imageKeys = Object.keys(imageLedger).sort();
+  require(imageKeys.length === artifacts.copiedImageCount && imageKeys.length > 0, 'comparison copiedImageCount is not observed from imageLedger');
+  const expectedKeys = ['cohort-manifest.json', 'index.html', ...imageKeys].sort();
+  require(stableJson(Object.keys(ledger).sort()) === stableJson(expectedKeys), 'comparison artifactLedger is partial or contains unexpected entries');
+  require(stableJson(artifacts.gallery) === stableJson(ledger['index.html']), 'comparison gallery descriptor drifted from artifactLedger');
+  require(stableJson(artifacts.cohortManifest) === stableJson(ledger['cohort-manifest.json']), 'comparison cohort descriptor drifted from artifactLedger');
+  for (const relative of expectedKeys) {
+    const descriptor = ledger[relative];
+    require(descriptor?.path === relative, `${relative} artifactLedger path drifted`);
+    const observed = bundleDescriptor(root, relative, relative);
+    require(observed.bytes === descriptor.bytes, `${relative} is blank or partial`);
+    require(observed.sha256 === descriptor.sha256, `${relative} hash drifted`);
+    if (relative.startsWith('images/')) {
+      require(stableJson(imageLedger[relative]) === stableJson(descriptor), `${relative} imageLedger drifted from artifactLedger`);
+      require(readFileSync(resolve(root, relative)).subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE), `${relative} is not PNG data`);
+    }
+  }
+  return {
+    identity: 'comparison-page-cohort-and-displayed-image-ledger-v0',
+    artifactCount: expectedKeys.length,
+    copiedImageCount: imageKeys.length,
+    gallerySha256: ledger['index.html'].sha256,
+    cohortManifestSha256: ledger['cohort-manifest.json'].sha256,
+  };
 }
 
 function validateReceipt(path, reportPath, report, cohortRow) {
@@ -249,6 +295,11 @@ try {
     console.log(USAGE);
     process.exit(0);
   }
+  if (requested['verify-bundle']) {
+    failurePhase = 'bundle-verification';
+    console.log(JSON.stringify({ status: 'verified', report: resolve(requested['verify-bundle']), ...verifyComparisonBundle(requested['verify-bundle']) }, null, 2));
+    process.exit(0);
+  }
   for (const key of ['cohort-manifest', 'out-dir', 'report']) require(requested[key], `--${key} is required`);
   const cohortPath = resolve(requested['cohort-manifest']);
   const outDir = resolve(requested['out-dir']);
@@ -306,6 +357,16 @@ try {
   const rows = copyVisuals(stage, control, controlPath, arms, armPaths);
   writeFileSync(join(stage, 'index.html'), pageHtml(rows, summaries));
   copyFileSync(cohortPath, join(stage, 'cohort-manifest.json'));
+  const imageRelatives = [...new Set(rows.flatMap(row => [
+    ...Object.values(row.control),
+    ...Object.values(row.arms).flatMap(images => Object.values(images)),
+  ]))].sort();
+  const imageLedger = Object.fromEntries(imageRelatives.map(relative => [relative, bundleDescriptor(stage, relative, relative)]));
+  const artifactLedger = {
+    'index.html': bundleDescriptor(stage, 'index.html', 'comparison gallery'),
+    'cohort-manifest.json': bundleDescriptor(stage, 'cohort-manifest.json', 'comparison cohort manifest'),
+    ...imageLedger,
+  };
   const report = {
     schema: SCHEMA, status: 'complete', failurePhase: null,
     identity: `sha256:${createHash('sha256').update(stableJson({ cohort: sha256File(cohortPath), control: sha256File(controlPath), arms: Object.fromEntries(Object.keys(arms).map(key => [key, sha256File(armPaths[key])])) })).digest('hex')}`,
@@ -314,12 +375,24 @@ try {
     control: lastTrustworthyEvidence.control,
     arms: lastTrustworthyEvidence.arms,
     summaries,
-    artifacts: { gallery: join(outDir, 'index.html'), copiedImageCount: 21 * (4 + 2 * expectedArmCoordinates.size), cameraCount: 21 },
+    artifacts: {
+      gallery: artifactLedger['index.html'],
+      cohortManifest: artifactLedger['cohort-manifest.json'],
+      copiedImageCount: imageRelatives.length,
+      cameraCount: 21,
+      imageLedger,
+      artifactLedger,
+      verification: null,
+    },
   };
   writeJson(join(stage, 'report.json'), report);
+  report.artifacts.verification = verifyComparisonBundle(join(stage, 'report.json'));
+  writeJson(join(stage, 'report.json'), report);
+  verifyComparisonBundle(join(stage, 'report.json'));
   rmSync(outDir, { recursive: true, force: true });
   renameSync(stage, outDir);
-  console.log(JSON.stringify({ status: 'complete', report: reportPath, gallery: join(outDir, 'index.html'), identity: report.identity }, null, 2));
+  const finalVerification = verifyComparisonBundle(reportPath);
+  console.log(JSON.stringify({ status: 'complete', report: reportPath, gallery: join(outDir, 'index.html'), identity: report.identity, verification: finalVerification }, null, 2));
 } catch (error) {
   const reportPath = requested.report ? resolve(requested.report) : null;
   if (reportPath) writeJson(reportPath, failureReport(error));
