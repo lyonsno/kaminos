@@ -62,6 +62,11 @@ assert.match(source, /def multiscale_pixel_samples\(/, 'oracle exposes the fine-
 assert.match(source, /--multiscale-middle-mass/, 'multiscale treatment requires an explicit shared coefficient mass partition');
 assert.match(source, /--multiscale-major-scale/, 'multiscale treatment requires an explicit middle-band tangent scale');
 assert.match(source, /--multiscale-minor-scale/, 'multiscale treatment requires an explicit middle-band normal scale');
+const successRequestedReceipt = source.match(/"requested": \{[\s\S]*?\n        "effective": \{/);
+assert.ok(successRequestedReceipt, 'oracle success report exposes adjacent requested and effective receipts');
+for (const field of ['multiscaleMiddleMass', 'multiscaleMajorScale', 'multiscaleMinorScale']) {
+  assert.match(successRequestedReceipt[0], new RegExp(`"${field}"`), `${field} must appear in the success requested-control receipt`);
+}
 assert.match(
   source,
   /view-independent-multiview-residual-three-child-subcell-split-v0/,

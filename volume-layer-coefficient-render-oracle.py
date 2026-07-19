@@ -1530,6 +1530,9 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "skirtMix": args.skirt_mix,
                 "skirtMinorScale": args.skirt_minor_scale,
                 "skirtRidgeRejection": args.skirt_ridge_rejection,
+                "multiscaleMiddleMass": args.multiscale_middle_mass,
+                "multiscaleMajorScale": args.multiscale_major_scale,
+                "multiscaleMinorScale": args.multiscale_minor_scale,
             },
             "depositionControls": {
                 "compoundHaloMass": args.compound_halo_mass,
