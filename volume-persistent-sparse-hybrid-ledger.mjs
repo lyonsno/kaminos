@@ -288,17 +288,41 @@ export function requireCapturedEvidence(evidence) {
   return true;
 }
 
+function requireExactCoefficientChannel(channel, channelName) {
+  for (const key of ['source', 'splat', 'residual', 'dropped']) {
+    assert.ok(Number.isFinite(channel?.[key]) && channel[key] >= 0, `${channelName} ${key} is invalid`);
+  }
+  for (const key of ['splat', 'residual', 'dropped']) {
+    assert.ok(channel[key] <= channel.source, `${channelName} ${key} exceeds source ownership`);
+  }
+  assert.equal(
+    channel.splat + channel.residual + channel.dropped,
+    channel.source,
+    `${channelName} ownership is not exact`,
+  );
+}
+
+export function requireExactCoefficientOwnership(arm) {
+  assert.ok(ARM_IDS.includes(arm?.armId), 'captured arm identity is invalid');
+  requireExactCoefficientChannel(arm?.coefficientLedger?.emission, 'emission');
+  requireExactCoefficientChannel(arm?.coefficientLedger?.extinction, 'extinction');
+  return true;
+}
+
 export function validateCapturedLedgerReport(report, expected) {
   for (const state of report?.states || []) {
-    for (const arm of state?.arms || []) requireCapturedEvidence({
-      route: report.route,
-      request: report.request,
-      effective: report.effective,
-      recurrenceIdentity: arm.recurrenceIdentity,
-      presentation: arm.presentation,
-      timing: arm.timing,
-      capture: arm.capture,
-    });
+    for (const arm of state?.arms || []) {
+      requireExactCoefficientOwnership(arm);
+      requireCapturedEvidence({
+        route: report.route,
+        request: report.request,
+        effective: report.effective,
+        recurrenceIdentity: arm.recurrenceIdentity,
+        presentation: arm.presentation,
+        timing: arm.timing,
+        capture: arm.capture,
+      });
+    }
   }
   return validateExtinctionCommonLedgerReport(report, expected);
 }

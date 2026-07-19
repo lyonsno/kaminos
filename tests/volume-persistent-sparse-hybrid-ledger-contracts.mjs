@@ -21,6 +21,7 @@ const {
   buildExpectedLedgerContract,
   buildFailedLedgerReport,
   requireCapturedEvidence,
+  requireExactCoefficientOwnership,
 } = await import(pathToFileURL(modulePath));
 
 const EXPECTED_SHA256 = '4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20';
@@ -120,6 +121,19 @@ test('coefficient ownership stays nonnegative and exact in every arm', () => {
     ),
     /outside source ownership/,
     'tiny sparse-over-source mass must not disappear behind a tolerance or complement clamp',
+  );
+});
+
+test('publication gate rejects approximate-conservation sparse-over-source evidence', () => {
+  assert.throws(
+    () => requireExactCoefficientOwnership({
+      armId: 'sparse-positive-complement',
+      coefficientLedger: {
+        emission: { source: 0, splat: 0.0000005, residual: 0.0000001, dropped: 0 },
+        extinction: { source: 0, splat: 0.0000005, residual: 0.0000001, dropped: 0 },
+      },
+    }),
+    /emission splat exceeds source ownership/,
   );
 });
 
