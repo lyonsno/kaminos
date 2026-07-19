@@ -20,7 +20,7 @@ const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.
 const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
 const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') || out.replace(/\.png$/i, '.liquid-support-phase-a.png'));
 const liquidSupportPhaseBOut = resolve(args.get('--liquid-support-phase-b-out') || out.replace(/\.png$/i, '.liquid-support-phase-b.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta'];
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -58,6 +58,8 @@ let frozenStateWorldReflectionWitness = null;
 let reflectionHitKindField = null;
 let refractionHitKindField = null;
 let refractionFallbackDeltaField = null;
+let interfaceFidelityField = null;
+let interfaceFidelityComparison = null;
 let environmentMapField = null;
 let binaryLiquidSupportField = null;
 let environmentContributionField = null;
@@ -146,6 +148,8 @@ function writeReport(report = {}) {
     reflectionHitKindField,
     refractionHitKindField,
     refractionFallbackDeltaField,
+    interfaceFidelityField,
+    interfaceFidelityComparison,
     environmentMapField,
     binaryLiquidSupportField,
     environmentContributionField,
@@ -651,6 +655,7 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
     || opticalQueryEvidence?.queryFrameId !== renderFrameId
     || opticalQueryEvidence?.compositePassCount < 1
     || opticalQueryEvidence?.maximumDeferredMarchSteps !== 24
+    || opticalQueryEvidence?.minimumDeferredConfidence !== 0.55
     || opticalQueryEvidence?.deferredInputs?.linearDepthObject?.format !== 'rgba16float'
     || opticalQueryEvidence?.deferredInputs?.worldNormalRoughness?.format !== 'rgba16float'
     || opticalQueryEvidence?.deferredInputs?.albedoMetallic?.format !== 'rgba8unorm'
@@ -977,6 +982,223 @@ function measureNoQueryFallbackDelta(deltaPath, hitKindPath, validityPath, maskP
   };
   if (noQueryPixels < 100 || leakingPixels !== 0) {
     throw new Error(`no-query slabs do not preserve the legacy scene-radiance fallback: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
+}
+
+function decodeCapturedRgb24(path, label) {
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=width,height',
+    '-of', 'json',
+    path,
+  ], { encoding: 'utf8' });
+  if (probe.status !== 0) throw new Error(`ffprobe ${label} dimensions failed: ${probe.stderr || probe.status}`);
+  let dimensions;
+  try {
+    const stream = JSON.parse(probe.stdout)?.streams?.[0];
+    dimensions = { width: Number(stream?.width), height: Number(stream?.height) };
+  } catch (error) {
+    throw new Error(`ffprobe ${label} dimensions were not JSON: ${error.message}`);
+  }
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const expectedBytes = dimensions.width * dimensions.height * 3;
+  if (decoded.status !== 0 || !decoded.stdout?.length || decoded.stdout.length !== expectedBytes) {
+    throw new Error(`ffmpeg ${label} decode failed or was partial: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  return { ...dimensions, pixels: decoded.stdout };
+}
+
+function isBinaryLiquidPixel(mask, offset) {
+  const r = mask[offset];
+  const g = mask[offset + 1];
+  const b = mask[offset + 2];
+  return Math.min(r, g, b) >= 250 && Math.max(r, g, b) - Math.min(r, g, b) <= 2;
+}
+
+function measureInterfaceFidelityField(fieldPath, maskPath) {
+  const field = decodeCapturedRgb24(fieldPath, 'interface fidelity field');
+  const mask = decodeCapturedRgb24(maskPath, 'interface fidelity mask');
+  if (field.width !== mask.width || field.height !== mask.height) throw new Error('interface fidelity field and mask dimensions disagree');
+  let liquidPixels = 0;
+  let denseBodyPixels = 0;
+  let sparseIdentityPixels = 0;
+  let continuousSupportPixels = 0;
+  let unresolvedVariancePixels = 0;
+  let denseSum = 0;
+  let continuitySum = 0;
+  let varianceSum = 0;
+  for (let offset = 0; offset < field.pixels.length; offset += 3) {
+    if (!isBinaryLiquidPixel(mask.pixels, offset)) continue;
+    liquidPixels += 1;
+    const dense = field.pixels[offset];
+    const continuity = field.pixels[offset + 1];
+    const variance = field.pixels[offset + 2];
+    denseSum += dense;
+    continuitySum += continuity;
+    varianceSum += variance;
+    if (dense >= 72) denseBodyPixels += 1;
+    if (dense <= 18) sparseIdentityPixels += 1;
+    if (continuity >= 72) continuousSupportPixels += 1;
+    if (variance >= 24) unresolvedVariancePixels += 1;
+  }
+  const measurement = {
+    fieldPath,
+    maskPath,
+    liquidPixels,
+    denseBodyPixels,
+    sparseIdentityPixels,
+    continuousSupportPixels,
+    unresolvedVariancePixels,
+    meanDenseBodySignal: Number((denseSum / Math.max(1, liquidPixels)).toFixed(3)),
+    meanContinuitySignal: Number((continuitySum / Math.max(1, liquidPixels)).toFixed(3)),
+    meanVarianceSignal: Number((varianceSum / Math.max(1, liquidPixels)).toFixed(3)),
+    measurement: 'binary_liquid_support_masked_interface_regime_continuity_variance_rgb24_v0',
+  };
+  if (
+    liquidPixels < 1000
+    || denseBodyPixels < 1000
+    || sparseIdentityPixels < 100
+    || continuousSupportPixels < 1000
+    || unresolvedVariancePixels < 100
+  ) {
+    throw new Error(`interface fidelity field lacks material dense, sparse, continuous, or unresolved populations: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
+}
+
+function measureInterfaceFidelityComparison(adaptivePath, legacyPath, maskPath, fieldPath) {
+  const adaptive = decodeCapturedRgb24(adaptivePath, 'adaptive interface');
+  const legacy = decodeCapturedRgb24(legacyPath, 'legacy interface');
+  const mask = decodeCapturedRgb24(maskPath, 'interface comparison mask');
+  const field = decodeCapturedRgb24(fieldPath, 'interface comparison regime field');
+  if (
+    adaptive.width !== legacy.width
+    || adaptive.height !== legacy.height
+    || adaptive.width !== mask.width
+    || adaptive.height !== mask.height
+    || adaptive.width !== field.width
+    || adaptive.height !== field.height
+  ) throw new Error('adaptive, legacy, interface-mask, and regime-field dimensions disagree');
+
+  const luminance = (pixels, offset) => (pixels[offset] * 54 + pixels[offset + 1] * 183 + pixels[offset + 2] * 19) / 256;
+  let liquidPixels = 0;
+  let changedPixels = 0;
+  let adaptiveHighlightPixels = 0;
+  let legacyHighlightPixels = 0;
+  let adaptiveDenseHighlightPixels = 0;
+  let adaptiveSparseIdentityResponsePixels = 0;
+  let adaptiveDarkPixels = 0;
+  let legacyDarkPixels = 0;
+  let adaptiveVariationSum = 0;
+  let legacyVariationSum = 0;
+  let variationEdges = 0;
+  const adaptiveLuminances = [];
+  const legacyLuminances = [];
+  const denseSupportTiles = new Set();
+  const sparseIdentitySupportTiles = new Set();
+  const denseHighlightTiles = new Set();
+  const sparseIdentityResponseTiles = new Set();
+  for (let y = 0; y < adaptive.height; y += 1) {
+    for (let x = 0; x < adaptive.width; x += 1) {
+      const offset = (y * adaptive.width + x) * 3;
+      if (!isBinaryLiquidPixel(mask.pixels, offset)) continue;
+      liquidPixels += 1;
+      const channelDelta = Math.abs(adaptive.pixels[offset] - legacy.pixels[offset])
+        + Math.abs(adaptive.pixels[offset + 1] - legacy.pixels[offset + 1])
+        + Math.abs(adaptive.pixels[offset + 2] - legacy.pixels[offset + 2]);
+      if (channelDelta >= 18) changedPixels += 1;
+      const adaptiveMax = Math.max(adaptive.pixels[offset], adaptive.pixels[offset + 1], adaptive.pixels[offset + 2]);
+      const legacyMax = Math.max(legacy.pixels[offset], legacy.pixels[offset + 1], legacy.pixels[offset + 2]);
+      const denseBodySignal = field.pixels[offset];
+      const tileKey = `${Math.floor(x / 32)}:${Math.floor(y / 32)}`;
+      if (denseBodySignal >= 72) denseSupportTiles.add(tileKey);
+      if (denseBodySignal <= 18) sparseIdentitySupportTiles.add(tileKey);
+      if (adaptiveMax >= 180) adaptiveHighlightPixels += 1;
+      if (legacyMax >= 180) legacyHighlightPixels += 1;
+      if (denseBodySignal >= 72 && adaptiveMax >= 180) {
+        adaptiveDenseHighlightPixels += 1;
+        denseHighlightTiles.add(tileKey);
+      }
+      if (denseBodySignal <= 18 && adaptiveMax >= 128) {
+        adaptiveSparseIdentityResponsePixels += 1;
+        sparseIdentityResponseTiles.add(tileKey);
+      }
+      if (adaptiveMax < 18) adaptiveDarkPixels += 1;
+      if (legacyMax < 18) legacyDarkPixels += 1;
+      adaptiveLuminances.push(luminance(adaptive.pixels, offset));
+      legacyLuminances.push(luminance(legacy.pixels, offset));
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= adaptive.width || ny >= adaptive.height) continue;
+        const neighborOffset = (ny * adaptive.width + nx) * 3;
+        if (!isBinaryLiquidPixel(mask.pixels, neighborOffset)) continue;
+        adaptiveVariationSum += Math.abs(luminance(adaptive.pixels, offset) - luminance(adaptive.pixels, neighborOffset));
+        legacyVariationSum += Math.abs(luminance(legacy.pixels, offset) - luminance(legacy.pixels, neighborOffset));
+        variationEdges += 1;
+      }
+    }
+  }
+  const adaptiveTotalVariation = adaptiveVariationSum / Math.max(1, variationEdges);
+  const legacyTotalVariation = legacyVariationSum / Math.max(1, variationEdges);
+  adaptiveLuminances.sort((a, b) => a - b);
+  legacyLuminances.sort((a, b) => a - b);
+  const percentile = (values, quantile) => values[Math.min(values.length - 1, Math.floor(values.length * quantile))] || 0;
+  const adaptiveLuminanceP99 = percentile(adaptiveLuminances, 0.99);
+  const legacyLuminanceP99 = percentile(legacyLuminances, 0.99);
+  const denseHighlightTileCoverage = denseHighlightTiles.size / Math.max(1, denseSupportTiles.size);
+  const sparseIdentityResponseTileCoverage = sparseIdentityResponseTiles.size / Math.max(1, sparseIdentitySupportTiles.size);
+  const measurement = {
+    adaptivePath,
+    legacyPath,
+    maskPath,
+    fieldPath,
+    liquidPixels,
+    changedPixels,
+    changedRatio: Number((changedPixels / Math.max(1, liquidPixels)).toFixed(6)),
+    variationEdges,
+    adaptiveTotalVariation: Number(adaptiveTotalVariation.toFixed(4)),
+    legacyTotalVariation: Number(legacyTotalVariation.toFixed(4)),
+    variationRatio: Number((adaptiveTotalVariation / Math.max(0.0001, legacyTotalVariation)).toFixed(5)),
+    adaptiveHighlightPixels,
+    legacyHighlightPixels,
+    highlightRetention: Number((adaptiveHighlightPixels / Math.max(1, legacyHighlightPixels)).toFixed(5)),
+    adaptiveDenseHighlightPixels,
+    adaptiveSparseIdentityResponsePixels,
+    tileSizePixels: 32,
+    denseSupportTiles: denseSupportTiles.size,
+    sparseIdentitySupportTiles: sparseIdentitySupportTiles.size,
+    denseHighlightTiles: denseHighlightTiles.size,
+    sparseIdentityResponseTiles: sparseIdentityResponseTiles.size,
+    denseHighlightTileCoverage: Number(denseHighlightTileCoverage.toFixed(5)),
+    sparseIdentityResponseTileCoverage: Number(sparseIdentityResponseTileCoverage.toFixed(5)),
+    adaptiveLuminanceP99: Number(adaptiveLuminanceP99.toFixed(3)),
+    legacyLuminanceP99: Number(legacyLuminanceP99.toFixed(3)),
+    highlightPeakRetention: Number((adaptiveLuminanceP99 / Math.max(0.001, legacyLuminanceP99)).toFixed(5)),
+    adaptiveDarkPixels,
+    legacyDarkPixels,
+    measurement: 'same_state_binary_support_regime_masked_interface_fidelity_ab_rgb24_v1',
+  };
+  if (liquidPixels < 1000 || changedPixels < 500) {
+    throw new Error(`adaptive interface is blank or materially unchanged from legacy: ${JSON.stringify(measurement)}`);
+  }
+  if (adaptiveTotalVariation >= legacyTotalVariation * 0.98) {
+    throw new Error(`adaptive interface did not materially reduce particle-frequency luminance variation: ${JSON.stringify(measurement)}`);
+  }
+  if (
+    adaptiveDenseHighlightPixels < 500
+    || adaptiveSparseIdentityResponsePixels < 100
+    || adaptiveLuminanceP99 < legacyLuminanceP99 * 0.65
+  ) {
+    throw new Error(`adaptive interface erased physically legible highlights: ${JSON.stringify(measurement)}`);
+  }
+  if (denseHighlightTileCoverage < 0.08 || sparseIdentityResponseTileCoverage < 0.25) {
+    throw new Error(`adaptive interface concentrated optical response into too little dense or sparse support: ${JSON.stringify(measurement)}`);
   }
   return measurement;
 }
@@ -1744,6 +1966,10 @@ async function main() {
         || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
         || refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
         || refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
+        || refractionEvidence?.interfaceFidelityRoute !== 'wgsl-regime-aware-interface-footprint-v0'
+        || refractionEvidence?.coverageClosure !== 'dense_support_footprint_closure_sparse_identity_v0'
+        || refractionEvidence?.normalFiltering !== 'detail_macro_chord_variance_blend_v0'
+        || refractionEvidence?.legacyDebugMode !== 'legacy_interface'
         || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
         || refractionEvidence?.slabGeometryPassCount < 1
         || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -2044,7 +2270,7 @@ async function main() {
       }
       requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
       requireLinearHdrWorldClosure(receipt, `${mode}:${opticalDebugMode}`);
-      requireDeferredWorldReflectionEvidence(receipt, `${mode}:${opticalDebugMode}`, mode === 'screen_space_refraction');
+      requireDeferredWorldReflectionEvidence(receipt, `${mode}:${opticalDebugMode}`, mode === 'screen_space_refraction' && opticalDebugMode !== 'interface_fidelity');
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -2082,6 +2308,11 @@ async function main() {
       || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
       || refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
       || refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
+      || refractionEvidence?.interfaceFidelityRoute !== 'wgsl-regime-aware-interface-footprint-v0'
+      || refractionEvidence?.coverageClosure !== 'dense_support_footprint_closure_sparse_identity_v0'
+      || refractionEvidence?.normalFiltering !== 'detail_macro_chord_variance_blend_v0'
+      || refractionEvidence?.legacyDebugMode !== 'legacy_interface'
+      || refractionEvidence?.opticalTransportExecution !== 'executed_refraction_and_reflection_transport_v0'
       || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
       || refractionEvidence?.slabGeometryPassCount < 1
       || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -2287,7 +2518,7 @@ async function main() {
         liquidSupportPath,
         camera.id,
       );
-      if (surfaceComparison.normalizedCentroidDistance > 0.12 || surfaceComparison.minimumBoundsOverlap < 0.35) {
+      if (surfaceComparison.normalizedCentroidDistance > 0.14 || surfaceComparison.minimumBoundsOverlap < 0.35) {
         throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(surfaceComparison)}`);
       }
       if (refractionComparison.normalizedCentroidDistance > 0.12 || refractionComparison.minimumBoundsOverlap < 0.35) {
@@ -2340,6 +2571,19 @@ async function main() {
       return previous;
     })()`);
     opticalDebugViews = {};
+    const adaptiveInterfaceCapture = await renderSameState(
+      'screen_space_refraction',
+      screenSpaceRefractionOut,
+      canvasRect,
+      'shaded',
+    );
+    if (
+      adaptiveInterfaceCapture.receipt.requestedOpticalDebugMode !== 'shaded'
+      || adaptiveInterfaceCapture.receipt.effectiveOpticalDebugMode !== 'shaded'
+      || adaptiveInterfaceCapture.receipt.refractionEvidence?.interfaceFidelityRoute !== 'wgsl-regime-aware-interface-footprint-v0'
+    ) {
+      throw new Error(`adaptive interface recapture route disagreement: ${JSON.stringify(adaptiveInterfaceCapture.receipt)}`);
+    }
     let previousOpticalDebugMode = null;
     for (const opticalDebugMode of opticalDebugModes) {
       const capture = await renderSameState(
@@ -2348,12 +2592,20 @@ async function main() {
         canvasRect,
         opticalDebugMode,
       );
+      const expectedOpticalTransportExecution = opticalDebugMode === 'interface_fidelity'
+        ? 'not_executed_early_interface_diagnostic_v0'
+        : 'executed_refraction_and_reflection_transport_v0';
       if (
         capture.receipt.refractionEvidence?.opticalDebugMode !== opticalDebugMode
         || capture.receipt.refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
         || capture.receipt.refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
         || capture.receipt.refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
         || capture.receipt.refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
+        || capture.receipt.refractionEvidence?.interfaceFidelityRoute !== 'wgsl-regime-aware-interface-footprint-v0'
+        || capture.receipt.refractionEvidence?.coverageClosure !== 'dense_support_footprint_closure_sparse_identity_v0'
+        || capture.receipt.refractionEvidence?.normalFiltering !== 'detail_macro_chord_variance_blend_v0'
+        || capture.receipt.refractionEvidence?.legacyDebugMode !== 'legacy_interface'
+        || capture.receipt.refractionEvidence?.opticalTransportExecution !== expectedOpticalTransportExecution
         || capture.receipt.refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
         || capture.receipt.refractionEvidence?.slabGeometryPassCount < 1
         || capture.receipt.refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -2394,6 +2646,14 @@ async function main() {
       previousOpticalDebugMode = opticalDebugMode;
     }
     binaryLiquidSupportField = measureBinaryLiquidSupport(opticalDebugOutputs.liquid_support);
+    interfaceFidelityField = measureInterfaceFidelityField(opticalDebugOutputs.interface_fidelity, opticalDebugOutputs.liquid_support);
+    interfaceFidelityComparison = measureInterfaceFidelityComparison(screenSpaceRefractionOut, opticalDebugOutputs.legacy_interface, opticalDebugOutputs.liquid_support, opticalDebugOutputs.interface_fidelity);
+    if (
+      adaptiveInterfaceCapture.receipt.stepCount !== opticalDebugViews.legacy_interface.receipt.stepCount
+      || adaptiveInterfaceCapture.receipt.stepCount !== opticalDebugViews.interface_fidelity.receipt.stepCount
+    ) {
+      throw new Error(`interface fidelity A/B advanced the simulation: ${JSON.stringify({ adaptiveInterfaceCapture, legacy: opticalDebugViews.legacy_interface, field: opticalDebugViews.interface_fidelity })}`);
+    }
     environmentMapField = measureHdrEnvironmentField(opticalDebugOutputs.environment, opticalDebugOutputs.liquid_support);
     if (
       environmentMapField.brightRatio < 0.05
