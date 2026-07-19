@@ -10,6 +10,7 @@ import {
   DETACHED_DYNAMICS_ROUTE,
   advanceDetachedDynamicsToTime,
   createDetachedDynamicsSidecar,
+  rebaseDetachedDynamicsClockOrigin,
   reconcileAcceptedDetachedDynamics,
   resetDetachedDynamics,
 } from '../structural-material-3d-detached-dynamics.js';
@@ -161,6 +162,13 @@ assert.equal(reset.retiredBodies.length, 0);
 assert.equal(reset.generation, launched.generation + 1);
 assert.equal('generation' in reset.config, false, 'lifecycle identity cannot leak into integrator config');
 
+const secondLaunchOrigin = rebaseDetachedDynamicsClockOrigin(12_000, settled.elapsedSeconds);
+assert.equal(secondLaunchOrigin, 4_000, 'new launch rebases wall time to current dynamics elapsed time');
+assert.ok(
+  Math.abs((12_016 - secondLaunchOrigin) / 1000 - 8.016) < 0.000001,
+  'the first new frame advances from current fixed-step time rather than page age',
+);
+
 const staleAssets = structuredClone(detachedAssets);
 staleAssets.connectivityEpoch = -1;
 assert.throws(
@@ -182,6 +190,7 @@ assert.match(pageSource, /DETACHED_DYNAMICS_AUTHORITY/, 'the page must expose dy
 assert.match(witnessSource, /detachedDynamicsAcceptedLaunch/, 'native witness must require accepted launch identity');
 assert.match(witnessSource, /detachedDynamicsSettledContact/, 'native witness must require collision and settlement evidence');
 assert.match(witnessSource, /detachedDynamicsRenderAgreement/, 'native witness must reject report-only body motion');
+assert.match(witnessSource, /detachedDynamicsSecondLaunchClock/, 'native witness must exercise a second launch episode');
 assert.match(greenroomSource, /detached-dynamics-greenroom-r1/, 'dynamics evidence needs a dedicated artifact identity');
 assert.match(greenroomSource, /bellTower=1/, 'dynamics Greenroom must request the structural bell route');
 

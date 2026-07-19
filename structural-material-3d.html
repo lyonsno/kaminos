@@ -237,6 +237,7 @@
       DETACHED_DYNAMICS_ROUTE,
       advanceDetachedDynamicsToTime,
       createDetachedDynamicsSidecar,
+      rebaseDetachedDynamicsClockOrigin,
       reconcileAcceptedDetachedDynamics,
       resetDetachedDynamics,
     } from './structural-material-3d-detached-dynamics.js';
@@ -813,7 +814,10 @@
         },
       );
       if (detachedDynamics.bodies.length > bodyCountBefore) {
-        detachedDynamicsClockOrigin = performance.now() - detachedDynamics.elapsedSeconds * 1000;
+        detachedDynamicsClockOrigin = rebaseDetachedDynamicsClockOrigin(
+          performance.now(),
+          detachedDynamics.elapsedSeconds,
+        );
       }
     }
 
@@ -2121,6 +2125,13 @@
       sympatheticCitadel: sympatheticCitadelWitness(),
       detachedDynamics: bellTowerMode ? structuredClone(detachedDynamics) : null,
       detachedDynamicsRendered: bellTowerMode ? detachedDynamicsRenderWitness() : null,
+      detachedDynamicsClock: bellTowerMode ? {
+        originMilliseconds: detachedDynamicsClockOrigin,
+        nowMilliseconds: performance.now(),
+        projectedElapsedSeconds: detachedDynamicsClockOrigin === null
+          ? detachedDynamics.elapsedSeconds
+          : (performance.now() - detachedDynamicsClockOrigin) / 1000,
+      } : null,
       visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       summary: summarizeLayeredStructuralState(material),
       forceEnvelope,

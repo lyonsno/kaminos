@@ -131,6 +131,11 @@ export function createDetachedDynamicsSidecar(options = {}) {
   };
 }
 
+export function rebaseDetachedDynamicsClockOrigin(nowMilliseconds, elapsedSeconds) {
+  return finite(nowMilliseconds, 'wall clock milliseconds') -
+    finite(elapsedSeconds, 'elapsedSeconds') * 1000;
+}
+
 function launchBody(previousAnchor, nextAnchor, transition, state) {
   const previousCenter = point(previousAnchor.acceptedBodyCenter, 'previous body center');
   const nextCenter = point(nextAnchor.acceptedBodyCenter, 'next body center');

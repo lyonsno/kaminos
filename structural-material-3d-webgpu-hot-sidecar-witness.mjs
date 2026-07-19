@@ -1158,6 +1158,75 @@ try {
       status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE)};
   })()`);
 
+  if (bellTowerRequested) {
+    report.failurePhase = 'detached-dynamics-second-launch';
+    const secondLaunchBaseline = await evaluate('window.__structuralMaterial3dWitness()');
+    const secondLaunchAppliedBaseline = secondLaunchBaseline.gpuTearAppliedCount;
+    await dispatchPointerClick(send, evaluate, '#fracture');
+    await dispatchProjectedStructuralDrag(send, evaluate, stageRect);
+    await dispatchProjectedStructuralDrag(send, evaluate, stageRect);
+    await waitUntil(
+      evaluate,
+      `(() => {
+        const witness = window.__structuralMaterial3dWitness();
+        return witness.gpuTearAppliedCount === ${secondLaunchAppliedBaseline + 2} &&
+          witness.detachedDynamics?.bodies?.length === 1 &&
+          witness.detachedDynamics?.launchKeys?.length === 2;
+      })()`,
+      config.loadTimeoutMs,
+      'accepted second bell separation did not launch a second dynamics episode',
+    );
+    const secondLaunchPage = await evaluate('window.__structuralMaterial3dWitness()');
+    const secondLaunchBody = secondLaunchPage.detachedDynamics.bodies[0];
+    const secondLaunchTransform = secondLaunchPage.detachedDynamicsRendered?.transforms?.find(transform =>
+      transform.bodyId === secondLaunchBody.id);
+    const secondLaunchCapture = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    const secondLaunchScreenshot = config.screenshot.replace(/\.png$/i, '-dynamics-second-launch.png');
+    writeFileSync(secondLaunchScreenshot, Buffer.from(secondLaunchCapture.data, 'base64'));
+    const secondLaunchPixelProbe = await probeScreenshot(evaluate, secondLaunchCapture.data);
+    report.detachedDynamicsSecondLaunch = {
+      baseline: {
+        elapsedSeconds: secondLaunchBaseline.detachedDynamics.elapsedSeconds,
+        stepCount: secondLaunchBaseline.detachedDynamics.stepCount,
+        launchKeys: secondLaunchBaseline.detachedDynamics.launchKeys,
+        retiredBodyCount: secondLaunchBaseline.detachedDynamics.retiredBodies.length,
+      },
+      state: secondLaunchPage.detachedDynamics,
+      clock: secondLaunchPage.detachedDynamicsClock,
+      rendered: secondLaunchPage.detachedDynamicsRendered,
+      screenshot: {
+        path: secondLaunchScreenshot,
+        byteLength: Buffer.from(secondLaunchCapture.data, 'base64').byteLength,
+        pixelProbe: secondLaunchPixelProbe,
+      },
+    };
+    const elapsedAdvance = secondLaunchPage.detachedDynamics.elapsedSeconds -
+      secondLaunchBaseline.detachedDynamics.elapsedSeconds;
+    const projectedClockLead = secondLaunchPage.detachedDynamicsClock.projectedElapsedSeconds -
+      secondLaunchPage.detachedDynamics.elapsedSeconds;
+    report.checks.detachedDynamicsSecondLaunchClock =
+      secondLaunchBody.launchStep === secondLaunchBaseline.detachedDynamics.stepCount &&
+      secondLaunchBody.launchEventEpoch >
+        report.detachedDynamicsAfterBind.state.retiredBodies[0].retirementEventEpoch &&
+      elapsedAdvance >= 0 &&
+      elapsedAdvance < 0.25 &&
+      projectedClockLead >= -0.001 &&
+      projectedClockLead < 0.25 &&
+      secondLaunchBody.phase !== 'settled' &&
+      secondLaunchTransform?.positionError <= 0.000001 &&
+      secondLaunchPixelProbe.nonDarkPixels >= 500 &&
+      secondLaunchPixelProbe.structuralColorPixels >= 40 &&
+      JSON.stringify(await evaluate('window.__structuralMaterial3dCameraWitness().state')) ===
+        JSON.stringify(cameraBefore);
+    assertCheck(
+      report.checks.detachedDynamicsSecondLaunchClock,
+      'second accepted launch froze or time-jumped from the prior dynamics clock episode',
+    );
+  }
+
   report.failurePhase = 'reset-reinitialize';
   await evaluate("document.querySelector('#reset').click()");
   await waitUntil(
