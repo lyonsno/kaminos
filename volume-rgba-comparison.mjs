@@ -78,6 +78,6 @@ export function compareRgbaPreviews(candidatePreview, targetPreview) {
     targetPeakPixelCount,
     candidateOnTargetPeakMeanLuma,
     targetPeakMeanLuma,
-    targetPeakLumaRetention: candidateOnTargetPeakMeanLuma / Math.max(Number.EPSILON, targetPeakMeanLuma),
+    targetPeakLumaRatio: candidateOnTargetPeakMeanLuma / Math.max(Number.EPSILON, targetPeakMeanLuma),
   };
 }

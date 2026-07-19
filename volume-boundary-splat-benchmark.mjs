@@ -467,7 +467,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
       const targetPeakPixelCount = Number(comparison?.targetPeakPixelCount);
       const rgbMaeNormalized = Number(comparison?.rgbMaeNormalized);
       const targetWeightedRgbMaeNormalized = Number(comparison?.targetWeightedRgbMaeNormalized);
-      const targetPeakLumaRetention = Number(comparison?.targetPeakLumaRetention);
+      const targetPeakLumaRatio = Number(comparison?.targetPeakLumaRatio);
       return comparison?.identity !== 'same-state-rgba8-target-relative-footprint-tier-metrics-v0'
         || arm?.visual?.simStepCount !== targetVisual?.simStepCount
         || arm?.visual?.effectiveRoute !== targetVisual?.effectiveRoute
@@ -484,8 +484,8 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
         || !Number.isFinite(targetWeightedRgbMaeNormalized)
         || targetWeightedRgbMaeNormalized < 0
         || targetWeightedRgbMaeNormalized > 1
-        || !Number.isFinite(targetPeakLumaRetention)
-        || targetPeakLumaRetention < 0;
+        || !Number.isFinite(targetPeakLumaRatio)
+        || targetPeakLumaRatio < 0;
     });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true

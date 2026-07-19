@@ -3448,7 +3448,8 @@ async function main() {
         arm.targetComparison = compareRgbaPreviews(preview, targetPreview);
         if (!Number.isFinite(arm.targetComparison.rgbMaeNormalized)
           || !Number.isFinite(arm.targetComparison.targetWeightedRgbMaeNormalized)
-          || !Number.isFinite(arm.targetComparison.targetPeakLumaRetention)) {
+          || !Number.isFinite(arm.targetComparison.targetPeakLumaRatio)
+          || arm.targetComparison.targetPeakLumaRatio < 0) {
           throw new Error(`footprint-tier-target-comparison-invalid:${arm.id}:${JSON.stringify(arm.targetComparison)}`);
         }
         arm.visual.preview = { path: previewPath, width: preview.width, height: preview.height };

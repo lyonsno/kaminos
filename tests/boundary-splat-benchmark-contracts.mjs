@@ -129,11 +129,11 @@ const authenticTierSweepFixture = {
         },
       },
       arms: [
-        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRetention: 0.9 } },
+        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRatio: 0.9 } },
         {
           id: 'importance-070-098',
           visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
-          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRetention: 0.95 },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRatio: 0.95 },
           audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
         {
@@ -149,7 +149,7 @@ const authenticTierSweepFixture = {
             mediumThreshold: 0.82,
             heroThreshold: 0.94,
           },
-          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.11, targetWeightedRgbMaeNormalized: 0.12, targetPeakLumaRetention: 0.91 },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.11, targetWeightedRgbMaeNormalized: 0.12, targetPeakLumaRatio: 0.91 },
           audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
       ],
@@ -202,7 +202,7 @@ for (const malformedApplication of [
 for (const malformedComparison of [
   { rgbMaeNormalized: -1 },
   { targetWeightedRgbMaeNormalized: 1.01 },
-  { targetPeakLumaRetention: -0.01 },
+  { targetPeakLumaRatio: -0.01 },
   { pixelCount: 1 },
   { targetPeakPixelCount: 3 },
 ]) {
@@ -311,7 +311,12 @@ const rgbaComparison = compareRgbaPreviews(
 assert.equal(rgbaComparison.identity, 'same-state-rgba8-target-relative-footprint-tier-metrics-v0');
 assert.ok(Math.abs(rgbaComparison.rgbMaeNormalized - (100 / (2 * 3 * 255))) < 1e-12);
 assert.equal(rgbaComparison.targetPeakPixelCount, 1);
-assert.equal(rgbaComparison.targetPeakLumaRetention, 1);
+assert.equal(rgbaComparison.targetPeakLumaRatio, 1);
+const overBrightPeakComparison = compareRgbaPreviews(
+  { width: 1, height: 1, rgba: [255, 255, 255, 255] },
+  { width: 1, height: 1, rgba: [100, 100, 100, 255] },
+);
+assert.ok(overBrightPeakComparison.targetPeakLumaRatio > 1, 'peak-luma ratio preserves lawful over-target amplification');
 assert.throws(
   () => compareRgbaPreviews(
     { width: 1, height: 1, rgba: [0, 0, 0, 255] },
