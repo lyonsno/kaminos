@@ -26,6 +26,13 @@ assert.match(benchmark, /--device-scale-factor[\s\S]*String\(testCase\.deviceSca
 assert.match(benchmark, /--boundary-splat-gpu-profile-samples[\s\S]*String\(BOUNDARY_SPLAT_GPU_PROFILE_SAMPLES\)/, 'benchmark requests a warm GPU timing series instead of trusting one timestamp sample');
 assert.match(benchmark, /--boundary-splat-footprint-audit/, 'benchmark requests projected footprint evidence for overdraw diagnosis');
 assert.match(benchmark, /--boundary-splat-footprint-sweep-radii/, 'bounded Grid96 viability probe requests one held-state conserved-footprint sweep');
+assert.match(benchmark, /--footprint-tier-sweep/, 'bounded Grid96 quadrature probe exposes one explicit tier-sweep gate');
+assert.match(benchmark, /boundary-splat-footprint-tier-arms/, 'tier probe delegates to the same held-state browser witness instead of inventing a second render path');
+assert.match(
+  benchmark,
+  /base-056[\s\S]*policy:\s*'off'[\s\S]*importance-070-098[\s\S]*policy:\s*'importance'[\s\S]*random-070-098[\s\S]*policy:\s*'random'/,
+  'tier sweep contains the exact base, appearance-charged, and random-control arms',
+);
 assert.match(benchmark, /analytic_conserved/, 'footprint sweep uses the renderer area-opacity conservation path');
 assert.match(
   volumeCore,
@@ -43,6 +50,16 @@ assert.match(
   witness,
   /boundarySplatFootprintSweepRadii[\s\S]*boundarySplatMode: 'analytic_conserved'[\s\S]*sampleBoundarySplatGpuProfile[\s\S]*sampleBoundarySplatFootprintAudit[\s\S]*held-state-analytic-conserved-footprint-sweep-v0/,
   'footprint viability sweep changes only conserved analytic footprint controls on one held state',
+);
+assert.match(
+  witness,
+  /boundarySplatFootprintTierArms[\s\S]*boundarySplatFootprintTierPolicy[\s\S]*boundarySplatFootprintMediumRadius[\s\S]*boundarySplatFootprintHeroRadius[\s\S]*sampleBoundarySplatGpuProfile[\s\S]*sampleBoundarySplatFootprintAudit/,
+  'tier sweep changes only explicit candidate-local charging controls on the held conserved route',
+);
+assert.match(
+  witness,
+  /footprint-tier-effective-control-mismatch[\s\S]*footprint-tier-candidate-identity-changed[\s\S]*footprint-tier-energy-conservation-failed/,
+  'tier sweep fails loud on fallback controls, candidate drift, or broken optical conservation',
 );
 assert.match(
   witness,

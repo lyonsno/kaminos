@@ -152,6 +152,14 @@ const boundarySplatGpuProfileSamples = Math.max(0, Math.floor(Number(args.get('-
 const boundarySplatGpuProfileWarmupSamples = boundarySplatGpuProfileSamples > 0 ? Math.min(2, boundarySplatGpuProfileSamples) : 0;
 const boundarySplatFootprintAuditRequested = args.has('--boundary-splat-footprint-audit');
 const boundarySplatFootprintSweepRadii = parseNumberList(args.get('--boundary-splat-footprint-sweep-radii'));
+let boundarySplatFootprintTierArms = [];
+if (args.has('--boundary-splat-footprint-tier-arms')) {
+  try {
+    boundarySplatFootprintTierArms = JSON.parse(String(args.get('--boundary-splat-footprint-tier-arms')));
+  } catch (error) {
+    throw new Error(`Invalid boundary splat footprint tier arms JSON: ${error.message}`);
+  }
+}
 if (boundarySplatFootprintSweepRadii.some((radius, index) => (
   !Number.isFinite(radius)
   || radius < 0.35
@@ -159,6 +167,27 @@ if (boundarySplatFootprintSweepRadii.some((radius, index) => (
   || (index > 0 && radius >= boundarySplatFootprintSweepRadii[index - 1])
 ))) {
   throw new Error(`Invalid descending boundary splat footprint sweep: ${boundarySplatFootprintSweepRadii.join(',')}`);
+}
+if (boundarySplatFootprintSweepRadii.length > 0 && boundarySplatFootprintTierArms.length > 0) {
+  throw new Error('Boundary splat footprint radius and tier sweeps are mutually exclusive');
+}
+if (!Array.isArray(boundarySplatFootprintTierArms)
+  || boundarySplatFootprintTierArms.length > 0 && boundarySplatFootprintTierArms.some((arm, index, arms) => (
+    !arm
+    || typeof arm.id !== 'string'
+    || arm.id.length === 0
+    || arms.findIndex(candidate => candidate?.id === arm.id) !== index
+    || !['off', 'importance', 'random'].includes(arm.policy)
+    || ![arm.baseRadius, arm.mediumRadius, arm.heroRadius, arm.mediumThreshold, arm.heroThreshold].every(Number.isFinite)
+    || arm.baseRadius < 0.35
+    || arm.heroRadius > 1.5
+    || arm.mediumRadius < arm.baseRadius
+    || arm.heroRadius < arm.mediumRadius
+    || arm.mediumThreshold < 0
+    || arm.heroThreshold > 1
+    || arm.heroThreshold < arm.mediumThreshold
+  ))) {
+  throw new Error('Invalid boundary splat footprint tier arm contract');
 }
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
@@ -3165,6 +3194,166 @@ async function main() {
         if (Number(arm.overflowCount) !== 0) throw new Error(`footprint-sweep-overflow:${arm.radius}:${arm.overflowCount}`);
         if (!Number.isFinite(Number(arm.audit.relativeError)) || Number(arm.audit.relativeError) > 1e-5) {
           throw new Error(`footprint-sweep-energy-conservation-failed:${arm.radius}:${arm.audit.relativeError}`);
+        }
+      }
+      boundarySplatFootprintSweep.ok = true;
+      boundarySplatFootprintSweep.candidatePayloadSha256 = baseline.audit.candidatePayloadSha256;
+      boundarySplatFootprintSweep.simStepCount = baseline.simStepCount;
+    }
+    if (boundarySplatFootprintTierArms.length > 0) {
+      phase = 'boundary-splat-footprint-tier-sweep';
+      const tierSweepEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const prototype = window.__kaminosVolumePrototype;
+          if (!prototype?.sampleBoundarySplatGpuProfile
+            || !prototype?.sampleBoundarySplatFootprintAudit
+            || !prototype?.sampleFrame
+            || !prototype?.debugState
+            || !prototype?.setControls
+            || !prototype?.setActive) {
+            throw new Error('boundary-splat-footprint-tier-sweep-api-unavailable');
+          }
+          const tierArms = ${JSON.stringify(boundarySplatFootprintTierArms)};
+          const activeBefore = prototype.debugState().active === true;
+          const controlsBefore = { ...(prototype.debugState().controls || {}) };
+          const arms = [];
+          await prototype.setActive(false);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          try {
+            for (const tierArm of tierArms) {
+              prototype.setControls({
+                ...controlsBefore,
+                lookFreeze: 1,
+                boundarySplatMode: 'analytic_conserved',
+                boundarySplatRadius: tierArm.baseRadius,
+                boundarySplatFootprintTierPolicy: tierArm.policy,
+                boundarySplatFootprintMediumRadius: tierArm.mediumRadius,
+                boundarySplatFootprintHeroRadius: tierArm.heroRadius,
+                boundarySplatFootprintMediumThreshold: tierArm.mediumThreshold,
+                boundarySplatFootprintHeroThreshold: tierArm.heroThreshold,
+              });
+              await new Promise(resolve => setTimeout(resolve, 40));
+              const samples = [];
+              for (let index = 0; index < ${boundarySplatGpuProfileSamples}; index += 1) {
+                const profile = await prototype.sampleBoundarySplatGpuProfile({ advanceSim: false });
+                const profileState = prototype.debugState();
+                samples.push({
+                  index,
+                  profile,
+                  frameCount: profileState.frameCount,
+                  simStepCount: profileState.simStepCount,
+                  candidateCount: profileState.boundarySplatCandidateCount,
+                  instanceCount: profileState.boundarySplatInstanceCount,
+                  overflowCount: profileState.boundarySplatOverflowCount,
+                });
+              }
+              const visual = await prototype.sampleFrame({
+                advanceSim: false,
+                allowInactive: true,
+                includeRgba: false,
+                sameStateCaptureId: 'footprint-tier-' + tierArm.id,
+              });
+              if (visual?.ok !== true) {
+                throw new Error('footprint-tier-visual-failed:' + tierArm.id + ':' + (visual?.reason || 'unknown'));
+              }
+              const audit = await prototype.sampleBoundarySplatFootprintAudit();
+              const state = prototype.debugState();
+              arms.push({
+                ...tierArm,
+                effectiveMode: state.boundarySplatMode,
+                effectiveRadius: state.boundarySplatRadius,
+                effectiveTier: state.boundarySplatFootprintTier,
+                frameCount: state.frameCount,
+                simStepCount: state.simStepCount,
+                candidateCount: state.boundarySplatCandidateCount,
+                instanceCount: state.boundarySplatInstanceCount,
+                overflowCount: state.boundarySplatOverflowCount,
+                samples,
+                audit,
+                visual: {
+                  sampleAuthority: visual.sampleAuthority,
+                  simAdvanced: visual.simAdvanced,
+                  sameStateCaptureId: visual.sameStateCaptureId,
+                  frameCount: visual.frameCount,
+                  simStepCount: visual.simStepCount,
+                  candidateCount: visual.boundarySplatCandidateCount,
+                  instanceCount: visual.boundarySplatInstanceCount,
+                  overflowCount: visual.boundarySplatOverflowCount,
+                  volumeReconstructionStyle: visual.volumeReconstructionStyle,
+                  selectiveHeadLiveCompositionEffective: visual.selectiveHeadLiveCompositionEffective,
+                  selectiveHeadLivePassReceipt: visual.selectiveHeadLivePassReceipt,
+                  litPixels: visual.litPixels,
+                  meanLuma: visual.meanLuma,
+                  fireLikePixels: visual.fireLikePixels,
+                  emissiveLikePixels: visual.emissiveLikePixels,
+                  smokeLikePixels: visual.smokeLikePixels,
+                  preview: visual.preview,
+                },
+              });
+            }
+          } finally {
+            prototype.setControls(controlsBefore);
+            if (activeBefore) await prototype.setActive(true);
+          }
+          return {
+            identity: 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
+            liveLoopSuspended: true,
+            activeBefore,
+            warmupSamples: ${boundarySplatGpuProfileWarmupSamples},
+            measuredSamples: ${Math.max(0, boundarySplatGpuProfileSamples - boundarySplatGpuProfileWarmupSamples)},
+            arms,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      boundarySplatFootprintSweep = tierSweepEval.result.value;
+      const arms = boundarySplatFootprintSweep?.arms;
+      if (!Array.isArray(arms) || arms.length !== boundarySplatFootprintTierArms.length) {
+        throw new Error(`footprint-tier-sweep-incomplete:${arms?.length ?? 'missing'}:${boundarySplatFootprintTierArms.length}`);
+      }
+      const baseline = arms[0];
+      for (const arm of arms) {
+        const preview = arm?.visual?.preview;
+        if (!preview || !Array.isArray(preview.rgba) || !Number.isFinite(preview.width) || !Number.isFinite(preview.height)) {
+          throw new Error(`footprint-tier-visual-preview-missing:${arm?.id ?? 'unknown'}`);
+        }
+        const previewPath = resolve(dirname(out), `footprint-tier-${arm.id}.png`);
+        writeRgbaPng(previewPath, preview.width, preview.height, preview.rgba);
+        arm.visual.preview = { path: previewPath, width: preview.width, height: preview.height };
+        arm.previewPath = previewPath;
+        const effectiveTier = arm.effectiveTier;
+        if (arm?.effectiveMode !== 'analytic_conserved'
+          || Math.abs(Number(arm.effectiveRadius) - Number(arm.baseRadius)) > 1e-6
+          || effectiveTier?.policy !== arm.policy
+          || Math.abs(Number(effectiveTier?.mediumRadius) - Number(arm.mediumRadius)) > 1e-6
+          || Math.abs(Number(effectiveTier?.heroRadius) - Number(arm.heroRadius)) > 1e-6
+          || Math.abs(Number(effectiveTier?.mediumThreshold) - Number(arm.mediumThreshold)) > 1e-6
+          || Math.abs(Number(effectiveTier?.heroThreshold) - Number(arm.heroThreshold)) > 1e-6) {
+          throw new Error(`footprint-tier-effective-control-mismatch:${JSON.stringify(arm)}`);
+        }
+        if (arm?.audit?.ok !== true) throw new Error(`footprint-tier-audit-failed:${JSON.stringify(arm?.audit)}`);
+        if (arm.simStepCount !== baseline.simStepCount
+          || arm.visual?.sampleAuthority !== 'render-only-frozen-sim-state'
+          || arm.visual?.simAdvanced !== false
+          || arm.visual?.simStepCount !== baseline.simStepCount) {
+          throw new Error(`footprint-tier-simulation-state-changed:${arm.id}`);
+        }
+        if (arm.visual?.candidateCount !== arm.candidateCount
+          || arm.visual?.instanceCount !== arm.instanceCount
+          || Number(arm.visual?.overflowCount) !== 0
+          || !Number.isFinite(Number(arm.visual?.meanLuma))
+          || Number(arm.visual?.litPixels) <= 0) {
+          throw new Error(`footprint-tier-visual-workload-invalid:${arm.id}`);
+        }
+        if (arm.audit.candidatePayloadSha256 !== baseline.audit.candidatePayloadSha256
+          || arm.candidateCount !== baseline.candidateCount
+          || arm.instanceCount !== baseline.instanceCount) {
+          throw new Error(`footprint-tier-candidate-identity-changed:${arm.id}`);
+        }
+        if (Number(arm.overflowCount) !== 0) throw new Error(`footprint-tier-overflow:${arm.id}:${arm.overflowCount}`);
+        if (!Number.isFinite(Number(arm.audit.relativeError)) || Number(arm.audit.relativeError) > 1e-5) {
+          throw new Error(`footprint-tier-energy-conservation-failed:${arm.id}:${arm.audit.relativeError}`);
         }
       }
       boundarySplatFootprintSweep.ok = true;

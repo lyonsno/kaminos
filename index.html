@@ -1175,6 +1175,35 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-radius-val">1.00</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Footprint charging</span>
+        <select id="volume-boundary-splat-footprint-tier-policy" class="select-input">
+          <option value="off">off</option>
+          <option value="importance">importance</option>
+          <option value="random">random control</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-footprint-tier-policy-val">off</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Medium footprint</span>
+        <input type="range" id="volume-boundary-splat-footprint-medium-radius" min="0.35" max="1.5" step="0.01" value="0.70">
+        <span class="slider-val" id="volume-boundary-splat-footprint-medium-radius-val">0.70</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Hero footprint</span>
+        <input type="range" id="volume-boundary-splat-footprint-hero-radius" min="0.35" max="1.5" step="0.01" value="0.98">
+        <span class="slider-val" id="volume-boundary-splat-footprint-hero-radius-val">0.98</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Medium charge cut</span>
+        <input type="range" id="volume-boundary-splat-footprint-medium-threshold" min="0" max="1" step="0.01" value="0.78">
+        <span class="slider-val" id="volume-boundary-splat-footprint-medium-threshold-val">0.78</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Hero charge cut</span>
+        <input type="range" id="volume-boundary-splat-footprint-hero-threshold" min="0" max="1" step="0.01" value="0.94">
+        <span class="slider-val" id="volume-boundary-splat-footprint-hero-threshold-val">0.94</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat sharpness</span>
         <input type="range" id="volume-boundary-splat-sharpness" min="1" max="12" step="0.1" value="3.4">
         <span class="slider-val" id="volume-boundary-splat-sharpness-val">3.4</span>
@@ -11767,6 +11796,10 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySplatRadius', id: 'volume-boundary-splat-radius', param: 'volume_boundary_splat_radius', min: 0.35, max: 1.5, decimals: 2 },
+  { key: 'boundarySplatFootprintMediumRadius', id: 'volume-boundary-splat-footprint-medium-radius', param: 'volume_boundary_splat_footprint_medium_radius', min: 0.35, max: 1.5, decimals: 2 },
+  { key: 'boundarySplatFootprintHeroRadius', id: 'volume-boundary-splat-footprint-hero-radius', param: 'volume_boundary_splat_footprint_hero_radius', min: 0.35, max: 1.5, decimals: 2 },
+  { key: 'boundarySplatFootprintMediumThreshold', id: 'volume-boundary-splat-footprint-medium-threshold', param: 'volume_boundary_splat_footprint_medium_threshold', min: 0, max: 1, decimals: 2 },
+  { key: 'boundarySplatFootprintHeroThreshold', id: 'volume-boundary-splat-footprint-hero-threshold', param: 'volume_boundary_splat_footprint_hero_threshold', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySplatSharpness', id: 'volume-boundary-splat-sharpness', param: 'volume_boundary_splat_sharpness', min: 1, max: 12, decimals: 1 },
   { key: 'flowKernelStrength', id: 'volume-flow-kernel-strength', param: 'volume_flow_kernel_strength', min: 0, max: 1, decimals: 2 },
   { key: 'flowKernelRadius', id: 'volume-flow-kernel-radius', param: 'volume_flow_kernel_radius', min: 0.0025, max: 0.12, decimals: 4 },
@@ -11807,6 +11840,7 @@ const BOUNDARY_SPLAT_MODE_VALUES = new Set([
   'kernel_moment_covariance',
   'kernel_moment_full_flame_union',
 ]);
+const BOUNDARY_SPLAT_FOOTPRINT_TIER_POLICY_VALUES = new Set(['off', 'importance', 'random']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11826,6 +11860,11 @@ function normalizeBoundarySidecarView(value) {
 function normalizeBoundarySplatMode(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SPLAT_MODE_VALUES.has(mode) ? mode : 'off';
+}
+
+function normalizeBoundarySplatFootprintTierPolicy(value) {
+  const policy = String(value || 'off').toLowerCase();
+  return BOUNDARY_SPLAT_FOOTPRINT_TIER_POLICY_VALUES.has(policy) ? policy : 'off';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -11966,6 +12005,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
+  ['boundarySplatFootprintTierPolicy', 'volume_boundary_splat_footprint_tier_policy'],
   ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ['flowKernelDescriptorCapture', 'volume_flow_kernel_descriptor_capture'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
@@ -12256,6 +12296,9 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
             : boundarySplatMode === 'analytic'
               ? 'analytic splats'
               : 'raymarch';
+  const footprintTierPolicy = normalizeBoundarySplatFootprintTierPolicy(controlsSnapshot.boundarySplatFootprintTierPolicy);
+  const footprintTierPolicyLabel = document.getElementById('volume-boundary-splat-footprint-tier-policy-val');
+  if (footprintTierPolicyLabel) footprintTierPolicyLabel.textContent = footprintTierPolicy === 'random' ? 'random control' : footprintTierPolicy;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -16205,6 +16248,7 @@ function readVolumeControls() {
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
+  const boundarySplatFootprintTierPolicy = normalizeBoundarySplatFootprintTierPolicy(document.getElementById('volume-boundary-splat-footprint-tier-policy')?.value);
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const flowKernelDescriptorCapture = ['1', 'true', 'on'].includes(String(params.get('volume_flow_kernel_descriptor_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
@@ -16273,9 +16317,14 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySplatMode,
+    boundarySplatFootprintTierPolicy,
     boundarySplatFeatureCapture,
     flowKernelDescriptorCapture,
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
+    boundarySplatFootprintMediumRadius: parseFloat(document.getElementById('volume-boundary-splat-footprint-medium-radius').value),
+    boundarySplatFootprintHeroRadius: parseFloat(document.getElementById('volume-boundary-splat-footprint-hero-radius').value),
+    boundarySplatFootprintMediumThreshold: parseFloat(document.getElementById('volume-boundary-splat-footprint-medium-threshold').value),
+    boundarySplatFootprintHeroThreshold: parseFloat(document.getElementById('volume-boundary-splat-footprint-hero-threshold').value),
     boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
     flowKernelStrength: parseFloat(document.getElementById('volume-flow-kernel-strength').value),
     flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
@@ -17536,6 +17585,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
+  if (params.has('volume_boundary_splat_footprint_tier_policy')) {
+    document.getElementById('volume-boundary-splat-footprint-tier-policy').value = normalizeBoundarySplatFootprintTierPolicy(params.get('volume_boundary_splat_footprint_tier_policy'));
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -17615,6 +17667,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-footprint-tier-policy')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-footprint-tier-policy')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);

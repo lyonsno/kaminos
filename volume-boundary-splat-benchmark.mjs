@@ -81,6 +81,35 @@ const windowSize = String(args.get('--window-size') || '1280,960');
 const deviceScaleFactor = 1;
 const BOUNDARY_SPLAT_GPU_PROFILE_SAMPLES = 9;
 const DEFAULT_FOOTPRINT_SWEEP_RADII = [0.98, 0.70, 0.56, 0.42];
+const DEFAULT_FOOTPRINT_TIER_ARMS = Object.freeze([
+  {
+    id: 'base-056',
+    policy: 'off',
+    baseRadius: 0.56,
+    mediumRadius: 0.70,
+    heroRadius: 0.98,
+    mediumThreshold: 0.78,
+    heroThreshold: 0.94,
+  },
+  {
+    id: 'importance-070-098',
+    policy: 'importance',
+    baseRadius: 0.56,
+    mediumRadius: 0.70,
+    heroRadius: 0.98,
+    mediumThreshold: 0.78,
+    heroThreshold: 0.94,
+  },
+  {
+    id: 'random-070-098',
+    policy: 'random',
+    baseRadius: 0.56,
+    mediumRadius: 0.70,
+    heroRadius: 0.98,
+    mediumThreshold: 0.78,
+    heroThreshold: 0.94,
+  },
+]);
 const userDataDir = String(args.get('--user-data-dir') || `/tmp/kaminos-boundary-splat-benchmark-profile-${process.pid}`);
 
 const ADMITTED_PRODUCTION_GRID_RESOLUTIONS = [96, 128, 160];
@@ -140,7 +169,12 @@ const FOOTPRINT_SWEEP_REQUESTED = args.has('--footprint-sweep-radii');
 const FOOTPRINT_SWEEP_RADII = FOOTPRINT_SWEEP_REQUESTED
   ? selectFootprintSweepRadii(args.get('--footprint-sweep-radii'))
   : [];
-if (FOOTPRINT_SWEEP_REQUESTED && (SELECTED_PRODUCTION_GRID_RESOLUTIONS.length !== 1 || SELECTED_PRODUCTION_GRID_RESOLUTIONS[0] !== 96)) {
+const FOOTPRINT_TIER_SWEEP_REQUESTED = args.has('--footprint-tier-sweep');
+if (FOOTPRINT_SWEEP_REQUESTED && FOOTPRINT_TIER_SWEEP_REQUESTED) {
+  throw new Error('footprint radius and tier sweeps are mutually exclusive');
+}
+if ((FOOTPRINT_SWEEP_REQUESTED || FOOTPRINT_TIER_SWEEP_REQUESTED)
+  && (SELECTED_PRODUCTION_GRID_RESOLUTIONS.length !== 1 || SELECTED_PRODUCTION_GRID_RESOLUTIONS[0] !== 96)) {
   throw new Error('footprint sweep requires the single admitted Grid96 arm');
 }
 const CASES = SELECTED_PRODUCTION_GRID_RESOLUTIONS.map(resolution => ({
@@ -150,9 +184,9 @@ const CASES = SELECTED_PRODUCTION_GRID_RESOLUTIONS.map(resolution => ({
   renderScale: 1,
   deviceScaleFactor,
   viewport: windowSize,
-  ...(FOOTPRINT_SWEEP_REQUESTED ? {
+  ...((FOOTPRINT_SWEEP_REQUESTED || FOOTPRINT_TIER_SWEEP_REQUESTED) ? {
     boundarySplatMode: 'analytic_conserved',
-    boundarySplatRadius: FOOTPRINT_SWEEP_RADII[0],
+    boundarySplatRadius: FOOTPRINT_TIER_SWEEP_REQUESTED ? 0.56 : FOOTPRINT_SWEEP_RADII[0],
   } : {}),
 }));
 
@@ -203,6 +237,13 @@ function writeReport(report) {
       identity: 'held-state-analytic-conserved-footprint-sweep-v0',
       radii: FOOTPRINT_SWEEP_RADII,
       fixedGrid: 96,
+      conservationAuthority: 'analytic-conserved-area-opacity-v0',
+    } : null,
+    footprintTierSweep: FOOTPRINT_TIER_SWEEP_REQUESTED ? {
+      identity: 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
+      arms: DEFAULT_FOOTPRINT_TIER_ARMS,
+      fixedGrid: 96,
+      candidateAuthority: 'unchanged-native-cell-selection-before-footprint-charging-v0',
       conservationAuthority: 'analytic-conserved-area-opacity-v0',
     } : null,
     unadmittedProductionGridHypotheses: UNADMITTED_PRODUCTION_GRID_HYPOTHESES,
@@ -520,6 +561,9 @@ function runWitness(testCase, index) {
   ];
   if (FOOTPRINT_SWEEP_REQUESTED) {
     witnessArgs.push('--boundary-splat-footprint-sweep-radii', FOOTPRINT_SWEEP_RADII.join(','));
+  }
+  if (FOOTPRINT_TIER_SWEEP_REQUESTED) {
+    witnessArgs.push('--boundary-splat-footprint-tier-arms', JSON.stringify(DEFAULT_FOOTPRINT_TIER_ARMS));
   }
   const result = spawnSync(process.execPath, witnessArgs, {
     cwd: new URL('.', import.meta.url).pathname,

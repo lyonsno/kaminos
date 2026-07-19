@@ -7,6 +7,7 @@ const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url)
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
 const {
   canonicalizeBoundarySplatAuditRows,
+  resolveBoundarySplatFootprintTier,
   resolveBoundarySplatRenderComposition,
 } = await import('../volume-core.js');
 const modelArtifact = JSON.parse(await readFile(new URL('../models/boundary-splat-attribute/analytic-teacher-h64-v0/model-artifact.json', import.meta.url), 'utf8'));
@@ -17,6 +18,80 @@ assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY\s*=\s*'boundary-splat
 assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.features, 'live feature capture and compiled model preserve one exact feature order');
 assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
+assert.equal(typeof resolveBoundarySplatFootprintTier, 'function', 'candidate-local footprint tier resolution is exported for exact witness replay');
+const baseFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'importance',
+  cellIndex: 41,
+  structuralSignal: 0,
+  fireSignal: 0,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+const mediumFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'importance',
+  cellIndex: 42,
+  structuralSignal: 0.36,
+  fireSignal: 0.72,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+const heroFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'importance',
+  cellIndex: 43,
+  structuralSignal: 0.5,
+  fireSignal: 1.25,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+assert.deepEqual(
+  [baseFootprintTier.tier, baseFootprintTier.radius],
+  ['base', 0.56],
+  'low-importance candidates stay on the cheap footprint arm',
+);
+assert.deepEqual(
+  [mediumFootprintTier.tier, mediumFootprintTier.radius],
+  ['medium', 0.7],
+  'mid-importance candidates receive only the intermediate footprint charge',
+);
+assert.deepEqual(
+  [heroFootprintTier.tier, heroFootprintTier.radius],
+  ['hero', 0.98],
+  'peak candidates recover the exact visually accepted hero footprint',
+);
+const randomFootprintTierA = resolveBoundarySplatFootprintTier({
+  policy: 'random',
+  cellIndex: 9876,
+  structuralSignal: 0.5,
+  fireSignal: 1.25,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+const randomFootprintTierB = resolveBoundarySplatFootprintTier({
+  policy: 'random',
+  cellIndex: 9876,
+  structuralSignal: 0,
+  fireSignal: 0,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+assert.deepEqual(randomFootprintTierA, randomFootprintTierB, 'random-control charging is deterministic by native cell identity and ignores candidate appearance');
+assert.match(core, /fn boundarySplatFootprintTierScore/, 'WGSL owns the same candidate-local footprint tier score as the audit helper');
+assert.match(core, /effectiveMajorRadius\s*=\s*effectiveMajorRadius \* footprintTierScale[\s\S]*effectiveMinorRadius\s*=\s*effectiveMinorRadius \* footprintTierScale[\s\S]*effectiveAxisAreaScale/, 'tier charging enlarges candidate-local axes before conserved area-opacity normalization');
 assert.equal(
   resolveBoundarySplatRenderComposition({
     boundarySplatRequested: true,
