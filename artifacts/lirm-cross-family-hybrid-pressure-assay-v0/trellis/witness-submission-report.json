@@ -1,7 +1,8 @@
 {
   "schema": "kaminos.lirm-cross-family-hybrid-trellis-witness-submission.v0",
-  "status": "submitted",
+  "status": "stale-pre-fingerprint-schema",
   "requestedCount": 12,
+  "staleReason": "Historical witness jobs completed before submission fingerprints were introduced; the current runner will resubmit every entry before collection.",
   "submitted": [
     {
       "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left",
@@ -89,5 +90,5 @@
     }
   ],
   "failurePhase": null,
-  "lastTrustworthyEvidence": "12/12 witness jobs submitted through Greenroom"
+  "lastTrustworthyEvidence": "12/12 historical Greenroom witness job IDs preserved; none is recoverable by the fingerprint-bound runner"
 }

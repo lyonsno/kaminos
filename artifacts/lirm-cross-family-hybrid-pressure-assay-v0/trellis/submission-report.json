@@ -1,7 +1,8 @@
 {
   "schema": "kaminos.lirm-cross-family-hybrid-trellis-submission.v0",
-  "status": "submitted",
+  "status": "stale-pre-fingerprint-schema",
   "requestedCount": 3,
+  "staleReason": "Historical jobs completed before submission fingerprints were introduced; the current runner will resubmit every entry before collection.",
   "submitted": [
     {
       "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
@@ -26,5 +27,5 @@
     }
   ],
   "failurePhase": null,
-  "lastTrustworthyEvidence": "3/3 Trellis jobs submitted through Greenroom"
+  "lastTrustworthyEvidence": "3/3 historical Greenroom job IDs preserved; none is recoverable by the fingerprint-bound runner"
 }

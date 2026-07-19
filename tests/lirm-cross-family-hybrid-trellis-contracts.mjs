@@ -147,6 +147,24 @@ await assert.rejects(
     imagegenCollection,
     adjudication: {
       ...adjudication,
+      contactSheet: { ...adjudication.contactSheet, sha256: `sha256:${'f'.repeat(64)}` },
+    },
+    contactSheetReceipt: {
+      ...contactSheetReceipt,
+      contactSheet: { ...contactSheetReceipt.contactSheet, sha256: `sha256:${'f'.repeat(64)}` },
+    },
+    contactSheetRoot: root,
+    durableImageRoot,
+    outputRoot: join(root, 'forged-live-sheet-runtime'),
+  }),
+  /contact sheet live file hash drift/,
+);
+await assert.rejects(
+  buildCrossFamilyHybridTrellisPromotionPlan({
+    imagegenPlan,
+    imagegenCollection,
+    adjudication: {
+      ...adjudication,
       contactSheet: {
         ...adjudication.contactSheet,
         sha256: `sha256:${'0'.repeat(64)}`,
@@ -224,6 +242,19 @@ for (const file of ['run-promotion.mjs', 'run-witness.mjs', 'build-witness-conta
   if (file.startsWith('run-')) {
     assert.match(source, /submissionFingerprint/);
     assert.match(source, /staleRecoveredSubmissions/);
+  }
+}
+
+for (const file of ['submission-report.json', 'witness-submission-report.json']) {
+  const report = JSON.parse(await readFile(new URL(
+    `../artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/${file}`,
+    import.meta.url,
+  ), 'utf8'));
+  if (report.status === 'submitted') {
+    assert.ok(
+      report.submitted.every(item => typeof item.submissionFingerprint === 'string'),
+      `${file} cannot claim submitted without fingerprint-bound entries`,
+    );
   }
 }
 
