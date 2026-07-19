@@ -315,6 +315,15 @@ function selectiveHeadLiveRenderCompositionAuthority(composition) {
   return SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[normalizeSelectiveHeadLiveRenderComposition(composition)]?.compositionAuthority || 'unavailable';
 }
 
+export function resolveBoundarySplatRenderComposition({
+  boundarySplatRequested = false,
+  selectiveHeadLiveEffectiveRole = 'off',
+  requestedComposition = SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+} = {}) {
+  if (!boundarySplatRequested && normalizeSelectiveHeadLiveRole(selectiveHeadLiveEffectiveRole) === 'off') return 'off';
+  return normalizeSelectiveHeadLiveRenderComposition(requestedComposition);
+}
+
 function makeSelectiveHeadLivePassReceipt({
   composition,
   raymarchEncoded = false,
@@ -10799,7 +10808,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
   }
 
-  async function sampleBoundarySplatGpuProfile() {
+  async function sampleBoundarySplatGpuProfile(options = {}) {
     if (!boundarySplatRequested()) {
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'unsupported',
@@ -10817,7 +10826,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }));
     }
 
-    const queryCount = 7;
+    const advanceSim = options.advanceSim !== false;
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    updateUniforms(sampleNow);
+    const queryIndices = advanceSim
+      ? {
+          queryCount: 7,
+          simulationBegin: 0,
+          simulationEnd: 1,
+          sidecarEnd: 2,
+          compactionEnd: 3,
+          rasterBegin: 4,
+          rasterEnd: 5,
+          raymarchEnd: 6,
+        }
+      : {
+          queryCount: 6,
+          sidecarBegin: 0,
+          sidecarEnd: 1,
+          compactionEnd: 2,
+          rasterBegin: 3,
+          rasterEnd: 4,
+          raymarchEnd: 5,
+        };
+    const queryCount = queryIndices.queryCount;
     const querySet = device.createQuerySet({
       type: 'timestamp',
       count: queryCount,
@@ -10838,23 +10870,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
       const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      encodeSim(encoder, {
-        timestampWrites: {
-          querySet,
-          beginningOfPassWriteIndex: 0,
-        },
-      });
-      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      if (advanceSim) {
+        encodeSim(encoder, {
+          timestampWrites: {
+            querySet,
+            beginningOfPassWriteIndex: queryIndices.simulationBegin,
+          },
+        });
+        writeTimestamp(queryIndices.simulationEnd, 'kaminos boundary splat timestamp after simulation');
+      }
       encodeBoundarySidecar(encoder, {
         timestampWrites: {
           querySet,
-          endOfPassWriteIndex: 2,
+          ...(advanceSim ? {} : { beginningOfPassWriteIndex: queryIndices.sidecarBegin }),
+          endOfPassWriteIndex: queryIndices.sidecarEnd,
         },
       });
       const splatsEncoded = encodeBoundarySplats(encoder, {
         finalizeTimestampWrites: {
           querySet,
-          endOfPassWriteIndex: 3,
+          endOfPassWriteIndex: queryIndices.compactionEnd,
         },
       });
       if (!splatsEncoded) {
@@ -10863,8 +10898,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 4,
-          endOfPassWriteIndex: 5,
+          beginningOfPassWriteIndex: queryIndices.rasterBegin,
+          endOfPassWriteIndex: queryIndices.rasterEnd,
         },
       });
       if (!splatApplied) {
@@ -10873,7 +10908,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline, {
         timestampWrites: {
           querySet,
-          endOfPassWriteIndex: 6,
+          endOfPassWriteIndex: queryIndices.raymarchEnd,
         },
       });
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
@@ -10895,6 +10930,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
       }
       const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      const profileBeginIndex = advanceSim ? queryIndices.simulationBegin : queryIndices.sidecarBegin;
+      const simulationMs = advanceSim ? nsToMs(queryIndices.simulationEnd, queryIndices.simulationBegin) : 0;
       const candidateCopyBytes = state.boundarySplatCopyBytesThisFrame ?? 0;
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'available',
@@ -10902,17 +10939,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCopyBytes,
         rendererIdentity: state.boundarySplatRendererIdentity,
         stages: {
-          simulation: makeBoundarySplatStage('sampled', nsToMs(1, 0)),
-          sidecar: makeBoundarySplatStage('sampled', nsToMs(2, 1)),
-          compaction: makeBoundarySplatStage('sampled', nsToMs(3, 2)),
+          simulation: makeBoundarySplatStage(advanceSim ? 'sampled' : 'skipped', simulationMs),
+          sidecar: makeBoundarySplatStage('sampled', nsToMs(queryIndices.sidecarEnd, advanceSim ? queryIndices.simulationEnd : queryIndices.sidecarBegin)),
+          compaction: makeBoundarySplatStage('sampled', nsToMs(queryIndices.compactionEnd, queryIndices.sidecarEnd)),
           candidateCopy: makeBoundarySplatStage('sampled', 0, {
             disposition: 'removed-full-capacity-copy',
             candidateCopyBytes,
           }),
-          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(4, 3)),
-          splatRaster: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
-          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
-          total: makeBoundarySplatStage('sampled', nsToMs(6, 0)),
+          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(queryIndices.rasterBegin, queryIndices.compactionEnd)),
+          splatRaster: makeBoundarySplatStage('sampled', nsToMs(queryIndices.rasterEnd, queryIndices.rasterBegin)),
+          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(queryIndices.raymarchEnd, queryIndices.rasterEnd)),
+          total: makeBoundarySplatStage('sampled', nsToMs(queryIndices.raymarchEnd, profileBeginIndex)),
         },
       }));
     } catch (error) {
@@ -11404,6 +11441,148 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           projectedFootprintPixels,
           totalSplatPixelWork: projectedFootprintPixels,
           meanDepthComplexity: projectedFootprintPixels / viewportPixelCount,
+          viewport: {
+            width: viewportWidth,
+            height: viewportHeight,
+            pixelCount: viewportPixelCount,
+          },
+          depthBinOccupancy: {
+            authority: 'clip-z-bin-occupancy-from-projected-candidate-centers-v0',
+            binCount: depthBinCount,
+            occupiedBins: occupiedDepthBins.length,
+            meanEntriesPerOccupiedBin: occupiedDepthBins.length > 0
+              ? occupiedDepthBins.reduce((sum, count) => sum + count, 0) / occupiedDepthBins.length
+              : 0,
+            p95EntriesPerOccupiedBin: sortedDepthBins[p95DepthBinIndex] ?? 0,
+            maxEntriesPerOccupiedBin: sortedDepthBins.at(-1) ?? 0,
+          },
+        };
+      } else {
+        const projectionAuthority = 'cpu-projected-analytic-camera-billboard-from-gpu-compacted-candidates-v0';
+        const cameraRight = Array.from(camera.matrixWorld.elements.slice(0, 3));
+        const cameraUp = Array.from(camera.matrixWorld.elements.slice(4, 7));
+        const matrix = viewProj.elements;
+        const viewportWidth = Math.max(1, Number(state.renderWidth || state.width || canvas.width || 1));
+        const viewportHeight = Math.max(1, Number(state.renderHeight || state.height || canvas.height || 1));
+        const viewportPixelCount = viewportWidth * viewportHeight;
+        const depthBinCount = 64;
+        const depthBins = new Uint32Array(depthBinCount);
+        let positiveClipWCount = 0;
+        let centerInFrustumCount = 0;
+        let projectedEllipsePixels = 0;
+        let projectedQuadPixels = 0;
+        let centerVisibleFootprintPixels = 0;
+        let centerVisibleQuadPixels = 0;
+        const footprintPixelSamples = [];
+        const quadPixelSamples = [];
+        const projectPoint = (x, y, z) => {
+          const clipX = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+          const clipY = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+          const clipZ = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+          const clipW = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+          if (!(clipW > 0)) return { clipX, clipY, clipZ, clipW, visible: false };
+          const ndcX = clipX / clipW;
+          const ndcY = clipY / clipW;
+          const ndcZ = clipZ / clipW;
+          return {
+            clipX,
+            clipY,
+            clipZ,
+            clipW,
+            ndcX,
+            ndcY,
+            ndcZ,
+            pixelX: (ndcX * 0.5 + 0.5) * viewportWidth,
+            pixelY: (0.5 - ndcY * 0.5) * viewportHeight,
+            visible: true,
+          };
+        };
+        for (let index = 0; index < draw.instanceCount; index += 1) {
+          const offset = index * strideFloats;
+          const x = values[offset];
+          const y = values[offset + 1];
+          const z = values[offset + 2];
+          const center = projectPoint(x, y, z);
+          if (!center.visible) continue;
+          positiveClipWCount += 1;
+          const centerInFrustum = Math.abs(center.clipX) <= center.clipW
+            && Math.abs(center.clipY) <= center.clipW
+            && center.clipZ >= 0
+            && center.clipZ <= center.clipW;
+          if (centerInFrustum) {
+            centerInFrustumCount += 1;
+          }
+          const radiusX = values[offset + 8] * globalRadius;
+          const radiusY = values[offset + 9] * globalRadius;
+          const rightEdge = projectPoint(
+            x + cameraRight[0] * radiusX,
+            y + cameraRight[1] * radiusX,
+            z + cameraRight[2] * radiusX,
+          );
+          const upEdge = projectPoint(
+            x + cameraUp[0] * radiusY,
+            y + cameraUp[1] * radiusY,
+            z + cameraUp[2] * radiusY,
+          );
+          const radiusPxX = rightEdge.visible
+            ? Math.hypot(rightEdge.pixelX - center.pixelX, rightEdge.pixelY - center.pixelY)
+            : 0;
+          const radiusPxY = upEdge.visible
+            ? Math.hypot(upEdge.pixelX - center.pixelX, upEdge.pixelY - center.pixelY)
+            : 0;
+          if (Number.isFinite(radiusPxX) && Number.isFinite(radiusPxY) && radiusPxX > 0 && radiusPxY > 0) {
+            const footprintPixels = Math.min(Math.PI * radiusPxX * radiusPxY, viewportPixelCount);
+            const quadPixels = Math.min(4 * radiusPxX * radiusPxY, viewportPixelCount);
+            projectedEllipsePixels += footprintPixels;
+            projectedQuadPixels += quadPixels;
+            footprintPixelSamples.push(footprintPixels);
+            quadPixelSamples.push(quadPixels);
+            if (centerInFrustum) {
+              centerVisibleFootprintPixels += footprintPixels;
+              centerVisibleQuadPixels += quadPixels;
+            }
+          }
+          if (center.ndcZ >= 0 && center.ndcZ <= 1) {
+            const depthBin = Math.min(depthBinCount - 1, Math.max(0, Math.floor(center.ndcZ * depthBinCount)));
+            depthBins[depthBin] += 1;
+          }
+        }
+        const occupiedDepthBins = Array.from(depthBins, count => count).filter(count => count > 0);
+        const sortedDepthBins = [...occupiedDepthBins].sort((left, right) => left - right);
+        const p95DepthBinIndex = sortedDepthBins.length > 0
+          ? Math.min(sortedDepthBins.length - 1, Math.floor(sortedDepthBins.length * 0.95))
+          : 0;
+        const summarizeDistribution = samples => {
+          const sorted = [...samples].sort((left, right) => left - right);
+          const valueAt = quantile => sorted.length > 0
+            ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * quantile))]
+            : 0;
+          return {
+            count: sorted.length,
+            min: sorted[0] ?? 0,
+            median: valueAt(0.5),
+            p95: valueAt(0.95),
+            max: sorted.at(-1) ?? 0,
+          };
+        };
+        projectionMetrics = {
+          authority: projectionAuthority,
+          projectionBasisAuthority: 'exact-render-camera-right-up-world-billboard-v0',
+          positiveClipWCount,
+          centerInFrustumCount,
+          candidateCount: draw.instanceCount,
+          projectedSurvivors: positiveClipWCount,
+          projectedFootprintPixels: projectedEllipsePixels,
+          totalSplatPixelWork: projectedEllipsePixels,
+          projectedQuadPixels,
+          centerVisibleFootprintPixels,
+          centerVisibleQuadPixels,
+          footprintPixelDistribution: summarizeDistribution(footprintPixelSamples),
+          quadPixelDistribution: summarizeDistribution(quadPixelSamples),
+          meanDepthComplexity: projectedEllipsePixels / viewportPixelCount,
+          meanQuadDepthComplexity: projectedQuadPixels / viewportPixelCount,
+          centerVisibleMeanDepthComplexity: centerVisibleFootprintPixels / viewportPixelCount,
+          centerVisibleMeanQuadDepthComplexity: centerVisibleQuadPixels / viewportPixelCount,
           viewport: {
             width: viewportWidth,
             height: viewportHeight,
@@ -12056,7 +12235,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function updateSelectiveHeadLiveCompositionState() {
     const request = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
-    const effective = state.selectiveHeadLiveEffectiveRole === 'off' ? 'off' : request.requested;
+    const effective = resolveBoundarySplatRenderComposition({
+      boundarySplatRequested: boundarySplatRequested(),
+      selectiveHeadLiveEffectiveRole: state.selectiveHeadLiveEffectiveRole,
+      requestedComposition: request.requested,
+    });
     state.selectiveHeadLiveCompositionRequestedRaw = request.raw;
     state.selectiveHeadLiveCompositionRequested = request.requested;
     state.selectiveHeadLiveCompositionEffective = effective;
@@ -15153,7 +15336,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function sampleFrame(options = {}) {
-    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    if ((!state.active && options.allowInactive !== true) || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
     const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const includeRgba = options.includeRgba === true;

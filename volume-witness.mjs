@@ -142,6 +142,24 @@ const reuseBrowser = args.has('--reuse-browser');
 const keepBrowserOpen = args.has('--keep-browser-open');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
+const requestedDeviceScaleFactor = args.has('--device-scale-factor')
+  ? Number(args.get('--device-scale-factor'))
+  : null;
+if (requestedDeviceScaleFactor != null && (!Number.isFinite(requestedDeviceScaleFactor) || requestedDeviceScaleFactor <= 0)) {
+  throw new Error(`Invalid device scale factor: ${args.get('--device-scale-factor')}`);
+}
+const boundarySplatGpuProfileSamples = Math.max(0, Math.floor(Number(args.get('--boundary-splat-gpu-profile-samples') || 0)));
+const boundarySplatGpuProfileWarmupSamples = boundarySplatGpuProfileSamples > 0 ? Math.min(2, boundarySplatGpuProfileSamples) : 0;
+const boundarySplatFootprintAuditRequested = args.has('--boundary-splat-footprint-audit');
+const boundarySplatFootprintSweepRadii = parseNumberList(args.get('--boundary-splat-footprint-sweep-radii'));
+if (boundarySplatFootprintSweepRadii.some((radius, index) => (
+  !Number.isFinite(radius)
+  || radius < 0.35
+  || radius > 1.5
+  || (index > 0 && radius >= boundarySplatFootprintSweepRadii[index - 1])
+))) {
+  throw new Error(`Invalid descending boundary splat footprint sweep: ${boundarySplatFootprintSweepRadii.join(',')}`);
+}
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
@@ -1816,7 +1834,8 @@ async function attachOrLaunchSharedBrowser() {
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     `--window-size=${windowSize}`,
-    url,
+    ...(requestedDeviceScaleFactor == null ? [] : [`--force-device-scale-factor=${requestedDeviceScaleFactor}`]),
+    requestedDeviceScaleFactor == null ? url : 'about:blank',
   ], { stdio: 'ignore', detached: keepBrowserOpen });
   if (keepBrowserOpen) proc.unref();
   return {
@@ -2284,6 +2303,9 @@ async function main() {
 
   let phase = 'launch';
   let identityFrameRecovery = null;
+  let boundarySplatGpuProfileSeries = null;
+  let boundarySplatFootprintAudit = null;
+  let boundarySplatFootprintSweep = null;
   try {
     await waitForCdp();
     phase = 'target';
@@ -2294,6 +2316,18 @@ async function main() {
     await waitForWebSocketOpen(ws);
     await wsRequest(ws, 'Runtime.enable');
     await wsRequest(ws, 'Page.enable');
+    if (requestedDeviceScaleFactor != null) {
+      const [viewportWidth, viewportHeight] = String(windowSize).split(',').map(Number);
+      if (!Number.isFinite(viewportWidth) || !Number.isFinite(viewportHeight) || viewportWidth <= 0 || viewportHeight <= 0) {
+        throw new Error(`Invalid window size for device-scale override: ${windowSize}`);
+      }
+      await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+        width: Math.floor(viewportWidth),
+        height: Math.floor(viewportHeight),
+        deviceScaleFactor: requestedDeviceScaleFactor,
+        mobile: false,
+      });
+    }
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
     if (!reuseBrowser) {
@@ -2917,6 +2951,225 @@ async function main() {
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
+    }
+    if (boundarySplatGpuProfileSamples > 0) {
+      phase = 'boundary-splat-gpu-profile-series';
+      const seriesEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const prototype = window.__kaminosVolumePrototype;
+          if (!prototype?.sampleBoundarySplatGpuProfile || !prototype?.debugState || !prototype?.setActive) {
+            throw new Error('boundary-splat-gpu-profile-series-api-unavailable');
+          }
+          const activeBefore = prototype.debugState().active === true;
+          await prototype.setActive(false);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const samples = [];
+          const result = { liveLoopSuspended: true, activeBefore, samples };
+          try {
+            for (let index = 0; index < ${boundarySplatGpuProfileSamples}; index += 1) {
+              const profile = await prototype.sampleBoundarySplatGpuProfile();
+              const state = prototype.debugState();
+              samples.push({
+                index,
+                profile,
+                frameCount: state.frameCount,
+                simStepCount: state.simStepCount,
+                candidateCount: state.boundarySplatCandidateCount,
+                instanceCount: state.boundarySplatInstanceCount,
+                overflowCount: state.boundarySplatOverflowCount,
+                renderWidth: state.renderWidth,
+                renderHeight: state.renderHeight,
+              });
+            }
+          } finally {
+            if (activeBefore) await prototype.setActive(true);
+          }
+          return result;
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const series = seriesEval.result.value;
+      const samples = series?.samples;
+      if (!Array.isArray(samples) || samples.length !== boundarySplatGpuProfileSamples) {
+        throw new Error(`boundary-splat-gpu-profile-series-incomplete:${samples?.length ?? 'missing'}:${boundarySplatGpuProfileSamples}`);
+      }
+      boundarySplatGpuProfileSeries = {
+        identity: 'boundary-splat-gpu-profile-warm-series-v0',
+        requestedSamples: boundarySplatGpuProfileSamples,
+        warmupSamples: boundarySplatGpuProfileWarmupSamples,
+        measuredSamples: boundarySplatGpuProfileSamples - boundarySplatGpuProfileWarmupSamples,
+        liveLoopSuspended: series.liveLoopSuspended === true,
+        activeBefore: series.activeBefore === true,
+        samples,
+      };
+    }
+    if (boundarySplatFootprintAuditRequested) {
+      phase = 'boundary-splat-footprint-audit';
+      const footprintEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype.sampleBoundarySplatFootprintAudit()',
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      boundarySplatFootprintAudit = footprintEval.result.value;
+      if (boundarySplatFootprintAudit?.ok !== true) {
+        throw new Error(`boundary-splat-footprint-audit-failed:${JSON.stringify(boundarySplatFootprintAudit)}`);
+      }
+    }
+    if (boundarySplatFootprintSweepRadii.length > 0) {
+      phase = 'boundary-splat-footprint-sweep';
+      const sweepEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const prototype = window.__kaminosVolumePrototype;
+          if (!prototype?.sampleBoundarySplatGpuProfile
+            || !prototype?.sampleBoundarySplatFootprintAudit
+            || !prototype?.sampleFrame
+            || !prototype?.debugState
+            || !prototype?.setControls
+            || !prototype?.setActive) {
+            throw new Error('boundary-splat-footprint-sweep-api-unavailable');
+          }
+          const radii = ${JSON.stringify(boundarySplatFootprintSweepRadii)};
+          const activeBefore = prototype.debugState().active === true;
+          const controlsBefore = { ...(prototype.debugState().controls || {}) };
+          const arms = [];
+          await prototype.setActive(false);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          try {
+            for (const radius of radii) {
+              prototype.setControls({
+                ...controlsBefore,
+                lookFreeze: 1,
+                boundarySplatMode: 'analytic_conserved',
+                boundarySplatRadius: radius,
+              });
+              await new Promise(resolve => setTimeout(resolve, 40));
+              const samples = [];
+              for (let index = 0; index < ${boundarySplatGpuProfileSamples}; index += 1) {
+                const profile = await prototype.sampleBoundarySplatGpuProfile({ advanceSim: false });
+                const profileState = prototype.debugState();
+                samples.push({
+                  index,
+                  profile,
+                  frameCount: profileState.frameCount,
+                  simStepCount: profileState.simStepCount,
+                  candidateCount: profileState.boundarySplatCandidateCount,
+                  instanceCount: profileState.boundarySplatInstanceCount,
+                  overflowCount: profileState.boundarySplatOverflowCount,
+                });
+              }
+              const visual = await prototype.sampleFrame({
+                advanceSim: false,
+                allowInactive: true,
+                includeRgba: false,
+                sameStateCaptureId: 'footprint-radius-' + radius,
+              });
+              if (visual?.ok !== true) {
+                throw new Error('footprint-sweep-visual-failed:' + radius + ':' + (visual?.reason || 'unknown'));
+              }
+              const audit = await prototype.sampleBoundarySplatFootprintAudit();
+              const state = prototype.debugState();
+              arms.push({
+                radius,
+                effectiveMode: state.boundarySplatMode,
+                effectiveRadius: state.boundarySplatRadius,
+                frameCount: state.frameCount,
+                simStepCount: state.simStepCount,
+                candidateCount: state.boundarySplatCandidateCount,
+                instanceCount: state.boundarySplatInstanceCount,
+                overflowCount: state.boundarySplatOverflowCount,
+                samples,
+                audit,
+                visual: {
+                  sampleAuthority: visual.sampleAuthority,
+                  simAdvanced: visual.simAdvanced,
+                  sameStateCaptureId: visual.sameStateCaptureId,
+                  frameCount: visual.frameCount,
+                  simStepCount: visual.simStepCount,
+                  candidateCount: visual.boundarySplatCandidateCount,
+                  instanceCount: visual.boundarySplatInstanceCount,
+                  overflowCount: visual.boundarySplatOverflowCount,
+                  volumeReconstructionStyle: visual.volumeReconstructionStyle,
+                  selectiveHeadLiveCompositionEffective: visual.selectiveHeadLiveCompositionEffective,
+                  selectiveHeadLivePassReceipt: visual.selectiveHeadLivePassReceipt,
+                  litPixels: visual.litPixels,
+                  meanLuma: visual.meanLuma,
+                  fireLikePixels: visual.fireLikePixels,
+                  emissiveLikePixels: visual.emissiveLikePixels,
+                  smokeLikePixels: visual.smokeLikePixels,
+                  preview: visual.preview,
+                },
+              });
+            }
+          } finally {
+            prototype.setControls(controlsBefore);
+            if (activeBefore) await prototype.setActive(true);
+          }
+          return {
+            identity: 'held-state-analytic-conserved-footprint-sweep-v0',
+            liveLoopSuspended: true,
+            activeBefore,
+            warmupSamples: ${boundarySplatGpuProfileWarmupSamples},
+            measuredSamples: ${Math.max(0, boundarySplatGpuProfileSamples - boundarySplatGpuProfileWarmupSamples)},
+            arms,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      boundarySplatFootprintSweep = sweepEval.result.value;
+      const arms = boundarySplatFootprintSweep?.arms;
+      if (!Array.isArray(arms) || arms.length !== boundarySplatFootprintSweepRadii.length) {
+        throw new Error(`footprint-sweep-incomplete:${arms?.length ?? 'missing'}:${boundarySplatFootprintSweepRadii.length}`);
+      }
+      const baseline = arms[0];
+      for (const arm of arms) {
+        const preview = arm?.visual?.preview;
+        if (!preview || !Array.isArray(preview.rgba) || !Number.isFinite(preview.width) || !Number.isFinite(preview.height)) {
+          throw new Error(`footprint-sweep-visual-preview-missing:${arm?.radius ?? 'unknown'}`);
+        }
+        const radiusSlug = String(Number(arm.radius).toFixed(3)).replace('.', 'p');
+        const previewPath = resolve(dirname(out), `footprint-sweep-radius-${radiusSlug}.png`);
+        writeRgbaPng(previewPath, preview.width, preview.height, preview.rgba);
+        arm.visual.preview = {
+          path: previewPath,
+          width: preview.width,
+          height: preview.height,
+        };
+        arm.previewPath = previewPath;
+        if (arm?.effectiveMode !== 'analytic_conserved' || Math.abs(Number(arm.effectiveRadius) - Number(arm.radius)) > 1e-6) {
+          throw new Error(`footprint-sweep-effective-control-mismatch:${JSON.stringify(arm)}`);
+        }
+        if (arm?.audit?.ok !== true) throw new Error(`footprint-sweep-audit-failed:${JSON.stringify(arm?.audit)}`);
+        if (arm.simStepCount !== baseline.simStepCount) {
+          throw new Error(`footprint-sweep-simulation-state-changed:${baseline.simStepCount}:${arm.simStepCount}`);
+        }
+        if (arm.visual?.sampleAuthority !== 'render-only-frozen-sim-state'
+          || arm.visual?.simAdvanced !== false
+          || arm.visual?.simStepCount !== baseline.simStepCount) {
+          throw new Error(`footprint-sweep-visual-state-changed:${arm.radius}`);
+        }
+        if (arm.visual?.candidateCount !== arm.candidateCount
+          || arm.visual?.instanceCount !== arm.instanceCount
+          || Number(arm.visual?.overflowCount) !== 0) {
+          throw new Error(`footprint-sweep-visual-workload-changed:${arm.radius}`);
+        }
+        if (!Number.isFinite(Number(arm.visual?.meanLuma)) || Number(arm.visual?.litPixels) <= 0) {
+          throw new Error(`footprint-sweep-visual-blank:${arm.radius}`);
+        }
+        if (arm.audit.candidatePayloadSha256 !== baseline.audit.candidatePayloadSha256
+          || arm.candidateCount !== baseline.candidateCount
+          || arm.instanceCount !== baseline.instanceCount) {
+          throw new Error(`footprint-sweep-candidate-identity-changed:${arm.radius}`);
+        }
+        if (Number(arm.overflowCount) !== 0) throw new Error(`footprint-sweep-overflow:${arm.radius}:${arm.overflowCount}`);
+        if (!Number.isFinite(Number(arm.audit.relativeError)) || Number(arm.audit.relativeError) > 1e-5) {
+          throw new Error(`footprint-sweep-energy-conservation-failed:${arm.radius}:${arm.audit.relativeError}`);
+        }
+      }
+      boundarySplatFootprintSweep.ok = true;
+      boundarySplatFootprintSweep.candidatePayloadSha256 = baseline.audit.candidatePayloadSha256;
+      boundarySplatFootprintSweep.simStepCount = baseline.simStepCount;
     }
     const boundarySplatFeatureCapture = sample.boundarySplatFeatureCaptureRequested
       ? materializeBoundarySplatFeatureCapture(sample.boundarySplatFeatureCapture)
@@ -4201,6 +4454,7 @@ async function main() {
       } : null,
       settleMs,
       windowSize,
+      requestedDeviceScaleFactor,
       evidenceMode,
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
@@ -4332,6 +4586,9 @@ async function main() {
       boundarySplatFrameCount: sample.boundarySplatFrameCount ?? state.boundarySplatFrameCount,
       boundarySplatTimestampStatus: sample.boundarySplatTimestampStatus ?? state.boundarySplatTimestampStatus,
       boundarySplatGpuProfile: sample.boundarySplatGpuProfile ?? state.boundarySplatGpuProfile,
+      boundarySplatGpuProfileSeries,
+      boundarySplatFootprintAudit,
+      boundarySplatFootprintSweep,
       boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame ?? state.boundarySplatCopyBytesThisFrame,
       boundarySplatCopyDisposition: sample.boundarySplatCopyDisposition ?? state.boundarySplatCopyDisposition,
       volumeResidualMode: sample.volumeResidualMode ?? state.volumeResidualMode ?? null,
@@ -4481,11 +4738,19 @@ async function main() {
         camera: replayedCaptureCamera,
       } : null,
       windowSize,
+      requestedDeviceScaleFactor,
+      boundarySplatGpuProfileSamples,
+      boundarySplatGpuProfileWarmupSamples,
+      boundarySplatFootprintAuditRequested,
+      boundarySplatFootprintSweepRadii,
       evidenceMode,
       visualEvidenceMode,
       phase,
       error: err?.message || String(err),
       state,
+      boundarySplatGpuProfileSeries,
+      boundarySplatFootprintAudit,
+      boundarySplatFootprintSweep,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {

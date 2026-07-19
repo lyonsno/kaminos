@@ -5,7 +5,10 @@ const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
-const { canonicalizeBoundarySplatAuditRows } = await import('../volume-core.js');
+const {
+  canonicalizeBoundarySplatAuditRows,
+  resolveBoundarySplatRenderComposition,
+} = await import('../volume-core.js');
 const modelArtifact = JSON.parse(await readFile(new URL('../models/boundary-splat-attribute/analytic-teacher-h64-v0/model-artifact.json', import.meta.url), 'utf8'));
 
 assert.match(core, /BOUNDARY_SPLAT_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-analytic-splats-v0'/, 'splat renderer route identity is explicit');
@@ -14,6 +17,24 @@ assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY\s*=\s*'boundary-splat
 assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.features, 'live feature capture and compiled model preserve one exact feature order');
 assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
+assert.equal(
+  resolveBoundarySplatRenderComposition({
+    boundarySplatRequested: true,
+    selectiveHeadLiveEffectiveRole: 'off',
+    requestedComposition: 'smoke-raymarch-under-splats-v0',
+  }),
+  'smoke-raymarch-under-splats-v0',
+  'analytical splats remain drawable when the unrelated selective-head role is off',
+);
+assert.equal(
+  resolveBoundarySplatRenderComposition({
+    boundarySplatRequested: false,
+    selectiveHeadLiveEffectiveRole: 'off',
+    requestedComposition: 'smoke-raymarch-under-splats-v0',
+  }),
+  'off',
+  'composition remains off only when neither splats nor a selective-head render route is active',
+);
 assert.match(page, /volume_boundary_splat_mode/, 'splat mode is routable from the browser URL');
 assert.match(page, /boundarySplatMode/, 'browser controls carry the splat mode into the renderer');
 assert.match(page, /id="volume-boundary-splat-radius"/, 'browser exposes a live learned-splat radius control');
