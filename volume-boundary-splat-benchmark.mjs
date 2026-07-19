@@ -278,6 +278,7 @@ function initialFalseClosureChecks() {
     incompleteFootprintSweep: false,
     incompleteFootprintTierSweep: false,
     mismatchedFootprintTierPopulation: false,
+    mismatchedFootprintTierCalibration: false,
     incompleteWorkloadReceipt: false,
     staleCountAuthority: false,
     capacityTruncatedWorkload: false,
@@ -391,6 +392,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
     return {
       incompleteFootprintTierSweep: false,
       mismatchedFootprintTierPopulation: false,
+      mismatchedFootprintTierCalibration: false,
     };
   }
   const expectedArmIds = expectedArms.map(arm => arm.id);
@@ -407,11 +409,36 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
       || treatmentCounts.medium !== controlCounts.medium
       || treatmentCounts.hero !== controlCounts.hero;
   });
+  const mismatchedFootprintTierCalibration = expectedArms.some(expectedArm => {
+    if (!expectedArm.matchCountsFrom) return false;
+    const treatment = sweep?.arms?.find(arm => arm?.id === expectedArm.id);
+    const control = sweep?.arms?.find(arm => arm?.id === expectedArm.matchCountsFrom);
+    const treatmentCounts = treatment?.audit?.footprintTier?.counts;
+    const controlCounts = control?.audit?.footprintTier?.counts;
+    const calibration = treatment?.matchedRandomTierThresholds;
+    const requestedCounts = calibration?.requestedCounts;
+    const candidateCount = controlCounts
+      ? Number(controlCounts.base) + Number(controlCounts.medium) + Number(controlCounts.hero)
+      : NaN;
+    return treatment?.matchCountsFrom !== expectedArm.matchCountsFrom
+      || calibration?.identity !== 'boundary-splat-held-cohort-random-tier-count-match-v0'
+      || Number(calibration?.candidateCount) !== candidateCount
+      || !controlCounts
+      || !treatmentCounts
+      || requestedCounts?.base !== controlCounts.base
+      || requestedCounts?.medium !== controlCounts.medium
+      || requestedCounts?.hero !== controlCounts.hero
+      || !Number.isFinite(Number(calibration?.mediumThreshold))
+      || !Number.isFinite(Number(calibration?.heroThreshold))
+      || Number(calibration?.mediumThreshold) !== Number(treatment?.mediumThreshold)
+      || Number(calibration?.heroThreshold) !== Number(treatment?.heroThreshold);
+  });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true
       || receivedArmIds.length !== expectedArmIds.length
       || receivedArmIds.some((id, index) => id !== expectedArmIds[index]),
     mismatchedFootprintTierPopulation,
+    mismatchedFootprintTierCalibration,
   };
 }
 

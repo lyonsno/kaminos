@@ -94,11 +94,28 @@ assert.deepEqual(
       arms: [
         { id: 'base-056' },
         { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
-        { id: 'random-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+        {
+          id: 'random-070-098',
+          matchCountsFrom: 'importance-070-098',
+          mediumThreshold: 0.82,
+          heroThreshold: 0.94,
+          matchedRandomTierThresholds: {
+            identity: 'boundary-splat-held-cohort-random-tier-count-match-v0',
+            candidateCount: 512,
+            requestedCounts: { base: 422, medium: 61, hero: 29 },
+            mediumThreshold: 0.82,
+            heroThreshold: 0.94,
+          },
+          audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+        },
       ],
     },
   }),
-  { incompleteFootprintTierSweep: false, mismatchedFootprintTierPopulation: false },
+  {
+    incompleteFootprintTierSweep: false,
+    mismatchedFootprintTierPopulation: false,
+    mismatchedFootprintTierCalibration: false,
+  },
   'a complete exact count-matched tier sweep preserves bounded optimization authority',
 );
 assert.equal(
@@ -119,6 +136,50 @@ assert.equal(
   true,
   'a random arm that overspends the importance population is denied even when all expected arm ids exist',
 );
+for (const malformedRandomArm of [
+  {
+    id: 'random-070-098',
+    matchCountsFrom: 'base-056',
+    mediumThreshold: 0.82,
+    heroThreshold: 0.94,
+    matchedRandomTierThresholds: {
+      identity: 'boundary-splat-held-cohort-random-tier-count-match-v0',
+      candidateCount: 512,
+      requestedCounts: { base: 422, medium: 61, hero: 29 },
+      mediumThreshold: 0.82,
+      heroThreshold: 0.94,
+    },
+    audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+  },
+  {
+    id: 'random-070-098',
+    matchCountsFrom: 'importance-070-098',
+    mediumThreshold: 0.82,
+    heroThreshold: 0.94,
+    audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+  },
+]) {
+  assert.equal(
+    benchmarkModule.footprintTierSweepReceiptChecks({
+      requested: true,
+      expectedArms: [
+        { id: 'base-056' },
+        { id: 'importance-070-098' },
+        { id: 'random-070-098', matchCountsFrom: 'importance-070-098' },
+      ],
+      sweep: {
+        ok: true,
+        arms: [
+          { id: 'base-056' },
+          { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+          malformedRandomArm,
+        ],
+      },
+    }).mismatchedFootprintTierCalibration,
+    true,
+    'a malformed count-match source or missing calibration receipt denies optimization authority',
+  );
+}
 for (const sweep of [
   null,
   { ok: false, arms: [] },
