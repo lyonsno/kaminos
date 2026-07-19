@@ -1,0 +1,1542 @@
+{
+  "schema": "kaminos.volume.stage-b-control-coupling-ledger.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedRoute": "http://127.0.0.1:18791/api/rebake",
+  "effectiveRoute": "http://127.0.0.1:18791/api/rebake",
+  "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+  "mandatoryControlCount": 14,
+  "baseline": {
+    "requestedControls": {
+      "volume_reaction_boundary_fire_tip": 2,
+      "volume_reaction_boundary_topology": 0.96,
+      "volume_reaction_boundary_fire_erosion": 0.3,
+      "volume_reaction_boundary_cut": 0.365,
+      "volume_reaction_boundary_softness": 0.135,
+      "volume_reaction_boundary_core_reject": 1,
+      "volume_reaction_boundary_support_thermal": 0.98,
+      "volume_reaction_boundary_support_reaction": 1,
+      "volume_reaction_boundary_support_front": 0.66,
+      "volume_reaction_boundary_support_interface": 0.78,
+      "volume_reaction_boundary_fire_ridge": 1.52,
+      "volume_reaction_boundary_fire_ridge_cut": 0.145,
+      "volume_reaction_boundary_curl": 1.18,
+      "volume_reaction_boundary_divergence": 0.22
+    },
+    "effectiveControls": {
+      "volume_reaction_boundary_fire_tip": 2,
+      "volume_reaction_boundary_topology": 0.96,
+      "volume_reaction_boundary_fire_erosion": 0.3,
+      "volume_reaction_boundary_cut": 0.365,
+      "volume_reaction_boundary_softness": 0.135,
+      "volume_reaction_boundary_core_reject": 1,
+      "volume_reaction_boundary_support_thermal": 0.98,
+      "volume_reaction_boundary_support_reaction": 1,
+      "volume_reaction_boundary_support_front": 0.66,
+      "volume_reaction_boundary_support_interface": 0.78,
+      "volume_reaction_boundary_fire_ridge": 1.52,
+      "volume_reaction_boundary_fire_ridge_cut": 0.145,
+      "volume_reaction_boundary_curl": 1.18,
+      "volume_reaction_boundary_divergence": 0.22
+    },
+    "controlsIdentity": "f9a272c6536ef869d0c1573867a939a2cc8f83f84b9c6106392bc902420cb234",
+    "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+    "stageBIdentity": "930a32388cc2daf8ff9f7acf3366dcc9ed3fb2dd446d88c297d10b10049018c6",
+    "candidateIdentity": "e8dc7b065c3617ee7a74e20cbbef96c2952dd6cdf9c8bb4911c7272b3b8ff54e",
+    "coefficientIdentity": "9df57193b659af42456d83476e15df6f02f639a07f00b842ed93345210b8cc85",
+    "covarianceIdentity": "ae1aa0188a9412c54010c7ab881edfcd21c02a61539da2a5a99ba50aaf0dc6e9",
+    "depositionIdentity": "e504e82cddf015bbb4f7df5d508b976c6b1635cb1cd5e6c9730e7f1945f9e43c",
+    "pixelIdentity": "3658a17e80f849ae178513fda36283e31e7b113831cb45b1f850c389b2c6ac02",
+    "candidateCount": 15842,
+    "depositCount": 316840,
+    "coefficientSummary": {
+      "coefficientSum": 1590.1945087648153,
+      "weightedCoefficientSum": 3340704042.577368
+    },
+    "covarianceSummary": {
+      "covarianceSum": [
+        3.5491450798651933,
+        0.6091033994641355,
+        -0.16292882079216156,
+        4.987875431844801,
+        -0.9766806264564138,
+        3.524793445574898
+      ],
+      "weightedCovarianceSum": [
+        6931627.703689758,
+        -266863.45796503575,
+        38597.6213431933,
+        10789332.668070696,
+        -2102300.471055413,
+        7567208.414754153
+      ]
+    },
+    "geometrySummary": {
+      "candidateWeightSum": 5528.979947730108,
+      "weightedCandidateSum": 11527626503.813105
+    },
+    "opticalLayers": 16,
+    "appliedPasses": [
+      "source-validation",
+      "boundary-support-rebake",
+      "candidate-membership-rebuild",
+      "coefficient-rebuild",
+      "flow-tangent-five-tap-bilinear-deposition",
+      "shared-optics-recurrence",
+      "raymarch-matched-exponential-power-grade"
+    ],
+    "fallback": null,
+    "postLoadMutation": "analytical-rebake-only",
+    "simulatorAdvanced": false,
+    "elapsedMs": 1181.328791
+  },
+  "rows": [
+    {
+      "control": "volume_reaction_boundary_fire_tip",
+      "status": "rebake-coupled",
+      "requested": 0,
+      "effective": 0,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 0,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -39.84675951531108,
+        "covarianceIdentityChanged": false,
+        "depositionIdentityChanged": true,
+        "depositCount": 0,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.033046875
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 0,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 0,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "4e12e49e7ae3c9af794265181cadf7cb4ab85adeffce21dcb6eccb7f2f0d40c8",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "694ff8d677cbf519dd7af8a09bd1d3470a86ebbd9669024e171fe3d05ffba5b3",
+        "candidateIdentity": "b96c4a6705da1eeba51f067fcebf6d570bd3b356ca5b0e8d60a25b3f72cab164",
+        "coefficientIdentity": "afba93952bcfd4e15a013412b7a5cdd70daf4fb86f3f443427595481eda184bf",
+        "covarianceIdentity": "ae1aa0188a9412c54010c7ab881edfcd21c02a61539da2a5a99ba50aaf0dc6e9",
+        "depositionIdentity": "c32ba3ec1e997d59cc1ed6413a9f063c626bb9e0b59dd4c905dbe7c2412f2f9a",
+        "pixelIdentity": "b065622a23a33456f87ac66818e42c792380e03b427be21e7d055b9f9de963d4",
+        "candidateCount": 15842,
+        "depositCount": 316840,
+        "coefficientSummary": {
+          "coefficientSum": 1550.3477492495042,
+          "weightedCoefficientSum": 3261499430.5166664
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.5491450798651933,
+            0.6091033994641355,
+            -0.16292882079216156,
+            4.987875431844801,
+            -0.9766806264564138,
+            3.524793445574898
+          ],
+          "weightedCovarianceSum": [
+            6931627.703689758,
+            -266863.45796503575,
+            38597.6213431933,
+            10789332.668070696,
+            -2102300.471055413,
+            7567208.414754153
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 5377.5060102479965,
+          "weightedCandidateSum": 11226665314.669004
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 818.1744580000013
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_topology",
+      "status": "rebake-coupled",
+      "requested": 2.5,
+      "effective": 2.5,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 185,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 426.7720854814229,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 3700,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.34936197916666667
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 2.5,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 2.5,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "a581cc75595187c10b9f1ebd080a464f46dd9d9984e1060e2e6731c12ef0589a",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "16f03c158b9234c0c8862402c1067f9bec84c09ebb1932bde8ca54f15491006d",
+        "candidateIdentity": "05a8ee0574ff6e59472fbfbe5640180a1140a51ed317ade61086cac02503d6f4",
+        "coefficientIdentity": "58099385a1eb640a8ab67380d5be4a7a811a9864f1be4614aa8fe8f065e4c8b8",
+        "covarianceIdentity": "d400e5319d80e0ea9d48cd99e28889125b800c9a725b7e5bcd8c9cf91c3a4043",
+        "depositionIdentity": "cbd4508dbccd2f57237a00d67548fe8f4efeaf52ad862d6bef4a4bec99a722df",
+        "pixelIdentity": "ad61ef3bc24f8ab4215b9a434904853500cf3c78b0db88586e89fb975234a29d",
+        "candidateCount": 16027,
+        "depositCount": 320540,
+        "coefficientSummary": {
+          "coefficientSum": 2016.9665942462382,
+          "weightedCoefficientSum": 4229912968.210955
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.5823783282286272,
+            0.6123636677375459,
+            -0.16244227563414249,
+            5.0400471011601615,
+            -0.9843674412428401,
+            3.561213870551595
+          ],
+          "weightedCovarianceSum": [
+            6994639.010790457,
+            -276889.29872739,
+            42700.57465713808,
+            10910085.3870268,
+            -2120698.798552093,
+            7642407.72305135
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 7213.798646412747,
+          "weightedCandidateSum": 15038442514.301605
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 749.6623749999999
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_fire_erosion",
+      "status": "rebake-coupled",
+      "requested": 1,
+      "effective": 1,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -124,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -1140.8469700074024,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -2480,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.9875227864583334
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 1,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 1,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "534d1f0b49845caedbfca483740894203e9eb3fca1fa4801f8f11847629d6e4a",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "322c94d36e6b46c3a1a360685f635201f9f56ff13a80c1590dcc3a4cd20df605",
+        "candidateIdentity": "af6ef33f4690227bac024b26e240ad27cc59bb48a9ab13e970bffa28a6c7dd31",
+        "coefficientIdentity": "c4ac73f64a96acf5b2cf23e5f4dd6193d3920354c7009340810b84866f580dbb",
+        "covarianceIdentity": "733cdd9e851b3cb18034f3ee80dd00c40c8fb90e97589b53875ad54e150804f8",
+        "depositionIdentity": "bc3715d7a9456f651ad82ce1334caecbcbf54f7780f8b7321d6928e1e128b2f4",
+        "pixelIdentity": "6a13ee47d98b0a167e4b538e5c22dda90de3ecde68b3e39fb906fd45a15e6bfe",
+        "candidateCount": 15718,
+        "depositCount": 314360,
+        "coefficientSummary": {
+          "coefficientSum": 449.34753875741274,
+          "weightedCoefficientSum": 940939235.6303602
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.521554682321199,
+            0.6096355672688913,
+            -0.16442993290203053,
+            4.9289437826833575,
+            -0.9670484747045482,
+            3.499648832156112
+          ],
+          "weightedCovarianceSum": [
+            6871998.681805855,
+            -248825.92812340567,
+            30991.418286238146,
+            10642307.42864981,
+            -2075388.0825575124,
+            7508076.691708
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 1605.6214377833046,
+          "weightedCandidateSum": 3348340461.6403613
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 739.7762500000008
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_cut",
+      "status": "rebake-coupled",
+      "requested": 0.08,
+      "effective": 0.08,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 219786,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 21432.124122408248,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 4395720,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 11.841829427083333
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.08,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.08,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "e6d88641b165d4c3517cdc97e49e8de1b18248c39f5f7bb3ddb59e3e0ec01ecc",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "01529996ee7e791fc1f1486ea8a8462e18a3f4571c7fece56698c2f04b7a36b9",
+        "candidateIdentity": "2ee697231cbcf6d8fec76f1f6b2819dd6342d96327eefd720a06f4d706ff869a",
+        "coefficientIdentity": "8805bc100c09396e293c67614cc5d3dff3f7e185b6046ebd9b70eff1e0c8b9f6",
+        "covarianceIdentity": "b5cdc2f3cdb41d4808b21cfb58886d085016346cf10bf79df50d76c7f9b50fa2",
+        "depositionIdentity": "ef95ba343f08feed668f5a45c69c3c10dda3cc6c88b71d112545b1429e9c467f",
+        "pixelIdentity": "c36c4c86cbe28bd82a34cf307e1cec3e3f3b8282c182229dc7a3a7d7b8fb1e4a",
+        "candidateCount": 235628,
+        "depositCount": 4712560,
+        "coefficientSummary": {
+          "coefficientSum": 23022.318631173064,
+          "weightedCoefficientSum": 46608702625.62975
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            47.54410157550364,
+            11.835760370527384,
+            -2.4568914071195755,
+            90.55021840198935,
+            -14.675312613948698,
+            39.95017716650548
+          ],
+          "weightedCovarianceSum": [
+            80629501.43474819,
+            -9358202.61289535,
+            4318310.732741139,
+            183914104.84708795,
+            -24534497.02607152,
+            82871372.3962265
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 70353.05825645763,
+          "weightedCandidateSum": 141999478470.62628
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 933.1659170000003
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_softness",
+      "status": "rebake-coupled",
+      "requested": 0.4,
+      "effective": 0.4,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -2715,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -1191.056543183844,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -54300,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 1.0909440104166668
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.4,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.4,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "c9e53b67b6ea06b64b56b707e2a2d7a01cd9c7446c765e5dc94e329ad0327102",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "9ff8f52cfcfaed246169aca46fc1b016681abfb6012ef6a70db3aa526d353d4e",
+        "candidateIdentity": "7e105f9af4f60e8ce69fd688ee961cce5365da638104c8589d5688b40c210748",
+        "coefficientIdentity": "f4a630fd826ddd766cd758365f0e8322385489f527b0bea9a6cb8a93dbe68f93",
+        "covarianceIdentity": "03b5b4c259a557d9ee3b357261939b4dff4c4bb3684f745c2d0d6b8db8e21035",
+        "depositionIdentity": "fefefcd81cbdc56e108289f45d2ba1301d442a708a979ff6e00be686c8ddeebf",
+        "pixelIdentity": "87936f39494f7b8fba2c96b38ae2380250fbee0d0644c7cb87f125a806920514",
+        "candidateCount": 13127,
+        "depositCount": 262540,
+        "coefficientSummary": {
+          "coefficientSum": 399.1379655809713,
+          "weightedCoefficientSum": 859314730.8865807
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            2.996872996675185,
+            0.5746685559070148,
+            -0.16409026538736501,
+            4.26418075459831,
+            -0.840323488937075,
+            2.9629537146431693
+          ],
+          "weightedCovarianceSum": [
+            5816432.355583452,
+            -132280.26911029618,
+            -17158.344258204106,
+            9159495.487887915,
+            -1791653.400789413,
+            6389612.032396611
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 1375.880852382937,
+          "weightedCandidateSum": 2929684095.327293
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 747.5181249999987
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_core_reject",
+      "status": "rebake-coupled",
+      "requested": 0.2,
+      "effective": 0.2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 2,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 20.72437382110411,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 40,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.016409505208333335
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 0.2,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 0.2,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "daac2079408a453f28eaa6f81f72e53e5c0477d865907bdf974d1e4aae348f40",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "5017ac0f015d13f701aed57de9dcdd1042b87e2ecb2aa15ecbc6e8539b34c0de",
+        "candidateIdentity": "2a1a9c2d2c0f31be05366c26d851e18afaa1581f3bcbd2f8ce349cd02e85e90e",
+        "coefficientIdentity": "86cddeddc1c42a450eec6f8d27dda2067f64bb378b6d350d1c3636e41a0407da",
+        "covarianceIdentity": "8a0fe566fdbdef89cfd45c643e779a7680ec6bc5252bc3e59babc80bcdb88d89",
+        "depositionIdentity": "b066fe54f5f4591f089d9abeb519130a09e4523dca7364dc2d983f5868d513c9",
+        "pixelIdentity": "5b00a635ad0092da5981d0f9f572174d429adc66397fd7d92f708d2bbcaa135a",
+        "candidateCount": 15844,
+        "depositCount": 316880,
+        "coefficientSummary": {
+          "coefficientSum": 1610.9188825859194,
+          "weightedCoefficientSum": 3384131299.4091997
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.5492182607978475,
+            0.609354057936369,
+            -0.16285194052352495,
+            4.989434394993587,
+            -0.9759497602300955,
+            3.5251863014934575
+          ],
+          "weightedCovarianceSum": [
+            6931749.826273828,
+            -266445.1651223751,
+            38725.917290367666,
+            10792723.947013982,
+            -2100553.667519501,
+            7568215.886476797
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 5595.2386007203095,
+          "weightedCandidateSum": 11664641884.236843
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 2060.6003329999985
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_support_thermal",
+      "status": "rebake-coupled",
+      "requested": 2,
+      "effective": 2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 5855,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 410.18147032145976,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 117100,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.40810546875
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 2,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 2,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "aed62e4cf7145161300ff91d7479adefef76f3057235d7d1eeb2867eb58772d0",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "4038159b88a1adf1fe07d2fa2820df7de2b979b0f765ce5b218ad57c4307e015",
+        "candidateIdentity": "f3bc75145a5d3af452a47b1bde3924c5cb183664cde3cecd07cce738a177d2bd",
+        "coefficientIdentity": "972aa7aa6d9c315c6f9fe8b6796421ef450c0ce5de9407519b598fbad310b2ef",
+        "covarianceIdentity": "d1578630aa1fb543406776ab768cb7ab48181304f0fee4a8d9d80b9ca037731d",
+        "depositionIdentity": "884a4b4d7e641285d0dcf5383730dd025d973dc727e2fb317dd7b05ffd7f03af",
+        "pixelIdentity": "8278391fe6793c782e309aaab89f22055eb205936b803f49ee76fc794a4aef1a",
+        "candidateCount": 21697,
+        "depositCount": 433940,
+        "coefficientSummary": {
+          "coefficientSum": 2000.375979086275,
+          "weightedCoefficientSum": 4224258949.744373
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            4.6800105016885905,
+            0.560703557964149,
+            -0.11567529462417123,
+            6.80507103744993,
+            -1.3618937047022261,
+            4.691536246785491
+          ],
+          "weightedCovarianceSum": [
+            9253200.276857268,
+            -907856.5852723392,
+            288375.34491340007,
+            15165323.497235814,
+            -3002117.110661599,
+            10130601.317280198
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 6980.155030376687,
+          "weightedCandidateSum": 14598343038.256495
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 852.2320839999993
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_support_reaction",
+      "status": "rebake-coupled",
+      "requested": 2,
+      "effective": 2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 10978,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 1111.7893218282509,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 219560,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 1.014501953125
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 2,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 2,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "ba05d3eb466d2bdd7159465c948936cecebc8ddf33595984a55f6b83db4e54e7",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "2ab3cd9e96996f8c150923647277a81a492af93b65b1f00c876a2b205be8a362",
+        "candidateIdentity": "c46703044ef259567072a3a0d50f39d2b49c848cc74844f60ead27a6abfe73f4",
+        "coefficientIdentity": "753e7b6d027f5bbdc2425cdb0fdcc035f6aed1274238d714c7137f22818ac9f4",
+        "covarianceIdentity": "7d28648728216798454243d71d9dd9a4bc1765d072ac3bf2a60b601051e3b3d5",
+        "depositionIdentity": "382b41a4d283059c326d11cba53a34aff47ce03cbba0f12ee8e6757b6d03ff0b",
+        "pixelIdentity": "ef740bf5f67cfe378f4b2cde424f9f92ad8535f9a19df4aa7859832a976daedb",
+        "candidateCount": 26820,
+        "depositCount": 536400,
+        "coefficientSummary": {
+          "coefficientSum": 2701.983830593066,
+          "weightedCoefficientSum": 5489198799.308039
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            6.143805594285321,
+            1.3396629959575508,
+            -0.4813954000849232,
+            8.235291707226308,
+            -1.730694711845747,
+            5.747911389641283
+          ],
+          "weightedCovarianceSum": [
+            11754304.319206122,
+            392239.2711439004,
+            -418343.03147977317,
+            17056872.74972243,
+            -3449739.7712197616,
+            11847492.497912357
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 8700.624122260524,
+          "weightedCandidateSum": 17622604522.514076
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 1985.9424580000014
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_support_front",
+      "status": "rebake-coupled",
+      "requested": 2,
+      "effective": 2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -847,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -124.96158100981506,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -16940,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.58162109375
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 2,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 2,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "d857186ff63ffac62cf82be64a3b3a4d7dd57355415b3827ec1e12b1dbd9ee89",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "8367ca5792ae4512a43d2f031e6cbe84afb76884baa09ea8d120f5d76245d90c",
+        "candidateIdentity": "ffe25fa4f8192bf89789c6ac8320e8cc439f89af3fdaddd3ef04bbbee9b47ae8",
+        "coefficientIdentity": "0810700645cf09ea960dd92f1105d2918e0bd4efaea5443a6a047b05a24ca5e6",
+        "covarianceIdentity": "b68b988126c740b0c7b7aeece2eb3a9e6d25c929457ea95b4f8a6bf55b30bd78",
+        "depositionIdentity": "811354dc43ba638cfafec2aecdfb3ab11d981ec06d3a0b7f511252256a09f724",
+        "pixelIdentity": "731a2963017c66e54df87b4e2fefd9cde38e3631b298fd51f499377143f4fbc8",
+        "candidateCount": 14995,
+        "depositCount": 299900,
+        "coefficientSummary": {
+          "coefficientSum": 1465.2329277550002,
+          "weightedCoefficientSum": 3120064671.9302506
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.3712428715612037,
+            0.6758626367501631,
+            -0.11580071875209096,
+            5.311596523627451,
+            -0.9159657774425906,
+            3.3518319298468686
+          ],
+          "weightedCovarianceSum": [
+            6502253.01491856,
+            -226987.36721286044,
+            114217.74834583775,
+            11725997.4909245,
+            -2142109.781156185,
+            7314671.986385712
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 4984.833208837621,
+          "weightedCandidateSum": 10488593829.517487
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 733.1654170000002
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_support_interface",
+      "status": "rebake-coupled",
+      "requested": 2,
+      "effective": 2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -3259,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -501.6100552403759,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -65180,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.6947591145833333
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 2,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 2,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "cc2b183c892deb21a5f562e12515a86c56cf7fd7ff715f61b032ad537273eac9",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "9a73bd8a9b16009f65fb1bd975c91b80a8efce8c667f1a2db59176337563dfd9",
+        "candidateIdentity": "cd80243aaa3618a288e679d07d9faa8d6e1a15d6c6275525b4515b2976f1d39f",
+        "coefficientIdentity": "0494fb4b77173c48ca820fd3021f5cb239a12abbbbaf4caf7af9427eb3c6b3e2",
+        "covarianceIdentity": "abd72303ab071f755d154de00be6b83a7a48e32a00098b376e3884ec4147d3f0",
+        "depositionIdentity": "90862a9f4392c41f499f75cda35f5cd694bf8d6349359ffe41776218e088f1d1",
+        "pixelIdentity": "d9edee8a13a117c65bb394c80e2aff73972024dafd24fa64f4e1587a5bd41b98",
+        "candidateCount": 12583,
+        "depositCount": 251660,
+        "coefficientSummary": {
+          "coefficientSum": 1088.5844535244394,
+          "weightedCoefficientSum": 2361734116.915345
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            2.7720181097716705,
+            0.35800506479772776,
+            0.08211892954732236,
+            4.494633770994367,
+            -0.9884155622506199,
+            2.8033138902537713
+          ],
+          "weightedCovarianceSum": [
+            5621089.574937082,
+            -779890.0128041101,
+            592679.0847096827,
+            10243481.054315964,
+            -2456667.2887537773,
+            6417071.906933076
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 4035.689757989399,
+          "weightedCandidateSum": 8734879211.671162
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 727.3990000000013
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_fire_ridge",
+      "status": "rebake-coupled",
+      "requested": 0.25,
+      "effective": 0.25,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -201,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -234.27577414879352,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -4020,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.20495442708333333
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 0.25,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 0.25,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "11671c49aa898681e21cec9a1ea627e4078c80f6b828fa4a8c98bf784c312555",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "19eab3c6704dbb72dee726e52efa17bb561e3492540343b73ca58fdfc95f7942",
+        "candidateIdentity": "30d1f963788b348bbec5b053472b9618fcb91257f138f30a1f94576e11824436",
+        "coefficientIdentity": "e15433323bb6bf9df54fe9940873d381eb71e3f39c3d42e9a4e45d318d6d810f",
+        "covarianceIdentity": "ea25645a8fe5358bf885727964376d46eb9be493ea511596c25a0555cfc8b54d",
+        "depositionIdentity": "a7b2e645bc79f7595cf8512a71479c62b970affe1f097ee32ec4b779140107e3",
+        "pixelIdentity": "cbcc874b100f235d6d6448245b245939897ce918ac157d6ffb3261c183872bee",
+        "candidateCount": 15641,
+        "depositCount": 312820,
+        "coefficientSummary": {
+          "coefficientSum": 1355.9187346160218,
+          "weightedCoefficientSum": 2857311723.7954216
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.506109671767265,
+            0.60501149327517,
+            -0.16405602054267046,
+            4.940942496058998,
+            -0.9706941101848936,
+            3.4870540399902246
+          ],
+          "weightedCovarianceSum": [
+            6847007.2171054585,
+            -262319.01986211754,
+            33896.274318565804,
+            10682475.059309475,
+            -2085274.542044315,
+            7489076.156771343
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 4753.916375240105,
+          "weightedCandidateSum": 9928640578.37565
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 728.4382499999992
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_fire_ridge_cut",
+      "status": "rebake-coupled",
+      "requested": 0.45,
+      "effective": 0.45,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": -57,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": -74.329886622387,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": -1140,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.06587565104166666
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.45,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.45,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "add8fa218312717c5462f3c32d71e268cebe2cf60940fba525d686f85784bcab",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "f753e435cbd606dc40365b4866283cd95cf398122d735de5e7874c795f2cb617",
+        "candidateIdentity": "83f3b4d10cb7b6543df6db737ede4afed8f101deffd92c851272828a894030da",
+        "coefficientIdentity": "969a885fadefebfa00b84a453a90afa5317d7f93dde557d99c704d43c24ef62e",
+        "covarianceIdentity": "eb5db3c5b17a17729eeaba1b691098ed718c5175ec215d724d6a9341f3c11d54",
+        "depositionIdentity": "d8c6ff2a6b4732a4d341450037e10f9c980ccf587cd347786d42586b405bb817",
+        "pixelIdentity": "c07fd6b83bc5cbb26b2b7947d800ba73aba02b87744d65d9098c4e02bc87ef0c",
+        "candidateCount": 15785,
+        "depositCount": 315700,
+        "coefficientSummary": {
+          "coefficientSum": 1515.8646221424283,
+          "weightedCoefficientSum": 3184547569.540098
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.538403562275076,
+            0.6067799569706703,
+            -0.1629675416953853,
+            4.973493729077179,
+            -0.9737121931879243,
+            3.5142717849823657
+          ],
+          "weightedCovarianceSum": [
+            6913174.574613185,
+            -268636.2384535082,
+            37628.86308561369,
+            10758991.27634851,
+            -2095304.0989317703,
+            7549020.579838757
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 5280.148401288186,
+          "weightedCandidateSum": 11008133434.755033
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 732.5298340000008
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_curl",
+      "status": "rebake-coupled",
+      "requested": 2,
+      "effective": 2,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 82,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 243.8381241297193,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 1640,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.19656901041666666
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 2,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 2,
+          "volume_reaction_boundary_divergence": 0.22
+        },
+        "controlsIdentity": "da8bb7735a6e7d58aeb1d28d692025ef6cf99ea8ebd8edc9c3291dd190503122",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "37a56a4e4095877ded84e1505617d2febc5e100bb3f3e8c418d1b3fec60d5119",
+        "candidateIdentity": "ee3c232adf73fde89a0926a978458da9bb6407e768c461ea1901ec186bc3804c",
+        "coefficientIdentity": "48eabaa2c67a8b0fa84607cdd4ed9b41df1e8f0195850cd667bd4173f18752ce",
+        "covarianceIdentity": "cf1c54e93c9c7223fa1752337f39860cec608bbbeba5b48588ee54f2425f3db5",
+        "depositionIdentity": "37d30477f106e92eee12b68938a709dd191d548746527d6c80ee72ad5f906658",
+        "pixelIdentity": "c5955009c000fd7dd5421f188ba46cce7f19a35413adb9582e79ce3f480d59df",
+        "candidateCount": 15924,
+        "depositCount": 318480,
+        "coefficientSummary": {
+          "coefficientSum": 1834.0326328945346,
+          "weightedCoefficientSum": 3853043938.5951457
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.5653094537598697,
+            0.6090926604974304,
+            -0.15987440657866658,
+            5.024165223356351,
+            -0.9825069211769849,
+            3.5427574647794926
+          ],
+          "weightedCovarianceSum": [
+            6964821.884557554,
+            -278861.06141072675,
+            49237.85770017424,
+            10876295.203263588,
+            -2118472.8278792594,
+            7608204.239134568
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 6484.547766223486,
+          "weightedCandidateSum": 13532213012.565868
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 725.1987079999999
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_divergence",
+      "status": "rebake-coupled",
+      "requested": 1,
+      "effective": 1,
+      "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+      "deltas": {
+        "stageBIdentityChanged": true,
+        "candidateIdentityChanged": true,
+        "candidateCount": 7,
+        "coefficientIdentityChanged": true,
+        "coefficientSum": 40.7260324828369,
+        "covarianceIdentityChanged": true,
+        "depositionIdentityChanged": true,
+        "depositCount": 140,
+        "pixelIdentityChanged": true,
+        "meanAbsoluteChannelDelta": 0.03309244791666666
+      },
+      "treatment": {
+        "requestedControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 1
+        },
+        "effectiveControls": {
+          "volume_reaction_boundary_fire_tip": 2,
+          "volume_reaction_boundary_topology": 0.96,
+          "volume_reaction_boundary_fire_erosion": 0.3,
+          "volume_reaction_boundary_cut": 0.365,
+          "volume_reaction_boundary_softness": 0.135,
+          "volume_reaction_boundary_core_reject": 1,
+          "volume_reaction_boundary_support_thermal": 0.98,
+          "volume_reaction_boundary_support_reaction": 1,
+          "volume_reaction_boundary_support_front": 0.66,
+          "volume_reaction_boundary_support_interface": 0.78,
+          "volume_reaction_boundary_fire_ridge": 1.52,
+          "volume_reaction_boundary_fire_ridge_cut": 0.145,
+          "volume_reaction_boundary_curl": 1.18,
+          "volume_reaction_boundary_divergence": 1
+        },
+        "controlsIdentity": "525c23856c647bf55e438bf047cb44134d850cacc18ccf36f216deda751bf84c",
+        "sourceStateIdentity": "086fa0d9591380a4f9877bd0f21255c0bf1992ecaad4dab72af820f4318aef3d",
+        "stageBIdentity": "f3a5c2bcd013c78d930ab7d8441adbde051ff4ab4daa9038d6f4191f22cfe85a",
+        "candidateIdentity": "38c1020ed34f9cae55cadac8a21028f204b9c126cb1ba6ec3059bd224e1f13d4",
+        "coefficientIdentity": "b9526230adab49c993c1106ad340f3672a32cfd1c89d3b5ad5e01426f7705bf8",
+        "covarianceIdentity": "06f3a0616ba9e4c021fde58171151ae2fdba48246ac0e4ab618eaa576f70e03c",
+        "depositionIdentity": "f31be6873e8e6772e702c7f2bb041e67a1efd0705a26bb48a636a3c419fedee4",
+        "pixelIdentity": "2362af98b511fd612f83f4d03fae070d72ef9cd445e2bf4a9b115e3b4600b0a9",
+        "candidateCount": 15849,
+        "depositCount": 316980,
+        "coefficientSummary": {
+          "coefficientSum": 1630.9205412476522,
+          "weightedCoefficientSum": 3431933694.4497013
+        },
+        "covarianceSummary": {
+          "covarianceSum": [
+            3.550061091888703,
+            0.6095657060075466,
+            -0.16288819308470073,
+            4.991751460673526,
+            -0.9772702085478312,
+            3.5268221539560636
+          ],
+          "weightedCovarianceSum": [
+            6933715.53449216,
+            -266494.77346793015,
+            38866.51696422832,
+            10798422.124882238,
+            -2105423.9027007753,
+            7572572.667786134
+          ]
+        },
+        "geometrySummary": {
+          "candidateWeightSum": 5672.475612143507,
+          "weightedCandidateSum": 11845058922.629341
+        },
+        "opticalLayers": 16,
+        "appliedPasses": [
+          "source-validation",
+          "boundary-support-rebake",
+          "candidate-membership-rebuild",
+          "coefficient-rebuild",
+          "flow-tangent-five-tap-bilinear-deposition",
+          "shared-optics-recurrence",
+          "raymarch-matched-exponential-power-grade"
+        ],
+        "fallback": null,
+        "postLoadMutation": "analytical-rebake-only",
+        "simulatorAdvanced": false,
+        "elapsedMs": 721.8385830000007
+      }
+    }
+  ],
+  "statusCounts": {
+    "rebake-coupled": 14,
+    "missing": 0
+  },
+  "missingInputs": []
+}

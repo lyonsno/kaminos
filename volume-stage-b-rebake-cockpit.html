@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>State 120 Stage B Rebake</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #101316;
+      color: #e6eaed;
+    }
+    * { box-sizing: border-box; letter-spacing: 0; }
+    body { margin: 0; min-height: 100vh; background: #101316; }
+    button, input { font: inherit; }
+    .topbar {
+      min-height: 54px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid #343a3f;
+      background: #171b1e;
+    }
+    h1 { margin: 0; font-size: 16px; font-weight: 650; white-space: nowrap; }
+    .source { min-width: 0; color: #9fa9af; font: 12px ui-monospace, SFMono-Regular, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .run-state { margin-left: auto; display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a12a; }
+    .dot.effective { background: #43c59e; }
+    .dot.failed { background: #ef6461; }
+    main { display: grid; grid-template-columns: minmax(500px, 1.35fr) minmax(430px, 1fr); min-height: calc(100vh - 54px); }
+    .visual { padding: 14px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; border-right: 1px solid #343a3f; }
+    .modes { display: flex; gap: 6px; align-items: center; }
+    .modes button, .rebake-button {
+      border: 1px solid #465058;
+      border-radius: 4px;
+      color: #d8dee2;
+      background: #20262a;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .modes button.active { border-color: #d8992c; color: #ffd889; background: #2b261d; }
+    .rebake-button { margin-left: auto; border-color: #3f8fa5; color: #a9e8f4; }
+    .rebake-button:disabled { opacity: .48; cursor: wait; }
+    .canvas-wrap { min-height: 320px; display: grid; place-items: center; background: #050708; border: 1px solid #30363a; overflow: hidden; }
+    canvas { width: min(100%, calc(100vh - 245px)); height: auto; max-height: calc(100vh - 245px); aspect-ratio: 1; image-rendering: auto; }
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: #343a3f; border: 1px solid #343a3f; }
+    .metric { min-width: 0; background: #171b1e; padding: 8px; }
+    .metric label { display: block; color: #8e9aa1; font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+    .metric output { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, SFMono-Regular, monospace; }
+    .controls { min-height: 0; overflow: auto; padding: 14px 16px 18px; }
+    .control-head { display: grid; grid-template-columns: minmax(170px, 1fr) 80px 108px; gap: 10px; color: #849098; font-size: 10px; text-transform: uppercase; padding: 0 0 6px; }
+    .control-row { display: grid; grid-template-columns: minmax(170px, 1fr) 80px 108px; gap: 10px; align-items: center; min-height: 40px; border-top: 1px solid #2d3337; }
+    .control-main { min-width: 0; }
+    .control-label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+    .control-label output { color: #ffd889; font: 11px ui-monospace, SFMono-Regular, monospace; }
+    input[type="range"] { width: 100%; accent-color: #d8992c; }
+    .effective-value { color: #b7c0c5; text-align: right; font: 11px ui-monospace, SFMono-Regular, monospace; }
+    .coupling { color: #65d8b2; font: 10px ui-monospace, SFMono-Regular, monospace; text-align: right; }
+    .coupling.missing { color: #ef6461; }
+    .error { display: none; padding: 9px 10px; border: 1px solid #a94442; background: #2a1718; color: #ffaaa7; font: 12px ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; }
+    .error.visible { display: block; }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      .visual { border-right: 0; border-bottom: 1px solid #343a3f; min-height: 620px; }
+      canvas { max-height: 480px; }
+    }
+    @media (max-width: 560px) {
+      .topbar { align-items: flex-start; flex-wrap: wrap; }
+      .run-state { margin-left: 0; }
+      main { display: block; }
+      .visual { min-height: 560px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .control-head, .control-row { grid-template-columns: minmax(150px, 1fr) 62px 96px; gap: 6px; }
+      .controls { padding-inline: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>State 120 Stage B Rebake</h1>
+    <div class="source" id="sourceStateIdentity" title="Loading frozen source identity">source: loading</div>
+    <div class="run-state"><span class="dot" id="state-dot"></span><span id="state-label">loading source</span></div>
+  </header>
+  <main>
+    <section class="visual">
+      <div class="modes" role="group" aria-label="Control treatment">
+        <button type="button" data-preset="baseline" class="active">Baseline</button>
+        <button type="button" data-preset="sparse">Sparse</button>
+        <button type="button" data-preset="dense">Dense</button>
+        <button type="button" class="rebake-button" id="rebake">Rebake</button>
+      </div>
+      <div class="canvas-wrap"><canvas id="frame" width="320" height="320"></canvas></div>
+      <div>
+        <div class="error" id="error"></div>
+        <div class="metrics">
+          <div class="metric"><label>Candidates</label><output id="candidate-count">-</output></div>
+          <div class="metric"><label>Rebake</label><output id="elapsed">-</output></div>
+          <div class="metric"><label>Candidate id</label><output id="candidateIdentity" title="">-</output></div>
+          <div class="metric"><label>Coefficient id</label><output id="coefficientIdentity" title="">-</output></div>
+          <div class="metric"><label>Covariance id</label><output id="covarianceIdentity" title="">-</output></div>
+          <div class="metric"><label>Deposition id</label><output id="depositionIdentity" title="">-</output></div>
+          <div class="metric"><label>Pixel id</label><output id="pixelIdentity" title="">-</output></div>
+          <div class="metric"><label>Stage B id</label><output id="stageBIdentity" title="">-</output></div>
+          <div class="metric"><label>Deposits</label><output id="deposit-count">-</output></div>
+          <div class="metric"><label>Optical layers</label><output id="layer-count">16</output></div>
+        </div>
+      </div>
+    </section>
+    <section class="controls" aria-label="Basin-critical Stage B controls">
+      <div class="control-head"><span>Requested control</span><span style="text-align:right">Effective</span><span style="text-align:right">Stage B</span></div>
+      <div id="control-list"></div>
+    </section>
+  </main>
+  <script>
+    const specs = [
+      ['volume_reaction_boundary_fire_tip', 'Fire tip', 0, 2, 0.01, 2],
+      ['volume_reaction_boundary_topology', 'Topology', 0, 2.5, 0.02, 0.96],
+      ['volume_reaction_boundary_fire_erosion', 'Fire erosion', 0, 1, 0.01, 0.3],
+      ['volume_reaction_boundary_cut', 'Boundary cut', 0, 0.55, 0.005, 0.365],
+      ['volume_reaction_boundary_softness', 'Boundary softness', 0.005, 0.45, 0.005, 0.135],
+      ['volume_reaction_boundary_core_reject', 'Core rejection', 0, 1, 0.01, 1],
+      ['volume_reaction_boundary_support_thermal', 'Support thermal', 0, 2, 0.01, 0.98],
+      ['volume_reaction_boundary_support_reaction', 'Support reaction', 0, 2, 0.01, 1],
+      ['volume_reaction_boundary_support_front', 'Support front', 0, 2, 0.01, 0.66],
+      ['volume_reaction_boundary_support_interface', 'Support interface', 0, 2, 0.01, 0.78],
+      ['volume_reaction_boundary_fire_ridge', 'Ridge gain', 0, 2, 0.01, 1.52],
+      ['volume_reaction_boundary_fire_ridge_cut', 'Ridge cut', 0, 0.55, 0.005, 0.145],
+      ['volume_reaction_boundary_curl', 'Curl gain', 0, 2, 0.01, 1.18],
+      ['volume_reaction_boundary_divergence', 'Divergence gain', 0, 1, 0.01, 0.22],
+    ];
+    const presets = {
+      baseline: Object.fromEntries(specs.map(([key,,,,, value]) => [key, value])),
+      sparse: {
+        volume_reaction_boundary_fire_tip: 0.25, volume_reaction_boundary_topology: 0.3,
+        volume_reaction_boundary_fire_erosion: 0.82, volume_reaction_boundary_cut: 0.46,
+        volume_reaction_boundary_softness: 0.035, volume_reaction_boundary_core_reject: 1,
+        volume_reaction_boundary_support_thermal: 0.35, volume_reaction_boundary_support_reaction: 0.45,
+        volume_reaction_boundary_support_front: 0.25, volume_reaction_boundary_support_interface: 0.32,
+        volume_reaction_boundary_fire_ridge: 0.55, volume_reaction_boundary_fire_ridge_cut: 0.31,
+        volume_reaction_boundary_curl: 0.25, volume_reaction_boundary_divergence: 0.05,
+      },
+      dense: {
+        volume_reaction_boundary_fire_tip: 2, volume_reaction_boundary_topology: 2.5,
+        volume_reaction_boundary_fire_erosion: 0.08, volume_reaction_boundary_cut: 0.08,
+        volume_reaction_boundary_softness: 0.28, volume_reaction_boundary_core_reject: 0.25,
+        volume_reaction_boundary_support_thermal: 1.8, volume_reaction_boundary_support_reaction: 1.7,
+        volume_reaction_boundary_support_front: 1.65, volume_reaction_boundary_support_interface: 1.55,
+        volume_reaction_boundary_fire_ridge: 2, volume_reaction_boundary_fire_ridge_cut: 0.025,
+        volume_reaction_boundary_curl: 2, volume_reaction_boundary_divergence: 0.85,
+      },
+    };
+    const controls = { ...presets.baseline };
+    window.__kaminosStageBRebakeCockpit = {
+      schema: 'kaminos.volume.stage-b-rebake-cockpit.v0',
+      requestedRoute: location.href,
+      effectiveRoute: location.href,
+      latestReceipt: null,
+    };
+    const controlList = document.getElementById('control-list');
+    const controlElements = new Map();
+    let timer = null;
+    let requestSerial = 0;
+
+    for (const [key, label, min, max, step] of specs) {
+      const row = document.createElement('div');
+      row.className = 'control-row';
+      row.innerHTML = `<div class="control-main"><label class="control-label" for="${key}"><span>${label}</span><output></output></label><input id="${key}" type="range" min="${min}" max="${max}" step="${step}"></div><div class="effective-value">pending</div><div class="coupling">rebake-coupled</div>`;
+      const input = row.querySelector('input');
+      const requestedOutput = row.querySelector('output');
+      const effectiveOutput = row.querySelector('.effective-value');
+      input.value = controls[key];
+      requestedOutput.value = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
+      input.addEventListener('input', () => {
+        controls[key] = Number(input.value);
+        requestedOutput.value = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
+        document.querySelectorAll('[data-preset]').forEach(button => button.classList.remove('active'));
+        clearTimeout(timer);
+        timer = setTimeout(rebake, 300);
+      });
+      controlElements.set(key, { input, requestedOutput, effectiveOutput, coupling: row.querySelector('.coupling'), step });
+      controlList.append(row);
+    }
+
+    function shortIdentity(identity) { return identity ? identity.slice(0, 12) : '-'; }
+    function setState(label, status = '') {
+      document.getElementById('state-label').textContent = label;
+      document.getElementById('state-dot').className = `dot ${status}`;
+      document.getElementById('rebake').disabled = status === 'running';
+    }
+    function setError(message) {
+      const error = document.getElementById('error');
+      error.textContent = message || '';
+      error.classList.toggle('visible', Boolean(message));
+    }
+    function drawFrame(base64, width, height) {
+      const bytes = Uint8ClampedArray.from(atob(base64), character => character.charCodeAt(0));
+      const canvas = document.getElementById('frame');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d', { alpha: false, willReadFrequently: true }).putImageData(new ImageData(bytes, width, height), 0, 0);
+    }
+    function showIdentity(id, value) {
+      const output = document.getElementById(id);
+      output.value = shortIdentity(value);
+      output.title = value || '';
+    }
+    function applyReceipt(receipt) {
+      window.__kaminosStageBRebakeCockpit.latestReceipt = structuredClone(receipt);
+      const source = document.getElementById('sourceStateIdentity');
+      source.textContent = `source: ${shortIdentity(receipt.sourceStateIdentity)} / ${receipt.source.stateId}`;
+      source.title = receipt.sourceStateIdentity;
+      document.getElementById('candidate-count').value = receipt.candidateCount.toLocaleString();
+      document.getElementById('deposit-count').value = receipt.depositCount.toLocaleString();
+      document.getElementById('elapsed').value = `${(receipt.elapsedMs / 1000).toFixed(2)} s`;
+      document.getElementById('layer-count').value = String(receipt.opticalLayers);
+      for (const id of ['candidateIdentity', 'coefficientIdentity', 'covarianceIdentity', 'depositionIdentity', 'pixelIdentity', 'stageBIdentity']) showIdentity(id, receipt[id]);
+      const statusMap = new Map(receipt.controlStatus.map(row => [row.control, row.status]));
+      for (const [key, element] of controlElements) {
+        const effective = receipt.effectiveControls[key];
+        element.effectiveOutput.textContent = Number(effective).toFixed(element.step < 0.01 ? 3 : 2);
+        element.coupling.textContent = statusMap.get(key) || 'missing';
+        element.coupling.classList.toggle('missing', !statusMap.has(key) || statusMap.get(key) === 'missing');
+      }
+    }
+    async function rebake() {
+      const serial = ++requestSerial;
+      setState('analytical rebake', 'running');
+      setError('');
+      try {
+        const response = await fetch('/api/rebake', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ controls }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `rebake-http-${response.status}`);
+        if (serial !== requestSerial) return;
+        if (result.receipt.status !== 'effective' || result.receipt.fallback !== null) throw new Error('rebake-receipt-not-effective');
+        drawFrame(result.pixelsBase64, result.receipt.output.width, result.receipt.output.height);
+        applyReceipt(result.receipt);
+        setState('effective / frozen State 120', 'effective');
+      } catch (error) {
+        if (serial !== requestSerial) return;
+        setState('rebake failed', 'failed');
+        setError(error?.message || String(error));
+      }
+    }
+    function applyPreset(name) {
+      Object.assign(controls, presets[name]);
+      for (const [key, element] of controlElements) {
+        element.input.value = controls[key];
+        element.requestedOutput.value = Number(controls[key]).toFixed(element.step < 0.01 ? 3 : 2);
+      }
+      document.querySelectorAll('[data-preset]').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
+      rebake();
+    }
+    document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => applyPreset(button.dataset.preset)));
+    document.getElementById('rebake').addEventListener('click', rebake);
+    rebake();
+  </script>
+</body>
+</html>
