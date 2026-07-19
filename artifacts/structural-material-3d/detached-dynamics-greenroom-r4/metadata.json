@@ -1,0 +1,20 @@
+{
+  "name": "null",
+  "job_type": "kaminos_structural_detached_dynamics_witness_0718",
+  "job_id": "f6c85cc3bc6e",
+  "input_path": "/dev/null",
+  "input_name": "null",
+  "params": {},
+  "output_files": [
+    "greenroom-wrapper-report.json",
+    "report.json",
+    "resident-solver-bind-preview.png",
+    "resident-solver-dynamics-second-launch.png",
+    "resident-solver-dynamics-settled.png",
+    "resident-solver-shear-accepted.png",
+    "resident-solver-shear-preview.png",
+    "resident-solver.png"
+  ],
+  "created_at": 1784433953.78204,
+  "duration_s": 3.5
+}
