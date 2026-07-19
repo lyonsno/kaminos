@@ -7,6 +7,7 @@ const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
 
 const requestedUrl = args.get('--url') || 'http://127.0.0.1:18142/index.html?kaminos_hand_state=1&hand_fixture=1';
+const fakeVideo = args.get('--fake-video') ? resolve(args.get('--fake-video')) : null;
 const out = resolve(args.get('--out') || '/tmp/kaminos-hand-state-runtime.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9517);
@@ -20,6 +21,7 @@ let effectiveUrl = null;
 let debugState = null;
 let emitterGrowthReceipt = null;
 let inactiveEmitterRespawnReceipt = null;
+let liveRuntimeState = null;
 let primaryOutputWritten = false;
 let stderr = '';
 
@@ -40,6 +42,8 @@ function writeReport(extra = {}) {
     debugState,
     emitterGrowthReceipt,
     inactiveEmitterRespawnReceipt,
+    fakeVideo,
+    liveRuntimeState,
     stderrTail: stderr.slice(-2000),
     ...extra,
   }, null, 2));
@@ -106,7 +110,7 @@ async function evaluate(socket, expression) {
 }
 
 async function main() {
-  const browser = spawn(chrome, [
+  const chromeArgs = [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
@@ -114,8 +118,16 @@ async function main() {
     '--disable-extensions',
     '--enable-unsafe-webgpu',
     `--window-size=${width},${height}`,
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  ];
+  if (fakeVideo) {
+    chromeArgs.push(
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
+      `--use-file-for-fake-video-capture=${fakeVideo}`,
+    );
+  }
+  chromeArgs.push('about:blank');
+  const browser = spawn(chrome, chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
   browser.stderr.on('data', chunk => { stderr += chunk.toString(); });
 
   try {
@@ -128,6 +140,84 @@ async function main() {
     await request(socket, 'Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     phase = 'navigate';
     await request(socket, 'Page.navigate', { url: requestedUrl });
+
+    if (fakeVideo) {
+      phase = 'start_live_camera';
+      const startupDeadline = Date.now() + 30000;
+      let startReceipt = null;
+      while (Date.now() < startupDeadline) {
+        startReceipt = await evaluate(socket, `(() => {
+          const frame = document.getElementById('hand-state-runtime-frame');
+          const button = frame?.contentWindow?.document?.getElementById('hand-toggle');
+          return {
+            effectiveUrl: frame?.contentWindow?.location?.href || null,
+            activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+            panelHidden: document.getElementById('hand-state-runtime-panel')?.hidden,
+            buttonPresent: Boolean(button),
+            buttonDisabled: button?.disabled ?? null,
+          };
+        })()`);
+        if (startReceipt?.activeTab === 'hand-state' && startReceipt?.panelHidden === false
+          && startReceipt?.buttonPresent && startReceipt?.buttonDisabled === false) break;
+        await delay(100);
+      }
+      effectiveUrl = startReceipt?.effectiveUrl || null;
+      if (!startReceipt?.buttonPresent) throw new Error('live Hand Start command never became available');
+      await evaluate(socket, `(() => {
+        const frame = document.getElementById('hand-state-runtime-frame');
+        frame.contentWindow.document.getElementById('hand-toggle').click();
+        return true;
+      })()`);
+
+      phase = 'wait_for_live_mano';
+      const liveDeadline = Date.now() + 45000;
+      while (Date.now() < liveDeadline) {
+        const receipt = await evaluate(socket, `(async () => {
+          const frame = document.getElementById('hand-state-runtime-frame');
+          const read = frame?.contentWindow?.__kaminosHandStateDebugState;
+          const stateResponse = await frame?.contentWindow?.fetch('http://127.0.0.1:8766/state', { cache: 'no-store' });
+          return {
+            effectiveUrl: frame?.contentWindow?.location?.href || null,
+            state: typeof read === 'function' ? read() : null,
+            runtimeState: stateResponse?.ok ? await stateResponse.json() : null,
+          };
+        })()`);
+        effectiveUrl = receipt?.effectiveUrl || effectiveUrl;
+        debugState = receipt?.state || null;
+        liveRuntimeState = receipt?.runtimeState || null;
+        if (debugState?.running && debugState?.fixtureMode === false && debugState?.meshVisible
+          && debugState.vertexCount > 0 && debugState.faceCount > 0
+          && liveRuntimeState?.frame?.authority?.sourceAuthority === 'live_simulation') break;
+        await delay(250);
+      }
+      if (debugState?.fixtureMode !== false) throw new Error('controlled live witness must not use fixture authority');
+      if (!debugState?.running) throw new Error('Start Hand did not enter the running state');
+      if (!debugState?.meshVisible || debugState.vertexCount <= 0 || debugState.faceCount <= 0) {
+        throw new Error('controlled live camera route produced no MANO mesh');
+      }
+      if (liveRuntimeState?.frame?.authority?.sourceAuthority !== 'live_simulation') {
+        throw new Error(`controlled live camera route has ${liveRuntimeState?.frame?.authority?.sourceAuthority || 'missing'} authority`);
+      }
+      if (liveRuntimeState?.frame?.source?.effectiveRoute !== 'native_wilor_mini_mlx_detector_sidecar_live') {
+        throw new Error(`controlled live camera route substituted ${liveRuntimeState?.frame?.source?.effectiveRoute || 'missing'}`);
+      }
+      if (liveRuntimeState?.frame?.mano?.vertexCount !== 778 || liveRuntimeState?.frame?.mano?.faceCount !== 1538) {
+        throw new Error('controlled live camera route did not publish the full WiLoR MANO surface');
+      }
+      const fatalConsole = consoleEvents.filter(event => event.type === 'exception' || event.type === 'error');
+      if (fatalConsole.length) throw new Error(`browser console emitted ${fatalConsole.length} fatal event(s)`);
+      phase = 'capture';
+      await delay(1000);
+      const screenshot = await request(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      mkdirSync(dirname(out), { recursive: true });
+      writeFileSync(out, Buffer.from(screenshot.data, 'base64'));
+      primaryOutputWritten = true;
+      phase = 'complete';
+      writeReport({ status: 'passed', screenshot: out });
+      socket.close();
+      browser.kill('SIGTERM');
+      return;
+    }
 
     phase = 'wait_for_mesh';
     const deadline = Date.now() + 30000;

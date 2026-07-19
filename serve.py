@@ -1602,7 +1602,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         rendered = format % args if args else format
         if "/api/" in rendered:
             return  # quiet API spam
-        super().log_message(format, *args)
+        try:
+            super().log_message(format, *args)
+        except (BrokenPipeError, OSError, ValueError):
+            # A detached terminal must not leave a listening server that aborts
+            # every otherwise healthy request while attempting to log it.
+            return
 
 
 if __name__ == "__main__":

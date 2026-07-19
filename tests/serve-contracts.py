@@ -26,6 +26,28 @@ def test_http_status_404_log_does_not_crash():
     )
 
 
+def test_closed_access_log_stream_does_not_abort_requests(monkeypatch):
+    class DetachedLogStream:
+        def write(self, _message):
+            raise BrokenPipeError("detached server log stream")
+
+        def flush(self):
+            raise BrokenPipeError("detached server log stream")
+
+    handler = KaminosHandler.__new__(KaminosHandler)
+    handler.requestline = "GET /index.html HTTP/1.1"
+    handler.client_address = ("127.0.0.1", 0)
+    monkeypatch.setattr(sys, "stderr", DetachedLogStream())
+
+    KaminosHandler.log_message(
+        handler,
+        '"%s" %s %s',
+        handler.requestline,
+        HTTPStatus.OK,
+        128,
+    )
+
+
 def test_forge_host_registry_snapshot_preserves_endpoint_identity():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)

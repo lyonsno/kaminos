@@ -30,5 +30,11 @@ assert.match(witness, /screenSpaceSurfaceAccumulationPassCount[^\n]*<= 0/, 'witn
 assert.match(witness, /screenSpaceRefractionCompositePassCount[^\n]*<= 0/, 'witness rejects refraction without a completed liquid composite');
 assert.doesNotMatch(witness, /fixture-zero-emitters/, 'witness does not clear emitters before visual capture');
 assert.match(witness, /consoleEvents/, 'witness records browser errors');
+assert.match(witness, /--fake-video/, 'witness can exercise the non-fixture camera startup path with a controlled video source');
+assert.match(witness, /--use-fake-device-for-media-stream/, 'controlled live witness grants Chrome a deterministic camera device');
+assert.match(witness, /--use-file-for-fake-video-capture=/, 'controlled live witness records the effective camera source file');
+assert.match(witness, /hand-toggle/, 'controlled live witness invokes the same Start Hand command as the operator');
+assert.match(witness, /sourceAuthority[^\n]*live_simulation/, 'controlled live witness rejects stale or fallback hand authority');
+assert.match(witness, /fixtureMode[^\n]*false/, 'controlled live witness cannot masquerade as the recorded surface fixture');
 
 console.log('hand-state runtime witness contracts passed');
