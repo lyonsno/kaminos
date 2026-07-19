@@ -184,15 +184,27 @@ detached.components = [
   },
 ];
 assert.equal(deriveAcceptedBellTowerState(detached).attached, false);
-const silentDetached = advanceAcceptedStructuralBellTower(bellCitadel, detached, {
+const terminalSeparation = advanceAcceptedStructuralBellTower(bellCitadel, detached, {
   accepted: true,
   eventEpoch: 8,
   operation: 'shear',
 });
-assert.equal(silentDetached.bellTower.ringEmitted, false, 'a detached bell cannot counterfeit an attached strike');
-assert.equal(silentDetached.sound.events.some(event => event.id === 'bell-ring:8'), false);
-const detachedGeometry = buildEffigyTileGeometrySidecar(silentDetached, { profile: 'rib-upper-v0' });
-const detachedAssets = buildStructuralAssetSidecar(silentDetached, detachedGeometry);
+assert.equal(terminalSeparation.bellTower.ringEmitted, true, 'the accepted hanger-separation impulse rings once');
+assert.equal(
+  terminalSeparation.sound.events.find(event => event.id === 'bell-ring:8')?.cause,
+  'accepted-hanger-separation',
+);
+const movedWhileDetached = structuredClone(detached);
+movedWhileDetached.nodes.find(node => node.structuralRole === 'bell-body').displacement.x += 0.04;
+const silentDetached = advanceAcceptedStructuralBellTower(detached, movedWhileDetached, {
+  accepted: true,
+  eventEpoch: 9,
+  operation: 'shear',
+});
+assert.equal(silentDetached.bellTower.ringEmitted, false, 'motion that begins detached cannot counterfeit an attached strike');
+assert.equal(silentDetached.sound.events.some(event => event.id === 'bell-ring:9'), false);
+const detachedGeometry = buildEffigyTileGeometrySidecar(terminalSeparation, { profile: 'rib-upper-v0' });
+const detachedAssets = buildStructuralAssetSidecar(terminalSeparation, detachedGeometry);
 const detachedBellAsset = detachedAssets.anchors.find(anchor => anchor.structuralRole === 'bell-body');
 assert.equal(detachedBellAsset.attached, false);
 assert.equal(detachedBellAsset.tumbleEligible, true, 'accepted separation makes the bell eligible for a later physics consumer');

@@ -98,7 +98,7 @@ export function advanceAcceptedStructuralBellTower(previousState, nextState, acc
   const eventId = `bell-ring:${accepted.eventEpoch}`;
   const priorEvents = Array.isArray(nextState.sound?.events) ? nextState.sound.events : [];
   const duplicate = priorEvents.some(event => event.id === eventId);
-  const shouldRing = accepted.operation === 'shear' && current.attached && relativeMotion >= threshold && !duplicate;
+  const shouldRing = accepted.operation === 'shear' && previous.attached && relativeMotion >= threshold && !duplicate;
   const energy = shouldRing
     ? round(relativeMotion * relativeMotion * 22 + current.deflectionMagnitude * 0.18)
     : 0;
@@ -121,7 +121,9 @@ export function advanceAcceptedStructuralBellTower(previousState, nextState, acc
         energy,
         pitchHz: round(392 + Math.min(132, relativeMotion * 880), 3),
         midpoint: current.currentBellCenter,
-        cause: 'accepted-relative-crown-body-motion',
+        cause: current.attached
+          ? 'accepted-relative-crown-body-motion'
+          : 'accepted-hanger-separation',
       }
     : null;
   const events = ringEvent ? [...priorEvents, ringEvent] : priorEvents;
