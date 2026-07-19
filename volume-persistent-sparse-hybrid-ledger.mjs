@@ -2,8 +2,17 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createReadStream, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import {
+  createReadStream,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -323,6 +332,26 @@ export function buildFailedLedgerReport({
   return report;
 }
 
+export function buildSourceAuthenticationFailureReport({
+  expected,
+  durableReportPath,
+  error,
+  sourcePopulationCountsByState,
+}) {
+  const failure = buildFailedLedgerReport({
+    expected,
+    durableReportPath,
+    failurePhase: error?.failurePhase || 'artifact-source-authentication',
+    reason: error?.message || String(error),
+    lastTrustworthyEvidence: `manifest identity and requested state-keyed config parsed; source authentication did not complete; declared populations ${JSON.stringify(sourcePopulationCountsByState)}`,
+    effectiveRouteStatus: 'unresolved-before-effective-route',
+    sourceBindingStatus: 'unresolved-before-source-binding',
+    effectiveConfigStatus: 'verified',
+  });
+  failure.sourcePopulationCountsByState = { ...sourcePopulationCountsByState };
+  return failure;
+}
+
 function requireExactPresentation(presentation) {
   assert.equal(presentation?.targetFormat, 'rgba16float', 'linear HDR target format drifted');
   assert.equal(presentation?.exposure, 0.96, 'raymarch exposure drifted');
@@ -414,15 +443,20 @@ async function sha256File(path) {
 }
 
 async function authenticateArrayDescriptor(descriptor, manifestPath, label, localOnly) {
-  assert.ok(descriptor && typeof descriptor === 'object', `${label} descriptor missing`);
-  const path = descriptorPath(descriptor, manifestPath, localOnly);
-  assert.equal(statSync(path).size, descriptor.bytes, `${label} byte count drifted`);
-  assert.equal(await sha256File(path), descriptor.sha256, `${label} SHA-256 drifted`);
-  return {
-    ...descriptor,
-    path,
-    authentication: 'sha256-and-byte-count-verified',
-  };
+  try {
+    assert.ok(descriptor && typeof descriptor === 'object', `${label} descriptor missing`);
+    const path = descriptorPath(descriptor, manifestPath, localOnly);
+    assert.equal(statSync(path).size, descriptor.bytes, `${label} byte count drifted`);
+    assert.equal(await sha256File(path), descriptor.sha256, `${label} SHA-256 drifted`);
+    return {
+      ...descriptor,
+      path,
+      authentication: 'sha256-and-byte-count-verified',
+    };
+  } catch (error) {
+    error.failurePhase ??= localOnly ? 'exported-array-authentication' : 'source-array-authentication';
+    throw error;
+  }
 }
 
 function artifactArrayDescriptor({ path, artifactPath, bytes, dtype, shape, semanticRole }) {
@@ -435,6 +469,40 @@ function artifactArrayDescriptor({ path, artifactPath, bytes, dtype, shape, sema
     semanticRole,
     authentication: 'derived-from-authenticated-disjoint-source-row-partition-v0',
   };
+}
+
+export async function authenticateDerivedComplementDescriptor({
+  artifactPath,
+  descriptor,
+  expectedRows,
+  expectedSemanticRole = descriptor?.semanticRole,
+}) {
+  try {
+    assert.ok(descriptor && typeof descriptor === 'object', 'derived complement descriptor missing');
+    assert.equal(typeof descriptor.path, 'string', 'derived complement path missing');
+    assert.equal(isAbsolute(descriptor.path), false, 'derived complement path must be artifact-relative');
+    assert.match(descriptor.sha256 || '', SHA256, 'derived complement SHA-256 missing');
+    assert.ok(Number.isInteger(expectedRows) && expectedRows > 0, 'derived complement row count is invalid');
+    assert.equal(descriptor.bytes, expectedRows * Uint32Array.BYTES_PER_ELEMENT, 'derived complement byte count drifted');
+    assert.equal(descriptor.dtype, '<u4', 'derived complement dtype drifted');
+    assert.deepEqual(descriptor.shape, [expectedRows], 'derived complement shape drifted');
+    assert.equal(descriptor.semanticRole, expectedSemanticRole, 'derived complement semantic role drifted');
+    assert.equal(
+      descriptor.authentication,
+      'derived-from-authenticated-disjoint-source-row-partition-v0',
+      'derived complement authentication identity drifted',
+    );
+    const root = realpathSync(dirname(resolve(artifactPath)));
+    const path = realpathSync(resolve(root, descriptor.path));
+    const rel = relative(root, path);
+    assert.ok(rel && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel), 'derived complement path escaped the artifact root');
+    assert.equal(statSync(path).size, descriptor.bytes, 'derived complement on-disk byte count drifted');
+    assert.equal(await sha256File(path), descriptor.sha256, 'derived complement on-disk SHA-256 drifted');
+    return true;
+  } catch (error) {
+    error.failurePhase ??= 'derived-complement-authentication';
+    throw error;
+  }
 }
 
 function exactProjectedValue(units) {
@@ -565,7 +633,7 @@ function buildArmPayloads({
   });
 }
 
-export function validateAuthenticatedHybridArtifact(artifact, expected) {
+export async function validateAuthenticatedHybridArtifact(artifact, expected, { artifactPath } = {}) {
   assert.equal(artifact?.schema, HYBRID_ARTIFACT_SCHEMA, 'hybrid artifact schema drifted');
   assert.equal(artifact?.status, 'authenticated-build-contract-only', 'hybrid artifact status drifted');
   assert.equal(artifact?.captureEligible, false, 'build artifact falsely claims capture eligibility');
@@ -629,6 +697,16 @@ export function validateAuthenticatedHybridArtifact(artifact, expected) {
     }
     const complementArm = state.arms.find(arm => arm.armId === 'sparse-positive-complement');
     assert.equal(complementArm?.residualPayload?.enabled, true, `${state.stateId} positive complement is disabled`);
+    assert.deepEqual(
+      complementArm?.residualPayload?.sourceRowIndices,
+      state.complementDescriptors?.sourceRowIndices,
+      `${state.stateId} residual source-row descriptor aliases unverified metadata`,
+    );
+    assert.deepEqual(
+      complementArm?.residualPayload?.nativeCellIndices,
+      state.complementDescriptors?.nativeCellIndices,
+      `${state.stateId} residual membership descriptor aliases unverified metadata`,
+    );
     assert.equal(
       complementArm?.residualPayload?.sourceRowIndices?.shape?.[0],
       state.population.complement,
@@ -639,6 +717,18 @@ export function validateAuthenticatedHybridArtifact(artifact, expected) {
       state.population.complement,
       `${state.stateId} complement membership descriptor count drifted`,
     );
+    await authenticateDerivedComplementDescriptor({
+      artifactPath,
+      descriptor: state.complementDescriptors.sourceRowIndices,
+      expectedRows: state.population.complement,
+      expectedSemanticRole: 'source-order-positive-complement-row-indices',
+    });
+    await authenticateDerivedComplementDescriptor({
+      artifactPath,
+      descriptor: state.complementDescriptors.nativeCellIndices,
+      expectedRows: state.population.complement,
+      expectedSemanticRole: 'source-order-positive-complement-native-cell-membership',
+    });
   }
   return true;
 }
@@ -799,7 +889,7 @@ export async function emitAuthenticatedHybridArtifact({ manifestPath, artifactPa
       'Census sixteen-cell validation and Bailiff dynamic/native inspection',
     ],
   };
-  validateAuthenticatedHybridArtifact(artifact, expected);
+  await validateAuthenticatedHybridArtifact(artifact, expected, { artifactPath: resolvedArtifactPath });
   atomicWrite(resolvedArtifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
   const artifactSha256 = await sha256File(resolvedArtifactPath);
   return { artifact, artifactPath: resolvedArtifactPath, artifactSha256, expected };
@@ -824,6 +914,8 @@ async function main() {
   const reportPath = resolve(options.report);
   const artifactPath = resolve(options.artifact || resolve(dirname(reportPath), 'hybrid-artifact.json'));
   mkdirSync(dirname(reportPath), { recursive: true });
+  rmSync(reportPath, { force: true });
+  rmSync(artifactPath, { force: true });
   let expected;
   let manifest;
   try {
@@ -867,17 +959,12 @@ async function main() {
     const sourcePopulationCountsByState = Object.fromEntries(
       (manifest?.states || []).map(state => [state.stateId, state.sourceRows?.count]),
     );
-    const failure = buildFailedLedgerReport({
+    const failure = buildSourceAuthenticationFailureReport({
       expected,
       durableReportPath: reportPath,
-      failurePhase: 'common-ledger-source-binding',
-      reason: error?.message || String(error),
-      lastTrustworthyEvidence: `immutable cohort and all arrays authenticated; source full-population counts ${JSON.stringify(sourcePopulationCountsByState)}`,
-      effectiveRouteStatus: 'unresolved-before-effective-route',
-      sourceBindingStatus: 'authenticated',
-      effectiveConfigStatus: 'verified',
+      error,
+      sourcePopulationCountsByState,
     });
-    failure.sourcePopulationCountsByState = sourcePopulationCountsByState;
     const validation = validateExtinctionCommonLedgerReport(failure, expected);
     assert.equal(validation.ok, true, validation.errors.join(', '));
     atomicWrite(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
