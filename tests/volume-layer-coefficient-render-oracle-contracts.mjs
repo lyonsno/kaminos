@@ -55,6 +55,15 @@ assert.match(source, /def compound_pixel_samples\(/, 'oracle exposes the compoun
 assert.match(source, /--compound-halo-mass/, 'compound treatment requires an explicit shared emission/extinction mass partition');
 assert.match(
   source,
+  /view-independent-flow-bilinear-five-tap-core-plus-seven-by-three-middle-band-shared-mass-v0/,
+  'oracle names the matched-work multiscale treatment without claiming a single smooth covariance',
+);
+assert.match(source, /def multiscale_pixel_samples\(/, 'oracle exposes the fine-core and middle-band partition');
+assert.match(source, /--multiscale-middle-mass/, 'multiscale treatment requires an explicit shared coefficient mass partition');
+assert.match(source, /--multiscale-major-scale/, 'multiscale treatment requires an explicit middle-band tangent scale');
+assert.match(source, /--multiscale-minor-scale/, 'multiscale treatment requires an explicit middle-band normal scale');
+assert.match(
+  source,
   /view-independent-multiview-residual-three-child-subcell-split-v0/,
   'oracle names the view-independent selective split treatment',
 );
@@ -93,6 +102,7 @@ assert.match(selfTest.stdout, /core-skirt endpoint contracts passed/);
 assert.match(selfTest.stdout, /target-aligned metric contracts passed/);
 assert.match(selfTest.stdout, /higher-order covariance contracts passed/);
 assert.match(selfTest.stdout, /compound optical mass contracts passed/);
+assert.match(selfTest.stdout, /multiscale matched-work contracts passed/);
 assert.match(selfTest.stdout, /selective split contracts passed/);
 assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
 
@@ -255,6 +265,9 @@ assert.deepEqual(missingControlsFailure.requested.footprintControls, {
   skirtMix: null,
   skirtMinorScale: null,
   skirtRidgeRejection: null,
+  multiscaleMiddleMass: null,
+  multiscaleMajorScale: null,
+  multiscaleMinorScale: null,
 });
 assert.match(missingControlsFailure.error, /requires explicit/i);
 
@@ -271,6 +284,29 @@ assert.notEqual(missingCompound.status, 0, 'compound mode without explicit mass 
 const missingCompoundFailure = JSON.parse(await readFile(missingCompoundReport, 'utf8'));
 assert.equal(missingCompoundFailure.failurePhase, 'footprint-control-validation');
 assert.match(missingCompoundFailure.error, /explicit.*compound-halo-mass/i);
+
+const missingMultiscaleReport = join(root, 'missing-multiscale-controls-report.json');
+const missingMultiscale = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'missing-multiscale-out'),
+  '--report', missingMultiscaleReport,
+  '--footprint-mode', 'multiscale',
+], { encoding: 'utf8' });
+assert.notEqual(missingMultiscale.status, 0, 'multiscale mode without explicit middle-band controls must fail');
+const missingMultiscaleFailure = JSON.parse(await readFile(missingMultiscaleReport, 'utf8'));
+assert.equal(missingMultiscaleFailure.failurePhase, 'footprint-control-validation');
+assert.equal(missingMultiscaleFailure.requested.footprintMode, 'multiscale');
+assert.deepEqual(missingMultiscaleFailure.requested.footprintControls, {
+  skirtMix: null,
+  skirtMinorScale: null,
+  skirtRidgeRejection: null,
+  multiscaleMiddleMass: null,
+  multiscaleMajorScale: null,
+  multiscaleMinorScale: null,
+});
+assert.match(missingMultiscaleFailure.error, /multiscale mode requires explicit/i);
 
 const missingSplitReport = join(root, 'missing-selective-split-controls-report.json');
 const missingSplit = spawnSync(python, [

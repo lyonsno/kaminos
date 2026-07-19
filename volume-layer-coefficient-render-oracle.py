@@ -45,6 +45,7 @@ FOOTPRINT_MODES = {
     "core-skirt": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
     "higher-order": "flow-covariance-seven-by-seven-gauss-hermite-area-conserving-v0",
     "compound": "flow-bilinear-core-plus-gauss-hermite-compound-shared-mass-v0",
+    "multiscale": "view-independent-flow-bilinear-five-tap-core-plus-seven-by-three-middle-band-shared-mass-v0",
     "selective-split": "view-independent-multiview-residual-three-child-subcell-split-v0",
 }
 TANGENT_OFFSETS = np.asarray((-1.0, -0.5, 0.0, 0.5, 1.0), dtype=np.float64)
@@ -397,6 +398,46 @@ def compound_pixel_samples(
     )
 
 
+def multiscale_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    minor_px: np.ndarray,
+    middle_mass: float,
+    middle_major_scale: float,
+    middle_minor_scale: float,
+):
+    require(math.isfinite(middle_mass) and 0.0 <= middle_mass <= 1.0, "multiscale middle mass must remain in [0, 1]")
+    require(math.isfinite(middle_major_scale) and middle_major_scale > 0.0, "multiscale major scale must be finite and positive")
+    require(math.isfinite(middle_minor_scale) and middle_minor_scale > 0.0, "multiscale minor scale must be finite and positive")
+    core_weight = np.full_like(pixel_x, 1.0 - middle_mass, dtype=np.float32)
+    middle_weight = np.full_like(pixel_x, middle_mass, dtype=np.float32)
+    yield from weighted_tangent_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, core_weight,
+    )
+
+    tangent_nodes, tangent_weights = gauss_hermite_axis(TANGENT_UNIT_VARIANCE)
+    normal_x = -tangent_y
+    normal_y = tangent_x
+    for tangent_offset, tangent_weight in zip(tangent_nodes, tangent_weights):
+        for normal_offset, normal_weight in zip(NORMAL_OFFSETS, NORMAL_WEIGHTS):
+            sample_x = (
+                pixel_x
+                + tangent_x * major_px * middle_major_scale * tangent_offset
+                + normal_x * minor_px * middle_minor_scale * normal_offset
+            )
+            sample_y = (
+                pixel_y
+                + tangent_y * major_px * middle_major_scale * tangent_offset
+                + normal_y * minor_px * middle_minor_scale * normal_offset
+            )
+            quadrature_weight = float(tangent_weight * normal_weight)
+            for x, y, pixel_weight in bilinear_pixel_samples(sample_x, sample_y):
+                yield x, y, pixel_weight * quadrature_weight * middle_weight
+
+
 def selective_split_pixel_samples(
     pixel_x: np.ndarray,
     pixel_y: np.ndarray,
@@ -515,6 +556,12 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
     }
     provided = [value is not None for value in requested.values()]
     compound_provided = args.compound_halo_mass is not None
+    multiscale_requested = {
+        "multiscaleMiddleMass": args.multiscale_middle_mass,
+        "multiscaleMajorScale": args.multiscale_major_scale,
+        "multiscaleMinorScale": args.multiscale_minor_scale,
+    }
+    multiscale_provided = [value is not None for value in multiscale_requested.values()]
     split_requested = {
         "splitAttributionCameras": args.split_attribution_cameras,
         "splitScoreThreshold": args.split_score_threshold,
@@ -523,7 +570,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
     }
     split_provided = [value is not None for value in split_requested.values()]
     if args.footprint_mode == "core-skirt":
-        require(not compound_provided and not any(split_provided), "core-skirt mode forbids compound and selective-split controls")
+        require(not compound_provided and not any(multiscale_provided) and not any(split_provided), "core-skirt mode forbids compound, multiscale, and selective-split controls")
         require(all(provided), "core-skirt mode requires explicit --skirt-mix, --skirt-minor-scale, and --skirt-ridge-rejection")
         require(math.isfinite(args.skirt_mix) and 0.0 <= args.skirt_mix <= 1.0, "--skirt-mix must be finite and in [0, 1]")
         require(math.isfinite(args.skirt_minor_scale) and args.skirt_minor_scale > 0.0, "--skirt-minor-scale must be finite and positive")
@@ -533,20 +580,36 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "conditioningFeature": FEATURE_ORDER[RIDGE_FEATURE_INDEX],
             "controlsExplicit": True,
             "compoundHaloMass": None,
+            **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
         }
     require(not any(provided), "skirt controls are only lawful with --footprint-mode core-skirt")
     if args.footprint_mode == "compound":
         require(compound_provided, "compound mode requires explicit --compound-halo-mass")
-        require(not any(split_provided), "compound mode forbids selective-split controls")
+        require(not any(multiscale_provided) and not any(split_provided), "compound mode forbids multiscale and selective-split controls")
         require(math.isfinite(args.compound_halo_mass) and 0.0 <= args.compound_halo_mass <= 1.0, "--compound-halo-mass must be finite and in [0, 1]")
         return {
             "skirtMix": None, "skirtMinorScale": 1.0, "skirtRidgeRejection": None,
             "conditioningFeature": None, "controlsExplicit": True,
             "compoundHaloMass": float(args.compound_halo_mass),
+            **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
         }
     require(not compound_provided, "--compound-halo-mass is only lawful with --footprint-mode compound")
+    if args.footprint_mode == "multiscale":
+        require(all(multiscale_provided), "multiscale mode requires explicit middle mass, major scale, and minor scale")
+        require(not any(split_provided), "multiscale mode forbids selective-split controls")
+        require(math.isfinite(args.multiscale_middle_mass) and 0.0 <= args.multiscale_middle_mass <= 1.0, "--multiscale-middle-mass must be finite and in [0, 1]")
+        require(math.isfinite(args.multiscale_major_scale) and args.multiscale_major_scale > 0.0, "--multiscale-major-scale must be finite and positive")
+        require(math.isfinite(args.multiscale_minor_scale) and args.multiscale_minor_scale > 0.0, "--multiscale-minor-scale must be finite and positive")
+        return {
+            "skirtMix": None, "skirtMinorScale": 1.0, "skirtRidgeRejection": None,
+            "conditioningFeature": None, "controlsExplicit": True,
+            "compoundHaloMass": None,
+            **{key: float(value) for key, value in multiscale_requested.items()},
+            **{key: None for key in split_requested},
+        }
+    require(not any(multiscale_provided), "multiscale controls are only lawful with --footprint-mode multiscale")
     if args.footprint_mode == "selective-split":
         require(all(split_provided), "selective-split mode requires explicit attribution cameras, score threshold, minimum camera support, and world offset")
         try:
@@ -565,6 +628,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "skirtMix": None, "skirtMinorScale": 1.0, "skirtRidgeRejection": None,
             "conditioningFeature": None, "controlsExplicit": True,
             "compoundHaloMass": None,
+            **{key: None for key in multiscale_requested},
             "splitAttributionCameras": attribution_cameras,
             "splitScoreThreshold": float(args.split_score_threshold),
             "splitMinCameraSupport": int(args.split_min_camera_support),
@@ -575,17 +639,20 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
         return {
             "skirtMix": 1.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
             "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+            **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
         }
     if args.footprint_mode == "bilinear":
         return {
             "skirtMix": 0.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
             "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+            **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
         }
     return {
         "skirtMix": None, "skirtMinorScale": None, "skirtRidgeRejection": None,
         "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+        **{key: None for key in multiscale_requested},
         **{key: None for key in split_requested},
     }
 
@@ -598,6 +665,9 @@ def bilinear_footprint_controls() -> dict[str, Any]:
         "conditioningFeature": None,
         "controlsExplicit": False,
         "compoundHaloMass": None,
+        "multiscaleMiddleMass": None,
+        "multiscaleMajorScale": None,
+        "multiscaleMinorScale": None,
         "splitAttributionCameras": None,
         "splitScoreThreshold": None,
         "splitMinCameraSupport": None,
@@ -782,6 +852,19 @@ def rasterize_coefficients(
         )
         nominal_quadrature_samples = 5 + GAUSS_HERMITE_ORDER ** 2
         nominal_pixel_deposits = nominal_quadrature_samples * 4
+    elif footprint_mode == "multiscale":
+        middle_mass = float(footprint_controls["multiscaleMiddleMass"])
+        pixel_samples = multiscale_pixel_samples(
+            pixel_x, pixel_y, tx, ty, major_px, minor_px,
+            middle_mass,
+            float(footprint_controls["multiscaleMajorScale"]),
+            float(footprint_controls["multiscaleMinorScale"]),
+        )
+        nominal_quadrature_samples = (
+            (5 if middle_mass < 1.0 else 0)
+            + (GAUSS_HERMITE_ORDER * len(NORMAL_OFFSETS) if middle_mass > 0.0 else 0)
+        )
+        nominal_pixel_deposits = nominal_quadrature_samples * 4
     else:
         require(footprint_mode == "selective-split", f"unknown footprint mode {footprint_mode}")
         require(split_mask is not None and split_mask.shape == (positions.shape[0],), "selective-split requires one frozen split mask for every candidate")
@@ -877,6 +960,10 @@ def rasterize_coefficients(
             "maximum": float(np.max(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
         } if footprint_mode in {"bilinear", "ellipse", "core-skirt"} else None,
         "compoundHaloMass": footprint_controls["compoundHaloMass"],
+        "multiscaleMiddleMass": footprint_controls["multiscaleMiddleMass"],
+        "multiscaleNominalWorkRatioToBilinear": (
+            float(nominal_pixel_deposits / 20.0) if footprint_mode == "multiscale" else None
+        ),
         "splitCandidateCount": int(np.count_nonzero(split_mask)) if split_mask is not None else 0,
         "splitSelectionCap": None,
         "minorPixelClamp": [0.5, 4.0],
@@ -1626,6 +1713,24 @@ def self_test() -> None:
     require(abs(sum(float(weight[0]) for _, _, weight in compound_samples) - 1.0) < 1e-6, "compound treatment does not conserve shared coefficient mass")
     require(len(compound_samples) == (5 + GAUSS_HERMITE_ORDER ** 2) * 4, "compound treatment sample count drifted")
     print("compound optical mass contracts passed")
+    multiscale_samples = list(multiscale_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+        0.25, 1.5, 1.5,
+    ))
+    multiscale_core_count = len(TANGENT_OFFSETS) * 4
+    multiscale_middle_count = GAUSS_HERMITE_ORDER * len(NORMAL_OFFSETS) * 4
+    require(len(multiscale_samples) == multiscale_core_count + multiscale_middle_count, "multiscale sample count drifted")
+    require(abs(sum(float(weight[0]) for _, _, weight in multiscale_samples) - 1.0) < 1e-6, "multiscale treatment does not conserve shared coefficient mass")
+    require(abs(sum(float(weight[0]) for _, _, weight in multiscale_samples[:multiscale_core_count]) - 0.75) < 1e-6, "multiscale fine core received the wrong coefficient mass")
+    require(abs(sum(float(weight[0]) for _, _, weight in multiscale_samples[multiscale_core_count:]) - 0.25) < 1e-6, "multiscale middle band received the wrong coefficient mass")
+    require(abs(len(multiscale_samples) / (len(TANGENT_OFFSETS) * 4) - 5.2) < 1e-12, "multiscale nominal work no longer matches the Grid160 comparison budget")
+    zero_middle = aggregate(list(multiscale_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+        0.0, 1.5, 1.5,
+    )))
+    require(bilinear.keys() == zero_middle.keys(), "zero middle band does not preserve bilinear support")
+    require(all(abs(bilinear[key] - zero_middle[key]) < 1e-6 for key in bilinear), "zero middle band does not equal bilinear weights")
+    print("multiscale matched-work contracts passed")
     split_pixel_x = np.asarray([2.25, 5.25], dtype=np.float32)
     split_pixel_y = np.asarray([3.5, 6.5], dtype=np.float32)
     split_mask_fixture = np.asarray([True, False], dtype=np.bool_)
@@ -1679,6 +1784,10 @@ def self_test() -> None:
     raster_modes = (
         ("higher-order", {**bilinear_footprint_controls(), "skirtMix": None}),
         ("compound", {**bilinear_footprint_controls(), "skirtMix": None, "compoundHaloMass": 0.35, "controlsExplicit": True}),
+        ("multiscale", {
+            **bilinear_footprint_controls(), "skirtMix": None, "controlsExplicit": True,
+            "multiscaleMiddleMass": 0.25, "multiscaleMajorScale": 1.5, "multiscaleMinorScale": 1.5,
+        }),
         ("selective-split", selective_controls),
     )
     for raster_mode, raster_controls in raster_modes:
@@ -1753,6 +1862,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skirt-minor-scale", type=float)
     parser.add_argument("--skirt-ridge-rejection", type=float)
     parser.add_argument("--compound-halo-mass", type=float)
+    parser.add_argument("--multiscale-middle-mass", type=float)
+    parser.add_argument("--multiscale-major-scale", type=float)
+    parser.add_argument("--multiscale-minor-scale", type=float)
     parser.add_argument("--split-attribution-cameras")
     parser.add_argument("--split-score-threshold", type=float)
     parser.add_argument("--split-min-camera-support", type=int)
@@ -1778,6 +1890,9 @@ def main() -> int:
             "skirtMix": args.skirt_mix,
             "skirtMinorScale": args.skirt_minor_scale,
             "skirtRidgeRejection": args.skirt_ridge_rejection,
+            "multiscaleMiddleMass": args.multiscale_middle_mass,
+            "multiscaleMajorScale": args.multiscale_major_scale,
+            "multiscaleMinorScale": args.multiscale_minor_scale,
         },
         "depositionControls": {
             "compoundHaloMass": args.compound_halo_mass,
