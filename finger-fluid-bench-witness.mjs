@@ -1216,8 +1216,15 @@ async function main() {
     const averageNeighborRetentionAge = lastDebugState.runtime?.diagnostics?.averageNeighborRetentionAge;
     const movingLockedParticleCount = lastDebugState.runtime?.diagnostics?.movingLockedParticleCount;
     const neighborRetentionHistogram = lastDebugState.runtime?.diagnostics?.neighborRetentionHistogram;
-    if (!Array.isArray(neighborRetentionHistogram) || neighborRetentionHistogram.length !== 4 || neighborRetentionHistogram.reduce((sum, count) => sum + count, 0) !== lastDebugState.runtime.particleCount) {
-      throw new Error(`topology histogram does not account for the exact particle population: ${JSON.stringify({ neighborRetentionHistogram, particleCount: lastDebugState.runtime?.particleCount })}`);
+    const activeParticleCount = lastDebugState.runtime?.diagnostics?.activeParticleCount;
+    const dormantParticleCount = lastDebugState.runtime?.diagnostics?.dormantParticleCount;
+    if (!Number.isSafeInteger(activeParticleCount)
+      || !Number.isSafeInteger(dormantParticleCount)
+      || activeParticleCount + dormantParticleCount !== lastDebugState.runtime.particleCount) {
+      throw new Error(`active/dormant diagnostics do not account for the exact particle population: ${JSON.stringify({ activeParticleCount, dormantParticleCount, particleCount: lastDebugState.runtime?.particleCount })}`);
+    }
+    if (!Array.isArray(neighborRetentionHistogram) || neighborRetentionHistogram.length !== 4 || neighborRetentionHistogram.reduce((sum, count) => sum + count, 0) !== activeParticleCount) {
+      throw new Error(`topology histogram does not account for the exact active population: ${JSON.stringify({ neighborRetentionHistogram, activeParticleCount })}`);
     }
     if (!Number.isFinite(averageNeighborRetention) || averageNeighborRetention <= 0.05 || averageNeighborRetention > 1.001) {
       throw new Error(`nearest-neighbor retention evidence is absent or malformed: ${JSON.stringify({ averageNeighborRetention })}`);
@@ -1335,6 +1342,23 @@ async function main() {
         || inletDiagnostics.inlets?.length !== 3) {
         throw new Error(`laminar inlet diagnostics missing or partial: ${JSON.stringify(inletDiagnostics)}`);
       }
+      const sourcePopulation = laminarInlets?.sourcePopulation;
+      const malformedSourcePopulation = laminarInlets?.sourcePopulationContract !== 'wgsl-distinct-flux-cadenced-inlet-population-v0'
+        || sourcePopulation?.contract !== 'wgsl-distinct-flux-cadenced-inlet-population-v0'
+        || sourcePopulation?.particleCount !== lastDebugState.runtime.particleCount
+        || sourcePopulation?.sources?.length !== 3
+        || sourcePopulation.sources.some(source => (
+          source.initialActiveCount <= 0
+          || source.initialActiveCount > source.reservoirCapacity
+          || source.initialDormantCount <= source.initialActiveCount
+          || source.uniqueInitialActivePositionCount !== source.initialActiveCount
+          || source.minimumInitialActiveSeparation < 0.035
+          || source.releaseRateRelativeError > 0.03
+          || source.cycleFrames <= source.reservoirResidenceFrames
+        ));
+      if (malformedSourcePopulation) {
+        throw new Error(`laminar inlet source population is coincident or overpacked: ${JSON.stringify(sourcePopulation)}`);
+      }
       if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite laminar inlet reservoir did not recycle: ${lastDebugState.runtime?.sourceRecirculationCount}`);
       const inletFixtures = lastDebugState.runtime?.playground?.inletFixtures;
       if (lastDebugState.runtime?.playground?.inletFixtureContract !== 'wgsl-analytic-laminar-inlet-fixture-presentation-v0'
@@ -1349,10 +1373,16 @@ async function main() {
       for (const [sourceIndex, inlet] of inletDiagnostics.inlets.entries()) {
         if (inlet.profile !== expectedProfiles[sourceIndex]
           || inlet.taggedParticleCount !== inlet.expectedParticleCount
+          || inlet.activeParticleCount + inlet.dormantParticleCount !== inlet.taggedParticleCount
+          || inlet.activeParticleCount <= 0
+          || inlet.dormantParticleCount <= 0
           || inlet.allocationErrorRatio !== 0
           || inlet.inletCoreParticleCount < 32
           || inlet.mouthParticleCount < 16) {
           throw new Error(`laminar inlet source accounting is incomplete: ${JSON.stringify(inlet)}`);
+        }
+        if (inlet.sourceLeakParticleCount !== 0) {
+          throw new Error(`laminar inlet startup leaked outside its attributable aperture: ${JSON.stringify(inlet)}`);
         }
         if (!Number.isFinite(inlet.profileNormalizedRmse) || inlet.profileNormalizedRmse > 0.18 || inlet.positiveAxialFlowRatio < 0.9) {
           throw new Error(`laminar inlet profile fit escaped its analytic contract: ${JSON.stringify(inlet)}`);
