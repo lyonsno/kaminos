@@ -76,10 +76,11 @@ const expectedIndexScreen = [
   1340 * 0.5 + points[8][0] * handFocalLength / handDepth,
   1080 * 0.5 - (-points[8][1] - 0.05) * handFocalLength / handDepth,
 ];
-const fluidProjectionScale = Math.min(1340 * 0.82, 1080 * 1.22) / (2.6 + indexEmitter.origin_world[2]);
+const fluidProjectionDepth = 4.25 - indexEmitter.origin_world[2];
+const fluidProjectionScale = 1080 / (2 * Math.tan((Math.PI / 3.15) / 2)) / fluidProjectionDepth;
 const actualIndexScreen = [
   1340 * 0.5 + indexEmitter.origin_world[0] * fluidProjectionScale,
-  1080 * 0.64 - (indexEmitter.origin_world[1] - 0.64) * fluidProjectionScale,
+  1080 * 0.5 - indexEmitter.origin_world[1] * fluidProjectionScale,
 ];
 assert.ok(Math.abs(expectedIndexScreen[0] - actualIndexScreen[0]) < 1, 'finger-fluid x projection lands on the rendered fingertip');
 assert.ok(Math.abs(expectedIndexScreen[1] - actualIndexScreen[1]) < 1, 'finger-fluid y projection lands on the rendered fingertip');
@@ -93,14 +94,14 @@ assert.equal(stalePacket.active_emitter_count, 0);
 
 assert.match(page, /id="finger-juice-canvas"/, 'live hand route has a composited fluid canvas');
 assert.match(viewer, /createLiveFingerJuiceEmitterPacket/, 'viewer maps live hand frames into emitter packets');
-assert.match(viewer, /setEmitterPacket/, 'viewer updates the live WebGPU emitter buffer');
-assert.match(viewer, /createWebGPUFingerJuiceSolver/, 'viewer uses Big Papa WebGPU fluid solver');
+assert.match(viewer, /setLiveInletPacket/, 'viewer updates the native continuous-fluid inlet buffer');
+assert.match(viewer, /createWebGPUFingerFluidSolver/, 'viewer uses Big Papa continuous WebGPU fluid solver');
 assert.match(solver, /nextEmitterData\.data\.byteLength > emitterBufferByteLength/, 'GPU emitter storage detects live packet growth');
 assert.match(solver, /emitterBuffer = device\.createBuffer/, 'GPU emitter storage can be replaced for larger live packets');
 assert.match(solver, /bindGroup = createComputeBindGroup\(\)/, 'GPU emitter storage growth rebinds compute resources');
 assert.doesNotMatch(solver, /expanded emitter packet has/, 'larger live emitter packets are not rejected by startup capacity');
 assert.match(solver, /particle\.flags\.y < 0\.5[\s\S]*respawnParticle/, 'particles initialized without emitters can activate when live emitters arrive');
-assert.match(viewer, /cpuOracle:\s*false/, 'live hand route disables startup CPU oracle');
-assert.match(solver, /options\.cpuOracle === false \? null/, 'WebGPU solver honors the no-oracle live initialization path');
+assert.match(viewer, /particleCount:\s*18_000/, 'live continuous route uses the bounded interactive particle population');
+assert.match(viewer, /densityIterations:\s*2/, 'live continuous route avoids the truth-bench density cost');
 
 console.log('hand-state finger-juice contracts passed');

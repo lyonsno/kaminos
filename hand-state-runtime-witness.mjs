@@ -174,18 +174,40 @@ async function main() {
     if (debugState?.fingerJuice?.renderBackend !== 'webgpu_direct_render') {
       throw new Error(`finger-fluid renderer route mismatch: ${debugState?.fingerJuice?.renderBackend || 'missing'}`);
     }
-    if (emitterGrowthReceipt?.emitterCount !== 5) {
-      throw new Error(`finger-fluid emitter growth count mismatch: ${emitterGrowthReceipt?.emitterCount ?? 'missing'}`);
+    if (debugState?.fingerJuice?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0') {
+      throw new Error(`continuous solver identity mismatch: ${debugState?.fingerJuice?.solverRoute || 'missing'}`);
+    }
+    if (debugState?.fingerJuice?.requestedRenderer !== 'webgpu-screen-space-liquid-refraction-v0'
+      || debugState?.fingerJuice?.effectiveRenderer !== 'webgpu-screen-space-liquid-refraction-v0') {
+      throw new Error(`continuous renderer identity mismatch: ${JSON.stringify(debugState?.fingerJuice)}`);
+    }
+    if (debugState?.fingerJuice?.truthScene !== 'live_hand_inlets') {
+      throw new Error(`live inlet truth scene mismatch: ${debugState?.fingerJuice?.truthScene || 'missing'}`);
+    }
+    if (emitterGrowthReceipt?.activeInletCount !== 5) {
+      throw new Error(`finger-fluid live inlet count mismatch: ${emitterGrowthReceipt?.activeInletCount ?? 'missing'}`);
     }
     if (!inactiveEmitterRespawnReceipt || inactiveEmitterRespawnReceipt.particleCount <= 0) {
       throw new Error(`finger-fluid inactive particle respawn failed: ${inactiveEmitterRespawnReceipt?.particleCount ?? 'missing'}`);
     }
-    const emitterBuckets = Object.entries(inactiveEmitterRespawnReceipt.particlesPerEmitter || {}).filter(([, count]) => count > 0);
-    if (emitterBuckets.length !== 5) {
-      throw new Error(`finger-fluid particle allocation reached ${emitterBuckets.length}/5 emitters`);
+    if (debugState?.fingerJuice?.liveInlets?.activeInletCount !== 5
+      || debugState?.fingerJuice?.liveInlets?.inlets?.filter(inlet => inlet.active).length !== 5) {
+      throw new Error(`continuous inlet packet did not preserve all five fingertips: ${JSON.stringify(debugState?.fingerJuice?.liveInlets)}`);
     }
     if (debugState?.fingerJuice?.activeEmitterCount !== 5) {
       throw new Error('fixture witness must capture all five active emitters');
+    }
+    if ((debugState?.fingerJuice?.directRenderFrameCount || 0) <= 0) {
+      throw new Error('continuous fluid route submitted no render frame');
+    }
+    if ((debugState?.fingerJuice?.screenSpaceRefractionRenderFrameCount || 0) <= 0) {
+      throw new Error('continuous fluid route completed no refraction render frame');
+    }
+    if ((debugState?.fingerJuice?.screenSpaceSurfaceAccumulationPassCount || 0) <= 0) {
+      throw new Error('continuous fluid route accumulated no liquid surface');
+    }
+    if ((debugState?.fingerJuice?.screenSpaceRefractionCompositePassCount || 0) <= 0) {
+      throw new Error('continuous fluid route completed no refraction composite');
     }
     const fatalConsole = consoleEvents.filter(event => event.type === 'exception' || event.type === 'error');
     if (fatalConsole.length) throw new Error(`browser console emitted ${fatalConsole.length} fatal event(s)`);

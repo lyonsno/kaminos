@@ -6,7 +6,7 @@ import {
   normalizeManoSurface,
   projectDisplayPointToFingerJuiceWorld,
 } from './hand-state-finger-juice.mjs';
-import { createWebGPUFingerJuiceSolver } from './lerms-finger-juice-webgpu-core.js';
+import { createWebGPUFingerFluidSolver } from './finger-fluid-webgpu-core.js';
 
 const params = new URLSearchParams(window.location.search);
 const runtimeUrl = params.get('runtime_url') || 'http://127.0.0.1:8766';
@@ -22,9 +22,9 @@ const captureContext = captureCanvas.getContext('2d', { alpha: false });
 const toggle = document.getElementById('hand-toggle');
 const status = document.getElementById('status');
 
-const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.setClearColor(0x07090b, 1);
+renderer.setClearColor(0x07090b, 0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
@@ -142,18 +142,23 @@ function updateHandSurface(mano) {
 async function ensureFingerJuice() {
   if (fingerJuiceSolver && fingerJuiceRenderer) return fingerJuiceSolver;
   if (fingerJuiceInitPromise) return fingerJuiceInitPromise;
-  fingerJuiceInitPromise = createWebGPUFingerJuiceSolver({
-    seed: 23,
-    maxParticles: 36_000,
-    emitterPacket: fingerJuicePacket,
-    cpuOracle: false,
+  fingerJuiceInitPromise = createWebGPUFingerFluidSolver({
+    canvas: fingerJuiceCanvas,
+    particleCount: 18_000,
+    densityIterations: 2,
+    truthScene: 'live_hand_inlets',
+    rendererMode: 'screen_space_refraction',
+    transparentBackground: true,
+    liveInletPacket: fingerJuicePacket,
   }).then(async solver => {
     if (solver.solver_backend !== 'webgpu_compute') throw new Error(solver.reason || 'finger fluid WebGPU solver unavailable');
-    const fluidRenderer = await solver.createRenderer(fingerJuiceCanvas);
-    if (fluidRenderer?.render_backend !== 'webgpu_direct_render') throw new Error(fluidRenderer?.reason || 'finger fluid renderer unavailable');
+    const route = solver.getDebugState();
+    if (route.effectiveRenderer !== 'webgpu-screen-space-liquid-refraction-v0') {
+      throw new Error(`continuous finger fluid renderer mismatch: ${route.effectiveRenderer || 'missing'}`);
+    }
     fingerJuiceSolver = solver;
-    fingerJuiceRenderer = fluidRenderer;
-    fingerJuiceSolver.setEmitterPacket(fingerJuicePacket);
+    fingerJuiceRenderer = solver;
+    fingerJuiceSolver.setLiveInletPacket(fingerJuicePacket);
     fingerJuiceError = null;
     return solver;
   }).catch(error => {
@@ -166,24 +171,25 @@ async function ensureFingerJuice() {
 
 async function probeFingerJuice(emitterPacket, steps = 24) {
   const solver = await ensureFingerJuice();
-  const growth = solver.setEmitterPacket(emitterPacket);
+  const growth = solver.setLiveInletPacket(emitterPacket);
   fingerJuicePacket = {
     ...emitterPacket,
     active_emitter_count: emitterPacket.emitters?.filter(emitter => emitter.active).length || 0,
   };
   fingerJuiceCanvas.style.visibility = 'visible';
-  const respawn = await solver.stepAndRead(1, 1 / 60, {
-    cpuOracle: false,
-    summaryMode: 'live_lightweight_readback_v0',
-    reason: 'visual witness inactive-to-live emitter respawn probe',
-  });
+  await solver.step(1, 1 / 60);
+  const respawn = solver.getDebugState();
   for (let index = 1; index < Math.max(1, Number(steps) || 1); index += 1) {
     await solver.step(1, 1 / 60);
     fingerJuiceRenderer.render({
       width: window.innerWidth,
       height: window.innerHeight,
-      pixelRatio: window.devicePixelRatio || 1,
-      camera: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 },
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
+      yaw: 0,
+      pitch: 0,
+      distance: 4.45,
+      target: [0, 0, -0.2],
+      rendererMode: 'screen_space_refraction',
     });
   }
   return { growth, respawn };
@@ -226,7 +232,7 @@ function updateFingerJuice(state) {
     previousFingerTips = fingerJuicePacket.adapter.tips;
     previousFingerTimestampMs = fingerJuicePacket.adapter.timestampMs;
   }
-  if (fingerJuiceSolver) fingerJuiceSolver.setEmitterPacket(fingerJuicePacket);
+  if (fingerJuiceSolver) fingerJuiceSolver.setLiveInletPacket(fingerJuicePacket);
 }
 
 async function runtimeFetch(path, options = {}) {
@@ -405,7 +411,7 @@ async function stop() {
   stateAbortController?.abort();
   stateAbortController = null;
   fingerJuicePacket = createLiveFingerJuiceEmitterPacket(null);
-  fingerJuiceSolver?.setEmitterPacket(fingerJuicePacket);
+  fingerJuiceSolver?.setLiveInletPacket(fingerJuicePacket);
   previousFingerTips = null;
   previousFingerTimestampMs = null;
   fingerJuiceCanvas.style.visibility = 'hidden';
@@ -461,8 +467,12 @@ function animate(now) {
     fingerJuiceRenderer.render({
       width: window.innerWidth,
       height: window.innerHeight,
-      pixelRatio: window.devicePixelRatio || 1,
-      camera: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 },
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
+      yaw: 0,
+      pitch: 0,
+      distance: 4.45,
+      target: [0, 0, -0.2],
+      rendererMode: 'screen_space_refraction',
     });
   }
   if (pendingLatencySample) {
@@ -489,6 +499,28 @@ window.__kaminosHandStateInitFingerJuice = ensureFingerJuice;
 window.__kaminosHandStateProbeFingerJuice = probeFingerJuice;
 window.__kaminosHandStateFixtureEmitterPacket = fixtureEmitterPacket;
 
+function fingerJuiceDebugState() {
+  const fluid = fingerJuiceSolver?.getDebugState?.() || null;
+  return {
+    solverBackend: fingerJuiceSolver?.solver_backend || (fingerJuiceInitPromise ? 'initializing' : 'stopped'),
+    renderBackend: fingerJuiceSolver?.render_backend || null,
+    solverRoute: fluid?.solverRoute || null,
+    requestedRenderer: fluid?.requestedRenderer || null,
+    effectiveRenderer: fluid?.effectiveRenderer || null,
+    truthScene: fluid?.truthScene || null,
+    directRenderFrameCount: fluid?.directRenderFrameCount || 0,
+    screenSpaceRefractionRenderFrameCount: fluid?.screenSpaceRefractionRenderFrameCount || 0,
+    screenSpaceSurfaceAccumulationPassCount: fluid?.screenSpaceSurfaceAccumulationPassCount || 0,
+    screenSpaceRefractionCompositePassCount: fluid?.screenSpaceRefractionCompositePassCount || 0,
+    liveInletContract: fluid?.liveInletContract || null,
+    liveInlets: fluid?.liveInlets || null,
+    activeEmitterCount: fingerJuicePacket.active_emitter_count || 0,
+    adapterContract: fingerJuicePacket.route_identity || null,
+    emissionStates: fingerJuicePacket.emitters?.map(emitter => ({ id: emitter.id, state: emitter.emission_state, extension: emitter.extension })) || [],
+    error: fingerJuiceError,
+  };
+}
+
 window.__kaminosHandStateDebugState = () => ({
   schema: 'kaminos.hand-state-runtime-viewer.v0',
   runtimeOwner: 'hand-state-runtime',
@@ -506,15 +538,7 @@ window.__kaminosHandStateDebugState = () => ({
   eventSequence: lastStateSequence,
   stateDeliveryMode: 'long_poll',
   manoOrientationContract: MANO_DISPLAY_ORIENTATION_CONTRACT,
-  fingerJuice: {
-    solverBackend: fingerJuiceSolver?.solver_backend || (fingerJuiceInitPromise ? 'initializing' : 'stopped'),
-    renderBackend: fingerJuiceRenderer?.render_backend || null,
-    emitterBufferRoute: fingerJuiceSolver?.emitterBufferRoute || null,
-    activeEmitterCount: fingerJuicePacket.active_emitter_count || 0,
-    adapterContract: fingerJuicePacket.route_identity || null,
-    emissionStates: fingerJuicePacket.emitters?.map(emitter => ({ id: emitter.id, state: emitter.emission_state, extension: emitter.extension })) || [],
-    error: fingerJuiceError,
-  },
+  fingerJuice: fingerJuiceDebugState(),
 });
 
 resize();

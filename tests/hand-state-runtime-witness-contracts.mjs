@@ -15,14 +15,19 @@ assert.match(witness, /__kaminosHandStateInitFingerJuice/, 'witness initializes 
 assert.match(witness, /webgpu_compute/, 'witness rejects a substituted finger-fluid solver');
 assert.match(witness, /webgpu_direct_render/, 'witness rejects a substituted finger-fluid renderer');
 assert.match(witness, /probe\(fixturePacket\(\), 12\)/, 'witness captures the emitted jets before they settle onto the fluid support plane');
-assert.match(witness, /emitterCount !== 5/, 'witness rejects partial emitter buffer growth');
+assert.match(witness, /activeInletCount !== 5/, 'witness rejects a partial native inlet update');
 assert.match(witness, /inactiveEmitterRespawnReceipt/, 'witness records whether startup-inactive particles respawned after emitters arrived');
 assert.match(witness, /particleCount <= 0/, 'witness rejects an emitter route that cannot activate particles');
-assert.match(witness, /particlesPerEmitter/, 'witness records real particle allocation across admitted emitters');
-assert.match(witness, /emitterBuckets\.length !== 5/, 'witness rejects slot-zero monopoly masquerading as five live jets');
+assert.match(witness, /webgpu-pbf-linked-cell-fluid-v0/, 'witness rejects the old splat solver route');
+assert.match(witness, /webgpu-screen-space-liquid-refraction-v0/, 'witness requires the continuous refracting renderer');
+assert.match(witness, /live_hand_inlets/, 'witness requires the dynamic fingertip inlet truth scene');
 assert.match(witness, /__kaminosHandStateProbeFingerJuice/, 'witness advances and renders the production fluid route before capture');
 assert.match(witness, /__kaminosHandStateFixtureEmitterPacket/, 'visual probe sources its emitters from recorded MANO fingertip vertices');
 assert.match(witness, /activeEmitterCount !== 5/, 'witness rejects a visual capture without all five probe emitters active');
+assert.match(witness, /directRenderFrameCount[^\n]*<= 0/, 'witness rejects route-only receipts with no submitted fluid frame');
+assert.match(witness, /screenSpaceRefractionRenderFrameCount[^\n]*<= 0/, 'witness rejects a selected refraction route that never rendered');
+assert.match(witness, /screenSpaceSurfaceAccumulationPassCount[^\n]*<= 0/, 'witness rejects refraction without visible liquid accumulation');
+assert.match(witness, /screenSpaceRefractionCompositePassCount[^\n]*<= 0/, 'witness rejects refraction without a completed liquid composite');
 assert.doesNotMatch(witness, /fixture-zero-emitters/, 'witness does not clear emitters before visual capture');
 assert.match(witness, /consoleEvents/, 'witness records browser errors');
 

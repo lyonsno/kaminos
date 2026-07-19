@@ -95,10 +95,12 @@ export function projectDisplayPointToFingerJuiceWorld(display, viewport = {}) {
   const handDepth = Math.max(0.01, 3.8 - display[2]);
   const screenX = width * 0.5 + display[0] * handFocalLength / handDepth;
   const screenY = height * 0.5 - (display[1] - 0.05) * handFocalLength / handDepth;
-  const fluidProjectionScale = Math.min(width * 0.82, height * 1.22) / Math.max(0.58, 2.6 + fluidZ);
+  const fluidEyeZ = -0.2 + 4.45;
+  const fluidDepth = Math.max(0.01, fluidEyeZ - fluidZ);
+  const fluidFocalLength = height / (2 * Math.tan((Math.PI / 3.15) / 2));
   return [
-    (screenX - width * 0.5) / fluidProjectionScale,
-    0.64 - (screenY - height * 0.64) / fluidProjectionScale,
+    (screenX - width * 0.5) * fluidDepth / fluidFocalLength,
+    -(screenY - height * 0.5) * fluidDepth / fluidFocalLength,
     fluidZ,
   ];
 }
