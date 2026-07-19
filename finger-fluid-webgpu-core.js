@@ -105,6 +105,41 @@ export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_pl
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
+export const KAMINOS_FINGER_FLUID_RUNTIME_PROFILES = Object.freeze({
+  full_bench: Object.freeze({
+    compileInterfaceCarriers: true,
+    compileLiquidFireContacts: true,
+    compileEnergyDiagnostics: true,
+    compileChemistry: true,
+    compileParticleShift: true,
+    rendererModes: KAMINOS_FINGER_FLUID_RENDERER_MODES,
+  }),
+  live_play: Object.freeze({
+    compileInterfaceCarriers: false,
+    compileLiquidFireContacts: false,
+    compileEnergyDiagnostics: false,
+    compileChemistry: false,
+    compileParticleShift: false,
+    rendererModes: Object.freeze(['screen_space_refraction']),
+  }),
+});
+
+export async function createNamedResourcesConcurrently(definitions, createResource) {
+  const entries = await Promise.all(
+    Object.entries(definitions).map(async ([name, definition]) => [
+      name,
+      await createResource(definition, name),
+    ]),
+  );
+  return Object.fromEntries(entries);
+}
+
+export function resolveFingerFluidRuntimeProfile(value = 'full_bench') {
+  const name = String(value || 'full_bench');
+  const profile = KAMINOS_FINGER_FLUID_RUNTIME_PROFILES[name];
+  if (!profile) throw new RangeError(`Unsupported finger fluid runtime profile: ${name}`);
+  return { name, ...profile };
+}
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -3705,10 +3740,20 @@ export async function createWebGPUFingerFluidSolver({
   chemistryDiffusion = 0,
   transparentBackground = false,
   liveInletPacket = null,
+  runtimeProfile = 'full_bench',
 } = {}) {
+  const initializationStartedAt = performance.now();
+  const initializationStages = {};
+  let initializationStageStartedAt = initializationStartedAt;
+  const finishInitializationStage = name => {
+    const now = performance.now();
+    initializationStages[name] = Number((now - initializationStageStartedAt).toFixed(3));
+    initializationStageStartedAt = now;
+  };
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
   if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  finishInitializationStage('adapter');
   if (!adapter) return createUnavailableSolver('WebGPU adapter unavailable');
   const requiredStorageBindings = 10;
   if (adapter.limits.maxStorageBuffersPerShaderStage < requiredStorageBindings) {
@@ -3717,6 +3762,7 @@ export async function createWebGPUFingerFluidSolver({
   const device = await adapter.requestDevice({
     requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
   });
+  finishInitializationStage('device');
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
 
@@ -3728,6 +3774,10 @@ export async function createWebGPUFingerFluidSolver({
     + (safeTruthScene === 'laminar_inlets' ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0);
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
+  const safeRuntimeProfile = resolveFingerFluidRuntimeProfile(runtimeProfile);
+  if (!safeRuntimeProfile.rendererModes.includes(safeRendererMode)) {
+    return createUnavailableSolver(`Finger fluid runtime profile ${safeRuntimeProfile.name} does not compile renderer ${safeRendererMode}`);
+  }
   const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
@@ -3885,32 +3935,43 @@ export async function createWebGPUFingerFluidSolver({
     layout: computePipelineLayout,
     compute: { module: computeModule, entryPoint },
   });
+  finishInitializationStage('resource_setup');
   let pipelines;
   try {
-    pipelines = {
-      clear: await pipelineFor('clear_grid'),
-      predict: await pipelineFor('predict_positions'),
-      build: await pipelineFor('build_linked_cell_grid'),
-      lambda: await pipelineFor('compute_density_lambda'),
-      delta: await pipelineFor('solve_position_delta'),
-      applyDelta: await pipelineFor('apply_position_delta'),
-      classifySurface: await pipelineFor('classify_free_surface'),
-      velocity: await pipelineFor('compute_velocity_viscosity'),
-      vorticity: await pipelineFor('compute_vorticity'),
-      confinement: await pipelineFor('apply_vorticity_confinement'),
-      cohesion: await pipelineFor('apply_surface_cohesion'),
-      applyVelocity: await pipelineFor('apply_velocity_position'),
-      clearInterface: await pipelineFor('clear_interface_counters'),
-      compactInterface: await pipelineFor('compact_interface_records'),
-      measureTopology: await pipelineFor('measure_neighbor_topology'),
-      computeParticleShift: await pipelineFor('compute_support_particle_shift'),
-      applyParticleShift: await pipelineFor('apply_support_particle_shift'),
-      computeChemistry: await pipelineFor('compute_material_tracer_diffusion'),
-      applyChemistry: await pipelineFor('apply_material_tracer_diffusion'),
-      clearLiquidFireContacts: await pipelineFor('clear_liquid_fire_contact_descriptor'),
-      compactLiquidFireContacts: await pipelineFor('compact_liquid_fire_contacts'),
-      finalizeLiquidFireContacts: await pipelineFor('finalize_liquid_fire_contact_descriptor'),
+    const pipelineDefinitions = {
+      clear: 'clear_grid',
+      predict: 'predict_positions',
+      build: 'build_linked_cell_grid',
+      lambda: 'compute_density_lambda',
+      delta: 'solve_position_delta',
+      applyDelta: 'apply_position_delta',
+      classifySurface: 'classify_free_surface',
+      velocity: 'compute_velocity_viscosity',
+      vorticity: 'compute_vorticity',
+      confinement: 'apply_vorticity_confinement',
+      cohesion: 'apply_surface_cohesion',
+      applyVelocity: 'apply_velocity_position',
+      measureTopology: 'measure_neighbor_topology',
     };
+    if (safeRuntimeProfile.compileInterfaceCarriers) Object.assign(pipelineDefinitions, {
+      clearInterface: 'clear_interface_counters',
+      compactInterface: 'compact_interface_records',
+    });
+    if (safeRuntimeProfile.compileParticleShift) Object.assign(pipelineDefinitions, {
+      computeParticleShift: 'compute_support_particle_shift',
+      applyParticleShift: 'apply_support_particle_shift',
+    });
+    if (safeRuntimeProfile.compileChemistry) Object.assign(pipelineDefinitions, {
+      computeChemistry: 'compute_material_tracer_diffusion',
+      applyChemistry: 'apply_material_tracer_diffusion',
+    });
+    if (safeRuntimeProfile.compileLiquidFireContacts) Object.assign(pipelineDefinitions, {
+      clearLiquidFireContacts: 'clear_liquid_fire_contact_descriptor',
+      compactLiquidFireContacts: 'compact_liquid_fire_contacts',
+      finalizeLiquidFireContacts: 'finalize_liquid_fire_contact_descriptor',
+    });
+    pipelines = await createNamedResourcesConcurrently(pipelineDefinitions, pipelineFor);
+    finishInitializationStage('compute_pipelines');
   } catch (error) {
     return createUnavailableSolver(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
@@ -3952,12 +4013,15 @@ export async function createWebGPUFingerFluidSolver({
   });
   let energyPipelines;
   try {
-    energyPipelines = {
-      projection: await energyPipelineFor('measure_projection_energy'),
-      viscosity: await energyPipelineFor('measure_viscosity_energy'),
-      vorticity: await energyPipelineFor('measure_vorticity_energy'),
-      cohesion: await energyPipelineFor('measure_cohesion_energy'),
-    };
+    energyPipelines = safeRuntimeProfile.compileEnergyDiagnostics
+      ? await createNamedResourcesConcurrently({
+        projection: 'measure_projection_energy',
+        viscosity: 'measure_viscosity_energy',
+        vorticity: 'measure_vorticity_energy',
+        cohesion: 'measure_cohesion_energy',
+      }, energyPipelineFor)
+      : {};
+    finishInitializationStage('energy_pipelines');
   } catch (error) {
     return createUnavailableSolver(`WebGPU energy diagnostic pipeline validation failed: ${error.message || String(error)}`);
   }
@@ -4028,7 +4092,14 @@ export async function createWebGPUFingerFluidSolver({
   let analyticSupportPresentationPipeline;
   let screenSpaceRefractionCompositePipeline;
   try {
-    renderPipeline = await device.createRenderPipelineAsync({
+    [
+      renderPipeline,
+      screenSpaceSurfaceAccumulationPipeline,
+      screenSpaceSurfaceCompositePipeline,
+      analyticSupportPresentationPipeline,
+      screenSpaceRefractionCompositePipeline,
+    ] = await Promise.all([
+      safeRuntimeProfile.rendererModes.includes('sphere_debug') ? device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
       layout: 'auto',
       vertex: { module: renderModule, entryPoint: 'vs_main' },
@@ -4045,8 +4116,8 @@ export async function createWebGPUFingerFluidSolver({
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-    });
-    screenSpaceSurfaceAccumulationPipeline = await device.createRenderPipelineAsync({
+      }) : Promise.resolve(null),
+      device.createRenderPipelineAsync({
       label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:particle-depth-thickness-accumulation`,
       layout: screenSpaceAccumulationPipelineLayout,
       vertex: { module: screenSpaceModule, entryPoint: 'vs_accumulate' },
@@ -4078,8 +4149,8 @@ export async function createWebGPUFingerFluidSolver({
         ],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
-    });
-    screenSpaceSurfaceCompositePipeline = await device.createRenderPipelineAsync({
+      }),
+      safeRuntimeProfile.rendererModes.includes('screen_space_surface') ? device.createRenderPipelineAsync({
       label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:edge-preserving-depth-normal-optical-shading`,
       layout: screenSpaceCompositePipelineLayout,
       vertex: { module: screenSpaceModule, entryPoint: 'vs_fullscreen' },
@@ -4096,8 +4167,8 @@ export async function createWebGPUFingerFluidSolver({
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
-    });
-    analyticSupportPresentationPipeline = await device.createRenderPipelineAsync({
+      }) : Promise.resolve(null),
+      device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
       layout: analyticSupportPresentationPipelineLayout,
       vertex: { module: analyticSupportPresentationModule, entryPoint: 'vs_analytic_support_presentation' },
@@ -4108,8 +4179,8 @@ export async function createWebGPUFingerFluidSolver({
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-    });
-    screenSpaceRefractionCompositePipeline = await device.createRenderPipelineAsync({
+      }),
+      safeRuntimeProfile.rendererModes.includes('screen_space_refraction') ? device.createRenderPipelineAsync({
       label: `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:snell-fresnel-absorption-composite`,
       layout: screenSpaceRefractionCompositePipelineLayout,
       vertex: { module: screenSpaceModule, entryPoint: 'vs_fullscreen' },
@@ -4120,11 +4191,13 @@ export async function createWebGPUFingerFluidSolver({
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
-    });
+      }) : Promise.resolve(null),
+    ]);
+    finishInitializationStage('render_pipelines');
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
   }
-  const renderBindGroup = device.createBindGroup({
+  const renderBindGroup = renderPipeline ? device.createBindGroup({
     label: 'kaminos-finger-fluid-render-bind-group',
     layout: renderPipeline.getBindGroupLayout(0),
     entries: [
@@ -4133,7 +4206,7 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 2, resource: { buffer: neighborTopologyBuffer } },
       { binding: 3, resource: { buffer: materialTracerBuffer } },
     ],
-  });
+  }) : null;
   const analyticSupportPresentationBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-analytic-support-presentation-bind-group',
     layout: analyticSupportPresentationLayout,
@@ -4154,6 +4227,8 @@ export async function createWebGPUFingerFluidSolver({
     magFilter: 'linear',
     minFilter: 'linear',
   });
+  finishInitializationStage('finalize');
+  const initializationCompletedAt = performance.now();
 
   let depthTexture = null;
   let configuredExtent = '';
@@ -4366,34 +4441,38 @@ export async function createWebGPUFingerFluidSolver({
       postProjectionGridRefreshCount += 1;
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
-      if (safeChemistryDiffusion > 0) {
+      if (safeRuntimeProfile.compileChemistry && safeChemistryDiffusion > 0) {
         dispatch(pass, pipelines.computeChemistry, safeParticleCount);
         dispatch(pass, pipelines.applyChemistry, safeParticleCount);
         chemistryDiffusionPassCount += 2;
       }
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
-      dispatchEnergy(pass, energyPipelines.projection);
+      if (safeRuntimeProfile.compileEnergyDiagnostics) dispatchEnergy(pass, energyPipelines.projection);
       dispatch(pass, pipelines.velocity, safeParticleCount);
-      dispatchEnergy(pass, energyPipelines.viscosity);
+      if (safeRuntimeProfile.compileEnergyDiagnostics) dispatchEnergy(pass, energyPipelines.viscosity);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
         dispatch(pass, pipelines.vorticity, safeParticleCount);
         dispatch(pass, pipelines.confinement, safeParticleCount);
         vorticityPassCount += 2;
       }
-      dispatchEnergy(pass, energyPipelines.vorticity);
+      if (safeRuntimeProfile.compileEnergyDiagnostics) dispatchEnergy(pass, energyPipelines.vorticity);
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
-      dispatchEnergy(pass, energyPipelines.cohesion);
+      if (safeRuntimeProfile.compileEnergyDiagnostics) dispatchEnergy(pass, energyPipelines.cohesion);
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
-      dispatch(pass, pipelines.clearInterface, 1);
-      dispatch(pass, pipelines.compactInterface, safeParticleCount);
-      interfaceCompactionPassCount += 1;
-      dispatch(pass, pipelines.clearLiquidFireContacts, 1);
-      dispatch(pass, pipelines.compactLiquidFireContacts, safeParticleCount);
-      dispatch(pass, pipelines.finalizeLiquidFireContacts, 1);
-      liquidFireContactCompactionPassCount += 1;
-      if (safeParticleShiftStrength > 0) {
+      if (safeRuntimeProfile.compileInterfaceCarriers) {
+        dispatch(pass, pipelines.clearInterface, 1);
+        dispatch(pass, pipelines.compactInterface, safeParticleCount);
+        interfaceCompactionPassCount += 1;
+      }
+      if (safeRuntimeProfile.compileLiquidFireContacts) {
+        dispatch(pass, pipelines.clearLiquidFireContacts, 1);
+        dispatch(pass, pipelines.compactLiquidFireContacts, safeParticleCount);
+        dispatch(pass, pipelines.finalizeLiquidFireContacts, 1);
+        liquidFireContactCompactionPassCount += 1;
+      }
+      if (safeRuntimeProfile.compileParticleShift && safeParticleShiftStrength > 0) {
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);
         particleShiftPassCount += 2;
@@ -4422,6 +4501,9 @@ export async function createWebGPUFingerFluidSolver({
     const extent = ensureExtent(width, height, pixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
+    if (!safeRuntimeProfile.rendererModes.includes(effectiveRendererMode)) {
+      throw new Error(`Finger fluid runtime profile ${safeRuntimeProfile.name} did not compile renderer ${effectiveRendererMode}`);
+    }
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
@@ -4907,6 +4989,19 @@ export async function createWebGPUFingerFluidSolver({
       available: true,
       solver_backend: 'webgpu_compute',
       render_backend: 'webgpu_direct_render',
+      runtimeProfile: safeRuntimeProfile.name,
+      runtimeCapabilities: {
+        interfaceCarriers: safeRuntimeProfile.compileInterfaceCarriers,
+        liquidFireContacts: safeRuntimeProfile.compileLiquidFireContacts,
+        energyDiagnostics: safeRuntimeProfile.compileEnergyDiagnostics,
+        chemistry: safeRuntimeProfile.compileChemistry,
+        particleShift: safeRuntimeProfile.compileParticleShift,
+        rendererModes: [...safeRuntimeProfile.rendererModes],
+      },
+      initialization: {
+        totalMs: Number((initializationCompletedAt - initializationStartedAt).toFixed(3)),
+        stages: { ...initializationStages },
+      },
       solverRoute: KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
       shaderRoute: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE,
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,

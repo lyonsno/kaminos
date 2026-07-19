@@ -2579,7 +2579,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <iframe
       id="hand-state-runtime-frame"
       title="Kaminos Live Hand"
-      data-src="hand-state-runtime.html?v=palm-mano-first-fluid-0718"
+      data-src="hand-state-runtime.html?v=palm-fluid-step-loop-0719"
       allow="camera"
       loading="lazy"
     ></iframe>
@@ -9415,7 +9415,7 @@ function ensureFingerJuiceTabFrameLoaded() {
 function ensureHandStateRuntimeFrameLoaded() {
   const frame = document.getElementById('hand-state-runtime-frame');
   if (!frame || frame.src) return;
-  frame.src = frame.dataset.src || 'hand-state-runtime.html?v=palm-mano-first-fluid-0718';
+  frame.src = frame.dataset.src || 'hand-state-runtime.html?v=palm-fluid-step-loop-0719';
 }
 
 function initKaminosHandStateRoute() {
@@ -9423,14 +9423,14 @@ function initKaminosHandStateRoute() {
   const frame = document.getElementById('hand-state-runtime-frame');
   document.getElementById('hand-state-reload')?.addEventListener('click', () => {
     if (!frame) return;
-    frame.src = frame.src || frame.dataset.src || 'hand-state-runtime.html?v=palm-mano-first-fluid-0718';
+    frame.src = frame.src || frame.dataset.src || 'hand-state-runtime.html?v=palm-fluid-step-loop-0719';
     frame.contentWindow?.location.reload();
   });
   if (params.get('kaminos_hand_state') !== '1') return;
   const childParams = new URLSearchParams();
   if (params.get('hand_fixture') === '1') childParams.set('fixture', '1');
   if (params.get('runtime_url')) childParams.set('runtime_url', params.get('runtime_url'));
-  childParams.set('v', 'palm-mano-first-fluid-0718');
+  childParams.set('v', 'palm-fluid-step-loop-0719');
   if (frame) frame.dataset.src = `hand-state-runtime.html?${childParams}`;
   setActiveTab('hand-state');
   setInfo('Standalone hand-state runtime viewer active');

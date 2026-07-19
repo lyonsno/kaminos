@@ -30,6 +30,16 @@ assert.match(
 );
 assert.match(viewer, /animationFrameCount/, 'Hand debug truth proves the MANO animation loop remains alive');
 assert.match(viewer, /fingerJuiceRenderAttemptCount/, 'Hand debug truth distinguishes fluid render attempts from completed passes');
+assert.doesNotMatch(
+  viewer,
+  /fingerJuiceSolver\.step\(1, dt\)\s*\.catch/,
+  'the live loop cannot assume the synchronous fluid step returns a Promise',
+);
+assert.match(
+  viewer,
+  /function animate\(now\)\s*\{\s*requestAnimationFrame\(animate\);/,
+  'the next MANO frame is secured before optional fluid work can throw',
+);
 assert.match(
   viewer,
   /function scheduleFingerJuiceWarmup[\s\S]*setTimeout[\s\S]*ensureFingerJuice/,

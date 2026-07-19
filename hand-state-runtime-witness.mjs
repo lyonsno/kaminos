@@ -219,6 +219,9 @@ async function main() {
       if (debugState?.fingerJuice?.directRenderFrameCount < 3) {
         throw new Error('controlled live witness did not reach post-initialization continuous-fluid rendering');
       }
+      if (debugState?.fingerJuice?.runtimeProfile !== 'live_play') {
+        throw new Error(`controlled live witness substituted ${debugState?.fingerJuice?.runtimeProfile || 'missing'} runtimeProfile for live_play`);
+      }
       if (liveRuntimeState?.frame?.authority?.sourceAuthority !== 'live_simulation') {
         throw new Error(`controlled live camera route has ${liveRuntimeState?.frame?.authority?.sourceAuthority || 'missing'} authority`);
       }

@@ -152,6 +152,7 @@ async function ensureFingerJuice() {
     densityIterations: 2,
     truthScene: 'live_hand_inlets',
     rendererMode: 'screen_space_refraction',
+    runtimeProfile: 'live_play',
     transparentBackground: true,
     liveInletPacket: fingerJuicePacket,
   }).then(async solver => {
@@ -469,6 +470,7 @@ function resize() {
 }
 
 function animate(now) {
+  requestAnimationFrame(animate);
   animationFrameCount += 1;
   if (handMesh.visible && now - lastLiveAt > 1200 && !fixtureMode) handMaterial.emissiveIntensity = 0;
   handMesh.rotation.y = Math.sin(now * 0.00022) * 0.08;
@@ -483,9 +485,14 @@ function animate(now) {
     const dt = fingerJuiceLastStepAt ? Math.min(1 / 30, Math.max(1 / 120, (now - fingerJuiceLastStepAt) / 1000)) : 1 / 60;
     fingerJuiceLastStepAt = now;
     if (!fingerJuiceStepPromise) {
-      fingerJuiceStepPromise = fingerJuiceSolver.step(1, dt)
-        .catch(error => { fingerJuiceError = error.message || String(error); })
-        .finally(() => { fingerJuiceStepPromise = null; });
+      try {
+        fingerJuiceStepPromise = Promise.resolve(fingerJuiceSolver.step(1, dt))
+          .catch(error => { fingerJuiceError = error.message || String(error); })
+          .finally(() => { fingerJuiceStepPromise = null; });
+      } catch (error) {
+        fingerJuiceError = error.message || String(error);
+        fingerJuiceStepPromise = null;
+      }
     }
     try {
       fingerJuiceRenderAttemptCount += 1;
@@ -513,7 +520,6 @@ function animate(now) {
       scheduleLatencyFlush();
     }).catch(error => { lastBenchmarkError = error.message || String(error); });
   }
-  requestAnimationFrame(animate);
 }
 
 window.__kaminosHandStateLatencyBenchmark = () => ({
@@ -533,6 +539,9 @@ function fingerJuiceDebugState() {
     solverBackend: fingerJuiceSolver?.solver_backend || (fingerJuiceInitPromise ? 'initializing' : 'stopped'),
     renderBackend: fingerJuiceSolver?.render_backend || null,
     solverRoute: fluid?.solverRoute || null,
+    runtimeProfile: fluid?.runtimeProfile || null,
+    runtimeCapabilities: fluid?.runtimeCapabilities || null,
+    initialization: fluid?.initialization || null,
     requestedRenderer: fluid?.requestedRenderer || null,
     effectiveRenderer: fluid?.effectiveRenderer || null,
     truthScene: fluid?.truthScene || null,
