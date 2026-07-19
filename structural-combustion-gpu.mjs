@@ -158,6 +158,59 @@ export function evaluateStructuralBurnAppearance({
   };
 }
 
+export function evaluateStructuralBurnMesostructure({
+  materialPosition = [0, 0, 0],
+  faceAxis = [0, 1, 0],
+  fractureFace = false,
+  ...burnState
+} = {}) {
+  const position = Array.from({ length: 3 }, (_, index) => finite(materialPosition?.[index], 0));
+  const axis = Array.from({ length: 3 }, (_, index) => finite(faceAxis?.[index], index === 1 ? 1 : 0));
+  const [x, y, z] = position;
+  const longitudinal = 0.5 + 0.5 * Math.sin(
+    (y * 15.7 + z * 10.9 + Math.sin(x * Math.PI * 3) * 0.18) * Math.PI * 2,
+  );
+  const fineFiber = 0.5 + 0.5 * Math.sin(
+    (y * 43.1 + z * 29.7 + Math.sin(x * Math.PI * 5) * 0.11) * Math.PI * 2,
+  );
+  const sidePattern = clamp(longitudinal * 0.72 + fineFiber * 0.28, 0, 1);
+  const dominantAxis = Math.abs(axis[0]) >= Math.abs(axis[1]) && Math.abs(axis[0]) >= Math.abs(axis[2])
+    ? 0
+    : Math.abs(axis[1]) >= Math.abs(axis[2]) ? 1 : 2;
+  const plane = dominantAxis === 0 ? [y, z] : dominantAxis === 1 ? [x, z] : [x, y];
+  const planeX = (plane[0] - 0.5) * 1.25;
+  const planeY = (plane[1] - 0.5) * 1.25;
+  const radius = Math.hypot(planeX, planeY);
+  const angle = Math.atan2(planeY, planeX);
+  const rings = 0.5 + 0.5 * Math.sin((radius * 19 + angle * 0.16) * Math.PI * 2);
+  const rays = 0.5 + 0.5 * Math.cos(angle * 9 + radius * 5);
+  const crossPattern = clamp(rings * 0.78 + rays * 0.22, 0, 1);
+  const crossGrainWeight = fractureFace ? 1 : smoothstep(0.65, 1, Math.abs(axis[0]));
+  const pattern = sidePattern + (crossPattern - sidePattern) * crossGrainWeight;
+  const poreSignal = 0.5 + 0.5 * Math.sin(
+    (x * 37.1 + y * 61.7 + z * 73.3 + pattern * 0.67) * Math.PI * 2,
+  );
+  const pore = smoothstep(0.74, 0.96, poreSignal);
+  const appearance = evaluateStructuralBurnAppearance(burnState);
+  const { preheat, pyrolysis, char: charStage } = appearance.semanticWeights;
+  const roughness = clamp(
+    0.34 + preheat * 0.1 + pyrolysis * 0.16 + charStage * 0.43 + pore * charStage * 0.09 + crossGrainWeight * 0.05,
+    0.28,
+    0.96,
+  );
+  const specular = clamp(0.2 * (1 - charStage * 0.88) * (1 - preheat * 0.22) * (1 - pyrolysis * 0.3), 0.015, 0.22);
+  const activeBreakup = pyrolysis * smoothstep(0.34, 0.82, pattern * 0.68 + pore * 0.32);
+  return {
+    pattern,
+    crossGrainWeight,
+    pore,
+    roughness,
+    specular,
+    activeBreakup,
+    localEmission: appearance.emissiveStrength * (0.52 + activeBreakup * 0.78),
+  };
+}
+
 export function createStructuralBurnFaceEmitter({
   worldOffset = [0, 0, 0],
   displayScale = [1.12, 0.42, 0.36],
@@ -816,6 +869,15 @@ struct VertexOut {
   @location(3) emissive: f32,
   @location(4) thermal: vec4<f32>,
   @location(5) reaction: vec4<f32>,
+  @location(6) materialPosition: vec3<f32>,
+  @location(7) @interpolate(flat) faceFrame: vec4<f32>,
+}
+
+struct WoodCharacter {
+  tint: vec3<f32>,
+  roughness: f32,
+  specular: f32,
+  activeBreakup: f32,
 }
 
 @group(0) @binding(0) var<storage, read> nodes: array<NodeRecord>;
@@ -836,7 +898,7 @@ fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
     node.displacement.xyz + presentation.world.xyz;
 }
 
-fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> {
+fn semanticBurnWeights(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> {
   let temperature = max(0.0, thermal.x);
   let fuel = clamp(thermal.y, 0.0, 1.0);
   let charMass = clamp(thermal.z, 0.0, 1.0);
@@ -844,7 +906,6 @@ fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> 
   let liveExposure = max(0.0, reaction.x);
   let consumedFuel = max(0.0, reaction.y);
   let ignited = smoothstep(0.25, 0.75, reaction.z);
-  let heat = smoothstep(0.48, 1.15, temperature);
   let charStage = smoothstep(0.02, 0.8, charMass);
   let pyrolysis = smoothstep(0.000001, 0.0025, consumedFuel) *
     smoothstep(0.02, 0.35, fuel) * ignited;
@@ -853,6 +914,19 @@ fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> 
     smoothstep(0.02, 0.45, peakExposure)
   ) * (1.0 - charStage) * (1.0 - pyrolysis);
   let contact = smoothstep(0.01, 0.6, liveExposure);
+  return vec4<f32>(preheat, pyrolysis, charStage, contact);
+}
+
+fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> {
+  let temperature = max(0.0, thermal.x);
+  let charMass = clamp(thermal.z, 0.0, 1.0);
+  let peakExposure = max(0.0, thermal.w);
+  let heat = smoothstep(0.48, 1.15, temperature);
+  let weights = semanticBurnWeights(thermal, reaction);
+  let preheat = weights.x;
+  let pyrolysis = weights.y;
+  let charStage = weights.z;
+  let contact = weights.w;
   let virgin = vec3<f32>(0.44, 0.29, 0.14);
   let heated = vec3<f32>(0.52, 0.19, 0.05);
   let pyrolyzing = vec3<f32>(0.98, 0.20, 0.018);
@@ -867,6 +941,63 @@ fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> 
   color = mix(color, pyrolyzing, pyrolysis * (0.28 + contact * 0.44));
   let emissive = heat * pyrolysis * (0.25 + contact * 0.75) * (1.0 - charMass * 0.35);
   return vec4<f32>(color, emissive);
+}
+
+fn woodMaterialCharacter(
+  materialPosition: vec3<f32>,
+  faceFrame: vec4<f32>,
+  thermal: vec4<f32>,
+  reaction: vec4<f32>
+) -> WoodCharacter {
+  let x = materialPosition.x;
+  let y = materialPosition.y;
+  let z = materialPosition.z;
+  let longitudinal = 0.5 + 0.5 * sin(
+    (y * 15.7 + z * 10.9 + sin(x * 9.42477796) * 0.18) * 6.28318531
+  );
+  let fineFiber = 0.5 + 0.5 * sin(
+    (y * 43.1 + z * 29.7 + sin(x * 15.70796327) * 0.11) * 6.28318531
+  );
+  let sidePattern = clamp(longitudinal * 0.72 + fineFiber * 0.28, 0.0, 1.0);
+  let faceAxis = abs(faceFrame.xyz);
+  var plane = materialPosition.yz;
+  if (faceAxis.y >= faceAxis.x && faceAxis.y >= faceAxis.z) {
+    plane = materialPosition.xz;
+  } else if (faceAxis.z >= faceAxis.x && faceAxis.z >= faceAxis.y) {
+    plane = materialPosition.xy;
+  }
+  let centeredPlane = (plane - vec2<f32>(0.5)) * 1.25;
+  let radius = length(centeredPlane);
+  let angle = atan2(centeredPlane.y, centeredPlane.x);
+  let rings = 0.5 + 0.5 * sin((radius * 19.0 + angle * 0.16) * 6.28318531);
+  let rays = 0.5 + 0.5 * cos(angle * 9.0 + radius * 5.0);
+  let crossPattern = clamp(rings * 0.78 + rays * 0.22, 0.0, 1.0);
+  let crossGrainWeight = max(faceFrame.w, smoothstep(0.65, 1.0, faceAxis.x));
+  let pattern = mix(sidePattern, crossPattern, crossGrainWeight);
+  let poreSignal = 0.5 + 0.5 * sin(
+    (x * 37.1 + y * 61.7 + z * 73.3 + pattern * 0.67) * 6.28318531
+  );
+  let pore = smoothstep(0.74, 0.96, poreSignal);
+  let weights = semanticBurnWeights(thermal, reaction);
+  let preheat = weights.x;
+  let pyrolysis = weights.y;
+  let charStage = weights.z;
+  let roughness = clamp(
+    0.34 + preheat * 0.1 + pyrolysis * 0.16 + charStage * 0.43 +
+      pore * charStage * 0.09 + crossGrainWeight * 0.05,
+    0.28,
+    0.96
+  );
+  let specular = clamp(
+    0.2 * (1.0 - charStage * 0.88) * (1.0 - preheat * 0.22) * (1.0 - pyrolysis * 0.3),
+    0.015,
+    0.22
+  );
+  let activeBreakup = pyrolysis * smoothstep(0.34, 0.82, pattern * 0.68 + pore * 0.32);
+  let warmFiber = mix(vec3<f32>(0.82, 0.76, 0.67), vec3<f32>(1.14, 1.06, 0.9), pattern);
+  let endGrainLift = mix(vec3<f32>(1.0), vec3<f32>(1.06, 1.0, 0.9), crossGrainWeight * (1.0 - charStage));
+  let charPoreShadow = 1.0 - pore * charStage * 0.26;
+  return WoodCharacter(warmFiber * endGrainLift * charPoreShadow, roughness, specular, activeBreakup);
 }
 
 fn materialColor(material: NodeMaterial) -> vec3<f32> {
@@ -930,6 +1061,15 @@ fn surfaceCellIsFractured(cell: vec3<u32>) -> bool {
   return false;
 }
 
+fn surfaceFaceFrame(faceIndex: u32, fractureFace: bool) -> vec4<f32> {
+  let axes = array<vec3<f32>, 6>(
+    vec3<f32>(-1.0, 0.0, 0.0), vec3<f32>(1.0, 0.0, 0.0),
+    vec3<f32>(0.0, -1.0, 0.0), vec3<f32>(0.0, 1.0, 0.0),
+    vec3<f32>(0.0, 0.0, -1.0), vec3<f32>(0.0, 0.0, 1.0)
+  );
+  return vec4<f32>(axes[faceIndex], select(0.0, 1.0, fractureFace));
+}
+
 @vertex
 fn surfaceVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) cellIndex: u32) -> VertexOut {
   let cell = surfaceCell(cellIndex);
@@ -945,23 +1085,27 @@ fn surfaceVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
     surfaceComponent == componentLabels[triangleNode1] &&
     surfaceComponent == componentLabels[triangleNode2];
   let faceIndex = vertexIndex / 6u;
+  let exteriorFace = surfaceFaceIsExterior(cell, faceIndex);
+  let fracturedCell = surfaceCellIsFractured(cell);
+  let fractureFace = !exteriorFace && fracturedCell;
   let surfaceVisible = triangleConnected &&
-    (surfaceFaceIsExterior(cell, faceIndex) || surfaceCellIsFractured(cell));
+    (exteriorFace || fracturedCell);
   let point0 = displayedPosition(triangleNode0);
   let point1 = displayedPosition(triangleNode1);
   let point2 = displayedPosition(triangleNode2);
   let rawNormal = cross(point1 - point0, point2 - point0);
   var surfaceNormal = vec3<f32>(0.0, 0.0, 1.0);
   if (dot(rawNormal, rawNormal) > 0.0000001) { surfaceNormal = normalize(rawNormal); }
-  let grain = 0.94 + 0.06 * sin(nodes[surfaceNodeIndex].position.x * 31.0 + nodes[surfaceNodeIndex].position.z * 17.0);
   var out: VertexOut;
   out.position = presentation.viewProjection * vec4<f32>(displayedPosition(surfaceNodeIndex), 1.0);
-  out.color = vec4<f32>(vec3<f32>(grain), select(0.0, 0.98, surfaceVisible));
+  out.color = vec4<f32>(vec3<f32>(1.0), select(0.0, 0.98, surfaceVisible));
   out.normal = surfaceNormal;
   out.surface = 1.0;
   out.emissive = materialEmissive(material);
   out.thermal = material.thermal;
   out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
+  out.materialPosition = nodes[surfaceNodeIndex].position.xyz;
+  out.faceFrame = surfaceFaceFrame(faceIndex, fractureFace);
   return out;
 }
 
@@ -983,6 +1127,8 @@ fn bondVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   out.emissive = 0.0;
   out.thermal = material.thermal;
   out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
+  out.materialPosition = nodes[nodeIndex].position.xyz;
+  out.faceFrame = vec4<f32>(0.0);
   return out;
 }
 
@@ -1005,6 +1151,8 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   out.emissive = 0.0;
   out.thermal = material.thermal;
   out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
+  out.materialPosition = nodes[nodeIndex].position.xyz;
+  out.faceFrame = vec4<f32>(0.0);
   return out;
 }
 
@@ -1013,12 +1161,17 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
   if (in.color.a <= 0.001) { discard; }
   if (in.surface > 0.5) {
     let appearance = semanticBurnAppearance(in.thermal, in.reaction);
+    let character = woodMaterialCharacter(in.materialPosition, in.faceFrame, in.thermal, in.reaction);
     let normal = normalize(in.normal);
     let keyLight = normalize(vec3<f32>(0.38, 0.82, 0.44));
     let diffuse = max(0.0, dot(normal, keyLight));
-    let albedo = appearance.rgb * in.color.rgb;
-    let litColor = albedo * (0.46 + diffuse * 0.54);
-    let finalColor = mix(litColor, albedo, clamp(appearance.a, 0.0, 1.0));
+    let albedo = appearance.rgb * character.tint * in.color.rgb;
+    var litColor = albedo * (0.46 + diffuse * 0.54);
+    let sheen = pow(diffuse, mix(18.0, 3.5, character.roughness)) * character.specular;
+    litColor += vec3<f32>(1.0, 0.82, 0.58) * sheen;
+    let localEmission = appearance.a * mix(0.52, 1.3, character.activeBreakup);
+    let emissionColor = appearance.rgb * mix(0.72, 1.12, character.activeBreakup);
+    let finalColor = mix(litColor, emissionColor, clamp(localEmission, 0.0, 1.0));
     return vec4<f32>(finalColor, in.color.a);
   }
   return in.color;
