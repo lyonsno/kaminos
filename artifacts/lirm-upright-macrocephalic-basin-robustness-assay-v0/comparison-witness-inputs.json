@@ -1,0 +1,52 @@
+{
+  "schema": "kaminos.lirm-crawler-basin-comparison-witness-inputs.v0",
+  "sourceKey": "primaryWitness",
+  "width": 1272,
+  "height": 1752,
+  "cells": [
+    {
+      "donorId": "basin-03-metabolizer-upright",
+      "outcome": "recovered",
+      "column": 0,
+      "row": 0,
+      "bandColor": [
+        194,
+        140,
+        61
+      ]
+    },
+    {
+      "donorId": "basin-10-metabolizer-upright",
+      "outcome": "recovered",
+      "column": 1,
+      "row": 0,
+      "bandColor": [
+        74,
+        148,
+        126
+      ]
+    },
+    {
+      "donorId": "basin-22-metabolizer-upright",
+      "outcome": "recovered",
+      "column": 0,
+      "row": 1,
+      "bandColor": [
+        112,
+        104,
+        174
+      ]
+    },
+    {
+      "donorId": "lirm-02-bulbous-radial-upright",
+      "outcome": "recovered",
+      "column": 1,
+      "row": 1,
+      "bandColor": [
+        183,
+        81,
+        92
+      ]
+    }
+  ]
+}
