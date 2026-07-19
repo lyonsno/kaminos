@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -105,6 +106,21 @@ def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
         while chunk := handle.read(chunk_size):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def producer_identity() -> dict[str, Any]:
+    concentration_path = Path(__file__).resolve()
+    parent_path = PARENT_PATH.resolve()
+    oracle_path = PARENT_PATH.with_name("volume-layer-coefficient-render-oracle.py").resolve()
+    for path in (concentration_path, parent_path, oracle_path):
+        require(path.is_file() and path.stat().st_size > 0, f"producer dependency is missing or blank: {path}")
+    return {
+        "concentrationScript": {"path": str(concentration_path), "sha256": sha256_file(concentration_path)},
+        "parentScript": {"path": str(parent_path), "sha256": sha256_file(parent_path)},
+        "oracleScript": {"path": str(oracle_path), "sha256": sha256_file(oracle_path)},
+        "pythonExecutable": str(Path(sys.executable).resolve()),
+        "routeReceiptAuthority": "external-gpu-greenroom-receipt-required-v0",
+    }
 
 
 def cohort_summary(mask: np.ndarray, cohort: np.ndarray) -> dict[str, Any]:
@@ -527,10 +543,19 @@ def cohort_image(cohort: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return image
 
 
+def evidence_scope(camera_rows: list[dict[str, Any]], full_orbit: bool) -> tuple[str, str]:
+    if full_orbit:
+        return "complete", "full 21-camera orbit"
+    if len(camera_rows) == 1 and camera_rows[0].get("cameraIndex") == 10 and camera_rows[0].get("role") == "calibration":
+        return "calibration-smoke", "calibration-camera smoke"
+    if len(camera_rows) == 1 and camera_rows[0].get("role") == "held-out":
+        return "subset-smoke", "held-out-camera smoke"
+    return "subset-smoke", f"{len(camera_rows)}-camera subset smoke"
+
+
 def gallery_html(camera_rows: list[dict[str, Any]], full_orbit: bool) -> str:
     rows = json.dumps(camera_rows, separators=(",", ":"))
-    authority = "full 21-camera orbit" if full_orbit else "calibration-camera smoke"
-    status = "complete" if full_orbit else "calibration-smoke"
+    status, authority = evidence_scope(camera_rows, full_orbit)
     maximum = len(camera_rows) - 1
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
 <title>Grid96 Peak Contribution Concentration</title><style>
@@ -724,9 +749,10 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     gallery_receipt = {"path": str(gallery_path), "bytes": gallery_path.stat().st_size, "sha256": sha256_file(gallery_path), "semanticRole": "interactive-all-camera-concentration-gallery"}
 
     args._phase["value"] = "manifest-write"
+    evidence_status, _ = evidence_scope(camera_rows, full_orbit)
     manifest_payload = {
         "schema": MANIFEST_SCHEMA,
-        "status": "complete" if full_orbit else "calibration-smoke",
+        "status": evidence_status,
         "failurePhase": None,
         "source": {
             "parentAttributionManifest": {"path": str(args.parent_attribution_manifest.resolve()), "sha256": EXPECTED_PARENT_MANIFEST_SHA256, "identity": EXPECTED_PARENT_MANIFEST_IDENTITY},
@@ -735,6 +761,7 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             "captureReport": {"path": str(args.capture_report.resolve()), "sha256": PARENT.EXPECTED_CAPTURE_SHA256},
             "sameStateCaptureId": registry["sameStateCaptureId"],
             "sourceHashes": registry["sourceHashes"],
+            "producer": producer_identity(),
         },
         "concentration": {
             "identity": CONTRIBUTION_IDENTITY,

@@ -25,8 +25,20 @@ spec.loader.exec_module(MODULE)
 assert MODULE.CONTRIBUTION_IDENTITY == "deposited-kernel-times-pre-bin-shared-transmittance-times-local-optical-weight-v0"
 assert MODULE.EMISSION_CONTRIBUTION_IDENTITY == "deposited-kernel-times-pre-bin-shared-transmittance-times-parent-emission-luma-times-path-scale-v0"
 assert MODULE.COHORT_IDENTITY == "top1-majority-hotspot_top4-submajority-distributed_else-mixed_unattributed-explicit-v0"
-assert "<dt>Status</dt><dd>calibration-smoke</dd>" in MODULE.gallery_html([], False)
+assert "<dt>Status</dt><dd>calibration-smoke</dd>" in MODULE.gallery_html(
+    [{"cameraIndex": 10, "role": "calibration"}], False
+)
 assert "<dt>Status</dt><dd>complete</dd>" in MODULE.gallery_html([], True)
+held_subset_html = MODULE.gallery_html([{"cameraIndex": 7, "role": "held-out"}], False)
+assert "<dt>Status</dt><dd>subset-smoke</dd>" in held_subset_html
+assert "<dt>Authority</dt><dd>held-out-camera smoke</dd>" in held_subset_html
+producer = MODULE.producer_identity()
+assert producer["concentrationScript"]["sha256"] == MODULE.sha256_file(MODULE.Path(MODULE.__file__))
+assert producer["parentScript"]["sha256"] == MODULE.sha256_file(MODULE.PARENT_PATH)
+assert producer["oracleScript"]["sha256"] == MODULE.sha256_file(
+    MODULE.PARENT_PATH.with_name("volume-layer-coefficient-render-oracle.py")
+)
+assert MODULE.Path(producer["pythonExecutable"]).is_file()
 
 
 # Four bright positive-peak pixels exercise all cohorts. Pixel zero receives two
@@ -107,6 +119,30 @@ assert metrics[0, 3, column["emissionCohortCode"]] == MODULE.COHORT_UNATTRIBUTED
 assert receipt["emission"]["identity"] == MODULE.EMISSION_CONTRIBUTION_IDENTITY
 assert receipt["emission"]["reconstruction"]["maximumAbsoluteDelta"] < 1e-6
 assert receipt["emission"]["reconstruction"]["failingPixelCount"] == 0
+
+# A non-uniform fixture constrains every factor in both contribution products.
+# Parent one wins optical influence only after depth transmittance is applied;
+# parent zero wins emitted luma because its nearer depth outweighs parent one.
+factor_metrics, _ = MODULE.concentrate_parent_contributions(
+    row_count=2,
+    row_index=np.asarray((0, 1), dtype=np.int64),
+    sample_x=np.zeros(2, dtype=np.int32),
+    sample_y=np.zeros(2, dtype=np.int32),
+    sample_depth=np.asarray((0, 1), dtype=np.int32),
+    sample_weight=np.ones(2, dtype=np.float32),
+    transmittance_before=np.asarray(([[1.0]], [[0.25]]), dtype=np.float32),
+    local_optical_weight=np.asarray((0.1, 1.0), dtype=np.float32),
+    parent_emission_luma=np.asarray((0.4, 0.8), dtype=np.float32),
+    path_scale=2.0,
+    composed_linear_luma=np.asarray(((1.2,),), dtype=np.float32),
+    target_bright_mask=np.asarray(((True,),), dtype=bool),
+    positive_peak_mask=np.asarray(((True,),), dtype=bool),
+    column_optical_depth=np.asarray(((0.5,),), dtype=np.float32),
+)
+assert np.isclose(factor_metrics[0, 0, column["totalContribution"]], 0.35)
+assert np.isclose(factor_metrics[0, 0, column["top1Fraction"]], 5.0 / 7.0)
+assert np.isclose(factor_metrics[0, 0, column["emissionTotalContribution"]], 1.2)
+assert np.isclose(factor_metrics[0, 0, column["emissionTop1Fraction"]], 2.0 / 3.0)
 
 for mask_name in ("targetBright", "positivePeak"):
     summary = receipt["cohorts"][mask_name]
