@@ -207,6 +207,12 @@ const DYNAMIC_REFLECTION_MESH_INDEX_COUNT = 36;
 const DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT = DYNAMIC_REFLECTION_MESH_INDEX_COUNT / 3;
 const LINEAR_SCENE_FORMAT = 'rgba16float';
 const LINEAR_SCENE_EXPOSURE = 0.58;
+const LINEAR_HDR_WORLD_LIGHTING_CONSUMERS = Object.freeze([
+  'visible_world_background',
+  'analytic_support',
+  'dynamic_indexed_mesh',
+  'liquid_world_reflection',
+]);
 const INTERFACE_THRESHOLD = 0.32;
 const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
@@ -317,6 +323,11 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   }
 
   const linearHdrSceneEvidence = runtime.linearHdrSceneEvidence;
+  const worldLightingConsumers = linearHdrSceneEvidence?.worldLightingConsumers;
+  const hasExactWorldLightingConsumers = Array.isArray(worldLightingConsumers)
+    && worldLightingConsumers.length === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
+    && new Set(worldLightingConsumers).size === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
+    && LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.every((consumer) => worldLightingConsumers.includes(consumer));
   if (
     linearHdrSceneEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
     || linearHdrSceneEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
@@ -326,6 +337,7 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     || linearHdrSceneEvidence?.environmentFilterRoute !== KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE
     || !Number.isInteger(linearHdrSceneEvidence?.backgroundPassCount)
     || linearHdrSceneEvidence.backgroundPassCount <= 0
+    || !hasExactWorldLightingConsumers
     || linearHdrSceneEvidence?.fallbackReason
   ) {
     throw new Error(`Finger fluid truth linear HDR scene evidence is missing or partial: ${JSON.stringify(linearHdrSceneEvidence)}`);
@@ -334,8 +346,12 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   if (
     finalPresentationEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
     || finalPresentationEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
+    || finalPresentationEvidence?.sourceFormat !== LINEAR_SCENE_FORMAT
     || finalPresentationEvidence?.toneMap !== 'aces-fitted-v0'
+    || finalPresentationEvidence?.exposure !== LINEAR_SCENE_EXPOSURE
     || finalPresentationEvidence?.displayTransformCountPerFrame !== 1
+    || finalPresentationEvidence?.exactDiagnosticBypass !== 'liquid_support'
+    || finalPresentationEvidence?.diagnosticVisibilityRoute !== 'post-composite-depth24plus-identity-v0'
     || !Number.isInteger(finalPresentationEvidence?.passCount)
     || finalPresentationEvidence.passCount <= 0
     || finalPresentationEvidence?.fallbackReason
@@ -4804,7 +4820,7 @@ export async function createWebGPUFingerFluidSolver({
         backgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
         environmentFilterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
         backgroundPassCount: hdrWorldBackgroundPassCount,
-        worldLightingConsumers: ['analytic_support', 'dynamic_indexed_mesh', 'liquid_world_reflection'],
+        worldLightingConsumers: [...LINEAR_HDR_WORLD_LIGHTING_CONSUMERS],
         fallbackReason: null,
       },
       finalPresentationEvidence: {

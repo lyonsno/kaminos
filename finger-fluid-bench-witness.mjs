@@ -547,6 +547,17 @@ function requireSharedSupportPresentation(receipt, label) {
 
 function requireLinearHdrWorldClosure(receipt, label) {
   const linearHdrSceneEvidence = receipt?.linearHdrSceneEvidence;
+  const requiredWorldLightingConsumers = [
+    'visible_world_background',
+    'analytic_support',
+    'dynamic_indexed_mesh',
+    'liquid_world_reflection',
+  ];
+  const worldLightingConsumers = linearHdrSceneEvidence?.worldLightingConsumers;
+  const hasExactWorldLightingConsumers = Array.isArray(worldLightingConsumers)
+    && worldLightingConsumers.length === requiredWorldLightingConsumers.length
+    && new Set(worldLightingConsumers).size === requiredWorldLightingConsumers.length
+    && requiredWorldLightingConsumers.every((consumer) => worldLightingConsumers.includes(consumer));
   if (
     linearHdrSceneEvidence?.requestedRoute !== 'webgpu-linear-hdr-scene-radiance-v0'
     || linearHdrSceneEvidence?.effectiveRoute !== 'webgpu-linear-hdr-scene-radiance-v0'
@@ -555,6 +566,7 @@ function requireLinearHdrWorldClosure(receipt, label) {
     || linearHdrSceneEvidence?.backgroundRoute !== 'wgsl-shared-hdr-world-background-v0'
     || linearHdrSceneEvidence?.environmentFilterRoute !== 'deterministic-five-tap-roughness-cone-v0'
     || linearHdrSceneEvidence?.backgroundPassCount < 1
+    || !hasExactWorldLightingConsumers
     || linearHdrSceneEvidence?.fallbackReason
   ) {
     throw new Error(`${label} linear HDR scene evidence missing, stale, fallback, or partial: ${JSON.stringify(linearHdrSceneEvidence)}`);

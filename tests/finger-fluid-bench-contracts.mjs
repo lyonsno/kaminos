@@ -498,6 +498,7 @@ assert.match(benchWitnessSource, /function requireLinearHdrWorldClosure[\s\S]*we
 assert.match(benchWitnessSource, /displayTransformCountPerFrame !== 1/, 'bench witness rejects duplicated or missing final display transforms');
 assert.match(benchWitnessSource, /diagnosticVisibilityRoute !== 'post-composite-depth24plus-identity-v0'/, 'bench witness rejects inferred or stale diagnostic visibility routing');
 assert.match(benchWitnessSource, /exactDiagnosticBypass !== 'liquid_support'/, 'bench witness requires exact binary-support preservation through final presentation');
+assert.match(benchWitnessSource, /requiredWorldLightingConsumers[\s\S]*visible_world_background[\s\S]*analytic_support[\s\S]*dynamic_indexed_mesh[\s\S]*liquid_world_reflection[\s\S]*hasExactWorldLightingConsumers/, 'bench witness rejects missing, duplicated, or substituted shared-world lighting consumers');
 assert.match(benchWitnessSource, /same-camera-linear-hdr-scene-radiance-v0/, 'bench witness requires refraction to sample the shared float scene authority');
 assert.match(benchWitnessSource, /environmentMapEvidence\?\.filterRoute !== 'deterministic-five-tap-roughness-cone-v0'/, 'bench witness rejects stale or substituted environment filtering');
 assert.match(benchWitnessSource, /playground\.supportGeometryMode !== 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'/, 'bench witness rejects stale billboard playground metadata');
@@ -847,12 +848,16 @@ const linearHdrSceneEvidence = {
   backgroundRoute: webgpuMod.KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
   environmentFilterRoute: webgpuMod.KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
   backgroundPassCount: 7,
+  worldLightingConsumers: ['visible_world_background', 'analytic_support', 'dynamic_indexed_mesh', 'liquid_world_reflection'],
   fallbackReason: null,
 };
 const finalPresentationEvidence = {
   requestedRoute: webgpuMod.KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
   effectiveRoute: webgpuMod.KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+  sourceFormat: 'rgba16float',
   toneMap: 'aces-fitted-v0',
+  exposure: 0.58,
+  exactDiagnosticBypass: 'liquid_support',
   diagnosticVisibilityRoute: 'post-composite-depth24plus-identity-v0',
   displayTransformCountPerFrame: 1,
   passCount: 7,
@@ -1024,7 +1029,37 @@ assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_spac
 }), /linear HDR scene evidence is missing or partial/);
 assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
   ...screenSpaceRendererRuntime,
+  linearHdrSceneEvidence: {
+    ...linearHdrSceneEvidence,
+    worldLightingConsumers: linearHdrSceneEvidence.worldLightingConsumers.filter((consumer) => consumer !== 'dynamic_indexed_mesh'),
+  },
+}), /linear HDR scene evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  linearHdrSceneEvidence: {
+    ...linearHdrSceneEvidence,
+    worldLightingConsumers: [...linearHdrSceneEvidence.worldLightingConsumers, 'fallback_world'],
+  },
+}), /linear HDR scene evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
   finalPresentationEvidence: { ...finalPresentationEvidence, displayTransformCountPerFrame: 2 },
+}), /final presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  finalPresentationEvidence: { ...finalPresentationEvidence, sourceFormat: 'bgra8unorm' },
+}), /final presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  finalPresentationEvidence: { ...finalPresentationEvidence, exposure: 99 },
+}), /final presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  finalPresentationEvidence: { ...finalPresentationEvidence, exactDiagnosticBypass: 'none' },
+}), /final presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  finalPresentationEvidence: { ...finalPresentationEvidence, diagnosticVisibilityRoute: 'pre-composite-proxy' },
 }), /final presentation evidence is missing or partial/);
 assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
   ...refractionRendererRuntime,
