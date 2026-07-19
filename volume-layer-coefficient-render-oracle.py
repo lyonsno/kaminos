@@ -483,7 +483,6 @@ def load_transverse_basis_socket(
     tangent_lengths = np.linalg.norm(tangent_source, axis=1)
     require(np.all(np.isfinite(tangent_lengths)) and float(np.min(tangent_lengths)) > 1e-6, "effective descriptors contain invalid flow tangents")
     normalized_tangents = tangent_source / tangent_lengths[:, None]
-    require(np.allclose(basis[:, 3:6], normalized_tangents, rtol=2e-6, atol=2e-7), "transverse tangents do not reproduce descriptors")
     require(np.allclose(basis[:, 12], descriptors[:, 14], rtol=2e-6, atol=2e-7), "transverse radii do not reproduce descriptors")
     ridge, nonridge = layer_optical_weights(coefficients)
     require(np.allclose(basis[:, 16], ridge, rtol=2e-6, atol=2e-7), "transverse Ridge optical weights do not reproduce")
@@ -496,6 +495,11 @@ def load_transverse_basis_socket(
     tangent = np.asarray(basis[valid, 3:6], dtype=np.float64)
     normal = np.asarray(basis[valid, 6:9], dtype=np.float64)
     binormal = np.asarray(basis[valid, 9:12], dtype=np.float64)
+    descriptor_tangent_in_plane = normalized_tangents[valid] - np.sum(normalized_tangents[valid] * normal, axis=1)[:, None] * normal
+    descriptor_tangent_conditioning = np.linalg.norm(descriptor_tangent_in_plane, axis=1)
+    require(float(np.min(descriptor_tangent_conditioning)) > 1e-6, "transverse valid rows do not have a conditioned descriptor tangent")
+    descriptor_tangent_in_plane /= descriptor_tangent_conditioning[:, None]
+    require(np.allclose(tangent, descriptor_tangent_in_plane, rtol=2e-6, atol=2e-7), "transverse tangents do not reproduce the declared normal-orthogonalized descriptor tangent")
     require(np.allclose(np.linalg.norm(tangent, axis=1), 1.0, atol=2e-6), "transverse valid tangents are not unit length")
     require(np.allclose(np.linalg.norm(normal, axis=1), 1.0, atol=2e-6), "transverse valid normals are not unit length")
     require(np.allclose(np.linalg.norm(binormal, axis=1), 1.0, atol=2e-6), "transverse valid binormals are not unit length")
