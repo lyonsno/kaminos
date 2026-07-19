@@ -20,7 +20,7 @@ const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.
 const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
 const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') || out.replace(/\.png$/i, '.liquid-support-phase-a.png'));
 const liquidSupportPhaseBOut = resolve(args.get('--liquid-support-phase-b-out') || out.replace(/\.png$/i, '.liquid-support-phase-b.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage'];
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -56,6 +56,8 @@ let surfaceRegistrationViews = null;
 let sameStateOpticalComparison = null;
 let frozenStateWorldReflectionWitness = null;
 let reflectionHitKindField = null;
+let refractionHitKindField = null;
+let refractionFallbackDeltaField = null;
 let environmentMapField = null;
 let binaryLiquidSupportField = null;
 let environmentContributionField = null;
@@ -142,6 +144,8 @@ function writeReport(report = {}) {
     sameStateOpticalComparison,
     frozenStateWorldReflectionWitness,
     reflectionHitKindField,
+    refractionHitKindField,
+    refractionFallbackDeltaField,
     environmentMapField,
     binaryLiquidSupportField,
     environmentContributionField,
@@ -623,12 +627,36 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
     throw new Error(`${label} deferred scene evidence missing, stale, or partial: ${JSON.stringify(deferredSceneEvidence)}`);
   }
   const worldSpaceReflectionEvidence = receipt?.worldSpaceReflectionEvidence;
+  const opticalQueryEvidence = receipt?.opticalQueryEvidence;
   const environmentMapEvidence = receipt?.environmentMapEvidence;
   if (!requireReflection && worldSpaceReflectionEvidence !== undefined) {
     throw new Error(`${label} published reflection provider evidence for a renderer frame that did not execute it: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
   }
   if (!requireReflection && environmentMapEvidence !== undefined) {
     throw new Error(`${label} published HDR environment evidence for a renderer frame that did not execute it: ${JSON.stringify(environmentMapEvidence)}`);
+  }
+  if (!requireReflection && opticalQueryEvidence !== undefined) {
+    throw new Error(`${label} published optical query evidence for a renderer frame that did not execute it: ${JSON.stringify(opticalQueryEvidence)}`);
+  }
+  if (requireReflection && (
+    opticalQueryEvidence?.schema !== 'kaminos.optical-query-provider.v0'
+    || opticalQueryEvidence?.requestedRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+    || opticalQueryEvidence?.effectiveRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+    || opticalQueryEvidence?.route !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+    || opticalQueryEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
+    || opticalQueryEvidence?.worldProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
+    || opticalQueryEvidence?.environmentRoute !== 'radiance-rgbe-equirectangular-environment-v0'
+    || opticalQueryEvidence?.resolverOrder !== 'deferred_depth_then_uncapped_world_mesh_then_hdr_environment-v0'
+    || opticalQueryEvidence?.fallbackReason
+    || opticalQueryEvidence?.queryFrameId !== renderFrameId
+    || opticalQueryEvidence?.compositePassCount < 1
+    || opticalQueryEvidence?.maximumDeferredMarchSteps !== 24
+    || opticalQueryEvidence?.deferredInputs?.linearDepthObject?.format !== 'rgba16float'
+    || opticalQueryEvidence?.deferredInputs?.worldNormalRoughness?.format !== 'rgba16float'
+    || opticalQueryEvidence?.deferredInputs?.albedoMetallic?.format !== 'rgba8unorm'
+    || opticalQueryEvidence?.consumers?.join('|') !== 'reflection_center_ray|two_interface_refraction_exit_ray'
+  )) {
+    throw new Error(`${label} hybrid optical query evidence missing, stale, fallback, substituted, or partial: ${JSON.stringify(opticalQueryEvidence)}`);
   }
   if (requireReflection && (
     worldSpaceReflectionEvidence?.providerRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
@@ -668,6 +696,7 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   }
   return {
     deferredSceneEvidence,
+    opticalQueryEvidence: requireReflection ? opticalQueryEvidence : null,
     worldSpaceReflectionEvidence: requireReflection ? worldSpaceReflectionEvidence : null,
     environmentMapEvidence: requireReflection ? environmentMapEvidence : null,
   };
@@ -794,6 +823,162 @@ function measureReflectionHitKinds(hitKindPath, maskPath) {
     indexedMeshRatio: Number((indexedMeshPixels / Math.max(1, liquidPixels)).toFixed(6)),
     measurement: 'binary_liquid_support_masked_attributable_reflection_hit_kinds_v0',
   };
+}
+
+function measureRefractionHitKinds(hitKindPath, validityPath, maskPath) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const hitKind = decode(hitKindPath);
+  const validity = decode(validityPath);
+  const mask = decode(maskPath);
+  if (
+    hitKind.status !== 0
+    || validity.status !== 0
+    || mask.status !== 0
+    || !hitKind.stdout?.length
+    || hitKind.stdout.length !== validity.stdout?.length
+    || hitKind.stdout.length !== mask.stdout?.length
+  ) {
+    throw new Error('refraction hit-kind, exit-validity, or liquid-support field decode failed or dimensions disagree');
+  }
+  let liquidPixels = 0;
+  let validExitPixels = 0;
+  let invalidExitPixels = 0;
+  let unclassifiedValidityPixels = 0;
+  let environmentPixels = 0;
+  let analyticPixels = 0;
+  let indexedMeshPixels = 0;
+  let deferredScenePixels = 0;
+  let invalidQueryHitPixels = 0;
+  let invalidNoQueryPixels = 0;
+  let validNoQueryPixels = 0;
+  let unclassifiedPixels = 0;
+  for (let offset = 0; offset < hitKind.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    if (!(Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2)) continue;
+    liquidPixels += 1;
+    const r = hitKind.stdout[offset];
+    const g = hitKind.stdout[offset + 1];
+    const b = hitKind.stdout[offset + 2];
+    const validityR = validity.stdout[offset];
+    const validityG = validity.stdout[offset + 1];
+    const validityB = validity.stdout[offset + 2];
+    const validExit = validityG > 96 && validityG > validityR * 1.35 && validityG > validityB * 1.35;
+    const invalidExit = validityR > 96 && validityR > validityG * 1.35 && validityR > validityB * 1.35;
+    const deferredScene = g > 145 && g > r * 1.55 && g > b * 1.15;
+    const environment = b > 120 && b > r * 1.5 && b > g * 1.2;
+    const analytic = r > 160 && g > 65 && r > g * 1.2 && g > b * 1.35;
+    const noQuery = r > 170 && b > 130 && g < 90 && b > r * 0.7;
+    const indexedMesh = !noQuery && r > 160 && r > g * 2 && b > g * 1.35;
+    const queryHit = !noQuery && (deferredScene || environment || analytic || indexedMesh);
+    if (validExit) {
+      validExitPixels += 1;
+      if (deferredScene) deferredScenePixels += 1;
+      else if (environment) environmentPixels += 1;
+      else if (analytic) analyticPixels += 1;
+      else if (indexedMesh) indexedMeshPixels += 1;
+      else if (noQuery) validNoQueryPixels += 1;
+      else unclassifiedPixels += 1;
+    } else if (invalidExit) {
+      invalidExitPixels += 1;
+      if (queryHit) invalidQueryHitPixels += 1;
+      else if (noQuery) invalidNoQueryPixels += 1;
+      else unclassifiedPixels += 1;
+    } else {
+      unclassifiedValidityPixels += 1;
+    }
+  }
+  const measurement = {
+    hitKindPath,
+    validityPath,
+    maskPath,
+    liquidPixels,
+    validExitPixels,
+    invalidExitPixels,
+    unclassifiedValidityPixels,
+    deferredScenePixels,
+    deferredSceneRatio: Number((deferredScenePixels / Math.max(1, validExitPixels)).toFixed(6)),
+    environmentPixels,
+    environmentRatio: Number((environmentPixels / Math.max(1, validExitPixels)).toFixed(6)),
+    analyticPixels,
+    indexedMeshPixels,
+    invalidQueryHitPixels,
+    invalidNoQueryPixels,
+    validNoQueryPixels,
+    unclassifiedPixels,
+    measurement: 'valid_exit_and_binary_liquid_support_masked_attributable_refracted_exit_hit_kinds_v0',
+  };
+  if (invalidQueryHitPixels !== 0 || invalidNoQueryPixels < 100 || validNoQueryPixels !== 0) {
+    throw new Error(`refracted hit-kind field executes or misclassifies optical queries across slab validity: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
+}
+
+function measureNoQueryFallbackDelta(deltaPath, hitKindPath, validityPath, maskPath) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const delta = decode(deltaPath);
+  const hitKind = decode(hitKindPath);
+  const validity = decode(validityPath);
+  const mask = decode(maskPath);
+  if (
+    delta.status !== 0
+    || hitKind.status !== 0
+    || validity.status !== 0
+    || mask.status !== 0
+    || !delta.stdout?.length
+    || delta.stdout.length !== hitKind.stdout?.length
+    || delta.stdout.length !== validity.stdout?.length
+    || delta.stdout.length !== mask.stdout?.length
+  ) {
+    throw new Error('refraction fallback-delta, hit-kind, validity, or support field decode failed or dimensions disagree');
+  }
+  let noQueryPixels = 0;
+  let leakingPixels = 0;
+  let maximumChannelDelta = 0;
+  let absoluteChannelDelta = 0;
+  for (let offset = 0; offset < delta.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    const liquid = Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2;
+    if (!liquid) continue;
+    const validityR = validity.stdout[offset];
+    const validityG = validity.stdout[offset + 1];
+    const validityB = validity.stdout[offset + 2];
+    const invalidExit = validityR > 96 && validityR > validityG * 1.35 && validityR > validityB * 1.35;
+    const hitR = hitKind.stdout[offset];
+    const hitG = hitKind.stdout[offset + 1];
+    const hitB = hitKind.stdout[offset + 2];
+    const noQuery = hitR > 170 && hitB > 130 && hitG < 90 && hitB > hitR * 0.7;
+    if (!invalidExit || !noQuery) continue;
+    noQueryPixels += 1;
+    const pixelMaximum = Math.max(delta.stdout[offset], delta.stdout[offset + 1], delta.stdout[offset + 2]);
+    maximumChannelDelta = Math.max(maximumChannelDelta, pixelMaximum);
+    absoluteChannelDelta += delta.stdout[offset] + delta.stdout[offset + 1] + delta.stdout[offset + 2];
+    if (pixelMaximum > 2) leakingPixels += 1;
+  }
+  const measurement = {
+    deltaPath,
+    hitKindPath,
+    validityPath,
+    maskPath,
+    noQueryPixels,
+    leakingPixels,
+    maximumChannelDelta,
+    meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, noQueryPixels * 3)).toFixed(6)),
+    measurement: 'explicit_no_query_slab_refraction_radiance_delta_rgb24_v0',
+  };
+  if (noQueryPixels < 100 || leakingPixels !== 0) {
+    throw new Error(`no-query slabs do not preserve the legacy scene-radiance fallback: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
 }
 
 function measureEnvironmentContributionField(contributionPath, maskPath) {
@@ -1557,6 +1742,8 @@ async function main() {
       if (
         refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
         || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+        || refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
         || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
         || refractionEvidence?.slabGeometryPassCount < 1
         || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -1893,6 +2080,8 @@ async function main() {
     if (
       refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
       || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+      || refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+      || refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
       || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
       || refractionEvidence?.slabGeometryPassCount < 1
       || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -2163,6 +2352,8 @@ async function main() {
         capture.receipt.refractionEvidence?.opticalDebugMode !== opticalDebugMode
         || capture.receipt.refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
         || capture.receipt.refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || capture.receipt.refractionEvidence?.opticalQueryRoute !== 'wgsl-hybrid-deferred-world-optical-query-v0'
+        || capture.receipt.refractionEvidence?.deferredTraversalRoute !== 'wgsl-deferred-linear-depth-ray-traversal-v0'
         || capture.receipt.refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
         || capture.receipt.refractionEvidence?.slabGeometryPassCount < 1
         || capture.receipt.refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
@@ -2219,6 +2410,20 @@ async function main() {
     if (reflectionHitKindField.environmentPixels < 1000 || reflectionHitKindField.indexedMeshPixels < 500) {
       throw new Error(`reflection hit-kind field does not materially expose environment plus indexed mesh visibility: ${JSON.stringify(reflectionHitKindField)}`);
     }
+    refractionHitKindField = measureRefractionHitKinds(
+      opticalDebugOutputs.refraction_hit_kind,
+      opticalDebugOutputs.exit_validity,
+      opticalDebugOutputs.liquid_support,
+    );
+    if (refractionHitKindField.deferredScenePixels < 10000 || refractionHitKindField.environmentPixels < 500) {
+      throw new Error(`refracted exit hit-kind field does not materially expose deferred-scene plus HDR-fallback visibility: ${JSON.stringify(refractionHitKindField)}`);
+    }
+    refractionFallbackDeltaField = measureNoQueryFallbackDelta(
+      opticalDebugOutputs.refraction_fallback_delta,
+      opticalDebugOutputs.refraction_hit_kind,
+      opticalDebugOutputs.exit_validity,
+      opticalDebugOutputs.liquid_support,
+    );
     environmentContributionField = measureEnvironmentContributionField(
       opticalDebugOutputs.environment_contribution,
       opticalDebugOutputs.liquid_support,

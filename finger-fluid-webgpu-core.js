@@ -27,6 +27,10 @@ export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE = 'wgsl-an
 export const KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE = 'webgpu-deferred-indexed-mesh-scene-v0';
 export const KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE = 'wgsl-indexed-mesh-world-space-reflection-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA = 'kaminos.reflection-query-provider.v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA = 'kaminos.optical-query-provider.v0';
+export const KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE = 'wgsl-hybrid-deferred-world-optical-query-v0';
+export const KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE = 'wgsl-deferred-linear-depth-ray-traversal-v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER = 'deferred_depth_then_uncapped_world_mesh_then_hdr_environment-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE = 'uncapped-exact-triangle-scan-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE = 'deterministic-five-ray-cone-quadrature-v0';
 export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE = 'radiance-rgbe-equirectangular-environment-v0';
@@ -228,7 +232,7 @@ let nextLiquidFireContactAllocationGeneration = 1;
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -384,6 +388,7 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
 
   let refractionEvidence = null;
   let worldSpaceReflectionEvidence = null;
+  let opticalQueryEvidence = null;
   let environmentMapEvidence = null;
   if (expectedMode === 'screen_space_refraction') {
     const evidence = runtime.refractionEvidence;
@@ -391,6 +396,8 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       evidence?.route !== KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.opticalTransportRoute !== KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE
+      || evidence?.opticalQueryRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || evidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
       || evidence?.slabRoute !== KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
@@ -416,6 +423,30 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     refractionEvidence = {
       ...evidence,
     };
+    const queryEvidence = runtime.opticalQueryEvidence;
+    if (
+      queryEvidence?.schema !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA
+      || queryEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.route !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
+      || queryEvidence?.worldProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
+      || queryEvidence?.environmentRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
+      || queryEvidence?.resolverOrder !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER
+      || queryEvidence?.fallbackReason
+      || queryEvidence?.queryFrameId !== renderFrameId
+      || !Number.isInteger(queryEvidence?.compositePassCount)
+      || queryEvidence.compositePassCount <= 0
+      || queryEvidence?.maximumDeferredMarchSteps !== 24
+      || queryEvidence?.deferredInputs?.linearDepthObject?.format !== 'rgba16float'
+      || queryEvidence?.deferredInputs?.worldNormalRoughness?.format !== 'rgba16float'
+      || queryEvidence?.deferredInputs?.albedoMetallic?.format !== 'rgba8unorm'
+      || queryEvidence?.consumers?.join('|') !== 'reflection_center_ray|two_interface_refraction_exit_ray'
+      || queryEvidence?.resultFields?.join('|') !== 'origin|direction|cone|interval|hit_kind|object_id|distance|normal|material|radiance|transmittance|confidence|provider|fallback'
+    ) {
+      throw new Error(`Finger fluid truth hybrid optical query evidence is missing or partial: ${JSON.stringify(queryEvidence)}`);
+    }
+    opticalQueryEvidence = { ...queryEvidence };
     const reflectionEvidence = runtime.worldSpaceReflectionEvidence;
     if (
       reflectionEvidence?.schema !== KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA
@@ -475,7 +506,7 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     linearHdrSceneEvidence: { ...linearHdrSceneEvidence },
     finalPresentationEvidence: { ...finalPresentationEvidence },
     screenSpaceSurfaceEvidence,
-    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence, worldSpaceReflectionEvidence, environmentMapEvidence } : {}),
+    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence, opticalQueryEvidence, worldSpaceReflectionEvidence, environmentMapEvidence } : {}),
   };
 }
 
@@ -2042,10 +2073,19 @@ struct SceneParams {
 
 @group(0) @binding(11) var<uniform> reflectionScene: SceneParams;
 @group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
+@group(0) @binding(13) var deferredLinearDepthObject: texture_2d<f32>;
+@group(0) @binding(14) var deferredWorldNormalRoughness: texture_2d<f32>;
+@group(0) @binding(15) var deferredAlbedoMetallic: texture_2d<f32>;
 
 const REFLECTION_HIT_ENVIRONMENT = 0u;
 const REFLECTION_HIT_ANALYTIC = 1u;
 const REFLECTION_HIT_INDEXED_MESH = 2u;
+const REFLECTION_HIT_DEFERRED_SCENE = 3u;
+const REFLECTION_HIT_NONE = 4u;
+const OPTICAL_PROVIDER_ENVIRONMENT = 0u;
+const OPTICAL_PROVIDER_WORLD = 1u;
+const OPTICAL_PROVIDER_DEFERRED = 2u;
+const OPTICAL_PROVIDER_NONE = 3u;
 
 struct AccumVertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -2173,6 +2213,83 @@ fn worldSurfaceNormal(viewNormal: vec3<f32>) -> vec3<f32> {
   return worldNormal;
 }
 
+fn viewDirectionToWorld(viewDirection: vec3<f32>) -> vec3<f32> {
+  return normalize(
+    params.cameraRight.xyz * viewDirection.x
+    + params.cameraUp.xyz * viewDirection.y
+    - params.cameraForward.xyz * viewDirection.z
+  );
+}
+
+struct DeferredSceneHit {
+  valid: f32,
+  distance: f32,
+  uv: vec2<f32>,
+  position: vec3<f32>,
+  normal: vec3<f32>,
+  albedo: vec3<f32>,
+  roughness: f32,
+  metallic: f32,
+  objectId: f32,
+  confidence: f32,
+}
+
+fn projectWorldToDeferred(worldPosition: vec3<f32>) -> vec4<f32> {
+  let clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  if (clip.w <= 0.001) { return vec4<f32>(-1.0); }
+  let ndc = clip.xy / clip.w;
+  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5);
+  return vec4<f32>(uv, clip.w, 1.0);
+}
+
+fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> DeferredSceneHit {
+  var hit: DeferredSceneHit;
+  hit.valid = 0.0;
+  hit.distance = 60.0;
+  hit.uv = vec2<f32>(-1.0);
+  hit.position = rayOrigin + rayDirection * hit.distance;
+  hit.normal = vec3<f32>(0.0, 1.0, 0.0);
+  hit.albedo = vec3<f32>(0.0);
+  hit.roughness = 1.0;
+  hit.metallic = 0.0;
+  hit.objectId = 0.0;
+  hit.confidence = 0.0;
+  let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
+  let dimsFloat = vec2<f32>(dims);
+  var distance = 0.055;
+  for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
+    let samplePosition = rayOrigin + rayDirection * distance;
+    let projected = projectWorldToDeferred(samplePosition);
+    if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
+      distance = distance + 0.05 + distance * 0.105;
+      continue;
+    }
+    let scenePixel = clamp(vec2<i32>(projected.xy * dimsFloat), vec2<i32>(0), dims - vec2<i32>(1));
+    let depthObject = textureLoad(deferredLinearDepthObject, scenePixel, 0);
+    let sceneDepth = depthObject.x;
+    let objectId = depthObject.y;
+    let depthDelta = projected.z - sceneDepth;
+    let crossingTolerance = 0.028 + distance * 0.012;
+    if (depthObject.w > 0.5 && sceneDepth < 29.5 && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
+      let normalRoughness = textureLoad(deferredWorldNormalRoughness, scenePixel, 0);
+      let albedoMetallic = textureLoad(deferredAlbedoMetallic, scenePixel, 0);
+      hit.valid = 1.0;
+      hit.uv = projected.xy;
+      hit.position = reconstructWorldPosition(scenePixel, sceneDepth);
+      hit.distance = length(hit.position - rayOrigin);
+      hit.normal = normalize(normalRoughness.xyz);
+      hit.albedo = albedoMetallic.rgb;
+      hit.roughness = normalRoughness.w;
+      hit.metallic = albedoMetallic.w;
+      hit.objectId = objectId;
+      hit.confidence = 1.0 - smoothstep(0.0, 0.22, abs(depthDelta));
+      return hit;
+    }
+    distance = distance + 0.05 + distance * 0.105;
+  }
+  return hit;
+}
+
 fn intersectTriangle(
   rayOrigin: vec3<f32>,
   rayDirection: vec3<f32>,
@@ -2273,18 +2390,93 @@ struct ReflectionSample {
   environmentRadiance: vec3<f32>,
 }
 
+struct OpticalQuerySample {
+  radiance: vec3<f32>,
+  environmentRadiance: vec3<f32>,
+  distance: f32,
+  hitKind: u32,
+  providerKind: u32,
+  position: vec3<f32>,
+  normal: vec3<f32>,
+  albedo: vec3<f32>,
+  roughness: f32,
+  metallic: f32,
+  objectId: f32,
+  confidence: f32,
+}
+
+fn makeNoOpticalQuerySample() -> OpticalQuerySample {
+  var sample: OpticalQuerySample;
+  sample.radiance = vec3<f32>(0.0);
+  sample.environmentRadiance = vec3<f32>(0.0);
+  sample.distance = 0.0;
+  sample.hitKind = REFLECTION_HIT_NONE;
+  sample.providerKind = OPTICAL_PROVIDER_NONE;
+  sample.position = vec3<f32>(0.0);
+  sample.normal = vec3<f32>(0.0, 1.0, 0.0);
+  sample.albedo = vec3<f32>(0.0);
+  sample.roughness = 1.0;
+  sample.metallic = 0.0;
+  sample.objectId = 0.0;
+  sample.confidence = 0.0;
+  return sample;
+}
+
 struct ReflectionQuadrature {
   radiance: vec3<f32>,
   environmentRadiance: vec3<f32>,
 }
 
-fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
+fn sampleWorldOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
   let hit = traceClosestSurface(rayOrigin, rayDirection);
   let surfaceRadiance = shadeSurfaceHit(hit, rayDirection);
-  var sample: ReflectionSample;
+  var sample: OpticalQuerySample;
   sample.radiance = surfaceRadiance + integrateParticipatingRadiance(rayOrigin, rayDirection, hit.distance);
   sample.environmentRadiance = select(vec3<f32>(0.0), surfaceRadiance, hit.kind == REFLECTION_HIT_ENVIRONMENT);
+  sample.distance = hit.distance;
+  sample.hitKind = hit.kind;
+  sample.providerKind = select(OPTICAL_PROVIDER_WORLD, OPTICAL_PROVIDER_ENVIRONMENT, hit.kind == REFLECTION_HIT_ENVIRONMENT);
+  sample.position = hit.position;
+  sample.normal = hit.normal;
+  sample.albedo = select(vec3<f32>(0.54, 0.32, 0.08), reflectionScene.albedoRoughness.rgb, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.roughness = select(0.42, reflectionScene.albedoRoughness.w, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.metallic = select(0.0, reflectionScene.identityMetallicPhase.y, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.objectId = select(2.0, reflectionScene.identityMetallicPhase.x, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.confidence = 1.0;
   return sample;
+}
+
+fn sampleHybridOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
+  let deferredHit = traceDeferredScene(rayOrigin, rayDirection);
+  if (deferredHit.valid > 0.5) {
+    var sample: OpticalQuerySample;
+    sample.radiance = textureSampleLevel(refractionSceneColor, refractionSceneSampler, deferredHit.uv, 0.0).rgb
+      + integrateParticipatingRadiance(rayOrigin, rayDirection, deferredHit.distance);
+    sample.environmentRadiance = vec3<f32>(0.0);
+    sample.distance = deferredHit.distance;
+    sample.hitKind = REFLECTION_HIT_DEFERRED_SCENE;
+    sample.providerKind = OPTICAL_PROVIDER_DEFERRED;
+    sample.position = deferredHit.position;
+    sample.normal = deferredHit.normal;
+    sample.albedo = deferredHit.albedo;
+    sample.roughness = deferredHit.roughness;
+    sample.metallic = deferredHit.metallic;
+    sample.objectId = deferredHit.objectId;
+    sample.confidence = deferredHit.confidence;
+    return sample;
+  }
+  return sampleWorldOpticalQuery(rayOrigin, rayDirection);
+}
+
+fn reflectionSampleFromOpticalQuery(query: OpticalQuerySample) -> ReflectionSample {
+  var sample: ReflectionSample;
+  sample.radiance = query.radiance;
+  sample.environmentRadiance = query.environmentRadiance;
+  return sample;
+}
+
+fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
+  return reflectionSampleFromOpticalQuery(sampleWorldOpticalQuery(rayOrigin, rayDirection));
 }
 
 fn integrateWorldReflectionQuadrature(
@@ -2298,7 +2490,7 @@ fn integrateWorldReflectionQuadrature(
   let tangent = normalize(cross(helperAxis, centerDirection));
   let bitangent = normalize(cross(centerDirection, tangent));
   let rayOrigin = worldPosition + worldNormal * 0.026;
-  let center = sampleWorldReflection(rayOrigin, centerDirection);
+  let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
   let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
   let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
   let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
@@ -2539,6 +2731,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitNormal = reconstructExitNormal(exitPixel, sampledExitDepth);
   let outgoingRay = refract(insideRay, -exitNormal, 1.333);
   let outgoingRayValid = length(outgoingRay) > 0.001;
+  let exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
+  let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
   let exitDirectionDelta = outgoingRay.xy / max(abs(outgoingRay.z), 0.25)
     - insideRay.xy / max(abs(insideRay.z), 0.25);
   let exitOffset = exitDirectionDelta * clamp(geometricPathLength * 7.0, 0.0, 12.0);
@@ -2547,10 +2741,11 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitValidity = slab.exitValidity
     * select(0.0, 1.0, exitInFrame)
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
-  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, exitValidity);
+  let queryValidity = select(0.0, 1.0, exitValidity > 0.5);
+  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, queryValidity);
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
-  let absorptionPath = mix(thickness * 0.12, geometricPathLength, exitValidity);
+  let absorptionPath = mix(thickness * 0.12, geometricPathLength, queryValidity);
   let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
   if (opticalDebugMode == 1) {
     let depthView = 1.0 - exp(-supportOrderingDepth * 0.22);
@@ -2589,6 +2784,38 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
   }
 
+  var refractionQuery = makeNoOpticalQuerySample();
+  if (queryValidity > 0.5) {
+    refractionQuery = sampleHybridOpticalQuery(exitWorldPosition + outgoingWorldRay * 0.035, outgoingWorldRay);
+  }
+  if (opticalDebugMode == 19) {
+    if (queryValidity <= 0.5) {
+      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
+    }
+    let hitKindColor = select(
+      select(
+        select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), refractionQuery.hitKind == REFLECTION_HIT_ANALYTIC),
+        vec3<f32>(0.96, 0.12, 0.38),
+        refractionQuery.hitKind == REFLECTION_HIT_INDEXED_MESH,
+      ),
+      vec3<f32>(0.16, 0.92, 0.48),
+      refractionQuery.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
+    );
+    return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 20) {
+    if (queryValidity <= 0.5) {
+      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
+    }
+    let distanceView = 1.0 - exp(-refractionQuery.distance * 0.18);
+    return refractionOutput(vec4<f32>(distanceView, refractionQuery.confidence, 1.0 - distanceView, 1.0), supportOrderingDepth);
+  }
+  let refractedRadiance = mix(refractedScene.rgb, refractionQuery.radiance, queryValidity);
+  if (opticalDebugMode == 21) {
+    let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);
+    return refractionOutput(vec4<f32>(fallbackDelta, 1.0), supportOrderingDepth);
+  }
+
   let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
   let worldPosition = reconstructWorldPosition(pixel, reflectionEntryDepth);
   let worldNormal = reconstructWorldReflectionNormal(pixel);
@@ -2613,12 +2840,16 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(sampleEnvironmentFiltered(reflectionDirection, reflectionRoughness), 1.0), supportOrderingDepth);
   }
   if (opticalDebugMode == 13 || opticalDebugMode == 14) {
-    let reflectionHit = traceClosestSurface(worldPosition + worldNormal * 0.026, reflectionDirection);
+    let reflectionHit = sampleHybridOpticalQuery(worldPosition + worldNormal * 0.026, reflectionDirection);
     if (opticalDebugMode == 13) {
       let hitKindColor = select(
-        select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.kind == REFLECTION_HIT_ANALYTIC),
-        vec3<f32>(0.96, 0.12, 0.38),
-        reflectionHit.kind == REFLECTION_HIT_INDEXED_MESH,
+        select(
+          select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.hitKind == REFLECTION_HIT_ANALYTIC),
+          vec3<f32>(0.96, 0.12, 0.38),
+          reflectionHit.hitKind == REFLECTION_HIT_INDEXED_MESH,
+        ),
+        vec3<f32>(0.16, 0.92, 0.48),
+        reflectionHit.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
       );
       return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
     }
@@ -2641,7 +2872,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
   let broadSpecular = pow(directLight, 38.0) * 0.32;
   let crestSpecular = pow(directLight, 128.0) * 0.46;
-  let reflectedTransport = mix(refractedScene.rgb * absorption, reflectionRadiance, fresnel);
+  let reflectedTransport = mix(refractedRadiance * absorption, reflectionRadiance, fresnel);
   let color = reflectedTransport + waterScatter * (1.0 - fresnel)
     + vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
     + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
@@ -3558,6 +3789,9 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 10, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
       { binding: 11, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 13, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 14, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 15, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     ],
   });
   const dynamicIndexedMeshLayout = device.createBindGroupLayout({
@@ -3838,12 +4072,14 @@ export async function createWebGPUFingerFluidSolver({
   let deferredScenePassCount = 0;
   let dynamicIndexedMeshDrawCount = 0;
   let worldSpaceReflectionCompositePassCount = 0;
+  let hybridOpticalQueryCompositePassCount = 0;
   let hdrWorldBackgroundPassCount = 0;
   let finalPresentationPassCount = 0;
   let lastRenderFrameId = 0;
   let lastDeferredSceneFrameId = 0;
   let lastDynamicIndexedMeshDrawFrameId = 0;
   let lastReflectionProviderFrameId = 0;
+  let lastOpticalQueryFrameId = 0;
   let reflectionMeshPhase = 0.36;
   let reflectionMeshTransformGeneration = 1;
   let lastDeferredMeshTransformGeneration = 0;
@@ -3968,6 +4204,9 @@ export async function createWebGPUFingerFluidSolver({
         { binding: 10, resource: { buffer: dynamicReflectionMeshIndexBuffer } },
         { binding: 11, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
         { binding: 12, resource: hdrEnvironmentTexture.createView() },
+        { binding: 13, resource: deferredLinearDepthObjectTexture.createView() },
+        { binding: 14, resource: deferredWorldNormalRoughnessTexture.createView() },
+        { binding: 15, resource: deferredAlbedoMetallicTexture.createView() },
       ],
     });
     finalPresentationBindGroup = device.createBindGroup({
@@ -4353,6 +4592,8 @@ export async function createWebGPUFingerFluidSolver({
         screenSpaceRefractionCompositePassCount += 1;
         screenSpaceRefractionRenderFrameCount += 1;
         worldSpaceReflectionCompositePassCount += 1;
+        hybridOpticalQueryCompositePassCount += 1;
+        lastOpticalQueryFrameId = renderFrameId;
         lastReflectionProviderFrameId = renderFrameId;
         lastReflectionProviderTransformGeneration = reflectionMeshTransformGeneration;
         lastReflectionProviderPhase = reflectionMeshPhase;
@@ -4810,6 +5051,7 @@ export async function createWebGPUFingerFluidSolver({
       deferredScenePassCount,
       dynamicIndexedMeshDrawCount,
       worldSpaceReflectionCompositePassCount,
+      hybridOpticalQueryCompositePassCount,
       hdrWorldBackgroundPassCount,
       finalPresentationPassCount,
       linearHdrSceneEvidence: {
@@ -4863,6 +5105,30 @@ export async function createWebGPUFingerFluidSolver({
         } : null,
       },
       ...(lastEffectiveRendererMode === 'screen_space_refraction' ? {
+        opticalQueryEvidence: {
+          schema: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA,
+          requestedRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          effectiveRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          route: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
+          worldProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          environmentRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
+          resolverOrder: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER,
+          fallbackReason: null,
+          queryFrameId: lastOpticalQueryFrameId,
+          compositePassCount: hybridOpticalQueryCompositePassCount,
+          maximumDeferredMarchSteps: 24,
+          deferredInputs: configuredExtent ? {
+            linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
+            worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
+            albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
+          } : null,
+          consumers: ['reflection_center_ray', 'two_interface_refraction_exit_ray'],
+          resultFields: ['origin', 'direction', 'cone', 'interval', 'hit_kind', 'object_id', 'distance', 'normal', 'material', 'radiance', 'transmittance', 'confidence', 'provider', 'fallback'],
+          deferredMissDisposition: 'uncapped_world_mesh_then_hdr_environment_v0',
+          invalidSlabDisposition: 'legacy_entry_interface_uv_only_no_exit_query_claim_v0',
+          participatingRadianceBoundary: 'reserved_zero_until_flame_contract_v0',
+        },
         worldSpaceReflectionEvidence: {
           schema: KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA,
           requestedProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
@@ -4936,6 +5202,8 @@ export async function createWebGPUFingerFluidSolver({
         route: KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
         opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
+        opticalQueryRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+        deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
         slabRoute: KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
         slabGeometryPassCount: screenSpaceOpticalSlabGeometryPassCount,
         frontDepthTexture: configuredExtent ? {
@@ -4970,7 +5238,7 @@ export async function createWebGPUFingerFluidSolver({
         scenePassCount: screenSpaceRefractionScenePassCount,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceRefractionCompositePassCount,
-        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_v0',
+        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_then_hybrid_exit_ray_query_v0',
         fresnel: 'schlick_f0_0.02037_v0',
         absorption: 'beer_lambert_from_particle_optical_thickness_v0',
         coverage: 'geometric_accumulation_support_alpha_independent_of_fresnel_v0',
