@@ -16,6 +16,7 @@ const source = readFileSync(modulePath, 'utf8');
 const {
   ARM_IDS,
   EXPECTED_COHORT_MANIFEST_SHA256,
+  auditFullCandidateCountContract,
   buildCoefficientLedger,
   buildExpectedLedgerContract,
   buildFailedLedgerReport,
@@ -56,6 +57,19 @@ test('ledger identity is pinned to the immutable producer artifact', () => {
   assert.equal(expected.residualRaySteps, 64);
   assert.equal(expected.width, 900);
   assert.equal(expected.height, 960);
+});
+
+test('one scalar full count cannot impersonate state-varying authenticated populations', () => {
+  const states = [
+    ['coefficient-state-114', 1924725],
+    ['coefficient-state-116', 1926470],
+    ['coefficient-state-118', 1927051],
+    ['coefficient-state-120', 1925788],
+  ].map(([stateId, count]) => ({ stateId, sourceRows: { count } }));
+  assert.throws(
+    () => auditFullCandidateCountContract({ states }, 1925788),
+    /state-varying authenticated full populations.*114=1924725.*116=1926470.*118=1927051.*120=1925788/,
+  );
 });
 
 test('coefficient ownership stays nonnegative and exact in every arm', () => {

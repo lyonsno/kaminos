@@ -77,8 +77,22 @@ function requireManifestIdentity(manifest) {
   assert.equal(manifest?.source?.implementationBundle?.sha256, IMPLEMENTATION_BUNDLE_SHA256, 'producer implementation bundle drifted');
   assert.deepEqual(manifest?.states?.map(state => state.stateId), STATE_IDS, 'held state sequence drifted');
   assert.ok(manifest.states.every(state => state.rowCount === SPARSE_CANDIDATE_COUNT), 'sparse cohort row count drifted');
-  assert.ok(manifest.states.every(state => state.sourceRows?.count === FULL_CANDIDATE_COUNT), 'full source row count drifted');
+  assert.ok(manifest.states.every(state => Number.isInteger(state.sourceRows?.count) && state.sourceRows.count > 0), 'full source row count is invalid');
   assert.ok(manifest.states.every(state => state.camera?.width === WIDTH && state.camera?.height === HEIGHT), 'camera resolution drifted');
+}
+
+export function auditFullCandidateCountContract(manifest, expectedFullCandidateCount = FULL_CANDIDATE_COUNT) {
+  const counts = Object.fromEntries((manifest?.states || []).map(state => [state.stateId, state.sourceRows?.count]));
+  const entries = Object.entries(counts);
+  assert.deepEqual(entries.map(([stateId]) => stateId), STATE_IDS, 'full-population state sequence drifted');
+  assert.ok(entries.every(([, count]) => Number.isInteger(count) && count > 0), 'full-population count is invalid');
+  const mismatches = entries.filter(([, count]) => count !== expectedFullCandidateCount);
+  assert.equal(
+    mismatches.length,
+    0,
+    `Census scalar fullCandidateCount=${expectedFullCandidateCount} cannot represent state-varying authenticated full populations: ${entries.map(([stateId, count]) => `${stateId.replace('coefficient-state-', '')}=${count}`).join(', ')}`,
+  );
+  return counts;
 }
 
 export function buildExpectedLedgerContract(manifest) {
@@ -302,6 +316,7 @@ async function main() {
   const reportPath = resolve(options.report);
   mkdirSync(dirname(reportPath), { recursive: true });
   let expected;
+  let manifest;
   try {
     await authenticatePersistentSparseCohort({
       manifestPath,
@@ -309,7 +324,9 @@ async function main() {
     });
     const manifestBytes = readFileSync(manifestPath);
     assert.equal(createHash('sha256').update(manifestBytes).digest('hex'), EXPECTED_COHORT_MANIFEST_SHA256);
-    expected = buildExpectedLedgerContract(JSON.parse(manifestBytes));
+    manifest = JSON.parse(manifestBytes);
+    expected = buildExpectedLedgerContract(manifest);
+    auditFullCandidateCountContract(manifest, expected.fullCandidateCount);
     const failure = buildFailedLedgerReport({
       expected,
       durableReportPath: reportPath,
@@ -326,7 +343,25 @@ async function main() {
     process.stdout.write(`${JSON.stringify({ reportPath, expected, validation }, null, 2)}\n`);
   } catch (error) {
     if (!expected) throw error;
-    throw error;
+    const sourcePopulationCountsByState = Object.fromEntries(
+      (manifest?.states || []).map(state => [state.stateId, state.sourceRows?.count]),
+    );
+    const failure = buildFailedLedgerReport({
+      expected,
+      durableReportPath: reportPath,
+      failurePhase: 'common-ledger-source-binding',
+      reason: error?.message || String(error),
+      lastTrustworthyEvidence: `immutable cohort and all arrays authenticated; source full-population counts ${JSON.stringify(sourcePopulationCountsByState)}`,
+      effectiveRouteStatus: 'unresolved-before-effective-route',
+      sourceBindingStatus: 'authenticated',
+      effectiveConfigStatus: 'verified',
+    });
+    failure.sourcePopulationCountsByState = sourcePopulationCountsByState;
+    const validation = validateExtinctionCommonLedgerReport(failure, expected);
+    assert.equal(validation.ok, true, validation.errors.join(', '));
+    writeFileSync(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    process.stderr.write(`${JSON.stringify({ reportPath, failure, validation }, null, 2)}\n`);
+    process.exitCode = 1;
   }
 }
 
