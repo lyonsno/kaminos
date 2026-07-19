@@ -1,0 +1,1324 @@
+{
+  "schema": "kaminos.lirm-reference-fitted-armature-assay.v0",
+  "status": "assay-passed-uninspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "effectiveRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "requestedArmatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+  "effectiveArmatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+    "parameterSpecs": [
+      {
+        "id": "trunkHeight",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.78,
+        "min": 0.42,
+        "max": 1.24,
+        "step": 0.14
+      },
+      {
+        "id": "trunkWidth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.38,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.09
+      },
+      {
+        "id": "trunkDepth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "crownWidth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.74,
+        "min": 0.38,
+        "max": 1.18,
+        "step": 0.14
+      },
+      {
+        "id": "crownHeight",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "crownDepth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.58,
+        "min": 0.3,
+        "max": 0.98,
+        "step": 0.12
+      },
+      {
+        "id": "crownLift",
+        "semanticRole": "crownElevation",
+        "initial": 0.16,
+        "min": -0.04,
+        "max": 0.42,
+        "step": 0.07
+      },
+      {
+        "id": "waistScale",
+        "semanticRole": "waistCompression",
+        "initial": 0.56,
+        "min": 0.3,
+        "max": 0.9,
+        "step": 0.09
+      },
+      {
+        "id": "crownForward",
+        "semanticRole": "anteriorProjection",
+        "initial": 0.08,
+        "min": -0.24,
+        "max": 0.38,
+        "step": 0.08
+      },
+      {
+        "id": "posteriorBulb",
+        "semanticRole": "posteriorCountermass",
+        "initial": 0.42,
+        "min": 0.16,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "radialContactField",
+        "initial": 0.62,
+        "min": 0.36,
+        "max": 1.02,
+        "step": 0.11
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.32,
+        "min": 0.16,
+        "max": 0.62,
+        "step": 0.08
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.085,
+        "min": 0.045,
+        "max": 0.18,
+        "step": 0.025
+      },
+      {
+        "id": "radialTwist",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.08,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ]
+  },
+  "requestedCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "effectiveCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "requestedFitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "requestedHeldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "fitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "heldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "timing": {
+    "startedAt": "2026-07-19T03:49:32.223Z",
+    "finishedAt": "2026-07-19T03:49:40.955Z",
+    "durationSeconds": 8.732
+  },
+  "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
+  "outputInventory": {
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/donors/basin-10-metabolizer-upright/silhouette-residual-witness.png",
+      "bytes": 15391,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-overlay",
+        "initial-overlay"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/donors/basin-10-metabolizer-upright/depth-residual-witness.png",
+      "bytes": 24434,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-depth-error",
+        "initial-depth-error"
+      ]
+    },
+    "donorEvidence": [
+      {
+        "cameraId": "az000",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az045",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az090",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az135",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az180",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az225",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az270",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az315",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      }
+    ]
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.glb",
+    "bytes": 9268008,
+    "sha256": "sha256:72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+    "triangleCount": 167136,
+    "sourceBounds": {
+      "min": {
+        "x": -0.34533676505088806,
+        "y": -0.2776733338832855,
+        "z": -0.49977433681488037
+      },
+      "max": {
+        "x": 0.3328548073768616,
+        "y": 0.26989665627479553,
+        "z": 0.49970707297325134
+      },
+      "center": {
+        "x": -0.006240978837013245,
+        "y": -0.003888338804244995,
+        "z": -0.00003363192081451416
+      },
+      "diagonal": 1.3261748721589532
+    },
+    "normalization": {
+      "kind": "bbox-center-diagonal-scale",
+      "targetDiagonal": 2.15,
+      "scale": 1.6212039943871779
+    }
+  },
+  "plan": {
+    "schema": "kaminos.lirm-reference-fitted-armature-plan.v0",
+    "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+    "donor": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.glb",
+      "sha256": "sha256:72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e"
+    },
+    "requestedCameraIds": [
+      "az000",
+      "az045",
+      "az090",
+      "az135",
+      "az180",
+      "az225",
+      "az270",
+      "az315"
+    ],
+    "fitViewIds": [
+      "az000",
+      "az090",
+      "az180",
+      "az270"
+    ],
+    "heldOutViewIds": [
+      "az045",
+      "az135",
+      "az225",
+      "az315"
+    ],
+    "requestedArmatureProgramId": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+    "armatureProgram": {
+      "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+      "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+      "parameterSpecs": [
+        {
+          "id": "trunkHeight",
+          "semanticRole": "uprightTrunk",
+          "initial": 0.78,
+          "min": 0.42,
+          "max": 1.24,
+          "step": 0.14
+        },
+        {
+          "id": "trunkWidth",
+          "semanticRole": "uprightTrunk",
+          "initial": 0.38,
+          "min": 0.22,
+          "max": 0.72,
+          "step": 0.09
+        },
+        {
+          "id": "trunkDepth",
+          "semanticRole": "uprightTrunk",
+          "initial": 0.42,
+          "min": 0.22,
+          "max": 0.78,
+          "step": 0.1
+        },
+        {
+          "id": "crownWidth",
+          "semanticRole": "macrocephalicCrown",
+          "initial": 0.74,
+          "min": 0.38,
+          "max": 1.18,
+          "step": 0.14
+        },
+        {
+          "id": "crownHeight",
+          "semanticRole": "macrocephalicCrown",
+          "initial": 0.48,
+          "min": 0.26,
+          "max": 0.82,
+          "step": 0.1
+        },
+        {
+          "id": "crownDepth",
+          "semanticRole": "macrocephalicCrown",
+          "initial": 0.58,
+          "min": 0.3,
+          "max": 0.98,
+          "step": 0.12
+        },
+        {
+          "id": "crownLift",
+          "semanticRole": "crownElevation",
+          "initial": 0.16,
+          "min": -0.04,
+          "max": 0.42,
+          "step": 0.07
+        },
+        {
+          "id": "waistScale",
+          "semanticRole": "waistCompression",
+          "initial": 0.56,
+          "min": 0.3,
+          "max": 0.9,
+          "step": 0.09
+        },
+        {
+          "id": "crownForward",
+          "semanticRole": "anteriorProjection",
+          "initial": 0.08,
+          "min": -0.24,
+          "max": 0.38,
+          "step": 0.08
+        },
+        {
+          "id": "posteriorBulb",
+          "semanticRole": "posteriorCountermass",
+          "initial": 0.42,
+          "min": 0.16,
+          "max": 0.82,
+          "step": 0.1
+        },
+        {
+          "id": "contactSpread",
+          "semanticRole": "radialContactField",
+          "initial": 0.62,
+          "min": 0.36,
+          "max": 1.02,
+          "step": 0.11
+        },
+        {
+          "id": "contactLength",
+          "semanticRole": "radialContactLimb",
+          "initial": 0.32,
+          "min": 0.16,
+          "max": 0.62,
+          "step": 0.08
+        },
+        {
+          "id": "contactThickness",
+          "semanticRole": "radialContactLimb",
+          "initial": 0.085,
+          "min": 0.045,
+          "max": 0.18,
+          "step": 0.025
+        },
+        {
+          "id": "radialTwist",
+          "semanticRole": "controlledAsymmetry",
+          "initial": 0.08,
+          "min": -0.34,
+          "max": 0.34,
+          "step": 0.07
+        }
+      ]
+    },
+    "parameterSpecs": [
+      {
+        "id": "trunkHeight",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.78,
+        "min": 0.42,
+        "max": 1.24,
+        "step": 0.14
+      },
+      {
+        "id": "trunkWidth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.38,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.09
+      },
+      {
+        "id": "trunkDepth",
+        "semanticRole": "uprightTrunk",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "crownWidth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.74,
+        "min": 0.38,
+        "max": 1.18,
+        "step": 0.14
+      },
+      {
+        "id": "crownHeight",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "crownDepth",
+        "semanticRole": "macrocephalicCrown",
+        "initial": 0.58,
+        "min": 0.3,
+        "max": 0.98,
+        "step": 0.12
+      },
+      {
+        "id": "crownLift",
+        "semanticRole": "crownElevation",
+        "initial": 0.16,
+        "min": -0.04,
+        "max": 0.42,
+        "step": 0.07
+      },
+      {
+        "id": "waistScale",
+        "semanticRole": "waistCompression",
+        "initial": 0.56,
+        "min": 0.3,
+        "max": 0.9,
+        "step": 0.09
+      },
+      {
+        "id": "crownForward",
+        "semanticRole": "anteriorProjection",
+        "initial": 0.08,
+        "min": -0.24,
+        "max": 0.38,
+        "step": 0.08
+      },
+      {
+        "id": "posteriorBulb",
+        "semanticRole": "posteriorCountermass",
+        "initial": 0.42,
+        "min": 0.16,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "radialContactField",
+        "initial": 0.62,
+        "min": 0.36,
+        "max": 1.02,
+        "step": 0.11
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.32,
+        "min": 0.16,
+        "max": 0.62,
+        "step": 0.08
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.085,
+        "min": 0.045,
+        "max": 0.18,
+        "step": 0.025
+      },
+      {
+        "id": "radialTwist",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.08,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ],
+    "evidencePredicate": {
+      "allowCameraFallback": false,
+      "allowMissingOrPartialDonorEvidence": false,
+      "heldOutViewsMayInfluenceOptimization": false,
+      "requireHeldOutSilhouetteImprovementCount": 3,
+      "requireHeldOutMeanDepthImprovement": true
+    },
+    "falseClosureGuards": {
+      "productionCreatureClaim": "forbidden",
+      "meshCopyClaim": "forbidden",
+      "learnedPriorClaim": "not_trained",
+      "topologySelectionClaim": "not_assayed"
+    }
+  },
+  "initialParameters": {
+    "trunkHeight": 0.78,
+    "trunkWidth": 0.38,
+    "trunkDepth": 0.42,
+    "crownWidth": 0.74,
+    "crownHeight": 0.48,
+    "crownDepth": 0.58,
+    "crownLift": 0.16,
+    "waistScale": 0.56,
+    "crownForward": 0.08,
+    "posteriorBulb": 0.42,
+    "contactSpread": 0.62,
+    "contactLength": 0.32,
+    "contactThickness": 0.085,
+    "radialTwist": 0.08
+  },
+  "fittedParameters": {
+    "trunkHeight": 0.5861156799999999,
+    "trunkWidth": 0.43220000000000003,
+    "trunkDepth": 0.6311512,
+    "crownWidth": 0.4443883199999999,
+    "crownHeight": 0.2688488,
+    "crownDepth": 0.5003679999999999,
+    "crownLift": 0.012194159999999994,
+    "waistScale": 0.5121639200000001,
+    "crownForward": 0.24892096,
+    "posteriorBulb": 0.5638712,
+    "contactSpread": 0.48853768000000003,
+    "contactLength": 0.25560896,
+    "contactThickness": 0.060000000000000005,
+    "radialTwist": 0.009999999999999995
+  },
+  "parameterSpecs": [
+    {
+      "id": "trunkHeight",
+      "semanticRole": "uprightTrunk",
+      "initial": 0.78,
+      "min": 0.42,
+      "max": 1.24,
+      "step": 0.14
+    },
+    {
+      "id": "trunkWidth",
+      "semanticRole": "uprightTrunk",
+      "initial": 0.38,
+      "min": 0.22,
+      "max": 0.72,
+      "step": 0.09
+    },
+    {
+      "id": "trunkDepth",
+      "semanticRole": "uprightTrunk",
+      "initial": 0.42,
+      "min": 0.22,
+      "max": 0.78,
+      "step": 0.1
+    },
+    {
+      "id": "crownWidth",
+      "semanticRole": "macrocephalicCrown",
+      "initial": 0.74,
+      "min": 0.38,
+      "max": 1.18,
+      "step": 0.14
+    },
+    {
+      "id": "crownHeight",
+      "semanticRole": "macrocephalicCrown",
+      "initial": 0.48,
+      "min": 0.26,
+      "max": 0.82,
+      "step": 0.1
+    },
+    {
+      "id": "crownDepth",
+      "semanticRole": "macrocephalicCrown",
+      "initial": 0.58,
+      "min": 0.3,
+      "max": 0.98,
+      "step": 0.12
+    },
+    {
+      "id": "crownLift",
+      "semanticRole": "crownElevation",
+      "initial": 0.16,
+      "min": -0.04,
+      "max": 0.42,
+      "step": 0.07
+    },
+    {
+      "id": "waistScale",
+      "semanticRole": "waistCompression",
+      "initial": 0.56,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.09
+    },
+    {
+      "id": "crownForward",
+      "semanticRole": "anteriorProjection",
+      "initial": 0.08,
+      "min": -0.24,
+      "max": 0.38,
+      "step": 0.08
+    },
+    {
+      "id": "posteriorBulb",
+      "semanticRole": "posteriorCountermass",
+      "initial": 0.42,
+      "min": 0.16,
+      "max": 0.82,
+      "step": 0.1
+    },
+    {
+      "id": "contactSpread",
+      "semanticRole": "radialContactField",
+      "initial": 0.62,
+      "min": 0.36,
+      "max": 1.02,
+      "step": 0.11
+    },
+    {
+      "id": "contactLength",
+      "semanticRole": "radialContactLimb",
+      "initial": 0.32,
+      "min": 0.16,
+      "max": 0.62,
+      "step": 0.08
+    },
+    {
+      "id": "contactThickness",
+      "semanticRole": "radialContactLimb",
+      "initial": 0.085,
+      "min": 0.045,
+      "max": 0.18,
+      "step": 0.025
+    },
+    {
+      "id": "radialTwist",
+      "semanticRole": "controlledAsymmetry",
+      "initial": 0.08,
+      "min": -0.34,
+      "max": 0.34,
+      "step": 0.07
+    }
+  ],
+  "optimization": {
+    "kind": "deterministic-bounded-coordinate-search",
+    "passes": 4,
+    "objective": 0.5629946230615158,
+    "trace": [
+      {
+        "pass": -1,
+        "parameterId": null,
+        "direction": 0,
+        "score": 0.8063793360995722,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "trunkHeight",
+        "direction": -1,
+        "value": 0.64,
+        "score": 0.7827334725573691,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "trunkWidth",
+        "direction": 0,
+        "value": 0.38,
+        "score": 0.7827334725573691,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "trunkDepth",
+        "direction": 1,
+        "value": 0.52,
+        "score": 0.760294319569331,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "crownWidth",
+        "direction": -1,
+        "value": 0.6,
+        "score": 0.7362666130846195,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "crownHeight",
+        "direction": -1,
+        "value": 0.38,
+        "score": 0.7251369111434781,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "crownDepth",
+        "direction": -1,
+        "value": 0.45999999999999996,
+        "score": 0.7177269775672749,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "crownLift",
+        "direction": -1,
+        "value": 0.09,
+        "score": 0.6964393548698805,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "waistScale",
+        "direction": 0,
+        "value": 0.56,
+        "score": 0.6964393548698805,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "crownForward",
+        "direction": 1,
+        "value": 0.16,
+        "score": 0.6940704574604222,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorBulb",
+        "direction": 1,
+        "value": 0.52,
+        "score": 0.6924804278060752,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactSpread",
+        "direction": -1,
+        "value": 0.51,
+        "score": 0.690394361194073,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactLength",
+        "direction": -1,
+        "value": 0.24,
+        "score": 0.6878899908343145,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactThickness",
+        "direction": -1,
+        "value": 0.060000000000000005,
+        "score": 0.6865573473314112,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "radialTwist",
+        "direction": -1,
+        "value": 0.009999999999999995,
+        "score": 0.6854423477795337,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "trunkHeight",
+        "direction": -1,
+        "value": 0.5588,
+        "score": 0.6756195792417443,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "trunkWidth",
+        "direction": 1,
+        "value": 0.43220000000000003,
+        "score": 0.6625321360950042,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "trunkDepth",
+        "direction": 1,
+        "value": 0.5780000000000001,
+        "score": 0.6345302402111846,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "crownWidth",
+        "direction": -1,
+        "value": 0.5187999999999999,
+        "score": 0.62770670058026,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "crownHeight",
+        "direction": -1,
+        "value": 0.322,
+        "score": 0.6234354146991514,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "crownDepth",
+        "direction": 0,
+        "value": 0.45999999999999996,
+        "score": 0.6234354146991514,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "crownLift",
+        "direction": -1,
+        "value": 0.04939999999999999,
+        "score": 0.6088705450942916,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "waistScale",
+        "direction": 0,
+        "value": 0.56,
+        "score": 0.6088705450942916,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "crownForward",
+        "direction": 1,
+        "value": 0.2064,
+        "score": 0.60597829563682,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorBulb",
+        "direction": 1,
+        "value": 0.5780000000000001,
+        "score": 0.6049639571970746,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactSpread",
+        "direction": 0,
+        "value": 0.51,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactLength",
+        "direction": 0,
+        "value": 0.24,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactThickness",
+        "direction": 0,
+        "value": 0.060000000000000005,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "radialTwist",
+        "direction": 0,
+        "value": 0.009999999999999995,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "trunkHeight",
+        "direction": 0,
+        "value": 0.5588,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "trunkWidth",
+        "direction": 0,
+        "value": 0.43220000000000003,
+        "score": 0.6049639571970746,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "trunkDepth",
+        "direction": 1,
+        "value": 0.6116400000000001,
+        "score": 0.5994680889714102,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "crownWidth",
+        "direction": -1,
+        "value": 0.4717039999999999,
+        "score": 0.5931695624595639,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "crownHeight",
+        "direction": -1,
+        "value": 0.28836,
+        "score": 0.5859191051386298,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "crownDepth",
+        "direction": 1,
+        "value": 0.5003679999999999,
+        "score": 0.5817198336973406,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "crownLift",
+        "direction": -1,
+        "value": 0.025851999999999993,
+        "score": 0.5789962299683565,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "waistScale",
+        "direction": -1,
+        "value": 0.5297240000000001,
+        "score": 0.5789454307583866,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "crownForward",
+        "direction": 1,
+        "value": 0.233312,
+        "score": 0.5759067667017161,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorBulb",
+        "direction": -1,
+        "value": 0.5443600000000001,
+        "score": 0.575903312157273,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactSpread",
+        "direction": 0,
+        "value": 0.51,
+        "score": 0.575903312157273,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactLength",
+        "direction": 0,
+        "value": 0.24,
+        "score": 0.575903312157273,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactThickness",
+        "direction": 0,
+        "value": 0.060000000000000005,
+        "score": 0.575903312157273,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "radialTwist",
+        "direction": 0,
+        "value": 0.009999999999999995,
+        "score": 0.575903312157273,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "trunkHeight",
+        "direction": 1,
+        "value": 0.5861156799999999,
+        "score": 0.5746655976421596,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "trunkWidth",
+        "direction": 0,
+        "value": 0.43220000000000003,
+        "score": 0.5746655976421596,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "trunkDepth",
+        "direction": 1,
+        "value": 0.6311512,
+        "score": 0.5733294716719494,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "crownWidth",
+        "direction": -1,
+        "value": 0.4443883199999999,
+        "score": 0.5699115981431694,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "crownHeight",
+        "direction": -1,
+        "value": 0.2688488,
+        "score": 0.5692508631785221,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "crownDepth",
+        "direction": 0,
+        "value": 0.5003679999999999,
+        "score": 0.5692508631785221,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "crownLift",
+        "direction": -1,
+        "value": 0.012194159999999994,
+        "score": 0.568581188532442,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "waistScale",
+        "direction": -1,
+        "value": 0.5121639200000001,
+        "score": 0.5685214635699127,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "crownForward",
+        "direction": 1,
+        "value": 0.24892096,
+        "score": 0.568442925200434,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorBulb",
+        "direction": 1,
+        "value": 0.5638712,
+        "score": 0.5660586533725066,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactSpread",
+        "direction": -1,
+        "value": 0.48853768000000003,
+        "score": 0.5630238390745215,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactLength",
+        "direction": 1,
+        "value": 0.25560896,
+        "score": 0.5629946230615158,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactThickness",
+        "direction": 0,
+        "value": 0.060000000000000005,
+        "score": 0.5629946230615158,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "radialTwist",
+        "direction": 0,
+        "value": 0.009999999999999995,
+        "score": 0.5629946230615158,
+        "accepted": false
+      }
+    ]
+  },
+  "metrics": {
+    "initial": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.3347457627118644,
+            "depthMae": 0.11250581428350784,
+            "occupancyError": 1.088235294117647,
+            "donorPixels": 102,
+            "armaturePixels": 213
+          },
+          "az090": {
+            "iou": 0.2540192926045016,
+            "depthMae": 0.05221579523388373,
+            "occupancyError": 0.11956521739130435,
+            "donorPixels": 184,
+            "armaturePixels": 206
+          },
+          "az180": {
+            "iou": 0.3442622950819672,
+            "depthMae": 0.08663890835763574,
+            "occupancyError": 1.1844660194174756,
+            "donorPixels": 103,
+            "armaturePixels": 225
+          },
+          "az270": {
+            "iou": 0.26366559485530544,
+            "depthMae": 0.038139288896358425,
+            "occupancyError": 0.11290322580645161,
+            "donorPixels": 186,
+            "armaturePixels": 207
+          }
+        },
+        "meanIou": 0.2991732363134097,
+        "meanDepthMae": 0.07237495169284644,
+        "meanOccupancyError": 0.6262924391832196
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.2655172413793103,
+            "depthMae": 0.0649708455649179,
+            "occupancyError": 0.44666666666666666,
+            "donorPixels": 150,
+            "armaturePixels": 217
+          },
+          "az135": {
+            "iou": 0.2876712328767123,
+            "depthMae": 0.06429860145018781,
+            "occupancyError": 0.36477987421383645,
+            "donorPixels": 159,
+            "armaturePixels": 217
+          },
+          "az225": {
+            "iou": 0.2808219178082192,
+            "depthMae": 0.06441952101800681,
+            "occupancyError": 0.3821656050955414,
+            "donorPixels": 157,
+            "armaturePixels": 217
+          },
+          "az315": {
+            "iou": 0.25170068027210885,
+            "depthMae": 0.054742339679182676,
+            "occupancyError": 0.4697986577181208,
+            "donorPixels": 149,
+            "armaturePixels": 219
+          }
+        },
+        "meanIou": 0.2714277680840877,
+        "meanDepthMae": 0.0621078269280738,
+        "meanOccupancyError": 0.4158527009235413
+      }
+    },
+    "fitted": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.5096774193548387,
+            "depthMae": 0.09627795417466703,
+            "occupancyError": 0.29411764705882354,
+            "donorPixels": 102,
+            "armaturePixels": 132
+          },
+          "az090": {
+            "iou": 0.4489795918367347,
+            "depthMae": 0.04935038506601113,
+            "occupancyError": 0.07065217391304347,
+            "donorPixels": 184,
+            "armaturePixels": 171
+          },
+          "az180": {
+            "iou": 0.50625,
+            "depthMae": 0.05791450568378423,
+            "occupancyError": 0.33980582524271846,
+            "donorPixels": 103,
+            "armaturePixels": 138
+          },
+          "az270": {
+            "iou": 0.47520661157024796,
+            "depthMae": 0.029470531521478643,
+            "occupancyError": 0.08064516129032258,
+            "donorPixels": 186,
+            "armaturePixels": 171
+          }
+        },
+        "meanIou": 0.4850284056904553,
+        "meanDepthMae": 0.05825334411148526,
+        "meanOccupancyError": 0.19630520187622702
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.46445497630331756,
+            "depthMae": 0.06263250416458735,
+            "occupancyError": 0.06,
+            "donorPixels": 150,
+            "armaturePixels": 159
+          },
+          "az135": {
+            "iou": 0.45701357466063347,
+            "depthMae": 0.05139218565301034,
+            "occupancyError": 0.025157232704402517,
+            "donorPixels": 159,
+            "armaturePixels": 163
+          },
+          "az225": {
+            "iou": 0.4611872146118721,
+            "depthMae": 0.03325980927089298,
+            "occupancyError": 0.03821656050955414,
+            "donorPixels": 157,
+            "armaturePixels": 163
+          },
+          "az315": {
+            "iou": 0.4528301886792453,
+            "depthMae": 0.04395077895510379,
+            "occupancyError": 0.06711409395973154,
+            "donorPixels": 149,
+            "armaturePixels": 159
+          }
+        },
+        "meanIou": 0.45887148856376714,
+        "meanDepthMae": 0.04780881951089862,
+        "meanOccupancyError": 0.04762197179342205
+      }
+    }
+  },
+  "acceptance": {
+    "heldOutSilhouetteImprovementCount": 4,
+    "requiredHeldOutSilhouetteImprovementCount": 3,
+    "heldOutDepthImproved": true,
+    "boundPinnedParameters": [],
+    "semanticParameterIdsStable": true,
+    "visualInspection": "pending"
+  },
+  "falseClosureGuards": {
+    "productionCreatureClaim": "forbidden",
+    "meshCopyClaim": "forbidden",
+    "learnedPriorClaim": "not_trained",
+    "topologySelectionClaim": "not_assayed"
+  }
+}

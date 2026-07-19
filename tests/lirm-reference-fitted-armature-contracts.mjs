@@ -27,6 +27,23 @@ assert.ok(REFERENCE_FIT_CAMERAS.every(camera => Number.isFinite(camera.yaw) && N
 
 const fitViewIds = ['az000', 'az090', 'az180', 'az270'];
 const heldOutViewIds = ['az045', 'az135', 'az225', 'az315'];
+const SENTINEL_PARAMETER_SPECS = Object.freeze([
+  Object.freeze({ id: 'sentinelWidth', semanticRole: 'sentinelMass', initial: 0.42, min: 0.2, max: 0.8, step: 0.1 }),
+  Object.freeze({ id: 'sentinelHeight', semanticRole: 'sentinelCrown', initial: 0.58, min: 0.25, max: 1.0, step: 0.12 }),
+]);
+const SENTINEL_ARMATURE_PROGRAM = Object.freeze({
+  id: 'kaminos.lirm-armature-program.sentinel.v0',
+  parameterVocabulary: 'kaminos.reference-fitted-armature.sentinel-2.v0',
+  parameterSpecs: SENTINEL_PARAMETER_SPECS,
+  createPrimitives(parameters) {
+    return [{
+      kind: 'ellipsoid',
+      role: 'sentinelCrown',
+      center: { x: 0, y: 0.18, z: 0 },
+      radius: { x: parameters.sentinelWidth, y: parameters.sentinelHeight, z: parameters.sentinelWidth },
+    }];
+  },
+});
 assert.doesNotThrow(() => assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds }));
 assert.throws(
   () => assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds: ['az000', 'az135', 'az225', 'az315'] }),
@@ -70,6 +87,20 @@ assert.equal(plan.evidencePredicate.allowMissingOrPartialDonorEvidence, false);
 assert.equal(plan.falseClosureGuards.productionCreatureClaim, 'forbidden');
 assert.equal(plan.falseClosureGuards.meshCopyClaim, 'forbidden');
 
+const sentinelPlan = createReferenceFitAssayPlan({
+  donorPath: '/durable/sentinel.glb',
+  donorSha256: 'sha256:sentinel',
+  fitViewIds,
+  heldOutViewIds,
+  armatureProgram: SENTINEL_ARMATURE_PROGRAM,
+});
+assert.equal(sentinelPlan.requestedArmatureProgramId, SENTINEL_ARMATURE_PROGRAM.id);
+assert.deepEqual(sentinelPlan.armatureProgram, {
+  id: SENTINEL_ARMATURE_PROGRAM.id,
+  parameterVocabulary: SENTINEL_ARMATURE_PROGRAM.parameterVocabulary,
+  parameterSpecs: SENTINEL_PARAMETER_SPECS,
+});
+
 const initialParameters = Object.fromEntries(REFERENCE_FIT_PARAMETER_SPECS.map(spec => [spec.id, spec.initial]));
 const render = renderReferenceArmature({
   parameters: initialParameters,
@@ -86,6 +117,16 @@ assert.ok(render.mask.some(Boolean), 'semantic SDF armature must produce foregro
 assert.ok(render.semanticRoles.includes('bodyMass'));
 assert.ok(render.semanticRoles.includes('headOrientation'));
 assert.ok(render.semanticRoles.includes('contactLimb'));
+
+const sentinelRender = renderReferenceArmature({
+  parameters: { sentinelWidth: 0.42, sentinelHeight: 0.58 },
+  armatureProgram: SENTINEL_ARMATURE_PROGRAM,
+  camera: REFERENCE_FIT_CAMERAS[0],
+  width: 24,
+  height: 24,
+});
+assert.ok(sentinelRender.mask.some(Boolean), 'selected armature program must produce foreground');
+assert.deepEqual(sentinelRender.semanticRoles, ['sentinelCrown']);
 
 const longerLimbParameters = { ...initialParameters, limbLength: initialParameters.limbLength + 0.2 };
 const initialPrimitives = createReferenceArmaturePrimitives(initialParameters);
@@ -139,7 +180,9 @@ await assert.rejects(
 const splitFailure = JSON.parse(readFileSync(join(splitFailureDir, 'report.json'), 'utf8'));
 assert.equal(splitFailure.status, 'failed');
 assert.equal(splitFailure.failurePhase, 'camera-split-validation');
-assert.equal(splitFailure.lastTrustworthyEvidence, 'invocation arguments recorded; camera split not yet validated');
+assert.equal(splitFailure.lastTrustworthyEvidence, 'armature program identity and parameter vocabulary validated; camera split not yet validated');
+assert.equal(splitFailure.requestedArmatureProgramId, 'kaminos.lirm-armature-program.crawler.v0');
+assert.equal(splitFailure.effectiveArmatureProgramId, 'kaminos.lirm-armature-program.crawler.v0');
 assert.deepEqual(splitFailure.requestedFitViewIds, fitViewIds);
 assert.equal(splitFailure.effectiveCameraIds, null);
 
@@ -169,6 +212,32 @@ const reportFixture = {
   },
 };
 assert.doesNotThrow(() => validateReferenceFitReport(reportFixture, { requireFiles: false }));
+const sentinelParameters = Object.fromEntries(SENTINEL_PARAMETER_SPECS.map(spec => [spec.id, spec.initial]));
+const sentinelReportFixture = {
+  ...structuredClone(reportFixture),
+  requestedArmatureProgramId: SENTINEL_ARMATURE_PROGRAM.id,
+  effectiveArmatureProgramId: SENTINEL_ARMATURE_PROGRAM.id,
+  armatureProgram: sentinelPlan.armatureProgram,
+  plan: sentinelPlan,
+  parameterSpecs: SENTINEL_PARAMETER_SPECS,
+  initialParameters: sentinelParameters,
+  fittedParameters: sentinelParameters,
+};
+assert.doesNotThrow(() => validateReferenceFitReport(sentinelReportFixture, { requireFiles: false }));
+assert.throws(
+  () => validateReferenceFitReport({
+    ...sentinelReportFixture,
+    effectiveArmatureProgramId: 'kaminos.lirm-armature-program.crawler.v0',
+  }, { requireFiles: false }),
+  /armature program identity mismatch/,
+);
+const reorderedSentinelSpecs = structuredClone(sentinelReportFixture);
+reorderedSentinelSpecs.armatureProgram.parameterSpecs.reverse();
+assert.throws(
+  () => validateReferenceFitReport(reorderedSentinelSpecs, { requireFiles: false }),
+  /plan\/program identity mismatch|parameter specification mismatch|initialParameters semantic parameter IDs drifted/,
+  'parameter order is part of the frozen program receipt',
+);
 assert.throws(
   () => validateReferenceFitReport({ ...reportFixture, effectiveCameraIds: reportFixture.effectiveCameraIds.slice(0, 7) }, { requireFiles: false }),
   /effective camera coverage/,

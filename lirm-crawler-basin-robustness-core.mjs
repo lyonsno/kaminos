@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { deflateSync, inflateSync } from 'node:zlib';
 
 import {
+  CRAWLER_ARMATURE_PROGRAM,
   REFERENCE_FIT_CAMERAS,
   REFERENCE_FIT_PARAMETER_SPECS,
   REFERENCE_FIT_ROUTE,
@@ -16,11 +17,14 @@ export const CRAWLER_BASIN_MANIFEST_SCHEMA = 'kaminos.lirm-crawler-basin-robustn
 export const CRAWLER_BASIN_MATRIX_SCHEMA = 'kaminos.lirm-crawler-basin-robustness-matrix.v0';
 export const UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA = 'kaminos.lirm-upright-macrocephalic-basin-robustness-manifest.v0';
 export const UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA = 'kaminos.lirm-upright-macrocephalic-basin-robustness-matrix.v0';
+export const UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1 = 'kaminos.lirm-upright-macrocephalic-basin-robustness-manifest.v1';
+export const UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA_V1 = 'kaminos.lirm-upright-macrocephalic-basin-robustness-matrix.v1';
 export const CRAWLER_BASIN_PARAMETER_VOCABULARY = 'kaminos.reference-fitted-armature.13-semantic-parameters.v0';
 
 const matrixSchemaByManifestSchema = new Map([
   [CRAWLER_BASIN_MANIFEST_SCHEMA, CRAWLER_BASIN_MATRIX_SCHEMA],
   [UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA, UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA],
+  [UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1, UPRIGHT_MACROCEPHALIC_BASIN_MATRIX_SCHEMA_V1],
 ]);
 
 const exactArray = (actual, expected) => (
@@ -59,7 +63,7 @@ function verifyFileIdentity({ absolutePath, bytes, sha256: expectedSha }, label)
 function matrixSchemaForManifest(manifest) {
   const matrixSchema = matrixSchemaByManifestSchema.get(manifest?.schema);
   if (!matrixSchema) throw new Error(`unexpected manifest schema: ${manifest?.schema}`);
-  if (manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA
+  if ([UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA, UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1].includes(manifest.schema)
       && manifest.familyId !== 'upright-macrocephalic-low-multicontact-v0') {
     throw new Error(`unexpected upright basin family: ${manifest.familyId}`);
   }
@@ -112,13 +116,46 @@ function admitSourceWitnesses(manifest, repoRoot, { requireFiles, embedded }) {
   });
 }
 
-function assertFixedRoute(manifest) {
+function armatureProgramReceipt(armatureProgram) {
+  if (!armatureProgram || typeof armatureProgram !== 'object') throw new Error('armature program is required');
+  if (typeof armatureProgram.id !== 'string' || !armatureProgram.id.trim()) throw new Error('armature program requires stable id');
+  if (typeof armatureProgram.parameterVocabulary !== 'string' || !armatureProgram.parameterVocabulary.trim()) {
+    throw new Error('armature program requires parameter vocabulary');
+  }
+  if (!Array.isArray(armatureProgram.parameterSpecs) || armatureProgram.parameterSpecs.length === 0) {
+    throw new Error('armature program requires parameter specs');
+  }
+  return {
+    id: armatureProgram.id,
+    parameterVocabulary: armatureProgram.parameterVocabulary,
+    parameterSpecs: armatureProgram.parameterSpecs,
+  };
+}
+
+function assertFixedRoute(manifest, armatureProgram = null) {
   const cameraIds = REFERENCE_FIT_CAMERAS.map(camera => camera.id);
   if (manifest.requestedRoute !== REFERENCE_FIT_ROUTE) throw new Error('manifest requested route mismatch');
-  if (manifest.fixedRoute?.parameterVocabulary !== CRAWLER_BASIN_PARAMETER_VOCABULARY) {
-    throw new Error('manifest parameter vocabulary mismatch');
+  if (manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1) {
+    const frozenProgram = armatureProgramReceipt(manifest.fixedRoute?.armatureProgram);
+    if (manifest.fixedRoute.parameterVocabulary !== frozenProgram.parameterVocabulary) {
+      throw new Error('manifest parameter vocabulary/program mismatch');
+    }
+    if (armatureProgram) {
+      if (typeof armatureProgram.createPrimitives !== 'function') throw new Error('armature program requires primitive factory');
+      const requestedProgram = armatureProgramReceipt(armatureProgram);
+      if (JSON.stringify(requestedProgram) !== JSON.stringify(frozenProgram)) {
+        throw new Error(`armature program selection mismatch: requested ${requestedProgram.id}, frozen ${frozenProgram.id}`);
+      }
+    }
+  } else {
+    if (manifest.fixedRoute?.parameterVocabulary !== CRAWLER_BASIN_PARAMETER_VOCABULARY) {
+      throw new Error('manifest parameter vocabulary mismatch');
+    }
+    if (REFERENCE_FIT_PARAMETER_SPECS.length !== 13) throw new Error('reviewed crawler parameter vocabulary is no longer 13 parameters');
+    if (armatureProgram && armatureProgram.id !== CRAWLER_ARMATURE_PROGRAM.id) {
+      throw new Error(`armature program selection mismatch: legacy manifest requires ${CRAWLER_ARMATURE_PROGRAM.id}`);
+    }
   }
-  if (REFERENCE_FIT_PARAMETER_SPECS.length !== 13) throw new Error('reviewed crawler parameter vocabulary is no longer 13 parameters');
   if (!exactArray(manifest.fixedRoute?.cameraIds, cameraIds)) throw new Error('manifest camera coverage mismatch');
   if (!exactArray(manifest.fixedRoute?.fitViewIds, ['az000', 'az090', 'az180', 'az270'])) throw new Error('manifest fit camera mismatch');
   if (!exactArray(manifest.fixedRoute?.heldOutViewIds, ['az045', 'az135', 'az225', 'az315'])) {
@@ -189,7 +226,11 @@ function validateEmbeddedFrozenManifest(manifest, { requireFiles }) {
   }
 }
 
-export async function loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot }) {
+export async function loadFrozenCrawlerBasinManifest({
+  manifestPath,
+  repoRoot,
+  armatureProgram = CRAWLER_ARMATURE_PROGRAM,
+}) {
   const absoluteManifestPath = resolve(manifestPath);
   const absoluteRepoRoot = resolve(repoRoot);
   const manifestBytes = await readFile(absoluteManifestPath);
@@ -199,7 +240,7 @@ export async function loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot })
   if (manifest.acceptance?.basin?.donorCount !== 4 || manifest.donors?.length !== 4) throw new Error('manifest requires exactly 4 donors');
   if (manifest.acceptance.basin.minimumRecoveredDonors !== 3) throw new Error('manifest requires a 3-of-4 basin predicate');
   if (manifest.acceptance.basin.allowDonorReplacement !== false) throw new Error('manifest must forbid donor replacement');
-  assertFixedRoute(manifest);
+  assertFixedRoute(manifest, armatureProgram);
 
   const ids = new Set();
   const paths = new Set();
@@ -237,6 +278,15 @@ export function validateCrawlerBasinSubreport(report, { manifest, donor, require
   if (report?.schema !== 'kaminos.lirm-reference-fitted-armature-assay.v0') throw new Error('unexpected donor subreport schema');
   if (report.requestedRoute !== manifest.requestedRoute) throw new Error('requested route mismatch');
   if (report.effectiveRoute !== manifest.requestedRoute) throw new Error('effective route mismatch');
+  if (manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1) {
+    const frozenProgram = armatureProgramReceipt(manifest.fixedRoute.armatureProgram);
+    if (report.requestedArmatureProgramId !== frozenProgram.id
+        || report.effectiveArmatureProgramId !== frozenProgram.id
+        || JSON.stringify(report.armatureProgram) !== JSON.stringify(frozenProgram)
+        || JSON.stringify(report.parameterSpecs) !== JSON.stringify(frozenProgram.parameterSpecs)) {
+      throw new Error(`donor armature program receipt mismatch for ${donor.id}`);
+    }
+  }
   if (!exactArray(report.requestedCameraIds, manifest.fixedRoute.cameraIds)) throw new Error('requested camera mismatch');
   if (!exactArray(report.effectiveCameraIds, manifest.fixedRoute.cameraIds)) throw new Error('effective camera mismatch');
   if (!exactArray(report.fitViewIds, manifest.fixedRoute.fitViewIds)) throw new Error('fit camera mismatch');
@@ -431,6 +481,14 @@ export function validateCrawlerBasinMatrixReport(report, { requireFiles = true }
   validateEmbeddedFrozenManifest(manifest, { requireFiles });
   if (report.requestedRoute !== manifest.requestedRoute) throw new Error('matrix requested route mismatch');
   if (report.effectiveRoute !== manifest.requestedRoute) throw new Error('matrix effective route mismatch');
+  if (manifest.schema === UPRIGHT_MACROCEPHALIC_BASIN_MANIFEST_SCHEMA_V1) {
+    const frozenProgram = armatureProgramReceipt(manifest.fixedRoute.armatureProgram);
+    if (report.requestedArmatureProgramId !== frozenProgram.id
+        || report.effectiveArmatureProgramId !== frozenProgram.id
+        || JSON.stringify(report.armatureProgram) !== JSON.stringify(frozenProgram)) {
+      throw new Error('matrix armature program receipt mismatch');
+    }
+  }
   if (report.rows?.length !== 4) throw new Error('matrix requires exactly 4 matrix rows');
   if (!exactArray(report.rows.map(row => row.donorId), manifest.donors.map(donor => donor.id))) throw new Error('matrix donor order or identity mismatch');
   for (const row of report.rows) {
@@ -477,11 +535,13 @@ export async function runCrawlerBasinMatrix({
   outDir,
   runAssay = runReferenceFittedArmatureAssay,
   buildComparisonWitness = buildDefaultComparisonWitness,
+  armatureProgram = CRAWLER_ARMATURE_PROGRAM,
 } = {}) {
   const outputRoot = resolve(outDir);
   await mkdir(outputRoot, { recursive: true });
   const reportPath = resolve(outputRoot, 'report.json');
-  const manifest = await loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot });
+  const manifest = await loadFrozenCrawlerBasinManifest({ manifestPath, repoRoot, armatureProgram });
+  const programReceipt = armatureProgramReceipt(armatureProgram);
   const startedAtMs = Date.now();
   const report = {
     schema: matrixSchemaForManifest(manifest),
@@ -489,6 +549,9 @@ export async function runCrawlerBasinMatrix({
     failurePhase: null,
     requestedRoute: manifest.requestedRoute,
     effectiveRoute: null,
+    requestedArmatureProgramId: programReceipt.id,
+    effectiveArmatureProgramId: null,
+    armatureProgram: programReceipt,
     manifest,
     rows: [],
     acceptance: null,
@@ -509,9 +572,10 @@ export async function runCrawlerBasinMatrix({
           fitViewIds: manifest.fixedRoute.fitViewIds,
           heldOutViewIds: manifest.fixedRoute.heldOutViewIds,
           width: manifest.fixedRoute.width,
-          height: manifest.fixedRoute.height,
-          passes: manifest.fixedRoute.passes,
-        });
+        height: manifest.fixedRoute.height,
+        passes: manifest.fixedRoute.passes,
+        armatureProgram,
+      });
         donorPhase = 'subreport-validation';
         validateCrawlerBasinSubreport(subreport, { manifest, donor });
         report.rows.push({
@@ -558,6 +622,7 @@ export async function runCrawlerBasinMatrix({
     validateComparisonWitness(report.outputInventory.depthComparisonWitness, true);
     report.status = report.acceptance.passed ? 'basin-passed-uninspected' : 'basin-missed-threshold-uninspected';
     report.effectiveRoute = manifest.requestedRoute;
+    report.effectiveArmatureProgramId = programReceipt.id;
     report.visualInspection = 'pending';
     report.lastTrustworthyEvidence = 'all four precommitted donors accounted for; comparison witness written but not inspected';
     const finishedAtMs = Date.now();

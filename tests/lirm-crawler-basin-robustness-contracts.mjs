@@ -334,4 +334,38 @@ assert.throws(
   'an inspection receipt must not coexist with uninspected status',
 );
 
+const allRecoveredVisualRejection = structuredClone(inspected);
+allRecoveredVisualRejection.rows[3] = {
+  donorId: runManifest.donors[3].id,
+  donorPath: runManifest.donors[3].absolutePath,
+  donorSha256: runManifest.donors[3].sha256,
+  outcome: 'recovered',
+  subreport: makeSubreport(runManifest.donors[3], { recovered: true }),
+};
+allRecoveredVisualRejection.acceptance = evaluateCrawlerBasinRows(
+  allRecoveredVisualRejection.rows,
+  allRecoveredVisualRejection.manifest.acceptance.basin,
+);
+allRecoveredVisualRejection.visualInspection = {
+  disposition: 'rejected',
+  visibleDelta: 'All four numerical recoveries still collapse the selected upright family into the crawler topology.',
+  missClassifications: {},
+  comparisonWitness: allRecoveredVisualRejection.outputInventory.comparisonWitness,
+  depthComparisonWitness: allRecoveredVisualRejection.outputInventory.depthComparisonWitness,
+};
+allRecoveredVisualRejection.status = 'basin-visual-rejected';
+assert.equal(allRecoveredVisualRejection.acceptance.recoveredDonorCount, 4);
+assert.equal(allRecoveredVisualRejection.acceptance.passed, true);
+assert.doesNotThrow(
+  () => validateCrawlerBasinMatrixReport(allRecoveredVisualRejection, { requireFiles: false }),
+  'visual rejection must override a 4-of-4 numerical basin pass',
+);
+const relabeledVisualRejection = structuredClone(allRecoveredVisualRejection);
+relabeledVisualRejection.status = 'basin-passed-inspected';
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(relabeledVisualRejection, { requireFiles: false }),
+  /matrix status\/inspection mismatch/,
+  'a 4-of-4 numerical pass must not launder an explicit visual rejection into green status',
+);
+
 console.log('LIRM crawler basin robustness contracts passed');

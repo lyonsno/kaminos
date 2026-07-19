@@ -2,12 +2,14 @@
 import { resolve } from 'node:path';
 
 import { runCrawlerBasinMatrix } from './lirm-crawler-basin-robustness-core.mjs';
+import { UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM } from './lirm-upright-macrocephalic-armature-program.mjs';
 
 const repoRoot = resolve(import.meta.dirname);
 const defaults = {
   repoRoot,
-  manifestPath: resolve(repoRoot, 'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v0/manifest.json'),
-  outDir: resolve(repoRoot, 'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v0'),
+  manifestPath: resolve(repoRoot, 'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/manifest.json'),
+  outDir: resolve(repoRoot, 'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1'),
+  armatureProgram: UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM,
 };
 
 function readArgs(argv) {

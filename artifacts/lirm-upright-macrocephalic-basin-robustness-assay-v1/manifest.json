@@ -1,0 +1,130 @@
+{
+  "schema": "kaminos.lirm-upright-macrocephalic-basin-robustness-manifest.v1",
+  "familyId": "upright-macrocephalic-low-multicontact-v0",
+  "selectionFrozenAt": "2026-07-19T02:15:51Z",
+  "programFrozenAt": "2026-07-19T03:45:00Z",
+  "fitOutcomesObserved": false,
+  "intent": "Test an explicit upright-macrocephalic SDF topology program against the same frozen four-donor family that visually rejected crawler-program transfer.",
+  "priorProgramEvidenceObserved": {
+    "path": "artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v0/report.json",
+    "bytes": 141004,
+    "sha256": "sha256:91d370664da190312d66b6510cd8c62893a8da7726fcc4117cfa9edcfec5ff0a",
+    "role": "program-design evidence; donor identities and acceptance predicate remain unchanged"
+  },
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "fixedRoute": {
+    "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+    "armatureProgram": {
+      "id": "kaminos.lirm-armature-program.upright-macrocephalic.v0",
+      "parameterVocabulary": "kaminos.reference-fitted-armature.upright-macrocephalic-14.v0",
+      "parameterSpecs": [
+        { "id": "trunkHeight", "semanticRole": "uprightTrunk", "initial": 0.78, "min": 0.42, "max": 1.24, "step": 0.14 },
+        { "id": "trunkWidth", "semanticRole": "uprightTrunk", "initial": 0.38, "min": 0.22, "max": 0.72, "step": 0.09 },
+        { "id": "trunkDepth", "semanticRole": "uprightTrunk", "initial": 0.42, "min": 0.22, "max": 0.78, "step": 0.1 },
+        { "id": "crownWidth", "semanticRole": "macrocephalicCrown", "initial": 0.74, "min": 0.38, "max": 1.18, "step": 0.14 },
+        { "id": "crownHeight", "semanticRole": "macrocephalicCrown", "initial": 0.48, "min": 0.26, "max": 0.82, "step": 0.1 },
+        { "id": "crownDepth", "semanticRole": "macrocephalicCrown", "initial": 0.58, "min": 0.3, "max": 0.98, "step": 0.12 },
+        { "id": "crownLift", "semanticRole": "crownElevation", "initial": 0.16, "min": -0.04, "max": 0.42, "step": 0.07 },
+        { "id": "waistScale", "semanticRole": "waistCompression", "initial": 0.56, "min": 0.3, "max": 0.9, "step": 0.09 },
+        { "id": "crownForward", "semanticRole": "anteriorProjection", "initial": 0.08, "min": -0.24, "max": 0.38, "step": 0.08 },
+        { "id": "posteriorBulb", "semanticRole": "posteriorCountermass", "initial": 0.42, "min": 0.16, "max": 0.82, "step": 0.1 },
+        { "id": "contactSpread", "semanticRole": "radialContactField", "initial": 0.62, "min": 0.36, "max": 1.02, "step": 0.11 },
+        { "id": "contactLength", "semanticRole": "radialContactLimb", "initial": 0.32, "min": 0.16, "max": 0.62, "step": 0.08 },
+        { "id": "contactThickness", "semanticRole": "radialContactLimb", "initial": 0.085, "min": 0.045, "max": 0.18, "step": 0.025 },
+        { "id": "radialTwist", "semanticRole": "controlledAsymmetry", "initial": 0.08, "min": -0.34, "max": 0.34, "step": 0.07 }
+      ]
+    },
+    "initialization": "upright-macrocephalic-reviewed-default-v0",
+    "cameraIds": ["az000", "az045", "az090", "az135", "az180", "az225", "az270", "az315"],
+    "fitViewIds": ["az000", "az090", "az180", "az270"],
+    "heldOutViewIds": ["az045", "az135", "az225", "az315"],
+    "width": 40,
+    "height": 32,
+    "passes": 4,
+    "search": "deterministic-bounded-coordinate-descent"
+  },
+  "acceptance": {
+    "donorRecovery": {
+      "minimumHeldOutSilhouetteImprovements": 3,
+      "requireMeanHeldOutDepthMaeImprovement": true
+    },
+    "basin": {
+      "donorCount": 4,
+      "minimumRecoveredDonors": 3,
+      "requireSingleComparisonWitness": true,
+      "allowDonorReplacement": false
+    }
+  },
+  "sourceWitnesses": [
+    {
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-witness-contact-sheet.png",
+      "bytes": 3793683,
+      "sha256": "sha256:eb022533832b1924f32ca5960e8e9245cec908b529a97eadcbd569c0fd873038",
+      "mapping": {
+        "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/witness-plan.json",
+        "bytes": 20992,
+        "sha256": "sha256:e954f77e8d286db1eab94dae653e13deb2f303a44c55ba7bbf55bd140f7e7ff5"
+      }
+    },
+    {
+      "path": "artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough-contact-sheet.png",
+      "bytes": 550611,
+      "sha256": "sha256:f7035818f65a2140eb5d42eebe8ab70b65cd2ebeafa195fb1b31bbbf8d154de5",
+      "mapping": {
+        "path": "artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough-contact-sheet.html",
+        "bytes": 7156,
+        "sha256": "sha256:2492e06bf6252fcafbb3ffc607e70679f5ccefcbca8e3ec33c02523db9ad26a1"
+      }
+    }
+  ],
+  "donors": [
+    {
+      "id": "basin-03-metabolizer-upright",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-outputs/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.glb",
+      "bytes": 9382068,
+      "sha256": "sha256:74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+      "witnessTitle": "B03 METABOLIZE / UPRIGHT",
+      "visualSelectionRationale": "Tallest admitted member: a vertically extended macrocephalic anterior lobe, narrow frontal projection, and compact four-point stance make it the strongest height-to-footprint challenge in the family."
+    },
+    {
+      "id": "basin-10-metabolizer-upright",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.glb",
+      "bytes": 9268008,
+      "sha256": "sha256:72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+      "witnessTitle": "B10 METABOLIZE / UPRIGHT",
+      "visualSelectionRationale": "Broad cranial bridge over a compact central trunk and four laterally planted contacts; it supplies the widest head-to-body ratio and strongest left-right asymmetry among the upright members."
+    },
+    {
+      "id": "basin-22-metabolizer-upright",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-outputs/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032.glb",
+      "bytes": 9347792,
+      "sha256": "sha256:6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+      "witnessTitle": "B22 METABOLIZE / UPRIGHT",
+      "visualSelectionRationale": "Large perforated cranial shell over a narrow vertical torso and compact low feet; it tests whether the family fit can express broad elevated mass without turning the organism into a horizontal crawler."
+    },
+    {
+      "id": "lirm-02-bulbous-radial-upright",
+      "path": "artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm02-hallucinate-beyond-trellis-fast4/output.glb",
+      "bytes": 9332344,
+      "sha256": "sha256:2ada08fd300ec58fb9acdd33668043a866af150919e7f751b2002fed234ffd69",
+      "witnessTitle": "LIRM 02 / BULBOUS RADIAL UPRIGHT",
+      "visualSelectionRationale": "A bulbous upright mass carried by a low radial arrangement of contact appendages; retained as the family-edge member because it shares vertical mass concentration while replacing the cranial bridge with stacked spherical lobes."
+    }
+  ],
+  "missClassifications": [
+    "parameter-range-failure",
+    "topology-family-mismatch",
+    "donor-incoherence",
+    "camera-or-normalization-failure"
+  ],
+  "nonGoals": [
+    "automatic-topology-family-selection",
+    "arbitrary-topology-composition",
+    "learned-initialization",
+    "image-only-recovery",
+    "production-surfacing",
+    "rigging",
+    "motion",
+    "generator-firing"
+  ]
+}

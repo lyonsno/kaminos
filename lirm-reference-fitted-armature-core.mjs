@@ -33,6 +33,13 @@ export const REFERENCE_FIT_PARAMETER_SPECS = Object.freeze([
   { id: 'headLift', semanticRole: 'headOrientation', initial: 0.04, min: -0.18, max: 0.34, step: 0.07 },
 ]);
 
+export const CRAWLER_ARMATURE_PROGRAM = Object.freeze({
+  id: 'kaminos.lirm-armature-program.crawler.v0',
+  parameterVocabulary: 'kaminos.reference-fitted-armature.13-semantic-parameters.v0',
+  parameterSpecs: REFERENCE_FIT_PARAMETER_SPECS,
+  createPrimitives: createReferenceArmaturePrimitives,
+});
+
 const COMPONENTS = {
   5120: { bytes: 1, read: 'getInt8' },
   5121: { bytes: 1, read: 'getUint8' },
@@ -74,8 +81,49 @@ export function assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds }) {
   }
 }
 
-export function createReferenceFitAssayPlan({ donorPath, donorSha256, fitViewIds, heldOutViewIds }) {
+function armatureProgramProjection(armatureProgram) {
+  if (!armatureProgram || typeof armatureProgram !== 'object') throw new TypeError('armature program is required');
+  if (typeof armatureProgram.id !== 'string' || !armatureProgram.id.trim()) throw new Error('armature program requires stable id');
+  if (typeof armatureProgram.parameterVocabulary !== 'string' || !armatureProgram.parameterVocabulary.trim()) {
+    throw new Error('armature program requires parameter vocabulary');
+  }
+  if (!Array.isArray(armatureProgram.parameterSpecs) || armatureProgram.parameterSpecs.length === 0) {
+    throw new Error('armature program requires parameter specs');
+  }
+  const ids = new Set();
+  for (const spec of armatureProgram.parameterSpecs) {
+    if (typeof spec?.id !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(spec.id) || ids.has(spec.id)) {
+      throw new Error(`invalid or duplicate armature parameter id: ${spec?.id}`);
+    }
+    ids.add(spec.id);
+    if (typeof spec.semanticRole !== 'string' || !spec.semanticRole.trim()) throw new Error(`missing semantic role for ${spec.id}`);
+    if (![spec.initial, spec.min, spec.max, spec.step].every(Number.isFinite)
+        || spec.min >= spec.max || spec.initial < spec.min || spec.initial > spec.max || spec.step <= 0) {
+      throw new Error(`invalid parameter bounds for ${spec.id}`);
+    }
+  }
+  return {
+    id: armatureProgram.id,
+    parameterVocabulary: armatureProgram.parameterVocabulary,
+    parameterSpecs: armatureProgram.parameterSpecs,
+  };
+}
+
+function resolveArmatureProgram(armatureProgram = CRAWLER_ARMATURE_PROGRAM) {
+  const projection = armatureProgramProjection(armatureProgram);
+  if (typeof armatureProgram.createPrimitives !== 'function') throw new Error('armature program requires primitive factory');
+  return { program: armatureProgram, projection };
+}
+
+export function createReferenceFitAssayPlan({
+  donorPath,
+  donorSha256,
+  fitViewIds,
+  heldOutViewIds,
+  armatureProgram = CRAWLER_ARMATURE_PROGRAM,
+}) {
   assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds });
+  const { projection } = resolveArmatureProgram(armatureProgram);
   return {
     schema: 'kaminos.lirm-reference-fitted-armature-plan.v0',
     requestedRoute: REFERENCE_FIT_ROUTE,
@@ -83,7 +131,9 @@ export function createReferenceFitAssayPlan({ donorPath, donorSha256, fitViewIds
     requestedCameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
     fitViewIds: [...fitViewIds],
     heldOutViewIds: [...heldOutViewIds],
-    parameterSpecs: REFERENCE_FIT_PARAMETER_SPECS,
+    requestedArmatureProgramId: projection.id,
+    armatureProgram: projection,
+    parameterSpecs: projection.parameterSpecs,
     evidencePredicate: {
       allowCameraFallback: false,
       allowMissingOrPartialDonorEvidence: false,
@@ -284,9 +334,9 @@ function rasterizeTriangleSoup({ triangles, camera, width, height }) {
   return { cameraId: exact.id, width, height, mask, depth: normalizedDepth };
 }
 
-function parameterObject(parameters) {
+function parameterObject(parameters, parameterSpecs) {
   const out = {};
-  for (const spec of REFERENCE_FIT_PARAMETER_SPECS) {
+  for (const spec of parameterSpecs) {
     const value = Number(parameters?.[spec.id]);
     if (!Number.isFinite(value)) throw new Error(`missing semantic parameter: ${spec.id}`);
     out[spec.id] = clamp(value, spec.min, spec.max);
@@ -313,7 +363,7 @@ function smoothMin(a, b, radius = 0.065) {
 }
 
 export function createReferenceArmaturePrimitives(parameters) {
-  const p = parameterObject(parameters);
+  const p = parameterObject(parameters, REFERENCE_FIT_PARAMETER_SPECS);
   const primitives = [];
   const segmentCount = 5;
   for (let index = 0; index < segmentCount; index += 1) {
@@ -364,9 +414,17 @@ function fieldDistance(point, primitives) {
   return distance;
 }
 
-export function renderReferenceArmature({ parameters, camera, width = 40, height = 32 }) {
+export function renderReferenceArmature({
+  parameters,
+  armatureProgram = CRAWLER_ARMATURE_PROGRAM,
+  camera,
+  width = 40,
+  height = 32,
+}) {
   const exact = canonicalCamera(camera);
-  const primitives = createReferenceArmaturePrimitives(parameters);
+  const { program, projection } = resolveArmatureProgram(armatureProgram);
+  const primitives = program.createPrimitives(parameterObject(parameters, projection.parameterSpecs));
+  if (!Array.isArray(primitives) || primitives.length === 0) throw new Error('armature primitive factory returned no primitives');
   const semanticRoles = [...new Set(primitives.map(primitive => primitive.role))];
   const frame = cameraFrame(exact);
   const mask = new Uint8Array(width * height);
@@ -426,27 +484,29 @@ function objective(metrics) {
   return (1 - metrics.meanIou) + metrics.meanDepthMae * 0.42 + metrics.meanOccupancyError * 0.12;
 }
 
-function renderViews(parameters, viewIds, width, height) {
+function renderViews(parameters, viewIds, width, height, armatureProgram) {
   return Object.fromEntries(viewIds.map(id => {
     const camera = REFERENCE_FIT_CAMERAS.find(item => item.id === id);
-    return [id, renderReferenceArmature({ parameters, camera, width, height })];
+    return [id, renderReferenceArmature({ parameters, armatureProgram, camera, width, height })];
   }));
 }
 
-function fitReferenceArmature({ donorById, fitViewIds, width, height, passes = 4 }) {
-  let parameters = Object.fromEntries(REFERENCE_FIT_PARAMETER_SPECS.map(spec => [spec.id, spec.initial]));
-  const steps = Object.fromEntries(REFERENCE_FIT_PARAMETER_SPECS.map(spec => [spec.id, spec.step]));
-  let renders = renderViews(parameters, fitViewIds, width, height);
+function fitReferenceArmature({ donorById, fitViewIds, width, height, armatureProgram, passes = 4 }) {
+  const { projection } = resolveArmatureProgram(armatureProgram);
+  const parameterSpecs = projection.parameterSpecs;
+  let parameters = Object.fromEntries(parameterSpecs.map(spec => [spec.id, spec.initial]));
+  const steps = Object.fromEntries(parameterSpecs.map(spec => [spec.id, spec.step]));
+  let renders = renderViews(parameters, fitViewIds, width, height, armatureProgram);
   let metrics = aggregateMetrics(fitViewIds, donorById, renders);
   let score = objective(metrics);
   const trace = [{ pass: -1, parameterId: null, direction: 0, score, accepted: true }];
   for (let pass = 0; pass < passes; pass += 1) {
-    for (const spec of REFERENCE_FIT_PARAMETER_SPECS) {
+    for (const spec of parameterSpecs) {
       let best = { parameters, renders, metrics, score, direction: 0 };
       for (const direction of [-1, 1]) {
         const candidate = { ...parameters, [spec.id]: clamp(parameters[spec.id] + steps[spec.id] * direction, spec.min, spec.max) };
         if (candidate[spec.id] === parameters[spec.id]) continue;
-        const candidateRenders = renderViews(candidate, fitViewIds, width, height);
+        const candidateRenders = renderViews(candidate, fitViewIds, width, height, armatureProgram);
         const candidateMetrics = aggregateMetrics(fitViewIds, donorById, candidateRenders);
         const candidateScore = objective(candidateMetrics);
         if (candidateScore + 1e-8 < best.score) {
@@ -457,7 +517,7 @@ function fitReferenceArmature({ donorById, fitViewIds, width, height, passes = 4
       ({ parameters, renders, metrics, score } = best);
       trace.push({ pass, parameterId: spec.id, direction: best.direction, value: parameters[spec.id], score, accepted });
     }
-    for (const spec of REFERENCE_FIT_PARAMETER_SPECS) steps[spec.id] *= 0.58;
+    for (const spec of parameterSpecs) steps[spec.id] *= 0.58;
   }
   return { parameters, renders, metrics, score, trace };
 }
@@ -552,6 +612,26 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
   if (report.requestedRoute !== REFERENCE_FIT_ROUTE || report.effectiveRoute !== REFERENCE_FIT_ROUTE) {
     throw new Error('reference-fit route identity mismatch');
   }
+  const carriesProgramIdentity = report.requestedArmatureProgramId !== undefined
+    || report.effectiveArmatureProgramId !== undefined
+    || report.armatureProgram !== undefined;
+  let programProjection;
+  if (carriesProgramIdentity) {
+    programProjection = armatureProgramProjection(report.armatureProgram);
+    if (report.requestedArmatureProgramId !== programProjection.id
+        || report.effectiveArmatureProgramId !== programProjection.id) {
+      throw new Error('reference-fit armature program identity mismatch');
+    }
+    if (report.plan?.requestedArmatureProgramId !== programProjection.id
+        || JSON.stringify(report.plan?.armatureProgram) !== JSON.stringify(programProjection)) {
+      throw new Error('reference-fit plan/program identity mismatch');
+    }
+  } else {
+    programProjection = armatureProgramProjection(CRAWLER_ARMATURE_PROGRAM);
+    if (JSON.stringify(report.parameterSpecs) !== JSON.stringify(programProjection.parameterSpecs)) {
+      throw new Error('legacy reference-fit report is not the exact crawler vocabulary');
+    }
+  }
   const expectedCameraIds = REFERENCE_FIT_CAMERAS.map(camera => camera.id);
   if (JSON.stringify(report.requestedCameraIds) !== JSON.stringify(expectedCameraIds)
     || JSON.stringify(report.effectiveCameraIds) !== JSON.stringify(expectedCameraIds)) {
@@ -560,7 +640,10 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
   assertReferenceFitCameraSplit({ fitViewIds: report.fitViewIds, heldOutViewIds: report.heldOutViewIds });
   if (typeof report.donor?.sha256 !== 'string' || !report.donor.sha256.startsWith('sha256:')) throw new Error('report requires donor hash');
   if (!Number.isInteger(report.donor?.triangleCount) || report.donor.triangleCount <= 0) throw new Error('report requires admitted donor triangles');
-  const parameterIds = REFERENCE_FIT_PARAMETER_SPECS.map(spec => spec.id);
+  if (JSON.stringify(report.parameterSpecs) !== JSON.stringify(programProjection.parameterSpecs)) {
+    throw new Error('reference-fit parameter specification mismatch');
+  }
+  const parameterIds = programProjection.parameterSpecs.map(spec => spec.id);
   for (const field of ['initialParameters', 'fittedParameters']) {
     if (JSON.stringify(Object.keys(report[field] ?? {})) !== JSON.stringify(parameterIds)) {
       throw new Error(`${field} semantic parameter IDs drifted`);
@@ -650,6 +733,7 @@ export async function runReferenceFittedArmatureAssay({
   width = 40,
   height = 32,
   passes = 4,
+  armatureProgram = CRAWLER_ARMATURE_PROGRAM,
 } = {}) {
   const outputRoot = resolve(outDir);
   await mkdir(outputRoot, { recursive: true });
@@ -661,6 +745,9 @@ export async function runReferenceFittedArmatureAssay({
     failurePhase: null,
     requestedRoute: REFERENCE_FIT_ROUTE,
     effectiveRoute: null,
+    requestedArmatureProgramId: armatureProgram?.id ?? null,
+    effectiveArmatureProgramId: null,
+    armatureProgram: null,
     requestedCameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
     effectiveCameraIds: null,
     requestedFitViewIds: Array.isArray(fitViewIds) ? [...fitViewIds] : fitViewIds,
@@ -672,8 +759,14 @@ export async function runReferenceFittedArmatureAssay({
     outputInventory: { primaryWitness: null, depthWitness: null, donorEvidence: [] },
   };
   await writeJsonAtomic(reportPath, report);
-  let activePhase = 'camera-split-validation';
+  let activePhase = 'armature-program-validation';
   try {
+    const { projection } = resolveArmatureProgram(armatureProgram);
+    report.armatureProgram = projection;
+    report.effectiveArmatureProgramId = projection.id;
+    report.lastTrustworthyEvidence = 'armature program identity and parameter vocabulary validated; camera split not yet validated';
+    activePhase = 'camera-split-validation';
+    await writeJsonAtomic(reportPath, report);
     assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds });
     report.fitViewIds = [...fitViewIds];
     report.heldOutViewIds = [...heldOutViewIds];
@@ -686,7 +779,13 @@ export async function runReferenceFittedArmatureAssay({
       path: resolve(donorPath), bytes: donor.bytes, sha256: donor.sha256,
       triangleCount: donor.triangleCount, sourceBounds: donor.sourceBounds, normalization: donor.normalization,
     };
-    report.plan = createReferenceFitAssayPlan({ donorPath, donorSha256: donor.sha256, fitViewIds, heldOutViewIds });
+    report.plan = createReferenceFitAssayPlan({
+      donorPath,
+      donorSha256: donor.sha256,
+      fitViewIds,
+      heldOutViewIds,
+      armatureProgram,
+    });
     report.lastTrustworthyEvidence = `${donor.triangleCount} donor triangles admitted and normalized`;
     activePhase = 'donor-evidence';
     await writeJsonAtomic(reportPath, report);
@@ -703,11 +802,12 @@ export async function runReferenceFittedArmatureAssay({
     activePhase = 'fit-or-witness';
     await writeJsonAtomic(reportPath, report);
 
-    const initialParameters = Object.fromEntries(REFERENCE_FIT_PARAMETER_SPECS.map(spec => [spec.id, spec.initial]));
+    const parameterSpecs = projection.parameterSpecs;
+    const initialParameters = Object.fromEntries(parameterSpecs.map(spec => [spec.id, spec.initial]));
     const allViewIds = REFERENCE_FIT_CAMERAS.map(camera => camera.id);
-    const initialById = renderViews(initialParameters, allViewIds, width, height);
-    const fit = fitReferenceArmature({ donorById, fitViewIds, width, height, passes });
-    const fittedById = renderViews(fit.parameters, allViewIds, width, height);
+    const initialById = renderViews(initialParameters, allViewIds, width, height, armatureProgram);
+    const fit = fitReferenceArmature({ donorById, fitViewIds, width, height, armatureProgram, passes });
+    const fittedById = renderViews(fit.parameters, allViewIds, width, height, armatureProgram);
     const initialFitMetrics = aggregateMetrics(fitViewIds, donorById, initialById);
     const fittedFitMetrics = aggregateMetrics(fitViewIds, donorById, fittedById);
     const initialHeldOutMetrics = aggregateMetrics(heldOutViewIds, donorById, initialById);
@@ -716,7 +816,7 @@ export async function runReferenceFittedArmatureAssay({
       fittedHeldOutMetrics.byView[id].iou > initialHeldOutMetrics.byView[id].iou + 1e-6
     )).length;
     const heldOutDepthImproved = fittedHeldOutMetrics.meanDepthMae < initialHeldOutMetrics.meanDepthMae;
-    const boundPinnedParameters = REFERENCE_FIT_PARAMETER_SPECS.filter(spec => (
+    const boundPinnedParameters = parameterSpecs.filter(spec => (
       Math.abs(fit.parameters[spec.id] - spec.min) < 1e-8 || Math.abs(fit.parameters[spec.id] - spec.max) < 1e-8
     )).map(spec => spec.id);
 
@@ -729,7 +829,7 @@ export async function runReferenceFittedArmatureAssay({
     report.status = heldOutSilhouetteImprovementCount >= 3 && heldOutDepthImproved ? 'assay-passed-uninspected' : 'assay-missed-threshold-uninspected';
     report.initialParameters = initialParameters;
     report.fittedParameters = fit.parameters;
-    report.parameterSpecs = REFERENCE_FIT_PARAMETER_SPECS;
+    report.parameterSpecs = parameterSpecs;
     report.optimization = { kind: 'deterministic-bounded-coordinate-search', passes, objective: fit.score, trace: fit.trace };
     report.metrics = { initial: { fit: initialFitMetrics, heldOut: initialHeldOutMetrics }, fitted: { fit: fittedFitMetrics, heldOut: fittedHeldOutMetrics } };
     report.acceptance = {

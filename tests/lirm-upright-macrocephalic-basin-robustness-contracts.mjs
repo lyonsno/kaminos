@@ -4,7 +4,12 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { loadFrozenCrawlerBasinManifest } from '../lirm-crawler-basin-robustness-core.mjs';
+import {
+  loadFrozenCrawlerBasinManifest,
+  validateCrawlerBasinMatrixReport,
+} from '../lirm-crawler-basin-robustness-core.mjs';
+import { CRAWLER_ARMATURE_PROGRAM } from '../lirm-reference-fitted-armature-core.mjs';
+import { UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM } from '../lirm-upright-macrocephalic-armature-program.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const manifestPath = resolve(
@@ -39,6 +44,55 @@ await writeFile(witnessEscapePath, `${JSON.stringify(witnessEscape, null, 2)}\n`
 await assert.rejects(
   () => loadFrozenCrawlerBasinManifest({ manifestPath: witnessEscapePath, repoRoot }),
   /source witness .*escapes repo root/,
+);
+
+const programAwareManifest = structuredClone(manifest);
+programAwareManifest.schema = 'kaminos.lirm-upright-macrocephalic-basin-robustness-manifest.v1';
+programAwareManifest.intent = 'Fit the frozen upright family with the explicit upright macrocephalic armature program.';
+programAwareManifest.fixedRoute.parameterVocabulary = UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM.parameterVocabulary;
+programAwareManifest.fixedRoute.armatureProgram = {
+  id: UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM.id,
+  parameterVocabulary: UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM.parameterVocabulary,
+  parameterSpecs: UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM.parameterSpecs,
+};
+const programAwarePath = join(temporaryRoot, 'upright-program-v1.json');
+await writeFile(programAwarePath, `${JSON.stringify(programAwareManifest, null, 2)}\n`);
+const programAwareFrozen = await loadFrozenCrawlerBasinManifest({
+  manifestPath: programAwarePath,
+  repoRoot,
+  armatureProgram: UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM,
+});
+assert.equal(programAwareFrozen.fixedRoute.armatureProgram.id, UPRIGHT_MACROCEPHALIC_ARMATURE_PROGRAM.id);
+await assert.rejects(
+  () => loadFrozenCrawlerBasinManifest({
+    manifestPath: programAwarePath,
+    repoRoot,
+    armatureProgram: CRAWLER_ARMATURE_PROGRAM,
+  }),
+  /armature program .*mismatch/,
+  'an upright manifest must fail before donor fitting when the crawler program is selected',
+);
+
+const legacyReport = JSON.parse(await readFile(resolve(
+  repoRoot,
+  'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v0/report.json',
+), 'utf8'));
+assert.doesNotThrow(
+  () => validateCrawlerBasinMatrixReport(legacyReport),
+  'program injection must preserve the historical crawler-transfer rejection receipt',
+);
+const programAwareReport = JSON.parse(await readFile(resolve(
+  repoRoot,
+  'artifacts/lirm-upright-macrocephalic-basin-robustness-assay-v1/report.json',
+), 'utf8'));
+assert.equal(programAwareReport.status, 'basin-passed-inspected');
+assert.doesNotThrow(() => validateCrawlerBasinMatrixReport(programAwareReport));
+const fallbackLie = structuredClone(programAwareReport);
+fallbackLie.effectiveArmatureProgramId = CRAWLER_ARMATURE_PROGRAM.id;
+assert.throws(
+  () => validateCrawlerBasinMatrixReport(fallbackLie, { requireFiles: false }),
+  /matrix armature program receipt mismatch/,
+  'an upright matrix must reject a crawler fallback even when donor metrics are green',
 );
 
 console.log('lirm upright macrocephalic basin robustness contracts passed');
