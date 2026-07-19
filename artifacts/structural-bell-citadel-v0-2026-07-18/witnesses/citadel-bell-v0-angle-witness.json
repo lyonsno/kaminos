@@ -1,0 +1,335 @@
+{
+  "schema": "kaminos.structural-bell.angle-witness.v0",
+  "ok": true,
+  "requestedUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fvisual%2Fcitadel-bell-v0.glb",
+  "effectiveUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fvisual%2Fcitadel-bell-v0.glb",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9455/devtools/browser/4f688490-f2ff-46e5-9e55-1da4e48630fa"
+  },
+  "asset": {
+    "schema": "kaminos.asset-smoke-link.v0",
+    "assetType": "mesh",
+    "status": "loaded",
+    "requestedRoot": "lerms-preview",
+    "requestedPath": "kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/visual/citadel-bell-v0.glb",
+    "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fvisual%2Fcitadel-bell-v0.glb",
+    "fileName": "citadel-bell-v0.glb",
+    "label": "Citadel Bell V0",
+    "registeredObjectId": "glb-51378b0b-f171-473b-ac37-0ddccc86fa5c",
+    "registeredAt": "2026-07-19T03:26:08.848Z",
+    "error": null
+  },
+  "sceneObjects": [
+    {
+      "id": "glb-51378b0b-f171-473b-ac37-0ddccc86fa5c",
+      "label": "Citadel Bell V0",
+      "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fvisual%2Fcitadel-bell-v0.glb",
+      "type": "glb",
+      "groupId": null,
+      "active": true,
+      "transform": {
+        "position": [
+          0,
+          0.6581117935463107,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.8085982113173458,
+          0.8085982113173458,
+          0.8085982113173458
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": null,
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    }
+  ],
+  "shots": [
+    {
+      "id": "front",
+      "pose": {
+        "id": "front",
+        "position": [
+          0,
+          0.05,
+          3.2
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ]
+      },
+      "camera": {
+        "position": [
+          0,
+          0.05000000000000028,
+          3.2
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0.9999560575840736,
+          0.009374588039850775,
+          0,
+          0,
+          -0.009374588039850775,
+          0.9999560575840736,
+          0,
+          0,
+          -0.019999121151681478,
+          -3.2003281136710284,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/witnesses/citadel-bell-v0-front.png",
+        "bytes": 358582
+      }
+    },
+    {
+      "id": "oblique",
+      "pose": {
+        "id": "oblique",
+        "position": [
+          2.2,
+          0.65,
+          2.25
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ]
+      },
+      "camera": {
+        "position": [
+          2.2000000000000006,
+          0.6500000000000002,
+          2.2500000000000004
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.7150066690130576,
+          -0.13724130597475248,
+          0.6855146148706067,
+          0,
+          1.3877787807814457e-17,
+          0.9805425919300044,
+          0.1963064578947647,
+          0,
+          -0.6991176319238787,
+          -0.14036042656508776,
+          0.7010944924813023,
+          0,
+          -4.119968255444917e-18,
+          -0.01961085183859999,
+          -3.213193958429863,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/witnesses/citadel-bell-v0-oblique.png",
+        "bytes": 410708
+      }
+    },
+    {
+      "id": "crown",
+      "pose": {
+        "id": "crown",
+        "position": [
+          0.35,
+          2.15,
+          1.1
+        ],
+        "target": [
+          0,
+          0.55,
+          0
+        ]
+      },
+      "camera": {
+        "position": [
+          0.35000000000000003,
+          2.15,
+          1.1000000000000003
+        ],
+        "target": [
+          0,
+          0.55,
+          0
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.952925780013262,
+          -0.2458895700321574,
+          0.17740004829626466,
+          0,
+          5.551115123125783e-17,
+          0.5850854501211608,
+          0.8109716493543523,
+          0,
+          -0.3032036572769469,
+          -0.7727957915296378,
+          0.5575430089311177,
+          0,
+          -1.249000902703301e-16,
+          -0.3217969975666387,
+          -2.4189763728397797,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/witnesses/citadel-bell-v0-crown.png",
+        "bytes": 299909
+      }
+    },
+    {
+      "id": "underside",
+      "pose": {
+        "id": "underside",
+        "position": [
+          0,
+          -1.55,
+          2.15
+        ],
+        "target": [
+          0,
+          -0.25,
+          0
+        ]
+      },
+      "camera": {
+        "position": [
+          0,
+          -1.5499999999999998,
+          2.15
+        ],
+        "target": [
+          0,
+          -0.25,
+          0
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0.8557319835805908,
+          -0.5174193389091946,
+          0,
+          0,
+          0.5174193389091946,
+          0.8557319835805908,
+          0,
+          0,
+          0.2139329958951473,
+          -2.641823740007521,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/witnesses/citadel-bell-v0-underside.png",
+        "bytes": 241763
+      }
+    }
+  ],
+  "phase": "capturing-angles"
+}

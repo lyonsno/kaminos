@@ -1,0 +1,95 @@
+{
+  "schema": "kaminos.structural-bell.cast-receipt.v0",
+  "createdAt": "2026-07-19T03:26:55Z",
+  "assetId": "citadel-bell-v0",
+  "sourceDirective": "internal operator-signed structural bell asset request, 2026-07-19",
+  "requiredBrief": "internal structural bell asset brief, 2026-07-18",
+  "consumer": "structural-material bell-tower lane",
+  "producer": "handy-candyman",
+  "kaminosBranch": "cc/handy-candyman-structural-bell-0718",
+  "consumerBase": "cc/structural-material-proxy-fracture-0713@26c4952e",
+  "generationRoute": {
+    "requestedRoute": "deterministic-procedural-glb",
+    "effectiveRoute": "deterministic-procedural-glb",
+    "backend": "node-manual-gltf-writer",
+    "model": null,
+    "config": {
+      "visualSegments": 56,
+      "proxySegments": 12,
+      "pivot": "crown-origin",
+      "bodyAxis": "-Y"
+    }
+  },
+  "directSmokeRoute": {
+    "requestedShape": "mesh_root/mesh_path",
+    "server": "http://127.0.0.1:8097/",
+    "serverRoot": "/private/tmp/kaminos-handy-candyman-structural-bell-0718",
+    "assetRootId": "lerms-preview",
+    "assetRootPath": "/private/tmp",
+    "visualUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fvisual%2Fcitadel-bell-v0.glb",
+    "proxyUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+    "routeContractSource": "internal direct-asset smoke route return, 2026-07-15"
+  },
+  "outputs": {
+    "visual": {
+      "path": "visual/citadel-bell-v0.glb",
+      "sha256": "f1af8771a8e4d896198c26a0f0f1fd71d40b7126fe82a6c3c68dc4b578e5913b",
+      "triangleCount": 2180,
+      "node": "BellVisual"
+    },
+    "proxy": {
+      "path": "proxy/citadel-bell-v0-proxy.glb",
+      "sha256": "fd1e28ca8757cbb402015c4eb66bdcd12cc5c6097f48580b3edd691a636acf23",
+      "triangleCount": 84,
+      "node": "BellProxy"
+    },
+    "descriptor": {
+      "path": "structuralAssetDescriptor.json",
+      "sha256": "d6c5c922f3f70b4f7fb525050e81f826c7f10560b3e33e34612b9076e289e38a"
+    }
+  },
+  "descriptor": {
+    "path": "structuralAssetDescriptor.json",
+    "socket": "bell-crown-v0",
+    "pivotTranslation": [0, 0, 0],
+    "coordinateFrame": { "handedness": "right", "up": "+Y", "forward": "+Z", "unit": "meter" },
+    "visualBounds": { "min": [-0.72, -1.36, -0.72], "max": [0.72, 0.04377641290737883, 0.72] },
+    "proxyBounds": { "min": [-0.72, -1.34, -0.72], "max": [0.72, 0.03, 0.72] },
+    "collisionStatus": "proxy-unverified",
+    "structuralAuthority": false
+  },
+  "witnesses": {
+    "visualDirect": {
+      "report": "witnesses/citadel-bell-v0-visual-direct.json",
+      "screenshot": "witnesses/citadel-bell-v0-visual-direct.png"
+    },
+    "proxyDirect": {
+      "report": "witnesses/citadel-bell-v0-proxy-direct.json",
+      "screenshot": "witnesses/citadel-bell-v0-proxy-direct.png"
+    },
+    "angles": {
+      "report": "witnesses/citadel-bell-v0-angle-witness.json",
+      "screenshots": [
+        "witnesses/citadel-bell-v0-front.png",
+        "witnesses/citadel-bell-v0-oblique.png",
+        "witnesses/citadel-bell-v0-crown.png",
+        "witnesses/citadel-bell-v0-underside.png"
+      ]
+    }
+  },
+  "visualVerdict": "Inspected captures show a coherent old bronze/dark-brass bell with strong mouth, shoulder, crown hardware, visible clapper, dark rim, and patina flecks; proxy is visibly low-poly and bounded.",
+  "claimBoundary": [
+    "visual/orbitability candidate",
+    "proxy is named and bounded for picking/collision experiments only",
+    "not production collision quality",
+    "not structural graph authority",
+    "not ring timing",
+    "not detached-body dynamics",
+    "not whole castle or fused tower asset"
+  ],
+  "usefulMisses": [
+    "Initial expected server root was set to /private/tmp, but the witness checks the app server root; rerun used /private/tmp/kaminos-handy-candyman-structural-bell-0718 while preserving lerms-preview=/private/tmp.",
+    "Initial GLB writer omitted bufferView.buffer; Three GLTFLoader failed before registration and the contract test now rejects that false pass.",
+    "Initial crown loop rose above the socket and weakened the pivot contract; generator now keeps max local Y near the socket."
+  ]
+}

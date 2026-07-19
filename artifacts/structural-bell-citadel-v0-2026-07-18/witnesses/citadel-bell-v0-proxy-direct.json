@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+  "effectiveUrl": "http://127.0.0.1:8097/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-structural-bell-0718",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9448,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9448-80217",
+  "settleMs": 3500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9448/devtools/browser/ef910a63-7747-4a6f-8595-562bebe6b040"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9448/devtools/browser/ef910a63-7747-4a6f-8595-562bebe6b040\nTrying to load the allocator multiple times. This is *not* supported.\n[80231:17230964:0718/232425.176074:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[80231:17230964:0718/232425.176168:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[80231:17230964:0718/232425.176837:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/witnesses/citadel-bell-v0-proxy-direct.png",
+  "screenshotBytes": 401290,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-structural-bell-0718/artifacts/structural-bell-citadel-v0-2026-07-18/proxy/citadel-bell-v0-proxy.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+        "fileName": "citadel-bell-v0-proxy.glb",
+        "label": "Citadel Bell V0 Proxy",
+        "registeredObjectId": "glb-f22ed961-9f7a-43b3-b84c-78f710804c99",
+        "registeredAt": "2026-07-19T03:24:22.800Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-f22ed961-9f7a-43b3-b84c-78f710804c99",
+        "label": "Citadel Bell V0 Proxy",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+        "type": "glb",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            0,
+            0.655,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.8148617070400591,
+            0.8148617070400591,
+            0.8148617070400591
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8097/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718%2Fartifacts%2Fstructural-bell-citadel-v0-2026-07-18%2Fproxy%2Fcitadel-bell-v0-proxy.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Citadel Bell V0 Proxy"
+    }
+  }
+}

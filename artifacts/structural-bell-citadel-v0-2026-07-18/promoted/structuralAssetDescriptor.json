@@ -1,0 +1,94 @@
+{
+  "schema": "kaminos.structural-material.asset-descriptor.v0",
+  "assetId": "citadel-bell-v0",
+  "visualRef": "visual/citadel-bell-v0.glb",
+  "proxyRef": "proxy/citadel-bell-v0-proxy.glb",
+  "assetRole": "bell-body",
+  "instancePolicy": "single-authored-asset",
+  "coordinateFrame": {
+    "handedness": "right",
+    "up": "+Y",
+    "forward": "+Z",
+    "unit": "meter"
+  },
+  "pivot": {
+    "kind": "attachment-socket",
+    "socketId": "bell-crown-v0",
+    "translation": [
+      0,
+      0,
+      0
+    ]
+  },
+  "localBounds": {
+    "min": [
+      -0.72,
+      -1.36,
+      -0.72
+    ],
+    "max": [
+      0.72,
+      0.04377641290737883,
+      0.72
+    ]
+  },
+  "proxyBounds": {
+    "min": [
+      -0.72,
+      -1.34,
+      -0.72
+    ],
+    "max": [
+      0.72,
+      0.03,
+      0.72
+    ]
+  },
+  "boundingSphere": {
+    "center": [
+      0,
+      -0.6581117935463107,
+      0
+    ],
+    "radius": 1.2367081524590906
+  },
+  "materialProfile": "weathered-cast-bronze-v0",
+  "materialSlots": [
+    "weathered-cast-bronze-v0",
+    "dark-aged-bronze-rim-v0",
+    "oxidized-patina-fleck-v0",
+    "dark-clapper-iron-v0"
+  ],
+  "triangleCount": {
+    "visual": 2180,
+    "proxy": 84
+  },
+  "nodeNames": {
+    "visual": "BellVisual",
+    "proxy": "BellProxy",
+    "socket": "bell-crown-v0"
+  },
+  "authoredScale": 1,
+  "transformsBaked": true,
+  "structuralAuthority": false,
+  "collisionStatus": "proxy-unverified",
+  "routeIdentity": {
+    "requestedRoute": "deterministic-procedural-glb",
+    "effectiveRoute": "deterministic-procedural-glb",
+    "backend": "node-manual-gltf-writer",
+    "model": null,
+    "config": {
+      "visualSegments": 56,
+      "proxySegments": 12,
+      "pivot": "crown-origin",
+      "bodyAxis": "-Y"
+    }
+  },
+  "claimBoundary": [
+    "visual/orbitability candidate",
+    "proxy is named and bounded for picking/collision experiments only",
+    "not structural graph authority",
+    "not production collision quality",
+    "not a whole castle or fused tower asset"
+  ]
+}
