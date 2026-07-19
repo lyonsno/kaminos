@@ -12110,7 +12110,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function setBoundarySplatGpuProfile(profile) {
     const forcedResponse = boundarySplatForcedResponseReceipt();
-    const splatRasterMs = Number(profile.stages?.splatRaster?.ms);
+    const splatRasterMs = profile.stages?.splatRaster?.ms;
     const completeResponseMs = Number.isFinite(splatRasterMs)
       ? splatRasterMs + forcedResponse.controlUploadCpuMs
       : null;
@@ -13135,8 +13135,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const rigidRasterMs = rigidRow?.splatRaster?.medianMs ?? null;
       const analyticalRasterMs = analyticalRow?.splatRaster?.medianMs ?? null;
       const controlUploadMs = analyticalRow?.forcedResponseControlUpload?.medianMs ?? null;
-      const incrementalRasterMs = Number.isFinite(rigidRasterMs) && Number.isFinite(analyticalRasterMs)
-        ? Math.max(0, analyticalRasterMs - rigidRasterMs)
+      const signedRasterDeltaMs = Number.isFinite(rigidRasterMs) && Number.isFinite(analyticalRasterMs)
+        ? analyticalRasterMs - rigidRasterMs
+        : null;
+      const timingNoiseFloor = Number.isFinite(signedRasterDeltaMs) && signedRasterDeltaMs < 0;
+      const incrementalRasterMs = Number.isFinite(signedRasterDeltaMs) && !timingNoiseFloor
+        ? signedRasterDeltaMs
         : null;
       const completeResponseMs = Number.isFinite(incrementalRasterMs) && Number.isFinite(controlUploadMs)
         ? incrementalRasterMs + controlUploadMs
@@ -13145,6 +13149,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         instanceCount,
         rigidControl: rigidRow,
         analyticalResponse: analyticalRow,
+        signedRasterDeltaMs,
+        timingNoiseFloor,
         incrementalRasterMs,
         controlUploadMs,
         completeResponseMs,
@@ -13152,8 +13158,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         targetMs: 1,
         firstFrontierMs: 1.5,
         stopCeilingMs: 2,
-        status: !Number.isFinite(completeResponseMs)
-          ? 'timing-unavailable'
+        status: timingNoiseFloor
+          ? 'timing-noise-floor'
+          : !Number.isFinite(completeResponseMs)
+            ? 'timing-unavailable'
           : completeResponseMs > 2
             ? 'stop-ceiling-exceeded'
             : completeResponseMs > 1.5

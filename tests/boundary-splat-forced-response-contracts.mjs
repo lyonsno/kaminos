@@ -157,6 +157,22 @@ assert.match(
   /async function sampleBoundarySplatForcedResponseCostLadder\(options = \{\}\)[\s\S]*counts:\s*\[1, 16, 100\][\s\S]*rigidControl[\s\S]*analyticalResponse[\s\S]*incrementalRasterMs[\s\S]*controlUploadMs[\s\S]*completeResponseMs[\s\S]*stopCeilingMs:\s*2/,
   'runtime must measure matched rigid and analytical complete paths at 1, 16, and 100 instances',
 );
+assert.doesNotMatch(
+  core,
+  /incrementalRasterMs\s*=\s*[^;]*Math\.max\(0,\s*analyticalRasterMs\s*-\s*rigidRasterMs\)/,
+  'negative analytical-minus-rigid deltas are measurement noise, not zero-cost response evidence',
+);
+assert.match(
+  core,
+  /signedRasterDeltaMs[\s\S]*timingNoiseFloor[\s\S]*incrementalRasterMs[\s\S]*timing-noise-floor/,
+  'timing ladder must retain a signed delta and fail loud when serial raster noise reverses it',
+);
+assert.match(core, /Number\.isFinite\(incrementalRasterMs\)/, 'complete response must require a finite non-negative raster delta');
+assert.match(
+  core,
+  /const splatRasterMs = profile\.stages\?\.splatRaster\?\.ms;[\s\S]*Number\.isFinite\(splatRasterMs\)/,
+  'missing raster timing must remain unavailable instead of Number(null) becoming zero milliseconds',
+);
 assert.match(
   core,
   /setBoundarySplatForcedResponses,[\s\S]*sampleBoundarySplatForcedResponseCostLadder,[\s\S]*boundarySplatForcedResponseReceipt/,
