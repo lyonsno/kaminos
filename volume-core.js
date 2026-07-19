@@ -16437,6 +16437,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   async function captureBoundarySplatSupervisionCandidates(options = {}) {
     if (!device) return { ok: false, reason: 'inactive', ...state };
+    const requireSelectiveTruthHigh = options.requireSelectiveTruthHigh !== false;
     const controlsBefore = { ...controlsSnapshot };
     const presentationBefore = volumePresentationModeRequestedRaw;
     const decompositionBefore = appearanceDecompositionModeRequestedRaw;
@@ -16457,8 +16458,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       setAppearanceDecompositionMode('off');
       controlsSnapshot = applyRuntimeQualityControls({
         ...controlsSnapshot,
-        selectiveHeadLiveRole: 'truthHigh',
-        selectiveHeadLiveRenderComposition: 'splat-only-v0',
+        ...(requireSelectiveTruthHigh ? {
+          selectiveHeadLiveRole: 'truthHigh',
+          selectiveHeadLiveRenderComposition: 'splat-only-v0',
+        } : {}),
         boundarySplatMode: 'analytic',
         boundarySplatFeatureCapture: true,
         volumeResidualMode: 'off',
@@ -16519,10 +16522,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (candidateSample.boundarySplatOverflowCount !== 0) {
         throw new Error(`fixed-candidate-supervision-overflow:${candidateSample.boundarySplatOverflowCount}`);
       }
-      if (candidateSample.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
+      if (requireSelectiveTruthHigh && candidateSample.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
         throw new Error(`fixed-candidate-supervision-selective-role:${candidateSample.selectiveHeadLiveEffectiveRole || 'missing'}`);
       }
-      if (candidateSample.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') {
+      if (requireSelectiveTruthHigh && candidateSample.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') {
         throw new Error(`fixed-candidate-supervision-selective-composition:${candidateSample.selectiveHeadLiveCompositionEffective || 'missing'}`);
       }
       if (candidateSample.simStepCount !== baseSimStepCount) {
@@ -16530,7 +16533,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       return {
         ok: true,
-        authority: 'live-simulator-frozen-state-fixed-candidate-supervision-v0',
+        authority: requireSelectiveTruthHigh
+          ? 'live-simulator-frozen-state-fixed-candidate-supervision-v0'
+          : 'live-simulator-frozen-state-fixed-candidate-oracle-cohort-v0',
         requestedRoute: state.requestedRoute,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
@@ -16551,8 +16556,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           viewport: [state.width, state.height],
         },
         captureAdmission: {
-          identity: 'fresh-live-selective-splat-candidate-admission-v0',
-          authority: 'fresh-live-settings-no-anchor-v0',
+          identity: requireSelectiveTruthHigh
+            ? 'fresh-live-selective-splat-candidate-admission-v0'
+            : 'fresh-live-geometric-splat-candidate-admission-v0',
+          authority: requireSelectiveTruthHigh
+            ? 'fresh-live-settings-no-anchor-v0'
+            : 'frozen-geometric-cohort-no-selective-head-authority-v0',
+          requireSelectiveTruthHigh,
           requestedRole: candidateSample.selectiveHeadLiveRequestedRole,
           effectiveRole: candidateSample.selectiveHeadLiveEffectiveRole,
           roleAuthority: candidateSample.selectiveHeadLiveRoleAuthority,
@@ -16620,6 +16630,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const candidateCapture = await captureBoundarySplatSupervisionCandidates({
       sameStateCaptureId: `${targetAuthority.sameStateCaptureId}-oracle-candidates`,
       resumeRenderLoop: false,
+      requireSelectiveTruthHigh: false,
     });
     if (candidateCapture?.ok !== true
       || candidateCapture.simStepCount !== state.simStepCount

@@ -307,6 +307,16 @@ assert.match(
   /sampleFrame\(\{[\s\S]*allowInactive:\s*true/,
   'held-state supervision capture explicitly authorizes render-only sampling while inactive',
 );
+assert.match(
+  supervisionCaptureSource,
+  /requireSelectiveTruthHigh[\s\S]*fixed-candidate-supervision-selective-role/,
+  'training supervision retains its strict truthHigh role gate while geometry-only consumers can opt out explicitly',
+);
+assert.match(
+  targetOracleBuilderSource,
+  /captureBoundarySplatSupervisionCandidates\(\{[\s\S]*requireSelectiveTruthHigh:\s*false/,
+  'the target oracle requests only frozen geometric candidate custody rather than impersonating selective-head training supervision',
+);
 assert.doesNotMatch(
   targetOracleBuilderSource,
   /if \(!state\.active/,
