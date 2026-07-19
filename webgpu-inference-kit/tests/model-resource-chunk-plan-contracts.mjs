@@ -624,6 +624,9 @@ const directFetchOptions = {
 };
 const observedDirectAuthorizations = [];
 const observedDirectRouting = [];
+const observedDirectTopLevelRouting = [];
+const observedDirectNullPrototypes = [];
+const observedDirectRequestMethods = [];
 const directSources = Object.freeze(Object.fromEntries(
   plan.chunkIds.map(chunkId => [chunkId, `https://models.example/direct-${chunkId}.bin`]),
 ));
@@ -631,6 +634,7 @@ const directBytesByUrl = new Map(
   plan.chunkIds.map(chunkId => [directSources[chunkId], chunkBytes[chunkId]]),
 );
 const originalRoutingDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'routing');
+const originalMethodDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'method');
 let directLease;
 try {
   const directLoad = fetchOptionsRoute.loadModelResourceChunksFromSources({
@@ -640,12 +644,20 @@ try {
     async fetch(url, options) {
       observedDirectAuthorizations.push(new Headers(options.headers).get('authorization'));
       observedDirectRouting.push(options.custom.routing ?? null);
+      observedDirectTopLevelRouting.push(options.routing ?? null);
+      observedDirectNullPrototypes.push(Object.getPrototypeOf(options) === null);
+      observedDirectRequestMethods.push(new Request(url, options).method);
       if (url === directSources['encoder-0']) {
         directFetchStarted.resolve();
         await directFetchRelease.promise;
         options.headers.authorization = 'direct-mutated-by-first-fetch';
         Object.defineProperty(Object.prototype, 'routing', {
           value: 'direct-mutated-by-first-fetch-prototype',
+          configurable: true,
+          writable: true,
+        });
+        Object.defineProperty(Object.prototype, 'method', {
+          value: 'POST',
           configurable: true,
           writable: true,
         });
@@ -660,6 +672,11 @@ try {
     configurable: true,
     writable: true,
   });
+  Object.defineProperty(Object.prototype, 'method', {
+    value: 'POST',
+    configurable: true,
+    writable: true,
+  });
   directFetchRelease.resolve();
   directLease = await directLoad;
 } finally {
@@ -668,6 +685,11 @@ try {
     Object.defineProperty(Object.prototype, 'routing', originalRoutingDescriptor);
   } else {
     delete Object.prototype.routing;
+  }
+  if (originalMethodDescriptor) {
+    Object.defineProperty(Object.prototype, 'method', originalMethodDescriptor);
+  } else {
+    delete Object.prototype.method;
   }
 }
 assert.deepEqual(
@@ -679,6 +701,21 @@ assert.deepEqual(
   observedDirectRouting,
   [null, null, null, null],
   'direct chunk loading must sever inherited prototype authority for every fetch',
+);
+assert.deepEqual(
+  observedDirectTopLevelRouting,
+  [null, null, null, null],
+  'direct chunk loading must sever inherited authority on the final RequestInit wrapper',
+);
+assert.deepEqual(
+  observedDirectNullPrototypes,
+  [true, true, true, true],
+  'direct chunk loading must materialize every final RequestInit with a null prototype',
+);
+assert.deepEqual(
+  observedDirectRequestMethods,
+  ['GET', 'GET', 'GET', 'GET'],
+  'direct chunk loading must prevent Request from consuming inherited init members',
 );
 const buffersBeforeNestedArray = fetchOptionsFixture.buffers.length;
 let nestedArrayFetchCount = 0;

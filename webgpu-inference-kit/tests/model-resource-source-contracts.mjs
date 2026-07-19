@@ -96,6 +96,36 @@ assert.equal(cold.bundle.verification.status, 'verified');
 assert.equal(fetchCount, 1);
 cold.bundle.release();
 
+const originalPrototypeMethod = Object.getOwnPropertyDescriptor(Object.prototype, 'method');
+let observedRequestSourceMethod;
+let requestSource;
+try {
+  requestSource = new Request('https://models.example/request-source.bin', { method: 'PUT' });
+  Object.defineProperty(Object.prototype, 'method', {
+    value: 'POST',
+    configurable: true,
+    writable: true,
+  });
+  const requestSourceAcquisition = await acquireWebGpuModelResourceBundle(manifest, requestSource, {
+    async fetch(requested, options) {
+      observedRequestSourceMethod = new Request(requested, options).method;
+      return streamedResponse([bytes]);
+    },
+  });
+  requestSourceAcquisition.bundle.release();
+} finally {
+  if (originalPrototypeMethod) {
+    Object.defineProperty(Object.prototype, 'method', originalPrototypeMethod);
+  } else {
+    delete Object.prototype.method;
+  }
+}
+assert.equal(
+  observedRequestSourceMethod,
+  requestSource.method,
+  'the final RequestInit wrapper must block inherited methods while preserving the source Request method',
+);
+
 const warm = await acquireWebGpuModelResourceBundle(manifest, 'https://models.example/acme.bin', {
   cache,
   fetch,

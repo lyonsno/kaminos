@@ -45,6 +45,37 @@ function awaitWithAbort(value, signal) {
   });
 }
 
+function createFetchRequestInit(source, fetchOptions, signal) {
+  const requestInit = Object.create(null);
+  if (fetchOptions != null) {
+    for (const key of Reflect.ownKeys(fetchOptions)) {
+      const descriptor = Object.getOwnPropertyDescriptor(fetchOptions, key);
+      if (!descriptor?.enumerable) continue;
+      Object.defineProperty(requestInit, key, {
+        value: fetchOptions[key],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+  }
+  Object.defineProperty(requestInit, 'signal', {
+    value: signal,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  if (requestInit.method === undefined) {
+    Object.defineProperty(requestInit, 'method', {
+      value: isInstance(source, 'Request') ? source.method : 'GET',
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return requestInit;
+}
+
 function isInstance(value, constructorName) {
   const Constructor = globalThis[constructorName];
   return typeof Constructor === 'function' && value instanceof Constructor;
@@ -353,7 +384,7 @@ async function acquire(expected, source, options) {
       const fetchImpl = options.fetch || globalThis.fetch;
       if (typeof fetchImpl !== 'function') throw new Error('fetch is required for URL and Request model resource sources');
       effectiveInput = await awaitWithAbort(
-        fetchImpl(source, { ...(options.fetchOptions || {}), signal: options.signal }),
+        fetchImpl(source, createFetchRequestInit(source, options.fetchOptions, options.signal)),
         options.signal,
       );
     }

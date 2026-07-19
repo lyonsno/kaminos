@@ -1216,9 +1216,13 @@ const prototypeSources = {
   },
 };
 const originalPrototypeRouting = Object.getOwnPropertyDescriptor(Object.prototype, 'routing');
+const originalPrototypeMethod = Object.getOwnPropertyDescriptor(Object.prototype, 'method');
 const oneShotPrototypeStarted = deferred();
 const oneShotPrototypeRelease = deferred();
 const observedOneShotPrototypeRouting = [];
+const observedOneShotTopLevelRouting = [];
+const observedOneShotNullPrototypes = [];
+const observedOneShotRequestMethods = [];
 let oneShotPrototypeLease;
 try {
   const loading = prototypeRoute.loadModelResourcePackageFromSources({
@@ -1227,6 +1231,9 @@ try {
     fetchOptions: { custom: {} },
     async fetch(url, options) {
       observedOneShotPrototypeRouting.push(options.custom.routing ?? null);
+      observedOneShotTopLevelRouting.push(options.routing ?? null);
+      observedOneShotNullPrototypes.push(Object.getPrototypeOf(options) === null);
+      observedOneShotRequestMethods.push(new Request(url, options).method);
       if (url === prototypeSources.encoder) {
         oneShotPrototypeStarted.resolve();
         await oneShotPrototypeRelease.promise;
@@ -1235,6 +1242,11 @@ try {
       if (url === prototypeSources.decoder['decoder-0']) {
         Object.defineProperty(Object.prototype, 'routing', {
           value: 'one-shot-mutated-by-first-chunk-prototype',
+          configurable: true,
+          writable: true,
+        });
+        Object.defineProperty(Object.prototype, 'method', {
+          value: 'POST',
           configurable: true,
           writable: true,
         });
@@ -1249,6 +1261,11 @@ try {
     configurable: true,
     writable: true,
   });
+  Object.defineProperty(Object.prototype, 'method', {
+    value: 'POST',
+    configurable: true,
+    writable: true,
+  });
   oneShotPrototypeRelease.resolve();
   oneShotPrototypeLease = await loading;
 } finally {
@@ -1258,11 +1275,31 @@ try {
   } else {
     delete Object.prototype.routing;
   }
+  if (originalPrototypeMethod) {
+    Object.defineProperty(Object.prototype, 'method', originalPrototypeMethod);
+  } else {
+    delete Object.prototype.method;
+  }
 }
 assert.deepEqual(
   observedOneShotPrototypeRouting,
   [null, null, null],
   'one-shot package admission must sever inherited prototype authority across children and chunks',
+);
+assert.deepEqual(
+  observedOneShotTopLevelRouting,
+  [null, null, null],
+  'one-shot package admission must sever inherited authority on every final RequestInit wrapper',
+);
+assert.deepEqual(
+  observedOneShotNullPrototypes,
+  [true, true, true],
+  'one-shot package admission must materialize every final RequestInit with a null prototype',
+);
+assert.deepEqual(
+  observedOneShotRequestMethods,
+  ['GET', 'GET', 'GET'],
+  'one-shot package admission must prevent Request from consuming inherited init members',
 );
 assert.equal(oneShotPrototypeLease.release().status, 'released');
 for (const allocation of chunkOnlyPackage.resources[0].chunkPlan.allocations) {
@@ -1280,6 +1317,9 @@ const reusablePrototypeSources = {
   },
 };
 const observedReusablePrototypeRouting = [];
+const observedReusableTopLevelRouting = [];
+const observedReusableNullPrototypes = [];
+const observedReusableRequestMethods = [];
 const reusablePrototypeLoader = prototypeRoute.createModelResourcePackageLoader({
   loaderId: 'package-prototype-authority-loader',
   package: chunkOnlyPackage,
@@ -1287,9 +1327,17 @@ const reusablePrototypeLoader = prototypeRoute.createModelResourcePackageLoader(
   fetchOptions: { custom: {} },
   async fetch(url, options) {
     observedReusablePrototypeRouting.push(options.custom.routing ?? null);
+    observedReusableTopLevelRouting.push(options.routing ?? null);
+    observedReusableNullPrototypes.push(Object.getPrototypeOf(options) === null);
+    observedReusableRequestMethods.push(new Request(url, options).method);
     if (url === reusablePrototypeSources.decoder['decoder-0']) {
       Object.defineProperty(Object.prototype, 'routing', {
         value: 'reusable-mutated-by-first-chunk-prototype',
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'method', {
+        value: 'POST',
         configurable: true,
         writable: true,
       });
@@ -1305,6 +1353,11 @@ try {
     configurable: true,
     writable: true,
   });
+  Object.defineProperty(Object.prototype, 'method', {
+    value: 'POST',
+    configurable: true,
+    writable: true,
+  });
   reusablePrototypeLease = await reusablePrototypeLoader.acquireResource({ resourceId: 'decoder' });
 } finally {
   if (originalPrototypeRouting) {
@@ -1312,11 +1365,31 @@ try {
   } else {
     delete Object.prototype.routing;
   }
+  if (originalPrototypeMethod) {
+    Object.defineProperty(Object.prototype, 'method', originalPrototypeMethod);
+  } else {
+    delete Object.prototype.method;
+  }
 }
 assert.deepEqual(
   observedReusablePrototypeRouting,
   [null, null],
   'reusable package admission must sever inherited prototype authority across chunk fetches',
+);
+assert.deepEqual(
+  observedReusableTopLevelRouting,
+  [null, null],
+  'reusable package admission must sever inherited authority on every final RequestInit wrapper',
+);
+assert.deepEqual(
+  observedReusableNullPrototypes,
+  [true, true],
+  'reusable package admission must materialize every final RequestInit with a null prototype',
+);
+assert.deepEqual(
+  observedReusableRequestMethods,
+  ['GET', 'GET'],
+  'reusable package admission must prevent Request from consuming inherited init members',
 );
 assert.equal(reusablePrototypeLease.release().status, 'released');
 assert.equal(reusablePrototypeLoader.close().status, 'closed');
