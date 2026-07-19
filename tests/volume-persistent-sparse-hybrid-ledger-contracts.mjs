@@ -33,7 +33,7 @@ const EXPECTED_ARMS = [
 test('ledger identity is pinned to the immutable producer artifact', () => {
   assert.equal(EXPECTED_COHORT_MANIFEST_SHA256, EXPECTED_SHA256);
   assert.deepEqual(ARM_IDS, EXPECTED_ARMS);
-  assert.doesNotMatch(source, /selectOpticalEnergy|rerunSelection|residualAwareRetarget/i);
+  assert.doesNotMatch(source, /selectOpticalEnergy|rerunSelection|function\s+\w*select/i);
   const expected = buildExpectedLedgerContract({
     schema: 'persistent-sparse-cohort-export-v0',
     authority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
