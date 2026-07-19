@@ -98,6 +98,14 @@ assert.match(source, /effectiveCameraPoseHash/, 'oracle hashes the actual camera
 assert.match(source, /imageLedger/, 'oracle binds every published comparison image by hash and byte count');
 assert.match(source, /coefficient payload is all zero/, 'oracle rejects a source object with no emission or extinction signal');
 assert.match(source, /inputIdentity/, 'oracle records exact manifest and capture identities');
+assert.match(source, /kaminos\.volume\.grid96-covariance-regime-socket\.v0/, 'oracle pins the r4 layer-importance socket schema');
+assert.match(source, /sha256:120a275c49ce7ae3456a9202ca3da55df5c51ab743b1c49ec71924abadae658d/, 'oracle pins the exact r4 socket identity');
+assert.match(source, /def load_layer_importance_socket\(/, 'oracle validates the source-owned layer-importance socket');
+assert.match(source, /def select_layer_retention\(/, 'oracle exposes deterministic uncapped layer selection');
+assert.match(source, /--importance-socket/, 'layer retention requires an explicit source socket');
+assert.match(source, /--ridge-retained-mass/, 'layer retention requires an explicit Ridge mass coordinate');
+assert.match(source, /--nonridge-retained-mass/, 'layer retention requires an explicit Non-Ridge mass coordinate');
+assert.match(source, /transmittanceLedger/, 'oracle binds exact per-camera transmittance artifacts');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
@@ -110,6 +118,7 @@ assert.match(selfTest.stdout, /compound optical mass contracts passed/);
 assert.match(selfTest.stdout, /multiscale matched-work contracts passed/);
 assert.match(selfTest.stdout, /selective split contracts passed/);
 assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
+assert.match(selfTest.stdout, /layer retention contracts passed/);
 
 const massAuthorityProbe = spawnSync(python, ['-c', String.raw`
 import importlib.util
@@ -312,6 +321,26 @@ assert.deepEqual(missingMultiscaleFailure.requested.footprintControls, {
   multiscaleMinorScale: null,
 });
 assert.match(missingMultiscaleFailure.error, /multiscale mode requires explicit/i);
+
+const partialImportanceReport = join(root, 'partial-importance-controls-report.json');
+const partialImportance = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'partial-importance-out'),
+  '--report', partialImportanceReport,
+  '--importance-socket', invalidManifestPath,
+  '--ridge-retained-mass', '0.9',
+], { encoding: 'utf8' });
+assert.notEqual(partialImportance.status, 0, 'partial layer-importance controls must fail before source loading');
+const partialImportanceFailure = JSON.parse(await readFile(partialImportanceReport, 'utf8'));
+assert.equal(partialImportanceFailure.failurePhase, 'importance-control-validation');
+assert.deepEqual(partialImportanceFailure.requested.importanceControls, {
+  socket: invalidManifestPath,
+  ridgeRetainedMass: 0.9,
+  nonRidgeRetainedMass: null,
+});
+assert.match(partialImportanceFailure.error, /requires explicit/i);
 
 const missingSplitReport = join(root, 'missing-selective-split-controls-report.json');
 const missingSplit = spawnSync(python, [

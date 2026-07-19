@@ -38,6 +38,19 @@ DEPOSITION_SCALE_IDENTITY = "native-cell-width-from-effective-source-grid-v0"
 GRID96_ADAPTER_SHA256 = "b967c04a50b37d6c64dd1857ec521f61202708f6920c125503500f702ddea87f"
 GRID96_ADAPTER_IDENTITY = "sha256:bbb2618c9769a495a01372a129397f8e8682cae21dd7743b93c4addd9cb9e588"
 GRID96_FEATURE_ORDER_AUTHORITY = "consumer-pinned-exact-grid96-source-adapter-feature-order-v0"
+IMPORTANCE_SOCKET_SCHEMA = "kaminos.volume.grid96-covariance-regime-socket.v0"
+IMPORTANCE_SOCKET_IDENTITY = "sha256:120a275c49ce7ae3456a9202ca3da55df5c51ab743b1c49ec71924abadae658d"
+IMPORTANCE_COEFFICIENT_SHA256 = "c7c018f4d9a7c2758322277640a2f8e7df06475e421d7f128b5cc05318c55c3b"
+IMPORTANCE_ROW_ORDER = "caller-ordered-native-cell-index-v0"
+LAYER_OPTICAL_WEIGHT_IDENTITY = "rgb-luma-plus-half-layer-extinction-v0"
+IMPORTANCE_CANDIDATE_ORDER = [
+    "center.x", "center.y", "center.z",
+    "covariance.xx", "covariance.xy", "covariance.xz",
+    "covariance.yy", "covariance.yz", "covariance.zz",
+    "eigenvalue.major", "eigenvalue.middle", "eigenvalue.minor",
+    "radiusWorld", "kernelCoherence", "ridgeOpticalWeight",
+    "nonRidgeOpticalWeight", "opticalWeight", "regimeConfidence",
+]
 FOOTPRINT_MODES = {
     "nearest": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
     "bilinear": "flow-tangent-five-tap-bilinear-v0",
@@ -271,6 +284,132 @@ def validate_capture_report(capture: dict[str, Any], state_step: int) -> list[di
     effective_hashes = [effective_camera_pose_hash(cameras[index].get("cameraPose")) for index in range(21)]
     require(len(set(effective_hashes)) == 21, "camera orbit reused an effective matrix payload")
     return [cameras[index] for index in range(21)]
+
+
+def resolve_importance_controls(args: argparse.Namespace) -> dict[str, Any] | None:
+    requested = {
+        "socket": args.importance_socket,
+        "ridgeRetainedMass": args.ridge_retained_mass,
+        "nonRidgeRetainedMass": args.nonridge_retained_mass,
+    }
+    provided = [value is not None for value in requested.values()]
+    if not any(provided):
+        return None
+    require(all(provided), "layer retention requires explicit --importance-socket, --ridge-retained-mass, and --nonridge-retained-mass")
+    for flag, value in (
+        ("--ridge-retained-mass", args.ridge_retained_mass),
+        ("--nonridge-retained-mass", args.nonridge_retained_mass),
+    ):
+        require(math.isfinite(value) and 0.0 < value <= 1.0, f"{flag} must be finite and in (0, 1]")
+    return {
+        "socket": str(Path(args.importance_socket).resolve()),
+        "ridgeRetainedMass": float(args.ridge_retained_mass),
+        "nonRidgeRetainedMass": float(args.nonridge_retained_mass),
+        "controlsExplicit": True,
+        "rowSelectionCap": None,
+    }
+
+
+def layer_optical_weights(coefficients: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    require(coefficients.ndim == 2 and coefficients.shape[1] == 8, "layer optical weights require [rows, 8] coefficients")
+    require(np.all(np.isfinite(coefficients)) and float(np.min(coefficients)) >= 0.0, "layer optical weights require finite nonnegative coefficients")
+    luma = np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    ridge = coefficients[:, 0:3] @ luma + np.float32(0.5) * coefficients[:, 3]
+    nonridge = coefficients[:, 4:7] @ luma + np.float32(0.5) * coefficients[:, 7]
+    return ridge.astype(np.float32, copy=False), nonridge.astype(np.float32, copy=False)
+
+
+def select_layer_retention(
+    weights: np.ndarray, native_ids: np.ndarray, retained_mass: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    require(weights.ndim == 1 and native_ids.ndim == 1 and weights.shape == native_ids.shape, "layer retention inputs must be aligned vectors")
+    require(np.all(np.isfinite(weights)) and float(np.min(weights, initial=0.0)) >= 0.0, "layer retention weights must be finite and nonnegative")
+    require(math.isfinite(retained_mass) and 0.0 < retained_mass <= 1.0, "retained layer mass must be in (0, 1]")
+    require(len(np.unique(native_ids)) == len(native_ids), "layer retention native ids must be unique")
+    total = float(np.sum(weights, dtype=np.float64))
+    require(total > 0.0, "layer retention source has zero optical mass")
+    positive = weights > 0.0
+    positive_count = int(np.count_nonzero(positive))
+    order = np.lexsort((native_ids.astype(np.uint64, copy=False), -weights.astype(np.float64, copy=False)))
+    positive_order = order[weights[order] > 0.0]
+    cumulative = np.cumsum(weights[positive_order], dtype=np.float64)
+    target = retained_mass * total
+    selected_count = min(int(np.searchsorted(cumulative, target, side="left")) + 1, positive_count)
+    mask = np.zeros(weights.shape, dtype=np.bool_)
+    mask[positive_order[:selected_count]] = True
+    selected_mass = float(cumulative[selected_count - 1])
+    return mask, {
+        "selectionIdentity": "descending-layer-optical-weight-native-id-tiebreak-uncapped-prefix-v0",
+        "opticalWeightIdentity": LAYER_OPTICAL_WEIGHT_IDENTITY,
+        "requestedRetainedMassFraction": float(retained_mass),
+        "effectiveRetainedMassFraction": selected_mass / total,
+        "sourceOpticalMass": total,
+        "retainedOpticalMass": selected_mass,
+        "positiveParentCount": positive_count,
+        "selectedParentCount": selected_count,
+        "totalParentCount": int(weights.shape[0]),
+        "rowSelectionCap": None,
+    }
+
+
+def load_layer_importance_socket(
+    socket_path: Path,
+    native_ids: np.ndarray,
+    coefficients: np.ndarray,
+    coefficient_path: Path,
+    verify_hashes: bool,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    socket = load_json(socket_path, "layer-importance socket")
+    require(socket.get("schema") == IMPORTANCE_SOCKET_SCHEMA, f"importance socket schema must be {IMPORTANCE_SOCKET_SCHEMA}")
+    require(socket.get("status") == "complete", "importance socket is not complete")
+    require(socket.get("identity") == IMPORTANCE_SOCKET_IDENTITY, "importance socket semantic identity drifted")
+    count = int(native_ids.shape[0])
+    require(socket.get("rowCount") == count, "importance socket row count drifted")
+    require(socket.get("rowOrderIdentity") == IMPORTANCE_ROW_ORDER, "importance socket row order drifted")
+    require(socket.get("candidateOrder") == IMPORTANCE_CANDIDATE_ORDER, "importance socket candidate order drifted")
+    require(socket.get("coefficientArtifactSha256") == IMPORTANCE_COEFFICIENT_SHA256, "importance socket coefficient identity drifted")
+    source = socket.get("source") or {}
+    require(source.get("grid") == 96, "importance socket source grid drifted")
+    require(source.get("rowCount") == count, "importance socket source row count drifted")
+    require(source.get("coefficientArtifactSha256") == IMPORTANCE_COEFFICIENT_SHA256, "importance socket source coefficient identity drifted")
+    require(source.get("nativeCellIndexSha256") == (socket.get("nativeCellIndexArtifact") or {}).get("sha256"), "importance socket native-id binding drifted")
+    if verify_hashes:
+        require(sha256_file(coefficient_path) == IMPORTANCE_COEFFICIENT_SHA256, "effective coefficient artifact does not match the importance socket")
+    candidate_path = validate_artifact(
+        socket.get("candidateArtifact"), socket_path, "importance candidates", "float32-le",
+        [count, len(IMPORTANCE_CANDIDATE_ORDER)], verify_hashes,
+    )
+    index_path = validate_artifact(
+        socket.get("nativeCellIndexArtifact"), socket_path, "importance native-cell indices",
+        "uint32-le", [count], verify_hashes,
+    )
+    socket_ids = np.memmap(index_path, dtype="<u4", mode="r", shape=(count,))
+    require(np.array_equal(socket_ids, native_ids), "importance socket native ids are not aligned to coefficient rows")
+    candidates = np.memmap(candidate_path, dtype="<f4", mode="r", shape=(count, len(IMPORTANCE_CANDIDATE_ORDER)))
+    require(np.all(np.isfinite(candidates)), "importance candidate artifact contains nonfinite values")
+    ridge, nonridge = layer_optical_weights(coefficients)
+    require(np.allclose(candidates[:, 14], ridge, rtol=2e-6, atol=2e-7), "importance socket Ridge optical weights do not reproduce")
+    require(np.allclose(candidates[:, 15], nonridge, rtol=2e-6, atol=2e-7), "importance socket Non-Ridge optical weights do not reproduce")
+    require(np.allclose(candidates[:, 16], ridge + nonridge, rtol=2e-6, atol=2e-7), "importance socket combined optical weights do not reproduce")
+    return ridge, nonridge, {
+        "schema": socket.get("schema"),
+        "identity": socket.get("identity"),
+        "path": str(socket_path),
+        "sha256": sha256_file(socket_path),
+        "rowCount": count,
+        "rowOrderIdentity": socket.get("rowOrderIdentity"),
+        "candidateArtifact": {
+            "path": str(candidate_path), "sha256": socket["candidateArtifact"]["sha256"],
+            "bytes": candidate_path.stat().st_size, "shape": [count, len(IMPORTANCE_CANDIDATE_ORDER)],
+        },
+        "nativeCellIndexArtifact": {
+            "path": str(index_path), "sha256": socket["nativeCellIndexArtifact"]["sha256"],
+            "bytes": index_path.stat().st_size, "shape": [count],
+        },
+        "coefficientArtifactSha256": IMPORTANCE_COEFFICIENT_SHA256,
+        "opticalWeightIdentity": LAYER_OPTICAL_WEIGHT_IDENTITY,
+        "hashVerificationSkipped": not verify_hashes,
+    }
 
 
 def project(points: np.ndarray, matrix_world_inverse: list[float], projection: list[float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1271,6 +1410,8 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         phase_state = {"value": "manifest-validation"}
     phase_state["value"] = "footprint-control-validation"
     footprint_controls = resolve_footprint_controls(args)
+    phase_state["value"] = "importance-control-validation"
+    importance_controls = resolve_importance_controls(args)
     phase_state["value"] = "manifest-validation"
     manifest_path = Path(args.manifest).resolve()
     capture_path = Path(args.capture_report).resolve()
@@ -1283,6 +1424,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
             "rowCount": int((state.get("rows") or {}).get("count")), "descriptor": descriptor_receipt,
             "footprintMode": footprint_identity(args.footprint_mode), "footprintControls": footprint_controls,
+            "importanceControls": importance_controls,
             "sourceGrid": source_grid, "nativeCellWidthWorld": native_cell_width_world(source_grid),
             "depositionScaleIdentity": DEPOSITION_SCALE_IDENTITY,
         }
@@ -1290,6 +1432,9 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
     if args.footprint_mode in {"higher-order", "compound", "selective-split"}:
         require(args.path_scale is not None, f"{args.footprint_mode} mode requires explicit --path-scale from the frozen bilinear baseline")
+    if importance_controls is not None:
+        require(args.footprint_mode == "bilinear", "layer-retention assay requires --footprint-mode bilinear to isolate parent support")
+        require(args.path_scale is not None, "layer-retention assay requires explicit --path-scale from the frozen full-parent bilinear baseline")
     phase_state["value"] = "capture-validation"
     capture_report = load_json(capture_path, "capture report")
     cameras = validate_capture_report(capture_report, state_step)
@@ -1335,6 +1480,58 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
 
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    effective_coefficients: np.ndarray = coefficients
+    importance_receipt: dict[str, Any] | None = None
+    if importance_controls is not None:
+        phase_state["value"] = "importance-socket-validation"
+        ridge_weights, nonridge_weights, socket_receipt = load_layer_importance_socket(
+            Path(importance_controls["socket"]), indices, coefficients, paths["coefficients"],
+            not args.skip_hash_verification,
+        )
+        ridge_mask, ridge_receipt = select_layer_retention(
+            ridge_weights, indices, importance_controls["ridgeRetainedMass"],
+        )
+        nonridge_mask, nonridge_receipt = select_layer_retention(
+            nonridge_weights, indices, importance_controls["nonRidgeRetainedMass"],
+        )
+        phase_state["value"] = "importance-artifact-write"
+        ridge_index_path = out_dir / "ridge-retained-native-cell-indices.u32"
+        nonridge_index_path = out_dir / "nonridge-retained-native-cell-indices.u32"
+        np.asarray(indices[ridge_mask], dtype="<u4").tofile(ridge_index_path)
+        np.asarray(indices[nonridge_mask], dtype="<u4").tofile(nonridge_index_path)
+        require(ridge_index_path.stat().st_size == ridge_receipt["selectedParentCount"] * 4, "Ridge retained-native-id artifact is partial")
+        require(nonridge_index_path.stat().st_size == nonridge_receipt["selectedParentCount"] * 4, "Non-Ridge retained-native-id artifact is partial")
+        ridge_receipt["selectedNativeCellArtifact"] = {
+            "path": str(ridge_index_path), "dtype": "uint32-le",
+            "shape": [ridge_receipt["selectedParentCount"]],
+            "bytes": ridge_index_path.stat().st_size, "sha256": sha256_file(ridge_index_path),
+        }
+        nonridge_receipt["selectedNativeCellArtifact"] = {
+            "path": str(nonridge_index_path), "dtype": "uint32-le",
+            "shape": [nonridge_receipt["selectedParentCount"]],
+            "bytes": nonridge_index_path.stat().st_size, "sha256": sha256_file(nonridge_index_path),
+        }
+        effective_coefficients = np.asarray(coefficients).copy()
+        effective_coefficients[~ridge_mask, 0:4] = 0.0
+        effective_coefficients[~nonridge_mask, 4:8] = 0.0
+        effective_nonzero_by_channel = np.count_nonzero(effective_coefficients, axis=0)
+        importance_receipt = {
+            "identity": "independent-ridge-nonridge-conserved-optical-mass-prefix-v0",
+            "socket": socket_receipt,
+            "controls": importance_controls,
+            "geometryRowCount": count,
+            "geometryRowsDropped": 0,
+            "coefficientsMoved": False,
+            "candidateSupportChanged": False,
+            "ridge": ridge_receipt,
+            "nonRidge": nonridge_receipt,
+            "effectiveCoefficientSignal": {
+                "minimum": float(np.min(effective_coefficients)),
+                "maximum": float(np.max(effective_coefficients)),
+                "nonzeroCount": int(np.sum(effective_nonzero_by_channel)),
+                "nonzeroCountByChannel": [int(value) for value in effective_nonzero_by_channel],
+            },
+        }
     phase_state["value"] = "calibration-raster"
     calibration_camera = cameras[10]
     calibration_footprint_mode = "bilinear" if args.footprint_mode == "selective-split" else args.footprint_mode
@@ -1342,7 +1539,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         bilinear_footprint_controls() if args.footprint_mode == "selective-split" else footprint_controls
     )
     calibration_planes, calibration_raster = rasterize_coefficients(
-        descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
+        descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, calibration_camera,
         args.depth_bins, calibration_footprint_mode, calibration_footprint_controls, source_grid,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
@@ -1379,14 +1576,14 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         for camera_index in attribution_cameras:
             camera = cameras[camera_index]
             baseline_planes = calibration_planes if camera_index == 10 else rasterize_coefficients(
-                descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
+                descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, camera,
                 args.depth_bins, "bilinear", bilinear_footprint_controls(), source_grid,
             )[0]
             target_capture_for_importance = find_capture(
                 capture_report, camera_index, "sharedTransmittanceContributionSum", 160,
             )
             camera_scores, camera_rows, camera_receipt = candidate_residual_importance(
-                descriptors[:, 0:3], coefficients, camera, baseline_planes,
+                descriptors[:, 0:3], effective_coefficients, camera, baseline_planes,
                 image_rgb(Path(target_capture_for_importance["imagePath"])),
                 path_scale, args.depth_bins,
             )
@@ -1435,7 +1632,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         }
         phase_state["value"] = "selective-split-calibration-raster"
         calibration_planes, calibration_raster = rasterize_coefficients(
-            descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
+            descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, calibration_camera,
             args.depth_bins, args.footprint_mode, footprint_controls, source_grid, split_mask, split_world_offsets,
         )
 
@@ -1445,7 +1642,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         index = int(camera["cameraIndex"])
         phase_state["value"] = f"camera-{index:02d}-raster"
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
-            descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
+            descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, camera,
             args.depth_bins, args.footprint_mode, footprint_controls, source_grid, split_mask, split_world_offsets,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
@@ -1483,6 +1680,20 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         write_png(out_dir / names["ridgeContribution"], ridge_contribution)
         write_png(out_dir / names["nonRidgeContribution"], nonridge_contribution)
         write_png(out_dir / names["residual"], residual_heatmap(expanded, complete))
+        transmittance_path = out_dir / f"{prefix}-final-transmittance.f32"
+        np.asarray(trans, dtype="<f4").tofile(transmittance_path)
+        require(
+            transmittance_path.stat().st_size == int(camera["width"]) * int(camera["height"]) * 4,
+            f"camera {index} transmittance artifact is partial",
+        )
+        transmittance_artifact = {
+            "path": str(transmittance_path), "dtype": "float32-le",
+            "shape": [int(camera["height"]), int(camera["width"])],
+            "bytes": transmittance_path.stat().st_size,
+            "sha256": sha256_file(transmittance_path),
+            "minimum": float(np.min(trans)), "mean": float(np.mean(trans)),
+            "maximum": float(np.max(trans)),
+        }
         expanded_metrics = image_metrics(expanded, complete)
         current_metrics = image_metrics(current, complete)
         metric = {
@@ -1494,6 +1705,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "current": current_metrics, "ridgeRidge": image_metrics(ridge_ridge, complete),
             "ridgeTotal": image_metrics(ridge_total, complete), "raster": raster_receipt,
             "meanFinalTransmittance": float(np.mean(trans)),
+            "transmittanceArtifact": transmittance_artifact,
         }
         metrics_rows.append(metric)
         camera_rows.append({
@@ -1509,6 +1721,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         row["raster"]["coefficientMass"] for row in metrics_rows
     ])
     image_ledger = {}
+    transmittance_ledger = {}
     for row in camera_rows:
         for relative in row["images"].values():
             path = out_dir / relative
@@ -1517,6 +1730,9 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "bytes": path.stat().st_size,
                 "sha256": sha256_file(path),
             }
+    for row in metrics_rows:
+        artifact = row["transmittanceArtifact"]
+        transmittance_ledger[f"camera-{row['cameraIndex']:02d}"] = artifact
 
     report = {
         "schema": REPORT_SCHEMA,
@@ -1541,6 +1757,11 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "splitMinCameraSupport": args.split_min_camera_support,
                 "splitOffsetWorld": args.split_offset_world,
             },
+            "importanceControls": {
+                "socket": args.importance_socket,
+                "ridgeRetainedMass": args.ridge_retained_mass,
+                "nonRidgeRetainedMass": args.nonridge_retained_mass,
+            },
         },
         "effective": {
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
@@ -1554,6 +1775,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "footprintControls": footprint_controls,
             "splitSelectionCap": None,
             "coefficientSignal": coefficient_signal,
+            "layerImportance": importance_receipt,
             "momentMatchReference": (
                 "flow-tangent-five-by-three-ellipse-first-two-moments-v0"
                 if args.footprint_mode in {"higher-order", "compound"} else None
@@ -1594,6 +1816,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "bracketUpper": calibration_fit["bracketUpper"],
         },
         "selectiveSplit": split_receipt,
+        "layerImportance": importance_receipt,
         "massAccounting": mass_accounting,
         "metrics": {
             "cameras": metrics_rows,
@@ -1615,6 +1838,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "gallery": str(out_dir / "index.html"),
             "cameraCount": len(camera_rows),
             "imageLedger": image_ledger,
+            "transmittanceLedger": transmittance_ledger,
         },
         "ceiling": {
             "truthful": True,
@@ -1848,6 +2072,21 @@ def self_test() -> None:
     require(missing_metrics["targetTopTailLumaUnderfit"] > 0.0, "missing peak was not diagnosed")
     require(missing_metrics["targetHighGradientUnderfit"] > 0.0, "missing target structure was not diagnosed")
     print("target-aligned metric contracts passed")
+    layer_fixture = np.asarray([
+        [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+    ], dtype=np.float32)
+    fixture_ridge, fixture_nonridge = layer_optical_weights(layer_fixture)
+    require(np.allclose(fixture_ridge, [0.2126, 0.7152]), "Ridge optical-weight definition drifted")
+    require(np.allclose(fixture_nonridge, [0.7152, 0.0722]), "Non-Ridge optical-weight definition drifted")
+    retention_weights = np.asarray([2.0, 2.0, 1.0], dtype=np.float32)
+    retention_ids = np.asarray([9, 3, 5], dtype=np.uint32)
+    retention_mask, retention_receipt = select_layer_retention(retention_weights, retention_ids, 0.8)
+    require(np.array_equal(retention_mask, [True, True, False]), "layer retention lost native-id tie ordering")
+    require(retention_receipt["selectedParentCount"] == 2, "layer retention selected the wrong parent count")
+    require(retention_receipt["rowSelectionCap"] is None, "layer retention installed a hidden row cap")
+    require(abs(retention_receipt["effectiveRetainedMassFraction"] - 0.8) < 1e-7, "layer retention mass accounting drifted")
+    print("layer retention contracts passed")
     print("coefficient render oracle self-test passed")
 
 
@@ -1872,6 +2111,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split-score-threshold", type=float)
     parser.add_argument("--split-min-camera-support", type=int)
     parser.add_argument("--split-offset-world", type=float)
+    parser.add_argument("--importance-socket")
+    parser.add_argument("--ridge-retained-mass", type=float)
+    parser.add_argument("--nonridge-retained-mass", type=float)
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--skip-hash-verification", action="store_true")
     parser.add_argument("--self-test", action="store_true")
@@ -1904,6 +2146,11 @@ def main() -> int:
             "splitMinCameraSupport": args.split_min_camera_support,
             "splitOffsetWorld": args.split_offset_world,
         },
+        "importanceControls": {
+            "socket": args.importance_socket,
+            "ridgeRetainedMass": args.ridge_retained_mass,
+            "nonRidgeRetainedMass": args.nonridge_retained_mass,
+        },
         "pathScale": args.path_scale,
         "stateStep": args.state_step,
         "depthBins": args.depth_bins,
@@ -1912,6 +2159,8 @@ def main() -> int:
     started = time.time()
     try:
         resolve_footprint_controls(args)
+        phase_state["value"] = "importance-control-validation"
+        resolve_importance_controls(args)
         phase_state["value"] = "manifest-validation"
         result = run_oracle(args, phase_state)
         phase_state["value"] = "report-write"
