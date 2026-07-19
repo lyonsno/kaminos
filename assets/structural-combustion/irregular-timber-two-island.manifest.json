@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.structural-mesh-asset-manifest.v0",
+  "assetPath": "assets/structural-combustion/irregular-timber-two-island.glb",
+  "assetIdentity": "sha256:bdbc14b51744cef147d5864865f823c9cb9d5bc49742dd33c0d907f12184ca97",
+  "byteLength": 4084,
+  "vertexCount": 84,
+  "triangleCount": 96,
+  "islandIds": [
+    "free",
+    "root"
+  ]
+}

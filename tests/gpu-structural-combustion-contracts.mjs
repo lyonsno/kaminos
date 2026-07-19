@@ -8,10 +8,43 @@ import {
   createGpuStructuralCombustionAssembly,
   evaluateStructuralCombustionTerminalChecks,
 } from '../structural-combustion-gpu.mjs';
-import { validateCombustibleObjectSourceDescriptor } from '../volume-core.js';
+import * as volumeModule from '../volume-core.js';
+
+const { validateCombustibleObjectSourceDescriptor } = volumeModule;
 
 const source = readFileSync(new URL('../structural-combustion-gpu.mjs', import.meta.url), 'utf8');
 const volumeSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+assert.equal(
+  typeof volumeModule.replaceOwnedGpuStructuralCombustionAssembly,
+  'function',
+  'structural combustion assembly replacement must have one testable ownership boundary',
+);
+const firstOwnedAssembly = { destroyCount: 0, destroy() { this.destroyCount += 1; } };
+const secondOwnedAssembly = { destroyCount: 0, destroy() { this.destroyCount += 1; } };
+assert.equal(
+  volumeModule.replaceOwnedGpuStructuralCombustionAssembly(firstOwnedAssembly, firstOwnedAssembly),
+  firstOwnedAssembly,
+  'rebinding the same assembly must not destroy it',
+);
+assert.equal(firstOwnedAssembly.destroyCount, 0);
+assert.equal(
+  volumeModule.replaceOwnedGpuStructuralCombustionAssembly(firstOwnedAssembly, secondOwnedAssembly),
+  secondOwnedAssembly,
+  'replacement must return the new owned assembly',
+);
+assert.equal(firstOwnedAssembly.destroyCount, 1, 'replacement must destroy the prior distinct assembly exactly once');
+assert.equal(volumeModule.replaceOwnedGpuStructuralCombustionAssembly(secondOwnedAssembly, null), null);
+assert.equal(secondOwnedAssembly.destroyCount, 1, 'clear and dispose must destroy the current assembly exactly once');
+assert.match(
+  volumeSource,
+  /gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly\([\s\S]*?gpuStructuralCombustionAssembly,[\s\S]*?assembly,[\s\S]*?\)/,
+  'volume replacement must use the owned structural assembly boundary',
+);
+assert.equal(
+  (volumeSource.match(/gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly\([\s\S]*?gpuStructuralCombustionAssembly,[\s\S]*?null,[\s\S]*?\)/g) || []).length,
+  2,
+  'volume clear and dispose must both release the owned structural assembly',
+);
 assert.doesNotMatch(source, /requestAdapter|requestDevice/, 'the combustion assembly cannot open a second GPU identity');
 assert.doesNotMatch(source, /setTimeout|ignitionRequested/, 'ignition cannot be a timer or host-authored request');
 assert.match(

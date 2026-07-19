@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 const PAGE_PATH = '/structural-combustion.html';
 const PAGE_ROUTE = 'kaminos.structural-combustion-dimensional-witness.v0';
 const AUTHORITY = 'same-device-pyro-node-material-bond-strength-v0';
 const CARRIED_FIRE_MODE = 'carried-fire';
 const MESH_PRESENTATION_MODE = 'indexed-mesh-skin-resident-structural-proxy-v0';
-const MESH_ASSET_PATH = '/assets/structural-combustion/irregular-timber-two-island.glb';
+const MESH_MANIFEST_PATH = '/assets/structural-combustion/irregular-timber-two-island.manifest.json';
+const MESH_MANIFEST = JSON.parse(readFileSync(
+  new URL(`.${MESH_MANIFEST_PATH}`, import.meta.url),
+  'utf8',
+));
+assert.equal(MESH_MANIFEST.schema, 'kaminos.structural-mesh-asset-manifest.v0', 'committed mesh manifest schema is invalid');
+assert.match(MESH_MANIFEST.assetIdentity || '', /^sha256:[0-9a-f]{64}$/, 'committed mesh asset identity is invalid');
+assert.ok(Number.isInteger(MESH_MANIFEST.byteLength) && MESH_MANIFEST.byteLength > 0, 'committed mesh byte length is invalid');
+assert.ok(Number.isInteger(MESH_MANIFEST.vertexCount) && MESH_MANIFEST.vertexCount >= 3, 'committed mesh vertex count is invalid');
+assert.ok(Number.isInteger(MESH_MANIFEST.triangleCount) && MESH_MANIFEST.triangleCount >= 1, 'committed mesh triangle count is invalid');
+assert.ok(Array.isArray(MESH_MANIFEST.islandIds) && MESH_MANIFEST.islandIds.length >= 2, 'committed mesh island set is invalid');
+const MESH_ASSET_PATH = `/${MESH_MANIFEST.assetPath}`;
 const REQUIRED_ROLES = ['emitter', 'control', 'propagation-target', 'propagation-control'];
 const REQUIRED_CARRIED_CHECKS = [
   'detachedEmitterMoved',
@@ -42,17 +54,25 @@ export function validateStructuralCombustionEvidence(evidence) {
   const meshAsset = evidence.meshAssetReceipt;
   assert.ok(meshAsset && typeof meshAsset === 'object', 'mesh asset receipt is missing');
   assert.equal(meshAsset.status, 'loaded', 'mesh asset receipt is not loaded');
+  const requestedManifest = new URL(meshAsset.manifestRequestedUrl, evidence.requestedUrl);
+  const effectiveManifest = new URL(meshAsset.manifestEffectiveUrl);
+  assert.equal(requestedManifest.pathname, MESH_MANIFEST_PATH, 'requested mesh manifest route is wrong');
+  assert.equal(effectiveManifest.pathname, MESH_MANIFEST_PATH, 'effective mesh manifest route is wrong');
+  assert.equal(requestedManifest.pathname, effectiveManifest.pathname, 'effective mesh manifest route differs from the request');
   const requestedAsset = new URL(meshAsset.requestedUrl, evidence.requestedUrl);
   const effectiveAsset = new URL(meshAsset.effectiveUrl);
   assert.equal(requestedAsset.pathname, MESH_ASSET_PATH, 'requested mesh asset route is wrong');
   assert.equal(effectiveAsset.pathname, MESH_ASSET_PATH, 'effective mesh asset route is wrong');
   assert.equal(requestedAsset.pathname, effectiveAsset.pathname, 'effective mesh asset route differs from the request');
-  assert.match(meshAsset.assetIdentity || '', /^sha256:[0-9a-f]{64}$/, 'mesh asset identity is not a SHA-256 receipt');
-  assert.ok(meshAsset.byteLength > 0, 'mesh asset receipt has no bytes');
-  assert.ok(meshAsset.vertexCount >= 6, 'mesh asset receipt has too few vertices');
-  assert.ok(meshAsset.triangleCount >= 2, 'mesh asset receipt has too few triangles');
-  const islandIds = new Set(meshAsset.islandIds || []);
-  assert.ok(islandIds.has('root') && islandIds.has('free') && islandIds.size >= 2, 'mesh asset receipt lacks the authored islands');
+  assert.equal(meshAsset.assetIdentity, MESH_MANIFEST.assetIdentity, 'mesh receipt does not match the committed mesh asset identity');
+  assert.equal(meshAsset.byteLength, MESH_MANIFEST.byteLength, 'mesh receipt byte length differs from the committed asset');
+  assert.equal(meshAsset.vertexCount, MESH_MANIFEST.vertexCount, 'mesh receipt vertex count differs from the committed asset');
+  assert.equal(meshAsset.triangleCount, MESH_MANIFEST.triangleCount, 'mesh receipt triangle count differs from the committed asset');
+  assert.deepEqual(
+    [...(meshAsset.islandIds || [])].sort(),
+    [...MESH_MANIFEST.islandIds].sort(),
+    'mesh receipt authored island set differs from the committed asset',
+  );
 
   for (const phase of ['initial', 'orbited', 'final']) {
     assertScreenshot(evidence[phase]?.screenshot, phase);

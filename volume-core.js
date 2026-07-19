@@ -14,6 +14,12 @@ export {
   GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA,
   validateGpuCombustibleObjectTerminalReceipt,
 };
+
+export function replaceOwnedGpuStructuralCombustionAssembly(current, next) {
+  if (current && current !== next) current.destroy();
+  return next || null;
+}
+
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
@@ -9398,7 +9404,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (gpuCombustibleObjectLoop) {
         throw new Error('GPU structural combustion cannot share the dynamic Pyro source socket with the object loop');
       }
-      if (!assembly?.encode || !assembly?.encodePresentation || !assembly?.sourceDescriptor || !assembly?.debugState) {
+      if (!assembly?.encode || !assembly?.encodePresentation || !assembly?.sourceDescriptor ||
+          !assembly?.debugState || !assembly?.destroy) {
         throw new Error('GPU structural combustion assembly contract is incomplete');
       }
       const descriptor = assembly.sourceDescriptor();
@@ -9425,7 +9432,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
         options.transfer || [96, 128, 96, 96],
       );
-      gpuStructuralCombustionAssembly = assembly;
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        assembly,
+      );
       state.combustibleObjectSource = combustibleObjectSourceDebug('gpu-structural-combustion-bound');
       state.gpuStructuralCombustionAssembly = assembly.debugState();
       emitStatus({
@@ -9435,8 +9445,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return { ...state.gpuStructuralCombustionAssembly };
     },
     clearGpuStructuralCombustionAssembly() {
-      gpuStructuralCombustionAssembly = null;
       combustibleObjectSourceReceiver?.clearSource();
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        null,
+      );
       state.gpuStructuralCombustionAssembly = null;
       state.combustibleObjectSource = combustibleObjectSourceDebug('gpu-structural-combustion-cleared');
       return { status: 'off', schema: 'kaminos.structural-combustion.node-material.v0' };
@@ -9579,7 +9592,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       combustibleObjectSourceReceiver = null;
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectLoop = null;
-      gpuStructuralCombustionAssembly = null;
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        null,
+      );
       gpuCombustibleObjectPresentationAnchorReady = false;
       frameTexture?.destroy();
       externalEmitterBuffer?.destroy();

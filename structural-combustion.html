@@ -136,7 +136,7 @@
     } from './structural-combustion-gpu.mjs';
 
     const ROUTE = 'kaminos.structural-combustion-dimensional-witness.v0';
-    const STRUCTURAL_MESH_URL = './assets/structural-combustion/irregular-timber-two-island.glb';
+    const STRUCTURAL_MESH_MANIFEST_URL = './assets/structural-combustion/irregular-timber-two-island.manifest.json';
     const stage = document.getElementById('stage');
     const statusEl = document.getElementById('status');
     const errorEl = document.getElementById('error');
@@ -168,11 +168,30 @@
       return `sha256:${Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('')}`;
     }
 
-    async function loadStructuralMeshSurface(requestedUrl) {
+    async function loadStructuralMeshSurface(manifestRequestedUrl) {
+      const manifestResponse = await fetch(manifestRequestedUrl, { cache: 'no-store' });
+      if (!manifestResponse.ok) throw new Error(`structural mesh manifest fetch failed with HTTP ${manifestResponse.status}`);
+      const manifest = await manifestResponse.json();
+      if (manifest?.schema !== 'kaminos.structural-mesh-asset-manifest.v0' ||
+          typeof manifest.assetPath !== 'string' ||
+          !/^sha256:[0-9a-f]{64}$/.test(manifest.assetIdentity || '') ||
+          !Number.isInteger(manifest.byteLength) || manifest.byteLength < 1 ||
+          !Number.isInteger(manifest.vertexCount) || manifest.vertexCount < 3 ||
+          !Number.isInteger(manifest.triangleCount) || manifest.triangleCount < 1 ||
+          !Array.isArray(manifest.islandIds) || manifest.islandIds.length < 2) {
+        throw new Error('structural mesh asset manifest is invalid');
+      }
+      const requestedUrl = new URL(manifest.assetPath, `${location.origin}/`).href;
+      if (new URL(requestedUrl).origin !== location.origin) {
+        throw new Error('structural mesh asset manifest escaped the witness origin');
+      }
       const response = await fetch(requestedUrl, { cache: 'no-store' });
       if (!response.ok) throw new Error(`structural mesh fetch failed with HTTP ${response.status}`);
       const bytes = await response.arrayBuffer();
       const assetIdentity = await sha256Identity(bytes);
+      if (assetIdentity !== manifest.assetIdentity) {
+        throw new Error(`structural mesh asset identity mismatch: expected ${manifest.assetIdentity}, received ${assetIdentity}`);
+      }
       const baseUrl = new URL('.', response.url).href;
       const gltf = await parseStructuralGltf(bytes, baseUrl);
       gltf.scene.updateMatrixWorld(true);
@@ -262,8 +281,15 @@
         vertexIslands: new Uint32Array(vertexIslands),
         islands,
       };
+      if (bytes.byteLength !== manifest.byteLength || positions.length / 3 !== manifest.vertexCount ||
+          indices.length / 3 !== manifest.triangleCount ||
+          JSON.stringify(islands.map(island => island.id).sort()) !== JSON.stringify([...manifest.islandIds].sort())) {
+        throw new Error('structural mesh asset manifest geometry mismatch');
+      }
       meshAssetReceipt = {
         schema: 'kaminos.structural-mesh-asset-receipt.v0',
+        manifestRequestedUrl,
+        manifestEffectiveUrl: manifestResponse.url,
         requestedUrl,
         effectiveUrl: response.url,
         assetIdentity,
@@ -598,7 +624,7 @@
         const propagationTargetState = createLayeredStructuralMaterial({ columns: 3, rows: 2, layers: 2, notch: false });
         const propagationControlState = createLayeredStructuralMaterial({ columns: 3, rows: 2, layers: 2, notch: false });
         failurePhase = 'structural-mesh-load';
-        const meshSurface = await loadStructuralMeshSurface(STRUCTURAL_MESH_URL);
+        const meshSurface = await loadStructuralMeshSurface(STRUCTURAL_MESH_MANIFEST_URL);
         const targetPresentation = Object.freeze({
           worldOffset: [-0.56, 0.08, -0.18],
           displayScale: [1.12, 0.42, 0.36],

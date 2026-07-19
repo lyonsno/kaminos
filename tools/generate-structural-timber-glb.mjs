@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RING = [
@@ -157,6 +158,21 @@ binaryHeader.writeUInt32LE(0x004e4942, 4);
 
 const defaultOutput = resolve(dirname(fileURLToPath(import.meta.url)), '../assets/structural-combustion/irregular-timber-two-island.glb');
 const output = resolve(process.argv[2] || defaultOutput);
+const manifestOutput = resolve(process.argv[3] || output.replace(/\.glb$/i, '.manifest.json'));
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const glb = Buffer.concat([header, jsonHeader, json, binaryHeader, binary]);
+const assetIdentity = `sha256:${createHash('sha256').update(glb).digest('hex')}`;
+const manifest = {
+  schema: 'kaminos.structural-mesh-asset-manifest.v0',
+  assetPath: relative(repositoryRoot, output).split('\\').join('/'),
+  assetIdentity,
+  byteLength: glb.byteLength,
+  vertexCount: parts.reduce((sum, part) => sum + part.geometry.positions.length / 3, 0),
+  triangleCount: parts.reduce((sum, part) => sum + part.geometry.indices.length / 3, 0),
+  islandIds: parts.map(part => part.id).sort(),
+};
 mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, Buffer.concat([header, jsonHeader, json, binaryHeader, binary]));
-console.log(JSON.stringify({ output, bytes: totalLength, triangles: parts.reduce((sum, part) => sum + part.geometry.indices.length / 3, 0) }));
+mkdirSync(dirname(manifestOutput), { recursive: true });
+writeFileSync(output, glb);
+writeFileSync(manifestOutput, `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(JSON.stringify({ output, manifestOutput, ...manifest }));

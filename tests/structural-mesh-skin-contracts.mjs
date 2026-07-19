@@ -12,6 +12,37 @@ assert.equal(
   'function',
   'the structural assembly must expose deterministic initialization-time mesh binding',
 );
+assert.equal(
+  typeof gpuModule.evaluateStructuralMeshMaterialBlend,
+  'function',
+  'mesh material interpolation must be independently testable from rigid island motion ownership',
+);
+
+const weightedMaterial = gpuModule.evaluateStructuralMeshMaterialBlend({
+  nodeIndices: [0, 1, 2, 3],
+  nodeWeights: [0.1, 0.6, 0.2, 0.1],
+  motionNodeIndex: 0,
+  materials: [
+    { thermal: [0.08, 1, 0, 0], rates: [0, 0, 0, 0], phase: 0 },
+    { thermal: [1.2, 0.7, 0.3, 2], rates: [0.8, 0.004, 0, 0], phase: 1 },
+    { thermal: [0.6, 0.9, 0.1, 1], rates: [0.2, 0.001, 0, 0], phase: 1 },
+    { thermal: [0.08, 1, 0, 0], rates: [0, 0, 0, 0], phase: 0 },
+  ],
+});
+assert.ok(Math.abs(weightedMaterial.ignition - 0.8) < 1e-6, 'weighted burning nodes must own mesh ignition');
+assert.ok(weightedMaterial.rates[1] > 0, 'weighted burning nodes must carry consumption into the mesh material');
+const alternateMotionOwner = gpuModule.evaluateStructuralMeshMaterialBlend({
+  nodeIndices: [0, 1, 2, 3],
+  nodeWeights: [0.1, 0.6, 0.2, 0.1],
+  motionNodeIndex: 3,
+  materials: [
+    { thermal: [0.08, 1, 0, 0], rates: [0, 0, 0, 0], phase: 0 },
+    { thermal: [1.2, 0.7, 0.3, 2], rates: [0.8, 0.004, 0, 0], phase: 1 },
+    { thermal: [0.6, 0.9, 0.1, 1], rates: [0.2, 0.001, 0, 0], phase: 1 },
+    { thermal: [0.08, 1, 0, 0], rates: [0, 0, 0, 0], phase: 0 },
+  ],
+});
+assert.deepEqual(alternateMotionOwner, weightedMaterial, 'changing rigid motion ownership cannot change mesh material state');
 
 const state = createLayeredStructuralMaterial({ columns: 5, rows: 4, layers: 3, notch: true });
 const mesh = {
@@ -102,6 +133,11 @@ assert.match(source, /struct MeshBinding[\s\S]*nodeIndices: vec4<u32>[\s\S]*node
 assert.match(source, /fn meshSurfaceVertex\(/, 'mesh vertices require a dedicated structural presentation stage');
 assert.match(source, /materials\[binding\.nodeIndices\.x\]/, 'mesh shading must consume resident node material state');
 assert.match(source, /componentMotions\[binding\.motion\.x\]/, 'mesh displacement must consume resident component motion');
+assert.match(
+  source,
+  /let ignition = f32\(material0\.identity\.z\) \* binding\.nodeWeights\.x[\s\S]*material3\.identity\.z/,
+  'mesh ignition must be weighted from the same resident material nodes as heat and consumption',
+);
 assert.match(source, /pass\.draw\(socket\.meshSkin\.indexCount\)/, 'the mesh surface must render its authored index stream');
 assert.match(
   source,

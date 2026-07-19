@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { validateStructuralCombustionEvidence } from '../structural-combustion-evidence.mjs';
 
 const witnessSource = readFileSync(new URL('../structural-combustion-witness.mjs', import.meta.url), 'utf8');
+const assetManifestUrl = new URL('../assets/structural-combustion/irregular-timber-two-island.manifest.json', import.meta.url);
+assert.ok(existsSync(assetManifestUrl), 'the generated structural mesh asset manifest is missing');
+const assetManifest = JSON.parse(readFileSync(assetManifestUrl, 'utf8'));
+const assetBytes = readFileSync(new URL(`../${assetManifest.assetPath}`, import.meta.url));
+assert.equal(assetManifest.schema, 'kaminos.structural-mesh-asset-manifest.v0');
+assert.equal(`sha256:${createHash('sha256').update(assetBytes).digest('hex')}`, assetManifest.assetIdentity);
 assert.match(
   witnessSource,
   /function isExecutionContextReplacement/,
@@ -45,13 +52,15 @@ const fixture = {
   presentationMode: 'indexed-mesh-skin-resident-structural-proxy-v0',
   meshAssetReceipt: {
     status: 'loaded',
+    manifestRequestedUrl: './assets/structural-combustion/irregular-timber-two-island.manifest.json',
+    manifestEffectiveUrl: 'http://127.0.0.1:8178/assets/structural-combustion/irregular-timber-two-island.manifest.json',
     requestedUrl: './assets/structural-combustion/irregular-timber-two-island.glb',
     effectiveUrl: 'http://127.0.0.1:8178/assets/structural-combustion/irregular-timber-two-island.glb',
-    assetIdentity: `sha256:${'a'.repeat(64)}`,
-    byteLength: 4084,
-    vertexCount: 84,
-    triangleCount: 96,
-    islandIds: ['free', 'root'],
+    assetIdentity: assetManifest.assetIdentity,
+    byteLength: assetManifest.byteLength,
+    vertexCount: assetManifest.vertexCount,
+    triangleCount: assetManifest.triangleCount,
+    islandIds: assetManifest.islandIds,
   },
   initial: {
     screenshot: { sha256: 'initial', nonDarkPixels: 2400, sampledPixels: 9216 },
@@ -89,10 +98,10 @@ const fixture = {
         propagationControlCool: true,
       },
       structures: [
-        { role: 'emitter', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
-        { role: 'control', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
-        { role: 'propagation-target', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
-        { role: 'propagation-control', meshAssetIdentity: `sha256:${'a'.repeat(64)}`, meshTriangleCount: 96 },
+        { role: 'emitter', meshAssetIdentity: assetManifest.assetIdentity, meshTriangleCount: assetManifest.triangleCount },
+        { role: 'control', meshAssetIdentity: assetManifest.assetIdentity, meshTriangleCount: assetManifest.triangleCount },
+        { role: 'propagation-target', meshAssetIdentity: assetManifest.assetIdentity, meshTriangleCount: assetManifest.triangleCount },
+        { role: 'propagation-control', meshAssetIdentity: assetManifest.assetIdentity, meshTriangleCount: assetManifest.triangleCount },
       ],
       carriedAudit: { movedSourceRecords: 12, firstMovedSourceStep: 120, lastMovedSourceStep: 180 },
       dispatchCount: 900,
@@ -144,6 +153,25 @@ assert.throws(
     },
   }),
   /mesh asset identity continuity/i,
+);
+const wrongButInternallyConsistentIdentity = `sha256:${'b'.repeat(64)}`;
+assert.throws(
+  () => validateStructuralCombustionEvidence({
+    ...fixture,
+    meshAssetReceipt: { ...fixture.meshAssetReceipt, assetIdentity: wrongButInternallyConsistentIdentity },
+    final: {
+      ...fixture.final,
+      terminalReceipt: {
+        ...fixture.final.terminalReceipt,
+        structures: fixture.final.terminalReceipt.structures.map(structure => ({
+          ...structure,
+          meshAssetIdentity: wrongButInternallyConsistentIdentity,
+        })),
+      },
+    },
+  }),
+  /committed mesh asset identity/i,
+  'an internally consistent wrong GLB cannot pass at the committed asset route',
 );
 assert.throws(
   () => validateStructuralCombustionEvidence({

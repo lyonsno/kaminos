@@ -261,6 +261,34 @@ function structuralMeshNodeBounds(island, islandIndex) {
   return { minimum, maximum, motionAnchor };
 }
 
+export function evaluateStructuralMeshMaterialBlend({ materials, nodeIndices, nodeWeights } = {}) {
+  if (!Array.isArray(materials) || materials.length < 1) {
+    throw new Error('structural mesh material blend requires resident materials');
+  }
+  if (!Array.isArray(nodeIndices) || nodeIndices.length !== 4 ||
+      nodeIndices.some(index => !Number.isInteger(index) || index < 0 || index >= materials.length)) {
+    throw new Error('structural mesh material blend requires four valid node indices');
+  }
+  const weights = structuralMeshVector('material blend weights', nodeWeights, 4);
+  const weightSum = weights.reduce((sum, value) => sum + value, 0);
+  if (weights.some(value => value < 0) || Math.abs(weightSum - 1) > 1e-6) {
+    throw new Error('structural mesh material blend weights must be nonnegative and normalized');
+  }
+  const weightedVector = key => Array.from({ length: 4 }, (_, component) => (
+    nodeIndices.reduce((sum, nodeIndex, offset) => {
+      const value = Number(materials[nodeIndex]?.[key]?.[component] ?? 0);
+      if (!Number.isFinite(value)) throw new Error(`structural mesh material ${key} must be finite`);
+      return sum + value * weights[offset];
+    }, 0)
+  ));
+  const ignition = nodeIndices.reduce((sum, nodeIndex, offset) => {
+    const phase = Number(materials[nodeIndex]?.phase ?? 0);
+    if (!Number.isFinite(phase)) throw new Error('structural mesh material phase must be finite');
+    return sum + phase * weights[offset];
+  }, 0);
+  return { thermal: weightedVector('thermal'), rates: weightedVector('rates'), ignition };
+}
+
 export function createStructuralMeshSkinBinding({ mesh, state } = {}) {
   if (mesh?.schema !== 'kaminos.structural-mesh-surface.v0') {
     throw new Error('structural mesh surface schema mismatch');
@@ -1037,6 +1065,11 @@ struct MeshBinding {
   motion: vec4<u32>,
 }
 
+struct MeshMaterial {
+  material: NodeMaterial,
+  ignition: f32,
+}
+
 struct Presentation {
   viewProjection: mat4x4<f32>,
   world: vec4<f32>,
@@ -1256,7 +1289,7 @@ fn surfaceFaceFrame(faceIndex: u32, fractureFace: bool) -> vec4<f32> {
   return vec4<f32>(axes[faceIndex], select(0.0, 1.0, fractureFace));
 }
 
-fn meshMaterial(binding: MeshBinding) -> NodeMaterial {
+fn meshMaterial(binding: MeshBinding) -> MeshMaterial {
   let material0 = materials[binding.nodeIndices.x];
   let material1 = materials[binding.nodeIndices.y];
   let material2 = materials[binding.nodeIndices.z];
@@ -1270,7 +1303,11 @@ fn meshMaterial(binding: MeshBinding) -> NodeMaterial {
     material1.rates * binding.nodeWeights.y +
     material2.rates * binding.nodeWeights.z +
     material3.rates * binding.nodeWeights.w;
-  return material;
+  let ignition = f32(material0.identity.z) * binding.nodeWeights.x +
+    f32(material1.identity.z) * binding.nodeWeights.y +
+    f32(material2.identity.z) * binding.nodeWeights.z +
+    f32(material3.identity.z) * binding.nodeWeights.w;
+  return MeshMaterial(material, ignition);
 }
 
 @vertex
@@ -1278,7 +1315,9 @@ fn meshSurfaceVertex(@builtin(vertex_index) indexStreamOffset: u32) -> VertexOut
   let meshVertexIndex = meshIndices[indexStreamOffset];
   let vertex = meshVertices[meshVertexIndex];
   let binding = meshBindings[meshVertexIndex];
-  let material = meshMaterial(binding);
+  let meshMaterialState = meshMaterial(binding);
+  let material = meshMaterialState.material;
+  let reaction = vec4<f32>(material.rates.xy, meshMaterialState.ignition, 0.0);
   let motion = componentMotions[binding.motion.x].translation.xyz;
   let nodeDisplacement = nodes[binding.motion.x].displacement.xyz;
   let materialPosition = vertex.position.xyz;
@@ -1290,9 +1329,9 @@ fn meshSurfaceVertex(@builtin(vertex_index) indexStreamOffset: u32) -> VertexOut
   out.color = vec4<f32>(vec3<f32>(1.0), 0.98);
   out.normal = surfaceNormal;
   out.surface = 1.0;
-  out.emissive = materialEmissive(material);
+  out.emissive = semanticBurnAppearance(material.thermal, reaction).a;
   out.thermal = material.thermal;
-  out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
+  out.reaction = reaction;
   out.materialPosition = materialPosition;
   out.faceFrame = vec4<f32>(surfaceNormal, select(0.0, 1.0, abs(surfaceNormal.x) > 0.82));
   return out;
