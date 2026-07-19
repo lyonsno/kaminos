@@ -18,8 +18,32 @@ const REJECTED_LEARNED_MODELS = new Set([
 const SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
+const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
+const SHARED_CURRENT_PHASE_SOURCE = 'shared-current-control';
+const LIVE_HISTORY_PHASE_SOURCE = 'live-history-offset';
+const SAME_HISTORY_SLOT_PHASE_SOURCE = 'same-history-slot-control';
+const AGE_SWEEP_PHASE_SOURCE = 'age-sweep-history';
+const PHASE_LAB_MODES = ['shared-current', 'same-history-slot', 'offset-history', 'age-sweep'];
+const PHASE_SOURCE_IDENTITIES = new Set([
+  SHARED_CURRENT_PHASE_SOURCE,
+  LIVE_HISTORY_PHASE_SOURCE,
+  SAME_HISTORY_SLOT_PHASE_SOURCE,
+  AGE_SWEEP_PHASE_SOURCE,
+]);
 
 const args = parseArgs(process.argv.slice(2));
+const forcedResponseAssay = args.has('--forced-response-assay');
+const requestedForcedResponseRendererMode = String(args.get('--forced-response-renderer') || 'analytic');
+const forcedResponseRendererMode = ['analytic', 'learned'].includes(requestedForcedResponseRendererMode)
+  ? requestedForcedResponseRendererMode
+  : null;
+const forcedResponseRendererIdentity = forcedResponseRendererMode === 'analytic'
+  ? SPLAT_RENDERER
+  : LEARNED_SPLAT_RENDERER;
+const forcedResponseExpectedModelIdentity = forcedResponseRendererMode === 'analytic'
+  ? null
+  : EXPECTED_LEARNED_MODEL;
+const FORCED_RESPONSE_SCHEMA = 'kaminos.volume.boundary-splat-forced-response-witness.v0';
 const requestedRoute = String(args.get('--url') || '');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-boundary-splat-motion-witness'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/motion-witness-report.json`));
@@ -31,7 +55,14 @@ const frameCount = Math.max(2, Math.floor(Number(args.get('--frames') || 6)));
 const stepMs = Math.max(1, Number(args.get('--step-ms') || 2000));
 const wallStepMs = Math.max(0, Number(args.get('--wall-step-ms') || 0));
 const keepBrowserOpen = args.has('--keep-browser-open');
+const headless = args.has('--headless');
 const userDataDir = resolve(String(args.get('--user-data-dir') || mkdtempSync(`${tmpdir()}/kaminos-splat-motion-chrome-`)));
+const requestedPhaseStride = Math.max(1, Math.floor(Number(args.get('--phase-stride') || 1)));
+const requestedHistoryDepth = Math.max(4, Math.floor(Number(args.get('--history-depth') || 4)));
+const requestedHistoryFrameStride = Math.max(1, Math.floor(Number(args.get('--history-frame-stride') || 1)));
+const operatorPrettySubstratePath = args.get('--operator-pretty-substrate')
+  ? resolve(String(args.get('--operator-pretty-substrate')))
+  : null;
 
 const runStartedAt = new Date().toISOString();
 const lastTrustworthyEvidence = {};
@@ -41,6 +72,9 @@ let failurePhase = 'startup';
 
 try {
   if (!requestedRoute) throw new Error('missing --url');
+  if (forcedResponseAssay && !forcedResponseRendererMode) {
+    throw new Error(`unsupported --forced-response-renderer:${requestedForcedResponseRendererMode}`);
+  }
   mkdirSync(outDir, { recursive: true });
   browserSession = await launchBrowser();
   failurePhase = 'cdp-connect';
@@ -51,12 +85,32 @@ try {
   await wsRequest('Page.enable');
   await wsRequest('Runtime.enable');
   failurePhase = 'route-load';
+  await navigateToRequestedRoute();
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
   const initialState = await debugState();
+  validateRequestedEffectiveConfig(initialState);
   lastTrustworthyEvidence.initialState = compactState(initialState);
+  const effectivePageUrl = await currentPageUrl();
 
+  if (forcedResponseAssay) {
+    failurePhase = 'forced-response-assay';
+    const report = await captureForcedResponseAssay({ effectivePageUrl });
+    lastTrustworthyEvidence.forcedResponseAssay = {
+      effectiveRoute: report.effectiveRoute,
+      inspectedArtifacts: report.inspectedArtifacts,
+      timingAuthority: report.timing?.authority || null,
+      timingRows: report.timing?.rows || null,
+      visualDeltas: report.visualDeltas,
+      routeEfficacyProbe: report.routeEfficacyProbe,
+      stopCeilingExceeded: report.stopCeilingExceeded,
+    };
+    failurePhase = 'forced-response-false-closure-validation';
+    rejectForcedResponseFalseClosure(report);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report, null, 2));
+  } else {
   const requestedRouteIdentity = {
     requestedRoute,
     rendererIdentity: SPLAT_RENDERER,
@@ -107,12 +161,15 @@ try {
       userDataDir,
       keepBrowserOpen,
       windowSize,
-      pageUrl: page.url,
+      pageUrl: effectivePageUrl,
     },
     captureConfig: {
       frameCount,
       stepMs,
       wallStepMs,
+      requestedPhaseStride,
+      requestedHistoryDepth,
+      requestedHistoryFrameStride,
       staticCameraDurationMs: (frameCount - 1) * stepMs,
       grazingCameraDurationMs: (frameCount - 1) * stepMs,
     },
@@ -122,6 +179,9 @@ try {
     grazingCamera: grazingSequence,
     candidateChurn: summarizeCandidateChurn([...staticSequence.frames, ...grazingSequence.frames]),
     birthDeathTelemetry: summarizeBirthDeath([...staticSequence.frames, ...grazingSequence.frames]),
+    duplicateMotionWitness: summarizeDuplicateMotionWitness([...staticSequence.frames, ...grazingSequence.frames]),
+    phaseLabWitness: summarizePhaseLabWitness([...staticSequence.frames, ...grazingSequence.frames]),
+    operatorPrettySubstrate: loadOperatorPrettySubstrate(operatorPrettySubstratePath),
     inspectedArtifacts: [
       staticSequence.contactSheet || null,
       grazingSequence.contactSheet || null,
@@ -140,9 +200,10 @@ try {
   rejectFalseClosure(report);
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
+  }
 } catch (error) {
   const failureReport = {
-    schema: SCHEMA,
+    schema: forcedResponseAssay ? FORCED_RESPONSE_SCHEMA : SCHEMA,
     status: 'failed',
     failurePhase,
     error: error?.stack || error?.message || String(error),
@@ -153,6 +214,8 @@ try {
     browser: browserSession ? {
       identity: browserSession.identity,
       mode: browserSession.mode,
+      headless,
+      unsafeWebGpuEnabled: headless,
       port,
       userDataDir,
       keepBrowserOpen,
@@ -195,7 +258,16 @@ function defaultChromePath() {
 }
 
 async function launchBrowser() {
+  try {
+    await cdpFetch('/json/version');
+    return {
+      identity: 'boundary-splat-motion-single-cdp-browser-v0',
+      mode: 'connected-existing',
+      process: null,
+    };
+  } catch {}
   const proc = spawn(chrome, [
+    ...(headless ? ['--headless=new', '--enable-unsafe-webgpu'] : []),
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
@@ -277,6 +349,58 @@ function wsRequest(method, params = {}) {
   });
 }
 
+async function currentPageUrl() {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  return result.result.value || '';
+}
+
+async function navigateToRequestedRoute() {
+  const current = await currentPageUrl().catch(() => '');
+  if (current !== requestedRoute) {
+    await wsRequest('Page.navigate', { url: requestedRoute });
+  }
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const result = await wsRequest('Runtime.evaluate', {
+      expression: `({ href: location.href, readyState: document.readyState })`,
+      returnByValue: true,
+    });
+    const value = result.result.value || {};
+    if (value.href === requestedRoute && value.readyState !== 'loading') return value;
+    await delay(125);
+  }
+  throw new Error(`stale page route: requested ${requestedRoute}`);
+}
+
+function validateRequestedEffectiveConfig(state) {
+  const params = new URL(requestedRoute).searchParams;
+  const expected = {
+    boundarySplatPhaseMode: params.get('volume_boundary_splat_phase_mode') || null,
+    boundarySplatPhaseStride: Number(params.get('volume_boundary_splat_phase_stride') || requestedPhaseStride),
+    boundarySplatHistoryDepth: Number(params.get('volume_boundary_splat_history_depth') || requestedHistoryDepth),
+    boundarySplatHistoryFrameStride: Number(params.get('volume_boundary_splat_history_frame_stride') || requestedHistoryFrameStride),
+  };
+  const mismatches = [];
+  if (expected.boundarySplatPhaseMode && state?.boundarySplatPhaseMode !== expected.boundarySplatPhaseMode) {
+    mismatches.push({ key: 'boundarySplatPhaseMode', requested: expected.boundarySplatPhaseMode, effective: state?.boundarySplatPhaseMode ?? null });
+  }
+  for (const key of ['boundarySplatPhaseStride', 'boundarySplatHistoryDepth', 'boundarySplatHistoryFrameStride']) {
+    if (Number.isFinite(expected[key]) && state?.[key] !== expected[key]) {
+      mismatches.push({ key, requested: expected[key], effective: state?.[key] ?? null });
+    }
+  }
+  if (mismatches.length) {
+    lastTrustworthyEvidence.staleConfigMismatch = {
+      requestedRoute,
+      effectiveState: compactState(state || {}),
+      mismatches,
+    };
+    throw new Error(`stale/default config mismatch: ${JSON.stringify(mismatches)}`);
+  }
+}
+
 async function waitForPrototype() {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const result = await wsRequest('Runtime.evaluate', {
@@ -322,6 +446,264 @@ async function setCameraPose(pose) {
     awaitPromise: true,
   });
   return result.result.value;
+}
+
+function forcedResponseRows(count = 100) {
+  return Array.from({ length: count }, (_, index) => ({
+    enabled: true,
+    gravityLocal: [0, -9.81, 0],
+    relativeWindLocal: [-2.5 + (index % 5) * 0.05, 0, 0.5],
+    accelerationLagLocal: [0.6, 0, -0.1],
+    sourceAttachment: 0.9,
+    dtSeconds: 1 / 30,
+    buoyancyGain: 0.9,
+    windGain: 0.3,
+    accelerationGain: 0.7,
+    opacityDamping: 0.08,
+  }));
+}
+
+function forcedResponseRouteProbeRows(count = 100) {
+  return Array.from({ length: count }, () => ({
+    enabled: true,
+    gravityLocal: [0, -9.81, 0],
+    relativeWindLocal: [0, 0, 0],
+    accelerationLagLocal: [1.5, 0, 0],
+    sourceAttachment: 0.9,
+    dtSeconds: 1 / 30,
+    buoyancyGain: 0,
+    windGain: 0,
+    accelerationGain: 2,
+    opacityDamping: 0,
+  }));
+}
+
+async function captureForcedResponseAssay({ effectivePageUrl }) {
+  const responses = forcedResponseRows(100);
+  const rendererLabel = `${forcedResponseRendererMode}-splat`;
+  const staticPose = {
+    position: [0.05, 1.85, 4.35],
+    target: [0, -0.18, 0.16],
+  };
+  const grazingPose = {
+    position: [2.95, 0.48, 1.15],
+    target: [0.04, 0.18, 0.04],
+  };
+  const staticCamera = await setCameraPose(staticPose);
+  const frameEval = await wsRequest('Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+      controlledStepFrameIndex: 0,
+      advanceSim: false,
+      startNow: 0,
+      stepDeltaMs: stepMs,
+      renderScales: [1],
+      includeRgba: false,
+      compactSamples: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const frozenFrame = frameEval.result.value;
+  if (frozenFrame?.ok !== true || frozenFrame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+    throw new Error(`forced-response-frozen-state-unavailable:${JSON.stringify(frozenFrame)}`);
+  }
+  const scaleSet = frozenFrame.scaleSet;
+  const staticDir = resolve(outDir, 'forced-response-static');
+  const grazingDir = resolve(outDir, 'forced-response-grazing');
+  mkdirSync(staticDir, { recursive: true });
+  mkdirSync(grazingDir, { recursive: true });
+  const rigidControlStatic = await captureRenderer({
+    frameDir: staticDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: staticCamera,
+    requestedRenderer: `${rendererLabel}-forced-rigid-static`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: [],
+  });
+  const routeEfficacyProbeCapture = await captureRenderer({
+    frameDir: staticDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: staticCamera,
+    requestedRenderer: `${rendererLabel}-forced-route-efficacy-probe`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: forcedResponseRouteProbeRows(100),
+  });
+  const analyticalResponseStatic = await captureRenderer({
+    frameDir: staticDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: staticCamera,
+    requestedRenderer: `${rendererLabel}-forced-analytical-static`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: responses,
+  });
+  const analyticalResponseStaticRepeat = await captureRenderer({
+    frameDir: staticDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: staticCamera,
+    requestedRenderer: `${rendererLabel}-forced-analytical-static-repeat`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: responses,
+  });
+  const grazingCamera = await setCameraPose(grazingPose);
+  const rigidControlGrazing = await captureRenderer({
+    frameDir: grazingDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: grazingCamera,
+    requestedRenderer: `${rendererLabel}-forced-rigid-grazing`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: [],
+  });
+  const analyticalResponseGrazing = await captureRenderer({
+    frameDir: grazingDir,
+    frameIndex: 0,
+    scaleSet,
+    camera: grazingCamera,
+    requestedRenderer: `${rendererLabel}-forced-analytical-grazing`,
+    boundarySplatMode: forcedResponseRendererMode,
+    forcedResponses: responses,
+  });
+  failurePhase = 'forced-response-gpu-timing';
+  const timingEval = await wsRequest('Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.sampleBoundarySplatForcedResponseCostLadder(${JSON.stringify({
+      responses,
+      warmupSamples: 1,
+      steadySamples: 4,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const timing = timingEval.result.value;
+  const staticDelta = imageDiff(rigidControlStatic.image.path, analyticalResponseStatic.image.path);
+  const grazingDelta = imageDiff(rigidControlGrazing.image.path, analyticalResponseGrazing.image.path);
+  const staticRepeatDelta = imageDiff(analyticalResponseStatic.image.path, analyticalResponseStaticRepeat.image.path);
+  const routeEfficacyDelta = imageDiff(rigidControlStatic.image.path, routeEfficacyProbeCapture.image.path);
+  const captures = [
+    rigidControlStatic,
+    routeEfficacyProbeCapture,
+    analyticalResponseStatic,
+    analyticalResponseStaticRepeat,
+    rigidControlGrazing,
+    analyticalResponseGrazing,
+  ];
+  return {
+    schema: FORCED_RESPONSE_SCHEMA,
+    status: timing?.stopCeilingExceeded ? 'stop-ceiling-exceeded' : 'completed',
+    runStartedAt,
+    runCompletedAt: new Date().toISOString(),
+    requestedRoute,
+    effectivePageUrl,
+    requestedResponseRoute: 'boundary-splat-analytical-age-height-forcing-warp-v0',
+    effectiveRoute: analyticalResponseStatic.forcedResponseReceipt?.effectiveRoute || null,
+    forcedResponseRendererMode,
+    forcedResponseRendererIdentity,
+    forcedResponseExpectedModelIdentity,
+    descriptorIdentity: INSTANCE_DESCRIPTOR_IDENTITY,
+    historyIdentity: 'boundary-splat-live-history-ring-v0',
+    sourceAuthority: SOURCE_AUTHORITY,
+    browser: {
+      identity: browserSession.identity,
+      mode: browserSession.mode,
+      headless,
+      unsafeWebGpuEnabled: headless,
+      port,
+      userDataDir,
+      windowSize,
+      pageUrl: effectivePageUrl,
+    },
+    frozenState: {
+      sequenceAuthority: frozenFrame.sequenceAuthority,
+      sameBrowserSessionId: frozenFrame.sameBrowserSessionId,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+    },
+    rigidControl: {
+      staticCamera: rigidControlStatic,
+      grazingCamera: rigidControlGrazing,
+    },
+    analyticalResponse: {
+      staticCamera: analyticalResponseStatic,
+      staticCameraRepeat: analyticalResponseStaticRepeat,
+      grazingCamera: analyticalResponseGrazing,
+    },
+    routeEfficacyProbe: {
+      capture: routeEfficacyProbeCapture,
+      visualDelta: routeEfficacyDelta,
+      excludedFromTeacherJudgment: true,
+    },
+    visualDeltas: {
+      staticRigidVsAnalytical: staticDelta,
+      grazingRigidVsAnalytical: grazingDelta,
+      staticAnalyticalRepeat: staticRepeatDelta,
+    },
+    timing,
+    stopCeilingExceeded: timing?.stopCeilingExceeded === true,
+    inspectedArtifacts: captures.map(capture => capture.image.path),
+    falseClosureChecks: {
+      rejectsFallbackRoutes: true,
+      rejectsMissingOrBlankCapture: true,
+      rejectsInvisibleAnalyticalResponse: true,
+      rejectsCameraInstability: true,
+      rejectsMissingGpuTimestampAuthority: true,
+      preservesStopCeiling: true,
+    },
+  };
+}
+
+function rejectForcedResponseFalseClosure(report) {
+  const rigidCaptures = Object.values(report.rigidControl || {});
+  const analyticalCaptures = Object.values(report.analyticalResponse || {});
+  if (rigidCaptures.some(capture => capture?.forcedResponseReceipt?.effectiveRoute !== 'boundary-splat-rigid-transformed-history-control-v0')) {
+    throw new Error('forced-response-route-disagreement:rigid-control');
+  }
+  if (analyticalCaptures.some(capture => capture?.forcedResponseReceipt?.effectiveRoute !== 'boundary-splat-analytical-age-height-forcing-warp-v0')) {
+    throw new Error('forced-response-route-disagreement:analytical-response');
+  }
+  if ([...rigidCaptures, ...analyticalCaptures].some(capture => capture?.rendererIdentity !== forcedResponseRendererIdentity
+    || capture?.appliedModelIdentity !== forcedResponseExpectedModelIdentity)) {
+    throw new Error('forced-response-route-disagreement:canonical-history-renderer');
+  }
+  const routeProbe = report.routeEfficacyProbe;
+  if (routeProbe?.capture?.forcedResponseReceipt?.effectiveRoute !== 'boundary-splat-analytical-age-height-forcing-warp-v0'
+    || routeProbe.capture.rendererIdentity !== forcedResponseRendererIdentity
+    || routeProbe.capture.appliedModelIdentity !== forcedResponseExpectedModelIdentity
+    || routeProbe.excludedFromTeacherJudgment !== true
+    || routeProbe.visualDelta?.changedFraction <= 0.0001) {
+    throw new Error(`forced-response-route-efficacy-missing:${JSON.stringify(routeProbe)}`);
+  }
+  const timingRows = report.timing?.rows || [];
+  const rasterProfiles = timingRows.flatMap(row => [row.rigidControl, row.analyticalResponse]);
+  if (report.timing?.ok !== true
+    || !String(report.timing?.authority || '').includes('timestamp-query')
+    || timingRows.length !== 3
+    || timingRows.some(row => !Number.isFinite(row.completeResponseMs))
+    || rasterProfiles.some(profile => profile?.timestampStatus !== 'measured'
+      || !profile.splatRaster?.samples?.length
+      || profile.splatRaster.samples.some(sample => !Number.isFinite(sample)))) {
+    throw new Error(`forced-response-timing-unavailable:${JSON.stringify(report.timing)}`);
+  }
+  if (timingRows.map(row => row.instanceCount).join(',') !== '1,16,100') {
+    throw new Error(`forced-response-timing-count-disagreement:${JSON.stringify(timingRows)}`);
+  }
+  if (report.stopCeilingExceeded !== timingRows.some(row => row.completeResponseMs > row.stopCeilingMs)) {
+    throw new Error(`forced-response-stop-ceiling-disagreement:${JSON.stringify(timingRows)}`);
+  }
+  if (report.stopCeilingExceeded) {
+    throw new Error(`forced-response-stop-ceiling-exceeded:${JSON.stringify(timingRows)}`);
+  }
+  if (report.visualDeltas.staticRigidVsAnalytical.changedFraction <= 0.001
+    || report.visualDeltas.grazingRigidVsAnalytical.changedFraction <= 0.001) {
+    throw new Error(`forced-response-visual-delta-missing:${JSON.stringify(report.visualDeltas)}`);
+  }
+  if (report.visualDeltas.staticAnalyticalRepeat.meanAbsDiff > 1.5) {
+    throw new Error(`forced-response-camera-instability:${JSON.stringify(report.visualDeltas.staticAnalyticalRepeat)}`);
+  }
 }
 
 async function captureSequence(config) {
@@ -384,6 +766,35 @@ async function captureSequence(config) {
       requestedRenderer: RAYMARCH_RENDERER,
       boundarySplatMode: 'off',
     });
+    const phaseLabCaptures = [];
+    if (config.label === 'staticCamera' && frameIndex === 0) {
+      for (const phaseMode of PHASE_LAB_MODES) {
+        phaseLabCaptures.push(await captureRenderer({
+          frameDir,
+          frameIndex,
+          scaleSet,
+          camera,
+          requestedRenderer: `analytic-splat-phase-${phaseMode}`,
+          boundarySplatMode: 'analytic',
+          boundarySplatPhaseMode: phaseMode,
+          boundarySplatPhaseStride: requestedPhaseStride,
+          boundarySplatHistoryDepth: requestedHistoryDepth,
+          boundarySplatHistoryFrameStride: requestedHistoryFrameStride,
+        }));
+        phaseLabCaptures.push(await captureRenderer({
+          frameDir,
+          frameIndex,
+          scaleSet,
+          camera,
+          requestedRenderer: `learned-splat-phase-${phaseMode}`,
+          boundarySplatMode: 'learned',
+          boundarySplatPhaseMode: phaseMode,
+          boundarySplatPhaseStride: requestedPhaseStride,
+          boundarySplatHistoryDepth: requestedHistoryDepth,
+          boundarySplatHistoryFrameStride: requestedHistoryFrameStride,
+        }));
+      }
+    }
     let determinismRepeat = null;
     if (config.label === 'staticCamera' && frameIndex === 0) {
       determinismRepeat = await captureRenderer({
@@ -406,7 +817,7 @@ async function captureSequence(config) {
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
       camera,
-      captures: [analytic, learned, raymarch, determinismRepeat].filter(Boolean),
+      captures: [analytic, learned, raymarch, ...phaseLabCaptures, determinismRepeat].filter(Boolean),
     });
   }
   const effectiveRoute = frames[0]?.captures[0]?.effectiveRoute || null;
@@ -425,7 +836,40 @@ async function captureSequence(config) {
   return sequence;
 }
 
-async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode }) {
+async function captureRenderer({
+  frameDir,
+  frameIndex,
+  scaleSet,
+  camera,
+  requestedRenderer,
+  boundarySplatMode,
+  boundarySplatPhaseMode = null,
+  boundarySplatPhaseStride = null,
+  boundarySplatHistoryDepth = null,
+  boundarySplatHistoryFrameStride = null,
+  forcedResponses = null,
+}) {
+  let forcedResponseReceipt = null;
+  if (Array.isArray(forcedResponses)) {
+    const responseEval = await wsRequest('Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.setBoundarySplatForcedResponses(${JSON.stringify(forcedResponses)}, ${JSON.stringify({
+        requestedRoute: forcedResponses.length > 0
+          ? 'boundary-splat-analytical-age-height-forcing-warp-v0'
+          : 'boundary-splat-rigid-transformed-history-control-v0',
+      })})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    forcedResponseReceipt = responseEval.result.value;
+    if (forcedResponseReceipt?.ok !== true) {
+      throw new Error(`forced-response-route-disagreement:${JSON.stringify(forcedResponseReceipt)}`);
+    }
+  }
+  const controlOverrides = { boundarySplatMode };
+  if (boundarySplatPhaseMode) controlOverrides.boundarySplatPhaseMode = boundarySplatPhaseMode;
+  if (boundarySplatPhaseStride) controlOverrides.boundarySplatPhaseStride = boundarySplatPhaseStride;
+  if (boundarySplatHistoryDepth) controlOverrides.boundarySplatHistoryDepth = boundarySplatHistoryDepth;
+  if (boundarySplatHistoryFrameStride) controlOverrides.boundarySplatHistoryFrameStride = boundarySplatHistoryFrameStride;
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
@@ -433,7 +877,7 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       sameStateCaptureId: scaleSet.sameStateCaptureId,
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
-      controlOverrides: { boundarySplatMode },
+      controlOverrides,
       restoreControls: true,
       resumeRenderLoop: false,
     })})`,
@@ -456,18 +900,48 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
   const imagePath = resolve(frameDir, `${String(frameIndex + 1).padStart(3, '0')}-${slug(requestedRenderer)}.png`);
   writeFileSync(imagePath, imageBuffer);
   const metrics = measureScreenshot(imageBuffer);
-  const effectiveRenderer = canvasCapture.volumeReconstructionStyle;
-  const fallbackReason = postState?.boundarySplatFallbackReason ?? canvasCapture.boundarySplatFallbackReason ?? null;
   const isSplat = boundarySplatMode !== 'off';
+  const effectiveRenderer = isSplat
+    ? canvasCapture.boundarySplatRendererIdentity
+    : canvasCapture.volumeReconstructionStyle;
+  const fallbackReason = postState?.boundarySplatFallbackReason ?? canvasCapture.boundarySplatFallbackReason ?? null;
   const capture = {
     requestedRenderer,
     effectiveRenderer,
     fallbackReason,
     requestedRoute,
     effectiveRoute: canvasCapture.effectiveRoute,
-    rendererIdentity: postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
-    appliedModelIdentity: postState?.boundarySplatAttributeModelIdentity ?? canvasCapture.boundarySplatAttributeModelIdentity ?? null,
+    rendererIdentity: canvasCapture.boundarySplatRendererIdentity || postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
+    appliedModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity ?? postState?.boundarySplatAttributeModelIdentity ?? null,
     sourceAuthority: postState?.boundarySplatSourceAuthority || SOURCE_AUTHORITY,
+    boundarySplatInstanceDescriptorIdentity: isSplat ? canvasCapture.boundarySplatInstanceDescriptorIdentity ?? postState?.boundarySplatInstanceDescriptorIdentity ?? null : null,
+    boundarySplatRequestedInstanceCount: isSplat ? canvasCapture.boundarySplatRequestedInstanceCount ?? postState?.boundarySplatRequestedInstanceCount ?? null : null,
+    boundarySplatSourceCandidateCount: isSplat ? canvasCapture.boundarySplatSourceCandidateCount ?? postState?.boundarySplatSourceCandidateCount ?? null : null,
+    boundarySplatSelectorPolicyIdentity: isSplat ? canvasCapture.boundarySplatSelectorPolicyIdentity ?? postState?.boundarySplatSelectorPolicyIdentity ?? null : null,
+    boundarySplatRequestedCandidateBudget: isSplat ? canvasCapture.boundarySplatRequestedCandidateBudget ?? postState?.boundarySplatRequestedCandidateBudget ?? null : null,
+    boundarySplatEffectiveCandidateBudget: isSplat ? canvasCapture.boundarySplatEffectiveCandidateBudget ?? postState?.boundarySplatEffectiveCandidateBudget ?? null : null,
+    boundarySplatSelectedCandidateCount: isSplat ? canvasCapture.boundarySplatSelectedCandidateCount ?? postState?.boundarySplatSelectedCandidateCount ?? null : null,
+    boundarySplatSelectorCostProfile: isSplat ? canvasCapture.boundarySplatSelectorCostProfile ?? postState?.boundarySplatSelectorCostProfile ?? null : null,
+    boundarySplatPhaseSourceCount: isSplat ? canvasCapture.boundarySplatPhaseSourceCount ?? postState?.boundarySplatPhaseSourceCount ?? null : null,
+    phaseMode: isSplat ? canvasCapture.boundarySplatPhaseMode ?? postState?.boundarySplatPhaseMode ?? null : null,
+    phaseModeIdentity: isSplat ? canvasCapture.boundarySplatPhaseModeIdentity ?? postState?.boundarySplatPhaseModeIdentity ?? null : null,
+    boundarySplatPhaseStride: isSplat ? canvasCapture.boundarySplatPhaseStride ?? postState?.boundarySplatPhaseStride ?? null : null,
+    boundarySplatHistoryDepth: isSplat ? canvasCapture.boundarySplatHistoryDepth ?? postState?.boundarySplatHistoryDepth ?? null : null,
+    boundarySplatHistoryFrameStride: isSplat ? canvasCapture.boundarySplatHistoryFrameStride ?? postState?.boundarySplatHistoryFrameStride ?? null : null,
+    boundarySplatEffectiveHistoryWindowFrames: isSplat ? canvasCapture.boundarySplatEffectiveHistoryWindowFrames ?? postState?.boundarySplatEffectiveHistoryWindowFrames ?? null : null,
+    phaseSourceIdentity: isSplat ? canvasCapture.boundarySplatPhaseSourceIdentity ?? postState?.boundarySplatPhaseSourceIdentity ?? null : null,
+    phaseSources: isSplat ? canvasCapture.boundarySplatPhaseSources ?? postState?.boundarySplatPhaseSources ?? null : null,
+    instanceDescriptors: isSplat ? canvasCapture.boundarySplatInstanceDescriptors ?? postState?.boundarySplatInstanceDescriptors ?? null : null,
+    incrementalInstanceCost: isSplat ? canvasCapture.boundarySplatIncrementalInstanceCost ?? postState?.boundarySplatIncrementalInstanceCost ?? null : null,
+    forcedResponseReceipt: isSplat ? postState?.boundarySplatForcedResponseEffectiveRoute
+      ? {
+          ...(forcedResponseReceipt || {}),
+          requestedRoute: postState.boundarySplatForcedResponseRequestedRoute,
+          effectiveRoute: postState.boundarySplatForcedResponseEffectiveRoute,
+          activeCount: postState.boundarySplatForcedResponseActiveCount,
+          controlUploadCpuMs: postState.boundarySplatForcedResponseControlUploadCpuMs,
+        }
+      : forcedResponseReceipt : null,
     boundarySplatCandidateCount: isSplat ? postState?.boundarySplatCandidateCount ?? null : null,
     boundarySplatInstanceCount: isSplat ? postState?.boundarySplatInstanceCount ?? null : null,
     boundarySplatOverflowCount: isSplat ? postState?.boundarySplatOverflowCount ?? null : null,
@@ -502,6 +976,18 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       boundarySplatMode: canvasCapture.boundarySplatMode,
       boundarySplatRendererIdentity: canvasCapture.boundarySplatRendererIdentity,
       boundarySplatAttributeModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity,
+      boundarySplatInstanceDescriptorIdentity: canvasCapture.boundarySplatInstanceDescriptorIdentity,
+      boundarySplatRequestedInstanceCount: canvasCapture.boundarySplatRequestedInstanceCount,
+      boundarySplatSourceCandidateCount: canvasCapture.boundarySplatSourceCandidateCount,
+      boundarySplatPhaseSourceCount: canvasCapture.boundarySplatPhaseSourceCount,
+      phaseMode: canvasCapture.boundarySplatPhaseMode,
+      phaseModeIdentity: canvasCapture.boundarySplatPhaseModeIdentity,
+      boundarySplatPhaseStride: canvasCapture.boundarySplatPhaseStride,
+      boundarySplatHistoryDepth: canvasCapture.boundarySplatHistoryDepth,
+      boundarySplatHistoryFrameStride: canvasCapture.boundarySplatHistoryFrameStride,
+      boundarySplatEffectiveHistoryWindowFrames: canvasCapture.boundarySplatEffectiveHistoryWindowFrames,
+      phaseSourceIdentity: canvasCapture.boundarySplatPhaseSourceIdentity,
+      incrementalInstanceCost: canvasCapture.boundarySplatIncrementalInstanceCost,
     },
   };
   validateCapture(capture);
@@ -558,6 +1044,15 @@ function validateCapture(capture) {
     }
   }
   if (capture.requestedRenderer.includes('splat')) {
+    if (capture.boundarySplatInstanceDescriptorIdentity !== INSTANCE_DESCRIPTOR_IDENTITY) {
+      throw new Error(`instance descriptor disagreement: expected ${INSTANCE_DESCRIPTOR_IDENTITY}, got ${capture.boundarySplatInstanceDescriptorIdentity}`);
+    }
+    if (!Number.isFinite(capture.boundarySplatRequestedInstanceCount) || capture.boundarySplatRequestedInstanceCount < 1) {
+      throw new Error(`instance-count route missing for ${capture.requestedRenderer}: ${JSON.stringify(capture)}`);
+    }
+    if (!PHASE_SOURCE_IDENTITIES.has(capture.phaseSourceIdentity)) {
+      throw new Error(`phase-source identity missing for ${capture.requestedRenderer}: ${capture.phaseSourceIdentity}`);
+    }
     if (capture.boundarySplatCandidateCopyBytes !== 0) {
       throw new Error(`candidate-copy disagreement: expected zero bytes, got ${capture.boundarySplatCandidateCopyBytes}`);
     }
@@ -620,7 +1115,14 @@ function summarizeAnalyticLearnedComparison(frames) {
       learnedRendererIdentity: learned.rendererIdentity,
       learnedModelIdentity: learned.appliedModelIdentity,
       candidateCount: analytic.boundarySplatCandidateCount,
+      sourceCandidateCount: analytic.boundarySplatSourceCandidateCount,
+      requestedInstanceCount: analytic.boundarySplatRequestedInstanceCount,
       instanceCount: analytic.boundarySplatInstanceCount,
+      phaseSourceIdentity: analytic.phaseSourceIdentity,
+      phaseSources: analytic.phaseSources,
+      instanceDescriptorIdentity: analytic.boundarySplatInstanceDescriptorIdentity,
+      instanceDescriptors: analytic.instanceDescriptors,
+      incrementalInstanceCost: analytic.incrementalInstanceCost,
       overflowCount: analytic.boundarySplatOverflowCount,
       analyticCopyDisposition: analytic.boundarySplatCandidateCopyDisposition,
       learnedCopyDisposition: learned.boundarySplatCandidateCopyDisposition,
@@ -636,6 +1138,109 @@ function summarizeAnalyticLearnedComparison(frames) {
     comparisonCount: comparisons.length,
     comparisons,
   };
+}
+
+function summarizeDuplicateMotionWitness(frames) {
+  const captures = frames
+    .map(frame => frame.captures.find(capture => capture.requestedRenderer === 'analytic-splat'))
+    .filter(Boolean);
+  const requestedInstanceCounts = captures.map(capture => capture.boundarySplatRequestedInstanceCount).filter(Number.isFinite);
+  const phaseSourceIdentities = [...new Set(captures.map(capture => capture.phaseSourceIdentity).filter(Boolean))];
+  const descriptorIdentities = [...new Set(captures.map(capture => capture.boundarySplatInstanceDescriptorIdentity).filter(Boolean))];
+  const requestedInstanceCount = requestedInstanceCounts.length
+    ? Math.max(...requestedInstanceCounts)
+    : null;
+  const sharedCurrentControl = phaseSourceIdentities.includes(SHARED_CURRENT_PHASE_SOURCE);
+  const liveHistoryOffset = phaseSourceIdentities.includes(LIVE_HISTORY_PHASE_SOURCE);
+  const ageSweepHistory = phaseSourceIdentities.includes(AGE_SWEEP_PHASE_SOURCE);
+  const sameHistorySlot = phaseSourceIdentities.includes(SAME_HISTORY_SLOT_PHASE_SOURCE);
+  const temporalDiversityActive = liveHistoryOffset || ageSweepHistory;
+  const motionCorrelation = sharedCurrentControl && !temporalDiversityActive ? 1 : null;
+  const incrementalInstanceCost = captures.at(-1)?.incrementalInstanceCost ?? null;
+  return {
+    identity: 'duplicateMotionWitness',
+    authority: 'renderer-phase-source-identity-and-draw-telemetry-v0',
+    status: temporalDiversityActive ? 'offset-motion-source-active' : 'synchronized-control',
+    requestedInstanceCount,
+    descriptorIdentities,
+    phaseSourceIdentities,
+    sharedCurrentControl,
+    liveHistoryOffset,
+    ageSweepHistory,
+    sameHistorySlot,
+    motionCorrelation,
+    incrementalInstanceCost,
+    claimBoundary: temporalDiversityActive
+      ? 'Motion diversity comes from the reported live-history phase source.'
+      : 'Four transformed fires are spatially distinct but intentionally share current candidate phase; this is a synchronization control, not phase diversity.',
+  };
+}
+
+function summarizePhaseLabWitness(frames) {
+  const captures = frames
+    .flatMap(frame => frame.captures.filter(capture => capture.requestedRenderer?.includes('splat')))
+    .filter(Boolean);
+  const phaseModeComparisons = PHASE_LAB_MODES.map(mode => {
+    const modeCaptures = captures.filter(capture => capture.phaseMode === mode);
+    const latest = modeCaptures.at(-1) || null;
+    return {
+      phaseMode: mode,
+      observed: modeCaptures.length > 0,
+      captureCount: modeCaptures.length,
+      phaseModeIdentity: latest?.phaseModeIdentity ?? null,
+      phaseSourceIdentity: latest?.phaseSourceIdentity ?? null,
+      phaseStride: latest?.boundarySplatPhaseStride ?? null,
+      historyDepth: latest?.boundarySplatHistoryDepth ?? null,
+      historyFrameStride: latest?.boundarySplatHistoryFrameStride ?? null,
+      effectiveHistoryWindowFrames: latest?.boundarySplatEffectiveHistoryWindowFrames ?? null,
+      phaseSources: latest?.phaseSources ?? null,
+      requestedInstanceCount: latest?.boundarySplatRequestedInstanceCount ?? null,
+      sourceCandidateCount: latest?.boundarySplatSourceCandidateCount ?? null,
+      instanceCount: latest?.boundarySplatInstanceCount ?? null,
+      overflowCount: latest?.boundarySplatOverflowCount ?? null,
+      incrementalInstanceCost: latest?.incrementalInstanceCost ?? null,
+    };
+  });
+  return {
+    identity: 'phaseLabWitness',
+    authority: 'same-live-route-explicit-phase-mode-telemetry-v0',
+    phaseModeComparisons,
+    observedPhaseModes: [...new Set(captures.map(capture => capture.phaseMode).filter(Boolean))],
+    claimBoundary: 'This summary proves routed phase-source identity and cost/candidate telemetry; visual convergence or manifold claims require inspecting the captured frames/contact sheets.',
+  };
+}
+
+function loadOperatorPrettySubstrate(path) {
+  if (!path) return null;
+  try {
+    const raw = readFileSync(path, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      identity: parsed.identity || 'operator-pretty-four-flame-substrate-v0',
+      path,
+      sha256: sha256(Buffer.from(raw)),
+      capturedAt: parsed.capturedAt || null,
+      href: parsed.href || null,
+      routeParams: parsed.routeParams || null,
+      model: parsed.kaminosDebugState?.boundarySplatAttributeModelIdentity ?? null,
+      phaseMode: parsed.kaminosDebugState?.boundarySplatPhaseMode ?? null,
+      phaseStride: parsed.kaminosDebugState?.boundarySplatPhaseStride ?? null,
+      historyDepth: parsed.kaminosDebugState?.boundarySplatHistoryDepth ?? null,
+      historyFrameStride: parsed.kaminosDebugState?.boundarySplatHistoryFrameStride ?? null,
+      effectiveHistoryWindowFrames: parsed.kaminosDebugState?.boundarySplatEffectiveHistoryWindowFrames ?? null,
+      phaseSourceIdentity: parsed.kaminosDebugState?.boundarySplatPhaseSourceIdentity ?? null,
+      requestedInstanceCount: parsed.kaminosDebugState?.boundarySplatRequestedInstanceCount ?? null,
+      sourceCandidateCount: parsed.kaminosDebugState?.boundarySplatSourceCandidateCount ?? null,
+      claimBoundary: 'Operator visual substrate pointer; paired screenshot carries the visual claim when canvas capture is hidden or 1x1.',
+    };
+  } catch (error) {
+    return {
+      identity: 'operatorPrettySubstrate',
+      path,
+      status: 'unreadable',
+      error: error?.message || String(error),
+    };
+  }
 }
 
 function computeFrozenDeterminism(frame) {
@@ -844,6 +1449,19 @@ function compactState(state) {
     boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
     boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
     boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+    boundarySplatInstanceDescriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
+    boundarySplatRequestedInstanceCount: state.boundarySplatRequestedInstanceCount,
+    boundarySplatSourceCandidateCount: state.boundarySplatSourceCandidateCount,
+    boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
+    phaseMode: state.boundarySplatPhaseMode,
+    phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
+    boundarySplatPhaseStride: state.boundarySplatPhaseStride,
+    boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
+    boundarySplatHistoryFrameStride: state.boundarySplatHistoryFrameStride,
+    boundarySplatEffectiveHistoryWindowFrames: state.boundarySplatEffectiveHistoryWindowFrames,
+    phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+    phaseSources: state.boundarySplatPhaseSources,
+    incrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
     boundarySplatCandidateCount: state.boundarySplatCandidateCount,
     boundarySplatOverflowCount: state.boundarySplatOverflowCount,
     boundarySplatFallbackReason: state.boundarySplatFallbackReason,

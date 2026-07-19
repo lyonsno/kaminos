@@ -172,6 +172,7 @@ const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -1498,6 +1499,23 @@ const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
+function quantizeFlowKernelControl(value, min, max, step, decimals) {
+  const clamped = Math.max(min, Math.min(max, value));
+  const quantized = min + Math.round((clamped - min) / step) * step;
+  return Number(quantized.toFixed(decimals));
+}
+const requestedFlowKernelStrength = Number(routeParams.get('volume_flow_kernel_strength'));
+const expectedFlowKernelStrength = routeParams.has('volume_flow_kernel_strength') && Number.isFinite(requestedFlowKernelStrength)
+  ? quantizeFlowKernelControl(requestedFlowKernelStrength, 0, 1, 0.02, 2)
+  : 0;
+const requestedFlowKernelRadius = Number(routeParams.get('volume_flow_kernel_radius'));
+const expectedFlowKernelRadius = routeParams.has('volume_flow_kernel_radius') && Number.isFinite(requestedFlowKernelRadius)
+  ? quantizeFlowKernelControl(requestedFlowKernelRadius, 0.0025, 0.12, 0.0025, 4)
+  : 0.03;
+const requestedFlowKernelCoherence = Number(routeParams.get('volume_flow_kernel_coherence'));
+const expectedFlowKernelCoherence = routeParams.has('volume_flow_kernel_coherence') && Number.isFinite(requestedFlowKernelCoherence)
+  ? quantizeFlowKernelControl(requestedFlowKernelCoherence, 0, 2, 0.05, 2)
+  : 1;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
 const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
   ? requestedMajorantGrid
@@ -2394,6 +2412,11 @@ async function main() {
             boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
             boundarySplatCapacity: sample.boundarySplatCapacity,
+            boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity,
+            boundarySplatRequestedCandidateBudget: sample.boundarySplatRequestedCandidateBudget,
+            boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget,
+            boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount,
+            boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile,
             boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
             boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
             boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
@@ -2634,6 +2657,14 @@ async function main() {
         return;
       }
     }
+    assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
+    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'native-cell-unfiltered', 'flow kernel changed or obscured splat admission authority');
+    assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');
+    assert.ok(Math.abs((state.flowKernelEffective?.strength ?? -1) - expectedFlowKernelStrength) < 0.001, 'effective flow kernel strength did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.radiusWorld ?? -1) - expectedFlowKernelRadius) < 0.001, 'effective world-space flow kernel radius did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.coherence ?? -1) - expectedFlowKernelCoherence) < 0.001, 'effective flow kernel coherence did not match the requested route');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -3459,6 +3490,20 @@ async function main() {
       boundaryFireReadbackEvidence.acceptsZeroRadiance &&
       mainRendererMetrics.litPixels >= 1500 &&
       mainRendererMetrics.meanLuma >= 8;
+    const boundarySplatBudgetVisualEvidence =
+      state.boundarySplatRendererIdentity === 'live-boundary-sidecar-learned-attribute-splats-v0' &&
+      state.boundarySplatSelectorPolicyIdentity === 'boundary-splat-nested-permutation-prefix-v0' &&
+      Number.isFinite(Number(state.boundarySplatRequestedCandidateBudget));
+    const boundarySplatBudgetSignalPixels = Number(metrics.litPixels || 0) +
+      Number(metrics.smokeLikePixels || 0) +
+      Number(metrics.fireLikePixels || 0) +
+      Number(metrics.emissiveLikePixels || 0) +
+      Number(metrics.volumeBounds?.pixelCount || 0);
+    const boundarySplatBudgetMainRendererSignalPixels = Number(mainRendererMetrics.litPixels || 0) +
+      Number(mainRendererMetrics.smokeLikePixels || 0) +
+      Number(mainRendererMetrics.fireLikePixels || 0) +
+      Number(mainRendererMetrics.emissiveLikePixels || 0) +
+      Number(mainRendererMetrics.volumeBounds?.pixelCount || 0);
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
@@ -3473,6 +3518,13 @@ async function main() {
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (boundarySplatBudgetVisualEvidence) {
+      if (mainRendererMetrics.litPixels < 220 || boundarySplatBudgetMainRendererSignalPixels < 350 || mainRendererMetrics.meanLuma < 1.0) {
+        throw new Error(`main renderer screenshot missing budgeted learned-splat volume signal: ${JSON.stringify({
+          ...mainRendererMetrics,
+          boundarySplatBudgetMainRendererSignalPixels,
+        })}`);
       }
     } else if (!boundaryFireMainRendererEvidence && (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8)) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -3575,6 +3627,13 @@ async function main() {
           smokeLikePixels: metrics.smokeLikePixels,
           meanLuma: metrics.meanLuma,
         });
+      }
+    } else if (boundarySplatBudgetVisualEvidence) {
+      if (metrics.litPixels < 220 || boundarySplatBudgetSignalPixels < 350 || metrics.meanLuma < 1.0) {
+        throw new Error(`blank frame or missing budgeted learned-splat volume signal: ${JSON.stringify({
+          ...metrics,
+          boundarySplatBudgetSignalPixels,
+        })}`);
       }
     } else if (!boundaryFireVisualEvidence && (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
@@ -4293,6 +4352,11 @@ async function main() {
       boundarySplatFeatureCapture,
       boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? state.boundarySplatSourceAuthority,
       boundarySplatCapacity: sample.boundarySplatCapacity ?? state.boundarySplatCapacity,
+      boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity ?? state.boundarySplatSelectorPolicyIdentity,
+      boundarySplatRequestedCandidateBudget: sample.boundarySplatRequestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
+      boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget ?? state.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
+      boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile ?? state.boundarySplatSelectorCostProfile,
       boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount,
       boundarySplatCandidateCount: sample.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount,
       boundarySplatOverflowCount: sample.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount,

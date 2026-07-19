@@ -1,0 +1,22 @@
+{
+  "schema": "kaminos.volume.boundary-splat-forced-response-greenroom-config.v0",
+  "renderer": "analytic",
+  "costLadderInstances": [1, 16, 100],
+  "settleMs": 3500,
+  "windowSize": "1280,960",
+  "route": {
+    "kaminos_volume_smoke": "1",
+    "volume_scene": "tall_plume",
+    "volume_resolution": "160",
+    "volume_boundary_sidecar_source": "baked",
+    "volume_boundary_splat_mode": "analytic",
+    "volume_boundary_splat_instances": "4",
+    "volume_boundary_splat_candidate_budget": "6400",
+    "volume_boundary_splat_composition": "field",
+    "volume_boundary_splat_phase_mode": "age-sweep",
+    "volume_boundary_splat_phase_stride": "1",
+    "volume_boundary_splat_history_depth": "4",
+    "volume_boundary_splat_history_frame_stride": "1",
+    "volume_render_scale": "0.5"
+  }
+}

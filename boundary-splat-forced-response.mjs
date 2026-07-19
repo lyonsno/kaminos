@@ -1,5 +1,3 @@
-import { performance } from 'node:perf_hooks';
-
 export const FORCED_SPLAT_RESPONSE_SCHEMA = 'kaminos.boundary-splat-forced-response.v0';
 export const FORCED_SPLAT_CONTROLS_SCHEMA = 'kaminos.boundary-splat-forced-controls.v0';
 export const FORCED_SPLAT_RESPONSE_COST_SCHEMA = 'kaminos.boundary-splat-forced-response-cost.v0';
@@ -9,6 +7,8 @@ export const MAX_INITIAL_RESIDUAL_SPLINE_KNOTS = 8;
 export const FORCED_SPLAT_RESPONSE_TARGET_MS = 1.0;
 export const FORCED_SPLAT_RESPONSE_FIRST_FRONTIER_MS = 1.5;
 export const FORCED_SPLAT_RESPONSE_STOP_CEILING_MS = 2.0;
+export const FORCED_SPLAT_RESPONSE_STRIDE_FLOATS = 16;
+export const FORCED_SPLAT_RESPONSE_STRIDE_BYTES = FORCED_SPLAT_RESPONSE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 
 const FORBIDDEN_INFERENCE_FLAGS = Object.freeze({
   usesDenseGridInference: false,
@@ -44,6 +44,12 @@ function scaleVec(a, scale) {
 
 function lengthVec(a) {
   return Math.hypot(a[0], a[1], a[2]);
+}
+
+function normalizeVec(a, fallback = [0, 1, 0]) {
+  const length = lengthVec(a);
+  const normalized = length > 1e-8 ? scaleVec(a, 1 / length) : [...fallback];
+  return normalized.map(value => Object.is(value, -0) ? 0 : value);
 }
 
 function rotateYaw(vec, yawRadians) {
@@ -151,6 +157,42 @@ export function buildForcedSplatResponseControls({
     sourceAttachment: clamp(descriptor.sourceAttachment ?? 1, 0, 1),
     recentForcing: recent,
     ...FORBIDDEN_INFERENCE_FLAGS,
+  };
+}
+
+export function packBoundarySplatForcedResponses(responses = [], { maxInstances = 128 } = {}) {
+  const instanceCapacity = Math.max(1, Math.trunc(finiteNumber(maxInstances, 128)));
+  const rows = Array.isArray(responses) ? responses : [];
+  const packed = new Float32Array(instanceCapacity * FORCED_SPLAT_RESPONSE_STRIDE_FLOATS);
+  let activeCount = 0;
+  for (let index = 0; index < Math.min(rows.length, instanceCapacity); index += 1) {
+    const response = rows[index];
+    if (!response || response.enabled === false) continue;
+    const gravityLocal = vec3(response.gravityLocal, [0, -9.81, 0]);
+    const buoyancyDirection = normalizeVec(scaleVec(gravityLocal, -1));
+    const relativeWind = vec3(response.relativeWindLocal);
+    const accelerationLag = vec3(response.accelerationLagLocal);
+    const offset = index * FORCED_SPLAT_RESPONSE_STRIDE_FLOATS;
+    packed.set(buoyancyDirection, offset);
+    packed[offset + 3] = clamp(response.ageSecondsPerFrame ?? response.dtSeconds ?? 1 / 60, 1 / 240, 1 / 10);
+    packed.set(relativeWind, offset + 4);
+    packed[offset + 7] = clamp(response.sourceAttachment ?? 1, 0, 1);
+    packed.set(accelerationLag, offset + 8);
+    packed[offset + 11] = clamp(response.opacityDamping ?? 0.08, 0, 1);
+    packed[offset + 12] = clamp(response.buoyancyGain ?? 0.42, 0, 4);
+    packed[offset + 13] = clamp(response.windGain ?? 0.035, 0, 1);
+    packed[offset + 14] = clamp(response.accelerationGain ?? 0.22, 0, 2);
+    packed[offset + 15] = 1;
+    activeCount += 1;
+  }
+  return {
+    identity: ANALYTICAL_FORCED_RESPONSE_IDENTITY,
+    strideFloats: FORCED_SPLAT_RESPONSE_STRIDE_FLOATS,
+    strideBytes: FORCED_SPLAT_RESPONSE_STRIDE_BYTES,
+    capacity: instanceCapacity,
+    requestedCount: rows.length,
+    activeCount,
+    packed,
   };
 }
 

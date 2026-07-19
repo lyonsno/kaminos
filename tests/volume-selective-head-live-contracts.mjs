@@ -52,7 +52,16 @@ assert.equal(model.packed.dtype, 'float32-le');
 assert.equal(model.packed.byteLength, readFileSync(modelDataPath).byteLength);
 assert.match(model.packed.sha256, /^[a-f0-9]{64}$/);
 
-const core = `${readFileSync(corePath, 'utf8')}\n${readFileSync(runtimePath, 'utf8')}`;
+const volumeCore = readFileSync(corePath, 'utf8');
+const core = `${volumeCore}\n${readFileSync(runtimePath, 'utf8')}`;
+
+function sourceBetween(source, start, end) {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  assert.notEqual(startIndex, -1, `source contains ${start}`);
+  assert.notEqual(endIndex, -1, `source contains ${end} after ${start}`);
+  return source.slice(startIndex, endIndex);
+}
 assert.match(core, /exact-basin-selective-head-live-v0/, 'core names the exact live route');
 assert.match(core, /box-average-linear-field-v0/, 'live route preserves the phase-aligned fluid downsample operator');
 assert.match(core, /max-pool-support-field-v0/, 'live route preserves the phase-aligned front downsample operator');
@@ -78,6 +87,24 @@ assert.match(core, /selectiveHeadLiveCompositionFallbackReason/, 'live route fai
 assert.match(core, /selectiveHeadLivePassReceipt/, 'frame-locked samples preserve exact raymarch/splat pass receipts');
 assert.match(core, /selectiveRaymarchFireAuthority/, 'smoke-hybrid raymarch suppresses fire authority without changing simulation state');
 assert.match(core, /selective-head-live-lean-frame-readback-v0/, 'movie capture avoids unrelated full-grid telemetry readbacks');
+assert.match(core, /boundarySplatPbrSceneReadbackPipeline/, 'off-canvas selective evidence has a format-matched PBR scene pipeline');
+const selectiveSplatComposition = sourceBetween(
+  volumeCore,
+  'function encodeSelectiveHeadBoundarySplatComposition',
+  'function encodeHistoryCopy',
+);
+assert.match(selectiveSplatComposition, /if \(raymarchApplied\)[\s\S]*loadOp:\s*'load'/, 'selective hybrid composition loads splats over the raymarch without adding PBR');
+assert.match(selectiveSplatComposition, /ensureBoundarySplatPbrDepthTexture\(\)/, 'selective splat-only composition allocates shared PBR depth');
+assert.match(selectiveSplatComposition, /encodeBoundarySplatPbrScene\(/, 'selective splat-only composition renders the PBR substrate first');
+assert.match(selectiveSplatComposition, /targetPbrPipeline/, 'selective splat-only composition selects the PBR pipeline for its target format');
+assert.match(selectiveSplatComposition, /loadColor:\s*pbrSceneApplied/, 'selective splats load the PBR color target');
+assert.match(selectiveSplatComposition, /loadDepth:\s*pbrSceneApplied/, 'selective splats share the PBR depth target');
+for (const selectiveEvidencePath of [
+  sourceBetween(volumeCore, 'async function sampleFrame', 'function compactRenderScaleSample'),
+  sourceBetween(volumeCore, 'async function captureSelectiveHeadLiveFrame', 'async function controlledStepSequence'),
+]) {
+  assert.match(selectiveEvidencePath, /encodeSelectiveHeadBoundarySplatComposition\(/, 'every selective evidence path uses the shared PBR-aware splat composition');
+}
 assert.match(core, /loadSelectiveHeadLiveReplayAnchor/, 'live route can load the checksum-bound exact training-horizon fields');
 assert.match(core, /setSelectiveHeadLiveCapturePaused/, 'live route exposes witness-owned pause and single-step release control');
 assert.match(core, /stepSelectiveHeadLiveCaptureFrame/, 'live route admits exactly one paused render and waits for GPU completion');

@@ -25,6 +25,8 @@ CLASSIFIER_IDENTITY = "full-low-state-spatial-mlp-support-classifier-v0"
 CHANNEL_HEAD_IDENTITY = "support-gated-single-channel-residual-mlp-v0"
 FEATURE_IDENTITY = "full-low-field-plus-spatial-rbf-features-v0"
 PREVIEW_IDENTITY = "labeled-support-gate-channel-preview-v0"
+PAIR_AUTHORITY = "downsampled-same-high-history-input-to-exact-high-target"
+TRAINING_INPUT_AUTHORITY = "phase-aligned-high-filtered-to-low-grid-v0"
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
     "smokeDensity", "heat", "fuel", "detail",
@@ -637,6 +639,11 @@ def main() -> int:
         full = read_json(full_path)
         if pair.get("schema") != "kaminos.volume.full-grid-field-pair.v0" or pair.get("status") != "captured":
             raise ProbeFailure(phase, "pair manifest is not a captured full-grid field pair", {"path": str(pair_path)})
+        if pair.get("authority") != PAIR_AUTHORITY:
+            raise ProbeFailure(phase, "pair authority mismatch", {
+                "expectedAuthority": PAIR_AUTHORITY,
+                "actualAuthority": pair.get("authority"),
+            })
         if full.get("schema") != "kaminos.volume.full-grid-field-export.v0" or full.get("status") != "captured":
             raise ProbeFailure(phase, "full-grid manifest is not a captured export", {"path": str(full_path)})
         if full.get("failurePhase") is not None or full.get("completeFieldCoverage") is not True:
@@ -822,6 +829,10 @@ def main() -> int:
                 "pairManifest": {"path": str(pair_path), "sha256": sha256_file(pair_path)},
                 "fullGridManifest": {"path": str(full_path), "sha256": sha256_file(full_path)},
                 "lowGrid": low_grid, "highGrid": high_grid,
+                "pairAuthority": pair.get("authority"),
+                "trainingInputAuthority": TRAINING_INPUT_AUTHORITY,
+                "trainingInputSyntheticDownsample": True,
+                "nativeDeploymentInputSeenDuringTraining": False,
                 "fluidChannelOrder": FLUID_CHANNELS,
                 "boundaryChannelOrder": boundary_descriptor.get("channelOrder"),
                 "effectiveSplatShape": splat_descriptor.get("shape"),

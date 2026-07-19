@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomInt } from 'node:crypto';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -15,6 +15,12 @@ const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
 const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const NATIVE_LOW_SELECTIVE_SCHEMA = 'kaminos.volume.native-low-selective-composition.v0';
+const NATIVE_LOW_SELECTIVE_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const NATIVE_LOW_CROSS_GRID_SELECTIVE_AUTHORITY = 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0';
+const NATIVE_LOW_INPUT_AUTHORITY = 'native-low-simulator-state-no-synthetic-downsample-v0';
+const NATIVE_LOW_HELD_SCHEMA = 'kaminos.volume.native-low-held-field.v0';
+const NATIVE_LOW_HELD_AUTHORITY = 'native-low-simulator-held-control-v0';
 const PHASE_ALIGNED_HELD_SCHEMA = 'kaminos.volume.phase-aligned-held-field.v0';
 const PHASE_ALIGNED_HELD_APPLICATION = 'phase-aligned-held-render-application-v0';
 const PHASE_ALIGNED_HELD_ROLES = {
@@ -42,6 +48,9 @@ const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const secondaryRenderPngPath = args.has('--secondary-render-png') ? resolve(String(args.get('--secondary-render-png'))) : null;
+const flowKernelDescriptorBinPath = args.has('--flow-kernel-descriptor-bin')
+  ? resolve(String(args.get('--flow-kernel-descriptor-bin')))
+  : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const renderCompositionExplicit = args.has('--render-composition');
@@ -98,6 +107,98 @@ function sha256File(path) {
   return sha256(readFileSync(path));
 }
 
+async function drainFlowKernelDescriptorCapture(ws, capture, outputPath) {
+  if (!capture) return null;
+  if (!outputPath) throw new Error('flow kernel descriptor capture requires --flow-kernel-descriptor-bin');
+  const session = capture.exportSession;
+  if (session?.identity !== 'session-bound-float32-chunk-export-v0'
+    || typeof session.sessionId !== 'string'
+    || !Number.isInteger(session.floatCount)
+    || session.floatCount <= 0
+    || Number(session.byteLength) !== session.floatCount * Float32Array.BYTES_PER_ELEMENT) {
+    throw new Error(`invalid flow kernel descriptor export session: ${JSON.stringify(session)}`);
+  }
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const partialPath = `${outputPath}.partial-${process.pid}-${randomInt(100000, 1000000)}`;
+  let fd = null;
+  let writtenBytes = 0;
+  let actualSha256 = null;
+  let release = null;
+  let exportError = null;
+  try {
+    fd = openSync(partialPath, 'w');
+    for (let startFloat = 0; startFloat < session.floatCount; startFloat += chunkFloats) {
+      const floatCount = Math.min(chunkFloats, session.floatCount - startFloat);
+      const chunk = await evaluateByValue(
+        ws,
+        `window.__kaminosVolumePrototype.readFlowKernelDescriptorCaptureChunk(${JSON.stringify({
+          sessionId: session.sessionId,
+          startFloat,
+          floatCount,
+        })})`,
+        'drain-flow-kernel-descriptor-chunk',
+      );
+      if (chunk?.ok !== true
+        || chunk.sessionId !== session.sessionId
+        || Number(chunk.startFloat) !== startFloat
+        || Number(chunk.floatCount) !== floatCount
+        || typeof chunk.base64 !== 'string') {
+        throw new Error(`invalid flow kernel descriptor chunk: ${JSON.stringify(chunk)}`);
+      }
+      const bytes = Buffer.from(chunk.base64, 'base64');
+      if (bytes.byteLength !== floatCount * Float32Array.BYTES_PER_ELEMENT) {
+        throw new Error(`flow kernel descriptor chunk byte mismatch: ${bytes.byteLength}`);
+      }
+      writeSync(fd, bytes);
+      writtenBytes += bytes.byteLength;
+    }
+    if (writtenBytes !== session.byteLength) {
+      throw new Error(`flow kernel descriptor artifact byte mismatch: ${writtenBytes} != ${session.byteLength}`);
+    }
+    actualSha256 = sha256File(partialPath);
+    if (actualSha256 !== capture.descriptorSha256) {
+      throw new Error(`flow kernel descriptor SHA-256 mismatch: ${actualSha256} != ${capture.descriptorSha256}`);
+    }
+  } catch (error) {
+    exportError = error;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+  try {
+    release = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.releaseFlowKernelDescriptorCapture(${JSON.stringify({ sessionId: session.sessionId })})`,
+      'release-flow-kernel-descriptor-capture',
+    );
+    if (release?.ok !== true
+      || release.sessionId !== session.sessionId
+      || release.descriptorSha256 !== capture.descriptorSha256) {
+      throw new Error(`flow kernel descriptor release failed: ${JSON.stringify(release)}`);
+    }
+  } catch (releaseError) {
+    exportError = exportError
+      ? new Error(`${exportError.message}; descriptor session release also failed: ${releaseError.message}`, { cause: exportError })
+      : releaseError;
+  }
+  if (exportError) {
+    rmSync(partialPath, { force: true });
+    throw exportError;
+  }
+  renameSync(partialPath, outputPath);
+  return {
+    identity: 'checksum-bound-flow-kernel-descriptor-binary-v0',
+    path: outputPath,
+    byteLength: writtenBytes,
+    floatCount: session.floatCount,
+    rowCount: capture.rowCount,
+    strideFloats: capture.strideFloats,
+    sha256: actualSha256,
+    browserDescriptorSha256: capture.descriptorSha256,
+    sourceHashes: capture.sourceHashes,
+    release,
+  };
+}
+
 function resolveInitialFieldManifest() {
   if (!initialFieldManifestPath) return null;
   if (deterministicReplayRequested) {
@@ -109,8 +210,11 @@ function resolveInitialFieldManifest() {
   if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
   const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
   const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
+  const isNativeLowSelective = manifest.schema === NATIVE_LOW_SELECTIVE_SCHEMA;
+  const isNativeLowHeld = manifest.schema === NATIVE_LOW_HELD_SCHEMA;
   const isPhaseAlignedHeld = manifest.schema === PHASE_ALIGNED_HELD_SCHEMA;
-  if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
+  const nativeLowSelectiveAuthority = isNativeLowSelective ? manifest.compositionAuthority : null;
+  if (!isCoarseReceiver && !isSelectiveComposition && !isNativeLowSelective && !isNativeLowHeld && !isPhaseAlignedHeld) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
   if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
@@ -127,6 +231,34 @@ function resolveInitialFieldManifest() {
       || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('coarse-receiver-initial')) {
       throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
     }
+  }
+  if (isNativeLowSelective) {
+    const isMatchedGridAuthority = nativeLowSelectiveAuthority === NATIVE_LOW_SELECTIVE_AUTHORITY;
+    const isExplicitCrossGridAuthority = nativeLowSelectiveAuthority === NATIVE_LOW_CROSS_GRID_SELECTIVE_AUTHORITY
+      && manifest.relationship?.crossGridApplication === true
+      && manifest.relationship?.crossGridCallerAdmission === true
+      && manifest.relationship?.applicationLowGrid !== manifest.relationship?.trainedLowGrid;
+    if ((!isMatchedGridAuthority && !isExplicitCrossGridAuthority)
+      || manifest.inputAuthority !== NATIVE_LOW_INPUT_AUTHORITY
+      || manifest.runtimeTruthAvailable !== false
+      || manifest.relationship?.syntheticDownsampleApplied !== false
+      || manifest.relationship?.highTruthUse !== 'unavailable; not loaded and not used for application or metrics') {
+      throw new Error('native-low selective authority or no-truth application contract mismatch');
+    }
+    if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
+      || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('filtered-high initialization truth')
+      || manifest.consumptionContract?.receiverAdvance !== 'held render only; simulation advance is forbidden for this assay') {
+      throw new Error('native-low selective composition held-only contract mismatch');
+    }
+  }
+  if (isNativeLowHeld && (
+    manifest.initializationAuthority !== NATIVE_LOW_HELD_AUTHORITY
+    || manifest.inputAuthority !== NATIVE_LOW_INPUT_AUTHORITY
+    || manifest.runtimeTruthAvailable !== false
+    || manifest.renderOnly !== true
+    || manifest.consumptionContract?.receiverAdvance !== 'held render only; simulation advance is forbidden for this assay'
+  )) {
+    throw new Error('native-low held control authority mismatch');
   }
   const heldRole = isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_ROLES[manifest.role] : null;
   if (isPhaseAlignedHeld && (
@@ -161,18 +293,31 @@ function resolveInitialFieldManifest() {
     manifestPath: initialFieldManifestPath,
     manifestSha256: sha256(raw),
     grid,
-    initializationAuthority: isSelectiveComposition
+    initializationAuthority: isNativeLowHeld
+      ? NATIVE_LOW_HELD_AUTHORITY
+      : isNativeLowSelective
+      ? nativeLowSelectiveAuthority
+      : isSelectiveComposition
       ? SELECTIVE_COMPOSITION_AUTHORITY
       : isPhaseAlignedHeld
         ? heldRole.authority
         : COARSE_RECEIVER_AUTHORITY,
-    filterIdentity: isSelectiveComposition || isPhaseAlignedHeld
-      ? isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_APPLICATION : SELECTIVE_COMPOSITION_APPLICATION
+    filterIdentity: isSelectiveComposition || isNativeLowSelective || isNativeLowHeld || isPhaseAlignedHeld
+      ? isPhaseAlignedHeld
+        ? PHASE_ALIGNED_HELD_APPLICATION
+        : isNativeLowHeld
+          ? 'native-low-held-render-application-v0'
+        : isNativeLowSelective
+          ? 'native-low-selective-held-render-application-v0'
+          : SELECTIVE_COMPOSITION_APPLICATION
       : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
-    heldOnly: isSelectiveComposition || isPhaseAlignedHeld,
+    heldOnly: isSelectiveComposition || isNativeLowSelective || isNativeLowHeld || isPhaseAlignedHeld,
+    heldOnlyFailure: isNativeLowSelective || isNativeLowHeld
+      ? 'native-low-selective-composition-held-only'
+      : 'selective-composition-held-only',
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
   };
@@ -262,6 +407,17 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
+async function waitForPageTarget() {
+  for (let i = 0; i < 80; i += 1) {
+    const targets = await cdpFetch('/json/list');
+    const page = targets.find(target => target.type === 'page' && target.url.includes('kaminos_volume_smoke=1'))
+      || targets.find(target => target.type === 'page');
+    if (page?.webSocketDebuggerUrl) return page;
+    await delay(125);
+  }
+  throw new Error('No debuggable page target');
+}
+
 async function attachOrLaunchBrowser(url) {
   if (reuseBrowser && await cdpAvailable()) {
     return {
@@ -305,8 +461,8 @@ function browserReceipt(browserSession) {
   };
 }
 
-function closeBrowserSession(browserSession) {
-  if (browserSession?.keepBrowserOpen) return;
+function closeBrowserSession(browserSession, { failed = false } = {}) {
+  if (browserSession?.keepBrowserOpen && !(failed && browserSession.mode === 'launched-shared')) return;
   browserSession?.process?.kill('SIGTERM');
 }
 
@@ -496,6 +652,7 @@ async function main() {
   let renderControlOverrides = {};
   let secondaryRenderControlOverrides = {};
   let browserSession = null;
+  let completed = false;
   let ws = null;
   let begin = null;
   let lastDebugState = null;
@@ -531,6 +688,13 @@ async function main() {
     if (!renderControlOverrides || typeof renderControlOverrides !== 'object' || Array.isArray(renderControlOverrides)) {
       throw new Error('--render-control-overrides-json must decode to an object');
     }
+    if (flowKernelDescriptorBinPath) {
+      if (!renderPngPath) throw new Error('--flow-kernel-descriptor-bin requires --render-png');
+      renderControlOverrides = {
+        ...renderControlOverrides,
+        flowKernelDescriptorCapture: true,
+      };
+    }
     secondaryRenderControlOverrides = args.has('--secondary-render-control-overrides-json')
       ? JSON.parse(String(args.get('--secondary-render-control-overrides-json')))
       : {};
@@ -546,7 +710,7 @@ async function main() {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
     if (initialField?.heldOnly && advanceImportedSteps > 0) {
-      throw new Error('selective-composition-held-only: --advance-imported-steps must be 0');
+      throw new Error(`${initialField.heldOnlyFailure}: --advance-imported-steps must be 0`);
     }
     if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
     if (renderOnly && (!initialField || !renderPngPath)) {
@@ -566,10 +730,7 @@ async function main() {
     browserSession = await attachOrLaunchBrowser(url);
     await waitForCdp();
     phase = 'target';
-    const targets = await cdpFetch('/json/list');
-    const page = targets.find(target => target.type === 'page' && target.url.includes('kaminos_volume_smoke=1'))
-      || targets.find(target => target.type === 'page');
-    if (!page?.webSocketDebuggerUrl) throw new Error('No debuggable page target');
+    const page = await waitForPageTarget();
     ws = new WebSocket(page.webSocketDebuggerUrl);
     await waitForWebSocketOpen(ws);
     ws.addEventListener('message', event => {
@@ -752,6 +913,15 @@ async function main() {
         if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
+        if (flowKernelDescriptorBinPath && !renderReceipt.flowKernelDescriptorCapture) {
+          throw new Error('flow kernel descriptor artifact was requested but the renderer produced no descriptor capture');
+        }
+        phase = 'drain-flow-kernel-descriptor';
+        const flowKernelDescriptorArtifact = await drainFlowKernelDescriptorCapture(
+          ws,
+          renderReceipt.flowKernelDescriptorCapture,
+          flowKernelDescriptorBinPath,
+        );
         const rect = renderReceipt.canvasCssRect;
         if (rect.x < 0
           || rect.y < 0
@@ -784,6 +954,7 @@ async function main() {
           importedFieldManifestSha256: initialField.manifestSha256,
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+          flowKernelDescriptorArtifact,
         };
         if (secondaryRenderPngPath) {
           phase = 'render-imported-field-secondary';
@@ -873,6 +1044,7 @@ async function main() {
         backend: importedRender?.backend || initialFieldImport?.effective?.backend || null,
       };
       writeManifest(manifest);
+      completed = true;
       console.log(JSON.stringify({
         ok: true,
         manifest: manifestPath,
@@ -982,6 +1154,7 @@ async function main() {
       release,
     };
     writeManifest(manifest);
+    completed = true;
     console.log(JSON.stringify({
       ok: true,
       manifest: manifestPath,
@@ -1029,7 +1202,7 @@ async function main() {
         ws.close();
       } catch {}
     }
-    closeBrowserSession(browserSession);
+    closeBrowserSession(browserSession, { failed: !completed });
   }
 }
 

@@ -1,0 +1,130 @@
+{
+  "schema": "kaminos.volume.selective-head-live-model.v0",
+  "identity": "latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0",
+  "status": "captured",
+  "failurePhase": null,
+  "source": {
+    "probeManifestPath": "/private/tmp/kaminos-latest-happy-bowl-support-probe-160-to-96-step96-v1/manifest.json",
+    "probeManifestSha256": "7cff7f12303b36d1259ed5a81023e9ca2eb50f01146b538c1220a5cf66a0f256",
+    "classifierSha256": "8b9f03c5e50a369d520ca47c46011bf3c975d83e984c3665e49d20d4f6f2295f",
+    "channelHeadsSha256": "d226eba39b902daea4cbb1178002894a0622a0cff2fcc8b6904886f5276df878",
+    "lowGrid": 96,
+    "highGrid": 160,
+    "pairAuthority": "downsampled-same-high-history-input-to-exact-high-target",
+    "trainingInputAuthority": "phase-aligned-high-filtered-to-low-grid-v0",
+    "trainingInputSyntheticDownsample": true,
+    "nativeDeploymentInputSeenDuringTraining": false,
+    "trainingBasinIdentity": "latest-happy-bowl-vsp-48617494-step96-v0",
+    "trainingSourceCaptureSha256": "3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035"
+  },
+  "features": {
+    "identity": "full-low-field-plus-spatial-rbf-features-v0",
+    "featureCount": 185,
+    "lowFieldCount": 17,
+    "squaredLowFieldCount": 17,
+    "positionCount": 5,
+    "fourierCount": 18,
+    "rbfCount": 128
+  },
+  "architecture": {
+    "identity": "dense-tanh-dense-v0",
+    "activation": "tanh",
+    "hiddenWidth": 48
+  },
+  "composition": {
+    "supportThreshold": 0.98,
+    "supportThresholdAuthority": "operator-selected-motion-witness-v0",
+    "fuel": "sparse-hard-support-gated-residual-v0",
+    "fireLick": "sparse-hard-support-gated-residual-v0",
+    "visibleFireCarrier": "sparse-hard-support-gated-residual-v0",
+    "frontTopology": "dense-ungated-residual-v0"
+  },
+  "outputs": [
+    {
+      "channel": "supportProbability",
+      "kind": "classifier",
+      "offsets": {
+        "w1": 370,
+        "b1": 9250,
+        "w2": 9298,
+        "b2": 9346,
+        "targetMean": 9347,
+        "targetStd": 9348
+      },
+      "policy": "probability-threshold-v0"
+    },
+    {
+      "channel": "fuel",
+      "kind": "residual-head",
+      "offsets": {
+        "w1": 9349,
+        "b1": 18229,
+        "w2": 18277,
+        "b2": 18325,
+        "targetMean": 18326,
+        "targetStd": 18327
+      },
+      "policy": "sparse-hard-support-gated-residual-v0"
+    },
+    {
+      "channel": "fireLick",
+      "kind": "residual-head",
+      "offsets": {
+        "w1": 18328,
+        "b1": 27208,
+        "w2": 27256,
+        "b2": 27304,
+        "targetMean": 27305,
+        "targetStd": 27306
+      },
+      "policy": "sparse-hard-support-gated-residual-v0"
+    },
+    {
+      "channel": "visibleFireCarrier",
+      "kind": "residual-head",
+      "offsets": {
+        "w1": 27307,
+        "b1": 36187,
+        "w2": 36235,
+        "b2": 36283,
+        "targetMean": 36284,
+        "targetStd": 36285
+      },
+      "policy": "sparse-hard-support-gated-residual-v0"
+    },
+    {
+      "channel": "frontTopology",
+      "kind": "residual-head",
+      "offsets": {
+        "w1": 36286,
+        "b1": 45166,
+        "w2": 45214,
+        "b2": 45262,
+        "targetMean": 45263,
+        "targetStd": 45264
+      },
+      "policy": "dense-ungated-residual-v0"
+    }
+  ],
+  "normalization": {
+    "featureMean": {
+      "channel": "featureMean",
+      "offset": 0,
+      "floatCount": 185,
+      "kind": "normalization"
+    },
+    "featureStd": {
+      "channel": "featureStd",
+      "offset": 185,
+      "floatCount": 185,
+      "kind": "normalization"
+    }
+  },
+  "packed": {
+    "path": "model.f32",
+    "dtype": "float32-le",
+    "floatCount": 45265,
+    "byteLength": 181060,
+    "sha256": "97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08"
+  }
+}
