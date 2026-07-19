@@ -446,6 +446,41 @@ def persist_source(source: Path, destination: Path) -> np.ndarray:
     return pixels
 
 
+def validate_descriptor_binding(
+    descriptor_receipt: dict[str, Any],
+    state_replay: dict[str, Any],
+    baseline_binding: dict[str, Any],
+    baseline_descriptor_receipt: dict[str, Any],
+) -> dict[str, Any]:
+    source_hashes = descriptor_receipt.get("sourceHashes") or {}
+    baseline_source_hashes = baseline_descriptor_receipt.get("sourceHashes") or {}
+    require(source_hashes and source_hashes == baseline_source_hashes, "descriptor source hash set differs from baseline")
+    require(
+        source_hashes.get("fluidSha256")
+        == state_replay.get("fluidSha256")
+        == baseline_binding.get("fluidSha256"),
+        "descriptor fluid hash differs from frozen source",
+    )
+    require(
+        source_hashes.get("frontSha256")
+        == state_replay.get("frontSha256")
+        == baseline_binding.get("frontSha256"),
+        "descriptor front hash differs from frozen source",
+    )
+    source_manifest_sha256 = descriptor_receipt.get("sourceManifestSha256")
+    require(
+        source_manifest_sha256
+        and source_manifest_sha256 == baseline_descriptor_receipt.get("sourceManifestSha256"),
+        "descriptor source manifest differs from baseline",
+    )
+    return {
+        "identity": "descriptor-source-equals-baseline-frozen-source-v0",
+        "sourceHashes": source_hashes,
+        "sourceManifestSha256": source_manifest_sha256,
+        "hashMatch": True,
+    }
+
+
 def gallery_html(camera_rows: list[dict[str, Any]], report_name: str) -> str:
     data = canonical_json(camera_rows)
     labels = {"target": "Exact Grid96 target", "baseline": "Projected five-tap control"}
@@ -509,6 +544,12 @@ def run(args: argparse.Namespace, progress: dict[str, str]) -> dict[str, Any]:
     capture = load_json(capture_path, "capture report")
     cameras = ORACLE.validate_capture_report(capture, args.state_step)
     baseline = load_json(baseline_path, "baseline oracle report")
+    descriptor_binding = validate_descriptor_binding(
+        descriptor_receipt,
+        state.get("replay") or {},
+        baseline.get("frozenStateBinding") or {},
+        baseline.get("descriptorReceipt") or {},
+    )
     baseline_dir, path_scale = validate_baseline(
         baseline, baseline_path, manifest_path, capture_path, state, args.depth_bins
     )
@@ -610,6 +651,7 @@ def run(args: argparse.Namespace, progress: dict[str, str]) -> dict[str, Any]:
             "stateStep": args.state_step,
             "rowCount": count,
             "descriptorReceipt": descriptor_receipt,
+            "descriptorBinding": descriptor_binding,
             "baselineFrozenStateBinding": baseline.get("frozenStateBinding"),
         },
         "execution": {

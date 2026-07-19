@@ -235,6 +235,61 @@ except ValueError:
 else:
     raise AssertionError("negative optical coefficients escaped validation")
 
+try:
+    MODULE.validate_descriptor_binding(
+        {
+            "sourceHashes": {
+                "fluidSha256": "fluid-wrong",
+                "frontSha256": "front-good",
+            },
+            "sourceManifestSha256": "source-manifest-good",
+        },
+        {
+            "fluidSha256": "fluid-good",
+            "frontSha256": "front-good",
+        },
+        {
+            "fluidSha256": "fluid-good",
+            "frontSha256": "front-good",
+        },
+        {
+            "sourceHashes": {
+                "fluidSha256": "fluid-good",
+                "frontSha256": "front-good",
+            },
+            "sourceManifestSha256": "source-manifest-good",
+        },
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("descriptor receipt from a different frozen source was accepted")
+
+MODULE.validate_descriptor_binding(
+    {
+        "sourceHashes": {
+            "fluidSha256": "fluid-good",
+            "frontSha256": "front-good",
+        },
+        "sourceManifestSha256": "source-manifest-good",
+    },
+    {
+        "fluidSha256": "fluid-good",
+        "frontSha256": "front-good",
+    },
+    {
+        "fluidSha256": "fluid-good",
+        "frontSha256": "front-good",
+    },
+    {
+        "sourceHashes": {
+            "fluidSha256": "fluid-good",
+            "frontSha256": "front-good",
+        },
+        "sourceManifestSha256": "source-manifest-good",
+    },
+)
+
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     manifest_path = root / "manifest.json"
