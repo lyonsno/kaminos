@@ -200,6 +200,11 @@ assert.match(
   /MIN_SETTLED_DYNAMICS_STRUCTURAL_COLOR_PIXELS = 24/,
   'settled screenshot calibration must preserve a measured structural-color floor',
 );
+assert.match(
+  witnessSource,
+  /retirementEventEpoch ===\s*report\.liveBinding\.gpuResidentBinding\.eventEpoch/,
+  'reattachment retirement must bind to its causal accepted Bind receipt rather than a later page epoch',
+);
 assert.match(witnessSource, /detachedDynamicsSecondLaunchClock/, 'native witness must exercise a second launch episode');
 assert.match(greenroomSource, /detached-dynamics-greenroom-r1/, 'dynamics evidence needs a dedicated artifact identity');
 assert.match(greenroomSource, /bellTower=1/, 'dynamics Greenroom must request the structural bell route');

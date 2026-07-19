@@ -1141,7 +1141,7 @@ try {
       boundPage.sympatheticCitadel?.bellTower?.attached === true &&
       boundPage.detachedDynamics?.bodies?.length === 0 &&
       retiredBell?.retirementCause === 'accepted-structural-reattachment' &&
-      retiredBell.retirementEventEpoch === boundPage.gpuResidentBinding?.eventEpoch &&
+      retiredBell.retirementEventEpoch === report.liveBinding.gpuResidentBinding.eventEpoch &&
       boundPage.detachedDynamicsRendered?.transforms?.length === 0;
     assertCheck(
       report.checks.detachedDynamicsAcceptedReattachment,
