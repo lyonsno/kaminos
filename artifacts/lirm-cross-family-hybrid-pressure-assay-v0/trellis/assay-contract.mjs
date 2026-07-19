@@ -11,6 +11,72 @@ import {
 
 export const CROSS_FAMILY_HYBRID_TRELLIS_PLAN_SCHEMA = 'kaminos.lirm-cross-family-hybrid-trellis-promotion-plan.v0';
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+  }
+  return value;
+}
+
+function fingerprint(value) {
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')}`;
+}
+
+export function trellisSubmissionFingerprint(cell) {
+  return fingerprint({
+    cellId: cell.cellId,
+    evidenceRole: cell.evidenceRole,
+    jobType: cell.jobType,
+    requestedRoute: cell.requestedRoute,
+    expectedRunner: cell.expectedRunner,
+    input: cell.input,
+    outputDir: cell.outputDir,
+    outputPath: cell.outputPath,
+    settings: cell.settings,
+  });
+}
+
+export function witnessSubmissionFingerprint(cell) {
+  return fingerprint({
+    witnessId: cell.witnessId,
+    cellId: cell.cellId,
+    evidenceRole: cell.evidenceRole,
+    jobType: cell.jobType,
+    requestedRoute: cell.requestedRoute,
+    expectedRunner: cell.expectedRunner,
+    input: cell.input,
+    witnessScript: cell.witnessScript,
+    outputDir: cell.outputDir,
+    outputPath: cell.outputPath,
+    view: cell.view,
+    yaw: cell.yaw,
+    pitch: cell.pitch,
+  });
+}
+
+export function recoverMatchingSubmissions({ cells, priorSubmitted, idKey, fingerprintFor }) {
+  const currentById = new Map(cells.map(cell => [cell[idKey], cell]));
+  const recovered = [];
+  const staleRecoveredSubmissions = [];
+  for (const prior of priorSubmitted ?? []) {
+    const cell = currentById.get(prior[idKey]);
+    const currentFingerprint = cell ? fingerprintFor(cell) : null;
+    if (cell && prior.submissionFingerprint === currentFingerprint) {
+      recovered.push(prior);
+    } else {
+      staleRecoveredSubmissions.push({
+        [idKey]: prior[idKey],
+        jobId: prior.jobId,
+        storedFingerprint: prior.submissionFingerprint ?? null,
+        currentFingerprint,
+        reason: cell ? 'submission-fingerprint-mismatch' : 'submission-id-not-in-current-plan',
+      });
+    }
+  }
+  return { recovered, staleRecoveredSubmissions };
+}
+
 const SETTINGS = Object.freeze({
   seed: 42,
   resolution: 512,
@@ -43,6 +109,7 @@ export async function buildCrossFamilyHybridTrellisPromotionPlan({
   imagegenPlan,
   imagegenCollection,
   adjudication,
+  contactSheetReceipt,
   durableImageRoot,
   outputRoot,
 }) {
@@ -57,6 +124,27 @@ export async function buildCrossFamilyHybridTrellisPromotionPlan({
       || adjudication.status !== 'visually-inspected-promotion-selected'
       || adjudication.contactSheet?.inspectedAtOriginalResolution !== true) {
     throw new Error('rare gestalt Trellis promotion requires original-resolution visual adjudication');
+  }
+  if (contactSheetReceipt?.schema !== 'kaminos.lirm-cross-family-hybrid-imagegen-contact-sheet-receipt.v0'
+      || contactSheetReceipt.status !== 'complete-inspected'
+      || contactSheetReceipt.visualInspectionVerified !== true) {
+    throw new Error('rare gestalt Trellis promotion requires the inspected contact sheet receipt');
+  }
+  if (!contactSheetReceipt.contactSheet?.sha256
+      || adjudication.contactSheet?.sha256 !== contactSheetReceipt.contactSheet.sha256) {
+    throw new Error('adjudication contact sheet hash drift');
+  }
+  const sourceReceipts = new Map((contactSheetReceipt.sources ?? []).map(item => [item.cellId, item]));
+  if (sourceReceipts.size !== imagegenCollection.accepted.length) {
+    throw new Error('contact sheet source coverage does not match imagegen collection');
+  }
+  for (const completion of imagegenCollection.accepted) {
+    const sourceReceipt = sourceReceipts.get(completion.cellId);
+    if (!sourceReceipt
+        || sourceReceipt.sha256 !== completion.output?.sha256
+        || sourceReceipt.sha256 !== completion.durableOutput?.sha256) {
+      throw new Error(`contact sheet source hash drift: ${completion.cellId}`);
+    }
   }
   const selections = adjudication.trellisPromotion?.evidenceRoles;
   if (adjudication.trellisPromotion?.status !== 'selected'

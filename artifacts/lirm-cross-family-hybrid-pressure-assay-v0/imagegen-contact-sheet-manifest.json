@@ -13,6 +13,7 @@
       "candidateId": "crown-halo-pendant-tripod",
       "stance": "anatomical-completion",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401.png",
+      "sourceSha256": "sha256:f9468d8baa175faf8d848f2dcef5012a11c401569e78863869c94bdb5a42f8cb",
       "title": "crown-halo-pendant-tripod",
       "viewLabel": "ANATOMICAL"
     },
@@ -21,6 +22,7 @@
       "candidateId": "crown-halo-pendant-tripod",
       "stance": "prior-led-invention",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.png",
+      "sourceSha256": "sha256:3437c48b36682c070d86314c43bc628a805ae5678fe2665906b116242803160f",
       "title": "crown-halo-pendant-tripod",
       "viewLabel": "PRIOR-LED"
     },
@@ -29,6 +31,7 @@
       "candidateId": "offset-keyhole-canopy-strider",
       "stance": "anatomical-completion",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401.png",
+      "sourceSha256": "sha256:a7e3769b57a47b101550eb8920ce8f98f3d4e39e069c61bc76514c9e015d6ef9",
       "title": "offset-keyhole-canopy-strider",
       "viewLabel": "ANATOMICAL"
     },
@@ -37,6 +40,7 @@
       "candidateId": "offset-keyhole-canopy-strider",
       "stance": "prior-led-invention",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.png",
+      "sourceSha256": "sha256:568063763a2d955f5bc470afd9b688043c31f63f01652e3a820b7b286ef038f3",
       "title": "offset-keyhole-canopy-strider",
       "viewLabel": "PRIOR-LED"
     },
@@ -45,6 +49,7 @@
       "candidateId": "wide-portal-saddle-canopy",
       "stance": "anatomical-completion",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401.png",
+      "sourceSha256": "sha256:8f9a59b9040098808c7e05069cf54fdb568969ace1728691c8b67ebd29934ef7",
       "title": "wide-portal-saddle-canopy",
       "viewLabel": "ANATOMICAL"
     },
@@ -53,6 +58,7 @@
       "candidateId": "wide-portal-saddle-canopy",
       "stance": "prior-led-invention",
       "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/imagegen-outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.png",
+      "sourceSha256": "sha256:9301c97ddc0508bf64447e41819463ed7ba74cbf6305ca7a92337e7a4149b238",
       "title": "wide-portal-saddle-canopy",
       "viewLabel": "PRIOR-LED"
     }

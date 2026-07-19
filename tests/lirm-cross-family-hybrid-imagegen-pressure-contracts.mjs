@@ -57,6 +57,18 @@ await assert.rejects(
   }),
   /visually inspected hybrid witness/,
 );
+await assert.rejects(
+  buildCrossFamilyHybridImagegenPlan({
+    witnessReceipt: {
+      ...inspectedWitness,
+      visualInspectionClaim: 'not-yet-inspected',
+    },
+    witnessRoot: outDir,
+    promptRoot,
+    outputRoot: join(outDir, 'sentinel-bypass-runtime'),
+  }),
+  /visually inspected hybrid witness/,
+);
 
 const runner = await readFile(new URL(
   '../artifacts/lirm-cross-family-hybrid-pressure-assay-v0/run-imagegen.mjs',

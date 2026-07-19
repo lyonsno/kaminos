@@ -10,7 +10,11 @@ import {
   parseGreenroomCliOutput,
   validateGestaltTrellisCompletion,
 } from '../../../lirm-speciation-gestalt-imagegen-core.mjs';
-import { buildCrossFamilyHybridTrellisPromotionPlan } from './assay-contract.mjs';
+import {
+  buildCrossFamilyHybridTrellisPromotionPlan,
+  recoverMatchingSubmissions,
+  trellisSubmissionFingerprint as submissionFingerprint,
+} from './assay-contract.mjs';
 
 const trellisRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const artifactRoot = resolve(trellisRoot, '..');
@@ -48,6 +52,7 @@ async function createPlan() {
     imagegenPlan: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-plan.json'), 'utf8')),
     imagegenCollection: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-collection.json'), 'utf8')),
     adjudication: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-adjudication.json'), 'utf8')),
+    contactSheetReceipt: JSON.parse(await readFile(resolve(artifactRoot, 'imagegen-contact-sheet-receipt.json'), 'utf8')),
     durableImageRoot: resolve(artifactRoot, 'imagegen-outputs'),
     outputRoot: greenroomOutputRoot,
   });
@@ -59,12 +64,19 @@ async function submit() {
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   let prior = null;
   try { prior = JSON.parse(await readFile(submissionPath, 'utf8')); } catch {}
-  const submittedById = new Map((prior?.submitted ?? []).map(item => [item.cellId, item]));
+  const recovery = recoverMatchingSubmissions({
+    cells: plan.cells,
+    priorSubmitted: prior?.submitted,
+    idKey: 'cellId',
+    fingerprintFor: submissionFingerprint,
+  });
+  const submittedById = new Map(recovery.recovered.map(item => [item.cellId, item]));
   const report = {
     schema: 'kaminos.lirm-cross-family-hybrid-trellis-submission.v0',
     status: 'submitting',
     requestedCount: plan.cells.length,
     submitted: plan.cells.flatMap(cell => submittedById.has(cell.cellId) ? [submittedById.get(cell.cellId)] : []),
+    staleRecoveredSubmissions: recovery.staleRecoveredSubmissions,
     failurePhase: null,
     lastTrustworthyEvidence: `${submittedById.size}/${plan.cells.length} previously accepted submissions recovered`,
   };
@@ -74,7 +86,12 @@ async function submit() {
       if (submittedById.has(cell.cellId)) continue;
       const response = runGreenroom(['submit', ...buildGreenroomTrellisSubmitArgs(cell)]);
       if (!response.job_id) throw new Error(`submit returned no job id for ${cell.cellId}`);
-      const submitted = { cellId: cell.cellId, jobId: response.job_id, response };
+      const submitted = {
+        cellId: cell.cellId,
+        submissionFingerprint: submissionFingerprint(cell),
+        jobId: response.job_id,
+        response,
+      };
       report.submitted.push(submitted);
       submittedById.set(cell.cellId, submitted);
       report.lastTrustworthyEvidence = `${report.submitted.length}/${report.requestedCount} Trellis jobs submitted through Greenroom`;
@@ -114,6 +131,14 @@ async function collect({ allowPending = false } = {}) {
   await mkdir(durableOutputRoot, { recursive: true });
   for (const submitted of submission.submitted) {
     const cell = byId.get(submitted.cellId);
+    if (submitted.submissionFingerprint !== submissionFingerprint(cell)) {
+      report.rejected.push({
+        cellId: cell.cellId,
+        jobId: submitted.jobId,
+        error: 'submission fingerprint does not match current Trellis plan',
+      });
+      continue;
+    }
     const status = runGreenroom(['status', submitted.jobId]);
     if (status.status === 'pending' || status.status === 'running') {
       report.nonterminal.push({ cellId: cell.cellId, jobId: submitted.jobId, status: status.status });

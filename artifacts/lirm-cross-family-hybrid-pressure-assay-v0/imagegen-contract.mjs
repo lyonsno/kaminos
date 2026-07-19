@@ -19,7 +19,7 @@ export async function buildCrossFamilyHybridImagegenPlan({
 } = {}) {
   if (witnessReceipt?.schema !== 'kaminos.lirm-cross-family-hybrid-pressure-witness.v0'
       || witnessReceipt.status !== 'complete-inspected'
-      || !String(witnessReceipt.visualInspectionClaim).includes('inspected')) {
+      || witnessReceipt.visualInspectionClaim !== 'inspected') {
     throw new Error('cross-family imagegen requires a visually inspected hybrid witness');
   }
   if (!Array.isArray(witnessReceipt.candidates) || witnessReceipt.candidates.length !== 3) {

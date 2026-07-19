@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import {
   buildCrossFamilyHybridTrellisPromotionPlan,
   buildCrossFamilyHybridTrellisWitnessPlan,
+  recoverMatchingSubmissions,
+  trellisSubmissionFingerprint,
+  witnessSubmissionFingerprint,
 } from '../artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/assay-contract.mjs';
 
 const candidateIds = [
@@ -48,10 +51,21 @@ const imagegenCollection = {
   status: 'complete-inspected',
   accepted,
 };
+const contactSheetSha256 = `sha256:${createHash('sha256').update('inspected-sheet').digest('hex')}`;
+const contactSheetReceipt = {
+  schema: 'kaminos.lirm-cross-family-hybrid-imagegen-contact-sheet-receipt.v0',
+  status: 'complete-inspected',
+  visualInspectionVerified: true,
+  contactSheet: { sha256: contactSheetSha256 },
+  sources: accepted.map(item => ({
+    cellId: item.cellId,
+    sha256: item.durableOutput.sha256,
+  })),
+};
 const adjudication = {
   schema: 'kaminos.lirm-cross-family-hybrid-imagegen-adjudication.v0',
   status: 'visually-inspected-promotion-selected',
-  contactSheet: { inspectedAtOriginalResolution: true },
+  contactSheet: { inspectedAtOriginalResolution: true, sha256: contactSheetSha256 },
   trellisPromotion: { status: 'selected', evidenceRoles: selections },
 };
 
@@ -59,6 +73,7 @@ const trellisPlan = await buildCrossFamilyHybridTrellisPromotionPlan({
   imagegenPlan,
   imagegenCollection,
   adjudication,
+  contactSheetReceipt,
   durableImageRoot,
   outputRoot: join(root, 'trellis-runtime'),
 });
@@ -71,15 +86,56 @@ assert.ok(trellisPlan.cells.every((cell) => cell.settings.steps === 6));
 assert.ok(trellisPlan.cells.every((cell) => cell.settings.cascade === false));
 assert.ok(trellisPlan.cells.every((cell) => cell.settings.targetFaces === 200000));
 assert.equal(trellisPlan.evidencePredicate.frontViewOnlyDoesNotSatisfy, true);
+const trellisFingerprint = trellisSubmissionFingerprint(trellisPlan.cells[0]);
+assert.notEqual(
+  trellisFingerprint,
+  trellisSubmissionFingerprint({
+    ...trellisPlan.cells[0],
+    input: { ...trellisPlan.cells[0].input, sha256: `sha256:${'1'.repeat(64)}` },
+  }),
+);
+const trellisRecovery = recoverMatchingSubmissions({
+  cells: trellisPlan.cells,
+  priorSubmitted: [{
+    cellId: trellisPlan.cells[0].cellId,
+    jobId: 'stale-input-job',
+    submissionFingerprint: trellisSubmissionFingerprint({
+      ...trellisPlan.cells[0],
+      input: { ...trellisPlan.cells[0].input, sha256: `sha256:${'1'.repeat(64)}` },
+    }),
+  }],
+  idKey: 'cellId',
+  fingerprintFor: trellisSubmissionFingerprint,
+});
+assert.equal(trellisRecovery.recovered.length, 0);
+assert.equal(trellisRecovery.staleRecoveredSubmissions[0].reason, 'submission-fingerprint-mismatch');
 await assert.rejects(
   buildCrossFamilyHybridTrellisPromotionPlan({
     imagegenPlan,
     imagegenCollection: { ...imagegenCollection, status: 'complete-uninspected' },
     adjudication,
+    contactSheetReceipt,
     durableImageRoot,
     outputRoot: join(root, 'invalid-runtime'),
   }),
   /complete and inspected/,
+);
+await assert.rejects(
+  buildCrossFamilyHybridTrellisPromotionPlan({
+    imagegenPlan,
+    imagegenCollection,
+    adjudication: {
+      ...adjudication,
+      contactSheet: {
+        ...adjudication.contactSheet,
+        sha256: `sha256:${'0'.repeat(64)}`,
+      },
+    },
+    contactSheetReceipt,
+    durableImageRoot,
+    outputRoot: join(root, 'stale-adjudication-runtime'),
+  }),
+  /adjudication contact sheet hash drift/,
 );
 
 const trellisAccepted = [];
@@ -112,6 +168,29 @@ assert.deepEqual(witnessPlan.requiredViews.map((item) => item.view), ['left', 'f
 assert.equal(new Set(witnessPlan.cells.map((cell) => cell.witnessId)).size, 12);
 assert.ok(witnessPlan.cells.every((cell) => cell.jobType === 'kaminos_blender_glb_witness_molten_0718'));
 assert.equal(witnessPlan.evidencePredicate.apertureAndSuspensionRequireOppositeViewInspection, true);
+const witnessFingerprint = witnessSubmissionFingerprint(witnessPlan.cells[0]);
+assert.notEqual(
+  witnessFingerprint,
+  witnessSubmissionFingerprint({
+    ...witnessPlan.cells[0],
+    witnessScript: { ...witnessPlan.cells[0].witnessScript, sha256: `sha256:${'2'.repeat(64)}` },
+  }),
+);
+const witnessRecovery = recoverMatchingSubmissions({
+  cells: witnessPlan.cells,
+  priorSubmitted: [{
+    witnessId: witnessPlan.cells[0].witnessId,
+    jobId: 'stale-script-job',
+    submissionFingerprint: witnessSubmissionFingerprint({
+      ...witnessPlan.cells[0],
+      witnessScript: { ...witnessPlan.cells[0].witnessScript, sha256: `sha256:${'2'.repeat(64)}` },
+    }),
+  }],
+  idKey: 'witnessId',
+  fingerprintFor: witnessSubmissionFingerprint,
+});
+assert.equal(witnessRecovery.recovered.length, 0);
+assert.equal(witnessRecovery.staleRecoveredSubmissions[0].reason, 'submission-fingerprint-mismatch');
 
 for (const file of ['run-promotion.mjs', 'run-witness.mjs', 'build-witness-contact-sheet.mjs']) {
   const source = await readFile(new URL(
@@ -120,6 +199,10 @@ for (const file of ['run-promotion.mjs', 'run-witness.mjs', 'build-witness-conta
   ), 'utf8');
   assert.match(source, /failurePhase|visualInspectionClaim/);
   assert.doesNotMatch(source, /\['status', [^\]]+, '--json'\]/);
+  if (file.startsWith('run-')) {
+    assert.match(source, /submissionFingerprint/);
+    assert.match(source, /staleRecoveredSubmissions/);
+  }
 }
 
 console.log('LIRM cross-family hybrid Trellis contracts passed');

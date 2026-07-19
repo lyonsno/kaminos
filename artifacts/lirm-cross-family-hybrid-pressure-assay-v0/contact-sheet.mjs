@@ -27,11 +27,15 @@ export function buildCrossFamilyHybridContactSheetManifest({ accepted, artifactR
     }
     return [anatomical, priorLed].map(cell => {
       if (!cell.durableOutput?.path) throw new Error(`missing durable output path: ${cell.cellId}`);
+      if (!cell.durableOutput?.sha256 || cell.durableOutput.sha256 !== cell.output?.sha256) {
+        throw new Error(`contact sheet source receipt mismatch: ${cell.cellId}`);
+      }
       return {
         cellId: cell.cellId,
         candidateId,
         stance: cell.stance,
         sourcePath: resolve(root, cell.durableOutput.path),
+        sourceSha256: cell.durableOutput.sha256,
         title: candidateId,
         viewLabel: cell.stance === 'anatomical-completion' ? 'ANATOMICAL' : 'PRIOR-LED',
       };
@@ -62,6 +66,20 @@ export async function writeCrossFamilyHybridContactSheet({ root = artifactRoot }
     accepted: collection.accepted,
     artifactRoot: root,
   });
+  const sources = [];
+  for (const cell of manifest.cells) {
+    const bytes = await readFile(cell.sourcePath);
+    const sha256 = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    if (sha256 !== cell.sourceSha256) {
+      throw new Error(`contact sheet source hash drift: ${cell.cellId}`);
+    }
+    sources.push({
+      cellId: cell.cellId,
+      path: relative(root, cell.sourcePath),
+      byteSize: bytes.length,
+      sha256,
+    });
+  }
   const manifestPath = join(root, 'imagegen-contact-sheet-manifest.json');
   const outputPath = join(root, 'imagegen-pressure-contact-sheet.png');
   await atomicWriteJson(manifestPath, manifest);
@@ -91,12 +109,15 @@ export async function writeCrossFamilyHybridContactSheet({ root = artifactRoot }
       width: manifest.width,
       height,
     },
+    sources,
+    visualInspectionVerified: false,
     visualInspectionClaim: 'not-yet-inspected',
     falseClosureGuards: {
       missingOrPartialCollectionAccepted: false,
       duplicateOrUnlabeledCellsAccepted: false,
       blankOrImplausiblySmallRasterAccepted: false,
       contactSheetImpliesVisualSuccess: false,
+      sourceHashDriftAccepted: false,
     },
   };
   await atomicWriteJson(join(root, 'imagegen-contact-sheet-receipt.json'), receipt);

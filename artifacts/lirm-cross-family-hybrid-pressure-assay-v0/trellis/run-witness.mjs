@@ -10,7 +10,11 @@ import {
   parseGreenroomCliOutput,
   validateGestaltWitnessCompletion,
 } from '../../../lirm-speciation-gestalt-imagegen-core.mjs';
-import { buildCrossFamilyHybridTrellisWitnessPlan } from './assay-contract.mjs';
+import {
+  buildCrossFamilyHybridTrellisWitnessPlan,
+  recoverMatchingSubmissions,
+  witnessSubmissionFingerprint as submissionFingerprint,
+} from './assay-contract.mjs';
 
 const trellisRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(trellisRoot, '../../..');
@@ -59,12 +63,19 @@ async function submit() {
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   let prior = null;
   try { prior = JSON.parse(await readFile(submissionPath, 'utf8')); } catch {}
-  const submittedById = new Map((prior?.submitted ?? []).map(item => [item.witnessId, item]));
+  const recovery = recoverMatchingSubmissions({
+    cells: plan.cells,
+    priorSubmitted: prior?.submitted,
+    idKey: 'witnessId',
+    fingerprintFor: submissionFingerprint,
+  });
+  const submittedById = new Map(recovery.recovered.map(item => [item.witnessId, item]));
   const report = {
     schema: 'kaminos.lirm-cross-family-hybrid-trellis-witness-submission.v0',
     status: 'submitting',
     requestedCount: plan.cells.length,
     submitted: plan.cells.flatMap(cell => submittedById.has(cell.witnessId) ? [submittedById.get(cell.witnessId)] : []),
+    staleRecoveredSubmissions: recovery.staleRecoveredSubmissions,
     failurePhase: null,
     lastTrustworthyEvidence: `${submittedById.size}/${plan.cells.length} previously accepted witness submissions recovered`,
   };
@@ -74,7 +85,12 @@ async function submit() {
       if (submittedById.has(cell.witnessId)) continue;
       const response = runGreenroom(['submit', ...buildGreenroomWitnessSubmitArgs(cell)]);
       if (!response.job_id) throw new Error(`submit returned no job id for ${cell.witnessId}`);
-      const submitted = { witnessId: cell.witnessId, jobId: response.job_id, response };
+      const submitted = {
+        witnessId: cell.witnessId,
+        submissionFingerprint: submissionFingerprint(cell),
+        jobId: response.job_id,
+        response,
+      };
       report.submitted.push(submitted);
       submittedById.set(cell.witnessId, submitted);
       report.lastTrustworthyEvidence = `${report.submitted.length}/${report.requestedCount} witness jobs submitted through Greenroom`;
@@ -115,6 +131,14 @@ async function collect({ allowPending = false } = {}) {
   await mkdir(durableFrameRoot, { recursive: true });
   for (const submitted of submission.submitted) {
     const cell = byId.get(submitted.witnessId);
+    if (submitted.submissionFingerprint !== submissionFingerprint(cell)) {
+      report.rejected.push({
+        witnessId: cell.witnessId,
+        jobId: submitted.jobId,
+        error: 'submission fingerprint does not match current witness plan',
+      });
+      continue;
+    }
     const status = runGreenroom(['status', submitted.jobId]);
     if (status.status === 'pending' || status.status === 'running') {
       report.nonterminal.push({ witnessId: cell.witnessId, jobId: submitted.jobId, status: status.status });
