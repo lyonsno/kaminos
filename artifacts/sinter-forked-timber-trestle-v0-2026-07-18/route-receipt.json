@@ -1,0 +1,88 @@
+{
+  "schema": "kaminos.structural-mesh-asset-route-receipt.v0",
+  "assetId": "forked-timber-reliquary-trestle-v0",
+  "createdAt": "2026-07-19T03:49:00Z",
+  "producer": "handy-candyman",
+  "consumer": "arbitrary-mesh-combustion-witness",
+  "routeDecision": {
+    "requested": "cheapest honest irregular indexed GLB with two named islands and one authored support-loss seam",
+    "effective": "deterministic authored GLB cast",
+    "backend": "node procedural GLB writer",
+    "reason": "Named seam topology, object-local coordinates, and independent island identity were load-bearing; opaque image-to-3D reconstruction could fuse the crossbrace."
+  },
+  "sourceEnvelope": {
+    "kind": "internal operator mesh-combustion asset consultation",
+    "strategy": "internal generation-strategy return requested an asymmetric forked trestle with detachable sacrificial crossbrace",
+    "publicArtifactNote": "Internal packet paths are intentionally omitted from this public-safe Kaminos artifact."
+  },
+  "files": {
+    "visual/forked-timber-reliquary-trestle-v0.glb": {
+      "sha256": "1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+      "vertices": 448,
+      "triangles": 864
+    },
+    "binding/forked-timber-reliquary-trestle-v0-binding.glb": {
+      "sha256": "ae799136077338053e10b02bfcc5e0c4754fcd703e6553f60cd6188378ac37d0",
+      "vertices": 296,
+      "triangles": 560
+    },
+    "structuralMeshAssetDescriptor.json": {
+      "schema": "kaminos.structural-mesh-asset-descriptor.v0"
+    }
+  },
+  "coordinateFrame": {
+    "handedness": "right",
+    "upAxis": "+Y",
+    "forwardAxis": "+Z",
+    "unit": "meter",
+    "transformsBaked": true
+  },
+  "islands": [
+    "reliquary_trestle_body",
+    "sacrificial_crossbrace"
+  ],
+  "seam": {
+    "id": "support_loss_tenon_0",
+    "translation": [
+      0,
+      0.43,
+      0.3
+    ],
+    "contract": "Release sacrificial_crossbrace without runtime triangle cutting."
+  },
+  "directRoutes": {
+    "visual": {
+      "requestedUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fvisual%2Fforked-timber-reliquary-trestle-v0.glb",
+      "witness": "witnesses/trestle-visual-direct.json",
+      "screenshot": "witnesses/trestle-visual-direct.png"
+    },
+    "binding": {
+      "requestedUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+      "witness": "witnesses/trestle-binding-direct.json",
+      "screenshot": "witnesses/trestle-binding-direct.png"
+    }
+  },
+  "angleWitness": {
+    "report": "witnesses/trestle-visual-angle-witness.json",
+    "captures": [
+      "witnesses/trestle-visual-front.png",
+      "witnesses/trestle-visual-oblique.png",
+      "witnesses/trestle-visual-side-seam.png"
+    ]
+  },
+  "supportedClaims": [
+    "GLB files are indexed triangle meshes with finite positions and normals.",
+    "The visual and binding GLBs expose named nodes reliquary_trestle_body, sacrificial_crossbrace, and support_loss_tenon_0.",
+    "The direct Kaminos asset route registers each GLB as a scene object and records requested/effective route identity.",
+    "Front, oblique, and side captures show a non-boxy forked support and visible crossbrace/seam region."
+  ],
+  "nonClaims": [
+    "No collision quality claim.",
+    "No runtime combustion behavior claim.",
+    "No arbitrary fracture or runtime cutting claim.",
+    "No photoreal hero asset or production UV/PBR claim."
+  ],
+  "usefulMisses": [
+    "First angle witness failed before screenshot capture at Runtime.evaluate and was repaired before promotion."
+  ]
+}

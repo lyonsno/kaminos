@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+  "effectiveUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9473,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9473-29698",
+  "settleMs": 3500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9473/devtools/browser/7bbadd25-bfa5-46d6-b31a-66963f4b580b"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9473/devtools/browser/7bbadd25-bfa5-46d6-b31a-66963f4b580b\nTrying to load the allocator multiple times. This is *not* supported.\n[29729:17496560:0718/234316.343467:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[29729:17496560:0718/234316.350693:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[29729:17496560:0718/234316.350982:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/witnesses/trestle-binding-direct.png",
+  "screenshotBytes": 439541,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/binding/forked-timber-reliquary-trestle-v0-binding.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+        "fileName": "forked-timber-reliquary-trestle-v0-binding.glb",
+        "label": "Forked Timber Reliquary Trestle V0 Binding",
+        "registeredObjectId": "glb-30c7d2f2-f004-40b7-b772-f543f1796f5f",
+        "registeredAt": "2026-07-19T03:43:14.943Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-30c7d2f2-f004-40b7-b772-f543f1796f5f",
+        "label": "Forked Timber Reliquary Trestle V0 Binding",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+        "type": "glb",
+        "groupId": "group-18464222-4642-41d1-99f0-f3e9fc363e93",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.018316500000000013,
+            -0.43871400000000005,
+            -0.034706000000000015
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.9965348955695303,
+            0.9965348955695303,
+            0.9965348955695303
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8098/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fbinding%2Fforked-timber-reliquary-trestle-v0-binding.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Forked Timber Reliquary Trestle V0 Binding"
+    }
+  }
+}

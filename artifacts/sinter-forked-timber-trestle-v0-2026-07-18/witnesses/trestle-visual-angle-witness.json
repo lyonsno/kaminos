@@ -1,0 +1,233 @@
+{
+  "requestedUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fvisual%2Fforked-timber-reliquary-trestle-v0.glb",
+  "debugPort": 9474,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-trestle-angle-witness-9474-35111",
+  "phase": "complete",
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9474/devtools/browser/16246494-d392-4825-9fe8-65710a39143f\nTrying to load the allocator multiple times. This is *not* supported.\n[35128:17525361:0718/234553.231220:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[35128:17525361:0718/234553.231485:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[35128:17525361:0718/234553.267413:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9474/devtools/browser/16246494-d392-4825-9fe8-65710a39143f"
+  },
+  "effectiveUrl": "http://127.0.0.1:8098/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fvisual%2Fforked-timber-reliquary-trestle-v0.glb",
+  "registration": {
+    "state": {
+      "schema": "kaminos.asset-smoke-link.v0",
+      "assetType": "mesh",
+      "status": "loaded",
+      "requestedRoot": "lerms-preview",
+      "requestedPath": "kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/visual/forked-timber-reliquary-trestle-v0.glb",
+      "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fvisual%2Fforked-timber-reliquary-trestle-v0.glb",
+      "fileName": "forked-timber-reliquary-trestle-v0.glb",
+      "label": "Forked Timber Reliquary Trestle V0",
+      "registeredObjectId": "glb-ec253726-c2a8-4a91-873c-a9e72ca8173d",
+      "registeredAt": "2026-07-19T03:45:51.423Z",
+      "error": null
+    },
+    "objects": [
+      {
+        "id": "glb-ec253726-c2a8-4a91-873c-a9e72ca8173d",
+        "label": "Forked Timber Reliquary Trestle V0",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718%2Fartifacts%2Fsinter-forked-timber-trestle-v0-2026-07-18%2Fvisual%2Fforked-timber-reliquary-trestle-v0.glb",
+        "type": "glb",
+        "groupId": "group-3621e04a-34a6-47e1-94e0-4fdad206817b",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.018791000000000002,
+            -0.443471,
+            -0.03791800000000001
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.9978277145626113,
+            0.9978277145626113,
+            0.9978277145626113
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      }
+    ]
+  },
+  "captures": [
+    {
+      "id": "front",
+      "cameraState": {
+        "position": [
+          0,
+          0.7200000000000001,
+          2.5500000000000003
+        ],
+        "target": [
+          0,
+          0.43,
+          0.020000000000000004
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0.9934946458894222,
+          0.11387883292803656,
+          0,
+          0,
+          -0.11387883292803656,
+          0.9934946458894222,
+          0,
+          0,
+          -0.42492512107389074,
+          -2.615404106726213,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/witnesses/trestle-visual-front.png",
+        "bytes": 346078
+      }
+    },
+    {
+      "id": "oblique",
+      "cameraState": {
+        "position": [
+          1.7500000000000002,
+          1.0500000000000003,
+          2.05
+        ],
+        "target": [
+          0,
+          0.41999999999999993,
+          0.02
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.7574099616005767,
+          -0.14940680412645016,
+          0.6356160452261519,
+          0,
+          -1.3877787807814457e-17,
+          0.9734683326638923,
+          0.22882177628141478,
+          0,
+          -0.652939622069463,
+          -0.17331189278668213,
+          0.737314612462336,
+          0,
+          0.013058792441389681,
+          -0.4053904618631011,
+          -2.86408589978904,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/witnesses/trestle-visual-oblique.png",
+        "bytes": 387495
+      }
+    },
+    {
+      "id": "side-seam",
+      "cameraState": {
+        "position": [
+          2.45,
+          0.76,
+          0.24000000000000016
+        ],
+        "target": [
+          0,
+          0.42,
+          0.18
+        ],
+        "projectionMatrix": [
+          2.063133319572083,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0001000100010002,
+          -1,
+          0,
+          0,
+          -0.010001000100010001,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.024482455341260433,
+          -0.1373765800769689,
+          0.9902162817419331,
+          0,
+          5.204170427930421e-18,
+          0.9905131783916963,
+          0.1374177697111254,
+          0,
+          -0.9997002597681284,
+          -0.0033643244100482156,
+          0.024250194654904567,
+          0,
+          0.17994604675826287,
+          -0.4154099565307037,
+          -2.5362874419653685,
+          1
+        ]
+      },
+      "screenshot": {
+        "path": "/private/tmp/kaminos-handy-candyman-structural-bell-0718-handy-candyman-sinter-trestle-0718/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/witnesses/trestle-visual-side-seam.png",
+        "bytes": 327325
+      }
+    }
+  ]
+}
