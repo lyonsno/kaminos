@@ -56,6 +56,14 @@ function sameStringSet(left, right) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+function samePositiveIntegerMap(left, right, keys) {
+  if (!left || typeof left !== 'object' || Array.isArray(left)) return false;
+  if (!right || typeof right !== 'object' || Array.isArray(right)) return false;
+  const expectedKeys = [...keys].sort();
+  if (!sameStringSet(Object.keys(left), expectedKeys) || !sameStringSet(Object.keys(right), expectedKeys)) return false;
+  return expectedKeys.every(key => isPositiveInteger(left[key]) && left[key] === right[key]);
+}
+
 function approximatelyEqual(left, right, tolerance = 1e-6) {
   return Number.isFinite(left) && Number.isFinite(right)
     && Math.abs(left - right) <= tolerance * Math.max(1, Math.abs(left), Math.abs(right));
@@ -77,7 +85,8 @@ function validateCoefficientChannel(channel, channelName, errors) {
 function failureRequestedConfigMatches(requested, expected) {
   return sameStringSet(requested?.stateIds, expected.stateIds)
     && sameStringSet(requested?.armIds, expected.armIds)
-    && requested?.fullCandidateCount === expected.fullCandidateCount
+    && requested?.fullCandidateCount == null
+    && samePositiveIntegerMap(requested?.fullCandidateCountByState, expected.fullCandidateCountByState, expected.stateIds)
     && requested?.sparseCandidateCount === expected.sparseCandidateCount
     && requested?.residualGridScale === expected.residualGridScale
     && requested?.residualRaySteps === expected.residualRaySteps
@@ -141,7 +150,8 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
       reject(
         !Array.isArray(effective.stateIds)
           || !Array.isArray(effective.armIds)
-          || !Number.isInteger(effective.fullCandidateCount)
+          || effective.fullCandidateCount != null
+          || !samePositiveIntegerMap(effective.fullCandidateCountByState, expected.fullCandidateCountByState, expected.stateIds)
           || !Number.isInteger(effective.sparseCandidateCount)
           || !Number.isFinite(effective.residualGridScale)
           || !Number.isInteger(effective.residualRaySteps)
@@ -190,14 +200,22 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
   const effective = report.effective ?? {};
   reject(!sameStringSet(requested.stateIds, expected.stateIds), 'requested-state-set-mismatch');
   reject(!sameStringSet(requested.armIds, expected.armIds), 'requested-arm-set-mismatch');
-  reject(requested.fullCandidateCount !== expected.fullCandidateCount, 'requested-full-count-mismatch');
+  reject(requested.fullCandidateCount != null, 'requested-scalar-full-count-alias');
+  reject(
+    !samePositiveIntegerMap(requested.fullCandidateCountByState, expected.fullCandidateCountByState, expected.stateIds),
+    'requested-full-count-map-mismatch',
+  );
   reject(requested.sparseCandidateCount !== expected.sparseCandidateCount, 'requested-sparse-count-mismatch');
   reject(requested.residualGridScale !== expected.residualGridScale, 'requested-grid-scale-mismatch');
   reject(requested.residualRaySteps !== expected.residualRaySteps, 'requested-ray-steps-mismatch');
   reject(requested.width !== expected.width || requested.height !== expected.height, 'requested-resolution-mismatch');
   reject(!sameStringSet(effective.stateIds, requested.stateIds), 'effective-state-set-mismatch');
   reject(!sameStringSet(effective.armIds, requested.armIds), 'effective-arm-set-mismatch');
-  reject(effective.fullCandidateCount !== requested.fullCandidateCount, 'requested-effective-full-count-mismatch');
+  reject(effective.fullCandidateCount != null, 'effective-scalar-full-count-alias');
+  reject(
+    !samePositiveIntegerMap(effective.fullCandidateCountByState, requested.fullCandidateCountByState, expected.stateIds),
+    'requested-effective-full-count-map-mismatch',
+  );
   reject(effective.sparseCandidateCount !== requested.sparseCandidateCount, 'requested-effective-sparse-count-mismatch');
   reject(effective.residualGridScale !== requested.residualGridScale, 'requested-effective-grid-scale-mismatch');
   reject(effective.residualRaySteps !== requested.residualRaySteps, 'requested-effective-ray-steps-mismatch');
@@ -226,7 +244,9 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
       const policy = ARM_POLICIES[arm?.armId];
       if (!policy) continue;
       const isFull = arm.armId === 'full-correct';
-      const expectedCount = isFull ? expected.fullCandidateCount : expected.sparseCandidateCount;
+      const expectedCount = isFull
+        ? expected.fullCandidateCountByState?.[state.stateId]
+        : expected.sparseCandidateCount;
 
       reject(arm.stateId !== state.stateId, 'arm-state-mismatch');
       reject(arm.role !== policy.role, 'arm-role-mismatch');
