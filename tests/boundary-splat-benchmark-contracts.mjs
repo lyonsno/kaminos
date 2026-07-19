@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import * as benchmarkModule from '../volume-boundary-splat-benchmark.mjs';
 import {
   acceptedFullSupportBasinReceipt,
   basinReceiptChecks,
@@ -66,6 +71,59 @@ assert.match(
   /footprint-tier-effective-control-mismatch[\s\S]*footprint-tier-candidate-identity-changed[\s\S]*footprint-tier-energy-conservation-failed/,
   'tier sweep fails loud on fallback controls, candidate drift, or broken optical conservation',
 );
+assert.equal(
+  typeof benchmarkModule.footprintTierSweepReceiptChecks,
+  'function',
+  'tier-arm completeness is an executable false-closure predicate',
+);
+assert.deepEqual(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArmIds: ['base-056', 'importance-070-098', 'random-070-098'],
+    sweep: {
+      ok: true,
+      arms: [
+        { id: 'base-056' },
+        { id: 'importance-070-098' },
+        { id: 'random-070-098' },
+      ],
+    },
+  }),
+  { incompleteFootprintTierSweep: false },
+  'a complete exact tier sweep preserves bounded optimization authority',
+);
+for (const sweep of [
+  null,
+  { ok: false, arms: [] },
+  { ok: true, arms: [{ id: 'base-056' }, { id: 'importance-070-098' }] },
+  { ok: true, arms: [{ id: 'base-056' }, { id: 'random-070-098' }, { id: 'importance-070-098' }] },
+]) {
+  assert.equal(
+    benchmarkModule.footprintTierSweepReceiptChecks({
+      requested: true,
+      expectedArmIds: ['base-056', 'importance-070-098', 'random-070-098'],
+      sweep,
+    }).incompleteFootprintTierSweep,
+    true,
+    'missing, failed, partial, or reordered tier arms deny bounded optimization authority',
+  );
+}
+
+const malformedTierReportDir = mkdtempSync(join(tmpdir(), 'kaminos-malformed-footprint-tier-'));
+const malformedTierReportPath = join(malformedTierReportDir, 'report.json');
+const malformedTierWitness = spawnSync(process.execPath, [
+  new URL('../volume-witness.mjs', import.meta.url).pathname,
+  '--report', malformedTierReportPath,
+  '--boundary-splat-footprint-tier-arms', '{bad-json',
+], { encoding: 'utf8' });
+assert.notEqual(malformedTierWitness.status, 0, 'malformed tier-arm input fails before primary output');
+assert.equal(existsSync(malformedTierReportPath), true, 'malformed tier-arm input still writes a durable failure report');
+const malformedTierReport = JSON.parse(readFileSync(malformedTierReportPath, 'utf8'));
+assert.equal(malformedTierReport.status, 'failed-before-primary-output');
+assert.equal(malformedTierReport.phase, 'argument-validation');
+assert.equal(malformedTierReport.lastTrustworthyEvidence, 'cli-arguments-parsed-report-path-resolved');
+assert.match(malformedTierReport.error, /Invalid boundary splat footprint tier arms JSON/);
+rmSync(malformedTierReportDir, { recursive: true, force: true });
 assert.match(
   witness,
   /sampleBoundarySplatGpuProfile\(\{\s*advanceSim:\s*false\s*\}\)/,

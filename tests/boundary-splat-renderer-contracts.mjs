@@ -33,8 +33,8 @@ const baseFootprintTier = resolveBoundarySplatFootprintTier({
 const mediumFootprintTier = resolveBoundarySplatFootprintTier({
   policy: 'importance',
   cellIndex: 42,
-  structuralSignal: 0.36,
-  fireSignal: 0.72,
+  structuralSignal: 0.75,
+  fireSignal: 1.8,
   baseRadius: 0.56,
   mediumRadius: 0.7,
   heroRadius: 0.98,
@@ -44,8 +44,8 @@ const mediumFootprintTier = resolveBoundarySplatFootprintTier({
 const heroFootprintTier = resolveBoundarySplatFootprintTier({
   policy: 'importance',
   cellIndex: 43,
-  structuralSignal: 0.5,
-  fireSignal: 1.25,
+  structuralSignal: 0.95,
+  fireSignal: 2.4,
   baseRadius: 0.56,
   mediumRadius: 0.7,
   heroRadius: 0.98,
@@ -66,6 +66,54 @@ assert.deepEqual(
   [heroFootprintTier.tier, heroFootprintTier.radius],
   ['hero', 0.98],
   'peak candidates recover the exact visually accepted hero footprint',
+);
+assert.equal(
+  heroFootprintTier.identity,
+  'boundary-splat-candidate-local-conserved-footprint-tier-v1',
+  'tier receipts version the joint structural-emissive importance law',
+);
+const structuralOnlyFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'importance',
+  cellIndex: 44,
+  structuralSignal: 1,
+  fireSignal: 0,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+const fireOnlyFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'importance',
+  cellIndex: 45,
+  structuralSignal: 0,
+  fireSignal: 3,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+assert.deepEqual(
+  [structuralOnlyFootprintTier.tier, fireOnlyFootprintTier.tier],
+  ['base', 'base'],
+  'neither broad support nor heat alone can spend a charged footprint',
+);
+const offZeroThresholdFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'off',
+  cellIndex: 46,
+  structuralSignal: 1,
+  fireSignal: 3,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0,
+  heroThreshold: 0,
+});
+assert.deepEqual(
+  [offZeroThresholdFootprintTier.tier, offZeroThresholdFootprintTier.radius],
+  ['base', 0.56],
+  'policy off remains the uniform-radius baseline even when tier thresholds are zero',
 );
 const randomFootprintTierA = resolveBoundarySplatFootprintTier({
   policy: 'random',
@@ -91,6 +139,12 @@ const randomFootprintTierB = resolveBoundarySplatFootprintTier({
 });
 assert.deepEqual(randomFootprintTierA, randomFootprintTierB, 'random-control charging is deterministic by native cell identity and ignores candidate appearance');
 assert.match(core, /fn boundarySplatFootprintTierScore/, 'WGSL owns the same candidate-local footprint tier score as the audit helper');
+assert.match(
+  core,
+  /let footprintTierPolicy = u32\(round\(boundarySplatCamera\.footprintTierPolicy\.x\)\);[\s\S]*if \(footprintTierPolicy != BOUNDARY_SPLAT_FOOTPRINT_TIER_OFF\) \{[\s\S]*footprintTierScore >= footprintHeroThreshold/,
+  'WGSL cannot charge a footprint tier while the effective policy is off',
+);
+assert.match(core, /scoreDistribution:\s*summarizeBoundarySplatFootprintScores\(footprintTierScores\)/, 'footprint audit reports the measured score distribution used to choose sparse cuts');
 assert.match(core, /effectiveMajorRadius\s*=\s*effectiveMajorRadius \* footprintTierScale[\s\S]*effectiveMinorRadius\s*=\s*effectiveMinorRadius \* footprintTierScale[\s\S]*effectiveAxisAreaScale/, 'tier charging enlarges candidate-local axes before conserved area-opacity normalization');
 assert.equal(
   resolveBoundarySplatRenderComposition({

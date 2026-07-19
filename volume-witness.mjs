@@ -155,12 +155,32 @@ const boundarySplatGpuProfileWarmupSamples = boundarySplatGpuProfileSamples > 0 
 const boundarySplatFootprintAuditRequested = args.has('--boundary-splat-footprint-audit');
 const boundarySplatFootprintSweepRadii = parseNumberList(args.get('--boundary-splat-footprint-sweep-radii'));
 let boundarySplatFootprintTierArms = [];
-if (args.has('--boundary-splat-footprint-tier-arms')) {
+function parseBoundarySplatFootprintTierArms(value) {
+  let arms;
   try {
-    boundarySplatFootprintTierArms = JSON.parse(String(args.get('--boundary-splat-footprint-tier-arms')));
+    arms = JSON.parse(String(value));
   } catch (error) {
     throw new Error(`Invalid boundary splat footprint tier arms JSON: ${error.message}`);
   }
+  if (!Array.isArray(arms)
+    || arms.length > 0 && arms.some((arm, index, candidates) => (
+      !arm
+      || typeof arm.id !== 'string'
+      || arm.id.length === 0
+      || candidates.findIndex(candidate => candidate?.id === arm.id) !== index
+      || !['off', 'importance', 'random'].includes(arm.policy)
+      || ![arm.baseRadius, arm.mediumRadius, arm.heroRadius, arm.mediumThreshold, arm.heroThreshold].every(Number.isFinite)
+      || arm.baseRadius < 0.35
+      || arm.heroRadius > 1.5
+      || arm.mediumRadius < arm.baseRadius
+      || arm.heroRadius < arm.mediumRadius
+      || arm.mediumThreshold < 0
+      || arm.heroThreshold > 1
+      || arm.heroThreshold < arm.mediumThreshold
+    ))) {
+    throw new Error('Invalid boundary splat footprint tier arm contract');
+  }
+  return arms;
 }
 if (boundarySplatFootprintSweepRadii.some((radius, index) => (
   !Number.isFinite(radius)
@@ -169,27 +189,6 @@ if (boundarySplatFootprintSweepRadii.some((radius, index) => (
   || (index > 0 && radius >= boundarySplatFootprintSweepRadii[index - 1])
 ))) {
   throw new Error(`Invalid descending boundary splat footprint sweep: ${boundarySplatFootprintSweepRadii.join(',')}`);
-}
-if (boundarySplatFootprintSweepRadii.length > 0 && boundarySplatFootprintTierArms.length > 0) {
-  throw new Error('Boundary splat footprint radius and tier sweeps are mutually exclusive');
-}
-if (!Array.isArray(boundarySplatFootprintTierArms)
-  || boundarySplatFootprintTierArms.length > 0 && boundarySplatFootprintTierArms.some((arm, index, arms) => (
-    !arm
-    || typeof arm.id !== 'string'
-    || arm.id.length === 0
-    || arms.findIndex(candidate => candidate?.id === arm.id) !== index
-    || !['off', 'importance', 'random'].includes(arm.policy)
-    || ![arm.baseRadius, arm.mediumRadius, arm.heroRadius, arm.mediumThreshold, arm.heroThreshold].every(Number.isFinite)
-    || arm.baseRadius < 0.35
-    || arm.heroRadius > 1.5
-    || arm.mediumRadius < arm.baseRadius
-    || arm.heroRadius < arm.mediumRadius
-    || arm.mediumThreshold < 0
-    || arm.heroThreshold > 1
-    || arm.heroThreshold < arm.mediumThreshold
-  ))) {
-  throw new Error('Invalid boundary splat footprint tier arm contract');
 }
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
@@ -2327,6 +2326,28 @@ async function recoverIdentityFrameState(ws, state) {
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
+  if (args.has('--boundary-splat-footprint-tier-arms')) {
+    try {
+      boundarySplatFootprintTierArms = parseBoundarySplatFootprintTierArms(args.get('--boundary-splat-footprint-tier-arms'));
+      if (boundarySplatFootprintSweepRadii.length > 0 && boundarySplatFootprintTierArms.length > 0) {
+        throw new Error('Boundary splat footprint radius and tier sweeps are mutually exclusive');
+      }
+    } catch (error) {
+      const report = {
+        status: 'failed-before-primary-output',
+        requestedRoute: url,
+        phase: 'argument-validation',
+        lastTrustworthyEvidence: 'cli-arguments-parsed-report-path-resolved',
+        error: error?.message || String(error),
+        reportPath,
+        boundarySplatFootprintTierArmsRequested: args.get('--boundary-splat-footprint-tier-arms'),
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      console.error(JSON.stringify(report, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+  }
   let replayedCaptureControls = null;
   let replayedCaptureCamera = null;
 

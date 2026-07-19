@@ -274,6 +274,8 @@ function initialFalseClosureChecks() {
     mismatchedDeviceScaleFactor: false,
     missingWarmGpuProfileSeries: false,
     incompleteFootprintAudit: false,
+    incompleteFootprintSweep: false,
+    incompleteFootprintTierSweep: false,
     incompleteWorkloadReceipt: false,
     staleCountAuthority: false,
     capacityTruncatedWorkload: false,
@@ -382,6 +384,16 @@ export function basinReceiptChecks(report) {
   return { missingAcceptedBasinReceipt, mismatchedAcceptedBasinReceipt };
 }
 
+export function footprintTierSweepReceiptChecks({ requested, expectedArmIds, sweep }) {
+  if (!requested) return { incompleteFootprintTierSweep: false };
+  const receivedArmIds = Array.isArray(sweep?.arms) ? sweep.arms.map(arm => arm?.id ?? null) : [];
+  return {
+    incompleteFootprintTierSweep: sweep?.ok !== true
+      || receivedArmIds.length !== expectedArmIds.length
+      || receivedArmIds.some((id, index) => id !== expectedArmIds[index]),
+  };
+}
+
 export function summarizeRun(testCase, reportPath, screenshotPath, report) {
   const wrapper = report;
   report = report?.state && typeof report.state === 'object'
@@ -391,12 +403,14 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report) {
         boundarySplatGpuProfileSeries: report.boundarySplatGpuProfileSeries ?? report.state.boundarySplatGpuProfileSeries,
         boundarySplatFootprintAudit: report.boundarySplatFootprintAudit ?? report.state.boundarySplatFootprintAudit,
         boundarySplatFootprintSweep: report.boundarySplatFootprintSweep ?? report.state.boundarySplatFootprintSweep,
+        boundarySplatFootprintTierSweep: report.boundarySplatFootprintTierSweep ?? report.state.boundarySplatFootprintTierSweep,
       }
     : report;
   const profile = report.boundarySplatGpuProfile || {};
   const profileSeries = summarizeGpuProfileSeries(report.boundarySplatGpuProfileSeries);
   const footprintAudit = report.boundarySplatFootprintAudit || null;
   const footprintSweep = report.boundarySplatFootprintSweep || null;
+  const footprintTierSweep = report.boundarySplatFootprintTierSweep || null;
   const copyDisposition = report.boundarySplatCopyDisposition || {};
   const litPixels = Number(report.litPixels ?? report.mainRendererMetrics?.litPixels ?? 0);
   const meanLuma = Number(report.meanLuma ?? report.mainRendererMetrics?.meanLuma ?? 0);
@@ -427,6 +441,11 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report) {
     footprintSweep?.ok !== true
     || footprintSweep?.arms?.length !== FOOTPRINT_SWEEP_RADII.length
   );
+  Object.assign(falseClosureChecks, footprintTierSweepReceiptChecks({
+    requested: FOOTPRINT_TIER_SWEEP_REQUESTED,
+    expectedArmIds: DEFAULT_FOOTPRINT_TIER_ARMS.map(arm => arm.id),
+    sweep: footprintTierSweep,
+  }));
   falseClosureChecks.mismatchedRaymarchQuality = !profile?.stages?.matchedRaymarchRaster;
   Object.assign(falseClosureChecks, workloadReceiptChecks(report));
   Object.assign(falseClosureChecks, basinReceiptChecks(report));
@@ -471,6 +490,7 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report) {
     boundarySplatGpuProfileSeries: profileSeries,
     boundarySplatFootprintAudit: footprintAudit,
     boundarySplatFootprintSweep: footprintSweep,
+    boundarySplatFootprintTierSweep: footprintTierSweep,
     boundarySplatCopyDisposition: copyDisposition,
     boundarySplatCopyBytesThisFrame,
     litPixels,

@@ -81,7 +81,7 @@ const BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_IDENTITY = 'boundary-splat-live-
 const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
 const BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE = 0;
 const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE = 1;
-const BOUNDARY_SPLAT_FOOTPRINT_TIER_IDENTITY = 'boundary-splat-candidate-local-conserved-footprint-tier-v0';
+const BOUNDARY_SPLAT_FOOTPRINT_TIER_IDENTITY = 'boundary-splat-candidate-local-conserved-footprint-tier-v1';
 const BOUNDARY_SPLAT_FOOTPRINT_TIER_POLICIES = Object.freeze({
   off: 0,
   importance: 1,
@@ -609,6 +609,30 @@ function boundarySplatDeterministicHash(value) {
   return (result ^ (result >>> 16)) >>> 0;
 }
 
+function boundarySplatJointImportanceScore(structuralSignal, fireSignal) {
+  const structuralImportance = smoothstep01(0.11, 1, Number(structuralSignal) || 0);
+  const emissiveImportance = smoothstep01(0.08, 2.5, Number(fireSignal) || 0);
+  return Math.sqrt(structuralImportance * emissiveImportance);
+}
+
+function summarizeBoundarySplatFootprintScores(samples) {
+  const sorted = samples.filter(Number.isFinite).sort((left, right) => left - right);
+  const valueAt = quantile => sorted.length > 0
+    ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * quantile))]
+    : 0;
+  return {
+    count: sorted.length,
+    min: sorted[0] ?? 0,
+    p50: valueAt(0.5),
+    p75: valueAt(0.75),
+    p90: valueAt(0.9),
+    p95: valueAt(0.95),
+    p98: valueAt(0.98),
+    p99: valueAt(0.99),
+    max: sorted.at(-1) ?? 0,
+  };
+}
+
 export function resolveBoundarySplatFootprintTier({
   policy = 'off',
   cellIndex = 0,
@@ -631,10 +655,7 @@ export function resolveBoundarySplatFootprintTier({
   const score = controls.policy === 'random'
     ? (boundarySplatDeterministicHash(cellIndex) & 0x00ffffff) / 16777216
     : controls.policy === 'importance'
-      ? Math.max(
-        smoothstep01(0.11, 0.42, Number(structuralSignal) || 0),
-        smoothstep01(0.08, 1.25, Number(fireSignal) || 0),
-      )
+      ? boundarySplatJointImportanceScore(structuralSignal, fireSignal)
       : 0;
   const tier = controls.policy !== 'off' && score >= controls.heroThreshold
     ? 'hero'
@@ -6233,10 +6254,9 @@ fn boundarySplatFootprintTierScore(cellIndex: u32, structuralSignal: f32, fireSi
     return boundarySplatHash01(cellIndex);
   }
   if (policy == BOUNDARY_SPLAT_FOOTPRINT_TIER_IMPORTANCE) {
-    return max(
-      smoothstep(0.11, 0.42, structuralSignal),
-      smoothstep(0.08, 1.25, fireSignal),
-    );
+    let structuralImportance = smoothstep(0.11, 1.0, structuralSignal);
+    let emissiveImportance = smoothstep(0.08, 2.5, fireSignal);
+    return sqrt(structuralImportance * emissiveImportance);
   }
   return 0.0;
 }
@@ -6388,10 +6408,13 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let footprintMediumThreshold = clamp(boundarySplatCamera.footprintTierControls.z, 0.0, 1.0);
   let footprintHeroThreshold = max(footprintMediumThreshold, clamp(boundarySplatCamera.footprintTierControls.w, 0.0, 1.0));
   var footprintTierRadius = globalRadius;
-  if (footprintTierScore >= footprintHeroThreshold) {
-    footprintTierRadius = footprintHeroRadius;
-  } else if (footprintTierScore >= footprintMediumThreshold) {
-    footprintTierRadius = footprintMediumRadius;
+  let footprintTierPolicy = u32(round(boundarySplatCamera.footprintTierPolicy.x));
+  if (footprintTierPolicy != BOUNDARY_SPLAT_FOOTPRINT_TIER_OFF) {
+    if (footprintTierScore >= footprintHeroThreshold) {
+      footprintTierRadius = footprintHeroRadius;
+    } else if (footprintTierScore >= footprintMediumThreshold) {
+      footprintTierRadius = footprintMediumRadius;
+    }
   }
   let footprintTierScale = footprintTierRadius / globalRadius;
   effectiveMajorRadius = effectiveMajorRadius * footprintTierScale;
@@ -11353,6 +11376,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
       const footprintTierControl = boundarySplatFootprintTierControls(controlsSnapshot);
       const footprintTierCounts = { base: 0, medium: 0, hero: 0 };
+      const footprintTierScores = [];
       for (let index = 0; index < draw.instanceCount; index += 1) {
         const offset = index * strideFloats;
         const opacity = values[offset + 7];
@@ -11380,6 +11404,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           heroThreshold: footprintTierControl.heroThreshold,
         });
         footprintTierCounts[footprintTier.tier] += 1;
+        footprintTierScores.push(footprintTier.score);
         baseIntegratedAlphaSum += values[offset + 15];
         effectiveIntegratedAlphaSum += radiusX * radiusY * opacity * kernelIntegral * energyCompensation;
       }
@@ -11777,6 +11802,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           ...footprintTierControl,
           counts: footprintTierCounts,
           chargedCount: footprintTierCounts.medium + footprintTierCounts.hero,
+          scoreDistribution: summarizeBoundarySplatFootprintScores(footprintTierScores),
         },
         descriptorFrameMetrics,
         projectionMetrics,
