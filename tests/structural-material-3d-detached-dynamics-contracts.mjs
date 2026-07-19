@@ -159,6 +159,7 @@ const reset = resetDetachedDynamics(launched);
 assert.equal(reset.bodies.length, 0);
 assert.equal(reset.retiredBodies.length, 0);
 assert.equal(reset.generation, launched.generation + 1);
+assert.equal('generation' in reset.config, false, 'lifecycle identity cannot leak into integrator config');
 
 const staleAssets = structuredClone(detachedAssets);
 staleAssets.connectivityEpoch = -1;

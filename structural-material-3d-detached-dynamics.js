@@ -91,7 +91,9 @@ function validateAssetProjection(sidecar, label) {
 }
 
 function configFrom(options = {}) {
-  const config = { ...DEFAULTS, ...options };
+  const config = Object.fromEntries(
+    Object.entries(DEFAULTS).map(([key, fallback]) => [key, options[key] ?? fallback]),
+  );
   config.fixedStepSeconds = positive(config.fixedStepSeconds, 'fixedStepSeconds');
   config.gravity = positive(config.gravity, 'gravity');
   config.groundPlaneY = finite(config.groundPlaneY, 'groundPlaneY');
