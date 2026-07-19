@@ -16602,6 +16602,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   async function buildBoundarySplatTargetSalienceOracle(options = {}) {
     if (!device) throw new Error('boundary-splat-target-oracle-inactive');
+    const reportProgress = (phase, detail = {}) => {
+      if (typeof options.onProgress !== 'function') return;
+      try {
+        options.onProgress({
+          identity: 'boundary-splat-target-salience-oracle-progress-v0',
+          phase,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          ...detail,
+        });
+      } catch {}
+    };
     const targetPreview = options.targetPreview;
     const targetAuthority = options.targetAuthority;
     const mediumCount = Math.floor(Number(options.mediumCount));
@@ -16627,10 +16639,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       (value, index) => Number(value) === Number(cameraBefore.viewport[index]),
     );
     if (!cameraMatches) throw new Error('boundary-splat-target-oracle-target-camera-mismatch');
+    reportProgress('boundary-splat-target-oracle-candidate-capture-start');
     const candidateCapture = await captureBoundarySplatSupervisionCandidates({
       sameStateCaptureId: `${targetAuthority.sameStateCaptureId}-oracle-candidates`,
       resumeRenderLoop: false,
       requireSelectiveTruthHigh: false,
+    });
+    reportProgress('boundary-splat-target-oracle-candidate-capture-complete', {
+      candidateCount: candidateCapture?.candidates?.candidateCount ?? null,
+      overflowCount: candidateCapture?.candidates?.overflowCount ?? null,
     });
     if (candidateCapture?.ok !== true
       || candidateCapture.simStepCount !== state.simStepCount
@@ -16672,6 +16689,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (candidatePositionSha256 !== expectedCandidatePositionSha256) {
       throw new Error(`boundary-splat-target-oracle-candidate-cohort-mismatch:${candidatePositionSha256}:${expectedCandidatePositionSha256}`);
     }
+    reportProgress('boundary-splat-target-oracle-scoring-start', {
+      candidateCount: candidateCapture.candidates.rowCount,
+      mediumCount,
+      heroCount,
+    });
     const oracle = buildTargetSalienceOracleScores({
       targetPreview,
       candidateValues,
@@ -16681,6 +16703,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       viewProjection: targetCamera.viewProjection,
       mediumCount,
       heroCount,
+    });
+    reportProgress('boundary-splat-target-oracle-scoring-complete', {
+      candidateCount: oracle.candidateCount,
+      projectedCount: oracle.projectedCount,
+      counts: oracle.counts,
     });
     const targetPreviewBytes = Uint8Array.from(targetPreview.rgba);
     const targetPreviewSha256 = await sha256Bytes(targetPreviewBytes);
@@ -16698,6 +16725,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(boundarySplatFootprintOracleBuffer, 0, oracle.denseScores);
+    reportProgress('boundary-splat-target-oracle-upload-complete', {
+      scoreBytes: oracle.denseScores.byteLength,
+      oracleScoreSha256,
+    });
     boundarySplatFootprintOracleScores = oracle.denseScores;
     boundarySplatFootprintOracleReceipt = {
       ok: true,

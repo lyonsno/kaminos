@@ -85,6 +85,41 @@ assert.match(
 );
 assert.match(
   witness,
+  /window\.__kaminosBoundarySplatFootprintTierProgress[\s\S]*target-capture-start[\s\S]*target-capture-complete[\s\S]*arm-start[\s\S]*profile-sample[\s\S]*visual-complete/,
+  'the monolithic browser sweep publishes compact phase-local progress before every expensive target and arm boundary',
+);
+assert.match(
+  volumeCore,
+  /boundary-splat-target-oracle-candidate-capture-start[\s\S]*boundary-splat-target-oracle-candidate-capture-complete[\s\S]*boundary-splat-target-oracle-scoring-start[\s\S]*boundary-splat-target-oracle-scoring-complete[\s\S]*boundary-splat-target-oracle-upload-complete/,
+  'the oracle builder exposes candidate capture, scoring, and GPU upload boundaries to the witness progress hook',
+);
+assert.match(
+  witness,
+  /cdpDisconnect[\s\S]*readyState[\s\S]*closeCode[\s\S]*closeReason/,
+  'CDP disconnect errors preserve WebSocket close metadata instead of collapsing to a generic message',
+);
+assert.match(
+  witness,
+  /const recovery = \{[\s\S]*targetList:[\s\S]*recoveryError:[\s\S]*footprintTierProgress,[\s\S]*recovery,/,
+  'a failed witness durably records the last in-page checkpoint, CDP recovery boundary, target list, and recovery error',
+);
+assert.match(
+  witness,
+  /screenshotRecoveryError:[\s\S]*stateProgressRecoveryError:[\s\S]*try\s*\{[\s\S]*captureViewportScreenshot[\s\S]*catch \(screenshotRecoveryError\)[\s\S]*try\s*\{[\s\S]*Runtime\.evaluate[\s\S]*catch \(stateProgressRecoveryError\)/,
+  'recovery isolates screenshot capture from state and progress evaluation so either CDP domain can preserve evidence independently',
+);
+assert.match(
+  witness,
+  /function browserProcessStatus[\s\S]*exitCode[\s\S]*signalCode[\s\S]*browserProcessStatus: browserProcessStatus\(browserSession\)/,
+  'a failed witness preserves any browser process exit and signal evidence available to its launcher',
+);
+assert.doesNotMatch(
+  witness,
+  /catch\s*\{\s*state\s*=\s*null;\s*\}/,
+  'failure recovery cannot silently erase its own diagnostic error',
+);
+assert.match(
+  witness,
   /target\.visual\.camera[\s\S]*target-oracle-camera-mismatch/,
   'oracle sweep binds its target salience receipt to the camera that rendered the exact target',
 );

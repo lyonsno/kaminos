@@ -1886,6 +1886,43 @@ function closeBrowserSession(browserSession) {
   browserSession?.process?.kill('SIGTERM');
 }
 
+function browserProcessStatus(browserSession) {
+  const process = browserSession?.process;
+  return {
+    identity: 'chrome-process-status-v0',
+    observable: Boolean(process),
+    pid: process?.pid ?? null,
+    exitCode: process?.exitCode ?? null,
+    signalCode: process?.signalCode ?? null,
+    killed: process?.killed ?? null,
+  };
+}
+
+function serializeError(error) {
+  return {
+    name: error?.name || 'Error',
+    message: error?.message || String(error),
+    stack: error?.stack || null,
+    cdpDisconnect: error?.cdpDisconnect || null,
+  };
+}
+
+function cdpDisconnectError(method, id, disposition, event, ws) {
+  const closeCode = Number.isFinite(Number(event?.code)) ? Number(event.code) : null;
+  const closeReason = event?.reason ? String(event.reason) : null;
+  const error = new Error(`${method}: WebSocket ${disposition} before CDP response ${id}`);
+  error.cdpDisconnect = {
+    identity: 'cdp-websocket-disconnect-v0',
+    method,
+    requestId: id,
+    disposition,
+    readyState: ws?.readyState ?? null,
+    closeCode,
+    closeReason,
+  };
+  return error;
+}
+
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   const keepAlive = setInterval(() => {}, 1000);
@@ -1906,8 +1943,8 @@ function wsRequest(ws, method, params = {}) {
       if (msg.error) settle(rejectReq, new Error(`${method}: ${msg.error.message}`));
       else settle(resolveReq, msg.result);
     };
-    const onClose = () => settle(rejectReq, new Error(`${method}: WebSocket closed before CDP response ${id}`));
-    const onError = () => settle(rejectReq, new Error(`${method}: WebSocket error before CDP response ${id}`));
+    const onClose = event => settle(rejectReq, cdpDisconnectError(method, id, 'closed', event, ws));
+    const onError = event => settle(rejectReq, cdpDisconnectError(method, id, 'error', event, ws));
     ws.addEventListener('message', onMessage);
     ws.addEventListener('close', onClose, { once: true });
     ws.addEventListener('error', onError, { once: true });
@@ -3241,6 +3278,19 @@ async function main() {
             throw new Error('boundary-splat-footprint-tier-sweep-api-unavailable');
           }
           const tierArms = ${JSON.stringify(boundarySplatFootprintTierArms)};
+          const updateProgress = (step, detail = {}) => {
+            const previous = window.__kaminosBoundarySplatFootprintTierProgress || {};
+            window.__kaminosBoundarySplatFootprintTierProgress = {
+              identity: 'boundary-splat-footprint-tier-progress-v0',
+              status: step === 'sweep-complete' ? 'complete' : 'running',
+              step,
+              armId: detail.armId ?? previous.armId ?? null,
+              simStepCount: prototype.debugState().simStepCount,
+              updatedAtMs: performance.now(),
+              ...detail,
+            };
+          };
+          updateProgress('sweep-start', { armCount: tierArms.length });
           if (tierArms.some(arm => arm.policy === 'target_oracle')
             && !prototype?.buildBoundarySplatTargetSalienceOracle) {
             throw new Error('boundary-splat-target-oracle-api-unavailable');
@@ -3258,6 +3308,7 @@ async function main() {
               boundarySplatMode: 'off',
             });
             await new Promise(resolve => setTimeout(resolve, 40));
+            updateProgress('target-capture-start');
             const initialTargetVisual = await prototype.sampleFrame({
               advanceSim: false,
               allowInactive: true,
@@ -3267,6 +3318,11 @@ async function main() {
             if (initialTargetVisual?.ok !== true) {
               throw new Error('footprint-tier-raymarch-target-failed:' + (initialTargetVisual?.reason || 'unknown'));
             }
+            updateProgress('target-capture-complete', {
+              targetFrameCount: initialTargetVisual.frameCount,
+              targetSimStepCount: initialTargetVisual.simStepCount,
+              targetPreviewPixels: Number(initialTargetVisual.preview?.width || 0) * Number(initialTargetVisual.preview?.height || 0),
+            });
             const initialTargetState = prototype.debugState();
             target = {
               effectiveMode: initialTargetState.boundarySplatMode,
@@ -3290,6 +3346,7 @@ async function main() {
               },
             };
             for (const tierArm of tierArms) {
+              updateProgress('arm-start', { armId: tierArm.id, policy: tierArm.policy });
               let effectiveTierArm = { ...tierArm };
               if (tierArm.oracleCountsFrom) {
                 const sourceArm = arms.find(arm => arm.id === tierArm.oracleCountsFrom);
@@ -3297,13 +3354,19 @@ async function main() {
                 if (!sourceCounts) {
                   throw new Error('target-oracle-count-source-missing:' + tierArm.id + ':' + tierArm.oracleCountsFrom);
                 }
+                updateProgress('oracle-build-start', { armId: tierArm.id });
                 const oracleReceipt = await prototype.buildBoundarySplatTargetSalienceOracle({
                   targetPreview: target.visual.preview,
                   targetAuthority: target.visual,
                   expectedCandidatePositionSha256: sourceArm.audit.candidatePositionSha256,
                   mediumCount: sourceCounts.medium,
                   heroCount: sourceCounts.hero,
+                  onProgress: oracleProgress => updateProgress(oracleProgress.phase, {
+                    armId: tierArm.id,
+                    oracleProgress,
+                  }),
                 });
+                updateProgress('oracle-build-complete', { armId: tierArm.id });
                 if (oracleReceipt?.status !== 'applied'
                   || oracleReceipt.identity !== 'boundary-splat-target-salience-oracle-v0'
                   || oracleReceipt.simStepCount !== target.visual.simStepCount
@@ -3359,6 +3422,7 @@ async function main() {
               await new Promise(resolve => setTimeout(resolve, 40));
               const samples = [];
               for (let index = 0; index < ${boundarySplatGpuProfileSamples}; index += 1) {
+                updateProgress('profile-sample', { armId: tierArm.id, sampleIndex: index });
                 const profile = await prototype.sampleBoundarySplatGpuProfile({ advanceSim: false });
                 const profileState = prototype.debugState();
                 samples.push({
@@ -3371,6 +3435,7 @@ async function main() {
                   overflowCount: profileState.boundarySplatOverflowCount,
                 });
               }
+              updateProgress('visual-start', { armId: tierArm.id });
               const visual = await prototype.sampleFrame({
                 advanceSim: false,
                 allowInactive: true,
@@ -3380,7 +3445,15 @@ async function main() {
               if (visual?.ok !== true) {
                 throw new Error('footprint-tier-visual-failed:' + tierArm.id + ':' + (visual?.reason || 'unknown'));
               }
+              updateProgress('visual-complete', {
+                armId: tierArm.id,
+                candidateCount: visual.boundarySplatCandidateCount,
+                instanceCount: visual.boundarySplatInstanceCount,
+                overflowCount: visual.boundarySplatOverflowCount,
+              });
+              updateProgress('audit-start', { armId: tierArm.id });
               const audit = await prototype.sampleBoundarySplatFootprintAudit();
+              updateProgress('audit-complete', { armId: tierArm.id });
               const state = prototype.debugState();
               arms.push({
                 ...effectiveTierArm,
@@ -3415,7 +3488,9 @@ async function main() {
                   preview: visual.preview,
                 },
               });
+              updateProgress('arm-complete', { armId: tierArm.id });
             }
+            updateProgress('sweep-complete', { completedArmCount: arms.length });
           } finally {
             prototype.setControls(controlsBefore);
             if (activeBefore) await prototype.setActive(true);
@@ -5108,23 +5183,67 @@ async function main() {
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     let state = null;
+    let footprintTierProgress = null;
+    const recovery = {
+      identity: 'volume-witness-cdp-recovery-v0',
+      attempted: true,
+      targetList: null,
+      selectedTarget: null,
+      stateRecovered: false,
+      progressRecovered: false,
+      screenshotRecovered: false,
+      screenshotRecoveryError: null,
+      stateProgressRecoveryError: null,
+      recoveryError: null,
+    };
     try {
       const targets = await cdpFetch('/json/list');
+      recovery.targetList = targets.map(target => ({
+        id: target.id || null,
+        type: target.type || null,
+        url: target.url || null,
+        title: target.title || null,
+        hasWebSocketDebuggerUrl: Boolean(target.webSocketDebuggerUrl),
+      }));
       const page = targets.find(t => t.type === 'page' && t.url.includes('kaminos_volume_smoke=1')) || targets.find(t => t.type === 'page');
+      recovery.selectedTarget = page ? {
+        id: page.id || null,
+        type: page.type || null,
+        url: page.url || null,
+        title: page.title || null,
+        hasWebSocketDebuggerUrl: Boolean(page.webSocketDebuggerUrl),
+      } : null;
       if (page?.webSocketDebuggerUrl) {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await waitForWebSocketOpen(ws);
         await wsRequest(ws, 'Page.enable');
-        await captureViewportScreenshot(ws, fullScreenshot);
-        const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
-          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
-          returnByValue: true,
-        });
-        state = stateEval.result.value || null;
+        if (fullScreenshot) {
+          try {
+            await captureViewportScreenshot(ws, fullScreenshot);
+            recovery.screenshotRecovered = true;
+          } catch (screenshotRecoveryError) {
+            recovery.screenshotRecoveryError = serializeError(screenshotRecoveryError);
+          }
+        }
+        try {
+          const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: `({
+              state: window.__kaminosVolumePrototype?.debugState?.() || null,
+              footprintTierProgress: window.__kaminosBoundarySplatFootprintTierProgress || null,
+            })`,
+            returnByValue: true,
+          });
+          state = stateEval.result.value?.state || null;
+          footprintTierProgress = stateEval.result.value?.footprintTierProgress || null;
+          recovery.stateRecovered = state != null;
+          recovery.progressRecovered = footprintTierProgress != null;
+        } catch (stateProgressRecoveryError) {
+          recovery.stateProgressRecoveryError = serializeError(stateProgressRecoveryError);
+        }
         ws.close();
       }
-    } catch {
-      state = null;
+    } catch (recoveryError) {
+      recovery.recoveryError = serializeError(recoveryError);
     }
     const report = {
       requestedRoute: url,
@@ -5149,7 +5268,10 @@ async function main() {
       visualEvidenceMode,
       phase,
       error: err?.message || String(err),
+      errorDetails: serializeError(err),
       state,
+      footprintTierProgress,
+      recovery,
       boundarySplatGpuProfileSeries,
       boundarySplatFootprintAudit,
       boundarySplatFootprintSweep,
@@ -5163,6 +5285,7 @@ async function main() {
         userDataDir: browserSession.userDataDir,
         keepBrowserOpen: browserSession.keepBrowserOpen,
       },
+      browserProcessStatus: browserProcessStatus(browserSession),
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     closeBrowserSession(browserSession);
