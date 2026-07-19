@@ -16,6 +16,11 @@ assert.match(source, /const TRANSVERSE_FOOTPRINT = TRANSVERSE_IDENTITY;/, 'assem
 assert.match(source, /sha256:b424b2eeb4bc30b2210ab5a3c5e2aebd16eb9ff270c9add32802926fd8f5f9e1/, 'assembler pins the exact transverse socket identity');
 assert.match(source, /739d60e8965d923acd10761331b5d1310d4dba75a7484a006217032d185d14c0/, 'assembler pins the socket manifest hash');
 assert.match(source, /3713938c8e664cf746d10fe4ed2b9c8082d8673d887e595becabbc67b0cb3cf5/, 'assembler pins the basis payload hash');
+assert.match(source, /sha256:aa870aa6c4e4e7e83eeaff2f43384949fc9aa14880895fabb758a8f6f2d55f3f/, 'assembler pins the exact material socket identity');
+assert.match(source, /e563d05ef0bde2c58c185f27c0c47f32acec90a74ec89579a87e39cba835ad3c/, 'assembler pins the material socket manifest hash');
+assert.match(source, /6b726c2f0c7efa223aab68eb7c76b42719595b4fc8943203d2671fa6652b5b13/, 'assembler pins the material basis payload hash');
+assert.match(source, /material-nonridge/, 'assembler requires the explicit complementary material role');
+assert.match(source, /composedWithStructureBasis/, 'assembler rejects accidental role composition');
 assert.match(source, /kaminos_grid96_transverse_oracle_0718/, 'assembler pins the Greenroom route');
 assert.match(source, /expectedArmCoordinates/, 'assembler requires the complete width surface');
 assert.match(source, /transmittanceLedger/, 'assembler validates exact transmittance artifacts');
@@ -43,7 +48,7 @@ const invoke = async cohort => {
   };
 };
 
-const expected = ['n1-b0', 'n0-b1', 'n05-b05', 'n1-b1', 'n15-b15'];
+const expected = ['n1-b0', 'n0-b1', 'n05-b05', 'n1-b1', 'n15-b15', 'material-n0-b1'];
 const partial = await invoke({
   name: 'partial', schema: 'kaminos.volume.grid96-transverse-cohort.v0', status: 'complete',
   control: { report: '/missing/control.json', receipt: '/missing/control-receipt.json' },
@@ -53,7 +58,7 @@ assert.notEqual(partial.result.status, 0, 'partial transverse cohort must fail')
 const partialFailure = JSON.parse(await readFile(join(partial.out, 'report.json'), 'utf8'));
 assert.equal(partialFailure.status, 'failed');
 assert.equal(partialFailure.failurePhase, 'cohort-validation');
-assert.match(partialFailure.error, /exactly five arms/i);
+assert.match(partialFailure.error, /exactly six arms/i);
 assert.ok(partialFailure.lastTrustworthyEvidence, 'partial cohort failure preserves last trustworthy evidence');
 
 const repeated = await invoke({
