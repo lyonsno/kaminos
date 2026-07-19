@@ -297,6 +297,11 @@ const report = {
   isolatedSequence: null,
   liveFirst: null,
   liveSecond: null,
+  liveTearAcceptance: null,
+  shearPreviewHeldGpuSamples: [],
+  shearPreviewDuringHeldGpuExecution: null,
+  shearPreviewScreenshot: null,
+  shearAcceptedScreenshot: null,
   modeSelection: null,
   liveBinding: null,
   checks: {},
@@ -347,6 +352,138 @@ try {
   assertCheck(report.checks.bodyIdentity, 'effective body identity mismatch');
   assertCheck(report.checks.pageRouteIdentity, 'effective page route mismatch');
   const cameraBefore = await evaluate('window.__structuralMaterial3dCameraWitness().state');
+
+  report.failurePhase = 'held-shear-preview';
+  const shearPreviewBaseline = await evaluate('window.__structuralMaterial3dWitness()');
+  const shearPreviewStageRect = await evaluate(`(() => {
+    const rect = document.querySelector('#stage').getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  })()`);
+  const shearPreviewTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(shearPreviewTarget, 'live sidecar route exposed no projected Shear contact target');
+  const shearPreviewStart = { x: shearPreviewTarget.clientX, y: shearPreviewTarget.clientY };
+  const shearPreviewEnd = {
+    x: Math.min(
+      shearPreviewStageRect.left + shearPreviewStageRect.width - 2,
+      shearPreviewStart.x + shearPreviewStageRect.width * 0.3,
+    ),
+    y: shearPreviewStart.y,
+  };
+  await evaluate('window.__structuralMaterial3dArmPreExecutionHoldForWitness()');
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', ...shearPreviewStart, button: 'left', buttons: 1, clickCount: 1,
+  });
+  for (const fraction of [0.34, 0.67, 1]) {
+    const samplePoint = {
+      x: shearPreviewStart.x + (shearPreviewEnd.x - shearPreviewStart.x) * fraction,
+      y: shearPreviewStart.y + (shearPreviewEnd.y - shearPreviewStart.y) * fraction,
+    };
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', ...samplePoint, button: 'left', buttons: 1,
+    });
+    if (fraction === 0.34) {
+      await waitUntil(
+        evaluate,
+        'window.__structuralMaterial3dPreExecutionHoldStatus().reached',
+        config.loadTimeoutMs,
+        'GPU tear never reached the pre-execution witness hold',
+      );
+    }
+    await new Promise(resolveWait => setTimeout(resolveWait, 16));
+    const sample = await evaluate('window.__structuralMaterial3dWitness()');
+    report.shearPreviewHeldGpuSamples.push({
+      fraction,
+      inputLoad: sample.shearContactPreview?.inputLoad ?? null,
+      maxOffset: sample.shearContactPreview?.maxOffset ?? null,
+      renderedMaxAcceptedDelta: sample.shearContactPreview?.renderedMaxAcceptedDelta ?? null,
+      renderedMaxPreviewError: sample.shearContactPreview?.renderedMaxPreviewError ?? null,
+      summary: sample.summary,
+      geometrySidecar: sample.geometrySidecar,
+      haptics: sample.haptics,
+      latestGpuOperation: sample.latestGpuOperation,
+      scheduler: sample.liveDrag?.scheduler,
+      renderTiming: sample.renderTiming,
+    });
+  }
+  const heldShearPreview = await evaluate('window.__structuralMaterial3dWitness()');
+  report.shearPreviewDuringHeldGpuExecution = heldShearPreview.shearContactPreview;
+  report.checks.shearPreviewPrecededGpuExecution =
+    heldShearPreview.latestGpuOperation?.kind === 'tear' &&
+    heldShearPreview.latestGpuOperation?.status === 'pending' &&
+    heldShearPreview.latestGpuOperation?.receipt?.requestedRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
+    heldShearPreview.latestGpuOperation?.receipt?.requestedExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    heldShearPreview.shearContactPreview?.status === 'active' &&
+    heldShearPreview.shearContactPreview?.authority === 'visual-only-shear-contact-compliance-not-fracture-v0' &&
+    heldShearPreview.shearContactPreview?.maxOffset > 0.000001 &&
+    heldShearPreview.shearContactPreview?.renderedMaxAcceptedDelta > 0.000001 &&
+    heldShearPreview.shearContactPreview?.renderedMaxPreviewError <= 0.000001;
+  report.checks.shearPreviewAdvancedWhileGpuHeld =
+    report.shearPreviewHeldGpuSamples.length === 3 &&
+    report.shearPreviewHeldGpuSamples.every((sample, index) => index === 0 || (
+      sample.inputLoad > report.shearPreviewHeldGpuSamples[index - 1].inputLoad &&
+      sample.maxOffset > report.shearPreviewHeldGpuSamples[index - 1].maxOffset &&
+      sample.renderedMaxAcceptedDelta >
+        report.shearPreviewHeldGpuSamples[index - 1].renderedMaxAcceptedDelta
+    )) &&
+    report.shearPreviewHeldGpuSamples.at(-1).scheduler?.coalescedCount >
+      report.shearPreviewHeldGpuSamples[0].scheduler?.coalescedCount;
+  report.checks.shearPreviewRenderWithinFrameBudget = report.shearPreviewHeldGpuSamples.every(sample =>
+    sample.renderTiming?.renderPath === 'incremental-shear-preview' &&
+    sample.renderTiming?.shearPreviewActive === true &&
+    sample.renderTiming?.pointerActive === true &&
+    Number.isFinite(sample.renderTiming?.materialRebuildMs) &&
+    Number.isFinite(sample.renderTiming?.sceneSubmissionMs) &&
+    sample.renderTiming?.totalMs <= 1000 / 60);
+  report.checks.shearPreviewPreservedAcceptedState = report.shearPreviewHeldGpuSamples.every(sample =>
+    JSON.stringify(sample.summary) === JSON.stringify(shearPreviewBaseline.summary) &&
+    sample.geometrySidecar?.topologyEpoch === shearPreviewBaseline.geometrySidecar?.topologyEpoch &&
+    sample.geometrySidecar?.connectivityEpoch === shearPreviewBaseline.geometrySidecar?.connectivityEpoch &&
+    sample.haptics?.impulseCount === shearPreviewBaseline.haptics?.impulseCount &&
+    sample.haptics?.dispatchCount === shearPreviewBaseline.haptics?.dispatchCount) &&
+    heldShearPreview.shearContactPreview?.sourceTopologyEpoch === shearPreviewBaseline.geometrySidecar?.topologyEpoch &&
+    heldShearPreview.shearContactPreview?.sourceConnectivityEpoch === shearPreviewBaseline.geometrySidecar?.connectivityEpoch &&
+    heldShearPreview.shearContactPreview?.structuralMutationAuthority === false;
+  assertCheck(report.checks.shearPreviewPrecededGpuExecution, 'held GPU tear did not expose immediate Shear compliance');
+  assertCheck(report.checks.shearPreviewAdvancedWhileGpuHeld, 'Shear preview did not advance while GPU tear was held');
+  assertCheck(report.checks.shearPreviewRenderWithinFrameBudget, 'Shear preview missed one 60 Hz frame');
+  assertCheck(report.checks.shearPreviewPreservedAcceptedState, 'Shear preview changed accepted state or causal haptics');
+  const shearPreviewCapture = await send('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: false,
+  });
+  const shearPreviewScreenshot = config.screenshot.replace(/\.png$/i, '-shear-preview.png');
+  writeFileSync(shearPreviewScreenshot, Buffer.from(shearPreviewCapture.data, 'base64'));
+  report.shearPreviewScreenshot = {
+    path: shearPreviewScreenshot,
+    byteLength: Buffer.from(shearPreviewCapture.data, 'base64').byteLength,
+    pixelProbe: await probeScreenshot(evaluate, shearPreviewCapture.data),
+  };
+  await evaluate(`(() => {
+    document.querySelector('#bind').click();
+    window.__structuralMaterial3dReleasePreExecutionHoldForWitness();
+  })()`);
+  await releaseProjectedStructuralDrag(send, shearPreviewEnd);
+  await waitUntil(
+    evaluate,
+    `(() => {
+      const witness = window.__structuralMaterial3dWitness();
+      return witness.liveDrag.pointerActive === false &&
+        witness.liveDrag.scheduler.pointerExecutionActive === false &&
+        witness.latestGpuOperation?.status === 'failed';
+    })()`,
+    config.loadTimeoutMs,
+    'cancelled pre-execution Shear did not settle without execution',
+  );
+  const cancelledShearPreview = await evaluate('window.__structuralMaterial3dWitness()');
+  report.checks.cancelledShearPreviewDidNotExecute =
+    cancelledShearPreview.latestGpuOperation?.receipt?.failurePhase === 'request-invalidated-before-execution' &&
+    cancelledShearPreview.gpuHotSidecar === null &&
+    cancelledShearPreview.summary.brokenBondCount === shearPreviewBaseline.summary.brokenBondCount &&
+    cancelledShearPreview.shearContactPreview === null &&
+    cancelledShearPreview.haptics.impulseCount === shearPreviewBaseline.haptics.impulseCount;
+  assertCheck(report.checks.cancelledShearPreviewDidNotExecute, 'held Shear preview leaked into resident execution');
+  const shearPreviewDiscardedCount = cancelledShearPreview.gpuTearDiscardedCount;
+  await dispatchPointerClick(send, evaluate, '#fracture');
 
   report.failurePhase = 'isolated-hot-sequence';
   const isolated = await evaluate('window.__structuralMaterial3dRunHotSidecarWitness()', true);
@@ -419,6 +556,22 @@ try {
     'two immediate live hot tears did not apply in order',
   );
   const livePage = await evaluate('window.__structuralMaterial3dWitness()');
+  report.liveTearAcceptance = livePage.gpuTearAcceptance;
+  const shearAcceptedCapture = await send('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: false,
+  });
+  const shearAcceptedScreenshot = config.screenshot.replace(/\.png$/i, '-shear-accepted.png');
+  writeFileSync(shearAcceptedScreenshot, Buffer.from(shearAcceptedCapture.data, 'base64'));
+  const shearAcceptedPixelProbe = await probeScreenshot(evaluate, shearAcceptedCapture.data);
+  report.shearAcceptedScreenshot = {
+    path: shearAcceptedScreenshot,
+    byteLength: Buffer.from(shearAcceptedCapture.data, 'base64').byteLength,
+    pixelProbe: shearAcceptedPixelProbe,
+  };
+  report.checks.shearAcceptedScreenshotPixels =
+    shearAcceptedPixelProbe.nonDarkPixels >= 500 &&
+    shearAcceptedPixelProbe.structuralColorPixels >= 40;
   [report.liveFirst, report.liveSecond] = livePage.gpuTearRecentAppliedReceipts;
   const cameraAfter = await evaluate('window.__structuralMaterial3dCameraWitness().state');
   report.checks.liveExecutionRoute = report.liveFirst.executionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
@@ -446,7 +599,12 @@ try {
     report.liveSecond.eventEpoch === 2 &&
     livePage.gpuTearAppliedCount === 2 &&
     livePage.gpuTearRecentAppliedReceipts.length === 2 &&
-    livePage.gpuTearDiscardedCount === 0;
+    livePage.gpuTearDiscardedCount === shearPreviewDiscardedCount;
+  report.checks.duplicateTearReplaySuppressed =
+    livePage.gpuTearAcceptance?.acceptedCount === 2 &&
+    livePage.gpuTearAcceptance?.acceptedKeys?.length === 2 &&
+    new Set(livePage.gpuTearAcceptance.acceptedKeys).size === 2 &&
+    livePage.gpuTearAppliedCount === livePage.gpuTearAcceptance.acceptedCount;
   report.checks.cameraPreserved = JSON.stringify(cameraBefore) === JSON.stringify(cameraAfter);
   report.checks.visibleSeparation = livePage.visibleTear?.components?.some(component =>
     !component.pinned && component.maxDisplacement > 0.000001) &&

@@ -1,6 +1,7 @@
 export const STRUCTURAL_MATERIAL_3D_LIVE_DRAG_ROUTE = 'kaminos.structural-material.live-sympathetic-drag.v0';
 export const STRUCTURAL_MATERIAL_3D_INTERACTION_MODE_ROUTE = 'kaminos.structural-material.interaction-mode.v0';
 export const STRUCTURAL_MATERIAL_3D_BIND_CONTACT_PREVIEW_ROUTE = 'kaminos.structural-material.bind-contact-preview.v0';
+export const STRUCTURAL_MATERIAL_3D_SHEAR_CONTACT_PREVIEW_ROUTE = 'kaminos.structural-material.shear-contact-preview.v0';
 export const STRUCTURAL_MATERIAL_3D_HAPTIC_ROUTE = 'kaminos.structural-material.causal-haptics.v0';
 export const STRUCTURAL_MATERIAL_NATIVE_HAPTIC_ROUTE = 'kaminos.structural-material.native-trackpad-haptics.v0';
 export const DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL = 'http://127.0.0.1:8396';
@@ -153,6 +154,138 @@ export function buildLayeredStructuralBindContactPreview(state, interaction = {}
     correctionScale: round(correctionScale),
     nodeOffsets,
     maxOffset: round(maxOffset),
+  };
+}
+
+export function buildLayeredStructuralShearContactPreview(state, interaction = {}) {
+  if (interaction.operationMode !== 'shear') {
+    throw new Error('Shear contact preview requires a shear-mode picked interaction');
+  }
+  if (!Array.isArray(state?.nodes) || !Array.isArray(state?.bonds)) {
+    throw new Error('Shear contact preview requires structural state');
+  }
+  const point = interaction.point;
+  const vector = interaction.vector;
+  if (![point?.x, point?.y, point?.z, vector?.x, vector?.y, vector?.z].every(Number.isFinite)) {
+    throw new Error('Shear contact preview requires a finite rest-space contact and direction');
+  }
+  const directionLength = Math.hypot(vector.x, vector.y, vector.z);
+  const direction = directionLength > 0.000000001
+    ? { x: vector.x / directionLength, y: vector.y / directionLength, z: vector.z / directionLength }
+    : { x: 0, y: 0, z: 0 };
+  const radius = clamp(interaction.radius, 0.12, 0.34);
+  const inputLoad = clamp(interaction.inputLoad, 0, 1);
+  const contactRamp = clamp(interaction.contactRamp, 0, 1);
+  const dragLength = clamp(interaction.dragLength, 0, 0.42);
+  const previewTravel = Math.min(
+    0.18,
+    Math.max(dragLength, inputLoad * 0.26) * (0.45 + contactRamp * 0.25),
+  );
+  const maxHops = Math.max(1, Math.round(1 + (radius / 0.34) * 3));
+  const contactIdentity = interaction.contactIdentity ? { ...interaction.contactIdentity } : null;
+  const nodeById = new Map(state.nodes.map(node => [node.id, node]));
+  const exactContactNodeIds = new Set();
+  if (contactIdentity?.kind === 'node' && nodeById.has(contactIdentity.id)) {
+    exactContactNodeIds.add(contactIdentity.id);
+  }
+  if (contactIdentity?.kind === 'bond') {
+    const bond = state.bonds.find(candidate => candidate.id === contactIdentity.id);
+    if (bond) {
+      exactContactNodeIds.add(bond.a);
+      exactContactNodeIds.add(bond.b);
+    }
+  }
+  if (exactContactNodeIds.size === 0) {
+    throw new Error('Shear contact preview requires stable contact identity in structural state');
+  }
+
+  const liveAdjacency = new Map(state.nodes.map(node => [node.id, []]));
+  for (const bond of state.bonds) {
+    if (bond.alive === false) continue;
+    liveAdjacency.get(bond.a)?.push(bond.b);
+    liveAdjacency.get(bond.b)?.push(bond.a);
+  }
+  const hopByNodeId = new Map([...exactContactNodeIds].map(nodeId => [nodeId, 0]));
+  const queue = [...exactContactNodeIds];
+  for (let index = 0; index < queue.length; index += 1) {
+    const nodeId = queue[index];
+    const hop = hopByNodeId.get(nodeId);
+    if (hop >= maxHops) continue;
+    for (const neighborId of liveAdjacency.get(nodeId) || []) {
+      if (hopByNodeId.has(neighborId)) continue;
+      hopByNodeId.set(neighborId, hop + 1);
+      queue.push(neighborId);
+    }
+  }
+
+  const nodeOffsets = state.nodes.flatMap(node => {
+    const hop = hopByNodeId.get(node.id);
+    const exactContact = exactContactNodeIds.has(node.id);
+    if (hop === undefined || (node.pinned && !exactContact) || previewTravel <= 0) return [];
+    const weight = exactContact ? 1 : (1 - hop / (maxHops + 1)) ** 2;
+    const magnitude = previewTravel * weight;
+    return [{
+      nodeId: node.id,
+      hop,
+      weight: round(weight),
+      magnitude: round(magnitude),
+      offset: {
+        x: round(direction.x * magnitude),
+        y: round(direction.y * magnitude),
+        z: round(direction.z * magnitude),
+      },
+    }];
+  });
+  const maxOffset = nodeOffsets.reduce((maximum, entry) => Math.max(maximum, entry.magnitude), 0);
+
+  return {
+    schema: 'kaminos.structural-material.shear-contact-preview.v0',
+    route: STRUCTURAL_MATERIAL_3D_SHEAR_CONTACT_PREVIEW_ROUTE,
+    authority: 'visual-only-shear-contact-compliance-not-fracture-v0',
+    status: 'active',
+    gestureId: interaction.gestureId || null,
+    sourceTopologyEpoch: state.topologyEpoch,
+    sourceConnectivityEpoch: state.connectivityEpoch,
+    contactIdentity,
+    point: { x: round(point.x), y: round(point.y), z: round(point.z) },
+    radius: round(radius),
+    inputLoad: round(inputLoad),
+    dragLength: round(dragLength),
+    maxHops,
+    nodeOffsets,
+    maxOffset: round(maxOffset),
+  };
+}
+
+export function createAcceptedStructuralTearReceiptGate() {
+  const acceptedKeys = new Set();
+  let duplicateCount = 0;
+
+  return {
+    accept(receipt = {}) {
+      if (receipt.status !== 'passed' || typeof receipt.objectIdentity !== 'string' ||
+          !Number.isInteger(receipt.eventEpoch) || receipt.eventEpoch < 0) {
+        throw new Error('accepted structural tear receipt requires passed object and event identity');
+      }
+      const key = `${receipt.objectIdentity}:e${receipt.eventEpoch}`;
+      if (acceptedKeys.has(key)) {
+        duplicateCount += 1;
+        return { accepted: false, duplicate: true, key };
+      }
+      acceptedKeys.add(key);
+      return { accepted: true, duplicate: false, key };
+    },
+    clear() {
+      acceptedKeys.clear();
+      duplicateCount = 0;
+    },
+    snapshot() {
+      return {
+        acceptedCount: acceptedKeys.size,
+        duplicateCount,
+        acceptedKeys: [...acceptedKeys],
+      };
+    },
   };
 }
 

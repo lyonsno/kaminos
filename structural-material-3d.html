@@ -198,6 +198,8 @@
       buildLayeredStructuralBindContactPreview,
       buildLayeredStructuralHapticImpulse,
       buildLayeredStructuralPickedBinding,
+      buildLayeredStructuralShearContactPreview,
+      createAcceptedStructuralTearReceiptGate,
       createStructuralInteractionModeController,
       createLatestStructuralGpuOperationTracker,
       createLatestStructuralInteractionScheduler,
@@ -304,6 +306,7 @@
     let latestStructuralPick = null;
     let forceEnvelope = null;
     let bindContactPreview = null;
+    let shearContactPreview = null;
     let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
     const cameraInvariantViolations = [];
     let gpuParityReceipt = null;
@@ -312,6 +315,7 @@
     let gpuRetainedPromise = null;
     let gpuTearReceipt = null;
     let gpuTearPromise = null;
+    let gpuTearPreExecutionWitnessHold = null;
     let gpuTearPostExecutionWitnessHold = null;
     let gpuBindingReceipt = null;
     let gpuBindingPromise = null;
@@ -336,6 +340,7 @@
     let structuralGestureSequence = 0;
     const hapticCapabilities = detectStructuralHapticCapabilities(undefined, { nativeCompanionUrl: nativeHapticCompanionUrl });
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
+    const gpuTearAcceptanceGate = createAcceptedStructuralTearReceiptGate();
     const latestGpuOperationTracker = createLatestStructuralGpuOperationTracker();
     const structuralInteractionMode = createStructuralInteractionModeController('shear');
     const liveDragScheduler = createLatestStructuralInteractionScheduler({
@@ -432,8 +437,11 @@
       bindContactPreview = forceEnvelope?.operationMode === 'bind' && materialPointerId !== null
         ? buildLayeredStructuralBindContactPreview(material, forceEnvelope)
         : null;
-      const bindPreviewOffsetByNodeId = new Map(
-        (bindContactPreview?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
+      shearContactPreview = forceEnvelope?.operationMode === 'shear' && materialPointerId !== null
+        ? buildLayeredStructuralShearContactPreview(material, forceEnvelope)
+        : null;
+      const contactPreviewOffsetByNodeId = new Map(
+        ((bindContactPreview || shearContactPreview)?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
       );
       const previousGeometrySidecar = geometrySidecar;
       const nextGeometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
@@ -485,7 +493,7 @@
                   ? tileStressedMaterial
                   : tileShellMaterial;
         const mesh = new THREE.Mesh(
-          geometryForEffigyFace(face, bindPreviewOffsetByNodeId.get(face.structuralNodeId)),
+          geometryForEffigyFace(face, contactPreviewOffsetByNodeId.get(face.structuralNodeId)),
           faceMaterial,
         );
         mesh.userData.effigySurfacePick = {
@@ -498,8 +506,8 @@
       for (const bond of material.bonds) {
         const nodeA = nodeById.get(bond.a);
         const nodeB = nodeById.get(bond.b);
-        const offsetA = bindPreviewOffsetByNodeId.get(bond.a);
-        const offsetB = bindPreviewOffsetByNodeId.get(bond.b);
+        const offsetA = contactPreviewOffsetByNodeId.get(bond.a);
+        const offsetB = contactPreviewOffsetByNodeId.get(bond.b);
         const a = worldCoordinate({
           x: nodeA.x + nodeA.displacement.x + (offsetA?.x || 0),
           y: nodeA.y + nodeA.displacement.y + (offsetA?.y || 0),
@@ -529,7 +537,7 @@
           nodeGeometry,
           node.pinned ? pinnedMaterial : node.componentId === anchoredComponentId ? nodeMaterial : looseMaterial,
         );
-        const previewOffset = bindPreviewOffsetByNodeId.get(node.id);
+        const previewOffset = contactPreviewOffsetByNodeId.get(node.id);
         mesh.position.copy(worldCoordinate({
           x: node.x + node.displacement.x + (previewOffset?.x || 0),
           y: node.y + node.displacement.y + (previewOffset?.y || 0),
@@ -727,9 +735,9 @@
       };
     }
 
-    function visibleBindContactPreview() {
-      if (!bindContactPreview) return null;
-      const offsetByNodeId = new Map(bindContactPreview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
+    function visibleContactPreview(preview) {
+      if (!preview) return null;
+      const offsetByNodeId = new Map(preview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
       world.updateMatrixWorld(true);
       let renderedMaxAcceptedDelta = 0;
@@ -752,23 +760,41 @@
         renderedMaxPreviewError = Math.max(renderedMaxPreviewError, actual.distanceTo(expectedPreview));
       }
       return {
-        ...structuredClone(bindContactPreview),
+        ...structuredClone(preview),
         renderedMaxAcceptedDelta,
         renderedMaxPreviewError,
         structuralMutationAuthority: false,
       };
     }
 
+    function visibleBindContactPreview() {
+      return visibleContactPreview(bindContactPreview);
+    }
+
+    function visibleShearContactPreview() {
+      return visibleContactPreview(shearContactPreview);
+    }
+
     function offsetsDiffer(a, b) {
       return ['x', 'y', 'z'].some(axis => Math.abs((a?.[axis] || 0) - (b?.[axis] || 0)) > 0.000000001);
     }
 
-    function updateBindPreviewGeometry() {
+    function updateContactPreviewGeometry(operationMode) {
+      const previousPreview = operationMode === 'bind' ? bindContactPreview : shearContactPreview;
       const previousOffsets = new Map(
-        (bindContactPreview?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
+        (previousPreview?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
       );
-      bindContactPreview = buildLayeredStructuralBindContactPreview(material, forceEnvelope);
-      const nextOffsets = new Map(bindContactPreview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
+      const nextPreview = operationMode === 'bind'
+        ? buildLayeredStructuralBindContactPreview(material, forceEnvelope)
+        : buildLayeredStructuralShearContactPreview(material, forceEnvelope);
+      if (operationMode === 'bind') {
+        bindContactPreview = nextPreview;
+        shearContactPreview = null;
+      } else {
+        shearContactPreview = nextPreview;
+        bindContactPreview = null;
+      }
+      const nextOffsets = new Map(nextPreview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
       const changedNodeIds = new Set([...previousOffsets.keys(), ...nextOffsets.keys()].filter(nodeId =>
         offsetsDiffer(previousOffsets.get(nodeId), nextOffsets.get(nodeId))));
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
@@ -831,6 +857,14 @@
       updateForceIndicator();
     }
 
+    function updateBindPreviewGeometry() {
+      updateContactPreviewGeometry('bind');
+    }
+
+    function updateShearPreviewGeometry() {
+      updateContactPreviewGeometry('shear');
+    }
+
     function recordRenderTiming(renderPath, startedAt, materialCompletedAt, readoutCompletedAt, completedAt) {
       const entry = {
         sequence: ++renderSequence,
@@ -838,6 +872,7 @@
         operationMode: structuralInteractionMode.snapshot().mode,
         pointerActive: materialPointerId !== null,
         bindPreviewActive: bindContactPreview?.status === 'active',
+        shearPreviewActive: shearContactPreview?.status === 'active',
         materialRebuildMs: materialCompletedAt - startedAt,
         readoutMs: readoutCompletedAt - materialCompletedAt,
         sceneSubmissionMs: completedAt - readoutCompletedAt,
@@ -878,6 +913,23 @@
       const completedAt = performance.now();
       return recordRenderTiming(
         'incremental-bind-preview',
+        startedAt,
+        materialCompletedAt,
+        readoutCompletedAt,
+        completedAt,
+      );
+    }
+
+    function renderShearPreview() {
+      const startedAt = performance.now();
+      updateShearPreviewGeometry();
+      const materialCompletedAt = performance.now();
+      updateReadout();
+      const readoutCompletedAt = performance.now();
+      renderScene();
+      const completedAt = performance.now();
+      return recordRenderTiming(
+        'incremental-shear-preview',
         startedAt,
         materialCompletedAt,
         readoutCompletedAt,
@@ -1079,7 +1131,9 @@
     function applyDrag(point) {
       const renderConsumer = dragStart?.operationMode === 'bind'
         ? renderBindPreview
-        : render;
+        : dragStart?.operationMode === 'shear'
+          ? renderShearPreview
+          : render;
       return runStructuralMutation('material-drag', () => {
         forceEnvelope = {
           ...createLayeredStructuralPickedDragInteraction({
@@ -1154,6 +1208,22 @@
               : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
           );
         }
+        if (gpuTearPreExecutionWitnessHold) {
+          const hold = gpuTearPreExecutionWitnessHold;
+          hold.reached = true;
+          await hold.releasePromise;
+          if (gpuTearPreExecutionWitnessHold === hold) gpuTearPreExecutionWitnessHold = null;
+        }
+        if (!gpuTearRequestGate.accepts(requestEpoch)) {
+          gpuTearDiscardedCount += 1;
+          return buildLayeredStructuralHotSympatheticTearFailureReceipt(
+            new Error('structural interaction invalidated before GPU execution'),
+            'request-invalidated-before-execution',
+            applyToWorld
+              ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+              : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+          );
+        }
         const effectiveSourceState = applyToWorld ? material : sourceState;
         const beforeRenderedNodes = applyToWorld
           ? renderedStructuralNodeSnapshot(effectiveSourceState)
@@ -1202,6 +1272,8 @@
         }
         gpuTearReceipt = receipt;
         if (applyToWorld && receipt.status === 'passed') {
+          const acceptance = gpuTearAcceptanceGate.accept(receipt);
+          if (!acceptance.accepted) return receipt;
           let nextMaterial;
           runStructuralMutation('gpu-sympathetic-tear', () => {
             nextMaterial = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
@@ -1372,7 +1444,10 @@
         void pending
           .then(sidecar => sidecar.reinitialize(nextState))
           .then(receipt => {
-            if (receipt.status === 'passed') return;
+            if (receipt.status === 'passed') {
+              gpuTearAcceptanceGate.clear();
+              return;
+            }
             gpuTearReceipt = buildLayeredStructuralHotSympatheticTearFailureReceipt(
               new Error(`hot sidecar reinitialize failed: ${receipt.failurePhase}`),
               receipt.failurePhase,
@@ -1496,6 +1571,7 @@
       runStructuralMutation('reset', () => {
         liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
+        gpuTearAcceptanceGate.clear();
         material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
         dragStart = null;
         latestStructuralPick = null;
@@ -1566,6 +1642,7 @@
       interactionMode: structuralInteractionMode.snapshot(),
       gpuHotSidecar: gpuHotSidecar?.snapshot() || null,
       gpuTearAppliedCount,
+      gpuTearAcceptance: gpuTearAcceptanceGate.snapshot(),
       gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]
         .filter(Boolean),
       gpuTearDiscardedCount,
@@ -1588,6 +1665,7 @@
       sympatheticBinding: material.sympatheticBinding || null,
       visibleBinding: visibleBindingState(),
       bindContactPreview: visibleBindContactPreview(),
+      shearContactPreview: visibleShearContactPreview(),
       renderTiming: renderTimingLedger.at(-1) || null,
       renderTimingLedger: structuredClone(renderTimingLedger),
       renderedMotionTimeline: structuredClone(buildRenderedStructuralMotionTimeline({
@@ -1619,6 +1697,19 @@
       routeTitle: gpuStatus.title,
     });
     window.__structuralMaterial3dInvalidateGpuRequestForWitness = () => gpuTearRequestGate.invalidate();
+    window.__structuralMaterial3dArmPreExecutionHoldForWitness = () => {
+      if (gpuTearPreExecutionWitnessHold) throw new Error('pre-execution witness hold already armed');
+      let release;
+      const releasePromise = new Promise(resolveRelease => { release = resolveRelease; });
+      gpuTearPreExecutionWitnessHold = { reached: false, release, releasePromise };
+    };
+    window.__structuralMaterial3dPreExecutionHoldStatus = () => ({
+      armed: gpuTearPreExecutionWitnessHold !== null,
+      reached: gpuTearPreExecutionWitnessHold?.reached === true,
+    });
+    window.__structuralMaterial3dReleasePreExecutionHoldForWitness = () => {
+      gpuTearPreExecutionWitnessHold?.release();
+    };
     window.__structuralMaterial3dArmPostExecutionHoldForWitness = () => {
       if (gpuTearPostExecutionWitnessHold) throw new Error('post-execution witness hold already armed');
       let release;
