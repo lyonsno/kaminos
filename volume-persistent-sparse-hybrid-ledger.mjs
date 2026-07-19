@@ -95,7 +95,7 @@ export function auditFullCandidateCountContract(manifest, expectedFullCandidateC
   return counts;
 }
 
-export function buildExpectedLedgerContract(manifest) {
+function buildCensusRequestedContract(manifest) {
   requireManifestIdentity(manifest);
   const cameraHashes = manifest.states.map(state => sha256Canonical(state.camera));
   assert.equal(new Set(cameraHashes).size, 1, 'held-state camera changed');
@@ -136,6 +136,12 @@ export function buildExpectedLedgerContract(manifest) {
   };
 }
 
+export function buildExpectedLedgerContract(manifest) {
+  const expected = buildCensusRequestedContract(manifest);
+  auditFullCandidateCountContract(manifest, expected.fullCandidateCount);
+  return expected;
+}
+
 function requireTotals(label, totals) {
   assert.ok(totals && typeof totals === 'object', `${label} totals missing`);
   for (const channel of ['emission', 'extinction']) {
@@ -144,8 +150,8 @@ function requireTotals(label, totals) {
 }
 
 function channelLedger(armId, source, sparse) {
-  assert.ok(sparse <= source + Math.max(1, source) * 1e-6, `${armId} sparse coefficient mass is outside source ownership`);
-  const complement = Math.max(0, source - sparse);
+  assert.ok(sparse <= source, `${armId} sparse coefficient mass is outside source ownership`);
+  const complement = source - sparse;
   if (armId === 'full-correct' || armId === 'sparse-conservative') {
     return { source, splat: source, residual: 0, dropped: 0 };
   }
@@ -325,7 +331,7 @@ async function main() {
     const manifestBytes = readFileSync(manifestPath);
     assert.equal(createHash('sha256').update(manifestBytes).digest('hex'), EXPECTED_COHORT_MANIFEST_SHA256);
     manifest = JSON.parse(manifestBytes);
-    expected = buildExpectedLedgerContract(manifest);
+    expected = buildCensusRequestedContract(manifest);
     auditFullCandidateCountContract(manifest, expected.fullCandidateCount);
     const failure = buildFailedLedgerReport({
       expected,

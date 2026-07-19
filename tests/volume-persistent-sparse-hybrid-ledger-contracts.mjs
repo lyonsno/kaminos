@@ -70,6 +70,23 @@ test('one scalar full count cannot impersonate state-varying authenticated popul
     () => auditFullCandidateCountContract({ states }, 1925788),
     /state-varying authenticated full populations.*114=1924725.*116=1926470.*118=1927051.*120=1925788/,
   );
+  const manifest = {
+    schema: 'persistent-sparse-cohort-export-v0',
+    authority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
+    source: { implementationBundle: { sha256: '603398858e2c8dac638f82a43a13f45d5e8f72c88ae1d2eb0d96f761e5e0853f' } },
+    states: states.map((state, index) => ({
+      ...state,
+      rowCount: 481447,
+      arrays: { nativeCellIndices: { sha256: `${index + 1}`.repeat(64) } },
+      sourceRows: { ...state.sourceRows, nativeCellIndices: { sha256: `${index + 5}`.repeat(64) } },
+      camera: { width: 900, height: 960, cameraPose: { position: [1, 2, 3] } },
+    })),
+  };
+  assert.throws(
+    () => buildExpectedLedgerContract(manifest),
+    /state-varying authenticated full populations/,
+    'the exported expected-contract builder must not bypass the full-population audit',
+  );
 });
 
 test('coefficient ownership stays nonnegative and exact in every arm', () => {
@@ -94,6 +111,15 @@ test('coefficient ownership stays nonnegative and exact in every arm', () => {
   assert.throws(
     () => buildCoefficientLedger('sparse-positive-complement', sourceTotals, { emission: 101, extinction: 26 }),
     /outside source ownership/,
+  );
+  assert.throws(
+    () => buildCoefficientLedger(
+      'sparse-positive-complement',
+      { emission: 0, extinction: 0 },
+      { emission: 0.0000005, extinction: 0 },
+    ),
+    /outside source ownership/,
+    'tiny sparse-over-source mass must not disappear behind a tolerance or complement clamp',
   );
 });
 
