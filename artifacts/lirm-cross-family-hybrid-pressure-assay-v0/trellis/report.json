@@ -1,0 +1,97 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-trellis-adjudication.v0",
+  "status": "complete-spatially-inspected",
+  "route": {
+    "imageGenerator": "flux2-klein-9b-q4",
+    "imageResolution": 512,
+    "imageSteps": 8,
+    "imageGuidance": 1,
+    "imageSeed": 718401,
+    "trellisBackend": "trellis2mlx_fast",
+    "trellisResolution": 512,
+    "trellisSteps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "evidence": {
+    "promotedImageCount": 3,
+    "acceptedGlbCount": 3,
+    "rejectedGlbCount": 0,
+    "renderedViewCount": 12,
+    "viewsPerAsset": [
+      "left",
+      "front",
+      "right",
+      "opposite"
+    ],
+    "trellisInferenceSeconds": 238.73914575576782,
+    "witnessRenderSeconds": 12.257242918014526,
+    "contactSheet": {
+      "path": "trellis-witness-contact-sheet.png",
+      "sha256": "sha256:db63597a28284a1a3396c262ce81aca11c9a99cc5234410899a0f535c8ee27a3",
+      "pixelWidth": 2048,
+      "pixelHeight": 1365,
+      "inspectedAsThreeAbsolutePixelRows": true
+    }
+  },
+  "assetVerdicts": [
+    {
+      "candidateId": "crown-halo-pendant-tripod",
+      "stance": "prior-led-invention",
+      "spatialVerdict": "strong-with-backside-artifact",
+      "authoredTopology": {
+        "annularAperture": "open-in-all-four-views",
+        "dorsalCanopy": "distinct-lobed-crown-in-all-four-views",
+        "supportField": "separated-ground-contacts-survive-rotation",
+        "suspendedAnatomy": "symbiont-and-organs-remain-spatially-distinct-inside-annulus"
+      },
+      "modelContribution": "hanging-symbiont-nursery-with-cords-and-organs",
+      "residual": "opposite view exposes one pale blade-like planar structure through the aperture"
+    },
+    {
+      "candidateId": "offset-keyhole-canopy-strider",
+      "stance": "prior-led-invention",
+      "spatialVerdict": "strongest",
+      "authoredTopology": {
+        "annularAperture": "open-in-all-four-views",
+        "dorsalCanopy": "eccentric-multilobed-canopy-remains-independent",
+        "supportField": "wide-sparse-tripod-remains-grounded",
+        "suspendedAnatomy": "vascular-seeded-organ-remains-centered-and-separated"
+      },
+      "modelContribution": "vascular-fruiting-body-organism-with-surface-organs-and-lower-seed-cluster",
+      "residual": "minor viewpoint-dependent thinning of interior cords without topology loss"
+    },
+    {
+      "candidateId": "wide-portal-saddle-canopy",
+      "stance": "prior-led-invention",
+      "spatialVerdict": "strong-with-planar-organ-artifact",
+      "authoredTopology": {
+        "annularAperture": "open-in-all-four-views",
+        "dorsalCanopy": "low-saddle-crown-remains-top-heavy",
+        "supportField": "three-separated-contacts-survive-rotation",
+        "suspendedAnatomy": "multiple-organs-remain-spatially-suspended-inside-portal"
+      },
+      "modelContribution": "compact-arch-organism-with-paired-suspended-organs-and-rootlike-cords",
+      "residual": "left-front-right views expose one pale flattened internal organ; opposite view confirms surrounding anatomy is volumetric"
+    }
+  ],
+  "findings": {
+    "hybridSpatialSurvivalRate": "3/3",
+    "frontOnlyReliefCount": 0,
+    "parentReversionCount": 0,
+    "allFourComposedCommitmentsSurviveFullRoute": true,
+    "priorLedInventionProducedNonredundantOrganisms": true,
+    "interpretation": "A single procedural armature can compose load-bearing topology from two proven parent families, let Flux invent anatomy around that scaffold, and survive Trellis as an open spatial organism rather than a front-view symbol."
+  },
+  "nextAssay": {
+    "id": "heritable-hybrid-lineage-v0",
+    "question": "Can one successful cross-family hybrid generate a parameter-mutated sibling lineage whose family identity survives Flux and Trellis while silhouette and anatomy diverge?",
+    "minimumEvidence": [
+      "six armature siblings spanning canopy, aperture, support, and pendant mutations",
+      "three visually distinct image basins that remain recognizably one hybrid family",
+      "multi-view spatial witnesses for two maximally separated survivors"
+    ],
+    "failureSignal": "Mutation either leaves the outputs visually redundant or causes the generator route to abandon the cross-family topology."
+  }
+}

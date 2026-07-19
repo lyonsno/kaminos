@@ -1,0 +1,394 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-imagegen-collection.v0",
+  "status": "complete-inspected",
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "f4156e451b84",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465748.979319,
+      "startedAt": 1784465749.1485262,
+      "finishedAt": 1784465806.025698,
+      "durationSeconds": 56.877171754837036,
+      "outputMtime": 1784465805.4601946,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/clay-implicit.png",
+        "bytes": 45557,
+        "sha256": "sha256:10ac4279f66992fc400f9c6d2b53e8da6534e26ef4fcfb803ac1f0bf8200f650"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png",
+          "bytes": 26536,
+          "sha256": "sha256:43b1093708f72c0e8f6081a350b800abe186af0b5c24b84b872ee749263aed81",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png",
+          "bytes": 55651,
+          "sha256": "sha256:33a513a9c4f2ee748483a34590b9b1a4b7e82e28b8f288c992ea120b0e238e70",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 1257,
+        "sha256": "sha256:88f6a7ecc9c5bd1a8355b1e84fc5eae386c5dfef5a76905d3403342aaacc3f9e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401/output.png",
+        "bytes": 305448,
+        "sha256": "sha256:f9468d8baa175faf8d848f2dcef5012a11c401569e78863869c94bdb5a42f8cb"
+      },
+      "candidateId": "crown-halo-pendant-tripod",
+      "stance": "anatomical-completion",
+      "durableOutput": {
+        "path": "imagegen-outputs/crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401.png",
+        "byteSize": 305448,
+        "sha256": "sha256:f9468d8baa175faf8d848f2dcef5012a11c401569e78863869c94bdb5a42f8cb"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "c7db46348be5",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465749.007852,
+      "startedAt": 1784465806.0282109,
+      "finishedAt": 1784465862.9864252,
+      "durationSeconds": 56.9582142829895,
+      "outputMtime": 1784465862.5174098,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/clay-implicit.png",
+        "bytes": 45557,
+        "sha256": "sha256:10ac4279f66992fc400f9c6d2b53e8da6534e26ef4fcfb803ac1f0bf8200f650"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png",
+          "bytes": 26536,
+          "sha256": "sha256:43b1093708f72c0e8f6081a350b800abe186af0b5c24b84b872ee749263aed81",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png",
+          "bytes": 55651,
+          "sha256": "sha256:33a513a9c4f2ee748483a34590b9b1a4b7e82e28b8f288c992ea120b0e238e70",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 1525,
+        "sha256": "sha256:8113e659664bb28918912899018c3ba09e070161d2c805ab374c8e210550e953"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/output.png",
+        "bytes": 317334,
+        "sha256": "sha256:3437c48b36682c070d86314c43bc628a805ae5678fe2665906b116242803160f"
+      },
+      "candidateId": "crown-halo-pendant-tripod",
+      "stance": "prior-led-invention",
+      "durableOutput": {
+        "path": "imagegen-outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.png",
+        "byteSize": 317334,
+        "sha256": "sha256:3437c48b36682c070d86314c43bc628a805ae5678fe2665906b116242803160f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "d96e342f31d5",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465749.032258,
+      "startedAt": 1784465862.989085,
+      "finishedAt": 1784465920.219569,
+      "durationSeconds": 57.23048400878906,
+      "outputMtime": 1784465919.7694125,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/clay-implicit.png",
+        "bytes": 48256,
+        "sha256": "sha256:064eac7352aa18989a9e647f8b3e0419cfb90c7b3c0a1cf6cc1d3543fb98f841"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png",
+          "bytes": 27915,
+          "sha256": "sha256:dee2029c1834af390cb505b2270ae988f934177879169b2ad42d740fda6d9b5a",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png",
+          "bytes": 59311,
+          "sha256": "sha256:90d4239b4b33b55f339b927206f23ae1f770528cf2e154e7bf35f18343b6f03d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 1257,
+        "sha256": "sha256:88f6a7ecc9c5bd1a8355b1e84fc5eae386c5dfef5a76905d3403342aaacc3f9e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401/output.png",
+        "bytes": 312685,
+        "sha256": "sha256:a7e3769b57a47b101550eb8920ce8f98f3d4e39e069c61bc76514c9e015d6ef9"
+      },
+      "candidateId": "offset-keyhole-canopy-strider",
+      "stance": "anatomical-completion",
+      "durableOutput": {
+        "path": "imagegen-outputs/offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401.png",
+        "byteSize": 312685,
+        "sha256": "sha256:a7e3769b57a47b101550eb8920ce8f98f3d4e39e069c61bc76514c9e015d6ef9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "e4ca6fff838c",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465749.057007,
+      "startedAt": 1784465920.221942,
+      "finishedAt": 1784465981.423415,
+      "durationSeconds": 61.201472997665405,
+      "outputMtime": 1784465980.9435458,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/clay-implicit.png",
+        "bytes": 48256,
+        "sha256": "sha256:064eac7352aa18989a9e647f8b3e0419cfb90c7b3c0a1cf6cc1d3543fb98f841"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png",
+          "bytes": 27915,
+          "sha256": "sha256:dee2029c1834af390cb505b2270ae988f934177879169b2ad42d740fda6d9b5a",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png",
+          "bytes": 59311,
+          "sha256": "sha256:90d4239b4b33b55f339b927206f23ae1f770528cf2e154e7bf35f18343b6f03d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 1525,
+        "sha256": "sha256:8113e659664bb28918912899018c3ba09e070161d2c805ab374c8e210550e953"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/output.png",
+        "bytes": 307785,
+        "sha256": "sha256:568063763a2d955f5bc470afd9b688043c31f63f01652e3a820b7b286ef038f3"
+      },
+      "candidateId": "offset-keyhole-canopy-strider",
+      "stance": "prior-led-invention",
+      "durableOutput": {
+        "path": "imagegen-outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.png",
+        "byteSize": 307785,
+        "sha256": "sha256:568063763a2d955f5bc470afd9b688043c31f63f01652e3a820b7b286ef038f3"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "4e3902aa35b9",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465749.08288,
+      "startedAt": 1784465981.42693,
+      "finishedAt": 1784466042.794038,
+      "durationSeconds": 61.36710810661316,
+      "outputMtime": 1784466042.2510762,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/clay-implicit.png",
+        "bytes": 45413,
+        "sha256": "sha256:536cbf849ea7a838771504e77f944b2f87a6d148b2346bc2629a3e1dae54c685"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png",
+          "bytes": 26452,
+          "sha256": "sha256:60ec59243ec072276d13fde06b15ae4d269b8444b41fa25891b64b43f9f8b962",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png",
+          "bytes": 55278,
+          "sha256": "sha256:c721e5b3d77a4fae9d268f0f2e3401919800eb2102e765909b1d44d2676586c7",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 1257,
+        "sha256": "sha256:88f6a7ecc9c5bd1a8355b1e84fc5eae386c5dfef5a76905d3403342aaacc3f9e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401/output.png",
+        "bytes": 293167,
+        "sha256": "sha256:8f9a59b9040098808c7e05069cf54fdb568969ace1728691c8b67ebd29934ef7"
+      },
+      "candidateId": "wide-portal-saddle-canopy",
+      "stance": "anatomical-completion",
+      "durableOutput": {
+        "path": "imagegen-outputs/wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401.png",
+        "byteSize": 293167,
+        "sha256": "sha256:8f9a59b9040098808c7e05069cf54fdb568969ace1728691c8b67ebd29934ef7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "7a5b58b5488f",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718401 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718401",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784465749.1073549,
+      "startedAt": 1784466042.7962399,
+      "finishedAt": 1784466105.5826209,
+      "durationSeconds": 62.786381006240845,
+      "outputMtime": 1784466105.0915656,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/clay-implicit.png",
+        "bytes": 45413,
+        "sha256": "sha256:536cbf849ea7a838771504e77f944b2f87a6d148b2346bc2629a3e1dae54c685"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png",
+          "bytes": 26452,
+          "sha256": "sha256:60ec59243ec072276d13fde06b15ae4d269b8444b41fa25891b64b43f9f8b962",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png",
+          "bytes": 55278,
+          "sha256": "sha256:c721e5b3d77a4fae9d268f0f2e3401919800eb2102e765909b1d44d2676586c7",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 1525,
+        "sha256": "sha256:8113e659664bb28918912899018c3ba09e070161d2c805ab374c8e210550e953"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-20260719/cells/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/output.png",
+        "bytes": 313915,
+        "sha256": "sha256:9301c97ddc0508bf64447e41819463ed7ba74cbf6305ca7a92337e7a4149b238"
+      },
+      "candidateId": "wide-portal-saddle-canopy",
+      "stance": "prior-led-invention",
+      "durableOutput": {
+        "path": "imagegen-outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.png",
+        "byteSize": 313915,
+        "sha256": "sha256:9301c97ddc0508bf64447e41819463ed7ba74cbf6305ca7a92337e7a4149b238"
+      }
+    }
+  ],
+  "incomplete": [],
+  "failed": [],
+  "visualInspectionClaim": "all six outputs inspected at original contact-sheet resolution; all preserve at least two composed commitments and the three prior-led cells were selected for spatial promotion",
+  "lastTrustworthyEvidence": "6/6 route-validated outputs copied durably and visually adjudicated; spatial reconstruction remains unwitnessed"
+}

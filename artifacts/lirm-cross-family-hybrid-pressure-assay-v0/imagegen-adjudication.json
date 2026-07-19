@@ -1,0 +1,60 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-imagegen-adjudication.v0",
+  "status": "visually-inspected-promotion-selected",
+  "contactSheet": {
+    "path": "imagegen-pressure-contact-sheet.png",
+    "sha256": "sha256:2fa84d611dd04948d7704e9a6bc6685f8a7cc0e7c6f8c8682f3e542a68e7d05a",
+    "pixelWidth": 1024,
+    "pixelHeight": 1650,
+    "inspectedAtOriginalResolution": true
+  },
+  "visualInspection": {
+    "allSixOutputsInspected": true,
+    "threePromotedSourcesInspectedIndividually": true,
+    "candidateVerdicts": [
+      {
+        "candidateId": "crown-halo-pendant-tripod",
+        "anatomicalCompletion": "open annulus, lobed canopy, tripod, and central pendant survive; interior anatomy remains mostly scaffold-like",
+        "priorLedInvention": "all four commitments survive while the model invents a spatial hanging symbiont nursery",
+        "promotion": "prior-led-invention"
+      },
+      {
+        "candidateId": "offset-keyhole-canopy-strider",
+        "anatomicalCompletion": "offset aperture, broad eccentric canopy, tripod, and pendant survive; lower aperture narrows around invented tissue",
+        "priorLedInvention": "all four commitments survive as a vascular fruiting-body organism with a suspended seeded organ",
+        "promotion": "prior-led-invention"
+      },
+      {
+        "candidateId": "wide-portal-saddle-canopy",
+        "anatomicalCompletion": "wide portal, low saddle canopy, and tripod survive; suspended anatomy is weak",
+        "priorLedInvention": "wide opening, canopy, tripod, and multiple suspended organs survive as a compact arch organism",
+        "promotion": "prior-led-invention"
+      }
+    ]
+  },
+  "findings": {
+    "minimumTwoCommitmentSurvivalRate": "6/6",
+    "fourCommitmentSurvivalRate": "5/6",
+    "parentReversionCount": 0,
+    "priorLedPressurePreservedAuthoredTopology": true,
+    "priorLedPressureAddedNonredundantOrganismAnatomy": true,
+    "spatialSurvivalStatus": "unwitnessed"
+  },
+  "trellisPromotion": {
+    "status": "selected",
+    "evidenceRoles": [
+      {
+        "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+        "role": "crown-halo-pendant-tripod-hybrid-survivor"
+      },
+      {
+        "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+        "role": "offset-keyhole-canopy-strider-hybrid-survivor"
+      },
+      {
+        "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+        "role": "wide-portal-saddle-canopy-hybrid-survivor"
+      }
+    ]
+  }
+}

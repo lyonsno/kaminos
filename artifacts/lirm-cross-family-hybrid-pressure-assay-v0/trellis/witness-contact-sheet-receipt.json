@@ -1,0 +1,99 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "all three promoted cross-family hybrids preserve the open aperture, dorsal canopy, sparse supports, and suspended anatomy across left, front, right, and opposite views",
+  "lastTrustworthyEvidence": "twelve route-validated witness frames visually inspected as three uncontaminated per-asset rows; spatial survival 3/3",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness-plan.json",
+    "bytes": 22014,
+    "sha256": "sha256:f889c28892d67ac8e26fc5a5650cb81203ef463d5b01e1e078ec3f7bbf1bce3a"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness-completion-report.json",
+    "bytes": 39405,
+    "sha256": "sha256:7bfbc89284a196a3c494a7a9db700cb0888d687722dd6f92e054c253f19476c6"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 3923,
+    "sha256": "sha256:cbf49e4ba0686512efce179d6b1552a15ab219f1c19b715cbe263fd712f09bfd"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/trellis-witness-contact-sheet.png",
+    "bytes": 2143733,
+    "sha256": "sha256:db63597a28284a1a3396c262ce81aca11c9a99cc5234410899a0f535c8ee27a3"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "bytes": 743730,
+      "sha256": "sha256:6fc4c30cad5d3892ab6ee4db0c0e95c9753fcea50993aadd1fa8758c950871d9"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "bytes": 798183,
+      "sha256": "sha256:5ad96a406ab54203c064fbe0527f381f284ba90ffcea7b8651f8f5454b4b33b7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "bytes": 747523,
+      "sha256": "sha256:06771d0915b3379436c3f3d04ee6e8bf25cee22c66adebcf802d857b2423cc93"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "bytes": 746973,
+      "sha256": "sha256:c6c7b3c1b048965471077d83954876be6a75a5929724cca4b03bb7a3b6ced7fb"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "bytes": 757237,
+      "sha256": "sha256:1f0d21fc2dab84e216d2e7d900bdf30491d565064e807af644abcd12645e21cb"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "bytes": 776932,
+      "sha256": "sha256:2073a347b1121a1cd63223f018ce3854d1e93265ad532bd685fe485978c5829c"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "bytes": 732444,
+      "sha256": "sha256:449ee3be51fe75d536188d1e13a996f4dc70ab1dcf6ae796cb41f9a00f3dd141"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "bytes": 726909,
+      "sha256": "sha256:36f192d44937abb1f1e3c50d2542655e3d2bb20d3940b15f6a5c384f4233f850"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "bytes": 726290,
+      "sha256": "sha256:d3d808b8d0630829d568a2c62dc61a16f4ea197eb9bbe8cc584454c636177434"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "bytes": 776140,
+      "sha256": "sha256:8791c42a87e625fb8523d93503f6521e7a9655a2c2c9ae248dde867350a317a4"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "bytes": 768001,
+      "sha256": "sha256:d6a6de10857013e6ce7ce12d0dc2a24d292b0749862563f1548975087fef4beb"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "bytes": 764703,
+      "sha256": "sha256:6da726ac2971039dcb2fa6d010625f73a503eae2cf4c8a8096d7612cbca8d44f"
+    }
+  ],
+  "falseClosureGuards": {
+    "partialFrameSetAccepted": false,
+    "routeValidatedFramesImplySpatialSuccess": false,
+    "frontViewOnlyAccepted": false
+  }
+}

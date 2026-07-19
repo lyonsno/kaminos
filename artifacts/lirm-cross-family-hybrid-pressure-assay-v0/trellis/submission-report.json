@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-trellis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 3,
+  "submitted": [
+    {
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "d69a598895ce",
+      "response": {
+        "job_id": "d69a598895ce"
+      }
+    },
+    {
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "a79fc5d3a513",
+      "response": {
+        "job_id": "a79fc5d3a513"
+      }
+    },
+    {
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "778c2bd81c79",
+      "response": {
+        "job_id": "778c2bd81c79"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "3/3 Trellis jobs submitted through Greenroom"
+}

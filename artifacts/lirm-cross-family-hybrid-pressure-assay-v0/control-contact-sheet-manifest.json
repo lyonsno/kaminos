@@ -1,0 +1,57 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-control-contact-sheet-manifest.v0",
+  "columns": 3,
+  "rows": 3,
+  "width": 864,
+  "cellWidth": 288,
+  "cellHeight": 292,
+  "imageHeight": 256,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/clay-implicit.png",
+      "title": "crown-halo-pendant-tripod",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/depth-implicit.png",
+      "title": "crown-halo-pendant-tripod",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/crown-halo-pendant-tripod/crown-halo-pendant-tripod/normal-implicit.png",
+      "title": "crown-halo-pendant-tripod",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/clay-implicit.png",
+      "title": "offset-keyhole-canopy-strider",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/depth-implicit.png",
+      "title": "offset-keyhole-canopy-strider",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/offset-keyhole-canopy-strider/offset-keyhole-canopy-strider/normal-implicit.png",
+      "title": "offset-keyhole-canopy-strider",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/clay-implicit.png",
+      "title": "wide-portal-saddle-canopy",
+      "viewLabel": "CLAY"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/depth-implicit.png",
+      "title": "wide-portal-saddle-canopy",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/candidates/wide-portal-saddle-canopy/wide-portal-saddle-canopy/normal-implicit.png",
+      "title": "wide-portal-saddle-canopy",
+      "viewLabel": "NORMAL"
+    }
+  ]
+}

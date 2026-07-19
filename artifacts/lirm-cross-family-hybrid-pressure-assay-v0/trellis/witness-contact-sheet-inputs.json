@@ -1,0 +1,70 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "title": "CROWN HALO / PRIOR",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "title": "CROWN HALO / PRIOR",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "title": "CROWN HALO / PRIOR",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "title": "CROWN HALO / PRIOR",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "title": "OFFSET KEYHOLE / PRIOR",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "title": "OFFSET KEYHOLE / PRIOR",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "title": "OFFSET KEYHOLE / PRIOR",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "title": "OFFSET KEYHOLE / PRIOR",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-left.png",
+      "title": "WIDE PORTAL / PRIOR",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-front.png",
+      "title": "WIDE PORTAL / PRIOR",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-right.png",
+      "title": "WIDE PORTAL / PRIOR",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+      "title": "WIDE PORTAL / PRIOR",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-imagegen-contact-sheet-receipt.v0",
+  "status": "complete-inspected",
+  "requestedRoute": "kaminos/local-swift-contact-sheet-v0",
+  "effectiveRoute": "swift/AppKit",
+  "manifestPath": "imagegen-contact-sheet-manifest.json",
+  "contactSheet": {
+    "path": "imagegen-pressure-contact-sheet.png",
+    "byteSize": 2390623,
+    "sha256": "sha256:2fa84d611dd04948d7704e9a6bc6685f8a7cc0e7c6f8c8682f3e542a68e7d05a",
+    "width": 1024,
+    "height": 1650
+  },
+  "visualInspectionClaim": "all six cells inspected at original 1024x1650 resolution; three nonredundant prior-led hybrid survivors selected",
+  "falseClosureGuards": {
+    "missingOrPartialCollectionAccepted": false,
+    "duplicateOrUnlabeledCellsAccepted": false,
+    "blankOrImplausiblySmallRasterAccepted": false,
+    "contactSheetImpliesVisualSuccess": false
+  }
+}

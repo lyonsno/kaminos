@@ -1,0 +1,31 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-control-contact-sheet-receipt.v0",
+  "status": "complete-inspected",
+  "requestedRoute": "kaminos/local-swift-contact-sheet-v0",
+  "effectiveRoute": "swift/AppKit",
+  "manifestPath": "control-contact-sheet-manifest.json",
+  "contactSheet": {
+    "path": "control-contact-sheet.png",
+    "byteSize": 448085,
+    "sha256": "sha256:7fdc2c690db0f15cf5174d0c8dd4c03544cf0ef6d5ec1ef7f1b223934f863899",
+    "width": 864,
+    "height": 876
+  },
+  "visualInspectionClaim": "inspected",
+  "falseClosureGuards": {
+    "missingOrPartialControlPackageAccepted": false,
+    "unlabeledCellsAccepted": false,
+    "contactSheetImpliesVisualSuccess": false
+  },
+  "inspection": {
+    "artifact": "control-contact-sheet.png",
+    "verdict": "pass",
+    "visibleDelta": "Three cross-family controls each preserve an open annular aperture, a canopy distinct from the annular body, sparse tripod contacts, and suspended interior anatomy without conditioning-frame clipping.",
+    "candidateFindings": {
+      "crown-halo-pendant-tripod": "Broad lobed canopy crowns an open upright annulus; central pendant and three separated contacts read clearly.",
+      "offset-keyhole-canopy-strider": "Asymmetric multi-lobed canopy, tall keyhole aperture, eccentric pendant, and wide tripod stance remain separately legible.",
+      "wide-portal-saddle-canopy": "Compact saddle canopy sits above a wide low portal; support field and tucked suspended anatomy remain visible."
+    },
+    "residualRisk": "Single-view controls prove a coherent conditioning scaffold; only image and multi-view mesh firings can prove downstream hybrid survival."
+  }
+}

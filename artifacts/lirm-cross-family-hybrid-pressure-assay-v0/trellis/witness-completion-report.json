@@ -1,0 +1,576 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-trellis-witness-collection.v0",
+  "status": "complete-frames-inspected",
+  "requestedCount": 12,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "crown-halo-pendant-tripod",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "c967c5f3e752",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.5829608,
+      "startedAt": 1784467288.258137,
+      "finishedAt": 1784467289.777637,
+      "durationSeconds": 1.5195000171661377,
+      "outputMtime": 1784467289.700769,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9487120,
+        "sha256": "sha256:025d75fc23e99c7d9c4bdd4b22a115218e737f42d476d1788dcaad5bb1c093f3"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left.png",
+        "bytes": 743730,
+        "sha256": "sha256:6fc4c30cad5d3892ab6ee4db0c0e95c9753fcea50993aadd1fa8758c950871d9"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "crown-halo-pendant-tripod-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/left/render.png",
+        "bytes": 743730,
+        "sha256": "sha256:6fc4c30cad5d3892ab6ee4db0c0e95c9753fcea50993aadd1fa8758c950871d9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-front",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "crown-halo-pendant-tripod",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "e59bf651402e",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.6107311,
+      "startedAt": 1784467289.7801,
+      "finishedAt": 1784467290.8213482,
+      "durationSeconds": 1.041248083114624,
+      "outputMtime": 1784467290.7467098,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9487120,
+        "sha256": "sha256:025d75fc23e99c7d9c4bdd4b22a115218e737f42d476d1788dcaad5bb1c093f3"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-front.png",
+        "bytes": 798183,
+        "sha256": "sha256:5ad96a406ab54203c064fbe0527f381f284ba90ffcea7b8651f8f5454b4b33b7"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "crown-halo-pendant-tripod-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/front/render.png",
+        "bytes": 798183,
+        "sha256": "sha256:5ad96a406ab54203c064fbe0527f381f284ba90ffcea7b8651f8f5454b4b33b7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-right",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "crown-halo-pendant-tripod",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "dd15cc446b0a",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.6383018,
+      "startedAt": 1784467290.8235,
+      "finishedAt": 1784467291.787146,
+      "durationSeconds": 0.9636461734771729,
+      "outputMtime": 1784467291.738715,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9487120,
+        "sha256": "sha256:025d75fc23e99c7d9c4bdd4b22a115218e737f42d476d1788dcaad5bb1c093f3"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-right.png",
+        "bytes": 747523,
+        "sha256": "sha256:06771d0915b3379436c3f3d04ee6e8bf25cee22c66adebcf802d857b2423cc93"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "crown-halo-pendant-tripod-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/right/render.png",
+        "bytes": 747523,
+        "sha256": "sha256:06771d0915b3379436c3f3d04ee6e8bf25cee22c66adebcf802d857b2423cc93"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "crown-halo-pendant-tripod",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "800f1a8287a0",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.665932,
+      "startedAt": 1784467291.789002,
+      "finishedAt": 1784467292.786319,
+      "durationSeconds": 0.9973170757293701,
+      "outputMtime": 1784467292.721347,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9487120,
+        "sha256": "sha256:025d75fc23e99c7d9c4bdd4b22a115218e737f42d476d1788dcaad5bb1c093f3"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+        "bytes": 746973,
+        "sha256": "sha256:c6c7b3c1b048965471077d83954876be6a75a5929724cca4b03bb7a3b6ced7fb"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "crown-halo-pendant-tripod-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png",
+        "bytes": 746973,
+        "sha256": "sha256:c6c7b3c1b048965471077d83954876be6a75a5929724cca4b03bb7a3b6ced7fb"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-left",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "offset-keyhole-canopy-strider",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "cae824940395",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.693377,
+      "startedAt": 1784467292.7892852,
+      "finishedAt": 1784467293.631867,
+      "durationSeconds": 0.8425817489624023,
+      "outputMtime": 1784467293.5865922,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 7721832,
+        "sha256": "sha256:ce1a89b63d7f22891f44129e42f2fdf186f57cd87e1a40695d19f8b3f6928e9b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-left.png",
+        "bytes": 757237,
+        "sha256": "sha256:1f0d21fc2dab84e216d2e7d900bdf30491d565064e807af644abcd12645e21cb"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "offset-keyhole-canopy-strider-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/left/render.png",
+        "bytes": 757237,
+        "sha256": "sha256:1f0d21fc2dab84e216d2e7d900bdf30491d565064e807af644abcd12645e21cb"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-front",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "offset-keyhole-canopy-strider",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "4d3107ed012d",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.721256,
+      "startedAt": 1784467293.6342049,
+      "finishedAt": 1784467294.581283,
+      "durationSeconds": 0.9470782279968262,
+      "outputMtime": 1784467294.5276818,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 7721832,
+        "sha256": "sha256:ce1a89b63d7f22891f44129e42f2fdf186f57cd87e1a40695d19f8b3f6928e9b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-front.png",
+        "bytes": 776932,
+        "sha256": "sha256:2073a347b1121a1cd63223f018ce3854d1e93265ad532bd685fe485978c5829c"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "offset-keyhole-canopy-strider-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/front/render.png",
+        "bytes": 776932,
+        "sha256": "sha256:2073a347b1121a1cd63223f018ce3854d1e93265ad532bd685fe485978c5829c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-right",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "offset-keyhole-canopy-strider",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "5629b56cf29c",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.748586,
+      "startedAt": 1784467294.583116,
+      "finishedAt": 1784467295.5860422,
+      "durationSeconds": 1.0029261112213135,
+      "outputMtime": 1784467295.505355,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 7721832,
+        "sha256": "sha256:ce1a89b63d7f22891f44129e42f2fdf186f57cd87e1a40695d19f8b3f6928e9b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-right.png",
+        "bytes": 732444,
+        "sha256": "sha256:449ee3be51fe75d536188d1e13a996f4dc70ab1dcf6ae796cb41f9a00f3dd141"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "offset-keyhole-canopy-strider-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/right/render.png",
+        "bytes": 732444,
+        "sha256": "sha256:449ee3be51fe75d536188d1e13a996f4dc70ab1dcf6ae796cb41f9a00f3dd141"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "offset-keyhole-canopy-strider",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "8ee9f7965d31",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.775903,
+      "startedAt": 1784467295.5878148,
+      "finishedAt": 1784467296.5407429,
+      "durationSeconds": 0.9529280662536621,
+      "outputMtime": 1784467296.479898,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 7721832,
+        "sha256": "sha256:ce1a89b63d7f22891f44129e42f2fdf186f57cd87e1a40695d19f8b3f6928e9b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+        "bytes": 726909,
+        "sha256": "sha256:36f192d44937abb1f1e3c50d2542655e3d2bb20d3940b15f6a5c384f4233f850"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "offset-keyhole-canopy-strider-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png",
+        "bytes": 726909,
+        "sha256": "sha256:36f192d44937abb1f1e3c50d2542655e3d2bb20d3940b15f6a5c384f4233f850"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-left",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "wide-portal-saddle-canopy",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "a38aa71503da",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.803401,
+      "startedAt": 1784467296.543187,
+      "finishedAt": 1784467297.588246,
+      "durationSeconds": 1.0450592041015625,
+      "outputMtime": 1784467297.503744,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9244016,
+        "sha256": "sha256:1b0a8af9878d35fbf2dae3b3850548cd0d0fedaa387d7e1f9fe603f2c059e1ed"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-left.png",
+        "bytes": 726290,
+        "sha256": "sha256:d3d808b8d0630829d568a2c62dc61a16f4ea197eb9bbe8cc584454c636177434"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "wide-portal-saddle-canopy-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/left/render.png",
+        "bytes": 726290,
+        "sha256": "sha256:d3d808b8d0630829d568a2c62dc61a16f4ea197eb9bbe8cc584454c636177434"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-front",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "wide-portal-saddle-canopy",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "00fe79aa79a3",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.8306649,
+      "startedAt": 1784467297.590543,
+      "finishedAt": 1784467298.56045,
+      "durationSeconds": 0.9699070453643799,
+      "outputMtime": 1784467298.5123034,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9244016,
+        "sha256": "sha256:1b0a8af9878d35fbf2dae3b3850548cd0d0fedaa387d7e1f9fe603f2c059e1ed"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-front.png",
+        "bytes": 776140,
+        "sha256": "sha256:8791c42a87e625fb8523d93503f6521e7a9655a2c2c9ae248dde867350a317a4"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "wide-portal-saddle-canopy-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/front/render.png",
+        "bytes": 776140,
+        "sha256": "sha256:8791c42a87e625fb8523d93503f6521e7a9655a2c2c9ae248dde867350a317a4"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-right",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "wide-portal-saddle-canopy",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "14ebb3989986",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.858028,
+      "startedAt": 1784467298.5622358,
+      "finishedAt": 1784467299.55467,
+      "durationSeconds": 0.9924342632293701,
+      "outputMtime": 1784467299.5042665,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9244016,
+        "sha256": "sha256:1b0a8af9878d35fbf2dae3b3850548cd0d0fedaa387d7e1f9fe603f2c059e1ed"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-right.png",
+        "bytes": 768001,
+        "sha256": "sha256:d6a6de10857013e6ce7ce12d0dc2a24d292b0749862563f1548975087fef4beb"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "wide-portal-saddle-canopy-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/right/render.png",
+        "bytes": 768001,
+        "sha256": "sha256:d6a6de10857013e6ce7ce12d0dc2a24d292b0749862563f1548975087fef4beb"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "candidateId": "wide-portal-saddle-canopy",
+      "imagegenSeed": 718401,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "87b41423cdc9",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784467287.885504,
+      "startedAt": 1784467299.557293,
+      "finishedAt": 1784467300.5399098,
+      "durationSeconds": 0.9826169013977051,
+      "outputMtime": 1784467300.4669077,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/outputs/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401.glb",
+        "bytes": 9244016,
+        "sha256": "sha256:1b0a8af9878d35fbf2dae3b3850548cd0d0fedaa387d7e1f9fe603f2c059e1ed"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cross-family-hybrid-pressure-assay-v0/trellis/witness/frames/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-opposite.png",
+        "bytes": 764703,
+        "sha256": "sha256:6da726ac2971039dcb2fa6d010625f73a503eae2cf4c8a8096d7612cbca8d44f"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "wide-portal-saddle-canopy-hybrid-survivor",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-cross-family-hybrid-trellis-20260719/witness/wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401/opposite/render.png",
+        "bytes": 764703,
+        "sha256": "sha256:6da726ac2971039dcb2fa6d010625f73a503eae2cf4c8a8096d7612cbca8d44f"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "visualInspectionClaim": "not-yet-inspected",
+  "lastTrustworthyEvidence": "12/12 route-validated witness frames copied; visual inspection pending"
+}

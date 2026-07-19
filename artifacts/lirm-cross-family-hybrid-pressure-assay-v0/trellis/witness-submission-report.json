@@ -1,0 +1,93 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 12,
+  "submitted": [
+    {
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-left",
+      "jobId": "c967c5f3e752",
+      "response": {
+        "job_id": "c967c5f3e752"
+      }
+    },
+    {
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-front",
+      "jobId": "e59bf651402e",
+      "response": {
+        "job_id": "e59bf651402e"
+      }
+    },
+    {
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-right",
+      "jobId": "dd15cc446b0a",
+      "response": {
+        "job_id": "dd15cc446b0a"
+      }
+    },
+    {
+      "witnessId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "jobId": "800f1a8287a0",
+      "response": {
+        "job_id": "800f1a8287a0"
+      }
+    },
+    {
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-left",
+      "jobId": "cae824940395",
+      "response": {
+        "job_id": "cae824940395"
+      }
+    },
+    {
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-front",
+      "jobId": "4d3107ed012d",
+      "response": {
+        "job_id": "4d3107ed012d"
+      }
+    },
+    {
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-right",
+      "jobId": "5629b56cf29c",
+      "response": {
+        "job_id": "5629b56cf29c"
+      }
+    },
+    {
+      "witnessId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "jobId": "8ee9f7965d31",
+      "response": {
+        "job_id": "8ee9f7965d31"
+      }
+    },
+    {
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-left",
+      "jobId": "a38aa71503da",
+      "response": {
+        "job_id": "a38aa71503da"
+      }
+    },
+    {
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-front",
+      "jobId": "00fe79aa79a3",
+      "response": {
+        "job_id": "00fe79aa79a3"
+      }
+    },
+    {
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-right",
+      "jobId": "14ebb3989986",
+      "response": {
+        "job_id": "14ebb3989986"
+      }
+    },
+    {
+      "witnessId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401-opposite",
+      "jobId": "87b41423cdc9",
+      "response": {
+        "job_id": "87b41423cdc9"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "12/12 witness jobs submitted through Greenroom"
+}

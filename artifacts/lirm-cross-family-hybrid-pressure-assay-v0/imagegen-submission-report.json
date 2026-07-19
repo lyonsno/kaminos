@@ -1,0 +1,39 @@
+{
+  "schema": "kaminos.lirm-cross-family-hybrid-imagegen-submission.v0",
+  "status": "complete",
+  "plannedCellCount": 6,
+  "submittedCellCount": 6,
+  "submissions": [
+    {
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "f4156e451b84",
+      "status": "submitted"
+    },
+    {
+      "cellId": "crown-halo-pendant-tripod-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "c7db46348be5",
+      "status": "submitted"
+    },
+    {
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "d96e342f31d5",
+      "status": "submitted"
+    },
+    {
+      "cellId": "offset-keyhole-canopy-strider-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "e4ca6fff838c",
+      "status": "submitted"
+    },
+    {
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-anatomical-completion-seed718401",
+      "jobId": "4e3902aa35b9",
+      "status": "submitted"
+    },
+    {
+      "cellId": "wide-portal-saddle-canopy-clay-depth-normal-prior-led-invention-seed718401",
+      "jobId": "7a5b58b5488f",
+      "status": "submitted"
+    }
+  ],
+  "lastTrustworthyEvidence": "6/6 cells accepted by GPU Greenroom"
+}
