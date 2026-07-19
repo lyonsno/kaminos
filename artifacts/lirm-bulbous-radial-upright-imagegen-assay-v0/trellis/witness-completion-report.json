@@ -1,0 +1,684 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-collection.v0",
+  "status": "complete-frames-uninspected",
+  "requestedCount": 16,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021-left",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "e16828868b45",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.352555,
+      "startedAt": 1784445505.1002262,
+      "finishedAt": 1784445507.674294,
+      "durationSeconds": 2.5740678310394287,
+      "outputMtime": 1784445507.577077,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb",
+        "bytes": 10123400,
+        "sha256": "sha256:26fe87ddcdbe0ad44ccb02f597ff3490e8e7e58d50520081840e7200e3797421"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/left/render.png",
+        "bytes": 710990,
+        "sha256": "sha256:ea9833cc921ba1c2e1a3ccf030712aba0e32b36ba732ea2858ff5a7b533b011d"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021-front",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "e9ce1380bf35",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.3798988,
+      "startedAt": 1784445507.676446,
+      "finishedAt": 1784445508.560489,
+      "durationSeconds": 0.8840429782867432,
+      "outputMtime": 1784445508.5046282,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb",
+        "bytes": 10123400,
+        "sha256": "sha256:26fe87ddcdbe0ad44ccb02f597ff3490e8e7e58d50520081840e7200e3797421"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/front/render.png",
+        "bytes": 698293,
+        "sha256": "sha256:ee31a3c8f01dc30637e8156f8577350421459fe010e3c7e6dcaaf79fe9d3fc70"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021-right",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "7bd76c0d3b99",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.4070668,
+      "startedAt": 1784445508.56268,
+      "finishedAt": 1784445509.478476,
+      "durationSeconds": 0.9157960414886475,
+      "outputMtime": 1784445509.386963,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb",
+        "bytes": 10123400,
+        "sha256": "sha256:26fe87ddcdbe0ad44ccb02f597ff3490e8e7e58d50520081840e7200e3797421"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/right/render.png",
+        "bytes": 727617,
+        "sha256": "sha256:f3fb2e7f7cda70bb539062b3e93edc59b47e8e708f2a44062df218414d8aa823"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021-opposite",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "55dc956d422c",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.434261,
+      "startedAt": 1784445509.480766,
+      "finishedAt": 1784445510.440924,
+      "durationSeconds": 0.9601578712463379,
+      "outputMtime": 1784445510.371846,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb",
+        "bytes": 10123400,
+        "sha256": "sha256:26fe87ddcdbe0ad44ccb02f597ff3490e8e7e58d50520081840e7200e3797421"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/opposite/render.png",
+        "bytes": 697131,
+        "sha256": "sha256:7965995acff85976586434fb0573af439b889fe20c84113dbbb337e192139dfe"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113-left",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "d03659596e69",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.461262,
+      "startedAt": 1784445510.446094,
+      "finishedAt": 1784445511.467177,
+      "durationSeconds": 1.021082878112793,
+      "outputMtime": 1784445511.4075167,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb",
+        "bytes": 10743488,
+        "sha256": "sha256:57bd71517916a5d5036dfbd3c2ebe09366f9d82f3ff00e0791df81231a89d772"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/left/render.png",
+        "bytes": 662498,
+        "sha256": "sha256:9997c6e65d6bce406d7e8555e5828f451981ae0feb3e01ff91678c251369c7d1"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113-front",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "1fdf92c4b784",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.4886332,
+      "startedAt": 1784445511.4693172,
+      "finishedAt": 1784445512.519444,
+      "durationSeconds": 1.0501267910003662,
+      "outputMtime": 1784445512.4387555,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb",
+        "bytes": 10743488,
+        "sha256": "sha256:57bd71517916a5d5036dfbd3c2ebe09366f9d82f3ff00e0791df81231a89d772"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/front/render.png",
+        "bytes": 641810,
+        "sha256": "sha256:905802b62a34a61691ffafe0bb69380dd0b235452fdbffa2655304b6707922f4"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113-right",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "04cfab4b0c78",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.519583,
+      "startedAt": 1784445512.5217128,
+      "finishedAt": 1784445513.512979,
+      "durationSeconds": 0.9912662506103516,
+      "outputMtime": 1784445513.416206,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb",
+        "bytes": 10743488,
+        "sha256": "sha256:57bd71517916a5d5036dfbd3c2ebe09366f9d82f3ff00e0791df81231a89d772"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/right/render.png",
+        "bytes": 674266,
+        "sha256": "sha256:0ec0ec51c493f82213784ee420afefec2b86130da267ea0a28cb3686b6ca7479"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113-opposite",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-only",
+      "stance": "world-creature-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "4f7427c12296",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.5475478,
+      "startedAt": 1784445513.515112,
+      "finishedAt": 1784445514.410678,
+      "durationSeconds": 0.8955659866333008,
+      "outputMtime": 1784445514.3521428,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb",
+        "bytes": 10743488,
+        "sha256": "sha256:57bd71517916a5d5036dfbd3c2ebe09366f9d82f3ff00e0791df81231a89d772"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/opposite/render.png",
+        "bytes": 668105,
+        "sha256": "sha256:e67e6050221a4ebee9f7dd1903a825e9eaf8530390e67637a505bc915d9c16ce"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021-left",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "c5386ee2f50c",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.575121,
+      "startedAt": 1784445514.4127512,
+      "finishedAt": 1784445515.2810502,
+      "durationSeconds": 0.8682990074157715,
+      "outputMtime": 1784445515.2241833,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb",
+        "bytes": 9582584,
+        "sha256": "sha256:14dc3a645d4c2886e3864b4e2b70bff0ec29c28d813c9e194031e6cb06c941c2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/left/render.png",
+        "bytes": 709215,
+        "sha256": "sha256:ea2a33f3e04d231726fc8c8d2293bd5871abc095c4b5ae65efbf3c0c9c16bcc0"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021-front",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "a70068edfdba",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.603171,
+      "startedAt": 1784445515.2836008,
+      "finishedAt": 1784445516.165371,
+      "durationSeconds": 0.881770133972168,
+      "outputMtime": 1784445516.0967448,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb",
+        "bytes": 9582584,
+        "sha256": "sha256:14dc3a645d4c2886e3864b4e2b70bff0ec29c28d813c9e194031e6cb06c941c2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/front/render.png",
+        "bytes": 691412,
+        "sha256": "sha256:bd37a9caa1f98a8e9dc999f2654a01bea3cb26d1f70e88af558cd4269e109ecb"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021-right",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "dbc13e915971",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.6316202,
+      "startedAt": 1784445516.167486,
+      "finishedAt": 1784445517.039623,
+      "durationSeconds": 0.8721370697021484,
+      "outputMtime": 1784445516.9979522,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb",
+        "bytes": 9582584,
+        "sha256": "sha256:14dc3a645d4c2886e3864b4e2b70bff0ec29c28d813c9e194031e6cb06c941c2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/right/render.png",
+        "bytes": 720131,
+        "sha256": "sha256:c356495f2b35fe10bbf2c92b361eb506268c48422ed92f02d6f2a263236cc6aa"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021-opposite",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "8ca41723fe2e",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.660932,
+      "startedAt": 1784445517.041395,
+      "finishedAt": 1784445518.0995572,
+      "durationSeconds": 1.0581622123718262,
+      "outputMtime": 1784445518.0079443,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb",
+        "bytes": 9582584,
+        "sha256": "sha256:14dc3a645d4c2886e3864b4e2b70bff0ec29c28d813c9e194031e6cb06c941c2"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/opposite/render.png",
+        "bytes": 702542,
+        "sha256": "sha256:e2df38d4a6b7deed8cf8783ceb6d11eecbb97465365286cd22d50dd7f6f67b11"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113-left",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "c53db8045136",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.6900249,
+      "startedAt": 1784445518.101311,
+      "finishedAt": 1784445519.1267142,
+      "durationSeconds": 1.0254032611846924,
+      "outputMtime": 1784445519.0325391,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 9753852,
+        "sha256": "sha256:e4f423d0d4598ab539853885cbe3a825838ed8b57a2a6b8b980c87c7a06c500b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/left/render.png",
+        "bytes": 671234,
+        "sha256": "sha256:18ba643a03558a5d33398f28f1b6e7035cff7cb088de0efce20ccbff66358b2a"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113-front",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "3fe046ceb5c3",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.718879,
+      "startedAt": 1784445519.128547,
+      "finishedAt": 1784445520.13073,
+      "durationSeconds": 1.002182960510254,
+      "outputMtime": 1784445520.0649865,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 9753852,
+        "sha256": "sha256:e4f423d0d4598ab539853885cbe3a825838ed8b57a2a6b8b980c87c7a06c500b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/front/render.png",
+        "bytes": 642922,
+        "sha256": "sha256:7093a9c95b564ee167231e223019f593e164e76d0d861383ea2c0cac9f88e407"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113-right",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "053875b0b6bd",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.747473,
+      "startedAt": 1784445520.132755,
+      "finishedAt": 1784445521.135473,
+      "durationSeconds": 1.0027179718017578,
+      "outputMtime": 1784445521.0541384,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 9753852,
+        "sha256": "sha256:e4f423d0d4598ab539853885cbe3a825838ed8b57a2a6b8b980c87c7a06c500b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/right/render.png",
+        "bytes": 683877,
+        "sha256": "sha256:96046ad17f21d10e9001fb0681f0246510b0effa61c4c6c6e40bea03258f98d4"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113-opposite",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "referenceSet": "clay-depth-normal",
+      "stance": "world-creature-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "cb7e4e035cda",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784445503.7755342,
+      "startedAt": 1784445521.137353,
+      "finishedAt": 1784445522.242353,
+      "durationSeconds": 1.1050000190734863,
+      "outputMtime": 1784445521.9797583,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 9753852,
+        "sha256": "sha256:e4f423d0d4598ab539853885cbe3a825838ed8b57a2a6b8b980c87c7a06c500b"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png",
+        "bytes": 662568,
+        "sha256": "sha256:ed816dd2e79f5a47d6a36e59f0ede5c83703acaed154ceeff19de9f1e09e0181"
+      },
+      "visualInspectionClaim": "not-yet-inspected"
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "16/16 nonempty witness frames accepted; visual inspection pending",
+  "visualInspectionClaim": "not-yet-inspected"
+}

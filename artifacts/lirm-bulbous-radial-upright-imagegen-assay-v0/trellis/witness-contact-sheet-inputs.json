@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/left/render.png",
+      "title": "CLAY / SEED 718021",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/front/render.png",
+      "title": "CLAY / SEED 718021",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/right/render.png",
+      "title": "CLAY / SEED 718021",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/opposite/render.png",
+      "title": "CLAY / SEED 718021",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/left/render.png",
+      "title": "CLAY / SEED 718113",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/front/render.png",
+      "title": "CLAY / SEED 718113",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/right/render.png",
+      "title": "CLAY / SEED 718113",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/opposite/render.png",
+      "title": "CLAY / SEED 718113",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/left/render.png",
+      "title": "3REF / SEED 718021",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/front/render.png",
+      "title": "3REF / SEED 718021",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/right/render.png",
+      "title": "3REF / SEED 718021",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/opposite/render.png",
+      "title": "3REF / SEED 718021",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/left/render.png",
+      "title": "3REF / SEED 718113",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/front/render.png",
+      "title": "3REF / SEED 718113",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/right/render.png",
+      "title": "3REF / SEED 718113",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/witness/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/opposite/render.png",
+      "title": "3REF / SEED 718113",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

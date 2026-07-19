@@ -45,4 +45,19 @@ The four clay-only cells took 31.5-37.0 seconds each, averaging 33.2 seconds. Th
 
 The four invention cells form the highest-value Trellis continuation: two image seeds crossed with clay-only versus clay/depth/normal conditioning. `trellis/plan.json` fixes the downstream route at `gpu-greenroom/trellis2mlx_fast`, seed 42, 512 resolution, six steps, no cascade, a 200,000-face target, 1024px textures, and simplify-first. This preserves a causal comparison through 3D reconstruction instead of promoting only the prettiest still.
 
-Spatial coherence remains unclaimed until each GLB completes route validation and four rendered witness views survive direct visual inspection.
+All four GLBs completed through the requested route and passed input, route, and output-hash validation. The exact accepted files are preserved under `trellis/outputs/`. Trellis generation took 50.4-64.5 seconds per cast, averaging 56.0 seconds and totaling 224.1 seconds. The Trellis seed remained fixed at 42, so the visible differences descend from the imagegen reference regime and image seed rather than a downstream seed change.
+
+![Sixteen-view Trellis witness](trellis/trellis-witness-contact-sheet.png)
+
+The sixteen-view witness was directly inspected across left, front, right, and opposite views for every cast. All four outputs are coherent spatial creatures rather than textured cards: each has a resolved back, connected body mass, grounded appendages, and materially distinct opposite-side anatomy. No asset collapsed into a missing-back or front-only reconstruction.
+
+The two reference regimes remain discriminable after reconstruction:
+
+- clay-only, seed 718021 becomes a low broad creature with a long upright neck, massive radial front limbs, and resolved posterior anatomy;
+- clay-only, seed 718113 makes the largest prior-driven leap into a green quadrupedal lineage with articulated legs, a long tail, and a complete dorsal side;
+- clay/depth/normal, seed 718021 most strongly preserves the source armature's broad radial stance, paired body mass, upright neck, and enlarged front contacts while resolving them into creature anatomy;
+- clay/depth/normal, seed 718113 preserves the proxy massing as a compact bulbous body with an upright neck, paired lobes, and a tail, with less limb articulation than the clay-only sibling.
+
+The result establishes the complete route: one crude fitted 3D armature can seed multiple coherent image basins, and those basins can survive Trellis as distinct, fully spatial creature casts. Clay-only is the stronger invention route. Clay/depth/normal is the stronger structural-adherence route. Their difference remains useful through the final 3D representation instead of disappearing after image generation.
+
+Rendering and validating all sixteen witness frames took 17.1 seconds total, averaging 1.1 seconds per view. `trellis/completion-report.json`, `trellis/witness-completion-report.json`, and `trellis/witness-contact-sheet-receipt.json` carry the effective commands, hashes, timing, and direct-inspection claim.

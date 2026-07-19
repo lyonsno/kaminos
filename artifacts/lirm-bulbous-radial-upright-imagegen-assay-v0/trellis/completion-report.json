@@ -1,0 +1,151 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-collection.v0",
+  "status": "complete-glbs-unwitnessed",
+  "requestedCount": 4,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "stance": "world-creature-invention",
+      "jobId": "38ee383f6009",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "effectiveJobType": "trellis2mlx_fast",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "submittedAt": 1784445154.857287,
+      "startedAt": 1784445156.425326,
+      "finishedAt": 1784445220.893023,
+      "durationSeconds": 64.46769690513611,
+      "outputMtime": 1784445220.5617635,
+      "warnings": [],
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.png",
+        "bytes": 299967,
+        "sha256": "sha256:a1121dbb8e6df00d4289c9abf6338026f80ca6e2a78bfe79f38a0201a2474787"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021/output.glb",
+        "bytes": 10123400,
+        "sha256": "sha256:26fe87ddcdbe0ad44ccb02f597ff3490e8e7e58d50520081840e7200e3797421"
+      },
+      "spatialCoherence": "unverified-pending-rendered-witness"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "stance": "world-creature-invention",
+      "jobId": "9bbf675b21fe",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "effectiveJobType": "trellis2mlx_fast",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "submittedAt": 1784445154.885567,
+      "startedAt": 1784445220.8953679,
+      "finishedAt": 1784445271.658939,
+      "durationSeconds": 50.76357102394104,
+      "outputMtime": 1784445271.4397478,
+      "warnings": [],
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.png",
+        "bytes": 268153,
+        "sha256": "sha256:492abdf7e52a76d3e86f2e28602c1db8793e113be45eaee8d7932594c0eb399e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113/output.glb",
+        "bytes": 10743488,
+        "sha256": "sha256:57bd71517916a5d5036dfbd3c2ebe09366f9d82f3ff00e0791df81231a89d772"
+      },
+      "spatialCoherence": "unverified-pending-rendered-witness"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718021,
+      "stance": "world-creature-invention",
+      "jobId": "e8e9f6f8bfd4",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "effectiveJobType": "trellis2mlx_fast",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "submittedAt": 1784445154.912629,
+      "startedAt": 1784445271.6613839,
+      "finishedAt": 1784445330.0960371,
+      "durationSeconds": 58.43465328216553,
+      "outputMtime": 1784445329.8410609,
+      "warnings": [],
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.png",
+        "bytes": 286467,
+        "sha256": "sha256:0776e33b8adea8c1cfbe0c345f4bcab19d99be12c358d4ce8f32b8bd9ff4ad3a"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021/output.glb",
+        "bytes": 9582584,
+        "sha256": "sha256:14dc3a645d4c2886e3864b4e2b70bff0ec29c28d813c9e194031e6cb06c941c2"
+      },
+      "spatialCoherence": "unverified-pending-rendered-witness"
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-completion.v0",
+      "status": "accepted",
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "candidateId": "lirm02-bulbous-radial-upright-fitted",
+      "imagegenSeed": 718113,
+      "stance": "world-creature-invention",
+      "jobId": "fe793624bdf8",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "effectiveJobType": "trellis2mlx_fast",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "submittedAt": 1784445154.9394,
+      "startedAt": 1784445330.0980139,
+      "finishedAt": 1784445380.495449,
+      "durationSeconds": 50.39743518829346,
+      "outputMtime": 1784445380.2396417,
+      "warnings": [],
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-imagegen-20260718/cells/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.png",
+        "bytes": 264611,
+        "sha256": "sha256:d9be37c7ffd8e630c2e700e5deda8e0e07c59dc99973b94a898192d0a6736d4e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-bulbous-radial-upright-trellis-20260718/lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113/output.glb",
+        "bytes": 9753852,
+        "sha256": "sha256:e4f423d0d4598ab539853885cbe3a825838ed8b57a2a6b8b980c87c7a06c500b"
+      },
+      "spatialCoherence": "unverified-pending-rendered-witness"
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 GLBs accepted; spatial coherence pending witness"
+}

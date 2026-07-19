@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.lirm-armature-program-trellis-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bulbous-radial-upright-imagegen-assay-v0/trellis/plan.json",
+  "requestedCount": 4,
+  "submitted": [
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718021",
+      "jobId": "38ee383f6009",
+      "response": {
+        "job_id": "38ee383f6009"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-only-world-creature-invention-seed718113",
+      "jobId": "9bbf675b21fe",
+      "response": {
+        "job_id": "9bbf675b21fe"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718021",
+      "jobId": "e8e9f6f8bfd4",
+      "response": {
+        "job_id": "e8e9f6f8bfd4"
+      }
+    },
+    {
+      "cellId": "lirm02-bulbous-radial-upright-fitted-clay-depth-normal-world-creature-invention-seed718113",
+      "jobId": "fe793624bdf8",
+      "response": {
+        "job_id": "fe793624bdf8"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 jobs submitted"
+}
