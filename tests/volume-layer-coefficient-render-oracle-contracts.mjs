@@ -75,7 +75,9 @@ assert.match(
   /native-cell-width-from-effective-source-grid-v0/,
   'oracle records that native deposition scale comes from the effective source grid',
 );
-assert.match(source, /5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c/, 'Grid96 feature compatibility is pinned to exact adapter bytes');
+assert.match(source, /b967c04a50b37d6c64dd1857ec521f61202708f6920c125503500f702ddea87f/, 'Grid96 feature compatibility is pinned to corrected r7 manifest bytes');
+assert.match(source, /sha256:bbb2618c9769a495a01372a129397f8e8682cae21dd7743b93c4addd9cb9e588/, 'Grid96 feature compatibility is pinned to corrected r7 semantic identity');
+assert.doesNotMatch(source, /5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c/, 'withdrawn all-zero Grid96 adapter must not remain accepted');
 assert.match(source, /consumer-pinned-exact-grid96-source-adapter-feature-order-v0/, 'Grid96 feature compatibility remains explicitly consumer-interpreted');
 assert.match(source, /cameraCohort/, 'oracle records the complete camera cohort identity');
 assert.match(source, /effectiveCameraPoseHash/, 'oracle hashes the actual camera matrix payload it rasterizes');

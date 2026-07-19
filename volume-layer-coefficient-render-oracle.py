@@ -35,8 +35,8 @@ CALIBRATION_IDENTITY = "camera-10-only-global-optical-path-fit-v0"
 FROZEN_CALIBRATION_IDENTITY = "caller-frozen-global-optical-path-v0"
 ORDER_APPROXIMATION = "camera-depth-96-bin-one-running-transmittance-v0"
 DEPOSITION_SCALE_IDENTITY = "native-cell-width-from-effective-source-grid-v0"
-GRID96_ADAPTER_SHA256 = "5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c"
-GRID96_ADAPTER_IDENTITY = "sha256:1291de8309826aa62e967fc75b1838575d88c91b03fc5123dbee5de297abcd9e"
+GRID96_ADAPTER_SHA256 = "b967c04a50b37d6c64dd1857ec521f61202708f6920c125503500f702ddea87f"
+GRID96_ADAPTER_IDENTITY = "sha256:bbb2618c9769a495a01372a129397f8e8682cae21dd7743b93c4addd9cb9e588"
 GRID96_FEATURE_ORDER_AUTHORITY = "consumer-pinned-exact-grid96-source-adapter-feature-order-v0"
 FOOTPRINT_MODES = {
     "nearest": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
