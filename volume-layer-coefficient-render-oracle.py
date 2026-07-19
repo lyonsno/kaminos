@@ -56,6 +56,23 @@ TRANSVERSE_BASIS_ORDER = [
     "orthogonalityResidual", "ridgeOpticalWeight", "nonRidgeOpticalWeight",
     "opticalWeight", "basis.valid", "structure.normalDeclaredValid",
 ]
+MATERIAL_SOCKET_SCHEMA = "kaminos.volume.grid96-nonridge-material-basis-socket.v0"
+MATERIAL_SOCKET_IDENTITY = "sha256:aa870aa6c4e4e7e83eeaff2f43384949fc9aa14880895fabb758a8f6f2d55f3f"
+MATERIAL_SOCKET_SHA256 = "e563d05ef0bde2c58c185f27c0c47f32acec90a74ec89579a87e39cba835ad3c"
+MATERIAL_BASIS_SHA256 = "6b726c2f0c7efa223aab68eb7c76b42719595b4fc8943203d2671fa6652b5b13"
+MATERIAL_REASON_SHA256 = "db0193bd9a1a522d8370a53e70c361d5817d12810b52ecd375822a1f52feada7"
+MATERIAL_BASIS_IDENTITY = "material-density-gradient-flow-tangent-plane-v0"
+MATERIAL_FALLBACK_POLICY = "none-separate-cohort-only-v0"
+MATERIAL_COHORT_IDENTITY = "structure-normal-undeclared-positive-nonridge-v0"
+MATERIAL_BASIS_ORDER = [
+    "center.x", "center.y", "center.z",
+    "tangent.x", "tangent.y", "tangent.z",
+    "normal.x", "normal.y", "normal.z",
+    "binormal.x", "binormal.y", "binormal.z",
+    "gradientMagnitude", "tangentPlaneConditioning", "nonRidgeOpticalWeight",
+    "basis.valid", "cohort.missingStructureNormal",
+]
+TRANSVERSE_BASIS_ROLES = {"structure-normal", "material-nonridge"}
 IMPORTANCE_CANDIDATE_ORDER = [
     "center.x", "center.y", "center.z",
     "covariance.xx", "covariance.xy", "covariance.xz",
@@ -513,6 +530,7 @@ def load_transverse_basis_socket(
         "identity": socket.get("identity"),
         "path": str(socket_path),
         "sha256": sha256_file(socket_path),
+        "basisRole": "structure-normal",
         "basisIdentity": basis_contract.get("identity"),
         "fallbackPolicy": basis_contract.get("fallbackPolicy"),
         "rowCount": count,
@@ -527,6 +545,115 @@ def load_transverse_basis_socket(
         "nativeCellIndexArtifact": {"path": str(index_path), "bytes": index_path.stat().st_size, "sha256": artifacts["nativeCellIndex"]["sha256"], "shape": [count]},
         "coefficientArtifactSha256": IMPORTANCE_COEFFICIENT_SHA256,
         "hashVerificationSkipped": not verify_hashes,
+        "composedWithStructureBasis": False,
+    }
+
+
+def load_material_nonridge_basis_socket(
+    socket_path: Path,
+    native_ids: np.ndarray,
+    descriptors: np.ndarray,
+    coefficients: np.ndarray,
+    coefficient_path: Path,
+    verify_hashes: bool,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    socket = load_json(socket_path, "Non-Ridge material-basis socket")
+    require(socket.get("schema") == MATERIAL_SOCKET_SCHEMA, f"material socket schema must be {MATERIAL_SOCKET_SCHEMA}")
+    require(socket.get("status") == "complete", "material socket is not complete")
+    require(socket.get("identity") == MATERIAL_SOCKET_IDENTITY, "material socket semantic identity drifted")
+    if verify_hashes:
+        require(sha256_file(socket_path) == MATERIAL_SOCKET_SHA256, "material socket manifest sha256 drifted")
+    count = int(native_ids.shape[0])
+    execution = socket.get("execution") or {}
+    require(execution.get("rowCount") == count, "material socket row count drifted")
+    require(execution.get("sampleCap") is None, "material socket installed a hidden sample cap")
+    require(execution.get("droppedRowCount") == 0, "material socket dropped source rows")
+    require(execution.get("fallbackRowCount") == 0, "material socket used fallback rows")
+    require(execution.get("targetImageUsed") is False, "material socket used a target image")
+    basis_contract = socket.get("basis") or {}
+    require(basis_contract.get("identity") == MATERIAL_BASIS_IDENTITY, "material basis identity drifted")
+    require(basis_contract.get("fallbackPolicy") == MATERIAL_FALLBACK_POLICY, "material fallback policy drifted")
+    require(basis_contract.get("cohort") == MATERIAL_COHORT_IDENTITY, "material cohort identity drifted")
+    require(basis_contract.get("normalSource") == "gradient.material.x", "material normal source drifted")
+    require(basis_contract.get("order") == MATERIAL_BASIS_ORDER, "material basis column order drifted")
+    claim = socket.get("claimBoundary") or {}
+    for field in ("widthsChosen", "childCountChosen", "capInstalled", "fallbackInstalled", "supportRedefined", "coefficientsChanged", "composedWithStructureBasis", "targetImageUsed"):
+        require(claim.get(field) is False, f"material source claim boundary {field} drifted")
+    source = socket.get("source") or {}
+    require(source.get("grid") == 96 and source.get("rowCount") == count, "material source grid or row count drifted")
+    require(source.get("coefficientArtifactSha256") == IMPORTANCE_COEFFICIENT_SHA256, "material source coefficient identity drifted")
+    require(source.get("nativeCellIndexSha256") == "67b05ed8752bd41fc16fdd0619b85bbc8b53d7725fb388808805ad806e07f55c", "material source native-id identity drifted")
+    route = source.get("route") or {}
+    require(route.get("effective") == "native-3d-compute-fluid-raymarch-v0", "material source effective route drifted")
+    require(route.get("backend") == "WebGPU:apple" and route.get("fallbackReason") is None, "material source route/backend fallback detected")
+    artifacts = socket.get("artifacts") or {}
+    require(artifacts.get("basis", {}).get("sha256") == MATERIAL_BASIS_SHA256, "material basis artifact identity drifted")
+    require(artifacts.get("reasonCodes", {}).get("sha256") == MATERIAL_REASON_SHA256, "material reason artifact identity drifted")
+    basis_path = validate_artifact(
+        artifacts.get("basis"), socket_path, "material basis", "float32-le",
+        [count, len(MATERIAL_BASIS_ORDER)], verify_hashes,
+    )
+    reason_path = validate_artifact(
+        artifacts.get("reasonCodes"), socket_path, "material reason codes", "uint8",
+        [count], verify_hashes,
+    )
+    index_path = validate_artifact(
+        artifacts.get("nativeCellIndex"), socket_path, "material native-cell indices", "uint32-le",
+        [count], verify_hashes,
+    )
+    socket_ids = np.memmap(index_path, dtype="<u4", mode="r", shape=(count,))
+    require(np.array_equal(socket_ids, native_ids), "material socket native ids are not aligned to coefficient rows")
+    if verify_hashes:
+        require(sha256_file(coefficient_path) == IMPORTANCE_COEFFICIENT_SHA256, "effective coefficient artifact does not match the material socket")
+    source_basis = np.memmap(basis_path, dtype="<f4", mode="r", shape=(count, len(MATERIAL_BASIS_ORDER)))
+    reasons = np.memmap(reason_path, dtype="u1", mode="r", shape=(count,))
+    require(np.all(np.isfinite(source_basis)), "material basis contains nonfinite values")
+    require(np.allclose(source_basis[:, 0:3], descriptors[:, 0:3], rtol=0.0, atol=2e-7), "material centers do not reproduce descriptor positions")
+    _, nonridge = layer_optical_weights(coefficients)
+    require(np.allclose(source_basis[:, 14], nonridge, rtol=2e-6, atol=2e-7), "material Non-Ridge optical weights do not reproduce")
+    valid = source_basis[:, 15] > 0.5
+    cohort = source_basis[:, 16] > 0.5
+    require(np.array_equal(valid, reasons == 0), "material validity does not agree with reason codes")
+    require(np.array_equal(valid, cohort), "material validity does not equal its missing-structure cohort")
+    require(np.count_nonzero(valid) == 75289 and np.count_nonzero(~valid) == 294905, "material cohort row coverage drifted")
+    require(np.all(nonridge[valid] > 0.0), "material valid rows contain zero Non-Ridge optical mass")
+    require(np.count_nonzero((reasons == 2)) == 1, "material zero-Non-Ridge reason count drifted")
+    tangent = np.asarray(source_basis[valid, 3:6], dtype=np.float64)
+    normal = np.asarray(source_basis[valid, 6:9], dtype=np.float64)
+    binormal = np.asarray(source_basis[valid, 9:12], dtype=np.float64)
+    require(np.allclose(np.linalg.norm(tangent, axis=1), 1.0, atol=2e-6), "material valid tangents are not unit length")
+    require(np.allclose(np.linalg.norm(normal, axis=1), 1.0, atol=2e-6), "material valid normals are not unit length")
+    require(np.allclose(np.linalg.norm(binormal, axis=1), 1.0, atol=2e-6), "material valid binormals are not unit length")
+    require(np.allclose(np.sum(tangent * normal, axis=1), 0.0, atol=2e-6), "material tangent/normal orthogonality drifted")
+    require(np.allclose(np.sum(tangent * binormal, axis=1), 0.0, atol=2e-6), "material tangent/binormal orthogonality drifted")
+    require(np.allclose(np.sum(normal * binormal, axis=1), 0.0, atol=2e-6), "material normal/binormal orthogonality drifted")
+    coverage = socket.get("coverage") or {}
+    require(coverage.get("basisValidRowCount") == 75289 and coverage.get("missingCohortRowCount") == 75289, "material coverage receipt drifted")
+    require(abs(float(coverage.get("missingNonRidgeMassRecoveryFraction")) - 1.0) < 1e-12, "material missing-mass recovery drifted")
+
+    standardized = np.zeros((count, len(TRANSVERSE_BASIS_ORDER)), dtype=np.float32)
+    standardized[:, 0:12] = source_basis[:, 0:12]
+    standardized[:, 12] = descriptors[:, 14]
+    standardized[:, 14] = source_basis[:, 13]
+    standardized[:, 16] = layer_optical_weights(coefficients)[0]
+    standardized[:, 17] = nonridge
+    standardized[:, 18] = standardized[:, 16] + standardized[:, 17]
+    standardized[:, 19] = valid.astype(np.float32)
+    standardized[:, 20] = 0.0
+    return standardized, {
+        "schema": socket.get("schema"), "identity": socket.get("identity"),
+        "path": str(socket_path), "sha256": sha256_file(socket_path),
+        "basisRole": "material-nonridge", "basisIdentity": basis_contract.get("identity"),
+        "cohortIdentity": basis_contract.get("cohort"), "fallbackPolicy": basis_contract.get("fallbackPolicy"),
+        "rowCount": count, "basisValidRowCount": int(np.count_nonzero(valid)),
+        "basisInvalidRowCount": int(np.count_nonzero(~valid)), "fallbackRowCount": 0,
+        "sampleCap": None, "droppedRowCount": 0, "coverage": coverage,
+        "basisArtifact": {"path": str(basis_path), "bytes": basis_path.stat().st_size, "sha256": artifacts["basis"]["sha256"], "shape": [count, len(MATERIAL_BASIS_ORDER)]},
+        "reasonArtifact": {"path": str(reason_path), "bytes": reason_path.stat().st_size, "sha256": artifacts["reasonCodes"]["sha256"], "shape": [count]},
+        "nativeCellIndexArtifact": {"path": str(index_path), "bytes": index_path.stat().st_size, "sha256": artifacts["nativeCellIndex"]["sha256"], "shape": [count]},
+        "coefficientArtifactSha256": IMPORTANCE_COEFFICIENT_SHA256,
+        "hashVerificationSkipped": not verify_hashes,
+        "composedWithStructureBasis": False,
     }
 
 
@@ -899,6 +1026,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
             **{key: float(value) for key, value in transverse_requested.items()},
+            "transverseBasisRole": args.transverse_basis_role,
         }
     require(args.transverse_basis_socket is None and not any(transverse_provided), "transverse socket and scales are only lawful with --footprint-mode transverse")
     if args.footprint_mode == "core-skirt":
@@ -1319,6 +1447,9 @@ def rasterize_coefficients(
         ),
         "transversePlacement": ({
             "identity": "rank-one-tangent-plus-world-normal-binormal-symmetric-placement-v0",
+            "basisRole": footprint_controls["transverseBasisRole"],
+            "composedWithStructureBasis": False,
+            "equalPerTreatedParentQuadrature": True,
             "basisValidRows": int(np.count_nonzero(transverse_basis[:, 19] > 0.5)),
             "basisInvalidRows": int(np.count_nonzero(transverse_basis[:, 19] <= 0.5)),
             "normalScale": float(footprint_controls["transverseNormalScale"]),
@@ -1709,10 +1840,17 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     transverse_receipt: dict[str, Any] | None = None
     if args.footprint_mode == "transverse":
         phase_state["value"] = "transverse-socket-validation"
-        transverse_basis, transverse_receipt = load_transverse_basis_socket(
+        transverse_loader = (
+            load_transverse_basis_socket
+            if args.transverse_basis_role == "structure-normal"
+            else load_material_nonridge_basis_socket
+        )
+        transverse_basis, transverse_receipt = transverse_loader(
             Path(args.transverse_basis_socket).resolve(), indices, descriptors, coefficients,
             paths["coefficients"], not args.skip_hash_verification,
         )
+        require(transverse_receipt.get("basisRole") == args.transverse_basis_role, "effective transverse basis role drifted")
+        require(transverse_receipt.get("composedWithStructureBasis") is False, "transverse basis roles were accidentally composed")
     if args.validate_only:
         return {
             "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
@@ -1999,7 +2137,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "transverseNormalScale": args.transverse_normal_scale,
                 "transverseBinormalScale": args.transverse_binormal_scale,
             },
-            "transverseBasis": {"socket": args.transverse_basis_socket},
+            "transverseBasis": {"socket": args.transverse_basis_socket, "role": args.transverse_basis_role},
             "depositionControls": {
                 "compoundHaloMass": args.compound_halo_mass,
                 "splitAttributionCameras": args.split_attribution_cameras,
@@ -2329,6 +2467,7 @@ def self_test() -> None:
         "controlsExplicit": True,
         "transverseNormalScale": 0.0,
         "transverseBinormalScale": 0.0,
+        "transverseBasisRole": "structure-normal",
     }
     transverse_features = np.zeros((2, len(FEATURE_ORDER)), dtype=np.float32)
     transverse_coefficients = np.ones((2, 8), dtype=np.float32)
@@ -2359,6 +2498,9 @@ def self_test() -> None:
     require(not np.allclose(wide_planes, bilinear_planes), "nonzero transverse widths produced no placement delta")
     require(wide_receipt["coefficientMass"]["nominalKernelMassConserved"], "world-transverse placement changed optical mass")
     require(wide_receipt["transversePlacement"]["childrenUseOwnProjectedDepth"], "world-transverse children reused parent depth")
+    require(wide_receipt["transversePlacement"]["basisRole"] == "structure-normal", "structure role identity drifted at raster")
+    require(wide_receipt["transversePlacement"]["composedWithStructureBasis"] is False, "structure role receipt implies composition")
+    require(wide_receipt["transversePlacement"]["equalPerTreatedParentQuadrature"], "structure role lost equal treated-parent quadrature")
     sample_weights = np.zeros(2, dtype=np.float64)
     ndc, depth, _ = project(
         transverse_positions,
@@ -2377,6 +2519,17 @@ def self_test() -> None:
         sample_weights += weight
     require(np.allclose(sample_weights, 1.0, rtol=0.0, atol=2e-6), "world-transverse symmetric placement does not conserve per-parent mass")
     print("world transverse placement contracts passed")
+    material_controls = {**transverse_controls_wide, "transverseBasisRole": "material-nonridge"}
+    _, material_receipt = rasterize_coefficients(
+        transverse_positions, transverse_tangents, transverse_features, transverse_coefficients,
+        raster_camera, 4, "transverse", material_controls, 160,
+        transverse_basis=transverse_basis_fixture,
+    )
+    require(material_receipt["transversePlacement"]["basisRole"] == "material-nonridge", "material role identity drifted at raster")
+    require(material_receipt["transversePlacement"]["composedWithStructureBasis"] is False, "material role accidentally composed with structure")
+    require(material_receipt["transversePlacement"]["equalPerTreatedParentQuadrature"], "material role lost equal treated-parent quadrature")
+    require(material_receipt["transversePlacement"]["validRowQuadratureSamples"] == wide_receipt["transversePlacement"]["validRowQuadratureSamples"], "material and structure roles have unequal treated-parent budgets")
+    print("material Non-Ridge transverse role contracts passed")
     metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
     metric_target[4:6, 4:6] = 255
     exact_metrics = image_metrics(metric_target, metric_target)
@@ -2424,6 +2577,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--multiscale-major-scale", type=float)
     parser.add_argument("--multiscale-minor-scale", type=float)
     parser.add_argument("--transverse-basis-socket")
+    parser.add_argument("--transverse-basis-role", choices=sorted(TRANSVERSE_BASIS_ROLES), default="structure-normal")
     parser.add_argument("--transverse-normal-scale", type=float)
     parser.add_argument("--transverse-binormal-scale", type=float)
     parser.add_argument("--split-attribution-cameras")
@@ -2460,7 +2614,7 @@ def main() -> int:
             "transverseNormalScale": args.transverse_normal_scale,
             "transverseBinormalScale": args.transverse_binormal_scale,
         },
-        "transverseBasis": {"socket": args.transverse_basis_socket},
+        "transverseBasis": {"socket": args.transverse_basis_socket, "role": args.transverse_basis_role},
         "depositionControls": {
             "compoundHaloMass": args.compound_halo_mass,
             "splitAttributionCameras": args.split_attribution_cameras,

@@ -115,6 +115,15 @@ assert.match(source, /--transverse-basis-socket/, 'world-transverse mode require
 assert.match(source, /--transverse-normal-scale/, 'world-transverse mode requires an explicit normal width');
 assert.match(source, /--transverse-binormal-scale/, 'world-transverse mode requires an explicit binormal width');
 assert.match(source, /invalidRowsUseRankOneWithoutFallback/, 'oracle receipts distinguish untreated invalid rows from fallback geometry');
+assert.match(source, /kaminos\.volume\.grid96-nonridge-material-basis-socket\.v0/, 'oracle pins the exact Non-Ridge material source schema');
+assert.match(source, /sha256:aa870aa6c4e4e7e83eeaff2f43384949fc9aa14880895fabb758a8f6f2d55f3f/, 'oracle pins the exact Non-Ridge material source identity');
+assert.match(source, /e563d05ef0bde2c58c185f27c0c47f32acec90a74ec89579a87e39cba835ad3c/, 'oracle pins the exact material socket manifest hash');
+assert.match(source, /6b726c2f0c7efa223aab68eb7c76b42719595b4fc8943203d2671fa6652b5b13/, 'oracle pins the exact material basis payload hash');
+assert.match(source, /def load_material_nonridge_basis_socket\(/, 'oracle validates the separate material-gradient cohort socket');
+assert.match(source, /--transverse-basis-role/, 'world-transverse mode records an explicit source-basis role');
+assert.match(source, /material-nonridge/, 'oracle exposes the material-gradient cohort as a separate role');
+assert.match(source, /composedWithStructureBasis/, 'oracle receipts forbid accidental material/structure composition');
+assert.match(source, /equalPerTreatedParentQuadrature/, 'oracle receipts state the equal treated-parent child budget');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
@@ -129,6 +138,7 @@ assert.match(selfTest.stdout, /selective split contracts passed/);
 assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
 assert.match(selfTest.stdout, /layer retention contracts passed/);
 assert.match(selfTest.stdout, /world transverse placement contracts passed/);
+assert.match(selfTest.stdout, /material Non-Ridge transverse role contracts passed/);
 
 const massAuthorityProbe = spawnSync(python, ['-c', String.raw`
 import importlib.util
@@ -361,7 +371,10 @@ assert.deepEqual(missingTransverseFailure.requested.footprintControls, {
   transverseNormalScale: 1,
   transverseBinormalScale: 1,
 });
-assert.deepEqual(missingTransverseFailure.requested.transverseBasis, { socket: null });
+assert.deepEqual(missingTransverseFailure.requested.transverseBasis, {
+  socket: null,
+  role: 'structure-normal',
+});
 assert.match(missingTransverseFailure.error, /transverse mode requires explicit/i);
 
 const partialImportanceReport = join(root, 'partial-importance-controls-report.json');
