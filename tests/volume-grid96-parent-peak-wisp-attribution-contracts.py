@@ -23,6 +23,21 @@ MODULE = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MODULE)
 
 
+# Attribution must match the accepted renderer's parent admission exactly:
+# center visibility is decided before each bilinear fragment is viewport-clipped.
+assert MODULE.FRAGMENT_ADMISSION_IDENTITY == "center-visible-parent-before-bilinear-fragment-clipping-v0"
+fragment_mask = MODULE.admitted_bilinear_fragment_mask(
+    center_visible=np.asarray((False, True, True), dtype=bool),
+    tangent_valid=np.asarray((True, True, False), dtype=bool),
+    sample_x=np.asarray((0, 3, 2), dtype=np.int32),
+    sample_y=np.asarray((1, 1, 1), dtype=np.int32),
+    sample_weight=np.asarray((0.5, 0.5, 0.5), dtype=np.float32),
+    width=4,
+    height=3,
+)
+assert fragment_mask.tolist() == [False, True, False]
+
+
 # Peak and wisp residuals are independent target-relative underfit fields. A
 # bright flat pixel must not become a wisp, and a dim edge must not become a peak.
 candidate = np.zeros((4, 4, 3), dtype=np.uint8)

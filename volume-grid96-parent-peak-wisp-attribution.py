@@ -32,6 +32,7 @@ ATTRIBUTION_IDENTITY = (
     "target-positive-underfit-bilinear-footprint-overlap-times-"
     "pre-bin-transmitted-local-optical-weight-v0"
 )
+FRAGMENT_ADMISSION_IDENTITY = "center-visible-parent-before-bilinear-fragment-clipping-v0"
 EXPECTED_REGISTRY_SCHEMA = "kaminos.volume.grid96-peak-wisp-source-registry.v0"
 EXPECTED_REGISTRY_IDENTITY = "sha256:ce1d84b4bb03c2132a1f9e80406192f1f6f25cb1aec5b970befd7095c16b49f8"
 EXPECTED_REGISTRY_SHA256 = "b47a29e72422c903e8c1647e60a31777c527bb9a10ed4cbc405a09ebe50f2481"
@@ -99,6 +100,32 @@ def load_oracle() -> Any:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def admitted_bilinear_fragment_mask(
+    center_visible: np.ndarray,
+    tangent_valid: np.ndarray,
+    sample_x: np.ndarray,
+    sample_y: np.ndarray,
+    sample_weight: np.ndarray,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    """Apply the frozen renderer's parent admission before fragment clipping."""
+
+    vectors = tuple(np.asarray(value) for value in (center_visible, tangent_valid, sample_x, sample_y, sample_weight))
+    require(all(value.ndim == 1 for value in vectors), "fragment admission vectors must be one-dimensional")
+    require(all(value.shape == vectors[0].shape for value in vectors[1:]), "fragment admission vectors must align")
+    require(width > 0 and height > 0, "fragment admission viewport must be positive")
+    return (
+        vectors[0].astype(bool)
+        & vectors[1].astype(bool)
+        & (vectors[4] > 0.0)
+        & (vectors[2] >= 0)
+        & (vectors[2] < width)
+        & (vectors[3] >= 0)
+        & (vectors[3] < height)
+    )
 
 
 def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -337,7 +364,7 @@ def projected_bilinear_fragments(
     source_grid: int,
     depth_bins: int,
 ):
-    """Yield the exact in-viewport fragments used by the bilinear oracle path."""
+    """Yield renderer-exact fragments from center-visible admitted parents."""
 
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
@@ -346,8 +373,8 @@ def projected_bilinear_fragments(
     pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height
     center_x = pixel_x.astype(np.int32)
     center_y = pixel_y.astype(np.int32)
-    valid &= (center_x >= 0) & (center_x < width) & (center_y >= 0) & (center_y < height) & np.isfinite(depth)
-    valid_rows = np.flatnonzero(valid)
+    center_visible = valid & (center_x >= 0) & (center_x < width) & (center_y >= 0) & (center_y < height) & np.isfinite(depth)
+    valid_rows = np.flatnonzero(center_visible)
     require(valid_rows.size > 0, f"camera {camera['cameraIndex']} projected zero source parents")
     near = float(np.percentile(depth[valid_rows], 0.01))
     far = float(np.percentile(depth[valid_rows], 99.99))
@@ -362,11 +389,12 @@ def projected_bilinear_fragments(
     base_radius = ORACLE.native_cell_width_world(source_grid) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(tangent_length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
-    effective = valid & tangent_valid
     for sample_x, sample_y, sample_weight in ORACLE.tangent_pixel_samples(
         pixel_x, pixel_y, tangent_x, tangent_y, major_px
     ):
-        selected = effective & (sample_weight > 0.0) & (sample_x >= 0) & (sample_x < width) & (sample_y >= 0) & (sample_y < height)
+        selected = admitted_bilinear_fragment_mask(
+            center_visible, tangent_valid, sample_x, sample_y, sample_weight, width, height
+        )
         rows = np.flatnonzero(selected)
         if rows.size:
             yield rows, sample_x[rows], sample_y[rows], depth_index[rows], sample_weight[rows]
@@ -395,7 +423,7 @@ def gallery_html(camera_rows: list[dict[str, Any]]) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
 <title>Grid96 Parent Peak/Wisp Attribution</title><style>
 :root{{--bg:#101214;--panel:#181b1e;--line:#353b40;--text:#f3f4f5;--muted:#aeb4b9;--peak:#ffb020;--wisp:#58c7ff}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:14px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}}header{{position:sticky;top:0;z-index:2;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#15181a;border-bottom:1px solid var(--line)}}h1{{font-size:15px;margin:0}}label{{display:flex;gap:6px;align-items:center;color:var(--muted)}}select,input{{min-width:0}}button{{width:32px;height:30px;border:1px solid var(--line);background:#22272b;color:var(--text);font-size:18px;cursor:pointer}}main{{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;padding:14px}}.stage{{position:relative;width:min(100%,calc((100vh - 110px)*1.298));aspect-ratio:314/242;margin:auto;background:#050607;border:1px solid var(--line)}}.stage img{{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}}#rightImage{{clip-path:inset(0 0 0 50%)}}#divider{{position:absolute;top:0;bottom:0;left:50%;width:1px;background:white}}.labels{{display:flex;justify-content:space-between;width:min(100%,calc((100vh - 110px)*1.298));margin:6px auto;color:var(--muted)}}aside{{border-left:1px solid var(--line);padding-left:14px}}h2{{font-size:13px;margin:0 0 10px}}dl{{display:grid;grid-template-columns:1fr auto;gap:6px 10px;margin:0}}dt{{color:var(--muted)}}dd{{margin:0;text-align:right}}a{{color:var(--peak)}}@media(max-width:760px){{header{{position:static}}h1{{width:100%}}main{{grid-template-columns:1fr}}.stage{{width:100%;aspect-ratio:314/242}}.labels{{width:100%}}aside{{border-left:0;border-top:1px solid var(--line);padding:12px 0 0}}}}
-</style></head><body><header><h1>Grid96 parent peak / wisp attribution</h1><button id="prev" title="Previous camera">&#8592;</button><label>Camera <input id="camera" type="range" min="0" max="20" value="10"></label><span id="cameraLabel"></span><button id="next" title="Next camera">&#8594;</button><label>Left <select id="left"><option value="candidate">Bilinear splats</option><option value="target">Exact target</option><option value="peak">Peak relevance</option><option value="wisp">Wisp relevance</option></select></label><label>Right <select id="right"><option value="target">Exact target</option><option value="candidate">Bilinear splats</option><option value="peak">Peak relevance</option><option value="wisp">Wisp relevance</option></select></label><label>Blend <input id="blend" type="range" min="0" max="100" value="50"></label></header><main><section><div class="stage"><img id="leftImage" alt="left evidence"><img id="rightImage" alt="right evidence"><div id="divider"></div></div><div class="labels"><span id="leftLabel"></span><span id="rightLabel"></span></div></section><aside><h2>Exact-source receipt</h2><dl><dt>Status</dt><dd>complete</dd><dt>Parents</dt><dd>370,194</dd><dt>Cameras</dt><dd>1 fit + 20 held</dd><dt>Footprint</dt><dd>bilinear</dd><dt>Peak parents</dt><dd id="peakCount"></dd><dt>Wisp parents</dt><dd id="wispCount"></dd><dt>Report</dt><dd><a href="report.json">JSON</a></dd><dt>Socket</dt><dd><a href="grid96-parent-peak-wisp-attribution-manifest.json">JSON</a></dd></dl></aside></main><script>
+</style></head><body><header><h1>Grid96 parent peak / wisp attribution</h1><button id="prev" title="Previous camera">&#8592;</button><label>Camera <input id="camera" type="range" min="0" max="20" value="10"></label><span id="cameraLabel"></span><button id="next" title="Next camera">&#8594;</button><label>Left <select id="left"><option value="candidate">Bilinear splats</option><option value="target">Exact target</option><option value="peak">Peak relevance</option><option value="wisp">Wisp relevance</option></select></label><label>Right <select id="right"><option value="target">Exact target</option><option value="candidate">Bilinear splats</option><option value="peak">Peak relevance</option><option value="wisp">Wisp relevance</option></select></label><label>Blend <input id="blend" type="range" min="0" max="100" value="50"></label></header><main><section><div class="stage"><img id="leftImage" alt="left evidence"><img id="rightImage" alt="right evidence"><div id="divider"></div></div><div class="labels"><span id="leftLabel"></span><span id="rightLabel"></span></div></section><aside><h2>Exact-source receipt</h2><dl><dt>Status</dt><dd>complete</dd><dt>Parents</dt><dd>370,194</dd><dt>Cameras</dt><dd>1 fit + 20 held</dd><dt>Footprint</dt><dd>bilinear</dd><dt>Admission</dt><dd>center-visible</dd><dt>Peak parents</dt><dd id="peakCount"></dd><dt>Wisp parents</dt><dd id="wispCount"></dd><dt>Report</dt><dd><a href="report.json">JSON</a></dd><dt>Socket</dt><dd><a href="grid96-parent-peak-wisp-attribution-manifest.json">JSON</a></dd></dl></aside></main><script>
 const rows={rows},labels={{candidate:'Bilinear splats',target:'Exact target',peak:'Peak relevance',wisp:'Wisp relevance'}},$=id=>document.getElementById(id);function render(){{const r=rows[+$('camera').value],l=$('left').value,q=$('right').value,b=+$('blend').value;$('cameraLabel').textContent=`${{r.cameraIndex}} / ${{r.role}}`;$('leftImage').src=r.images[l];$('rightImage').src=r.images[q];$('rightImage').style.clipPath=`inset(0 0 0 ${{b}}%)`;$('divider').style.left=`${{b}}%`;$('leftLabel').textContent=labels[l];$('rightLabel').textContent=labels[q];$('peakCount').textContent=r.peakParentCount.toLocaleString();$('wispCount').textContent=r.wispParentCount.toLocaleString()}}for(const id of ['camera','left','right','blend'])$(id).addEventListener('input',render);$('prev').onclick=()=>{{$('camera').value=Math.max(0,+$('camera').value-1);render()}};$('next').onclick=()=>{{$('camera').value=Math.min(20,+$('camera').value+1);render()}};render();</script></body></html>"""
 
 
@@ -414,6 +442,7 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             "failurePhase": None,
             "source": {"registry": str(registry_path), "identity": registry["identity"]},
             "execution": {"rowCount": EXPECTED_ROW_COUNT, "cameraCount": 21, "sampleCap": None, "droppedRowCount": 0, "fallbackRowCount": 0},
+            "effective": {"fragmentAdmission": FRAGMENT_ADMISSION_IDENTITY},
             "claimBoundary": CLAIM_BOUNDARY,
         }
 
@@ -530,6 +559,7 @@ def run(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         },
         "attribution": {
             "identity": ATTRIBUTION_IDENTITY,
+            "fragmentAdmission": FRAGMENT_ADMISSION_IDENTITY,
             "footprint": ORACLE.FOOTPRINT_MODES["bilinear"],
             "pathScale": args.path_scale,
             "depthBins": args.depth_bins,
