@@ -92,16 +92,25 @@ export function packBoundarySplatFeatureCapture(values, rowCount, capacity) {
   };
 }
 
-export function packBoundarySplatSupervisionCandidates(candidateValues, featureValues, rowCount, capacity) {
+export function packBoundarySplatSupervisionCandidates(
+  candidateValues,
+  featureValues,
+  rowCount,
+  capacity,
+  { candidateStrideFloats = BOUNDARY_SPLAT_RENDER_CANDIDATE_STRIDE_FLOATS } = {},
+) {
   if (!(candidateValues instanceof Float32Array)) throw new Error('candidate values must be a Float32Array');
   if (!(featureValues instanceof Float32Array)) throw new Error('feature values must be a Float32Array');
   if (!Number.isInteger(rowCount) || rowCount <= 0) throw new Error('supervision row count must be a positive integer');
   if (!Number.isInteger(capacity) || capacity <= 0) throw new Error('supervision capacity must be a positive integer');
   if (rowCount > capacity) throw new Error(`supervision row count ${rowCount} exceeds capacity ${capacity}`);
-  const expectedCandidateValues = rowCount * BOUNDARY_SPLAT_RENDER_CANDIDATE_STRIDE_FLOATS;
+  if (!Number.isInteger(candidateStrideFloats) || candidateStrideFloats < 3) {
+    throw new Error(`candidate stride must be an integer of at least 3 floats, received ${candidateStrideFloats}`);
+  }
+  const expectedCandidateValues = rowCount * candidateStrideFloats;
   const expectedFeatureValues = rowCount * BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS;
   if (candidateValues.length !== expectedCandidateValues) {
-    throw new Error(`candidate values must contain exactly ${expectedCandidateValues} values (${rowCount} × ${BOUNDARY_SPLAT_RENDER_CANDIDATE_STRIDE_FLOATS})`);
+    throw new Error(`candidate values must contain exactly ${expectedCandidateValues} values (${rowCount} × ${candidateStrideFloats})`);
   }
   if (featureValues.length !== expectedFeatureValues) {
     throw new Error(`feature values must contain exactly ${expectedFeatureValues} values (${rowCount} × ${BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS})`);
@@ -109,7 +118,7 @@ export function packBoundarySplatSupervisionCandidates(candidateValues, featureV
 
   const packed = new Float32Array(rowCount * BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS);
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    const candidateOffset = rowIndex * BOUNDARY_SPLAT_RENDER_CANDIDATE_STRIDE_FLOATS;
+    const candidateOffset = rowIndex * candidateStrideFloats;
     const featureOffset = rowIndex * BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS;
     const packedOffset = rowIndex * BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS;
     packed[packedOffset] = candidateValues[candidateOffset];

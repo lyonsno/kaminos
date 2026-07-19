@@ -33,11 +33,17 @@ assert.match(benchmark, /--boundary-splat-gpu-profile-samples[\s\S]*String\(BOUN
 assert.match(benchmark, /--boundary-splat-footprint-audit/, 'benchmark requests projected footprint evidence for overdraw diagnosis');
 assert.match(benchmark, /--boundary-splat-footprint-sweep-radii/, 'bounded Grid96 viability probe requests one held-state conserved-footprint sweep');
 assert.match(benchmark, /--footprint-tier-sweep/, 'bounded Grid96 quadrature probe exposes one explicit tier-sweep gate');
+assert.match(benchmark, /--footprint-tier-oracle-sweep/, 'the target-salience upper bound has an explicit bounded Greenroom gate');
 assert.match(benchmark, /boundary-splat-footprint-tier-arms/, 'tier probe delegates to the same held-state browser witness instead of inventing a second render path');
 assert.match(
   benchmark,
   /base-056[\s\S]*policy:\s*'off'[\s\S]*importance-070-098[\s\S]*policy:\s*'importance'[\s\S]*random-070-098[\s\S]*policy:\s*'random'[\s\S]*matchCountsFrom:\s*'importance-070-098'/,
   'tier sweep contains the exact base, appearance-charged, and held-population-matched random-control arms',
+);
+assert.match(
+  benchmark,
+  /target-oracle-070-098[\s\S]*policy:\s*'target_oracle'[\s\S]*oracleCountsFrom:\s*'importance-070-098'[\s\S]*oracle-random-070-098[\s\S]*matchCountsFrom:\s*'target-oracle-070-098'/,
+  'oracle sweep charges an exact importance-sized population and compares it with an exact-count deterministic random control',
 );
 assert.match(benchmark, /analytic_conserved/, 'footprint sweep uses the renderer area-opacity conservation path');
 assert.match(
@@ -69,6 +75,26 @@ assert.match(
 );
 assert.match(
   witness,
+  /buildBoundarySplatTargetSalienceOracle[\s\S]*target-oracle-receipt-(?:missing|invalid|stale)[\s\S]*footprint-tier-population-mismatch/,
+  'oracle sweep fails loud on missing or stale target authority before accepting exact-count visual evidence',
+);
+assert.match(
+  witness,
+  /target\.visual\.camera[\s\S]*target-oracle-camera-mismatch/,
+  'oracle sweep binds its target salience receipt to the camera that rendered the exact target',
+);
+assert.match(
+  witness,
+  /held-state-target-salience-oracle-footprint-tier-sweep-v0/,
+  'oracle sweep returns a distinct non-production receipt identity',
+);
+assert.match(
+  benchmark,
+  /FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED[\s\S]*economicsClaimAllowed:\s*false[\s\S]*optimizationClaimAllowed:\s*false/,
+  'non-production target-oracle sweeps cannot emit economics or optimization authority',
+);
+assert.match(
+  witness,
   /let boundarySplatFootprintTierSweep = null;[\s\S]*boundarySplatFootprintTierSweep = tierSweepEval\.result\.value;[\s\S]*boundarySplatFootprintTierSweep,/,
   'the witness emits a tier-specific receipt instead of aliasing the radius-sweep field',
 );
@@ -94,6 +120,21 @@ assert.match(
   footprintTierSweepSource,
   /boundarySplatMode:\s*'off'[\s\S]*footprint-tier-raymarch-target[\s\S]*volumePresentationApplication[\s\S]*footprint-tier-target-comparison/,
   'tier sweep captures one same-state raymarch target with a fresh applied-pass receipt and compares every splat arm against it',
+);
+assert.equal(
+  [...footprintTierSweepSource.matchAll(/prototype\.sampleFrame\(\{[\s\S]{0,240}?sameStateCaptureId:\s*'footprint-tier-raymarch-target'/g)].length,
+  1,
+  'the target-salience sweep has one immutable raymarch target capture rather than recapturing after treatment arms',
+);
+assert.match(
+  footprintTierSweepSource,
+  /targetPreviewSha256[\s\S]*target-oracle-preview-hash-mismatch/,
+  'the witness binds target-relative comparisons to the exact preview bytes used by the target oracle',
+);
+assert.match(
+  footprintTierSweepSource,
+  /expectedCandidatePositionSha256:\s*sourceArm\.audit\.candidatePositionSha256[\s\S]*target-oracle-candidate-cohort-mismatch/,
+  'the witness binds the oracle ranking capture to the exact held candidate-position cohort',
 );
 assert.equal(
   typeof benchmarkModule.footprintTierSweepReceiptChecks,
@@ -126,15 +167,16 @@ const authenticTierSweepFixture = {
             fallbackReason: null,
           },
           preview: { width: 2, height: 1 },
+          previewSha256: 'target-preview',
         },
       },
       arms: [
-        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRatio: 0.9 } },
+        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRatio: 0.9 }, audit: { candidatePositionSha256: 'held-candidate-positions' } },
         {
           id: 'importance-070-098',
           visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
           targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, pixelCount: 2, targetPeakPixelCount: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRatio: 0.95 },
-          audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+          audit: { candidatePositionSha256: 'held-candidate-positions', footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
         {
           id: 'random-070-098',
@@ -162,8 +204,110 @@ assert.deepEqual(
     mismatchedFootprintTierPopulation: false,
     mismatchedFootprintTierCalibration: false,
     missingFootprintTierTargetComparison: false,
+    invalidFootprintTierOracle: false,
   },
   'a complete exact count-matched tier sweep preserves bounded optimization authority',
+);
+const mismatchedOracleCameraSweep = structuredClone(authenticTierSweepFixture.sweep);
+const targetCamera = {
+  viewProjection: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  viewport: [2, 1],
+};
+mismatchedOracleCameraSweep.target.visual.camera = targetCamera;
+const oracleCounts = { base: 422, medium: 61, hero: 29 };
+const mismatchedOracleReceipt = {
+  identity: 'boundary-splat-target-salience-oracle-v0',
+  status: 'applied',
+  oracleScoreSha256: 'oracle-score',
+  targetPreviewSha256: 'target-preview',
+  candidatePositionSha256: 'held-candidate-positions',
+  expectedCandidatePositionSha256: 'held-candidate-positions',
+  targetSameStateCaptureId: 'footprint-tier-raymarch-target',
+  simStepCount: 61,
+  counts: oracleCounts,
+  camera: {
+    viewProjection: [2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    viewport: [2, 1],
+  },
+};
+mismatchedOracleCameraSweep.arms.splice(2, 1,
+  {
+    id: 'target-oracle-070-098',
+    oracleReceipt: mismatchedOracleReceipt,
+    visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
+    targetComparison: structuredClone(mismatchedOracleCameraSweep.arms[1].targetComparison),
+    audit: { candidatePositionSha256: 'held-candidate-positions', footprintTier: { counts: oracleCounts, oracleReceipt: mismatchedOracleReceipt } },
+  },
+  {
+    id: 'oracle-random-070-098',
+    matchCountsFrom: 'target-oracle-070-098',
+    mediumThreshold: 0.82,
+    heroThreshold: 0.94,
+    matchedRandomTierThresholds: {
+      identity: 'boundary-splat-held-cohort-random-tier-count-match-v0',
+      candidateCount: 512,
+      requestedCounts: oracleCounts,
+      mediumThreshold: 0.82,
+      heroThreshold: 0.94,
+    },
+    visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
+    targetComparison: structuredClone(mismatchedOracleCameraSweep.arms[1].targetComparison),
+    audit: { footprintTier: { counts: oracleCounts } },
+  },
+);
+assert.equal(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArms: [
+      { id: 'base-056' },
+      { id: 'importance-070-098' },
+      { id: 'target-oracle-070-098', policy: 'target_oracle' },
+      { id: 'oracle-random-070-098', matchCountsFrom: 'target-oracle-070-098' },
+    ],
+    sweep: mismatchedOracleCameraSweep,
+  }).invalidFootprintTierOracle,
+  true,
+  'a camera-shaped oracle receipt from a different projection is rejected at the report boundary',
+);
+const mismatchedOracleTargetPreviewSweep = structuredClone(mismatchedOracleCameraSweep);
+const targetOracleArm = mismatchedOracleTargetPreviewSweep.arms.find(arm => arm.id === 'target-oracle-070-098');
+targetOracleArm.oracleReceipt.camera = structuredClone(targetCamera);
+targetOracleArm.audit.footprintTier.oracleReceipt.camera = structuredClone(targetCamera);
+targetOracleArm.oracleReceipt.targetPreviewSha256 = 'different-target-preview';
+targetOracleArm.audit.footprintTier.oracleReceipt.targetPreviewSha256 = 'different-target-preview';
+assert.equal(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArms: [
+      { id: 'base-056' },
+      { id: 'importance-070-098' },
+      { id: 'target-oracle-070-098', policy: 'target_oracle' },
+      { id: 'oracle-random-070-098', matchCountsFrom: 'target-oracle-070-098' },
+    ],
+    sweep: mismatchedOracleTargetPreviewSweep,
+  }).invalidFootprintTierOracle,
+  true,
+  'an oracle built from different target preview bytes is rejected at the report boundary',
+);
+const mismatchedOracleCandidateCohortSweep = structuredClone(mismatchedOracleCameraSweep);
+const cohortOracleArm = mismatchedOracleCandidateCohortSweep.arms.find(arm => arm.id === 'target-oracle-070-098');
+cohortOracleArm.oracleReceipt.camera = structuredClone(targetCamera);
+cohortOracleArm.audit.footprintTier.oracleReceipt.camera = structuredClone(targetCamera);
+cohortOracleArm.oracleReceipt.candidatePositionSha256 = 'different-candidate-positions';
+cohortOracleArm.audit.footprintTier.oracleReceipt.candidatePositionSha256 = 'different-candidate-positions';
+assert.equal(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArms: [
+      { id: 'base-056' },
+      { id: 'importance-070-098' },
+      { id: 'target-oracle-070-098', policy: 'target_oracle' },
+      { id: 'oracle-random-070-098', matchCountsFrom: 'target-oracle-070-098' },
+    ],
+    sweep: mismatchedOracleCandidateCohortSweep,
+  }).invalidFootprintTierOracle,
+  true,
+  'an oracle ranked from a different candidate-position cohort is rejected at the report boundary',
 );
 for (const malformedTarget of [
   { sameStateCaptureId: 'stale-target', simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },

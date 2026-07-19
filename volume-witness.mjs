@@ -169,7 +169,7 @@ function parseBoundarySplatFootprintTierArms(value) {
       || typeof arm.id !== 'string'
       || arm.id.length === 0
       || candidates.findIndex(candidate => candidate?.id === arm.id) !== index
-      || !['off', 'importance', 'random'].includes(arm.policy)
+      || !['off', 'importance', 'random', 'target_oracle'].includes(arm.policy)
       || (arm.matchCountsFrom !== undefined
         && (arm.policy !== 'random' || typeof arm.matchCountsFrom !== 'string' || arm.matchCountsFrom.length === 0))
       || ![arm.baseRadius, arm.mediumRadius, arm.heroRadius, arm.mediumThreshold, arm.heroThreshold].every(Number.isFinite)
@@ -3241,6 +3241,10 @@ async function main() {
             throw new Error('boundary-splat-footprint-tier-sweep-api-unavailable');
           }
           const tierArms = ${JSON.stringify(boundarySplatFootprintTierArms)};
+          if (tierArms.some(arm => arm.policy === 'target_oracle')
+            && !prototype?.buildBoundarySplatTargetSalienceOracle) {
+            throw new Error('boundary-splat-target-oracle-api-unavailable');
+          }
           const activeBefore = prototype.debugState().active === true;
           const controlsBefore = { ...(prototype.debugState().controls || {}) };
           const arms = [];
@@ -3248,8 +3252,74 @@ async function main() {
           await prototype.setActive(false);
           await new Promise(resolve => setTimeout(resolve, 100));
           try {
+            prototype.setControls({
+              ...controlsBefore,
+              lookFreeze: 1,
+              boundarySplatMode: 'off',
+            });
+            await new Promise(resolve => setTimeout(resolve, 40));
+            const initialTargetVisual = await prototype.sampleFrame({
+              advanceSim: false,
+              allowInactive: true,
+              includeRgba: false,
+              sameStateCaptureId: 'footprint-tier-raymarch-target',
+            });
+            if (initialTargetVisual?.ok !== true) {
+              throw new Error('footprint-tier-raymarch-target-failed:' + (initialTargetVisual?.reason || 'unknown'));
+            }
+            const initialTargetState = prototype.debugState();
+            target = {
+              effectiveMode: initialTargetState.boundarySplatMode,
+              fallbackReason: initialTargetState.boundarySplatFallbackReason,
+              volumeReconstructionStyle: initialTargetVisual.volumeReconstructionStyle,
+              visual: {
+                sampleAuthority: initialTargetVisual.sampleAuthority,
+                simAdvanced: initialTargetVisual.simAdvanced,
+                sameStateCaptureId: initialTargetVisual.sameStateCaptureId,
+                frameCount: initialTargetVisual.frameCount,
+                simStepCount: initialTargetVisual.simStepCount,
+                effectiveRoute: initialTargetVisual.effectiveRoute,
+                camera: initialTargetVisual.camera,
+                volumePresentationApplication: initialTargetVisual.volumePresentationApplication,
+                litPixels: initialTargetVisual.litPixels,
+                meanLuma: initialTargetVisual.meanLuma,
+                fireLikePixels: initialTargetVisual.fireLikePixels,
+                emissiveLikePixels: initialTargetVisual.emissiveLikePixels,
+                smokeLikePixels: initialTargetVisual.smokeLikePixels,
+                preview: initialTargetVisual.preview,
+              },
+            };
             for (const tierArm of tierArms) {
               let effectiveTierArm = { ...tierArm };
+              if (tierArm.oracleCountsFrom) {
+                const sourceArm = arms.find(arm => arm.id === tierArm.oracleCountsFrom);
+                const sourceCounts = sourceArm?.audit?.footprintTier?.counts;
+                if (!sourceCounts) {
+                  throw new Error('target-oracle-count-source-missing:' + tierArm.id + ':' + tierArm.oracleCountsFrom);
+                }
+                const oracleReceipt = await prototype.buildBoundarySplatTargetSalienceOracle({
+                  targetPreview: target.visual.preview,
+                  targetAuthority: target.visual,
+                  expectedCandidatePositionSha256: sourceArm.audit.candidatePositionSha256,
+                  mediumCount: sourceCounts.medium,
+                  heroCount: sourceCounts.hero,
+                });
+                if (oracleReceipt?.status !== 'applied'
+                  || oracleReceipt.identity !== 'boundary-splat-target-salience-oracle-v0'
+                  || oracleReceipt.simStepCount !== target.visual.simStepCount
+                  || oracleReceipt.targetSameStateCaptureId !== target.visual.sameStateCaptureId
+                  || oracleReceipt.candidatePositionSha256 !== sourceArm.audit.candidatePositionSha256
+                  || oracleReceipt.expectedCandidatePositionSha256 !== sourceArm.audit.candidatePositionSha256
+                  || oracleReceipt.counts?.medium !== sourceCounts.medium
+                  || oracleReceipt.counts?.hero !== sourceCounts.hero) {
+                  throw new Error('target-oracle-receipt-invalid:' + tierArm.id + ':' + JSON.stringify(oracleReceipt));
+                }
+                if (JSON.stringify(oracleReceipt.camera?.viewProjection) !== JSON.stringify(target.visual.camera?.viewProjection)
+                  || JSON.stringify(oracleReceipt.camera?.viewport) !== JSON.stringify(target.visual.camera?.viewport)) {
+                  throw new Error('target-oracle-camera-mismatch:' + tierArm.id);
+                }
+                effectiveTierArm = { ...effectiveTierArm, oracleReceipt };
+              }
               if (tierArm.matchCountsFrom) {
                 const matchedArm = arms.find(arm => arm.id === tierArm.matchCountsFrom);
                 const matchedCounts = matchedArm?.audit?.footprintTier?.counts;
@@ -3346,48 +3416,14 @@ async function main() {
                 },
               });
             }
-            prototype.setControls({
-              ...controlsBefore,
-              lookFreeze: 1,
-              boundarySplatMode: 'off',
-            });
-            await new Promise(resolve => setTimeout(resolve, 40));
-            const targetVisual = await prototype.sampleFrame({
-              advanceSim: false,
-              allowInactive: true,
-              includeRgba: false,
-              sameStateCaptureId: 'footprint-tier-raymarch-target',
-            });
-            if (targetVisual?.ok !== true) {
-              throw new Error('footprint-tier-raymarch-target-failed:' + (targetVisual?.reason || 'unknown'));
-            }
-            const targetState = prototype.debugState();
-            target = {
-              effectiveMode: targetState.boundarySplatMode,
-              fallbackReason: targetState.boundarySplatFallbackReason,
-              volumeReconstructionStyle: targetVisual.volumeReconstructionStyle,
-              visual: {
-                sampleAuthority: targetVisual.sampleAuthority,
-                simAdvanced: targetVisual.simAdvanced,
-                sameStateCaptureId: targetVisual.sameStateCaptureId,
-                frameCount: targetVisual.frameCount,
-                simStepCount: targetVisual.simStepCount,
-                effectiveRoute: targetVisual.effectiveRoute,
-                volumePresentationApplication: targetVisual.volumePresentationApplication,
-                litPixels: targetVisual.litPixels,
-                meanLuma: targetVisual.meanLuma,
-                fireLikePixels: targetVisual.fireLikePixels,
-                emissiveLikePixels: targetVisual.emissiveLikePixels,
-                smokeLikePixels: targetVisual.smokeLikePixels,
-                preview: targetVisual.preview,
-              },
-            };
           } finally {
             prototype.setControls(controlsBefore);
             if (activeBefore) await prototype.setActive(true);
           }
           return {
-            identity: 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
+            identity: tierArms.some(arm => arm.policy === 'target_oracle')
+              ? 'held-state-target-salience-oracle-footprint-tier-sweep-v0'
+              : 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
             liveLoopSuspended: true,
             activeBefore,
             warmupSamples: ${boundarySplatGpuProfileWarmupSamples},
@@ -3412,6 +3448,16 @@ async function main() {
         || !Number.isFinite(targetPreview.width)
         || !Number.isFinite(targetPreview.height)) {
         throw new Error('footprint-tier-raymarch-target-preview-missing');
+      }
+      target.visual.previewSha256 = createHash('sha256')
+        .update(Uint8Array.from(targetPreview.rgba))
+        .digest('hex');
+      for (const arm of arms) {
+        if (arm?.policy !== 'target_oracle') continue;
+        if (arm?.oracleReceipt?.targetPreviewSha256 !== target.visual.previewSha256
+          || arm?.audit?.footprintTier?.oracleReceipt?.targetPreviewSha256 !== target.visual.previewSha256) {
+          throw new Error(`target-oracle-preview-hash-mismatch:${arm?.id ?? 'unknown'}`);
+        }
       }
       const targetPreviewPath = resolve(dirname(out), 'footprint-tier-raymarch-target.png');
       writeRgbaPng(targetPreviewPath, targetPreview.width, targetPreview.height, targetPreview.rgba);
@@ -3486,6 +3532,22 @@ async function main() {
         if (Number(arm.overflowCount) !== 0) throw new Error(`footprint-tier-overflow:${arm.id}:${arm.overflowCount}`);
         if (!Number.isFinite(Number(arm.audit.relativeError)) || Number(arm.audit.relativeError) > 1e-5) {
           throw new Error(`footprint-tier-energy-conservation-failed:${arm.id}:${arm.audit.relativeError}`);
+        }
+        if (arm.policy === 'target_oracle') {
+          const oracleReceipt = arm.oracleReceipt;
+          const auditedOracleReceipt = arm.audit?.footprintTier?.oracleReceipt;
+          if (oracleReceipt?.status !== 'applied'
+            || auditedOracleReceipt?.status !== 'applied'
+            || oracleReceipt.oracleScoreSha256 !== auditedOracleReceipt.oracleScoreSha256
+            || oracleReceipt.candidatePositionSha256 !== baseline.audit.candidatePositionSha256
+            || oracleReceipt.expectedCandidatePositionSha256 !== baseline.audit.candidatePositionSha256
+            || auditedOracleReceipt.candidatePositionSha256 !== baseline.audit.candidatePositionSha256
+            || oracleReceipt.simStepCount !== baseline.simStepCount
+            || oracleReceipt.grid !== 96
+            || oracleReceipt.camera?.viewProjection?.length !== 16
+            || oracleReceipt.camera?.viewport?.length !== 2) {
+            throw new Error(`target-oracle-candidate-cohort-mismatch:${arm.id}:${JSON.stringify({ oracleReceipt, auditedOracleReceipt })}`);
+          }
         }
         if (arm.matchCountsFrom) {
           const matchedArm = arms.find(candidate => candidate.id === arm.matchCountsFrom);

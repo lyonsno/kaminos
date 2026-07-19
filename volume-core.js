@@ -9,6 +9,10 @@ import {
   packBoundarySplatSupervisionCandidates,
 } from './boundary-splat-feature-capture.mjs';
 import {
+  BOUNDARY_SPLAT_TARGET_SALIENCE_ORACLE_IDENTITY,
+  buildTargetSalienceOracleScores,
+} from './boundary-splat-target-salience.mjs';
+import {
   FLOW_KERNEL_DESCRIPTOR_ORDER,
   FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
   FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
@@ -86,6 +90,7 @@ const BOUNDARY_SPLAT_FOOTPRINT_TIER_POLICIES = Object.freeze({
   off: 0,
   importance: 1,
   random: 2,
+  target_oracle: 3,
 });
 const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
 const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
@@ -251,6 +256,43 @@ export function canonicalizeBoundarySplatAuditRows(values, instanceCount, stride
     );
   }
   return { positionSupport, attributes };
+}
+
+export function canonicalizeBoundarySplatPositions(values, instanceCount, strideFloats) {
+  if (!(values instanceof Float32Array)) throw new TypeError('boundary splat position values must be Float32Array');
+  if (!Number.isInteger(instanceCount) || instanceCount < 0) throw new RangeError('boundary splat position instance count is invalid');
+  if (!Number.isInteger(strideFloats) || strideFloats < 3) throw new RangeError('boundary splat position stride is invalid');
+  if (values.length < instanceCount * strideFloats) throw new RangeError('boundary splat position payload is partial');
+  const order = Array.from({ length: instanceCount }, (_, index) => index);
+  const valueBits = new Uint32Array(values.buffer, values.byteOffset, values.length);
+  for (let row = 0; row < instanceCount; row += 1) {
+    const offset = row * strideFloats;
+    for (let channel = 0; channel < 3; channel += 1) {
+      if (!Number.isFinite(values[offset + channel])) {
+        throw new Error('boundary splat position payload contains non-finite value');
+      }
+    }
+  }
+  order.sort((leftIndex, rightIndex) => {
+    const leftOffset = leftIndex * strideFloats;
+    const rightOffset = rightIndex * strideFloats;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const leftValue = values[leftOffset + channel];
+      const rightValue = values[rightOffset + channel];
+      if (leftValue < rightValue) return -1;
+      if (leftValue > rightValue) return 1;
+      const leftBits = valueBits[leftOffset + channel];
+      const rightBits = valueBits[rightOffset + channel];
+      if (leftBits !== rightBits) return leftBits < rightBits ? -1 : 1;
+    }
+    return 0;
+  });
+  const positions = new Float32Array(instanceCount * 3);
+  for (let canonicalIndex = 0; canonicalIndex < order.length; canonicalIndex += 1) {
+    const sourceOffset = order[canonicalIndex] * strideFloats;
+    positions.set(values.subarray(sourceOffset, sourceOffset + 3), canonicalIndex * 3);
+  }
+  return positions;
 }
 
 const CANONICAL_SOURCE_MODE_VALUES = {
@@ -677,6 +719,7 @@ export function resolveBoundarySplatFootprintTier({
   heroRadius = 0.98,
   mediumThreshold = 0.78,
   heroThreshold = 0.94,
+  oracleScore = 0,
 } = {}) {
   const controls = boundarySplatFootprintTierControls({
     boundarySplatFootprintTierPolicy: policy,
@@ -690,7 +733,9 @@ export function resolveBoundarySplatFootprintTier({
     ? (boundarySplatDeterministicHash(cellIndex) & 0x00ffffff) / 16777216
     : controls.policy === 'importance'
       ? boundarySplatJointImportanceScore(structuralSignal, fireSignal)
-      : 0;
+      : controls.policy === 'target_oracle'
+        ? clampFinite(oracleScore, 0, 1, 0)
+        : 0;
   const tier = controls.policy !== 'off' && score >= controls.heroThreshold
     ? 'hero'
     : controls.policy !== 'off' && score >= controls.mediumThreshold
@@ -5883,6 +5928,7 @@ const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE: u32 = 1u;
 const BOUNDARY_SPLAT_FOOTPRINT_TIER_OFF: u32 = 0u;
 const BOUNDARY_SPLAT_FOOTPRINT_TIER_IMPORTANCE: u32 = 1u;
 const BOUNDARY_SPLAT_FOOTPRINT_TIER_RANDOM: u32 = 2u;
+const BOUNDARY_SPLAT_FOOTPRINT_TIER_TARGET_ORACLE: u32 = 3u;
 
 struct BoundarySplat {
   positionSupport: vec4<f32>,
@@ -5991,6 +6037,7 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(9) var<storage, read> flowKernelDescriptorCellIndices: array<u32>;
 @group(0) @binding(10) var<storage, read> boundarySplatLiveUnionCoefficients: array<vec4<f32>>;
 @group(0) @binding(11) var<storage, read> boundarySplatLiveUnionLookup: array<u32>;
+@group(0) @binding(12) var<storage, read> boundarySplatFootprintOracleScores: array<f32>;
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -6284,6 +6331,9 @@ fn boundarySplatHash01(value: u32) -> f32 {
 
 fn boundarySplatFootprintTierScore(cellIndex: u32, structuralSignal: f32, fireSignal: f32) -> f32 {
   let policy = u32(round(boundarySplatCamera.footprintTierPolicy.x));
+  if (policy == BOUNDARY_SPLAT_FOOTPRINT_TIER_TARGET_ORACLE) {
+    return clamp(boundarySplatFootprintOracleScores[cellIndex], 0.0, 1.0);
+  }
   if (policy == BOUNDARY_SPLAT_FOOTPRINT_TIER_RANDOM) {
     return boundarySplatHash01(cellIndex);
   }
@@ -6830,6 +6880,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
     boundarySplatFootprintTier: boundarySplatFootprintTierControls(controlsSnapshot),
+    boundarySplatFootprintOracleReceipt: null,
     boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatFeatureCaptureRequested: normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture),
@@ -7240,6 +7291,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatLiveUnionOverlayGpuResources = null;
   let boundarySplatLiveUnionCoefficientDummyBuffer = null;
   let boundarySplatLiveUnionLookupDummyBuffer = null;
+  let boundarySplatFootprintOracleBuffer = null;
+  let boundarySplatFootprintOracleScores = null;
+  let boundarySplatFootprintOracleReceipt = null;
   let flowKernelDescriptorBuffer = null;
   let flowKernelDescriptorBufferCapacity = 0;
   let flowKernelDescriptorExportSession = null;
@@ -7746,6 +7800,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBuffer?.destroy();
     boundarySplatLiveUnionCoefficientDummyBuffer?.destroy();
     boundarySplatLiveUnionLookupDummyBuffer?.destroy();
+    boundarySplatFootprintOracleBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
     flowKernelDescriptorIndexBuffer?.destroy();
     nonRidgeOpticalCaptureHeaderBuffer?.destroy();
@@ -7760,6 +7815,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBufferCapacity = 0;
     boundarySplatLiveUnionCoefficientDummyBuffer = null;
     boundarySplatLiveUnionLookupDummyBuffer = null;
+    boundarySplatFootprintOracleBuffer = null;
+    boundarySplatFootprintOracleScores = null;
+    boundarySplatFootprintOracleReceipt = null;
+    state.boundarySplatFootprintOracleReceipt = null;
     flowKernelDescriptorBuffer = null;
     flowKernelDescriptorBufferCapacity = 0;
     flowKernelDescriptorExportSession = null;
@@ -8006,6 +8065,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatDrawBuffer
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
+      || !boundarySplatFootprintOracleBuffer
       || !flowKernelDescriptorBuffer
       || !flowKernelDescriptorIndexBuffer
     ) {
@@ -8063,6 +8123,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 7, resource: { buffer: majorantBuffer } },
           { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
           { binding: 9, resource: { buffer: flowKernelDescriptorIndexBuffer } },
+          { binding: 12, resource: { buffer: boundarySplatFootprintOracleBuffer } },
         ],
       }),
     });
@@ -8233,7 +8294,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function ensureBoundarySplatBuffers() {
-    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && boundarySplatLiveUnionCoefficientDummyBuffer && boundarySplatLiveUnionLookupDummyBuffer && flowKernelDescriptorBuffer && flowKernelDescriptorIndexBuffer) return;
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && boundarySplatLiveUnionCoefficientDummyBuffer && boundarySplatLiveUnionLookupDummyBuffer && boundarySplatFootprintOracleBuffer && flowKernelDescriptorBuffer && flowKernelDescriptorIndexBuffer) return;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
       size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
@@ -8280,6 +8341,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.queue.writeBuffer(boundarySplatLiveUnionCoefficientDummyBuffer, 0, new Float32Array(8));
     device.queue.writeBuffer(boundarySplatLiveUnionLookupDummyBuffer, 0, new Uint32Array([0]));
+    boundarySplatFootprintOracleBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_TARGET_SALIENCE_ORACLE_IDENTITY} dummy`,
+      size: Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySplatFootprintOracleBuffer, 0, new Float32Array([0]));
     const descriptorCaptureRequested = normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
     const descriptorMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
     const descriptorRowsRequested = descriptorCaptureRequested
@@ -8336,6 +8403,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatFeatureBuffer
       || !boundarySplatLiveUnionCoefficientDummyBuffer
       || !boundarySplatLiveUnionLookupDummyBuffer
+      || !boundarySplatFootprintOracleBuffer
       || !flowKernelDescriptorBuffer
       || !flowKernelDescriptorIndexBuffer
       || !majorantBuffer
@@ -8354,6 +8422,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 7, resource: { buffer: majorantBuffer } },
         { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
         { binding: 9, resource: { buffer: flowKernelDescriptorIndexBuffer } },
+        { binding: 12, resource: { buffer: boundarySplatFootprintOracleBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -8983,6 +9052,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -10855,6 +10925,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
       return false;
     }
+    const footprintTierPolicy = normalizeBoundarySplatFootprintTierPolicy(controlsSnapshot.boundarySplatFootprintTierPolicy);
+    if (footprintTierPolicy === 'target_oracle') {
+      if (!boundarySplatFootprintOracleReceipt
+        || boundarySplatFootprintOracleReceipt.status !== 'applied'
+        || !boundarySplatFootprintOracleScores
+        || boundarySplatFootprintOracleScores.length !== gridCellCount(gridSize)) {
+        throw new Error('boundary-splat-footprint-oracle-missing');
+      }
+      if (boundarySplatFootprintOracleReceipt.grid !== gridSize
+        || boundarySplatFootprintOracleReceipt.simStepCount !== state.simStepCount) {
+        throw new Error(`boundary-splat-footprint-oracle-stale:${boundarySplatFootprintOracleReceipt.grid}:${boundarySplatFootprintOracleReceipt.simStepCount}:${gridSize}:${state.simStepCount}`);
+      }
+      const oracleCamera = boundarySplatFootprintOracleReceipt.camera;
+      const matrixMatches = Array.isArray(oracleCamera?.viewProjection)
+        && oracleCamera.viewProjection.length === 16
+        && oracleCamera.viewProjection.every((value, index) => Math.abs(Number(value) - Number(viewProj.elements[index])) <= 1e-6);
+      const viewportMatches = Array.isArray(oracleCamera?.viewport)
+        && oracleCamera.viewport.length === 2
+        && Number(oracleCamera.viewport[0]) === Number(state.width)
+        && Number(oracleCamera.viewport[1]) === Number(state.height);
+      if (!matrixMatches || !viewportMatches) {
+        throw new Error('boundary-splat-footprint-oracle-camera-mismatch');
+      }
+    }
     if (
       !state.boundarySidecarBuiltThisFrame
       || !boundarySplatCompactPipeline
@@ -11324,7 +11418,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       candidateReadback.unmap();
       featureReadback.unmap();
       return {
-        ...packBoundarySplatSupervisionCandidates(candidateValues, featureValues, instanceCount, boundarySplatCapacity),
+        ...packBoundarySplatSupervisionCandidates(
+          candidateValues,
+          featureValues,
+          instanceCount,
+          boundarySplatCapacity,
+          { candidateStrideFloats: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT },
+        ),
         status: 'captured',
         requested: true,
         effective: true,
@@ -11392,6 +11492,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         draw.instanceCount,
         strideFloats,
       );
+      const candidatePositions = canonicalizeBoundarySplatPositions(values, draw.instanceCount, strideFloats);
       const globalRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       const kernelSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
       const kernelIntegral = Math.PI * (1 - Math.exp(-kernelSharpness)) / kernelSharpness;
@@ -11432,6 +11533,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           cellIndex: values[offset + 20],
           structuralSignal: values[offset + 3],
           fireSignal: values[offset + 11],
+          oracleScore: boundarySplatFootprintOracleScores?.[values[offset + 20]] ?? 0,
           baseRadius: footprintTierControl.baseRadius,
           mediumRadius: footprintTierControl.mediumRadius,
           heroRadius: footprintTierControl.heroRadius,
@@ -11453,6 +11555,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const digest = await crypto.subtle.digest('SHA-256', identity);
       const candidatePayloadSha256 = Array.from(
         new Uint8Array(digest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
+      const candidatePositionDigest = await crypto.subtle.digest('SHA-256', candidatePositions);
+      const candidatePositionSha256 = Array.from(
+        new Uint8Array(candidatePositionDigest),
         value => value.toString(16).padStart(2, '0'),
       ).join('');
       const attributeDigest = await crypto.subtle.digest('SHA-256', attributes);
@@ -11828,6 +11935,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         attributeSetId: state.boundarySplatAttributeSetId,
         candidatePayloadAuthority: 'gpu-compacted-boundary-splat-position-support-frozen-state-v0',
         candidatePayloadSha256,
+        candidatePositionAuthority: 'gpu-compacted-canonical-position-cohort-frozen-state-v0',
+        candidatePositionSha256,
         attributePayloadAuthority: 'gpu-compacted-boundary-splat-effective-attributes-v0',
         attributePayloadSha256,
         stateWitnessAuthority: 'live-frame-step-plus-canonical-compacted-candidate-payload-sha256-v0',
@@ -11842,6 +11951,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         channelMax,
         footprintTier: {
           ...footprintTierControl,
+          oracleReceipt: footprintTierControl.policy === 'target_oracle'
+            ? boundarySplatFootprintOracleReceipt
+            : null,
           counts: footprintTierCounts,
           chargedCount: footprintTierCounts.medium + footprintTierCounts.hero,
           scoreDistribution: summarizeBoundarySplatFootprintScores(footprintTierScores),
@@ -16289,6 +16401,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      camera: boundarySplatCameraState(),
       sampleAuthority: advanceSim ? 'sim-advanced-frame-readback' : 'render-only-frozen-sim-state',
       simAdvanced: advanceSim,
       sameStateCaptureId,
@@ -16323,7 +16436,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function captureBoundarySplatSupervisionCandidates(options = {}) {
-    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    if (!device) return { ok: false, reason: 'inactive', ...state };
     const controlsBefore = { ...controlsSnapshot };
     const presentationBefore = volumePresentationModeRequestedRaw;
     const decompositionBefore = appearanceDecompositionModeRequestedRaw;
@@ -16355,6 +16468,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       resetTemporalHistory('fixed-candidate-supervision-candidates');
       let candidateSample = await sampleFrame({
         advanceSim: false,
+        allowInactive: true,
         includeRgba: false,
         includeBoundarySplatSupervision: true,
         now: fixedNow,
@@ -16378,6 +16492,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         resetTemporalHistory('fixed-candidate-supervision-candidates-after-capacity-growth');
         candidateSample = await sampleFrame({
           advanceSim: false,
+          allowInactive: true,
           includeRgba: false,
           includeBoundarySplatSupervision: true,
           now: fixedNow,
@@ -16473,6 +16588,140 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         raf = requestAnimationFrame(render);
       }
     }
+  }
+
+  async function buildBoundarySplatTargetSalienceOracle(options = {}) {
+    if (!device) throw new Error('boundary-splat-target-oracle-inactive');
+    const targetPreview = options.targetPreview;
+    const targetAuthority = options.targetAuthority;
+    const mediumCount = Math.floor(Number(options.mediumCount));
+    const heroCount = Math.floor(Number(options.heroCount));
+    if (targetAuthority?.sampleAuthority !== 'render-only-frozen-sim-state'
+      || targetAuthority?.simAdvanced !== false
+      || Number(targetAuthority?.simStepCount) !== Number(state.simStepCount)
+      || targetAuthority?.effectiveRoute !== state.effectiveRoute
+      || !String(targetAuthority?.sameStateCaptureId || '').startsWith('footprint-tier-raymarch-target')) {
+      throw new Error('boundary-splat-target-oracle-target-authority-invalid');
+    }
+    const targetCamera = targetAuthority?.camera;
+    if (!Array.isArray(targetCamera?.viewProjection)
+      || targetCamera.viewProjection.length !== 16
+      || !Array.isArray(targetCamera?.viewport)
+      || targetCamera.viewport.length !== 2) {
+      throw new Error('boundary-splat-target-oracle-target-camera-invalid');
+    }
+    const cameraBefore = boundarySplatCameraState();
+    const cameraMatches = targetCamera.viewProjection.every(
+      (value, index) => Math.abs(Number(value) - Number(cameraBefore.viewProjection[index])) <= 1e-6,
+    ) && targetCamera.viewport.every(
+      (value, index) => Number(value) === Number(cameraBefore.viewport[index]),
+    );
+    if (!cameraMatches) throw new Error('boundary-splat-target-oracle-target-camera-mismatch');
+    const candidateCapture = await captureBoundarySplatSupervisionCandidates({
+      sameStateCaptureId: `${targetAuthority.sameStateCaptureId}-oracle-candidates`,
+      resumeRenderLoop: false,
+    });
+    if (candidateCapture?.ok !== true
+      || candidateCapture.simStepCount !== state.simStepCount
+      || candidateCapture.grid !== gridSize
+      || candidateCapture.candidates?.rowCount !== candidateCapture.candidates?.candidateCount
+      || candidateCapture.candidates?.overflowCount !== 0) {
+      throw new Error(`boundary-splat-target-oracle-candidate-capture-invalid:${JSON.stringify(candidateCapture)}`);
+    }
+    const candidateCameraMatches = candidateCapture.camera?.viewProjection?.every(
+      (value, index) => Math.abs(Number(value) - Number(targetCamera.viewProjection[index])) <= 1e-6,
+    ) && candidateCapture.camera?.viewport?.every(
+      (value, index) => Number(value) === Number(targetCamera.viewport[index]),
+    );
+    if (!candidateCameraMatches) throw new Error('boundary-splat-target-oracle-candidate-camera-mismatch');
+    const packedBytes = decodeFullFieldImportChunk(candidateCapture.candidates.packedFloat32Base64);
+    if (packedBytes.byteLength !== candidateCapture.candidates.packedByteLength) {
+      throw new Error(`boundary-splat-target-oracle-candidate-bytes:${packedBytes.byteLength}:${candidateCapture.candidates.packedByteLength}`);
+    }
+    const candidateValues = new Float32Array(
+      packedBytes.buffer,
+      packedBytes.byteOffset,
+      packedBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    );
+    const expectedCandidatePositionSha256 = String(options.expectedCandidatePositionSha256 || '');
+    if (!/^[0-9a-f]{64}$/.test(expectedCandidatePositionSha256)) {
+      throw new Error('boundary-splat-target-oracle-expected-candidate-cohort-missing');
+    }
+    const candidatePositions = canonicalizeBoundarySplatPositions(
+      candidateValues,
+      candidateCapture.candidates.rowCount,
+      candidateCapture.candidates.strideFloats,
+    );
+    const candidatePositionBytes = new Uint8Array(
+      candidatePositions.buffer,
+      candidatePositions.byteOffset,
+      candidatePositions.byteLength,
+    );
+    const candidatePositionSha256 = await sha256Bytes(candidatePositionBytes);
+    if (candidatePositionSha256 !== expectedCandidatePositionSha256) {
+      throw new Error(`boundary-splat-target-oracle-candidate-cohort-mismatch:${candidatePositionSha256}:${expectedCandidatePositionSha256}`);
+    }
+    const oracle = buildTargetSalienceOracleScores({
+      targetPreview,
+      candidateValues,
+      candidateStrideFloats: candidateCapture.candidates.strideFloats,
+      candidateCount: candidateCapture.candidates.rowCount,
+      grid: gridSize,
+      viewProjection: targetCamera.viewProjection,
+      mediumCount,
+      heroCount,
+    });
+    const targetPreviewBytes = Uint8Array.from(targetPreview.rgba);
+    const targetPreviewSha256 = await sha256Bytes(targetPreviewBytes);
+    const candidateCaptureSha256 = await sha256Bytes(packedBytes);
+    const oracleScoreBytes = new Uint8Array(
+      oracle.denseScores.buffer,
+      oracle.denseScores.byteOffset,
+      oracle.denseScores.byteLength,
+    );
+    const oracleScoreSha256 = await sha256Bytes(oracleScoreBytes);
+    const previousBuffer = boundarySplatFootprintOracleBuffer;
+    boundarySplatFootprintOracleBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_TARGET_SALIENCE_ORACLE_IDENTITY} ${gridSize}^3`,
+      size: oracle.denseScores.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySplatFootprintOracleBuffer, 0, oracle.denseScores);
+    boundarySplatFootprintOracleScores = oracle.denseScores;
+    boundarySplatFootprintOracleReceipt = {
+      ok: true,
+      identity: BOUNDARY_SPLAT_TARGET_SALIENCE_ORACLE_IDENTITY,
+      status: 'applied',
+      authority: 'same-state-raymarch-target-screen-salience-non-production-oracle-v0',
+      scoreIdentity: oracle.scoreIdentity,
+      targetSameStateCaptureId: targetAuthority.sameStateCaptureId,
+      targetPreviewSha256,
+      candidateCaptureSha256,
+      candidatePositionSha256,
+      expectedCandidatePositionSha256,
+      oracleScoreSha256,
+      grid: gridSize,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      candidateCount: oracle.candidateCount,
+      projectedCount: oracle.projectedCount,
+      counts: oracle.counts,
+      salience: oracle.salience,
+      camera: {
+        viewProjection: [...targetCamera.viewProjection],
+        cameraRight: Array.isArray(targetCamera.cameraRight) ? [...targetCamera.cameraRight] : null,
+        cameraUp: Array.isArray(targetCamera.cameraUp) ? [...targetCamera.cameraUp] : null,
+        viewport: [...targetCamera.viewport],
+      },
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      fallbackReason: null,
+    };
+    state.boundarySplatFootprintOracleReceipt = boundarySplatFootprintOracleReceipt;
+    rebuildBoundarySplatBindGroups();
+    previousBuffer?.destroy();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    return { ...boundarySplatFootprintOracleReceipt };
   }
 
   function compactRenderScaleSample(sample) {
@@ -17845,6 +18094,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleBoundarySplatGpuProfile,
     boundarySplatCameraState,
     captureBoundarySplatSupervisionCandidates,
+    buildBoundarySplatTargetSalienceOracle,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,

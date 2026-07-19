@@ -111,6 +111,30 @@ const DEFAULT_FOOTPRINT_TIER_ARMS = Object.freeze([
     heroThreshold: 0.94,
   },
 ]);
+const TARGET_ORACLE_FOOTPRINT_TIER_ARMS = Object.freeze([
+  DEFAULT_FOOTPRINT_TIER_ARMS[0],
+  DEFAULT_FOOTPRINT_TIER_ARMS[1],
+  {
+    id: 'target-oracle-070-098',
+    policy: 'target_oracle',
+    oracleCountsFrom: 'importance-070-098',
+    baseRadius: 0.56,
+    mediumRadius: 0.70,
+    heroRadius: 0.98,
+    mediumThreshold: 0.78,
+    heroThreshold: 0.94,
+  },
+  {
+    id: 'oracle-random-070-098',
+    policy: 'random',
+    matchCountsFrom: 'target-oracle-070-098',
+    baseRadius: 0.56,
+    mediumRadius: 0.70,
+    heroRadius: 0.98,
+    mediumThreshold: 0.78,
+    heroThreshold: 0.94,
+  },
+]);
 const userDataDir = String(args.get('--user-data-dir') || `/tmp/kaminos-boundary-splat-benchmark-profile-${process.pid}`);
 
 const ADMITTED_PRODUCTION_GRID_RESOLUTIONS = [96, 128, 160];
@@ -171,10 +195,18 @@ const FOOTPRINT_SWEEP_RADII = FOOTPRINT_SWEEP_REQUESTED
   ? selectFootprintSweepRadii(args.get('--footprint-sweep-radii'))
   : [];
 const FOOTPRINT_TIER_SWEEP_REQUESTED = args.has('--footprint-tier-sweep');
-if (FOOTPRINT_SWEEP_REQUESTED && FOOTPRINT_TIER_SWEEP_REQUESTED) {
+const FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED = args.has('--footprint-tier-oracle-sweep');
+const ANY_FOOTPRINT_TIER_SWEEP_REQUESTED = FOOTPRINT_TIER_SWEEP_REQUESTED || FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED;
+const ACTIVE_FOOTPRINT_TIER_ARMS = FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED
+  ? TARGET_ORACLE_FOOTPRINT_TIER_ARMS
+  : DEFAULT_FOOTPRINT_TIER_ARMS;
+if (FOOTPRINT_TIER_SWEEP_REQUESTED && FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED) {
+  throw new Error('ordinary and target-oracle footprint tier sweeps are mutually exclusive');
+}
+if (FOOTPRINT_SWEEP_REQUESTED && ANY_FOOTPRINT_TIER_SWEEP_REQUESTED) {
   throw new Error('footprint radius and tier sweeps are mutually exclusive');
 }
-if ((FOOTPRINT_SWEEP_REQUESTED || FOOTPRINT_TIER_SWEEP_REQUESTED)
+if ((FOOTPRINT_SWEEP_REQUESTED || ANY_FOOTPRINT_TIER_SWEEP_REQUESTED)
   && (SELECTED_PRODUCTION_GRID_RESOLUTIONS.length !== 1 || SELECTED_PRODUCTION_GRID_RESOLUTIONS[0] !== 96)) {
   throw new Error('footprint sweep requires the single admitted Grid96 arm');
 }
@@ -185,9 +217,9 @@ const CASES = SELECTED_PRODUCTION_GRID_RESOLUTIONS.map(resolution => ({
   renderScale: 1,
   deviceScaleFactor,
   viewport: windowSize,
-  ...((FOOTPRINT_SWEEP_REQUESTED || FOOTPRINT_TIER_SWEEP_REQUESTED) ? {
+  ...((FOOTPRINT_SWEEP_REQUESTED || ANY_FOOTPRINT_TIER_SWEEP_REQUESTED) ? {
     boundarySplatMode: 'analytic_conserved',
-    boundarySplatRadius: FOOTPRINT_TIER_SWEEP_REQUESTED ? 0.56 : FOOTPRINT_SWEEP_RADII[0],
+    boundarySplatRadius: ANY_FOOTPRINT_TIER_SWEEP_REQUESTED ? 0.56 : FOOTPRINT_SWEEP_RADII[0],
   } : {}),
 }));
 
@@ -240,9 +272,11 @@ function writeReport(report) {
       fixedGrid: 96,
       conservationAuthority: 'analytic-conserved-area-opacity-v0',
     } : null,
-    footprintTierSweep: FOOTPRINT_TIER_SWEEP_REQUESTED ? {
-      identity: 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
-      arms: DEFAULT_FOOTPRINT_TIER_ARMS,
+    footprintTierSweep: ANY_FOOTPRINT_TIER_SWEEP_REQUESTED ? {
+      identity: FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED
+        ? 'held-state-target-salience-oracle-footprint-tier-sweep-v0'
+        : 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
+      arms: ACTIVE_FOOTPRINT_TIER_ARMS,
       fixedGrid: 96,
       candidateAuthority: 'unchanged-native-cell-selection-before-footprint-charging-v0',
       conservationAuthority: 'analytic-conserved-area-opacity-v0',
@@ -280,6 +314,7 @@ function initialFalseClosureChecks() {
     mismatchedFootprintTierPopulation: false,
     mismatchedFootprintTierCalibration: false,
     missingFootprintTierTargetComparison: false,
+    invalidFootprintTierOracle: false,
     incompleteWorkloadReceipt: false,
     staleCountAuthority: false,
     capacityTruncatedWorkload: false,
@@ -395,6 +430,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
       mismatchedFootprintTierPopulation: false,
       mismatchedFootprintTierCalibration: false,
       missingFootprintTierTargetComparison: false,
+      invalidFootprintTierOracle: false,
     };
   }
   const expectedArmIds = expectedArms.map(arm => arm.id);
@@ -439,7 +475,9 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
   const targetVisual = target?.visual;
   const targetPassReceipt = targetVisual?.volumePresentationApplication;
   const targetPreview = targetVisual?.preview;
-  const baselineVisual = sweep?.arms?.find(arm => arm?.id === expectedArmIds[0])?.visual;
+  const baselineArm = sweep?.arms?.find(arm => arm?.id === expectedArmIds[0]);
+  const baselineVisual = baselineArm?.visual;
+  const baselineAudit = baselineArm?.audit;
   const missingFootprintTierTargetComparison = target?.effectiveMode !== 'off'
     || target?.fallbackReason != null
     || target?.volumeReconstructionStyle !== 'native-resolution'
@@ -487,6 +525,43 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
         || !Number.isFinite(targetPeakLumaRatio)
         || targetPeakLumaRatio < 0;
     });
+  const invalidFootprintTierOracle = expectedArms.some(expectedArm => {
+    if (expectedArm.policy !== 'target_oracle') return false;
+    const arm = sweep?.arms?.find(candidate => candidate?.id === expectedArm.id);
+    const receipt = arm?.oracleReceipt;
+    const auditedReceipt = arm?.audit?.footprintTier?.oracleReceipt;
+    const counts = arm?.audit?.footprintTier?.counts;
+    const targetCamera = targetVisual?.camera;
+    const viewProjectionMatches = Array.isArray(receipt?.camera?.viewProjection)
+      && Array.isArray(targetCamera?.viewProjection)
+      && receipt.camera.viewProjection.length === targetCamera.viewProjection.length
+      && receipt.camera.viewProjection.every(
+        (value, index) => Math.abs(Number(value) - Number(targetCamera.viewProjection[index])) <= 1e-6,
+      );
+    const viewportMatches = Array.isArray(receipt?.camera?.viewport)
+      && Array.isArray(targetCamera?.viewport)
+      && receipt.camera.viewport.length === targetCamera.viewport.length
+      && receipt.camera.viewport.every(
+        (value, index) => Number(value) === Number(targetCamera.viewport[index]),
+      );
+    return receipt?.identity !== 'boundary-splat-target-salience-oracle-v0'
+      || receipt?.status !== 'applied'
+      || auditedReceipt?.status !== 'applied'
+      || receipt?.oracleScoreSha256 !== auditedReceipt?.oracleScoreSha256
+      || receipt?.targetPreviewSha256 !== targetVisual?.previewSha256
+      || auditedReceipt?.targetPreviewSha256 !== targetVisual?.previewSha256
+      || receipt?.candidatePositionSha256 !== baselineAudit?.candidatePositionSha256
+      || receipt?.expectedCandidatePositionSha256 !== baselineAudit?.candidatePositionSha256
+      || auditedReceipt?.candidatePositionSha256 !== baselineAudit?.candidatePositionSha256
+      || arm?.audit?.candidatePositionSha256 !== baselineAudit?.candidatePositionSha256
+      || receipt?.targetSameStateCaptureId !== targetVisual?.sameStateCaptureId
+      || receipt?.simStepCount !== targetVisual?.simStepCount
+      || receipt?.counts?.base !== counts?.base
+      || receipt?.counts?.medium !== counts?.medium
+      || receipt?.counts?.hero !== counts?.hero
+      || !viewProjectionMatches
+      || !viewportMatches;
+  });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true
       || receivedArmIds.length !== expectedArmIds.length
@@ -494,6 +569,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
     mismatchedFootprintTierPopulation,
     mismatchedFootprintTierCalibration,
     missingFootprintTierTargetComparison,
+    invalidFootprintTierOracle,
   };
 }
 
@@ -545,8 +621,8 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report, optio
     || footprintSweep?.arms?.length !== FOOTPRINT_SWEEP_RADII.length
   );
   Object.assign(falseClosureChecks, footprintTierSweepReceiptChecks({
-    requested: options.footprintTierSweepRequested ?? FOOTPRINT_TIER_SWEEP_REQUESTED,
-    expectedArms: DEFAULT_FOOTPRINT_TIER_ARMS,
+    requested: options.footprintTierSweepRequested ?? ANY_FOOTPRINT_TIER_SWEEP_REQUESTED,
+    expectedArms: options.expectedFootprintTierArms ?? ACTIVE_FOOTPRINT_TIER_ARMS,
     sweep: footprintTierSweep,
   }));
   falseClosureChecks.mismatchedRaymarchQuality = !profile?.stages?.matchedRaymarchRaster;
@@ -558,6 +634,10 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report, optio
     || !report.boundarySplatCopyDisposition;
 
   const gridCellCount = testCase.gridCellCount;
+  const nonProductionOracleSweep = options.footprintTierOracleSweepRequested
+    ?? FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED;
+  const boundedClaimAllowed = !Object.values(falseClosureChecks).some(Boolean)
+    && !nonProductionOracleSweep;
   return {
     id: testCase.id,
     requestedRoute: benchmarkRoute(testCase),
@@ -599,8 +679,8 @@ export function summarizeRun(testCase, reportPath, screenshotPath, report, optio
     litPixels,
     meanLuma,
     falseClosureChecks,
-    economicsClaimAllowed: !Object.values(falseClosureChecks).some(Boolean),
-    optimizationClaimAllowed: !Object.values(falseClosureChecks).some(Boolean),
+    economicsClaimAllowed: boundedClaimAllowed,
+    optimizationClaimAllowed: boundedClaimAllowed,
     visualQualityClaimAllowed: false,
   };
 }
@@ -685,8 +765,8 @@ function runWitness(testCase, index) {
   if (FOOTPRINT_SWEEP_REQUESTED) {
     witnessArgs.push('--boundary-splat-footprint-sweep-radii', FOOTPRINT_SWEEP_RADII.join(','));
   }
-  if (FOOTPRINT_TIER_SWEEP_REQUESTED) {
-    witnessArgs.push('--boundary-splat-footprint-tier-arms', JSON.stringify(DEFAULT_FOOTPRINT_TIER_ARMS));
+  if (ANY_FOOTPRINT_TIER_SWEEP_REQUESTED) {
+    witnessArgs.push('--boundary-splat-footprint-tier-arms', JSON.stringify(ACTIVE_FOOTPRINT_TIER_ARMS));
   }
   const result = spawnSync(process.execPath, witnessArgs, {
     cwd: new URL('.', import.meta.url).pathname,
@@ -808,7 +888,8 @@ async function main() {
       falseClosureChecks[key] ||= Boolean(value);
     }
   }
-  const economicsClaimAllowed = economicsClaimAllowedFor(runs, falseClosureChecks);
+  const economicsClaimAllowed = !FOOTPRINT_TIER_ORACLE_SWEEP_REQUESTED
+    && economicsClaimAllowedFor(runs, falseClosureChecks);
   const optimizationClaimAllowed = economicsClaimAllowed;
   const status = economicsClaimAllowed ? 'valid-economics-evidence' : 'invalid-for-economics-claim';
 

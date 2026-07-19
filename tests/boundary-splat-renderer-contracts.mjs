@@ -5,8 +5,10 @@ const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
+const { buildTargetSalienceOracleScores } = await import('../boundary-splat-target-salience.mjs');
 const {
   canonicalizeBoundarySplatAuditRows,
+  canonicalizeBoundarySplatPositions,
   matchRandomBoundarySplatFootprintTierThresholds,
   resolveBoundarySplatFootprintTier,
   resolveBoundarySplatRenderComposition,
@@ -20,6 +22,11 @@ assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.feat
 assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
 assert.equal(typeof resolveBoundarySplatFootprintTier, 'function', 'candidate-local footprint tier resolution is exported for exact witness replay');
+assert.throws(
+  () => canonicalizeBoundarySplatPositions(Float32Array.from([Number.NaN, 0, 0]), 1, 3),
+  /boundary splat position payload contains non-finite value/,
+  'a one-row candidate cohort cannot evade position-digest validation because sorting never compares it',
+);
 assert.equal(
   typeof matchRandomBoundarySplatFootprintTierThresholds,
   'function',
@@ -162,7 +169,149 @@ const randomFootprintTierB = resolveBoundarySplatFootprintTier({
   heroThreshold: 0.94,
 });
 assert.deepEqual(randomFootprintTierA, randomFootprintTierB, 'random-control charging is deterministic by native cell identity and ignores candidate appearance');
+const oracleFootprintTier = resolveBoundarySplatFootprintTier({
+  policy: 'target_oracle',
+  cellIndex: 9877,
+  oracleScore: 0.97,
+  baseRadius: 0.56,
+  mediumRadius: 0.7,
+  heroRadius: 0.98,
+  mediumThreshold: 0.78,
+  heroThreshold: 0.94,
+});
+assert.deepEqual(
+  [oracleFootprintTier.policy, oracleFootprintTier.score, oracleFootprintTier.tier, oracleFootprintTier.radius],
+  ['target_oracle', 0.97, 'hero', 0.98],
+  'an authenticated target-salience score can charge the immutable candidate without consulting live appearance features',
+);
+const oracleTargetRgba = new Array(4 * 4 * 4).fill(0);
+for (const [pixelIndex, rgb] of [[6, [255, 230, 160]], [5, [120, 45, 10]]]) {
+  const offset = pixelIndex * 4;
+  oracleTargetRgba.splice(offset, 4, ...rgb, 255);
+}
+const oracleCandidates = Float32Array.from([
+  0.25, 0.25, 0.75,
+  0.25, 0.25, 0.25,
+  -0.75, -0.75, 0.25,
+]);
+const oracleScores = buildTargetSalienceOracleScores({
+  targetPreview: { width: 4, height: 4, rgba: oracleTargetRgba },
+  candidateValues: oracleCandidates,
+  candidateStrideFloats: 3,
+  candidateCount: 3,
+  grid: 4,
+  viewProjection: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  mediumCount: 1,
+  heroCount: 1,
+});
+assert.deepEqual(oracleScores.counts, { base: 1, medium: 1, hero: 1 }, 'target oracle assigns exact requested tier populations');
+assert.equal(
+  Array.from(oracleScores.denseScores).filter(score => score > 0).length,
+  2,
+  'target oracle charges only the exact selected native cells in the dense GPU lookup',
+);
+const paddedCandidateValues = new Float32Array(48);
+paddedCandidateValues.set([0.25, 0.25, 0.25], 0);
+paddedCandidateValues.set([-0.25, -0.25, 0.25], 24);
+const packedPaddedCandidates = featureCapture.packBoundarySplatSupervisionCandidates(
+  paddedCandidateValues,
+  new Float32Array(32),
+  2,
+  2,
+  { candidateStrideFloats: 24 },
+);
+assert.equal(
+  packedPaddedCandidates.rowCount,
+  2,
+  'supervision packing accepts the live 24-float candidate stride while preserving the two candidate positions',
+);
+assert.throws(
+  () => buildTargetSalienceOracleScores({
+    targetPreview: { width: 4, height: 4, rgba: oracleTargetRgba },
+    candidateValues: Float32Array.from([
+      0, 0, 0.5,
+      0.75, 0, 0.5,
+      0, 0, -0.5,
+    ]),
+    candidateStrideFloats: 3,
+    candidateCount: 3,
+    grid: 4,
+    viewProjection: [2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    mediumCount: 1,
+    heroCount: 1,
+  }),
+  /boundary-splat-target-oracle-visible-tier-counts:2:1/,
+  'offscreen and out-of-depth candidates cannot satisfy exact charged-tier counts',
+);
+assert.throws(
+  () => buildTargetSalienceOracleScores({
+    targetPreview: { width: 4, height: 4, rgba: [] },
+    candidateValues: oracleCandidates,
+    candidateStrideFloats: 3,
+    candidateCount: 3,
+    grid: 4,
+    viewProjection: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    mediumCount: 1,
+    heroCount: 1,
+  }),
+  /boundary-splat-target-oracle-preview-rgba-length/,
+  'blank or partial target previews fail before oracle scores can impersonate evidence',
+);
 assert.match(core, /fn boundarySplatFootprintTierScore/, 'WGSL owns the same candidate-local footprint tier score as the audit helper');
+assert.match(core, /BOUNDARY_SPLAT_FOOTPRINT_TIER_TARGET_ORACLE:\s*u32\s*=\s*3u/, 'WGSL assigns a distinct non-production target-oracle policy code');
+assert.match(
+  core,
+  /@group\(0\) @binding\(12\) var<storage, read> boundarySplatFootprintOracleScores:\s*array<f32>/,
+  'candidate compaction reads target-oracle scores from one explicit per-native-cell storage buffer',
+);
+assert.match(
+  core,
+  /policy == BOUNDARY_SPLAT_FOOTPRINT_TIER_TARGET_ORACLE[\s\S]*boundarySplatFootprintOracleScores\[cellIndex\]/,
+  'target-oracle charging uses native cell identity rather than candidate append order',
+);
+assert.match(
+  core,
+  /boundary-splat-footprint-oracle-(?:missing|stale|camera-mismatch)/,
+  'requesting target-oracle policy without current frozen-state and camera authority fails loud before GPU dispatch',
+);
+assert.match(
+  core,
+  /buildBoundarySplatTargetSalienceOracle/,
+  'the browser prototype exposes one bounded same-state oracle builder instead of accepting silent ad hoc score mutation',
+);
+assert.match(
+  core,
+  /targetAuthority\?\.camera[\s\S]*boundary-splat-target-oracle-target-camera-invalid[\s\S]*boundary-splat-target-oracle-target-camera-mismatch/,
+  'the oracle builder binds projection to the exact camera that produced the target preview',
+);
+assert.match(
+  core,
+  /expectedCandidatePositionSha256[\s\S]*boundary-splat-target-oracle-candidate-cohort-mismatch/,
+  'the oracle builder rejects a fresh capture whose canonical position cohort differs from the held arm authority',
+);
+const supervisionCaptureSource = core.slice(
+  core.indexOf('async function captureBoundarySplatSupervisionCandidates'),
+  core.indexOf('async function buildBoundarySplatTargetSalienceOracle'),
+);
+const targetOracleBuilderSource = core.slice(
+  core.indexOf('async function buildBoundarySplatTargetSalienceOracle'),
+  core.indexOf('function compactRenderScaleSample'),
+);
+assert.doesNotMatch(
+  supervisionCaptureSource,
+  /if \(!state\.active/,
+  'held-state oracle candidate capture remains legal after the witness intentionally suspends RAF',
+);
+assert.match(
+  supervisionCaptureSource,
+  /sampleFrame\(\{[\s\S]*allowInactive:\s*true/,
+  'held-state supervision capture explicitly authorizes render-only sampling while inactive',
+);
+assert.doesNotMatch(
+  targetOracleBuilderSource,
+  /if \(!state\.active/,
+  'target-oracle construction requires a live device but not a running render loop',
+);
 assert.match(
   core,
   /let footprintTierPolicy = u32\(round\(boundarySplatCamera\.footprintTierPolicy\.x\)\);[\s\S]*if \(footprintTierPolicy != BOUNDARY_SPLAT_FOOTPRINT_TIER_OFF\) \{[\s\S]*footprintTierScore >= footprintHeroThreshold/,
