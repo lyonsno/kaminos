@@ -8,8 +8,11 @@ export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_IDENTITY = 'webgpu-screen-
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_IDENTITY = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY = 'wgsl-solver-owned-interface-normal-curvature-confidence-v1';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
+export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_IDENTITY = 'wgsl-analytic-contact-partial-slip-v0';
+export const KAMINOS_FINGER_FLUID_ENERGY_LEDGER_IDENTITY = 'wgsl-per-pass-kinetic-energy-ledger-v0';
 export const KAMINOS_FINGER_FLUID_TOPOLOGY_IDENTITY = 'wgsl-four-neighbor-topology-retention-v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY = 'wgsl-opt-in-support-tangential-particle-shift-v0';
 export const KAMINOS_FINGER_FLUID_CHEMISTRY_IDENTITY = 'wgsl-passive-material-tracer-diffusion-v0';
@@ -67,11 +70,16 @@ export function createFingerFluidBenchState(options = {}) {
       gridDimensions: options.gridDimensions || [32, 20, 32],
       neighborGridContract: options.neighborGridContract || 'wgsl-linked-cell-neighbor-grid-v0',
       densityContinuity: options.densityContract || 'wgsl-pbf-density-constraint-v0',
+      boundaryPressureContract: options.boundaryPressureContract || 'wgsl-analytic-boundary-density-support-v0',
       pressureProjection: 'iterative_position_density_projection',
       vorticityConfinement: options.vorticityConfinementContract || 'wgsl-neighbor-vorticity-confinement-v0',
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
       restStateContract: options.restStateContract || KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY,
       supportTransportContract: options.supportTransportContract || KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY,
+      supportFrictionContract: options.supportFrictionContract || KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_IDENTITY,
+      supportFriction: finite(options.supportFriction, 1.6),
+      energyLedgerContract: options.energyLedgerContract || KAMINOS_FINGER_FLUID_ENERGY_LEDGER_IDENTITY,
+      energyLedger: options.energyLedger || null,
       topologyContract: options.topologyContract || KAMINOS_FINGER_FLUID_TOPOLOGY_IDENTITY,
       particleShiftContract: options.particleShiftContract || KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY,
       particleShiftStrength: finite(options.particleShiftStrength, 0),
@@ -81,6 +89,7 @@ export function createFingerFluidBenchState(options = {}) {
       chemistryDiffusionPassCount: nonNegativeInteger(options.chemistryDiffusionPassCount, 0),
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
+      interfaceGeometryContract: options.interfaceGeometryContract || KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),
       linkedCellGridBuildCount: nonNegativeInteger(options.linkedCellGridBuildCount, 0),
       densityIterationCount: nonNegativeInteger(options.densityIterationCount, 0),
@@ -124,6 +133,7 @@ export function createFingerFluidBenchState(options = {}) {
     playground: options.playground || null,
     config: options.config || null,
     playgroundZoneDiagnostics: options.playgroundZoneDiagnostics || null,
+    laminarInletDiagnostics: options.laminarInletDiagnostics || null,
     interfaceCarrier: options.interfaceCarrier || null,
     downgrades,
     compatibility: {
