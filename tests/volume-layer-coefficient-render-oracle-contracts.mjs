@@ -106,6 +106,15 @@ assert.match(source, /--importance-socket/, 'layer retention requires an explici
 assert.match(source, /--ridge-retained-mass/, 'layer retention requires an explicit Ridge mass coordinate');
 assert.match(source, /--nonridge-retained-mass/, 'layer retention requires an explicit Non-Ridge mass coordinate');
 assert.match(source, /transmittanceLedger/, 'oracle binds exact per-camera transmittance artifacts');
+assert.match(source, /kaminos\.volume\.grid96-transverse-basis-socket\.v0/, 'oracle pins the exact transverse source socket schema');
+assert.match(source, /sha256:b424b2eeb4bc30b2210ab5a3c5e2aebd16eb9ff270c9add32802926fd8f5f9e1/, 'oracle pins the exact transverse source identity');
+assert.match(source, /rank-one-tangent-plus-world-normal-binormal-symmetric-placement-v0/, 'oracle names the bounded world-transverse treatment honestly');
+assert.match(source, /def load_transverse_basis_socket\(/, 'oracle validates the source-owned transverse frame socket');
+assert.match(source, /def transverse_world_pixel_samples\(/, 'oracle exposes world-transverse symmetric placement');
+assert.match(source, /--transverse-basis-socket/, 'world-transverse mode requires an explicit source socket');
+assert.match(source, /--transverse-normal-scale/, 'world-transverse mode requires an explicit normal width');
+assert.match(source, /--transverse-binormal-scale/, 'world-transverse mode requires an explicit binormal width');
+assert.match(source, /invalidRowsUseRankOneWithoutFallback/, 'oracle receipts distinguish untreated invalid rows from fallback geometry');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
@@ -119,6 +128,7 @@ assert.match(selfTest.stdout, /multiscale matched-work contracts passed/);
 assert.match(selfTest.stdout, /selective split contracts passed/);
 assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
 assert.match(selfTest.stdout, /layer retention contracts passed/);
+assert.match(selfTest.stdout, /world transverse placement contracts passed/);
 
 const massAuthorityProbe = spawnSync(python, ['-c', String.raw`
 import importlib.util
@@ -282,6 +292,8 @@ assert.deepEqual(missingControlsFailure.requested.footprintControls, {
   multiscaleMiddleMass: null,
   multiscaleMajorScale: null,
   multiscaleMinorScale: null,
+  transverseNormalScale: null,
+  transverseBinormalScale: null,
 });
 assert.match(missingControlsFailure.error, /requires explicit/i);
 
@@ -319,8 +331,38 @@ assert.deepEqual(missingMultiscaleFailure.requested.footprintControls, {
   multiscaleMiddleMass: null,
   multiscaleMajorScale: null,
   multiscaleMinorScale: null,
+  transverseNormalScale: null,
+  transverseBinormalScale: null,
 });
 assert.match(missingMultiscaleFailure.error, /multiscale mode requires explicit/i);
+
+const missingTransverseReport = join(root, 'missing-transverse-controls-report.json');
+const missingTransverse = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'missing-transverse-out'),
+  '--report', missingTransverseReport,
+  '--footprint-mode', 'transverse',
+  '--transverse-normal-scale', '1',
+  '--transverse-binormal-scale', '1',
+], { encoding: 'utf8' });
+assert.notEqual(missingTransverse.status, 0, 'world-transverse mode without its exact source socket must fail before source loading');
+const missingTransverseFailure = JSON.parse(await readFile(missingTransverseReport, 'utf8'));
+assert.equal(missingTransverseFailure.failurePhase, 'footprint-control-validation');
+assert.equal(missingTransverseFailure.requested.footprintMode, 'transverse');
+assert.deepEqual(missingTransverseFailure.requested.footprintControls, {
+  skirtMix: null,
+  skirtMinorScale: null,
+  skirtRidgeRejection: null,
+  multiscaleMiddleMass: null,
+  multiscaleMajorScale: null,
+  multiscaleMinorScale: null,
+  transverseNormalScale: 1,
+  transverseBinormalScale: 1,
+});
+assert.deepEqual(missingTransverseFailure.requested.transverseBasis, { socket: null });
+assert.match(missingTransverseFailure.error, /transverse mode requires explicit/i);
 
 const partialImportanceReport = join(root, 'partial-importance-controls-report.json');
 const partialImportance = spawnSync(python, [

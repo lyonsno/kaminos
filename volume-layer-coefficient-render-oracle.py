@@ -43,6 +43,19 @@ IMPORTANCE_SOCKET_IDENTITY = "sha256:120a275c49ce7ae3456a9202ca3da55df5c51ab743b
 IMPORTANCE_COEFFICIENT_SHA256 = "c7c018f4d9a7c2758322277640a2f8e7df06475e421d7f128b5cc05318c55c3b"
 IMPORTANCE_ROW_ORDER = "caller-ordered-native-cell-index-v0"
 LAYER_OPTICAL_WEIGHT_IDENTITY = "rgb-luma-plus-half-layer-extinction-v0"
+TRANSVERSE_SOCKET_SCHEMA = "kaminos.volume.grid96-transverse-basis-socket.v0"
+TRANSVERSE_SOCKET_IDENTITY = "sha256:b424b2eeb4bc30b2210ab5a3c5e2aebd16eb9ff270c9add32802926fd8f5f9e1"
+TRANSVERSE_BASIS_IDENTITY = "declared-normal-flow-tangent-orthonormal-frame-v0"
+TRANSVERSE_FALLBACK_POLICY = "none-invalid-rows-remain-invalid-v0"
+TRANSVERSE_BASIS_ORDER = [
+    "center.x", "center.y", "center.z",
+    "tangent.x", "tangent.y", "tangent.z",
+    "normal.x", "normal.y", "normal.z",
+    "binormal.x", "binormal.y", "binormal.z",
+    "radiusWorld", "flowCoherence", "tangentPlaneConditioning",
+    "orthogonalityResidual", "ridgeOpticalWeight", "nonRidgeOpticalWeight",
+    "opticalWeight", "basis.valid", "structure.normalDeclaredValid",
+]
 IMPORTANCE_CANDIDATE_ORDER = [
     "center.x", "center.y", "center.z",
     "covariance.xx", "covariance.xy", "covariance.xz",
@@ -60,6 +73,7 @@ FOOTPRINT_MODES = {
     "compound": "flow-bilinear-core-plus-gauss-hermite-compound-shared-mass-v0",
     "multiscale": "view-independent-flow-bilinear-five-tap-core-plus-seven-by-three-middle-band-shared-mass-v0",
     "selective-split": "view-independent-multiview-residual-three-child-subcell-split-v0",
+    "transverse": "rank-one-tangent-plus-world-normal-binormal-symmetric-placement-v0",
 }
 TANGENT_OFFSETS = np.asarray((-1.0, -0.5, 0.0, 0.5, 1.0), dtype=np.float64)
 TANGENT_WEIGHTS = np.asarray((0.075, 0.225, 0.4, 0.225, 0.075), dtype=np.float64)
@@ -412,6 +426,106 @@ def load_layer_importance_socket(
     }
 
 
+def load_transverse_basis_socket(
+    socket_path: Path,
+    native_ids: np.ndarray,
+    descriptors: np.ndarray,
+    coefficients: np.ndarray,
+    coefficient_path: Path,
+    verify_hashes: bool,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    socket = load_json(socket_path, "transverse-basis socket")
+    require(socket.get("schema") == TRANSVERSE_SOCKET_SCHEMA, f"transverse socket schema must be {TRANSVERSE_SOCKET_SCHEMA}")
+    require(socket.get("status") == "complete", "transverse socket is not complete")
+    require(socket.get("identity") == TRANSVERSE_SOCKET_IDENTITY, "transverse socket semantic identity drifted")
+    count = int(native_ids.shape[0])
+    execution = socket.get("execution") or {}
+    require(execution.get("rowCount") == count, "transverse socket row count drifted")
+    require(execution.get("sampleCap") is None, "transverse socket installed a hidden sample cap")
+    require(execution.get("droppedRowCount") == 0, "transverse socket dropped source rows")
+    require(execution.get("fallbackRowCount") == 0, "transverse socket used fallback rows")
+    basis_contract = socket.get("basis") or {}
+    require(basis_contract.get("identity") == TRANSVERSE_BASIS_IDENTITY, "transverse basis identity drifted")
+    require(basis_contract.get("fallbackPolicy") == TRANSVERSE_FALLBACK_POLICY, "transverse fallback policy drifted")
+    require(basis_contract.get("order") == TRANSVERSE_BASIS_ORDER, "transverse basis column order drifted")
+    claim = socket.get("claimBoundary") or {}
+    for field in ("widthsChosen", "childCountChosen", "capInstalled", "fallbackInstalled", "supportRedefined", "coefficientsChanged"):
+        require(claim.get(field) is False, f"transverse source claim boundary {field} drifted")
+    source = socket.get("source") or {}
+    require(source.get("grid") == 96 and source.get("rowCount") == count, "transverse source grid or row count drifted")
+    require(source.get("coefficientArtifactSha256") == IMPORTANCE_COEFFICIENT_SHA256, "transverse source coefficient identity drifted")
+    route = source.get("route") or {}
+    require(route.get("effective") == "native-3d-compute-fluid-raymarch-v0", "transverse source effective route drifted")
+    require(route.get("backend") == "WebGPU:apple" and route.get("fallbackReason") is None, "transverse source route/backend fallback detected")
+    artifacts = socket.get("artifacts") or {}
+    basis_path = validate_artifact(
+        artifacts.get("basis"), socket_path, "transverse basis", "float32-le",
+        [count, len(TRANSVERSE_BASIS_ORDER)], verify_hashes,
+    )
+    reason_path = validate_artifact(
+        artifacts.get("reasonCodes"), socket_path, "transverse reason codes", "uint8",
+        [count], verify_hashes,
+    )
+    index_path = validate_artifact(
+        artifacts.get("nativeCellIndex"), socket_path, "transverse native-cell indices", "uint32-le",
+        [count], verify_hashes,
+    )
+    socket_ids = np.memmap(index_path, dtype="<u4", mode="r", shape=(count,))
+    require(np.array_equal(socket_ids, native_ids), "transverse socket native ids are not aligned to coefficient rows")
+    require(source.get("nativeCellIndexSha256") == artifacts["nativeCellIndex"].get("sha256"), "transverse native-id source binding drifted")
+    if verify_hashes:
+        require(sha256_file(coefficient_path) == IMPORTANCE_COEFFICIENT_SHA256, "effective coefficient artifact does not match the transverse socket")
+    basis = np.memmap(basis_path, dtype="<f4", mode="r", shape=(count, len(TRANSVERSE_BASIS_ORDER)))
+    reasons = np.memmap(reason_path, dtype="u1", mode="r", shape=(count,))
+    require(np.all(np.isfinite(basis)), "transverse basis contains nonfinite values")
+    require(np.allclose(basis[:, 0:3], descriptors[:, 0:3], rtol=0.0, atol=2e-7), "transverse centers do not reproduce descriptor positions")
+    tangent_source = np.asarray(descriptors[:, 20:23], dtype=np.float64)
+    tangent_lengths = np.linalg.norm(tangent_source, axis=1)
+    require(np.all(np.isfinite(tangent_lengths)) and float(np.min(tangent_lengths)) > 1e-6, "effective descriptors contain invalid flow tangents")
+    normalized_tangents = tangent_source / tangent_lengths[:, None]
+    require(np.allclose(basis[:, 3:6], normalized_tangents, rtol=2e-6, atol=2e-7), "transverse tangents do not reproduce descriptors")
+    require(np.allclose(basis[:, 12], descriptors[:, 14], rtol=2e-6, atol=2e-7), "transverse radii do not reproduce descriptors")
+    ridge, nonridge = layer_optical_weights(coefficients)
+    require(np.allclose(basis[:, 16], ridge, rtol=2e-6, atol=2e-7), "transverse Ridge optical weights do not reproduce")
+    require(np.allclose(basis[:, 17], nonridge, rtol=2e-6, atol=2e-7), "transverse Non-Ridge optical weights do not reproduce")
+    require(np.allclose(basis[:, 18], ridge + nonridge, rtol=2e-6, atol=2e-7), "transverse combined optical weights do not reproduce")
+    valid = basis[:, 19] > 0.5
+    require(np.array_equal(valid, reasons == 0), "transverse validity does not agree with reason codes")
+    require(np.all(reasons[~valid] != 0), "transverse invalid rows lost explicit reasons")
+    require(np.all(basis[valid, 20] > 0.5), "transverse valid rows lack declared source normals")
+    tangent = np.asarray(basis[valid, 3:6], dtype=np.float64)
+    normal = np.asarray(basis[valid, 6:9], dtype=np.float64)
+    binormal = np.asarray(basis[valid, 9:12], dtype=np.float64)
+    require(np.allclose(np.linalg.norm(tangent, axis=1), 1.0, atol=2e-6), "transverse valid tangents are not unit length")
+    require(np.allclose(np.linalg.norm(normal, axis=1), 1.0, atol=2e-6), "transverse valid normals are not unit length")
+    require(np.allclose(np.linalg.norm(binormal, axis=1), 1.0, atol=2e-6), "transverse valid binormals are not unit length")
+    require(np.allclose(np.sum(tangent * normal, axis=1), 0.0, atol=2e-6), "transverse tangent/normal orthogonality drifted")
+    require(np.allclose(np.sum(tangent * binormal, axis=1), 0.0, atol=2e-6), "transverse tangent/binormal orthogonality drifted")
+    require(np.allclose(np.sum(normal * binormal, axis=1), 0.0, atol=2e-6), "transverse normal/binormal orthogonality drifted")
+    coverage = socket.get("coverage") or {}
+    require(coverage.get("basisValidRowCount") == int(np.count_nonzero(valid)), "transverse valid-row receipt drifted")
+    return basis, {
+        "schema": socket.get("schema"),
+        "identity": socket.get("identity"),
+        "path": str(socket_path),
+        "sha256": sha256_file(socket_path),
+        "basisIdentity": basis_contract.get("identity"),
+        "fallbackPolicy": basis_contract.get("fallbackPolicy"),
+        "rowCount": count,
+        "basisValidRowCount": int(np.count_nonzero(valid)),
+        "basisInvalidRowCount": int(np.count_nonzero(~valid)),
+        "fallbackRowCount": 0,
+        "sampleCap": None,
+        "droppedRowCount": 0,
+        "coverage": coverage,
+        "basisArtifact": {"path": str(basis_path), "bytes": basis_path.stat().st_size, "sha256": artifacts["basis"]["sha256"], "shape": [count, len(TRANSVERSE_BASIS_ORDER)]},
+        "reasonArtifact": {"path": str(reason_path), "bytes": reason_path.stat().st_size, "sha256": artifacts["reasonCodes"]["sha256"], "shape": [count]},
+        "nativeCellIndexArtifact": {"path": str(index_path), "bytes": index_path.stat().st_size, "sha256": artifacts["nativeCellIndex"]["sha256"], "shape": [count]},
+        "coefficientArtifactSha256": IMPORTANCE_COEFFICIENT_SHA256,
+        "hashVerificationSkipped": not verify_hashes,
+    }
+
+
 def project(points: np.ndarray, matrix_world_inverse: list[float], projection: list[float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     # Three.js serializes column-major Matrix4.elements.
     view = np.asarray(matrix_world_inverse, dtype=np.float64).reshape(4, 4, order="F")
@@ -463,6 +577,60 @@ def tangent_pixel_samples(
         sample_y = pixel_y + tangent_y * major_px * tangent_offset
         for x, y, pixel_weight in bilinear_pixel_samples(sample_x, sample_y):
             yield x, y, pixel_weight * tangent_weight
+
+
+def transverse_world_pixel_samples(
+    positions: np.ndarray,
+    transverse_basis: np.ndarray,
+    camera: dict[str, Any],
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    center_depth_index: np.ndarray,
+    near: float,
+    far: float,
+    depth_bins: int,
+    normal_scale: float,
+    binormal_scale: float,
+):
+    require(transverse_basis.shape == (positions.shape[0], len(TRANSVERSE_BASIS_ORDER)), "transverse basis shape drifted at raster")
+    require(math.isfinite(normal_scale) and normal_scale >= 0.0, "transverse normal scale must be finite and nonnegative")
+    require(math.isfinite(binormal_scale) and binormal_scale >= 0.0, "transverse binormal scale must be finite and nonnegative")
+    basis_valid = transverse_basis[:, 19] > 0.5
+    invalid_weight = (~basis_valid).astype(np.float32)
+    for x, y, weight in weighted_tangent_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, invalid_weight,
+    ):
+        yield x, y, weight, center_depth_index
+    pose = camera["cameraPose"]
+    normal = np.asarray(transverse_basis[:, 6:9], dtype=np.float32)
+    binormal = np.asarray(transverse_basis[:, 9:12], dtype=np.float32)
+    radius = np.asarray(transverse_basis[:, 12], dtype=np.float32)
+    valid_weight = basis_valid.astype(np.float32)
+    for normal_offset, normal_weight in zip(NORMAL_OFFSETS, NORMAL_WEIGHTS):
+        for binormal_offset, binormal_weight in zip(NORMAL_OFFSETS, NORMAL_WEIGHTS):
+            child_positions = (
+                positions
+                + normal * (radius * float(normal_scale * normal_offset))[:, None]
+                + binormal * (radius * float(binormal_scale * binormal_offset))[:, None]
+            )
+            child_ndc, child_depth, child_valid = project(
+                child_positions, pose["matrixWorldInverse"], pose["projectionMatrix"],
+            )
+            require(np.all(child_valid[basis_valid]), "world-transverse placement projected a valid-basis child behind the camera")
+            child_x = (child_ndc[:, 0] * 0.5 + 0.5) * int(camera["width"])
+            child_y = (1.0 - (child_ndc[:, 1] * 0.5 + 0.5)) * int(camera["height"])
+            child_depth_index = np.clip(
+                ((child_depth - near) / max(far - near, 1e-6) * (depth_bins - 1)).astype(np.int32),
+                0, depth_bins - 1,
+            )
+            placement_weight = valid_weight * float(normal_weight * binormal_weight)
+            for x, y, weight in weighted_tangent_pixel_samples(
+                child_x, child_y, tangent_x, tangent_y, major_px, placement_weight,
+            ):
+                yield x, y, weight, child_depth_index
 
 
 def weighted_tangent_pixel_samples(
@@ -708,6 +876,27 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
         "splitOffsetWorld": args.split_offset_world,
     }
     split_provided = [value is not None for value in split_requested.values()]
+    transverse_requested = {
+        "transverseNormalScale": args.transverse_normal_scale,
+        "transverseBinormalScale": args.transverse_binormal_scale,
+    }
+    transverse_provided = [value is not None for value in transverse_requested.values()]
+    if args.footprint_mode == "transverse":
+        require(
+            args.transverse_basis_socket is not None and all(transverse_provided),
+            "transverse mode requires explicit --transverse-basis-socket, --transverse-normal-scale, and --transverse-binormal-scale",
+        )
+        require(not any(provided) and not compound_provided and not any(multiscale_provided) and not any(split_provided), "transverse mode forbids skirt, compound, multiscale, and selective-split controls")
+        for flag, value in (("--transverse-normal-scale", args.transverse_normal_scale), ("--transverse-binormal-scale", args.transverse_binormal_scale)):
+            require(math.isfinite(value) and value >= 0.0, f"{flag} must be finite and nonnegative")
+        return {
+            "skirtMix": None, "skirtMinorScale": None, "skirtRidgeRejection": None,
+            "conditioningFeature": None, "controlsExplicit": True, "compoundHaloMass": None,
+            **{key: None for key in multiscale_requested},
+            **{key: None for key in split_requested},
+            **{key: float(value) for key, value in transverse_requested.items()},
+        }
+    require(args.transverse_basis_socket is None and not any(transverse_provided), "transverse socket and scales are only lawful with --footprint-mode transverse")
     if args.footprint_mode == "core-skirt":
         require(not compound_provided and not any(multiscale_provided) and not any(split_provided), "core-skirt mode forbids compound, multiscale, and selective-split controls")
         require(all(provided), "core-skirt mode requires explicit --skirt-mix, --skirt-minor-scale, and --skirt-ridge-rejection")
@@ -721,6 +910,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "compoundHaloMass": None,
             **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
+            **{key: None for key in transverse_requested},
         }
     require(not any(provided), "skirt controls are only lawful with --footprint-mode core-skirt")
     if args.footprint_mode == "compound":
@@ -733,6 +923,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "compoundHaloMass": float(args.compound_halo_mass),
             **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
+            **{key: None for key in transverse_requested},
         }
     require(not compound_provided, "--compound-halo-mass is only lawful with --footprint-mode compound")
     if args.footprint_mode == "multiscale":
@@ -747,6 +938,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "compoundHaloMass": None,
             **{key: float(value) for key, value in multiscale_requested.items()},
             **{key: None for key in split_requested},
+            **{key: None for key in transverse_requested},
         }
     require(not any(multiscale_provided), "multiscale controls are only lawful with --footprint-mode multiscale")
     if args.footprint_mode == "selective-split":
@@ -772,6 +964,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "splitScoreThreshold": float(args.split_score_threshold),
             "splitMinCameraSupport": int(args.split_min_camera_support),
             "splitOffsetWorld": float(args.split_offset_world),
+            **{key: None for key in transverse_requested},
         }
     require(not any(split_provided), "selective-split controls are only lawful with --footprint-mode selective-split")
     if args.footprint_mode == "ellipse":
@@ -780,6 +973,7 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
             **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
+            **{key: None for key in transverse_requested},
         }
     if args.footprint_mode == "bilinear":
         return {
@@ -787,12 +981,14 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
             **{key: None for key in multiscale_requested},
             **{key: None for key in split_requested},
+            **{key: None for key in transverse_requested},
         }
     return {
         "skirtMix": None, "skirtMinorScale": None, "skirtRidgeRejection": None,
         "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
         **{key: None for key in multiscale_requested},
         **{key: None for key in split_requested},
+        **{key: None for key in transverse_requested},
     }
 
 
@@ -811,6 +1007,8 @@ def bilinear_footprint_controls() -> dict[str, Any]:
         "splitScoreThreshold": None,
         "splitMinCameraSupport": None,
         "splitOffsetWorld": None,
+        "transverseNormalScale": None,
+        "transverseBinormalScale": None,
     }
 
 
@@ -920,6 +1118,7 @@ def rasterize_coefficients(
     source_grid: int,
     split_mask: np.ndarray | None = None,
     split_world_offsets: np.ndarray | None = None,
+    transverse_basis: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
@@ -1004,6 +1203,17 @@ def rasterize_coefficients(
             + (GAUSS_HERMITE_ORDER * len(NORMAL_OFFSETS) if middle_mass > 0.0 else 0)
         )
         nominal_pixel_deposits = nominal_quadrature_samples * 4
+    elif footprint_mode == "transverse":
+        require(transverse_basis is not None, "transverse footprint requires its validated source basis")
+        pixel_samples = transverse_world_pixel_samples(
+            positions, transverse_basis, camera,
+            pixel_x, pixel_y, tx, ty, major_px, depth_index,
+            near, far, depth_bins,
+            float(footprint_controls["transverseNormalScale"]),
+            float(footprint_controls["transverseBinormalScale"]),
+        )
+        nominal_quadrature_samples = None
+        nominal_pixel_deposits = None
     else:
         require(footprint_mode == "selective-split", f"unknown footprint mode {footprint_mode}")
         require(split_mask is not None and split_mask.shape == (positions.shape[0],), "selective-split requires one frozen split mask for every candidate")
@@ -1044,7 +1254,7 @@ def rasterize_coefficients(
     projected_fragments = 0
     nominal_projected_fragments = 0
     nominal_candidate_weight = np.zeros(positions.shape[0], dtype=np.float64)
-    if footprint_mode != "selective-split":
+    if footprint_mode not in {"selective-split", "transverse"}:
         pixel_samples = (
             (sx, sy, sample_weight, depth_index)
             for sx, sy, sample_weight in pixel_samples
@@ -1103,6 +1313,19 @@ def rasterize_coefficients(
         "multiscaleNominalWorkRatioToBilinear": (
             float(nominal_pixel_deposits / 20.0) if footprint_mode == "multiscale" else None
         ),
+        "transversePlacement": ({
+            "identity": "rank-one-tangent-plus-world-normal-binormal-symmetric-placement-v0",
+            "basisValidRows": int(np.count_nonzero(transverse_basis[:, 19] > 0.5)),
+            "basisInvalidRows": int(np.count_nonzero(transverse_basis[:, 19] <= 0.5)),
+            "normalScale": float(footprint_controls["transverseNormalScale"]),
+            "binormalScale": float(footprint_controls["transverseBinormalScale"]),
+            "validRowQuadratureSamples": int(len(TANGENT_OFFSETS) * len(NORMAL_OFFSETS) ** 2),
+            "invalidRowQuadratureSamples": int(len(TANGENT_OFFSETS)),
+            "childrenUseOwnProjectedDepth": True,
+            "invalidRowsUseRankOneWithoutFallback": True,
+            "fallbackRowCount": 0,
+            "rowSelectionCap": None,
+        } if footprint_mode == "transverse" and transverse_basis is not None else None),
         "splitCandidateCount": int(np.count_nonzero(split_mask)) if split_mask is not None else 0,
         "splitSelectionCap": None,
         "minorPixelClamp": [0.5, 4.0],
@@ -1419,7 +1642,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     state, paths, descriptor_receipt = validate_manifest(manifest, manifest_path, args.state_step, not args.skip_hash_verification)
     state_step = int((state.get("replay") or {}).get("completedSteps"))
     source_grid = int((state.get("replay") or {}).get("grid"))
-    if args.validate_only:
+    if args.validate_only and args.footprint_mode != "transverse":
         return {
             "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
             "rowCount": int((state.get("rows") or {}).get("count")), "descriptor": descriptor_receipt,
@@ -1430,10 +1653,10 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         }
     required = {"features", "admission", "coefficients", "kernelDescriptors"}
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
-    if args.footprint_mode in {"higher-order", "compound", "selective-split"}:
+    if args.footprint_mode in {"higher-order", "compound", "selective-split", "transverse"}:
         require(args.path_scale is not None, f"{args.footprint_mode} mode requires explicit --path-scale from the frozen bilinear baseline")
     if importance_controls is not None:
-        require(args.footprint_mode == "bilinear", "layer-retention assay requires --footprint-mode bilinear to isolate parent support")
+        require(args.footprint_mode in {"bilinear", "transverse"}, "layer retention may compose only with bilinear or the explicit transverse treatment")
         require(args.path_scale is not None, "layer-retention assay requires explicit --path-scale from the frozen full-parent bilinear baseline")
     phase_state["value"] = "capture-validation"
     capture_report = load_json(capture_path, "capture report")
@@ -1477,6 +1700,24 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         "nonzeroCount": int(np.sum(coefficient_nonzero_by_channel)),
         "nonzeroCountByChannel": [int(value) for value in coefficient_nonzero_by_channel],
     }
+
+    transverse_basis: np.ndarray | None = None
+    transverse_receipt: dict[str, Any] | None = None
+    if args.footprint_mode == "transverse":
+        phase_state["value"] = "transverse-socket-validation"
+        transverse_basis, transverse_receipt = load_transverse_basis_socket(
+            Path(args.transverse_basis_socket).resolve(), indices, descriptors, coefficients,
+            paths["coefficients"], not args.skip_hash_verification,
+        )
+    if args.validate_only:
+        return {
+            "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
+            "rowCount": count, "descriptor": descriptor_receipt,
+            "footprintMode": footprint_identity(args.footprint_mode), "footprintControls": footprint_controls,
+            "importanceControls": importance_controls, "transverseBasis": transverse_receipt,
+            "sourceGrid": source_grid, "nativeCellWidthWorld": native_cell_width_world(source_grid),
+            "depositionScaleIdentity": DEPOSITION_SCALE_IDENTITY,
+        }
 
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1541,6 +1782,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     calibration_planes, calibration_raster = rasterize_coefficients(
         descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, calibration_camera,
         args.depth_bins, calibration_footprint_mode, calibration_footprint_controls, source_grid,
+        transverse_basis=transverse_basis,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
@@ -1644,6 +1886,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, effective_coefficients, camera,
             args.depth_bins, args.footprint_mode, footprint_controls, source_grid, split_mask, split_world_offsets,
+            transverse_basis,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
         ridge_total_planes = planes.copy()
@@ -1749,7 +1992,10 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "multiscaleMiddleMass": args.multiscale_middle_mass,
                 "multiscaleMajorScale": args.multiscale_major_scale,
                 "multiscaleMinorScale": args.multiscale_minor_scale,
+                "transverseNormalScale": args.transverse_normal_scale,
+                "transverseBinormalScale": args.transverse_binormal_scale,
             },
+            "transverseBasis": {"socket": args.transverse_basis_socket},
             "depositionControls": {
                 "compoundHaloMass": args.compound_halo_mass,
                 "splitAttributionCameras": args.split_attribution_cameras,
@@ -1776,6 +2022,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "splitSelectionCap": None,
             "coefficientSignal": coefficient_signal,
             "layerImportance": importance_receipt,
+            "transverseBasis": transverse_receipt,
             "momentMatchReference": (
                 "flow-tangent-five-by-three-ellipse-first-two-moments-v0"
                 if args.footprint_mode in {"higher-order", "compound"} else None
@@ -2061,6 +2308,71 @@ def self_test() -> None:
     require(not edge_mass["inViewportMassConserved"], "selective edge fixture did not diagnose viewport clipping")
     require(edge_mass["viewportMassEvidenceAuthority"] == "non-decision-bearing-clipped-framing-v0", "selective edge clipping retained coefficient-mass authority")
     print("deposition raster smoke contracts passed")
+    transverse_basis_fixture = np.zeros((2, len(TRANSVERSE_BASIS_ORDER)), dtype=np.float32)
+    transverse_positions = np.asarray([[-0.2, 0.0, -0.5], [0.2, 0.0, -0.5]], dtype=np.float32)
+    transverse_tangents = np.asarray([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)
+    transverse_basis_fixture[:, 0:3] = transverse_positions
+    transverse_basis_fixture[0, 3:6] = [1.0, 0.0, 0.0]
+    transverse_basis_fixture[0, 6:9] = [0.0, 1.0, 0.0]
+    transverse_basis_fixture[0, 9:12] = [0.0, 0.0, 1.0]
+    transverse_basis_fixture[0, 12] = 0.1
+    transverse_basis_fixture[0, 19:21] = 1.0
+    transverse_controls_zero = {
+        **bilinear_footprint_controls(),
+        "skirtMix": None,
+        "skirtMinorScale": None,
+        "skirtRidgeRejection": None,
+        "controlsExplicit": True,
+        "transverseNormalScale": 0.0,
+        "transverseBinormalScale": 0.0,
+    }
+    transverse_features = np.zeros((2, len(FEATURE_ORDER)), dtype=np.float32)
+    transverse_coefficients = np.ones((2, 8), dtype=np.float32)
+    bilinear_planes, _ = rasterize_coefficients(
+        transverse_positions, transverse_tangents, transverse_features, transverse_coefficients,
+        raster_camera, 4, "bilinear", bilinear_footprint_controls(), 160,
+    )
+    zero_planes, zero_receipt = rasterize_coefficients(
+        transverse_positions, transverse_tangents, transverse_features, transverse_coefficients,
+        raster_camera, 4, "transverse", transverse_controls_zero, 160,
+        transverse_basis=transverse_basis_fixture,
+    )
+    require(np.allclose(zero_planes, bilinear_planes, rtol=2e-6, atol=2e-6), "zero-width transverse endpoint does not reproduce rank-one bilinear")
+    require(zero_receipt["coefficientMass"]["nominalKernelMassConserved"], "zero-width transverse endpoint changed optical mass")
+    require(zero_receipt["transversePlacement"]["basisValidRows"] == 1, "transverse fixture valid-row count drifted")
+    require(zero_receipt["transversePlacement"]["basisInvalidRows"] == 1, "transverse fixture invalid-row count drifted")
+    require(zero_receipt["transversePlacement"]["invalidRowsUseRankOneWithoutFallback"], "transverse invalid row used fallback geometry")
+    transverse_controls_wide = {
+        **transverse_controls_zero,
+        "transverseNormalScale": 0.5,
+        "transverseBinormalScale": 1.0,
+    }
+    wide_planes, wide_receipt = rasterize_coefficients(
+        transverse_positions, transverse_tangents, transverse_features, transverse_coefficients,
+        raster_camera, 4, "transverse", transverse_controls_wide, 160,
+        transverse_basis=transverse_basis_fixture,
+    )
+    require(not np.allclose(wide_planes, bilinear_planes), "nonzero transverse widths produced no placement delta")
+    require(wide_receipt["coefficientMass"]["nominalKernelMassConserved"], "world-transverse placement changed optical mass")
+    require(wide_receipt["transversePlacement"]["childrenUseOwnProjectedDepth"], "world-transverse children reused parent depth")
+    sample_weights = np.zeros(2, dtype=np.float64)
+    ndc, depth, _ = project(
+        transverse_positions,
+        raster_camera["cameraPose"]["matrixWorldInverse"],
+        raster_camera["cameraPose"]["projectionMatrix"],
+    )
+    transverse_pixel_x = (ndc[:, 0] * 0.5 + 0.5) * raster_camera["width"]
+    transverse_pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * raster_camera["height"]
+    for _, _, weight, _ in transverse_world_pixel_samples(
+        transverse_positions, transverse_basis_fixture, raster_camera,
+        transverse_pixel_x, transverse_pixel_y,
+        np.ones(2, dtype=np.float32), np.zeros(2, dtype=np.float32),
+        np.ones(2, dtype=np.float32), np.zeros(2, dtype=np.int32),
+        float(np.min(depth)), float(np.max(depth)), 4, 0.5, 1.0,
+    ):
+        sample_weights += weight
+    require(np.allclose(sample_weights, 1.0, rtol=0.0, atol=2e-6), "world-transverse symmetric placement does not conserve per-parent mass")
+    print("world transverse placement contracts passed")
     metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
     metric_target[4:6, 4:6] = 255
     exact_metrics = image_metrics(metric_target, metric_target)
@@ -2107,6 +2419,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--multiscale-middle-mass", type=float)
     parser.add_argument("--multiscale-major-scale", type=float)
     parser.add_argument("--multiscale-minor-scale", type=float)
+    parser.add_argument("--transverse-basis-socket")
+    parser.add_argument("--transverse-normal-scale", type=float)
+    parser.add_argument("--transverse-binormal-scale", type=float)
     parser.add_argument("--split-attribution-cameras")
     parser.add_argument("--split-score-threshold", type=float)
     parser.add_argument("--split-min-camera-support", type=int)
@@ -2138,7 +2453,10 @@ def main() -> int:
             "multiscaleMiddleMass": args.multiscale_middle_mass,
             "multiscaleMajorScale": args.multiscale_major_scale,
             "multiscaleMinorScale": args.multiscale_minor_scale,
+            "transverseNormalScale": args.transverse_normal_scale,
+            "transverseBinormalScale": args.transverse_binormal_scale,
         },
+        "transverseBasis": {"socket": args.transverse_basis_socket},
         "depositionControls": {
             "compoundHaloMass": args.compound_halo_mass,
             "splitAttributionCameras": args.split_attribution_cameras,
