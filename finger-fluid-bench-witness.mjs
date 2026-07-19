@@ -20,7 +20,7 @@ const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.
 const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
 const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') || out.replace(/\.png$/i, '.liquid-support-phase-a.png'));
 const liquidSupportPhaseBOut = resolve(args.get('--liquid-support-phase-b-out') || out.replace(/\.png$/i, '.liquid-support-phase-b.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'];
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -426,7 +426,7 @@ function compareFluidProjections(sphere, surface) {
   };
 }
 
-function measureSharedSupportIdentity(spherePath, surfacePath, refractionThicknessPath, label) {
+function measureSharedSupportIdentity(spherePath, surfacePath, refractionThicknessPath, exactSphereSupportPath, exactRefractionSupportPath, label) {
   const probe = spawnSync('ffprobe', [
     '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', spherePath,
   ], { encoding: 'utf8' });
@@ -443,14 +443,20 @@ function measureSharedSupportIdentity(spherePath, surfacePath, refractionThickne
   const sphere = decode(spherePath);
   const surface = decode(surfacePath);
   const refraction = decode(refractionThicknessPath);
+  const exactSphereSupport = decode(exactSphereSupportPath);
+  const exactRefractionSupport = decode(exactRefractionSupportPath);
   const expectedBytes = width * height * 3;
   if (
     sphere.status !== 0
     || surface.status !== 0
     || refraction.status !== 0
+    || exactSphereSupport.status !== 0
+    || exactRefractionSupport.status !== 0
     || sphere.stdout?.length !== expectedBytes
     || surface.stdout?.length !== expectedBytes
     || refraction.stdout?.length !== expectedBytes
+    || exactSphereSupport.stdout?.length !== expectedBytes
+    || exactRefractionSupport.stdout?.length !== expectedBytes
   ) {
     throw new Error(`ffmpeg ${label} support identity decode failed or dimensions disagree`);
   }
@@ -467,28 +473,21 @@ function measureSharedSupportIdentity(spherePath, surfacePath, refractionThickne
     const thicknessR = refraction.stdout[offset];
     const thicknessG = refraction.stdout[offset + 1];
     const thicknessB = refraction.stdout[offset + 2];
+    const sphereSupportR = exactSphereSupport.stdout[offset];
+    const sphereSupportG = exactSphereSupport.stdout[offset + 1];
+    const sphereSupportB = exactSphereSupport.stdout[offset + 2];
+    const refractionSupportR = exactRefractionSupport.stdout[offset];
+    const refractionSupportG = exactRefractionSupport.stdout[offset + 1];
+    const refractionSupportB = exactRefractionSupport.stdout[offset + 2];
     const sphereLiquid = sphereB >= 58 && sphereB >= sphereR * 1.28 && sphereB >= sphereG * 0.92 && sphereG >= sphereR * 1.02;
     const surfaceLiquid = surfaceB >= 58 && surfaceB >= surfaceR * 1.28 && surfaceB >= surfaceG * 0.92 && surfaceG >= surfaceR * 1.02;
     const thicknessLiquid = thicknessR > 110 && thicknessR > thicknessG * 1.12 && thicknessG > thicknessB * 1.18;
-    if (sphereLiquid || surfaceLiquid || thicknessLiquid) liquidMask[pixel] = 1;
-  }
-  for (let dilation = 0; dilation < 12; dilation += 1) {
-    const expanded = liquidMask.slice();
-    for (let y = 1; y < height - 1; y += 1) {
-      for (let x = 1; x < width - 1; x += 1) {
-        const pixel = y * width + x;
-        if (!liquidMask[pixel]) continue;
-        expanded[pixel - width - 1] = 1;
-        expanded[pixel - width] = 1;
-        expanded[pixel - width + 1] = 1;
-        expanded[pixel - 1] = 1;
-        expanded[pixel + 1] = 1;
-        expanded[pixel + width - 1] = 1;
-        expanded[pixel + width] = 1;
-        expanded[pixel + width + 1] = 1;
-      }
-    }
-    liquidMask = expanded;
+    const exactSphereLiquid = Math.min(sphereSupportR, sphereSupportG, sphereSupportB) >= 250
+      && Math.max(sphereSupportR, sphereSupportG, sphereSupportB) - Math.min(sphereSupportR, sphereSupportG, sphereSupportB) <= 2;
+    const exactRefractionLiquid = Math.min(refractionSupportR, refractionSupportG, refractionSupportB) >= 250
+      && Math.max(refractionSupportR, refractionSupportG, refractionSupportB) - Math.min(refractionSupportR, refractionSupportG, refractionSupportB) <= 2;
+    const exactLiquid = exactSphereLiquid || exactRefractionLiquid;
+    if (sphereLiquid || surfaceLiquid || thicknessLiquid || exactLiquid) liquidMask[pixel] = 1;
   }
 
   let comparedPixels = 0;
@@ -517,13 +516,16 @@ function measureSharedSupportIdentity(spherePath, surfacePath, refractionThickne
     spherePath,
     surfacePath,
     refractionThicknessPath,
+    exactSphereSupportPath,
+    exactRefractionSupportPath,
     pixelCount,
     comparedPixels,
     comparedRatio: Number((comparedPixels / pixelCount).toFixed(5)),
     mismatchedPixels,
     mismatchRatio: Number((mismatchedPixels / comparedPixels).toFixed(6)),
     meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, comparedPixels * 6)).toFixed(4)),
-    liquidMaskDilationPixels: 12,
+    liquidMaskDilationPixels: 0,
+    liquidMaskDilationBasis: 'exact_route_union_no_dilation_v0',
     measurement: 'same_camera_nonliquid_shared_support_rgb24_identity_v0',
   };
 }
@@ -541,6 +543,38 @@ function requireSharedSupportPresentation(receipt, label) {
     throw new Error(`${label} shared analytic support presentation evidence missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
   }
   return supportPresentationEvidence;
+}
+
+function requireLinearHdrWorldClosure(receipt, label) {
+  const linearHdrSceneEvidence = receipt?.linearHdrSceneEvidence;
+  if (
+    linearHdrSceneEvidence?.requestedRoute !== 'webgpu-linear-hdr-scene-radiance-v0'
+    || linearHdrSceneEvidence?.effectiveRoute !== 'webgpu-linear-hdr-scene-radiance-v0'
+    || linearHdrSceneEvidence?.format !== 'rgba16float'
+    || linearHdrSceneEvidence?.colorSpace !== 'scene_linear_rec2020_agnostic_rgb_v0'
+    || linearHdrSceneEvidence?.backgroundRoute !== 'wgsl-shared-hdr-world-background-v0'
+    || linearHdrSceneEvidence?.environmentFilterRoute !== 'deterministic-five-tap-roughness-cone-v0'
+    || linearHdrSceneEvidence?.backgroundPassCount < 1
+    || linearHdrSceneEvidence?.fallbackReason
+  ) {
+    throw new Error(`${label} linear HDR scene evidence missing, stale, fallback, or partial: ${JSON.stringify(linearHdrSceneEvidence)}`);
+  }
+  const finalPresentationEvidence = receipt?.finalPresentationEvidence;
+  if (
+    finalPresentationEvidence?.requestedRoute !== 'wgsl-linear-exposure-aces-presentation-v0'
+    || finalPresentationEvidence?.effectiveRoute !== 'wgsl-linear-exposure-aces-presentation-v0'
+    || finalPresentationEvidence?.sourceFormat !== 'rgba16float'
+    || finalPresentationEvidence?.toneMap !== 'aces-fitted-v0'
+    || finalPresentationEvidence?.exposure !== 0.58
+    || finalPresentationEvidence?.displayTransformCountPerFrame !== 1
+    || finalPresentationEvidence?.exactDiagnosticBypass !== 'liquid_support'
+    || finalPresentationEvidence?.diagnosticVisibilityRoute !== 'post-composite-depth24plus-identity-v0'
+    || finalPresentationEvidence?.passCount < 1
+    || finalPresentationEvidence?.fallbackReason
+  ) {
+    throw new Error(`${label} final presentation evidence missing, stale, fallback, duplicated, or partial: ${JSON.stringify(finalPresentationEvidence)}`);
+  }
+  return { linearHdrSceneEvidence, finalPresentationEvidence };
 }
 
 function requireDeferredWorldReflectionEvidence(receipt, label, requireReflection = false) {
@@ -611,6 +645,8 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
     || environmentMapEvidence?.license !== 'CC0-1.0'
     || environmentMapEvidence?.decodeRoute !== 'cpu-radiance-rle-rgbe-v0'
     || environmentMapEvidence?.samplingRoute !== 'wgsl-manual-bilinear-rgbe-equirectangular-v0'
+    || environmentMapEvidence?.filterRoute !== 'deterministic-five-tap-roughness-cone-v0'
+    || environmentMapEvidence?.worldBackgroundRoute !== 'wgsl-shared-hdr-world-background-v0'
     || environmentMapEvidence?.width !== 1024
     || environmentMapEvidence?.height !== 512
     || environmentMapEvidence?.gpuTextureFormat !== 'rgba8unorm'
@@ -1493,6 +1529,7 @@ async function main() {
     }
     if (lastDebugState.runtime?.fallbackReason) throw new Error(`renderer fallback rejected: ${lastDebugState.runtime.fallbackReason}`);
     requireSharedSupportPresentation(lastDebugState.runtime, 'initial runtime');
+    requireLinearHdrWorldClosure(lastDebugState.runtime, 'initial runtime');
     requireDeferredWorldReflectionEvidence(lastDebugState.runtime, 'initial runtime', effectiveRendererMode === 'screen_space_refraction');
     if (effectiveRendererMode === 'screen_space_surface') {
       screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
@@ -1520,7 +1557,8 @@ async function main() {
         || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || refractionEvidence?.analyticSupportDepthPassCount < 1
         || refractionEvidence?.opticalDebugMode !== requestedOpticalDebugMode
-        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-deferred-scene-color-v0'
+        || refractionEvidence?.sceneColorTexture?.format !== 'rgba16float'
+        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-linear-hdr-scene-radiance-v0'
         || refractionEvidence?.scenePassCount < 1
         || refractionEvidence?.accumulationPassCount < 1
         || refractionEvidence?.compositePassCount < 1
@@ -1806,6 +1844,7 @@ async function main() {
         throw new Error(`optical renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
       requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
+      requireLinearHdrWorldClosure(receipt, `${mode}:${opticalDebugMode}`);
       requireDeferredWorldReflectionEvidence(receipt, `${mode}:${opticalDebugMode}`, mode === 'screen_space_refraction');
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
@@ -1854,7 +1893,8 @@ async function main() {
       || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
       || refractionEvidence?.analyticSupportDepthPassCount < 1
       || refractionEvidence?.opticalDebugMode !== 'shaded'
-      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-deferred-scene-color-v0'
+      || refractionEvidence?.sceneColorTexture?.format !== 'rgba16float'
+      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-linear-hdr-scene-radiance-v0'
       || refractionEvidence?.scenePassCount < 1
       || refractionEvidence?.compositePassCount < 1
     ) throw new Error(`same-state refraction evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
@@ -1985,9 +2025,13 @@ async function main() {
     ];
     const registrationOverlayVisibility = await evaluate(ws, `(() => {
       const overlay = document.getElementById('finger-fluid-bench-overlay');
-      if (!overlay) return null;
-      const previous = overlay.style.visibility;
-      overlay.style.visibility = 'hidden';
+      const fpsCounter = document.getElementById('fps-counter');
+      const previous = {
+        overlay: overlay?.style.visibility || '',
+        fpsCounter: fpsCounter?.style.visibility || '',
+      };
+      if (overlay) overlay.style.visibility = 'hidden';
+      if (fpsCounter) fpsCounter.style.visibility = 'hidden';
       return previous;
     })()`);
     mkdirSync(surfaceRegistrationDir, { recursive: true });
@@ -1998,10 +2042,15 @@ async function main() {
       const spherePath = resolve(surfaceRegistrationDir, `${camera.id}.sphere-debug.png`);
       const surfacePath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-surface.png`);
       const refractionPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-thickness.png`);
+      const sphereLiquidSupportPath = resolve(surfaceRegistrationDir, `${camera.id}.sphere-debug-liquid-support.png`);
+      const liquidSupportPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-liquid-support.png`);
       const shadedRefractionPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-shaded.png`);
       const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 'shaded', 0.005);
+      const sphereLiquidSupportRender = await renderSameState('sphere_debug', sphereLiquidSupportPath, canvasRect, 'liquid_support', 0);
+      const sphereLiquidSupportField = measureBinaryLiquidSupport(sphereLiquidSupportPath);
       const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 'shaded', 0.005);
       const refractionRender = await renderSameState('screen_space_refraction', refractionPath, canvasRect, 'thickness', 0.005);
+      const liquidSupportRender = await renderSameState('screen_space_refraction', liquidSupportPath, canvasRect, 'liquid_support', 0.005);
       const shadedRefraction = await renderSameState(
         'screen_space_refraction',
         shadedRefractionPath,
@@ -2017,7 +2066,9 @@ async function main() {
       }
       if (
         sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount
+        || sphereRender.receipt.stepCount !== sphereLiquidSupportRender.receipt.stepCount
         || sphereRender.receipt.stepCount !== refractionRender.receipt.stepCount
+        || sphereRender.receipt.stepCount !== liquidSupportRender.receipt.stepCount
         || sphereRender.receipt.stepCount !== shadedRefraction.receipt.stepCount
       ) {
         throw new Error(`registration view ${camera.id} advanced the simulation between renderers`);
@@ -2027,7 +2078,14 @@ async function main() {
       const refractionProjection = measureFluidProjection(refractionPath, `${camera.id}:screen_space_refraction:thickness`, 'optical_thickness');
       const surfaceComparison = compareFluidProjections(sphereProjection, surfaceProjection);
       const refractionComparison = compareFluidProjections(sphereProjection, refractionProjection);
-      const sharedSupportIdentity = measureSharedSupportIdentity(spherePath, surfacePath, refractionPath, camera.id);
+      const sharedSupportIdentity = measureSharedSupportIdentity(
+        spherePath,
+        surfacePath,
+        refractionPath,
+        sphereLiquidSupportPath,
+        liquidSupportPath,
+        camera.id,
+      );
       if (surfaceComparison.normalizedCentroidDistance > 0.12 || surfaceComparison.minimumBoundsOverlap < 0.35) {
         throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(surfaceComparison)}`);
       }
@@ -2045,6 +2103,7 @@ async function main() {
         refractionProjection,
         surfaceComparison,
         refractionComparison,
+        sphereLiquidSupportField,
         sharedSupportIdentity,
         shadedRefraction: {
           path: shadedRefractionPath,
@@ -2059,7 +2118,9 @@ async function main() {
     }
     await evaluate(ws, `(() => {
       const overlay = document.getElementById('finger-fluid-bench-overlay');
-      if (overlay) overlay.style.visibility = ${JSON.stringify(registrationOverlayVisibility || '')};
+      const fpsCounter = document.getElementById('fps-counter');
+      if (overlay) overlay.style.visibility = ${JSON.stringify(registrationOverlayVisibility?.overlay || '')};
+      if (fpsCounter) fpsCounter.style.visibility = ${JSON.stringify(registrationOverlayVisibility?.fpsCounter || '')};
       return true;
     })()`);
     await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(originalCamera)})`);
@@ -2132,7 +2193,7 @@ async function main() {
     binaryLiquidSupportField = measureBinaryLiquidSupport(opticalDebugOutputs.liquid_support);
     environmentMapField = measureHdrEnvironmentField(opticalDebugOutputs.environment, opticalDebugOutputs.liquid_support);
     if (
-      environmentMapField.brightRatio < 0.1
+      environmentMapField.brightRatio < 0.05
       || environmentMapField.shadowRatio < 0.1
       || environmentMapField.midtoneRatio < 0.03
       || environmentMapField.luminanceP95 - environmentMapField.luminanceP05 < 100
