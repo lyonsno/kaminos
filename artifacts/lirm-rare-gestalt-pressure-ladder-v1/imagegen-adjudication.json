@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-adjudication.v0",
+  "status": "visually-inspected-promotion-selected",
+  "contactSheet": {
+    "path": "imagegen-pressure-contact-sheet.png",
+    "sha256": "sha256:545fee3e2787f748c68df1650a24e94e5bcf9b3c44e6d8cad059545660b47572",
+    "inspectedAtOriginalResolution": true
+  },
+  "visualInspection": {
+    "allTwelveOutputsInspected": true,
+    "fourPromotedSourcesInspectedIndividually": true,
+    "candidateVerdicts": [
+      {
+        "candidateId": "annular-tripod-open-crown",
+        "apertureSurvival": "strong-both-stances",
+        "suspendedMassSurvival": "strong-anatomical-prior-led-reinterprets-as-surface-organs",
+        "organismCompletion": "strong"
+      },
+      {
+        "candidateId": "annular-tripod-wide-slant",
+        "apertureSurvival": "strong-both-stances",
+        "suspendedMassSurvival": "strong-anatomical-prior-led-reinterprets-as-internal-and-surface-organs",
+        "organismCompletion": "strong"
+      },
+      {
+        "candidateId": "annular-tripod-tall-keyhole",
+        "apertureSurvival": "strong-both-stances",
+        "suspendedMassSurvival": "not-load-bearing-for-this-variant",
+        "organismCompletion": "moderate-strong"
+      },
+      {
+        "candidateId": "tripod-canopy-suspended",
+        "canopySurvival": "strong-both-stances",
+        "suspensionSurvival": "strong-both-stances",
+        "organismCompletion": "strong"
+      },
+      {
+        "candidateId": "tripod-canopy-wide-low-pendant",
+        "canopySurvival": "strong-both-stances",
+        "suspensionSurvival": "single-pendant-anatomical-multiple-pendants-prior-led",
+        "organismCompletion": "strong"
+      },
+      {
+        "candidateId": "tripod-canopy-asymmetric-deep",
+        "canopySurvival": "strong-both-stances",
+        "suspensionSurvival": "strong-anatomical-weaker-prior-led",
+        "organismCompletion": "strong"
+      }
+    ]
+  },
+  "findings": {
+    "rareGestaltSurvivalRate": "12/12",
+    "conventionalQuadrupedCollapseCount": 0,
+    "priorLedPressureAddsAnatomyWhilePreservingScaffold": true,
+    "apertureIsControllableAcrossImagegen": true,
+    "canopySuspensionIsControllableAcrossImagegen": true
+  },
+  "trellisPromotion": {
+    "status": "selected",
+    "evidenceRoles": [
+      {
+        "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+        "role": "open-annulus-single-pendant"
+      },
+      {
+        "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+        "role": "slanted-annulus-prior-invention"
+      },
+      {
+        "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+        "role": "broad-canopy-multiple-pendants"
+      },
+      {
+        "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+        "role": "clustered-canopy-single-pendant"
+      }
+    ]
+  }
+}

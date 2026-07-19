@@ -1,0 +1,265 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-bundle.v0",
+  "route": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "forked-saddle-lirm02",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+    "parameterSpecs": [
+      {
+        "id": "rootWidth",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.82,
+        "min": 0.48,
+        "max": 1.26,
+        "step": 0.12
+      },
+      {
+        "id": "rootHeight",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.42,
+        "min": 0.24,
+        "max": 0.72,
+        "step": 0.08
+      },
+      {
+        "id": "rootDepth",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.08
+      },
+      {
+        "id": "branchSpread",
+        "semanticRole": "forkBranchSeparation",
+        "initial": 1.18,
+        "min": 0.72,
+        "max": 1.82,
+        "step": 0.15
+      },
+      {
+        "id": "branchRise",
+        "semanticRole": "forkBranchElevation",
+        "initial": 0.88,
+        "min": 0.44,
+        "max": 1.42,
+        "step": 0.14
+      },
+      {
+        "id": "branchArc",
+        "semanticRole": "forkBranchCurvature",
+        "initial": 0.2,
+        "min": -0.18,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "branchThickness",
+        "semanticRole": "forkBranch",
+        "initial": 0.26,
+        "min": 0.14,
+        "max": 0.48,
+        "step": 0.055
+      },
+      {
+        "id": "branchDepth",
+        "semanticRole": "forkBranch",
+        "initial": 0.3,
+        "min": 0.16,
+        "max": 0.58,
+        "step": 0.065
+      },
+      {
+        "id": "branchForward",
+        "semanticRole": "forkBranchTrajectory",
+        "initial": 0.04,
+        "min": -0.3,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalMass",
+        "initial": 0.52,
+        "min": 0.26,
+        "max": 0.9,
+        "step": 0.09
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.82,
+        "step": 0.08
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalLift",
+        "semanticRole": "terminalElevation",
+        "initial": 0.06,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.06
+      },
+      {
+        "id": "asymmetry",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.05,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.065
+      },
+      {
+        "id": "depthTwist",
+        "semanticRole": "branchDepthDivergence",
+        "initial": 0.05,
+        "min": -0.3,
+        "max": 0.3,
+        "step": 0.06
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.62,
+        "min": 0.36,
+        "max": 1.04,
+        "step": 0.1
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.3,
+        "min": 0.14,
+        "max": 0.58,
+        "step": 0.075
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.075,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactForeAft",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.24,
+        "min": 0.08,
+        "max": 0.5,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "rootWidth": 0.659632,
+    "rootHeight": 0.36691199999999996,
+    "rootDepth": 0.38252095999999997,
+    "branchSpread": 1.0511932,
+    "branchRise": 0.6117039999999999,
+    "branchArc": 0.04668800000000002,
+    "branchThickness": 0.18649800000000002,
+    "branchDepth": 0.16275172,
+    "branchForward": -0.0025209599999999905,
+    "terminalWidth": 0.49491592000000006,
+    "terminalHeight": 0.34920896,
+    "terminalDepth": 0.27799103999999997,
+    "terminalLift": -0.0348,
+    "asymmetry": 0.12224827999999999,
+    "depthTwist": -0.009999999999999995,
+    "contactSpread": 0.74436,
+    "contactLength": 0.22499999999999998,
+    "contactThickness": 0.04,
+    "contactForeAft": 0.15294799999999997,
+    "groundHeight": -0.5252000000000001
+  },
+  "renderMode": "raymarched-implicit-field",
+  "fieldModel": {
+    "kind": "smooth-sdf-armature-program",
+    "surfaceThreshold": 0.0065,
+    "smoothUnionK": 0.075,
+    "primitiveKinds": [
+      "ellipsoid",
+      "capsule"
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "implicitPrimitiveCount": 28,
+  "semanticRoles": [
+    "saddleRootMass",
+    "forkBranch",
+    "terminalMass",
+    "localizedContactLimb",
+    "groundContact"
+  ],
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "forked-saddle-lirm02/clay-implicit.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "forked-saddle-lirm02/depth-implicit.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "forked-saddle-lirm02/normal-implicit.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "forked-saddle-lirm02/mask-implicit.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "forked-saddle-lirm02/semantic-implicit.svg"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "forked-saddle-lirm02/trellis-source.svg",
+    "rasterPath": "forked-saddle-lirm02/trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x192",
+      "displayedPixels": "512x512"
+    }
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

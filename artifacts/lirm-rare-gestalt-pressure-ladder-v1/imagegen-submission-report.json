@@ -1,0 +1,69 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-submission.v0",
+  "status": "complete",
+  "plannedCellCount": 12,
+  "submittedCellCount": 12,
+  "submissions": [
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "abfdb343d696",
+      "status": "submitted"
+    },
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "5117a2aee0ab",
+      "status": "submitted"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "6fe4a2079189",
+      "status": "submitted"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "4761701c9884",
+      "status": "submitted"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "ac0236a545f0",
+      "status": "submitted"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "594d6b51b1ac",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "716c624608d4",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "6ea1681c006e",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "6d6c3d597bc9",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "56f83b9562af",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "ef50a8226611",
+      "status": "submitted"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "bac9057d0b22",
+      "status": "submitted"
+    }
+  ],
+  "lastTrustworthyEvidence": "12/12 cells accepted by GPU Greenroom"
+}

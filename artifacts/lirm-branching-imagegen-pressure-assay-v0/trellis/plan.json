@@ -1,0 +1,139 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-promotion-plan.v0",
+  "status": "planned",
+  "comparisonContract": {
+    "kind": "inspected-evidence-role-promotion",
+    "evidenceRoles": [
+      {
+        "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+        "role": "rare-topology-preservation"
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+        "role": "clean-adherence-baseline"
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+        "role": "productive-prior-extrapolation"
+      }
+    ],
+    "fixedSettings": {
+      "seed": 42,
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true
+    }
+  },
+  "evidencePredicate": {
+    "directInferenceForbidden": true,
+    "routeFallbackAllowed": false,
+    "missingGlbCountsAsSuccess": false,
+    "sourceHashDriftAllowed": false,
+    "spatialCoherenceRequiresRenderedWitness": true,
+    "visuallyNovelWithoutLineage": "does_not_satisfy"
+  },
+  "cells": [
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "evidenceRole": "rare-topology-preservation",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "candidateId": "forked-saddle-lirm02",
+      "generationId": "forked-saddle-lirm02",
+      "sourceBasinIndex": null,
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718201,
+      "referenceSet": "clay-depth-normal",
+      "dualLineage": {
+        "proceduralArmature": "forked-saddle-lirm02",
+        "imagegenPressure": "anatomical-completion"
+      },
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.png",
+        "bytes": 230055,
+        "sha256": "sha256:82f12ccdd599c6205a4888a117b8988046f3b30e9f23999a685a84043a799e8b"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "evidenceRole": "clean-adherence-baseline",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "generationId": "asymmetric-bead-chain-lirm07",
+      "sourceBasinIndex": null,
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718202,
+      "referenceSet": "clay-depth-normal",
+      "dualLineage": {
+        "proceduralArmature": "asymmetric-bead-chain-lirm07",
+        "imagegenPressure": "anatomical-completion"
+      },
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.png",
+        "bytes": 228142,
+        "sha256": "sha256:dab47f3a8998f88cbed59de5cd6f496276e36f288595ca387e6e604e2b3093c7"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "evidenceRole": "productive-prior-extrapolation",
+      "jobType": "trellis2mlx_fast",
+      "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+      "expectedRunner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "generationId": "asymmetric-bead-chain-lirm07",
+      "sourceBasinIndex": null,
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718201,
+      "referenceSet": "clay-depth-normal",
+      "dualLineage": {
+        "proceduralArmature": "asymmetric-bead-chain-lirm07",
+        "imagegenPressure": "prior-led-invention"
+      },
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.png",
+        "bytes": 196807,
+        "sha256": "sha256:d0d018da72e894df50949c5403361e55946a591b59d98e30fa281f07f283e18a"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/output.glb",
+      "settings": {
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "cascade": false,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "simplifyFirst": true
+      }
+    }
+  ]
+}

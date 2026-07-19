@@ -1,0 +1,752 @@
+{
+  "schema": "kaminos.lirm-branching-imagegen-pressure-collection.v0",
+  "status": "complete",
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "jobId": "487c426eff43",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.5095491,
+      "startedAt": 1784456127.144135,
+      "finishedAt": 1784456185.650047,
+      "durationSeconds": 58.50591206550598,
+      "outputMtime": 1784456184.9733558,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/output.png",
+        "bytes": 230055,
+        "sha256": "sha256:82f12ccdd599c6205a4888a117b8988046f3b30e9f23999a685a84043a799e8b"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.png",
+        "byteSize": 230055,
+        "sha256": "sha256:82f12ccdd599c6205a4888a117b8988046f3b30e9f23999a685a84043a799e8b"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202",
+      "jobId": "c491063fe3eb",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.535512,
+      "startedAt": 1784456185.6548831,
+      "finishedAt": 1784456243.428739,
+      "durationSeconds": 57.77385592460632,
+      "outputMtime": 1784456242.888126,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202/output.png",
+        "bytes": 231538,
+        "sha256": "sha256:5b7316ec49add1f881947133a4427a50cdf1a471502788e0855cb234eaa1ed59"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202.png",
+        "byteSize": 231538,
+        "sha256": "sha256:5b7316ec49add1f881947133a4427a50cdf1a471502788e0855cb234eaa1ed59"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201",
+      "jobId": "3c8752e132fb",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.56033,
+      "startedAt": 1784456243.432781,
+      "finishedAt": 1784456301.153088,
+      "durationSeconds": 57.72030711174011,
+      "outputMtime": 1784456300.6509106,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201/output.png",
+        "bytes": 219466,
+        "sha256": "sha256:7e069dfd8b781116c5b04bfdadb42039b90e9daab701cac29d5f17671e0cf224"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201.png",
+        "byteSize": 219466,
+        "sha256": "sha256:7e069dfd8b781116c5b04bfdadb42039b90e9daab701cac29d5f17671e0cf224"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202",
+      "jobId": "5b80388f7ce0",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.585121,
+      "startedAt": 1784456301.156807,
+      "finishedAt": 1784456360.97391,
+      "durationSeconds": 59.817103147506714,
+      "outputMtime": 1784456360.5500357,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202/output.png",
+        "bytes": 245189,
+        "sha256": "sha256:09cc9772e4ea5a9a26a66c3444e1e0b5f8250a193bba4e386edac4f807605423"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202.png",
+        "byteSize": 245189,
+        "sha256": "sha256:09cc9772e4ea5a9a26a66c3444e1e0b5f8250a193bba4e386edac4f807605423"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobId": "55c2a0e0b54b",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.609589,
+      "startedAt": 1784456360.976777,
+      "finishedAt": 1784456421.368362,
+      "durationSeconds": 60.39158487319946,
+      "outputMtime": 1784456420.8959312,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201/output.png",
+        "bytes": 241470,
+        "sha256": "sha256:57d2c2d3540371c08751dc4afb28e575c3b71de6261ce6fe217e302331568b52"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+        "byteSize": 241470,
+        "sha256": "sha256:57d2c2d3540371c08751dc4afb28e575c3b71de6261ce6fe217e302331568b52"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobId": "2bf717d8ad95",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.6341681,
+      "startedAt": 1784456421.3714108,
+      "finishedAt": 1784456489.850243,
+      "durationSeconds": 68.47883224487305,
+      "outputMtime": 1784456489.3822246,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202/output.png",
+        "bytes": 220400,
+        "sha256": "sha256:2975804ea08e85f566d4db148ebb6cd0a449bdb77192324ace2b86f9f113ff93"
+      },
+      "durableOutput": {
+        "path": "outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+        "byteSize": 220400,
+        "sha256": "sha256:2975804ea08e85f566d4db148ebb6cd0a449bdb77192324ace2b86f9f113ff93"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201",
+      "jobId": "067414795760",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.658605,
+      "startedAt": 1784456489.8534951,
+      "finishedAt": 1784456567.041377,
+      "durationSeconds": 77.18788194656372,
+      "outputMtime": 1784456566.5211492,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201/output.png",
+        "bytes": 213616,
+        "sha256": "sha256:785fe335ffa56b3c89be3a21fb35f337b33a43df3c29bb6c07bb3a7c1b7aada7"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201.png",
+        "byteSize": 213616,
+        "sha256": "sha256:785fe335ffa56b3c89be3a21fb35f337b33a43df3c29bb6c07bb3a7c1b7aada7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "jobId": "bacc17f4abec",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.683646,
+      "startedAt": 1784456567.0450501,
+      "finishedAt": 1784456643.1727638,
+      "durationSeconds": 76.12771368026733,
+      "outputMtime": 1784456642.7163327,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/output.png",
+        "bytes": 228142,
+        "sha256": "sha256:dab47f3a8998f88cbed59de5cd6f496276e36f288595ca387e6e604e2b3093c7"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.png",
+        "byteSize": 228142,
+        "sha256": "sha256:dab47f3a8998f88cbed59de5cd6f496276e36f288595ca387e6e604e2b3093c7"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "jobId": "b87c3fc4d214",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.708336,
+      "startedAt": 1784456643.175662,
+      "finishedAt": 1784456717.856443,
+      "durationSeconds": 74.68078088760376,
+      "outputMtime": 1784456717.4024723,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/output.png",
+        "bytes": 196807,
+        "sha256": "sha256:d0d018da72e894df50949c5403361e55946a591b59d98e30fa281f07f283e18a"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.png",
+        "byteSize": 196807,
+        "sha256": "sha256:d0d018da72e894df50949c5403361e55946a591b59d98e30fa281f07f283e18a"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202",
+      "jobId": "c9113b71c7ba",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.733428,
+      "startedAt": 1784456717.859918,
+      "finishedAt": 1784456792.512251,
+      "durationSeconds": 74.65233278274536,
+      "outputMtime": 1784456792.0677128,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202/output.png",
+        "bytes": 226424,
+        "sha256": "sha256:9128e44070d0571a921b821ccf8cde7df493a38bee66822b40336698a9713be2"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202.png",
+        "byteSize": 226424,
+        "sha256": "sha256:9128e44070d0571a921b821ccf8cde7df493a38bee66822b40336698a9713be2"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobId": "2eb67b2cb67a",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718201 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718201",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.757958,
+      "startedAt": 1784456792.514764,
+      "finishedAt": 1784456867.161087,
+      "durationSeconds": 74.64632296562195,
+      "outputMtime": 1784456866.7250905,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201/output.png",
+        "bytes": 242012,
+        "sha256": "sha256:70437e6f000d9f219aa94fce9fe697899d8f296f3823d10a3e81bcb226762b60"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+        "byteSize": 242012,
+        "sha256": "sha256:70437e6f000d9f219aa94fce9fe697899d8f296f3823d10a3e81bcb226762b60"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobId": "7ad1ab7f412c",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718202 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718202",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784456126.782455,
+      "startedAt": 1784456867.1717708,
+      "finishedAt": 1784456942.25469,
+      "durationSeconds": 75.08291912078857,
+      "outputMtime": 1784456941.7966735,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202/output.png",
+        "bytes": 238032,
+        "sha256": "sha256:1cd6c5f5d72cfa8d53979e1eb4d37995b4d171d27627a307d3c92edacd7063e3"
+      },
+      "durableOutput": {
+        "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+        "byteSize": 238032,
+        "sha256": "sha256:1cd6c5f5d72cfa8d53979e1eb4d37995b4d171d27627a307d3c92edacd7063e3"
+      }
+    }
+  ],
+  "incomplete": [],
+  "failed": []
+}

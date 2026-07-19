@@ -1,0 +1,283 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-bundle.v0",
+  "route": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "asymmetric-bead-chain-default",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+    "parameterSpecs": [
+      {
+        "id": "posteriorLength",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.84,
+        "min": 0.46,
+        "max": 1.34,
+        "step": 0.13
+      },
+      {
+        "id": "posteriorWidth",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.72,
+        "min": 0.38,
+        "max": 1.14,
+        "step": 0.11
+      },
+      {
+        "id": "posteriorHeight",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.62,
+        "min": 0.34,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "posteriorSplit",
+        "semanticRole": "posteriorMassArticulation",
+        "initial": 0.26,
+        "min": 0.08,
+        "max": 0.52,
+        "step": 0.07
+      },
+      {
+        "id": "posteriorLift",
+        "semanticRole": "posteriorElevation",
+        "initial": 0.08,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "chainLength",
+        "semanticRole": "axialBeadTrajectory",
+        "initial": 1.38,
+        "min": 0.82,
+        "max": 2.02,
+        "step": 0.17
+      },
+      {
+        "id": "beadWidth",
+        "semanticRole": "axialBead",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "beadHeight",
+        "semanticRole": "axialBead",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "beadDepth",
+        "semanticRole": "axialBead",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "beadTaper",
+        "semanticRole": "axialMassTaper",
+        "initial": 0.48,
+        "min": 0.08,
+        "max": 0.82,
+        "step": 0.09
+      },
+      {
+        "id": "lateralSweep",
+        "semanticRole": "axialLateralSweep",
+        "initial": 0.38,
+        "min": -0.62,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "verticalArc",
+        "semanticRole": "axialVerticalArc",
+        "initial": 0.18,
+        "min": -0.28,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "axialBias",
+        "semanticRole": "axialMassDistribution",
+        "initial": 0.12,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.44,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "terminalOffset",
+        "semanticRole": "terminalSensoryOffset",
+        "initial": 0.14,
+        "min": -0.28,
+        "max": 0.44,
+        "step": 0.075
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 0.92,
+        "step": 0.09
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.28,
+        "min": 0.13,
+        "max": 0.56,
+        "step": 0.07
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.072,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactBias",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.16,
+        "min": -0.38,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "posteriorLength": 0.84,
+    "posteriorWidth": 0.72,
+    "posteriorHeight": 0.62,
+    "posteriorSplit": 0.26,
+    "posteriorLift": 0.08,
+    "chainLength": 1.38,
+    "beadWidth": 0.46,
+    "beadHeight": 0.42,
+    "beadDepth": 0.48,
+    "beadTaper": 0.48,
+    "lateralSweep": 0.38,
+    "verticalArc": 0.18,
+    "axialBias": 0.12,
+    "terminalWidth": 0.44,
+    "terminalHeight": 0.42,
+    "terminalDepth": 0.46,
+    "terminalOffset": 0.14,
+    "contactSpread": 0.54,
+    "contactLength": 0.28,
+    "contactThickness": 0.072,
+    "contactBias": 0.16,
+    "groundHeight": -0.56
+  },
+  "renderMode": "raymarched-implicit-field",
+  "fieldModel": {
+    "kind": "smooth-sdf-armature-program",
+    "surfaceThreshold": 0.0065,
+    "smoothUnionK": 0.075,
+    "primitiveKinds": [
+      "ellipsoid",
+      "capsule"
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "implicitPrimitiveCount": 23,
+  "semanticRoles": [
+    "posteriorCluster",
+    "axialBead",
+    "terminalSensoryMass",
+    "localizedContactLimb",
+    "groundContact"
+  ],
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "asymmetric-bead-chain-default/clay-implicit.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "asymmetric-bead-chain-default/depth-implicit.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "asymmetric-bead-chain-default/normal-implicit.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "asymmetric-bead-chain-default/mask-implicit.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "asymmetric-bead-chain-default/semantic-implicit.svg"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "asymmetric-bead-chain-default/trellis-source.svg",
+    "rasterPath": "asymmetric-bead-chain-default/trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x192",
+      "displayedPixels": "512x512"
+    }
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

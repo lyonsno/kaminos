@@ -1,0 +1,70 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-left.png",
+      "title": "FORK / PRESERVE / A718201",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-front.png",
+      "title": "FORK / PRESERVE / A718201",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-right.png",
+      "title": "FORK / PRESERVE / A718201",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-opposite.png",
+      "title": "FORK / PRESERVE / A718201",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-left.png",
+      "title": "BEAD / BASELINE / A718202",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-front.png",
+      "title": "BEAD / BASELINE / A718202",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-right.png",
+      "title": "BEAD / BASELINE / A718202",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-opposite.png",
+      "title": "BEAD / BASELINE / A718202",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-left.png",
+      "title": "BEAD / INVENT / P718201",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-front.png",
+      "title": "BEAD / INVENT / P718201",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-right.png",
+      "title": "BEAD / INVENT / P718201",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-opposite.png",
+      "title": "BEAD / INVENT / P718201",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

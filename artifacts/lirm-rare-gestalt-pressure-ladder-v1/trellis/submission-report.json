@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-trellis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 4,
+  "submitted": [
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "591c7619c012",
+      "response": {
+        "job_id": "591c7619c012"
+      }
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "e5a27ee69938",
+      "response": {
+        "job_id": "e5a27ee69938"
+      }
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "3289cca81908",
+      "response": {
+        "job_id": "3289cca81908"
+      }
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "05947cba18a6",
+      "response": {
+        "job_id": "05947cba18a6"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "4/4 Trellis jobs submitted through Greenroom"
+}

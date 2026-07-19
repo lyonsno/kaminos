@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+      "title": "forked-saddle-lirm02",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+      "title": "forked-saddle-lirm02",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.png",
+      "title": "anatomical-completion",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202.png",
+      "title": "anatomical-completion",
+      "viewLabel": "SEED 718202"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201.png",
+      "title": "prior-led-invention",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202.png",
+      "title": "prior-led-invention",
+      "viewLabel": "SEED 718202"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+      "title": "semantic-role-interpretation",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+      "title": "semantic-role-interpretation",
+      "viewLabel": "SEED 718202"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+      "title": "asymmetric-bead-chain-lirm07",
+      "viewLabel": "ARMATURE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+      "title": "asymmetric-bead-chain-lirm07",
+      "viewLabel": "NORMAL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201.png",
+      "title": "anatomical-completion",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.png",
+      "title": "anatomical-completion",
+      "viewLabel": "SEED 718202"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.png",
+      "title": "prior-led-invention",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202.png",
+      "title": "prior-led-invention",
+      "viewLabel": "SEED 718202"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+      "title": "semantic-role-interpretation",
+      "viewLabel": "SEED 718201"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+      "title": "semantic-role-interpretation",
+      "viewLabel": "SEED 718202"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.lirm-branching-imagegen-pressure-submission.v0",
+  "status": "complete",
+  "plannedCellCount": 12,
+  "submittedCellCount": 12,
+  "submissions": [
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "jobId": "487c426eff43",
+      "status": "submitted"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202",
+      "jobId": "c491063fe3eb",
+      "status": "submitted"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201",
+      "jobId": "3c8752e132fb",
+      "status": "submitted"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202",
+      "jobId": "5b80388f7ce0",
+      "status": "submitted"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobId": "55c2a0e0b54b",
+      "status": "submitted"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobId": "2bf717d8ad95",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201",
+      "jobId": "067414795760",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "jobId": "bacc17f4abec",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "jobId": "b87c3fc4d214",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202",
+      "jobId": "c9113b71c7ba",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobId": "2eb67b2cb67a",
+      "status": "submitted"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobId": "7ad1ab7f412c",
+      "status": "submitted"
+    }
+  ]
+}

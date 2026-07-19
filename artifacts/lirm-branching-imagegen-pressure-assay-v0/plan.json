@@ -1,0 +1,3110 @@
+{
+  "schema": "kaminos.lirm-branching-imagegen-pressure-plan.v0",
+  "status": "planned",
+  "createdAt": "2026-07-19T10:14:56.591Z",
+  "purpose": "Assay whether two donor-fitted branching creature gestalts survive increasingly prior-led anatomical invention.",
+  "comparisonContract": {
+    "kind": "two-gestalt-three-stance-two-seed-pressure-matrix",
+    "candidateIds": [
+      "forked-saddle-lirm02",
+      "asymmetric-bead-chain-lirm07"
+    ],
+    "stances": [
+      "anatomical-completion",
+      "prior-led-invention",
+      "semantic-role-interpretation"
+    ],
+    "seeds": [
+      718201,
+      718202
+    ],
+    "fixedReferenceSet": "clay-depth-normal",
+    "fixedModel": "flux2-klein-9b",
+    "fixedSteps": 8,
+    "fixedGuidance": 1,
+    "loadBearingDiscriminator": "Outputs must become coherent organisms with visible lineage to the supplied 3D gestalt; mere novelty or literal clay skinning does not satisfy."
+  },
+  "falseClosureGuards": {
+    "directInferenceForbidden": true,
+    "fallbackRouteAccepted": false,
+    "missingOrEmptyPrimaryOutputAccepted": false,
+    "everyConditioningInputMustMatchWitnessHash": true,
+    "requestedRouteMustEqualEffectiveJobType": true,
+    "visuallyDistinctOutputWithoutLineage": "does_not_satisfy",
+    "visuallyAdherentOutputWithoutOrganismLevelCompletion": "does_not_satisfy"
+  },
+  "cells": [
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "487c426eff43"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "c491063fe3eb"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "3c8752e132fb"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "5b80388f7ce0"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "semantic-role-interpretation",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "55c2a0e0b54b"
+    },
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "forked-saddle-lirm02",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+        "parameterSpecs": [
+          {
+            "id": "rootWidth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.82,
+            "min": 0.48,
+            "max": 1.26,
+            "step": 0.12
+          },
+          {
+            "id": "rootHeight",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "rootDepth",
+            "semanticRole": "saddleRootMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.08
+          },
+          {
+            "id": "branchSpread",
+            "semanticRole": "forkBranchSeparation",
+            "initial": 1.18,
+            "min": 0.72,
+            "max": 1.82,
+            "step": 0.15
+          },
+          {
+            "id": "branchRise",
+            "semanticRole": "forkBranchElevation",
+            "initial": 0.88,
+            "min": 0.44,
+            "max": 1.42,
+            "step": 0.14
+          },
+          {
+            "id": "branchArc",
+            "semanticRole": "forkBranchCurvature",
+            "initial": 0.2,
+            "min": -0.18,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "branchThickness",
+            "semanticRole": "forkBranch",
+            "initial": 0.26,
+            "min": 0.14,
+            "max": 0.48,
+            "step": 0.055
+          },
+          {
+            "id": "branchDepth",
+            "semanticRole": "forkBranch",
+            "initial": 0.3,
+            "min": 0.16,
+            "max": 0.58,
+            "step": 0.065
+          },
+          {
+            "id": "branchForward",
+            "semanticRole": "forkBranchTrajectory",
+            "initial": 0.04,
+            "min": -0.3,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalMass",
+            "initial": 0.52,
+            "min": 0.26,
+            "max": 0.9,
+            "step": 0.09
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.82,
+            "step": 0.08
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalLift",
+            "semanticRole": "terminalElevation",
+            "initial": 0.06,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.06
+          },
+          {
+            "id": "asymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.05,
+            "min": -0.34,
+            "max": 0.34,
+            "step": 0.065
+          },
+          {
+            "id": "depthTwist",
+            "semanticRole": "branchDepthDivergence",
+            "initial": 0.05,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.06
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.62,
+            "min": 0.36,
+            "max": 1.04,
+            "step": 0.1
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.58,
+            "step": 0.075
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.075,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactForeAft",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.24,
+            "min": 0.08,
+            "max": 0.5,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "rootWidth": 0.659632,
+        "rootHeight": 0.36691199999999996,
+        "rootDepth": 0.38252095999999997,
+        "branchSpread": 1.0511932,
+        "branchRise": 0.6117039999999999,
+        "branchArc": 0.04668800000000002,
+        "branchThickness": 0.18649800000000002,
+        "branchDepth": 0.16275172,
+        "branchForward": -0.0025209599999999905,
+        "terminalWidth": 0.49491592000000006,
+        "terminalHeight": 0.34920896,
+        "terminalDepth": 0.27799103999999997,
+        "terminalLift": -0.0348,
+        "asymmetry": 0.12224827999999999,
+        "depthTwist": -0.009999999999999995,
+        "contactSpread": 0.74436,
+        "contactLength": 0.22499999999999998,
+        "contactThickness": 0.04,
+        "contactForeAft": 0.15294799999999997,
+        "groundHeight": -0.5252000000000001
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "semantic-role-interpretation",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+        "bytes": 27442,
+        "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44",
+        "role": "clay",
+        "sourceRelativePath": "forked-saddle-lirm02/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/depth-implicit.png",
+          "bytes": 15114,
+          "sha256": "sha256:892ca3af934c252b441521b7f9c4cf3eac130b28ff298fd7b6307cf0fca070a3",
+          "role": "depth",
+          "sourceRelativePath": "forked-saddle-lirm02/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+          "bytes": 32314,
+          "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862",
+          "role": "normal",
+          "sourceRelativePath": "forked-saddle-lirm02/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "2bf717d8ad95"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "067414795760"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/anatomical-completion.txt",
+        "bytes": 929,
+        "sha256": "sha256:40439ad737a92d70e8fe3c66d211710349fe0d9f2de6ee7986ce3ee0a41e7e31"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "bacc17f4abec"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "b87c3fc4d214"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/prior-led-invention.txt",
+        "bytes": 988,
+        "sha256": "sha256:5444f368d54320dd925ceac83c81d03030d9222caf10d9503c0ab564577f523b"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "c9113b71c7ba"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "semantic-role-interpretation",
+      "seed": 718201,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "2eb67b2cb67a"
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+        "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+        "parameterSpecs": [
+          {
+            "id": "posteriorLength",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.84,
+            "min": 0.46,
+            "max": 1.34,
+            "step": 0.13
+          },
+          {
+            "id": "posteriorWidth",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.72,
+            "min": 0.38,
+            "max": 1.14,
+            "step": 0.11
+          },
+          {
+            "id": "posteriorHeight",
+            "semanticRole": "posteriorCluster",
+            "initial": 0.62,
+            "min": 0.34,
+            "max": 1.02,
+            "step": 0.1
+          },
+          {
+            "id": "posteriorSplit",
+            "semanticRole": "posteriorMassArticulation",
+            "initial": 0.26,
+            "min": 0.08,
+            "max": 0.52,
+            "step": 0.07
+          },
+          {
+            "id": "posteriorLift",
+            "semanticRole": "posteriorElevation",
+            "initial": 0.08,
+            "min": -0.18,
+            "max": 0.34,
+            "step": 0.07
+          },
+          {
+            "id": "chainLength",
+            "semanticRole": "axialBeadTrajectory",
+            "initial": 1.38,
+            "min": 0.82,
+            "max": 2.02,
+            "step": 0.17
+          },
+          {
+            "id": "beadWidth",
+            "semanticRole": "axialBead",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "beadHeight",
+            "semanticRole": "axialBead",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "beadDepth",
+            "semanticRole": "axialBead",
+            "initial": 0.48,
+            "min": 0.26,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "beadTaper",
+            "semanticRole": "axialMassTaper",
+            "initial": 0.48,
+            "min": 0.08,
+            "max": 0.82,
+            "step": 0.09
+          },
+          {
+            "id": "lateralSweep",
+            "semanticRole": "axialLateralSweep",
+            "initial": 0.38,
+            "min": -0.62,
+            "max": 0.82,
+            "step": 0.1
+          },
+          {
+            "id": "verticalArc",
+            "semanticRole": "axialVerticalArc",
+            "initial": 0.18,
+            "min": -0.28,
+            "max": 0.54,
+            "step": 0.08
+          },
+          {
+            "id": "axialBias",
+            "semanticRole": "axialMassDistribution",
+            "initial": 0.12,
+            "min": -0.42,
+            "max": 0.42,
+            "step": 0.08
+          },
+          {
+            "id": "terminalWidth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.44,
+            "min": 0.22,
+            "max": 0.76,
+            "step": 0.08
+          },
+          {
+            "id": "terminalHeight",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.72,
+            "step": 0.075
+          },
+          {
+            "id": "terminalDepth",
+            "semanticRole": "terminalSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.78,
+            "step": 0.08
+          },
+          {
+            "id": "terminalOffset",
+            "semanticRole": "terminalSensoryOffset",
+            "initial": 0.14,
+            "min": -0.28,
+            "max": 0.44,
+            "step": 0.075
+          },
+          {
+            "id": "contactSpread",
+            "semanticRole": "localizedContactField",
+            "initial": 0.54,
+            "min": 0.3,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "contactLength",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.28,
+            "min": 0.13,
+            "max": 0.56,
+            "step": 0.07
+          },
+          {
+            "id": "contactThickness",
+            "semanticRole": "localizedContactLimb",
+            "initial": 0.072,
+            "min": 0.04,
+            "max": 0.16,
+            "step": 0.022
+          },
+          {
+            "id": "contactBias",
+            "semanticRole": "localizedContactDistribution",
+            "initial": 0.16,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.07
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.56,
+            "min": -0.76,
+            "max": -0.38,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "posteriorLength": 0.56550344,
+        "posteriorWidth": 0.95226632,
+        "posteriorHeight": 0.72,
+        "posteriorSplit": 0.36720584,
+        "posteriorLift": 0.17694216000000001,
+        "chainLength": 1.02104296,
+        "beadWidth": 0.533312,
+        "beadHeight": 0.4913634,
+        "beadDepth": 0.48668799999999995,
+        "beadTaper": 0.41023992,
+        "lateralSweep": 0.51364,
+        "verticalArc": 0.2136,
+        "axialBias": 0.08639999999999999,
+        "terminalWidth": 0.36387904,
+        "terminalHeight": 0.2616366,
+        "terminalDepth": 0.29107904,
+        "terminalOffset": 0.06500000000000002,
+        "contactSpread": 0.660276,
+        "contactLength": 0.13219416000000003,
+        "contactThickness": 0.046891664,
+        "contactBias": 0.24365784000000001,
+        "groundHeight": -0.56
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 192,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "semantic-role-interpretation",
+      "seed": 718202,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+        "bytes": 30894,
+        "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9",
+        "role": "clay",
+        "sourceRelativePath": "asymmetric-bead-chain-lirm07/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/depth-implicit.png",
+          "bytes": 16275,
+          "sha256": "sha256:9e7bd706ba0026fae814aceb623b84a499b903e983ab63ab3078dcc9a1ab82bd",
+          "role": "depth",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+          "bytes": 40773,
+          "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71",
+          "role": "normal",
+          "sourceRelativePath": "asymmetric-bead-chain-lirm07/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/prompts/semantic-role-interpretation.txt",
+        "bytes": 1120,
+        "sha256": "sha256:c466f2d2e53e69a185788f987ecf41d536d5d1b25d842ac5baa05f2826efcbe5"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-imagegen-pressure-20260718/cells/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "7ad1ab7f412c"
+    }
+  ],
+  "sourceEvidence": {
+    "familyReceipt": {
+      "path": "../lirm-armature-expanded-gestalt-conditioning-assay-v1/receipt.json",
+      "byteSize": 12005,
+      "sha256": "sha256:2116b8479d5551d283995ae119a11bffdb33de81a945abca170160be2a452d78"
+    },
+    "candidateReceiptIds": [
+      "forked-saddle-lirm02",
+      "asymmetric-bead-chain-lirm07"
+    ]
+  },
+  "greenroomAuthority": "/Users/noahlyons/.local/state/gpu-greenroom"
+}

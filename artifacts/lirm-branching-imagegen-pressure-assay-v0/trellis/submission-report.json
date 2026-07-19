@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-submission.v0",
+  "status": "submitted",
+  "requestedCount": 3,
+  "submitted": [
+    {
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "jobId": "099477356542",
+      "response": {
+        "job_id": "099477356542"
+      }
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "jobId": "bb9a47185fff",
+      "response": {
+        "job_id": "bb9a47185fff"
+      }
+    },
+    {
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "jobId": "44cfa6e04047",
+      "response": {
+        "job_id": "44cfa6e04047"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "3/3 Trellis jobs submitted through Greenroom"
+}

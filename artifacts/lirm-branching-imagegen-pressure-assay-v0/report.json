@@ -1,0 +1,169 @@
+{
+  "schema": "kaminos.lirm-branching-imagegen-pressure-assay.v0",
+  "status": "visually-inspected-promotion-selected",
+  "evidencePredicate": "Outputs must become coherent organisms with visible lineage to the supplied 3D gestalt; mere novelty or literal clay skinning does not satisfy.",
+  "plan": {
+    "path": "plan.json",
+    "byteSize": 106305,
+    "sha256": "sha256:d7542a5fb6561505f13fc6d1d357b5ee7b7cff9cb1ca432dbd97f0c63896bafe"
+  },
+  "submission": {
+    "path": "submission-report.json",
+    "byteSize": 2198,
+    "sha256": "sha256:84c7ba578d5793ae4a26b7baa04cab90e7fcd817ab8df9a7eaded50b8393ce16"
+  },
+  "collection": {
+    "path": "collection.json",
+    "byteSize": 56870,
+    "sha256": "sha256:c57862ef46141e19c76b23d160f6177568542cefffa297d0b5005e2f145d181f"
+  },
+  "contactSheetManifest": {
+    "path": "contact-sheet-manifest.json",
+    "byteSize": 4975,
+    "sha256": "sha256:4197d2f68f605e632f68e594ff0df76742ce65bde973b9deecac224145e8957b"
+  },
+  "contactSheet": {
+    "path": "branching-imagegen-pressure-contact-sheet.png",
+    "byteSize": 4092145,
+    "sha256": "sha256:011c0791881db2cabfec27c0feeb8398cf1a1bba1393501f7bbb2b37f59d2f43"
+  },
+  "pngInspection": {
+    "width": 2048,
+    "height": 2192,
+    "luminanceStdDev": 82.65867988994927,
+    "edgeRatio": 0.027798602927149318,
+    "activePixelRatio": 0.6688642292997263,
+    "activeBoundsRatio": 1,
+    "activeBounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 2047,
+      "maxY": 2191
+    }
+  },
+  "sourceEvidence": [
+    {
+      "path": "../lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/clay-implicit.png",
+      "byteSize": 27442,
+      "sha256": "sha256:c2563d5de4233b846d8b9d9ad91fb31dd2cedaf5c73b2e350c48fd194af19d44"
+    },
+    {
+      "path": "../lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/forked-saddle-lirm02/forked-saddle-lirm02/normal-implicit.png",
+      "byteSize": 32314,
+      "sha256": "sha256:4ad13bf1a7b86e2d23de2fdafdec87094d0aa5d416979edd9b649db814d8f862"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.png",
+      "byteSize": 230055,
+      "sha256": "sha256:82f12ccdd599c6205a4888a117b8988046f3b30e9f23999a685a84043a799e8b"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718202.png",
+      "byteSize": 231538,
+      "sha256": "sha256:5b7316ec49add1f881947133a4427a50cdf1a471502788e0855cb234eaa1ed59"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718201.png",
+      "byteSize": 219466,
+      "sha256": "sha256:7e069dfd8b781116c5b04bfdadb42039b90e9daab701cac29d5f17671e0cf224"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-prior-led-invention-seed718202.png",
+      "byteSize": 245189,
+      "sha256": "sha256:09cc9772e4ea5a9a26a66c3444e1e0b5f8250a193bba4e386edac4f807605423"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+      "byteSize": 241470,
+      "sha256": "sha256:57d2c2d3540371c08751dc4afb28e575c3b71de6261ce6fe217e302331568b52"
+    },
+    {
+      "path": "outputs/forked-saddle-lirm02-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+      "byteSize": 220400,
+      "sha256": "sha256:2975804ea08e85f566d4db148ebb6cd0a449bdb77192324ace2b86f9f113ff93"
+    },
+    {
+      "path": "../lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/clay-implicit.png",
+      "byteSize": 30894,
+      "sha256": "sha256:ebfb31c8c288d9663d0eac3b8ea131239c96ddc77114098424520f7fdaa996a9"
+    },
+    {
+      "path": "../lirm-armature-expanded-gestalt-conditioning-assay-v1/candidates/asymmetric-bead-chain-lirm07/asymmetric-bead-chain-lirm07/normal-implicit.png",
+      "byteSize": 40773,
+      "sha256": "sha256:15c888f3f92e6e5f7fee1566aa8ebedef0ea14d59fa0fdfef8d5eb787fd7ea71"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718201.png",
+      "byteSize": 213616,
+      "sha256": "sha256:785fe335ffa56b3c89be3a21fb35f337b33a43df3c29bb6c07bb3a7c1b7aada7"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.png",
+      "byteSize": 228142,
+      "sha256": "sha256:dab47f3a8998f88cbed59de5cd6f496276e36f288595ca387e6e604e2b3093c7"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.png",
+      "byteSize": 196807,
+      "sha256": "sha256:d0d018da72e894df50949c5403361e55946a591b59d98e30fa281f07f283e18a"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718202.png",
+      "byteSize": 226424,
+      "sha256": "sha256:9128e44070d0571a921b821ccf8cde7df493a38bee66822b40336698a9713be2"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718201.png",
+      "byteSize": 242012,
+      "sha256": "sha256:70437e6f000d9f219aa94fce9fe697899d8f296f3823d10a3e81bcb226762b60"
+    },
+    {
+      "path": "outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-semantic-role-interpretation-seed718202.png",
+      "byteSize": 238032,
+      "sha256": "sha256:1cd6c5f5d72cfa8d53979e1eb4d37995b4d171d27627a307d3c92edacd7063e3"
+    }
+  ],
+  "visualInspection": {
+    "artifact": "branching-imagegen-pressure-contact-sheet.png",
+    "inspectedAtOriginalResolution": true,
+    "visibleDelta": "Both branching armatures became coherent organism images while retaining load-bearing lineage. Anatomical and semantic stances preserve rare topology most reliably; prior-led invention contributes richer anatomy but can collapse rare fork structure toward familiar quadruped priors.",
+    "forkedSaddle": {
+      "anatomicalCompletionSeed718201": "Strongest structural result. Preserves the bifurcated silhouette and central negative space while inventing a coherent two-terminal organism with sparse contacts.",
+      "anatomicalCompletionSeed718202": "Preserves the fork, but completes only one branch as a face; coherent and visibly less complete.",
+      "priorLedInventionSeed718201": "Aesthetically richer quadruped-like organism, but loses the load-bearing fork event and therefore does not satisfy lineage preservation.",
+      "priorLedInventionSeed718202": "Retains one large branch as a tail but collapses toward a familiar small quadruped; partial lineage only.",
+      "semanticRoleSeed718201": "Strong fork preservation with tubular anatomical elaboration and two terminal interpretations; coherent and useful but more literal than the selected anatomical result.",
+      "semanticRoleSeed718202": "Very literal fork with minimal organism-level completion."
+    },
+    "asymmetricBeadChain": {
+      "anatomicalCompletionSeed718201": "Coherent posterior-heavy crawler that preserves chain and contacts but remains under-elaborated.",
+      "anatomicalCompletionSeed718202": "Strong clean completion with a clear terminal sensory head while retaining posterior-heavy chain structure.",
+      "priorLedInventionSeed718201": "Best balance of invention and lineage: a coherent non-tetrapod segmented organism preserving the lobe chain and terminal mass while adding useful anatomy.",
+      "priorLedInventionSeed718202": "Retains broad mass and terminal structure but becomes cartoonier and less aesthetically resolved.",
+      "semanticRoleSeed718201": "Coherent insect-like organism preserving the bead-chain trajectory, though conventional limbs make it a less discriminating lineage witness.",
+      "semanticRoleSeed718202": "Interesting one-foot pedestal morphology with weak creature plausibility; lineage remains visible in the upper bead mass."
+    },
+    "limitations": [
+      "The fixed clay controls pull material treatment toward toy-like surfaces.",
+      "A coherent image alone does not prove spatial coherence or 3D lineage survival.",
+      "Prior-led pressure is topology-dependent: it enriches the bead chain but erases the rare fork when pushed too far."
+    ]
+  },
+  "trellisPromotion": {
+    "status": "selected",
+    "evidenceRoles": [
+      {
+        "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+        "role": "rare-topology-preservation"
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+        "role": "clean-adherence-baseline"
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+        "role": "productive-prior-extrapolation"
+      }
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-trellis-adjudication.v0",
+  "status": "complete-spatially-inspected",
+  "route": {
+    "imageGenerator": "flux2-klein-9b-q4",
+    "imageResolution": 512,
+    "imageSteps": 8,
+    "trellisBackend": "trellis2mlx_fast",
+    "trellisResolution": 512,
+    "trellisSteps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "evidence": {
+    "promotedImageCount": 4,
+    "acceptedGlbCount": 4,
+    "rejectedGlbCount": 0,
+    "renderedViewCount": 16,
+    "viewsPerAsset": [
+      "left",
+      "front",
+      "right",
+      "opposite"
+    ],
+    "trellisInferenceSeconds": 340.40718936920166,
+    "witnessRenderSeconds": 16.28825616836548,
+    "contactSheet": {
+      "path": "trellis-witness-contact-sheet.png",
+      "sha256": "sha256:c817eed3fc46b54a1d5343b00306642c64bd3f55c72d2a4b877958661e9faf85",
+      "inspectedAsFourAbsolutePixelRows": true
+    }
+  },
+  "assetVerdicts": [
+    {
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "evidenceRole": "open-annulus-single-pendant",
+      "spatialVerdict": "strong",
+      "authoredTopology": {
+        "annularAperture": "open-in-all-four-views",
+        "tripodSupport": "three-separated-ground-contacts",
+        "suspendedMass": "spatially-distinct-inside-annulus-in-all-four-views"
+      },
+      "modelContribution": "segmented-fleshy-ring-and-teardrop-organ-without-gestalt-erasure"
+    },
+    {
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "evidenceRole": "slanted-annulus-prior-invention",
+      "spatialVerdict": "strong",
+      "authoredTopology": {
+        "annularAperture": "open-in-all-four-views",
+        "tripodSupport": "three-separated-ground-contacts",
+        "slantAndDepth": "asymmetric-depth-survives-side-and-opposite-views"
+      },
+      "modelContribution": "distributed-organs-sprouts-and-internal-segmented-growth-without-quadruped-collapse"
+    },
+    {
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "evidenceRole": "broad-canopy-multiple-pendants",
+      "spatialVerdict": "strong",
+      "authoredTopology": {
+        "canopy": "broad-top-heavy-perforated-roof-in-all-four-views",
+        "supportField": "sparse-separated-legs-with-central-trunk",
+        "suspendedMass": "multiple-fruiting-bodies-remain-separated-beneath-canopy"
+      },
+      "modelContribution": "perforations-fruiting-bodies-and-rootlike-suspension-add-complexity-without-canopy-erasure"
+    },
+    {
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "evidenceRole": "clustered-canopy-single-pendant",
+      "spatialVerdict": "strong",
+      "authoredTopology": {
+        "canopy": "top-heavy-asymmetric-cluster-in-all-four-views",
+        "supportField": "three-separated-supports",
+        "suspendedMass": "central-pendant-survives-front-side-and-opposite-views"
+      },
+      "modelContribution": "lobed-fleshy-canopy-and-pink-contact-pads-without-symmetry-collapse"
+    }
+  ],
+  "findings": {
+    "rareGestaltSpatialSurvivalRate": "4/4",
+    "frontOnlyReliefCount": 0,
+    "conventionalCreatureHomogenizationCount": 0,
+    "authoredOpenTopologySurvivesFullRoute": true,
+    "authoredSuspensionSurvivesFullRoute": true,
+    "priorLedInventionCanAddAnatomyWithoutErasingGestalt": true,
+    "interpretation": "The armature is carrying load-bearing creature topology while Flux supplies anatomical completion and Trellis converts that joint result into coherent spatial assets."
+  },
+  "nextAssay": {
+    "id": "cross-family-rare-gestalt-hybrid-v0",
+    "question": "Can one armature compose annular aperture, top-heavy canopy, sparse supports, and suspended anatomy without collapsing into either proven parent family?",
+    "minimumEvidence": [
+      "three or more hybrid armatures whose silhouettes are distinguishable from both parent families",
+      "conditioned image outputs that preserve at least two load-bearing commitments per hybrid",
+      "multi-view Trellis witnesses for promoted hybrids"
+    ],
+    "failureSignal": "The image or mesh route resolves every hybrid back into a parent basin or erases one of the composed topological commitments."
+  }
+}

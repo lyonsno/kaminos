@@ -1,0 +1,329 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "forked-saddle-default",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "forked-saddle-default/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "forked-saddle-default/clay-implicit.svg",
+        "rasterPath": "forked-saddle-default/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "forked-saddle-default/depth-implicit.svg",
+        "rasterPath": "forked-saddle-default/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "forked-saddle-default/normal-implicit.svg",
+        "rasterPath": "forked-saddle-default/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "forked-saddle-default/mask-implicit.svg",
+        "rasterPath": "forked-saddle-default/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "forked-saddle-default/semantic-implicit.svg",
+        "rasterPath": "forked-saddle-default/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "forked-saddle-default/trellis-source.svg",
+      "rasterPath": "forked-saddle-default/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "forked-saddle-default/bundle.json",
+      "byteSize": 6474,
+      "sha256": "sha256:ff6c1fd913607533315a4efc1b8e6617e0579b0ad141d26c616644b6887bd1aa"
+    },
+    {
+      "path": "forked-saddle-default/clay-implicit.svg",
+      "byteSize": 1052798,
+      "sha256": "sha256:92082cae03047779662581a16d809aa58afbd55a5ad3b9c5f2f861d6ce41863c"
+    },
+    {
+      "path": "forked-saddle-default/clay-implicit.png",
+      "byteSize": 45583,
+      "sha256": "sha256:7c9b5179323b886cf56a1685d977f2a0ba2b79c5f29161fa4606768e1b637682"
+    },
+    {
+      "path": "forked-saddle-default/depth-implicit.svg",
+      "byteSize": 1081556,
+      "sha256": "sha256:925b9e19cb76ca14b70a4926588f5d186fb5877cb77674fcf324c7be3aa73e53"
+    },
+    {
+      "path": "forked-saddle-default/depth-implicit.png",
+      "byteSize": 24146,
+      "sha256": "sha256:e76bffec9cdf530723246bddb47b5bd87c058f9f08d62fd8517ce95612027a41"
+    },
+    {
+      "path": "forked-saddle-default/normal-implicit.svg",
+      "byteSize": 1068539,
+      "sha256": "sha256:f48d98261ea73717d327a9b0128c2bea28a8ac744458ba2520f457abbfdce205"
+    },
+    {
+      "path": "forked-saddle-default/normal-implicit.png",
+      "byteSize": 54827,
+      "sha256": "sha256:6b504f25cd89bfa55fefbca2b1a143ded3c10177d11969cda961abaa5d3c7353"
+    },
+    {
+      "path": "forked-saddle-default/mask-implicit.svg",
+      "byteSize": 1081512,
+      "sha256": "sha256:a796077c65630eb7ed6ecf0605828f6cf24810e4786f32bdca4c34ae2151bb5b"
+    },
+    {
+      "path": "forked-saddle-default/mask-implicit.png",
+      "byteSize": 7857,
+      "sha256": "sha256:5f569926a84ef60d0146fe224c06253431d177a1a386ff85ae0f1c7c1b9198cb"
+    },
+    {
+      "path": "forked-saddle-default/semantic-implicit.svg",
+      "byteSize": 1170484,
+      "sha256": "sha256:7775c455436e5545736482d44dba5bec3e1499f7731026674d78857ed2eaa579"
+    },
+    {
+      "path": "forked-saddle-default/semantic-implicit.png",
+      "byteSize": 9279,
+      "sha256": "sha256:a13c5aa3b7156e7d1fd4c6486f90989731afdf6e2bfda56c2f9bb83bd832199b"
+    },
+    {
+      "path": "forked-saddle-default/trellis-source.svg",
+      "byteSize": 1055719,
+      "sha256": "sha256:91d18621654991c3461e12131babb44c855463119d76593721b5a6278a372dc4"
+    },
+    {
+      "path": "forked-saddle-default/trellis-source.png",
+      "byteSize": 169914,
+      "sha256": "sha256:e8bacbd4c3c1e0d005a4e7878927b20c6840df3a765cec5e0e16b94adaad2c5a"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.forked-saddle.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.forked-saddle-20.v0",
+    "parameterSpecs": [
+      {
+        "id": "rootWidth",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.82,
+        "min": 0.48,
+        "max": 1.26,
+        "step": 0.12
+      },
+      {
+        "id": "rootHeight",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.42,
+        "min": 0.24,
+        "max": 0.72,
+        "step": 0.08
+      },
+      {
+        "id": "rootDepth",
+        "semanticRole": "saddleRootMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.08
+      },
+      {
+        "id": "branchSpread",
+        "semanticRole": "forkBranchSeparation",
+        "initial": 1.18,
+        "min": 0.72,
+        "max": 1.82,
+        "step": 0.15
+      },
+      {
+        "id": "branchRise",
+        "semanticRole": "forkBranchElevation",
+        "initial": 0.88,
+        "min": 0.44,
+        "max": 1.42,
+        "step": 0.14
+      },
+      {
+        "id": "branchArc",
+        "semanticRole": "forkBranchCurvature",
+        "initial": 0.2,
+        "min": -0.18,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "branchThickness",
+        "semanticRole": "forkBranch",
+        "initial": 0.26,
+        "min": 0.14,
+        "max": 0.48,
+        "step": 0.055
+      },
+      {
+        "id": "branchDepth",
+        "semanticRole": "forkBranch",
+        "initial": 0.3,
+        "min": 0.16,
+        "max": 0.58,
+        "step": 0.065
+      },
+      {
+        "id": "branchForward",
+        "semanticRole": "forkBranchTrajectory",
+        "initial": 0.04,
+        "min": -0.3,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalMass",
+        "initial": 0.52,
+        "min": 0.26,
+        "max": 0.9,
+        "step": 0.09
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.82,
+        "step": 0.08
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalLift",
+        "semanticRole": "terminalElevation",
+        "initial": 0.06,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.06
+      },
+      {
+        "id": "asymmetry",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.05,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.065
+      },
+      {
+        "id": "depthTwist",
+        "semanticRole": "branchDepthDivergence",
+        "initial": 0.05,
+        "min": -0.3,
+        "max": 0.3,
+        "step": 0.06
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.62,
+        "min": 0.36,
+        "max": 1.04,
+        "step": 0.1
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.3,
+        "min": 0.14,
+        "max": 0.58,
+        "step": 0.075
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.075,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactForeAft",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.24,
+        "min": 0.08,
+        "max": 0.5,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "rootWidth": 0.82,
+    "rootHeight": 0.42,
+    "rootDepth": 0.42,
+    "branchSpread": 1.18,
+    "branchRise": 0.88,
+    "branchArc": 0.2,
+    "branchThickness": 0.26,
+    "branchDepth": 0.3,
+    "branchForward": 0.04,
+    "terminalWidth": 0.52,
+    "terminalHeight": 0.46,
+    "terminalDepth": 0.42,
+    "terminalLift": 0.06,
+    "asymmetry": 0.05,
+    "depthTwist": 0.05,
+    "contactSpread": 0.62,
+    "contactLength": 0.3,
+    "contactThickness": 0.075,
+    "contactForeAft": 0.24,
+    "groundHeight": -0.56
+  },
+  "implicitPrimitiveCount": 28,
+  "semanticRoles": [
+    "saddleRootMass",
+    "forkBranch",
+    "terminalMass",
+    "localizedContactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

@@ -14,6 +14,10 @@ import {
 import {
   BULBOUS_RADIAL_UPRIGHT_ARMATURE_PROGRAM,
 } from './lirm-bulbous-radial-upright-armature-program.mjs';
+import {
+  ASYMMETRIC_BEAD_CHAIN_ARMATURE_PROGRAM,
+  FORKED_SADDLE_ARMATURE_PROGRAM,
+} from './lirm-branching-armature-programs.mjs';
 
 export const LIRM_ARMATURE_GESTALT_FAMILY_ROUTE =
   'kaminos/lirm-armature-gestalt-family/source-anchored-conditioning-v0';
@@ -82,6 +86,20 @@ export const DEFAULT_LIRM_ARMATURE_GESTALT_FAMILY_SOURCES = Object.freeze([
     armatureProgram: BULBOUS_RADIAL_UPRIGHT_ARMATURE_PROGRAM,
     fitReportPath: 'artifacts/lirm-bulbous-radial-upright-armature-assay-v1/report.json',
     fitReportSha256: 'sha256:d4ca63ebad2fa83f7266afb435eae240983659254a3f1b251bd12036c47d32bf',
+    acceptance: Object.freeze({ kind: 'direct-status', expectedStatus: 'assay-passed-inspected' }),
+  }),
+  Object.freeze({
+    id: 'forked-saddle-lirm02',
+    armatureProgram: FORKED_SADDLE_ARMATURE_PROGRAM,
+    fitReportPath: 'artifacts/lirm-branching-gestalt-reference-fit-assay-v0/forked-saddle-lirm02/report.json',
+    fitReportSha256: 'sha256:4e778f4ef3ad0f506e101454403b89791a904d0a2a332a73433fe6d2e51c09b3',
+    acceptance: Object.freeze({ kind: 'direct-status', expectedStatus: 'assay-passed-inspected' }),
+  }),
+  Object.freeze({
+    id: 'asymmetric-bead-chain-lirm07',
+    armatureProgram: ASYMMETRIC_BEAD_CHAIN_ARMATURE_PROGRAM,
+    fitReportPath: 'artifacts/lirm-branching-gestalt-reference-fit-assay-v0/asymmetric-bead-chain-lirm07/report.json',
+    fitReportSha256: 'sha256:87a4209a0842b6214d671a456c53a139605a87997d3e58c1d08e6ee0669dd5d5',
     acceptance: Object.freeze({ kind: 'direct-status', expectedStatus: 'assay-passed-inspected' }),
   }),
 ]);
@@ -341,7 +359,7 @@ export async function writeLirmArmatureGestaltFamilyWitness({
       sourceEvidence,
       candidates: candidateReceipts,
       falseClosureGuards: family.falseClosureGuards,
-      lastTrustworthyEvidence: 'five source-anchored conditioning packages written with pinned source and output receipt hashes',
+      lastTrustworthyEvidence: 'seven source-anchored conditioning packages written with pinned source and output receipt hashes',
     };
     await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
     return {

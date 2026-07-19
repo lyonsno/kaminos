@@ -1,0 +1,94 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "inspected-at-original-resolution; three spatially coherent casts confirmed",
+  "lastTrustworthyEvidence": "twelve route-validated witness frames assembled and inspected against their selected imagegen sources; adjudication recorded in report.json",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness-plan.json",
+    "bytes": 21764,
+    "sha256": "sha256:277263e531dd8de19df57970c54ef117f5155a9daffa7a2952dfda2b3835779d"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness-completion-report.json",
+    "bytes": 39216,
+    "sha256": "sha256:3828c24d9a1dca49b4d26cf91f8b2c39c0bcfb842a93e42157f50245e44af6c8"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 3971,
+    "sha256": "sha256:3b21c74761550329ebf6b0f54600fa9923e10f385b68259222b12c02848769f1"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/trellis-witness-contact-sheet.png",
+    "bytes": 1977327,
+    "sha256": "sha256:92f70ac5b5ff3a4003ff951bf1ffac47bbd411e10971b478c0ec2567dfb40dbf"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-left.png",
+      "bytes": 757988,
+      "sha256": "sha256:e875b6ec2168010318c267ca7ff5f137b1e9e189f3c422b315198d62f0dfd29d"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-front.png",
+      "bytes": 780073,
+      "sha256": "sha256:b7ab420e53b1a6233810b9a60751b11960069d2befe5b2d179689cf3f2c92437"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-right.png",
+      "bytes": 759377,
+      "sha256": "sha256:778e1ef3bf90dac1f82f0794d4f0b3101d029a8ed3eae7dfd517822cd32f7df9"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-opposite.png",
+      "bytes": 745470,
+      "sha256": "sha256:773fd01b2c5c9924c50654a8d652d055ac818a396e48befba4bbffac348a6da2"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-left.png",
+      "bytes": 709476,
+      "sha256": "sha256:25f668b3f05467d6885a52918b09205df5c89caf39b5c275fd2e7a0bdba46a1f"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-front.png",
+      "bytes": 679323,
+      "sha256": "sha256:991b84079a5d2078efa8e0969f2afcd754c7670e929405848484ec3eb53af5ac"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-right.png",
+      "bytes": 700141,
+      "sha256": "sha256:f2a98a063c606348a54a3f85afdd37a7e19b0bb33011b3f27b7a578819fc1d10"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-opposite.png",
+      "bytes": 652783,
+      "sha256": "sha256:50b6cc7b38f254d88e18c2985d971668cb739ffe45c3ed8b29175284ac1618c5"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-left.png",
+      "bytes": 679934,
+      "sha256": "sha256:2a2f64e67d5fb8b8dd2a5ae9ad1a67dbee3f30b5bfb9e0e9b703267035ac7963"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-front.png",
+      "bytes": 665982,
+      "sha256": "sha256:696de2a0bf9a52cb1a996ee25a238c886edd9ffcdb3231a75b14bbb0deae9664"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-right.png",
+      "bytes": 691128,
+      "sha256": "sha256:5f592c8450e88a661fcfafbfbb971a39453aef8808ce419389b610a61d78712c"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-opposite.png",
+      "bytes": 631358,
+      "sha256": "sha256:55e73fd38a1cecf13bc38e5b97be75f11bc2b2a83b5172401392b1ba6c522dbd"
+    }
+  ]
+}

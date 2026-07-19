@@ -1,0 +1,121 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 16,
+  "submitted": [
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-left",
+      "jobId": "431f0e92715f",
+      "response": {
+        "job_id": "431f0e92715f"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-front",
+      "jobId": "755767da38ee",
+      "response": {
+        "job_id": "755767da38ee"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-right",
+      "jobId": "59d5083b6334",
+      "response": {
+        "job_id": "59d5083b6334"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-opposite",
+      "jobId": "0ff05b97b4dc",
+      "response": {
+        "job_id": "0ff05b97b4dc"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-left",
+      "jobId": "f1c8ba576286",
+      "response": {
+        "job_id": "f1c8ba576286"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-front",
+      "jobId": "c8852f256def",
+      "response": {
+        "job_id": "c8852f256def"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-right",
+      "jobId": "cf81f94ebc47",
+      "response": {
+        "job_id": "cf81f94ebc47"
+      }
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-opposite",
+      "jobId": "9525b1f8d799",
+      "response": {
+        "job_id": "9525b1f8d799"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-left",
+      "jobId": "ee93832791a0",
+      "response": {
+        "job_id": "ee93832791a0"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-front",
+      "jobId": "693d1ec96e29",
+      "response": {
+        "job_id": "693d1ec96e29"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-right",
+      "jobId": "426e1488c959",
+      "response": {
+        "job_id": "426e1488c959"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-opposite",
+      "jobId": "b62405ee5736",
+      "response": {
+        "job_id": "b62405ee5736"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-left",
+      "jobId": "b8778441777d",
+      "response": {
+        "job_id": "b8778441777d"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-front",
+      "jobId": "6128dd0e4cc4",
+      "response": {
+        "job_id": "6128dd0e4cc4"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-right",
+      "jobId": "5083f31845e7",
+      "response": {
+        "job_id": "5083f31845e7"
+      }
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-opposite",
+      "jobId": "f950ef43d3fb",
+      "response": {
+        "job_id": "f950ef43d3fb"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "16/16 witness jobs submitted through Greenroom"
+}

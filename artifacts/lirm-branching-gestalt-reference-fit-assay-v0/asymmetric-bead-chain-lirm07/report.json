@@ -1,0 +1,1871 @@
+{
+  "schema": "kaminos.lirm-reference-fitted-armature-assay.v0",
+  "status": "assay-passed-inspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "effectiveRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "requestedArmatureProgramId": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+  "effectiveArmatureProgramId": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+    "parameterSpecs": [
+      {
+        "id": "posteriorLength",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.84,
+        "min": 0.46,
+        "max": 1.34,
+        "step": 0.13
+      },
+      {
+        "id": "posteriorWidth",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.72,
+        "min": 0.38,
+        "max": 1.14,
+        "step": 0.11
+      },
+      {
+        "id": "posteriorHeight",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.62,
+        "min": 0.34,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "posteriorSplit",
+        "semanticRole": "posteriorMassArticulation",
+        "initial": 0.26,
+        "min": 0.08,
+        "max": 0.52,
+        "step": 0.07
+      },
+      {
+        "id": "posteriorLift",
+        "semanticRole": "posteriorElevation",
+        "initial": 0.08,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "chainLength",
+        "semanticRole": "axialBeadTrajectory",
+        "initial": 1.38,
+        "min": 0.82,
+        "max": 2.02,
+        "step": 0.17
+      },
+      {
+        "id": "beadWidth",
+        "semanticRole": "axialBead",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "beadHeight",
+        "semanticRole": "axialBead",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "beadDepth",
+        "semanticRole": "axialBead",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "beadTaper",
+        "semanticRole": "axialMassTaper",
+        "initial": 0.48,
+        "min": 0.08,
+        "max": 0.82,
+        "step": 0.09
+      },
+      {
+        "id": "lateralSweep",
+        "semanticRole": "axialLateralSweep",
+        "initial": 0.38,
+        "min": -0.62,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "verticalArc",
+        "semanticRole": "axialVerticalArc",
+        "initial": 0.18,
+        "min": -0.28,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "axialBias",
+        "semanticRole": "axialMassDistribution",
+        "initial": 0.12,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.44,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "terminalOffset",
+        "semanticRole": "terminalSensoryOffset",
+        "initial": 0.14,
+        "min": -0.28,
+        "max": 0.44,
+        "step": 0.075
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 0.92,
+        "step": 0.09
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.28,
+        "min": 0.13,
+        "max": 0.56,
+        "step": 0.07
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.072,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactBias",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.16,
+        "min": -0.38,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ]
+  },
+  "requestedCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "effectiveCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "requestedFitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "requestedHeldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "fitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "heldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "timing": {
+    "startedAt": "2026-07-19T09:53:37.604Z",
+    "finishedAt": "2026-07-19T09:53:50.757Z",
+    "durationSeconds": 13.153
+  },
+  "lastTrustworthyEvidence": "exact-camera residual witnesses visually inspected and accepted",
+  "outputInventory": {
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-gestalt-reference-fit-assay-v0/asymmetric-bead-chain-lirm07/silhouette-residual-witness.png",
+      "bytes": 14936,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-overlay",
+        "initial-overlay"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-gestalt-reference-fit-assay-v0/asymmetric-bead-chain-lirm07/depth-residual-witness.png",
+      "bytes": 25180,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-depth-error",
+        "initial-depth-error"
+      ]
+    },
+    "donorEvidence": [
+      {
+        "cameraId": "az000",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az045",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az090",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az135",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az180",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az225",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az270",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      },
+      {
+        "cameraId": "az315",
+        "kind": "software-raster-mask-depth",
+        "width": 40,
+        "height": 32
+      }
+    ]
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-assay-v0/trellis-prior-assay/lirm07-tadpole-clean-fast4-nocascade/output.glb",
+    "bytes": 12883084,
+    "sha256": "sha256:90404edf213ed80e23c8c37f754a01a95e87e7b2b2f6161e5310a55bfb55326f",
+    "triangleCount": 153793,
+    "sourceBounds": {
+      "min": {
+        "x": -0.4999752342700958,
+        "y": -0.3012866973876953,
+        "z": -0.23464715480804443
+      },
+      "max": {
+        "x": 0.5004425048828125,
+        "y": 0.31119683384895325,
+        "z": 0.23422132432460785
+      },
+      "center": {
+        "x": 0.0002336353063583374,
+        "y": 0.004955068230628967,
+        "z": -0.00021291524171829224
+      },
+      "diagonal": 1.263253489831751
+    },
+    "normalization": {
+      "kind": "bbox-center-diagonal-scale",
+      "targetDiagonal": 2.15,
+      "scale": 1.7019545303503196
+    }
+  },
+  "plan": {
+    "schema": "kaminos.lirm-reference-fitted-armature-plan.v0",
+    "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+    "donor": {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-assay-v0/trellis-prior-assay/lirm07-tadpole-clean-fast4-nocascade/output.glb",
+      "sha256": "sha256:90404edf213ed80e23c8c37f754a01a95e87e7b2b2f6161e5310a55bfb55326f"
+    },
+    "requestedCameraIds": [
+      "az000",
+      "az045",
+      "az090",
+      "az135",
+      "az180",
+      "az225",
+      "az270",
+      "az315"
+    ],
+    "fitViewIds": [
+      "az000",
+      "az090",
+      "az180",
+      "az270"
+    ],
+    "heldOutViewIds": [
+      "az045",
+      "az135",
+      "az225",
+      "az315"
+    ],
+    "requestedArmatureProgramId": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+    "armatureProgram": {
+      "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+      "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+      "parameterSpecs": [
+        {
+          "id": "posteriorLength",
+          "semanticRole": "posteriorCluster",
+          "initial": 0.84,
+          "min": 0.46,
+          "max": 1.34,
+          "step": 0.13
+        },
+        {
+          "id": "posteriorWidth",
+          "semanticRole": "posteriorCluster",
+          "initial": 0.72,
+          "min": 0.38,
+          "max": 1.14,
+          "step": 0.11
+        },
+        {
+          "id": "posteriorHeight",
+          "semanticRole": "posteriorCluster",
+          "initial": 0.62,
+          "min": 0.34,
+          "max": 1.02,
+          "step": 0.1
+        },
+        {
+          "id": "posteriorSplit",
+          "semanticRole": "posteriorMassArticulation",
+          "initial": 0.26,
+          "min": 0.08,
+          "max": 0.52,
+          "step": 0.07
+        },
+        {
+          "id": "posteriorLift",
+          "semanticRole": "posteriorElevation",
+          "initial": 0.08,
+          "min": -0.18,
+          "max": 0.34,
+          "step": 0.07
+        },
+        {
+          "id": "chainLength",
+          "semanticRole": "axialBeadTrajectory",
+          "initial": 1.38,
+          "min": 0.82,
+          "max": 2.02,
+          "step": 0.17
+        },
+        {
+          "id": "beadWidth",
+          "semanticRole": "axialBead",
+          "initial": 0.46,
+          "min": 0.24,
+          "max": 0.76,
+          "step": 0.08
+        },
+        {
+          "id": "beadHeight",
+          "semanticRole": "axialBead",
+          "initial": 0.42,
+          "min": 0.22,
+          "max": 0.72,
+          "step": 0.075
+        },
+        {
+          "id": "beadDepth",
+          "semanticRole": "axialBead",
+          "initial": 0.48,
+          "min": 0.26,
+          "max": 0.78,
+          "step": 0.08
+        },
+        {
+          "id": "beadTaper",
+          "semanticRole": "axialMassTaper",
+          "initial": 0.48,
+          "min": 0.08,
+          "max": 0.82,
+          "step": 0.09
+        },
+        {
+          "id": "lateralSweep",
+          "semanticRole": "axialLateralSweep",
+          "initial": 0.38,
+          "min": -0.62,
+          "max": 0.82,
+          "step": 0.1
+        },
+        {
+          "id": "verticalArc",
+          "semanticRole": "axialVerticalArc",
+          "initial": 0.18,
+          "min": -0.28,
+          "max": 0.54,
+          "step": 0.08
+        },
+        {
+          "id": "axialBias",
+          "semanticRole": "axialMassDistribution",
+          "initial": 0.12,
+          "min": -0.42,
+          "max": 0.42,
+          "step": 0.08
+        },
+        {
+          "id": "terminalWidth",
+          "semanticRole": "terminalSensoryMass",
+          "initial": 0.44,
+          "min": 0.22,
+          "max": 0.76,
+          "step": 0.08
+        },
+        {
+          "id": "terminalHeight",
+          "semanticRole": "terminalSensoryMass",
+          "initial": 0.42,
+          "min": 0.22,
+          "max": 0.72,
+          "step": 0.075
+        },
+        {
+          "id": "terminalDepth",
+          "semanticRole": "terminalSensoryMass",
+          "initial": 0.46,
+          "min": 0.24,
+          "max": 0.78,
+          "step": 0.08
+        },
+        {
+          "id": "terminalOffset",
+          "semanticRole": "terminalSensoryOffset",
+          "initial": 0.14,
+          "min": -0.28,
+          "max": 0.44,
+          "step": 0.075
+        },
+        {
+          "id": "contactSpread",
+          "semanticRole": "localizedContactField",
+          "initial": 0.54,
+          "min": 0.3,
+          "max": 0.92,
+          "step": 0.09
+        },
+        {
+          "id": "contactLength",
+          "semanticRole": "localizedContactLimb",
+          "initial": 0.28,
+          "min": 0.13,
+          "max": 0.56,
+          "step": 0.07
+        },
+        {
+          "id": "contactThickness",
+          "semanticRole": "localizedContactLimb",
+          "initial": 0.072,
+          "min": 0.04,
+          "max": 0.16,
+          "step": 0.022
+        },
+        {
+          "id": "contactBias",
+          "semanticRole": "localizedContactDistribution",
+          "initial": 0.16,
+          "min": -0.38,
+          "max": 0.38,
+          "step": 0.07
+        },
+        {
+          "id": "groundHeight",
+          "semanticRole": "groundContact",
+          "initial": -0.56,
+          "min": -0.76,
+          "max": -0.38,
+          "step": 0.06
+        }
+      ]
+    },
+    "parameterSpecs": [
+      {
+        "id": "posteriorLength",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.84,
+        "min": 0.46,
+        "max": 1.34,
+        "step": 0.13
+      },
+      {
+        "id": "posteriorWidth",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.72,
+        "min": 0.38,
+        "max": 1.14,
+        "step": 0.11
+      },
+      {
+        "id": "posteriorHeight",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.62,
+        "min": 0.34,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "posteriorSplit",
+        "semanticRole": "posteriorMassArticulation",
+        "initial": 0.26,
+        "min": 0.08,
+        "max": 0.52,
+        "step": 0.07
+      },
+      {
+        "id": "posteriorLift",
+        "semanticRole": "posteriorElevation",
+        "initial": 0.08,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "chainLength",
+        "semanticRole": "axialBeadTrajectory",
+        "initial": 1.38,
+        "min": 0.82,
+        "max": 2.02,
+        "step": 0.17
+      },
+      {
+        "id": "beadWidth",
+        "semanticRole": "axialBead",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "beadHeight",
+        "semanticRole": "axialBead",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "beadDepth",
+        "semanticRole": "axialBead",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "beadTaper",
+        "semanticRole": "axialMassTaper",
+        "initial": 0.48,
+        "min": 0.08,
+        "max": 0.82,
+        "step": 0.09
+      },
+      {
+        "id": "lateralSweep",
+        "semanticRole": "axialLateralSweep",
+        "initial": 0.38,
+        "min": -0.62,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "verticalArc",
+        "semanticRole": "axialVerticalArc",
+        "initial": 0.18,
+        "min": -0.28,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "axialBias",
+        "semanticRole": "axialMassDistribution",
+        "initial": 0.12,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.44,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "terminalOffset",
+        "semanticRole": "terminalSensoryOffset",
+        "initial": 0.14,
+        "min": -0.28,
+        "max": 0.44,
+        "step": 0.075
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 0.92,
+        "step": 0.09
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.28,
+        "min": 0.13,
+        "max": 0.56,
+        "step": 0.07
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.072,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactBias",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.16,
+        "min": -0.38,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ],
+    "evidencePredicate": {
+      "allowCameraFallback": false,
+      "allowMissingOrPartialDonorEvidence": false,
+      "heldOutViewsMayInfluenceOptimization": false,
+      "requireHeldOutSilhouetteImprovementCount": 3,
+      "requireHeldOutMeanDepthImprovement": true
+    },
+    "falseClosureGuards": {
+      "productionCreatureClaim": "forbidden",
+      "meshCopyClaim": "forbidden",
+      "learnedPriorClaim": "not_trained",
+      "topologySelectionClaim": "not_assayed"
+    }
+  },
+  "initialParameters": {
+    "posteriorLength": 0.84,
+    "posteriorWidth": 0.72,
+    "posteriorHeight": 0.62,
+    "posteriorSplit": 0.26,
+    "posteriorLift": 0.08,
+    "chainLength": 1.38,
+    "beadWidth": 0.46,
+    "beadHeight": 0.42,
+    "beadDepth": 0.48,
+    "beadTaper": 0.48,
+    "lateralSweep": 0.38,
+    "verticalArc": 0.18,
+    "axialBias": 0.12,
+    "terminalWidth": 0.44,
+    "terminalHeight": 0.42,
+    "terminalDepth": 0.46,
+    "terminalOffset": 0.14,
+    "contactSpread": 0.54,
+    "contactLength": 0.28,
+    "contactThickness": 0.072,
+    "contactBias": 0.16,
+    "groundHeight": -0.56
+  },
+  "fittedParameters": {
+    "posteriorLength": 0.56550344,
+    "posteriorWidth": 0.95226632,
+    "posteriorHeight": 0.72,
+    "posteriorSplit": 0.36720584,
+    "posteriorLift": 0.17694216000000001,
+    "chainLength": 1.02104296,
+    "beadWidth": 0.533312,
+    "beadHeight": 0.4913634,
+    "beadDepth": 0.48668799999999995,
+    "beadTaper": 0.41023992,
+    "lateralSweep": 0.51364,
+    "verticalArc": 0.2136,
+    "axialBias": 0.08639999999999999,
+    "terminalWidth": 0.36387904,
+    "terminalHeight": 0.2616366,
+    "terminalDepth": 0.29107904,
+    "terminalOffset": 0.06500000000000002,
+    "contactSpread": 0.660276,
+    "contactLength": 0.13219416000000003,
+    "contactThickness": 0.046891664,
+    "contactBias": 0.24365784000000001,
+    "groundHeight": -0.56
+  },
+  "parameterSpecs": [
+    {
+      "id": "posteriorLength",
+      "semanticRole": "posteriorCluster",
+      "initial": 0.84,
+      "min": 0.46,
+      "max": 1.34,
+      "step": 0.13
+    },
+    {
+      "id": "posteriorWidth",
+      "semanticRole": "posteriorCluster",
+      "initial": 0.72,
+      "min": 0.38,
+      "max": 1.14,
+      "step": 0.11
+    },
+    {
+      "id": "posteriorHeight",
+      "semanticRole": "posteriorCluster",
+      "initial": 0.62,
+      "min": 0.34,
+      "max": 1.02,
+      "step": 0.1
+    },
+    {
+      "id": "posteriorSplit",
+      "semanticRole": "posteriorMassArticulation",
+      "initial": 0.26,
+      "min": 0.08,
+      "max": 0.52,
+      "step": 0.07
+    },
+    {
+      "id": "posteriorLift",
+      "semanticRole": "posteriorElevation",
+      "initial": 0.08,
+      "min": -0.18,
+      "max": 0.34,
+      "step": 0.07
+    },
+    {
+      "id": "chainLength",
+      "semanticRole": "axialBeadTrajectory",
+      "initial": 1.38,
+      "min": 0.82,
+      "max": 2.02,
+      "step": 0.17
+    },
+    {
+      "id": "beadWidth",
+      "semanticRole": "axialBead",
+      "initial": 0.46,
+      "min": 0.24,
+      "max": 0.76,
+      "step": 0.08
+    },
+    {
+      "id": "beadHeight",
+      "semanticRole": "axialBead",
+      "initial": 0.42,
+      "min": 0.22,
+      "max": 0.72,
+      "step": 0.075
+    },
+    {
+      "id": "beadDepth",
+      "semanticRole": "axialBead",
+      "initial": 0.48,
+      "min": 0.26,
+      "max": 0.78,
+      "step": 0.08
+    },
+    {
+      "id": "beadTaper",
+      "semanticRole": "axialMassTaper",
+      "initial": 0.48,
+      "min": 0.08,
+      "max": 0.82,
+      "step": 0.09
+    },
+    {
+      "id": "lateralSweep",
+      "semanticRole": "axialLateralSweep",
+      "initial": 0.38,
+      "min": -0.62,
+      "max": 0.82,
+      "step": 0.1
+    },
+    {
+      "id": "verticalArc",
+      "semanticRole": "axialVerticalArc",
+      "initial": 0.18,
+      "min": -0.28,
+      "max": 0.54,
+      "step": 0.08
+    },
+    {
+      "id": "axialBias",
+      "semanticRole": "axialMassDistribution",
+      "initial": 0.12,
+      "min": -0.42,
+      "max": 0.42,
+      "step": 0.08
+    },
+    {
+      "id": "terminalWidth",
+      "semanticRole": "terminalSensoryMass",
+      "initial": 0.44,
+      "min": 0.22,
+      "max": 0.76,
+      "step": 0.08
+    },
+    {
+      "id": "terminalHeight",
+      "semanticRole": "terminalSensoryMass",
+      "initial": 0.42,
+      "min": 0.22,
+      "max": 0.72,
+      "step": 0.075
+    },
+    {
+      "id": "terminalDepth",
+      "semanticRole": "terminalSensoryMass",
+      "initial": 0.46,
+      "min": 0.24,
+      "max": 0.78,
+      "step": 0.08
+    },
+    {
+      "id": "terminalOffset",
+      "semanticRole": "terminalSensoryOffset",
+      "initial": 0.14,
+      "min": -0.28,
+      "max": 0.44,
+      "step": 0.075
+    },
+    {
+      "id": "contactSpread",
+      "semanticRole": "localizedContactField",
+      "initial": 0.54,
+      "min": 0.3,
+      "max": 0.92,
+      "step": 0.09
+    },
+    {
+      "id": "contactLength",
+      "semanticRole": "localizedContactLimb",
+      "initial": 0.28,
+      "min": 0.13,
+      "max": 0.56,
+      "step": 0.07
+    },
+    {
+      "id": "contactThickness",
+      "semanticRole": "localizedContactLimb",
+      "initial": 0.072,
+      "min": 0.04,
+      "max": 0.16,
+      "step": 0.022
+    },
+    {
+      "id": "contactBias",
+      "semanticRole": "localizedContactDistribution",
+      "initial": 0.16,
+      "min": -0.38,
+      "max": 0.38,
+      "step": 0.07
+    },
+    {
+      "id": "groundHeight",
+      "semanticRole": "groundContact",
+      "initial": -0.56,
+      "min": -0.76,
+      "max": -0.38,
+      "step": 0.06
+    }
+  ],
+  "optimization": {
+    "kind": "deterministic-bounded-coordinate-search",
+    "passes": 4,
+    "objective": 0.64264022039374,
+    "trace": [
+      {
+        "pass": -1,
+        "parameterId": null,
+        "direction": 0,
+        "score": 0.8752793095506844,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorLength",
+        "direction": -1,
+        "value": 0.71,
+        "score": 0.8658377659370595,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorWidth",
+        "direction": 1,
+        "value": 0.83,
+        "score": 0.8589077963313503,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorHeight",
+        "direction": 1,
+        "value": 0.72,
+        "score": 0.8442787688892271,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorSplit",
+        "direction": 1,
+        "value": 0.33,
+        "score": 0.838334294830181,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "posteriorLift",
+        "direction": 1,
+        "value": 0.15000000000000002,
+        "score": 0.8147633598698049,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "chainLength",
+        "direction": -1,
+        "value": 1.21,
+        "score": 0.7859940923225042,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "beadWidth",
+        "direction": 0,
+        "value": 0.46,
+        "score": 0.7859940923225042,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "beadHeight",
+        "direction": 1,
+        "value": 0.495,
+        "score": 0.7850156496372939,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "beadDepth",
+        "direction": 1,
+        "value": 0.5599999999999999,
+        "score": 0.7842240224993053,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "beadTaper",
+        "direction": 0,
+        "value": 0.48,
+        "score": 0.7842240224993053,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "lateralSweep",
+        "direction": 1,
+        "value": 0.48,
+        "score": 0.7818251613841715,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "verticalArc",
+        "direction": 1,
+        "value": 0.26,
+        "score": 0.7807800871227157,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "axialBias",
+        "direction": -1,
+        "value": 0.039999999999999994,
+        "score": 0.7776753835096779,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "terminalWidth",
+        "direction": -1,
+        "value": 0.36,
+        "score": 0.7769933042440061,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "terminalHeight",
+        "direction": -1,
+        "value": 0.345,
+        "score": 0.7729536945756206,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "terminalDepth",
+        "direction": -1,
+        "value": 0.38,
+        "score": 0.770064373033301,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "terminalOffset",
+        "direction": -1,
+        "value": 0.06500000000000002,
+        "score": 0.7676159620510147,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactSpread",
+        "direction": 1,
+        "value": 0.63,
+        "score": 0.7614832402142742,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactLength",
+        "direction": -1,
+        "value": 0.21000000000000002,
+        "score": 0.7470068893941709,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactThickness",
+        "direction": -1,
+        "value": 0.049999999999999996,
+        "score": 0.7373010773000866,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactBias",
+        "direction": 1,
+        "value": 0.23,
+        "score": 0.7371370495724594,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "groundHeight",
+        "direction": 0,
+        "value": -0.56,
+        "score": 0.7371370495724594,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorLength",
+        "direction": -1,
+        "value": 0.6345999999999999,
+        "score": 0.7316864902112648,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorWidth",
+        "direction": 1,
+        "value": 0.8937999999999999,
+        "score": 0.7270324445117968,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorHeight",
+        "direction": 0,
+        "value": 0.72,
+        "score": 0.7270324445117968,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorSplit",
+        "direction": 0,
+        "value": 0.33,
+        "score": 0.7270324445117968,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "posteriorLift",
+        "direction": 1,
+        "value": 0.19060000000000002,
+        "score": 0.7260704665748448,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "chainLength",
+        "direction": -1,
+        "value": 1.1114,
+        "score": 0.7044993137888481,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "beadWidth",
+        "direction": 1,
+        "value": 0.5064,
+        "score": 0.6954113980471126,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "beadHeight",
+        "direction": -1,
+        "value": 0.4515,
+        "score": 0.6953223137519251,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "beadDepth",
+        "direction": -1,
+        "value": 0.5136,
+        "score": 0.6952932395557375,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "beadTaper",
+        "direction": -1,
+        "value": 0.42779999999999996,
+        "score": 0.695067253073995,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "lateralSweep",
+        "direction": 0,
+        "value": 0.48,
+        "score": 0.695067253073995,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "verticalArc",
+        "direction": -1,
+        "value": 0.2136,
+        "score": 0.6941917662574928,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "axialBias",
+        "direction": 1,
+        "value": 0.08639999999999999,
+        "score": 0.6933443215854098,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "terminalWidth",
+        "direction": 1,
+        "value": 0.4064,
+        "score": 0.6926914440170405,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "terminalHeight",
+        "direction": -1,
+        "value": 0.3015,
+        "score": 0.6914551822753383,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "terminalDepth",
+        "direction": -1,
+        "value": 0.3336,
+        "score": 0.6889734498160303,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "terminalOffset",
+        "direction": 0,
+        "value": 0.06500000000000002,
+        "score": 0.6889734498160303,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactSpread",
+        "direction": 0,
+        "value": 0.63,
+        "score": 0.6889734498160303,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactLength",
+        "direction": -1,
+        "value": 0.16940000000000002,
+        "score": 0.6829201150086617,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactThickness",
+        "direction": 0,
+        "value": 0.049999999999999996,
+        "score": 0.6829201150086617,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactBias",
+        "direction": 0,
+        "value": 0.23,
+        "score": 0.6829201150086617,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "groundHeight",
+        "direction": 0,
+        "value": -0.56,
+        "score": 0.6829201150086617,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorLength",
+        "direction": -1,
+        "value": 0.590868,
+        "score": 0.674729602550842,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorWidth",
+        "direction": 1,
+        "value": 0.930804,
+        "score": 0.6743522054167116,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorHeight",
+        "direction": 0,
+        "value": 0.72,
+        "score": 0.6743522054167116,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorSplit",
+        "direction": 1,
+        "value": 0.35354800000000003,
+        "score": 0.673213981522498,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "posteriorLift",
+        "direction": 0,
+        "value": 0.19060000000000002,
+        "score": 0.673213981522498,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "chainLength",
+        "direction": -1,
+        "value": 1.054212,
+        "score": 0.6689097553680025,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "beadWidth",
+        "direction": 1,
+        "value": 0.533312,
+        "score": 0.6680912073584698,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "beadHeight",
+        "direction": 1,
+        "value": 0.47673,
+        "score": 0.6665262533021235,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "beadDepth",
+        "direction": -1,
+        "value": 0.48668799999999995,
+        "score": 0.6659981009127373,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "beadTaper",
+        "direction": 0,
+        "value": 0.42779999999999996,
+        "score": 0.6659981009127373,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "lateralSweep",
+        "direction": 1,
+        "value": 0.51364,
+        "score": 0.6653230979064882,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "verticalArc",
+        "direction": 0,
+        "value": 0.2136,
+        "score": 0.6653230979064882,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "axialBias",
+        "direction": 0,
+        "value": 0.08639999999999999,
+        "score": 0.6653230979064882,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "terminalWidth",
+        "direction": -1,
+        "value": 0.379488,
+        "score": 0.6653028581311109,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "terminalHeight",
+        "direction": -1,
+        "value": 0.27627,
+        "score": 0.6640163791196722,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "terminalDepth",
+        "direction": -1,
+        "value": 0.306688,
+        "score": 0.6632838951740111,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "terminalOffset",
+        "direction": 0,
+        "value": 0.06500000000000002,
+        "score": 0.6632838951740111,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactSpread",
+        "direction": 1,
+        "value": 0.660276,
+        "score": 0.661224094858577,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactLength",
+        "direction": -1,
+        "value": 0.14585200000000004,
+        "score": 0.6589281237131467,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactThickness",
+        "direction": -1,
+        "value": 0.0425992,
+        "score": 0.6578762023650979,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactBias",
+        "direction": 0,
+        "value": 0.23,
+        "score": 0.6578762023650979,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "groundHeight",
+        "direction": 0,
+        "value": -0.56,
+        "score": 0.6578762023650979,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorLength",
+        "direction": -1,
+        "value": 0.56550344,
+        "score": 0.6566112560467751,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorWidth",
+        "direction": 1,
+        "value": 0.95226632,
+        "score": 0.6565723659360156,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorHeight",
+        "direction": 0,
+        "value": 0.72,
+        "score": 0.6565723659360156,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorSplit",
+        "direction": 1,
+        "value": 0.36720584,
+        "score": 0.656373981275598,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "posteriorLift",
+        "direction": -1,
+        "value": 0.17694216000000001,
+        "score": 0.6561395529585573,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "chainLength",
+        "direction": -1,
+        "value": 1.02104296,
+        "score": 0.650839721764834,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "beadWidth",
+        "direction": 0,
+        "value": 0.533312,
+        "score": 0.650839721764834,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "beadHeight",
+        "direction": 1,
+        "value": 0.4913634,
+        "score": 0.6497288143641902,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "beadDepth",
+        "direction": 0,
+        "value": 0.48668799999999995,
+        "score": 0.6497288143641902,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "beadTaper",
+        "direction": -1,
+        "value": 0.41023992,
+        "score": 0.6476711443257536,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "lateralSweep",
+        "direction": 0,
+        "value": 0.51364,
+        "score": 0.6476711443257536,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "verticalArc",
+        "direction": 0,
+        "value": 0.2136,
+        "score": 0.6476711443257536,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "axialBias",
+        "direction": 0,
+        "value": 0.08639999999999999,
+        "score": 0.6476711443257536,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "terminalWidth",
+        "direction": -1,
+        "value": 0.36387904,
+        "score": 0.6476561294005833,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "terminalHeight",
+        "direction": -1,
+        "value": 0.2616366,
+        "score": 0.6476429131793611,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "terminalDepth",
+        "direction": -1,
+        "value": 0.29107904,
+        "score": 0.6476190082023977,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "terminalOffset",
+        "direction": 0,
+        "value": 0.06500000000000002,
+        "score": 0.6476190082023977,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactSpread",
+        "direction": 0,
+        "value": 0.660276,
+        "score": 0.6476190082023977,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactLength",
+        "direction": -1,
+        "value": 0.13219416000000003,
+        "score": 0.6443738202111885,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactThickness",
+        "direction": 1,
+        "value": 0.046891664,
+        "score": 0.6426417776251802,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactBias",
+        "direction": 1,
+        "value": 0.24365784000000001,
+        "score": 0.64264022039374,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "groundHeight",
+        "direction": 0,
+        "value": -0.56,
+        "score": 0.64264022039374,
+        "accepted": false
+      }
+    ]
+  },
+  "metrics": {
+    "initial": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.4342629482071713,
+            "depthMae": 0.18997462445970506,
+            "occupancyError": 0.08092485549132948,
+            "donorPixels": 173,
+            "armaturePixels": 187
+          },
+          "az090": {
+            "iou": 0.16878980891719744,
+            "depthMae": 0.08129284724102064,
+            "occupancyError": 1.1101694915254237,
+            "donorPixels": 118,
+            "armaturePixels": 249
+          },
+          "az180": {
+            "iou": 0.3088803088803089,
+            "depthMae": 0.17330751821462603,
+            "occupancyError": 0.06285714285714286,
+            "donorPixels": 175,
+            "armaturePixels": 164
+          },
+          "az270": {
+            "iou": 0.20134228187919462,
+            "depthMae": 0.2186913735329272,
+            "occupancyError": 1.5445544554455446,
+            "donorPixels": 101,
+            "armaturePixels": 257
+          }
+        },
+        "meanIou": 0.27831883697096804,
+        "meanDepthMae": 0.16581659086206973,
+        "meanOccupancyError": 0.6996264863298602
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.2932330827067669,
+            "depthMae": 0.15800572482998815,
+            "occupancyError": 0.08484848484848485,
+            "donorPixels": 165,
+            "armaturePixels": 179
+          },
+          "az135": {
+            "iou": 0.31309904153354634,
+            "depthMae": 0.11596478510576565,
+            "occupancyError": 0.5214723926380368,
+            "donorPixels": 163,
+            "armaturePixels": 248
+          },
+          "az225": {
+            "iou": 0.45228215767634855,
+            "depthMae": 0.29902580039971355,
+            "occupancyError": 0.09580838323353294,
+            "donorPixels": 167,
+            "armaturePixels": 183
+          },
+          "az315": {
+            "iou": 0.38741721854304634,
+            "depthMae": 0.14774642545598962,
+            "occupancyError": 0.7207792207792207,
+            "donorPixels": 154,
+            "armaturePixels": 265
+          }
+        },
+        "meanIou": 0.361507875114927,
+        "meanDepthMae": 0.18018568394786424,
+        "meanOccupancyError": 0.3557271203748188
+      }
+    },
+    "fitted": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.6553191489361702,
+            "depthMae": 0.13787985237532902,
+            "occupancyError": 0.24855491329479767,
+            "donorPixels": 173,
+            "armaturePixels": 216
+          },
+          "az090": {
+            "iou": 0.3303964757709251,
+            "depthMae": 0.11508842514810334,
+            "occupancyError": 0.559322033898305,
+            "donorPixels": 118,
+            "armaturePixels": 184
+          },
+          "az180": {
+            "iou": 0.5573770491803278,
+            "depthMae": 0.11124887114514462,
+            "occupancyError": 0.17142857142857143,
+            "donorPixels": 175,
+            "armaturePixels": 205
+          },
+          "az270": {
+            "iou": 0.34977578475336324,
+            "depthMae": 0.17932788848596598,
+            "occupancyError": 0.9801980198019802,
+            "donorPixels": 101,
+            "armaturePixels": 200
+          }
+        },
+        "meanIou": 0.47321711466019656,
+        "meanDepthMae": 0.13588625928863574,
+        "meanOccupancyError": 0.4898758846059136
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.4192139737991266,
+            "depthMae": 0.14606184588805005,
+            "occupancyError": 0.030303030303030304,
+            "donorPixels": 165,
+            "armaturePixels": 160
+          },
+          "az135": {
+            "iou": 0.46494464944649444,
+            "depthMae": 0.11849170511381646,
+            "occupancyError": 0.43558282208588955,
+            "donorPixels": 163,
+            "armaturePixels": 234
+          },
+          "az225": {
+            "iou": 0.5358851674641149,
+            "depthMae": 0.21612742379902844,
+            "occupancyError": 0.07784431137724551,
+            "donorPixels": 167,
+            "armaturePixels": 154
+          },
+          "az315": {
+            "iou": 0.5018587360594795,
+            "depthMae": 0.12018561584541619,
+            "occupancyError": 0.6233766233766234,
+            "donorPixels": 154,
+            "armaturePixels": 250
+          }
+        },
+        "meanIou": 0.4804756316923039,
+        "meanDepthMae": 0.15021664766157777,
+        "meanOccupancyError": 0.2917766967856972
+      }
+    }
+  },
+  "acceptance": {
+    "heldOutSilhouetteImprovementCount": 4,
+    "requiredHeldOutSilhouetteImprovementCount": 3,
+    "heldOutDepthImproved": true,
+    "boundPinnedParameters": [],
+    "semanticParameterIdsStable": true,
+    "visualInspection": {
+      "disposition": "accepted",
+      "visibleDelta": "The fitted scaffold shifts from a generic long crawler to the donor-like swollen posterior cluster and short swept bead trajectory while preserving materially different front and side silhouettes.",
+      "limitations": [
+        "The disconnected donor orb is intentionally not represented as body structure.",
+        "Fine Trellis lobe articulation is compressed into semantic overlapping masses."
+      ],
+      "artifacts": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-gestalt-reference-fit-assay-v0/asymmetric-bead-chain-lirm07/silhouette-residual-witness.png",
+          "bytes": 14936,
+          "sha256": "sha256:a45fcc43522c693e3a0914a7a14679eb6bf1a53071f193b993c70c567702c046"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-gestalt-reference-fit-assay-v0/asymmetric-bead-chain-lirm07/depth-residual-witness.png",
+          "bytes": 25180,
+          "sha256": "sha256:229774b79901c20359803e9be00375df256450ac58e37718f42eca1f2c755ae6"
+        }
+      ]
+    }
+  },
+  "falseClosureGuards": {
+    "productionCreatureClaim": "forbidden",
+    "meshCopyClaim": "forbidden",
+    "learnedPriorClaim": "not_trained",
+    "topologySelectionClaim": "not_assayed"
+  }
+}

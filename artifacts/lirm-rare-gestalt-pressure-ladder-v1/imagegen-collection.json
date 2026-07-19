@@ -1,0 +1,754 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-collection.v0",
+  "status": "complete-inspected",
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "abfdb343d696",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.823043,
+      "startedAt": 1784460834.491689,
+      "finishedAt": 1784460892.718296,
+      "durationSeconds": 58.22660708427429,
+      "outputMtime": 1784460892.0492547,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png",
+        "bytes": 42062,
+        "sha256": "sha256:06bc7fb6e7d32ca49c3b6acaa3483e8457bdbee2fb0b3384eaf83bb50f3ed076"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+          "bytes": 24678,
+          "sha256": "sha256:22bcf107d7d7dbca8d584d660fbb6420ff74ed62592dcc8b114a353a5807f058",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+          "bytes": 49072,
+          "sha256": "sha256:bd1e7ef4cb11d61b724261c4ce3d983f42f90f2a05099a4ac6435a24abfb3ea0",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 290959,
+        "sha256": "sha256:990347c1826ebec918542486ed65f60268b437777847f13debf0dab8e997c2a6"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 290959,
+        "sha256": "sha256:990347c1826ebec918542486ed65f60268b437777847f13debf0dab8e997c2a6"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "5117a2aee0ab",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.850951,
+      "startedAt": 1784460892.7305658,
+      "finishedAt": 1784460949.6742342,
+      "durationSeconds": 56.943668365478516,
+      "outputMtime": 1784460949.210535,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png",
+        "bytes": 42062,
+        "sha256": "sha256:06bc7fb6e7d32ca49c3b6acaa3483e8457bdbee2fb0b3384eaf83bb50f3ed076"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+          "bytes": 24678,
+          "sha256": "sha256:22bcf107d7d7dbca8d584d660fbb6420ff74ed62592dcc8b114a353a5807f058",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+          "bytes": 49072,
+          "sha256": "sha256:bd1e7ef4cb11d61b724261c4ce3d983f42f90f2a05099a4ac6435a24abfb3ea0",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 281745,
+        "sha256": "sha256:8beb51f943aa237da9abce8ba6a1b8cb6e252ae963eacadcb7559cb5bdd6bdae"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 281745,
+        "sha256": "sha256:8beb51f943aa237da9abce8ba6a1b8cb6e252ae963eacadcb7559cb5bdd6bdae"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "6fe4a2079189",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.877213,
+      "startedAt": 1784460949.679009,
+      "finishedAt": 1784461007.7077389,
+      "durationSeconds": 58.0287299156189,
+      "outputMtime": 1784461007.138008,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png",
+        "bytes": 45632,
+        "sha256": "sha256:896777a427ed64e0309a88c4bbb37652939ab3cc10afaaa4bbd0c41e8fcd8cad"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+          "bytes": 26418,
+          "sha256": "sha256:c99f58b8a15dc420e0009be0bbf6517c910aba21b8aec5bd5400a1e40d4ec151",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+          "bytes": 54343,
+          "sha256": "sha256:730674bf0f70f4d0214cdcb376950285248645b1cae51e35f89b78eae616e000",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 286934,
+        "sha256": "sha256:60fccefd2d0f27691c4fb477ad18b1221ab51e3515ee9faa1e83c6ebacfeb542"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 286934,
+        "sha256": "sha256:60fccefd2d0f27691c4fb477ad18b1221ab51e3515ee9faa1e83c6ebacfeb542"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "4761701c9884",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.9038122,
+      "startedAt": 1784461007.712516,
+      "finishedAt": 1784461067.8779662,
+      "durationSeconds": 60.16545009613037,
+      "outputMtime": 1784461067.4212694,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png",
+        "bytes": 45632,
+        "sha256": "sha256:896777a427ed64e0309a88c4bbb37652939ab3cc10afaaa4bbd0c41e8fcd8cad"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+          "bytes": 26418,
+          "sha256": "sha256:c99f58b8a15dc420e0009be0bbf6517c910aba21b8aec5bd5400a1e40d4ec151",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+          "bytes": 54343,
+          "sha256": "sha256:730674bf0f70f4d0214cdcb376950285248645b1cae51e35f89b78eae616e000",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 283670,
+        "sha256": "sha256:8f5285b437a7a25224b9957477209dc68baf0dc0d6442f3513a8212768184ce9"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 283670,
+        "sha256": "sha256:8f5285b437a7a25224b9957477209dc68baf0dc0d6442f3513a8212768184ce9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "ac0236a545f0",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.930152,
+      "startedAt": 1784461067.882624,
+      "finishedAt": 1784461127.431326,
+      "durationSeconds": 59.548702001571655,
+      "outputMtime": 1784461126.852779,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png",
+        "bytes": 41474,
+        "sha256": "sha256:66b484a53d14bc5aec87dcdece4d580d987bf5824b0973418f8fbbfc04a836cf"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+          "bytes": 24410,
+          "sha256": "sha256:803220ffc180e6680bcb5f2d0085bd3b5830284263353e7bf17a5545155e6403",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+          "bytes": 49517,
+          "sha256": "sha256:730858de7fb03cc552b139598de7a4ff054e9eab201b2b461f08d95de6306790",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 272631,
+        "sha256": "sha256:b3e6a066d59030d091a3381b5165407874c60d02ca0f0e93ad68e99e9d728d02"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 272631,
+        "sha256": "sha256:b3e6a066d59030d091a3381b5165407874c60d02ca0f0e93ad68e99e9d728d02"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "594d6b51b1ac",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.956368,
+      "startedAt": 1784461127.436675,
+      "finishedAt": 1784461191.475481,
+      "durationSeconds": 64.03880596160889,
+      "outputMtime": 1784461191.017175,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png",
+        "bytes": 41474,
+        "sha256": "sha256:66b484a53d14bc5aec87dcdece4d580d987bf5824b0973418f8fbbfc04a836cf"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+          "bytes": 24410,
+          "sha256": "sha256:803220ffc180e6680bcb5f2d0085bd3b5830284263353e7bf17a5545155e6403",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+          "bytes": 49517,
+          "sha256": "sha256:730858de7fb03cc552b139598de7a4ff054e9eab201b2b461f08d95de6306790",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 270632,
+        "sha256": "sha256:996a9fcdba0407455b91c844f1947622384d345772cfc58beba8dfacc280d9dc"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 270632,
+        "sha256": "sha256:996a9fcdba0407455b91c844f1947622384d345772cfc58beba8dfacc280d9dc"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "716c624608d4",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460833.98334,
+      "startedAt": 1784461191.479216,
+      "finishedAt": 1784461260.685966,
+      "durationSeconds": 69.20674991607666,
+      "outputMtime": 1784461260.2649057,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png",
+        "bytes": 33224,
+        "sha256": "sha256:cee5aeea7b2806d44cffba6281c2c117fde5ee872901fa6138007ace5fe7876a"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+          "bytes": 20521,
+          "sha256": "sha256:f45cfe9fcc985124b6637a48d6cd2158f59865c17e31f0c2e3fa5ab6e7be0905",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+          "bytes": 40343,
+          "sha256": "sha256:2c6458caf19da3287f80ec3b0ca3b4ddf6fe0f6261169986ab939579f6897c9d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 250529,
+        "sha256": "sha256:d1104fcd4723489ea31c6323c7a34907a5d2853092010ba3527885aee3f7f48d"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 250529,
+        "sha256": "sha256:d1104fcd4723489ea31c6323c7a34907a5d2853092010ba3527885aee3f7f48d"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "6ea1681c006e",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460834.0094101,
+      "startedAt": 1784461260.689114,
+      "finishedAt": 1784461329.4025989,
+      "durationSeconds": 68.71348476409912,
+      "outputMtime": 1784461328.8702054,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png",
+        "bytes": 33224,
+        "sha256": "sha256:cee5aeea7b2806d44cffba6281c2c117fde5ee872901fa6138007ace5fe7876a"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+          "bytes": 20521,
+          "sha256": "sha256:f45cfe9fcc985124b6637a48d6cd2158f59865c17e31f0c2e3fa5ab6e7be0905",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+          "bytes": 40343,
+          "sha256": "sha256:2c6458caf19da3287f80ec3b0ca3b4ddf6fe0f6261169986ab939579f6897c9d",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 237372,
+        "sha256": "sha256:455d23a222833563173a6eb246207388847c0e676163f9ca1297e5f2e7baf2e9"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 237372,
+        "sha256": "sha256:455d23a222833563173a6eb246207388847c0e676163f9ca1297e5f2e7baf2e9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "6d6c3d597bc9",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460834.035517,
+      "startedAt": 1784461329.409285,
+      "finishedAt": 1784461396.808553,
+      "durationSeconds": 67.39926791191101,
+      "outputMtime": 1784461396.396998,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png",
+        "bytes": 33874,
+        "sha256": "sha256:458e525a7455d16f8d216641bccc437eee0c32c974efb6e0d0c260c60bec40b5"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+          "bytes": 20701,
+          "sha256": "sha256:d5ceec0db0c92234ac56ef508cf32086b54accde54f8216256ce702962020112",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+          "bytes": 40792,
+          "sha256": "sha256:da3dab73d9a04e4ce5391b71b033e2f5e40e646922587d570fb0ae161beacc69",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 240467,
+        "sha256": "sha256:489fe29a0021feb1fe03a397b1fdadfa92eb16c672723e88d13281aa0c1ab04f"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 240467,
+        "sha256": "sha256:489fe29a0021feb1fe03a397b1fdadfa92eb16c672723e88d13281aa0c1ab04f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "56f83b9562af",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460834.0631208,
+      "startedAt": 1784461396.81183,
+      "finishedAt": 1784461463.323133,
+      "durationSeconds": 66.51130294799805,
+      "outputMtime": 1784461462.832391,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png",
+        "bytes": 33874,
+        "sha256": "sha256:458e525a7455d16f8d216641bccc437eee0c32c974efb6e0d0c260c60bec40b5"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+          "bytes": 20701,
+          "sha256": "sha256:d5ceec0db0c92234ac56ef508cf32086b54accde54f8216256ce702962020112",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+          "bytes": 40792,
+          "sha256": "sha256:da3dab73d9a04e4ce5391b71b033e2f5e40e646922587d570fb0ae161beacc69",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 243327,
+        "sha256": "sha256:497f78a8881276ad3ac6528fb9ebb4ff39c57437bd41b9b025b45748b5706d91"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 243327,
+        "sha256": "sha256:497f78a8881276ad3ac6528fb9ebb4ff39c57437bd41b9b025b45748b5706d91"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "jobId": "ef50a8226611",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460834.09117,
+      "startedAt": 1784461463.325918,
+      "finishedAt": 1784461530.397065,
+      "durationSeconds": 67.07114696502686,
+      "outputMtime": 1784461529.868366,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png",
+        "bytes": 37027,
+        "sha256": "sha256:7c59e91d26477da437f078cc5fe0499bf8399b5398d305305b510a66043568b9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+          "bytes": 22568,
+          "sha256": "sha256:d6add6557d7301daa33056d639e028b5e8cf3a86168a9f9ae2c3c674c77f0c4c",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+          "bytes": 44992,
+          "sha256": "sha256:82e91af35c34c79cf0cea278e7fe0e719f296111b313b1763e889008ecb23652",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/output.png",
+        "bytes": 255194,
+        "sha256": "sha256:488f18021a6ed447182a2e9b3df9b0cd3cea4338a291508d2c3a7638d4c9b526"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.png",
+        "byteSize": 255194,
+        "sha256": "sha256:488f18021a6ed447182a2e9b3df9b0cd3cea4338a291508d2c3a7638d4c9b526"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+      "status": "accepted",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301",
+      "jobId": "bac9057d0b22",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "effectiveJobType": "mflux_flux2_edit_promptfile_3ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 718301 --mlx-cache-limit-gb 48",
+      "effectiveParams": {
+        "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+        "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+        "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "seed": "718301",
+        "mlx_cache_limit_gb": "48"
+      },
+      "submittedAt": 1784460834.119671,
+      "startedAt": 1784461530.535508,
+      "finishedAt": 1784461598.201899,
+      "durationSeconds": 67.66639113426208,
+      "outputMtime": 1784461597.6474187,
+      "warnings": [],
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png",
+        "bytes": 37027,
+        "sha256": "sha256:7c59e91d26477da437f078cc5fe0499bf8399b5398d305305b510a66043568b9"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+          "bytes": 22568,
+          "sha256": "sha256:d6add6557d7301daa33056d639e028b5e8cf3a86168a9f9ae2c3c674c77f0c4c",
+          "role": "depth"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+          "bytes": 44992,
+          "sha256": "sha256:82e91af35c34c79cf0cea278e7fe0e719f296111b313b1763e889008ecb23652",
+          "role": "normal"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301/output.png",
+        "bytes": 244988,
+        "sha256": "sha256:af5a3f8c5de7cf5c673327176d08ddf0a92a49133b435c617cfeb273a2f10f90"
+      },
+      "durableOutput": {
+        "path": "imagegen-outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301.png",
+        "byteSize": 244988,
+        "sha256": "sha256:af5a3f8c5de7cf5c673327176d08ddf0a92a49133b435c617cfeb273a2f10f90"
+      }
+    }
+  ],
+  "incomplete": [],
+  "failed": [],
+  "visualInspectionClaim": "all twelve outputs inspected in the labeled contact sheet; four promoted cells also inspected at original resolution",
+  "lastTrustworthyEvidence": "12/12 route-validated outputs copied durably and visually adjudicated"
+}

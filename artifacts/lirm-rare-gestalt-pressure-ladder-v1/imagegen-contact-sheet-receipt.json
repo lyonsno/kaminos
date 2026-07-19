@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-contact-sheet-receipt.v0",
+  "status": "complete-inspected",
+  "requestedRoute": "kaminos/local-swift-contact-sheet-v0",
+  "effectiveRoute": "swift/AppKit",
+  "manifestPath": "imagegen-contact-sheet-manifest.json",
+  "contactSheet": {
+    "path": "imagegen-pressure-contact-sheet.png",
+    "byteSize": 4171288,
+    "sha256": "sha256:545fee3e2787f748c68df1650a24e94e5bcf9b3c44e6d8cad059545660b47572",
+    "width": 1024,
+    "height": 3420
+  },
+  "visualInspectionClaim": "all six candidate stance pairs inspected; authored annular and canopy gestalts survive both stances",
+  "falseClosureGuards": {
+    "missingOrPartialCollectionAccepted": false,
+    "unlabeledCellsAccepted": false,
+    "blankOrImplausiblySmallRasterAccepted": false,
+    "contactSheetImpliesVisualSuccess": false
+  }
+}

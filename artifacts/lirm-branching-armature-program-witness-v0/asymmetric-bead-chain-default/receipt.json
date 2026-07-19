@@ -1,0 +1,347 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "asymmetric-bead-chain-default",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "asymmetric-bead-chain-default/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "asymmetric-bead-chain-default/clay-implicit.svg",
+        "rasterPath": "asymmetric-bead-chain-default/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "asymmetric-bead-chain-default/depth-implicit.svg",
+        "rasterPath": "asymmetric-bead-chain-default/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "asymmetric-bead-chain-default/normal-implicit.svg",
+        "rasterPath": "asymmetric-bead-chain-default/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "asymmetric-bead-chain-default/mask-implicit.svg",
+        "rasterPath": "asymmetric-bead-chain-default/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "asymmetric-bead-chain-default/semantic-implicit.svg",
+        "rasterPath": "asymmetric-bead-chain-default/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "asymmetric-bead-chain-default/trellis-source.svg",
+      "rasterPath": "asymmetric-bead-chain-default/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "asymmetric-bead-chain-default/bundle.json",
+      "byteSize": 7017,
+      "sha256": "sha256:1c6474b4ff337669faeaf49efd3b5f8eeb417db86c5d1ee5c740276318f348b8"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/clay-implicit.svg",
+      "byteSize": 735772,
+      "sha256": "sha256:55cc819c1817ba1504104c1c22fed57a9be5531c25e6b8e52d91aafdc48f3ecc"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/clay-implicit.png",
+      "byteSize": 31667,
+      "sha256": "sha256:39ae0ea8c38c86a65cd9ef5f55fe2677763dcae86b6474424210758d9ea9e5fa"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/depth-implicit.svg",
+      "byteSize": 754711,
+      "sha256": "sha256:add27efb940937cccf20a50c83edf0e7f344afe4e955a6bf8f915ed1a70c136d"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/depth-implicit.png",
+      "byteSize": 18203,
+      "sha256": "sha256:bebd80687b29080b71815b49c6e496d92467fbf901b1983742c26554fafd9232"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/normal-implicit.svg",
+      "byteSize": 741526,
+      "sha256": "sha256:e0775dea9f95b5bdf006e6a16c675b413e9e5c53ef5ccf4ed9c0fdcf74af62b7"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/normal-implicit.png",
+      "byteSize": 42024,
+      "sha256": "sha256:4bc61bc598204ae946a69f95c08cae1b5366dd743356e2bbedb8de39fdc63c04"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/mask-implicit.svg",
+      "byteSize": 754796,
+      "sha256": "sha256:a2d6d138fb1e791349d5d7604ae58ff7f43000a2235b695ed3bcb10759fe93b3"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/mask-implicit.png",
+      "byteSize": 6403,
+      "sha256": "sha256:021882e91af10699782e71ea36be0b157d735e189abb9c0cd86b9559e8cac99f"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/semantic-implicit.svg",
+      "byteSize": 815999,
+      "sha256": "sha256:7a1e2cf055a33a419699f3d0d7f4a6b841ca2515417078a609456fd32867af5b"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/semantic-implicit.png",
+      "byteSize": 7841,
+      "sha256": "sha256:480875c0b71a967c65a11eb49cc9edba8770a3218d0c84e39758732ed70ca275"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/trellis-source.svg",
+      "byteSize": 735566,
+      "sha256": "sha256:86de7bb066dd2230c4303940965ecc3fa9a1e74e38136f8c30b308c9260443b4"
+    },
+    {
+      "path": "asymmetric-bead-chain-default/trellis-source.png",
+      "byteSize": 113075,
+      "sha256": "sha256:91339eec18900ab887c1f65448e9b860aa88e4fb5fdb424d1157245a6e4ca31a"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.asymmetric-bead-chain.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.asymmetric-bead-chain-22.v0",
+    "parameterSpecs": [
+      {
+        "id": "posteriorLength",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.84,
+        "min": 0.46,
+        "max": 1.34,
+        "step": 0.13
+      },
+      {
+        "id": "posteriorWidth",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.72,
+        "min": 0.38,
+        "max": 1.14,
+        "step": 0.11
+      },
+      {
+        "id": "posteriorHeight",
+        "semanticRole": "posteriorCluster",
+        "initial": 0.62,
+        "min": 0.34,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "posteriorSplit",
+        "semanticRole": "posteriorMassArticulation",
+        "initial": 0.26,
+        "min": 0.08,
+        "max": 0.52,
+        "step": 0.07
+      },
+      {
+        "id": "posteriorLift",
+        "semanticRole": "posteriorElevation",
+        "initial": 0.08,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "chainLength",
+        "semanticRole": "axialBeadTrajectory",
+        "initial": 1.38,
+        "min": 0.82,
+        "max": 2.02,
+        "step": 0.17
+      },
+      {
+        "id": "beadWidth",
+        "semanticRole": "axialBead",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "beadHeight",
+        "semanticRole": "axialBead",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "beadDepth",
+        "semanticRole": "axialBead",
+        "initial": 0.48,
+        "min": 0.26,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "beadTaper",
+        "semanticRole": "axialMassTaper",
+        "initial": 0.48,
+        "min": 0.08,
+        "max": 0.82,
+        "step": 0.09
+      },
+      {
+        "id": "lateralSweep",
+        "semanticRole": "axialLateralSweep",
+        "initial": 0.38,
+        "min": -0.62,
+        "max": 0.82,
+        "step": 0.1
+      },
+      {
+        "id": "verticalArc",
+        "semanticRole": "axialVerticalArc",
+        "initial": 0.18,
+        "min": -0.28,
+        "max": 0.54,
+        "step": 0.08
+      },
+      {
+        "id": "axialBias",
+        "semanticRole": "axialMassDistribution",
+        "initial": 0.12,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "terminalWidth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.44,
+        "min": 0.22,
+        "max": 0.76,
+        "step": 0.08
+      },
+      {
+        "id": "terminalHeight",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.075
+      },
+      {
+        "id": "terminalDepth",
+        "semanticRole": "terminalSensoryMass",
+        "initial": 0.46,
+        "min": 0.24,
+        "max": 0.78,
+        "step": 0.08
+      },
+      {
+        "id": "terminalOffset",
+        "semanticRole": "terminalSensoryOffset",
+        "initial": 0.14,
+        "min": -0.28,
+        "max": 0.44,
+        "step": 0.075
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "localizedContactField",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 0.92,
+        "step": 0.09
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.28,
+        "min": 0.13,
+        "max": 0.56,
+        "step": 0.07
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "localizedContactLimb",
+        "initial": 0.072,
+        "min": 0.04,
+        "max": 0.16,
+        "step": 0.022
+      },
+      {
+        "id": "contactBias",
+        "semanticRole": "localizedContactDistribution",
+        "initial": 0.16,
+        "min": -0.38,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.56,
+        "min": -0.76,
+        "max": -0.38,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "posteriorLength": 0.84,
+    "posteriorWidth": 0.72,
+    "posteriorHeight": 0.62,
+    "posteriorSplit": 0.26,
+    "posteriorLift": 0.08,
+    "chainLength": 1.38,
+    "beadWidth": 0.46,
+    "beadHeight": 0.42,
+    "beadDepth": 0.48,
+    "beadTaper": 0.48,
+    "lateralSweep": 0.38,
+    "verticalArc": 0.18,
+    "axialBias": 0.12,
+    "terminalWidth": 0.44,
+    "terminalHeight": 0.42,
+    "terminalDepth": 0.46,
+    "terminalOffset": 0.14,
+    "contactSpread": 0.54,
+    "contactLength": 0.28,
+    "contactThickness": 0.072,
+    "contactBias": 0.16,
+    "groundHeight": -0.56
+  },
+  "implicitPrimitiveCount": 23,
+  "semanticRoles": [
+    "posteriorCluster",
+    "axialBead",
+    "terminalSensoryMass",
+    "localizedContactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

@@ -1,0 +1,576 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-witness-collection.v0",
+  "status": "complete-frames-uninspected",
+  "requestedCount": 12,
+  "accepted": [
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-left",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "candidateId": "forked-saddle-lirm02",
+      "imagegenSeed": 718201,
+      "stance": "anatomical-completion",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "f1b73dd0a3ec",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458662.966086,
+      "startedAt": 1784458663.0160792,
+      "finishedAt": 1784458664.6612868,
+      "durationSeconds": 1.6452076435089111,
+      "outputMtime": 1784458664.565065,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb",
+        "bytes": 8893796,
+        "sha256": "sha256:9422e88eaa641ab452784324a6cefcf0da2b99b02488af6ada1c6524a139c2ef"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-left.png",
+        "bytes": 757988,
+        "sha256": "sha256:e875b6ec2168010318c267ca7ff5f137b1e9e189f3c422b315198d62f0dfd29d"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "rare-topology-preservation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/left/render.png",
+        "bytes": 757988,
+        "sha256": "sha256:e875b6ec2168010318c267ca7ff5f137b1e9e189f3c422b315198d62f0dfd29d"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-front",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "candidateId": "forked-saddle-lirm02",
+      "imagegenSeed": 718201,
+      "stance": "anatomical-completion",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "50b7a428b3ae",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458662.9927418,
+      "startedAt": 1784458664.6650748,
+      "finishedAt": 1784458665.623447,
+      "durationSeconds": 0.9583721160888672,
+      "outputMtime": 1784458665.570634,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb",
+        "bytes": 8893796,
+        "sha256": "sha256:9422e88eaa641ab452784324a6cefcf0da2b99b02488af6ada1c6524a139c2ef"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-front.png",
+        "bytes": 780073,
+        "sha256": "sha256:b7ab420e53b1a6233810b9a60751b11960069d2befe5b2d179689cf3f2c92437"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "rare-topology-preservation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/front/render.png",
+        "bytes": 780073,
+        "sha256": "sha256:b7ab420e53b1a6233810b9a60751b11960069d2befe5b2d179689cf3f2c92437"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-right",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "candidateId": "forked-saddle-lirm02",
+      "imagegenSeed": 718201,
+      "stance": "anatomical-completion",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "1ccf98f8354a",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.0193799,
+      "startedAt": 1784458665.625762,
+      "finishedAt": 1784458666.665591,
+      "durationSeconds": 1.0398290157318115,
+      "outputMtime": 1784458666.5755758,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb",
+        "bytes": 8893796,
+        "sha256": "sha256:9422e88eaa641ab452784324a6cefcf0da2b99b02488af6ada1c6524a139c2ef"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-right.png",
+        "bytes": 759377,
+        "sha256": "sha256:778e1ef3bf90dac1f82f0794d4f0b3101d029a8ed3eae7dfd517822cd32f7df9"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "rare-topology-preservation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/right/render.png",
+        "bytes": 759377,
+        "sha256": "sha256:778e1ef3bf90dac1f82f0794d4f0b3101d029a8ed3eae7dfd517822cd32f7df9"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-opposite",
+      "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+      "candidateId": "forked-saddle-lirm02",
+      "imagegenSeed": 718201,
+      "stance": "anatomical-completion",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "adac9d2048c3",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.0475578,
+      "startedAt": 1784458666.667886,
+      "finishedAt": 1784458667.667291,
+      "durationSeconds": 0.9994049072265625,
+      "outputMtime": 1784458667.5681834,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201.glb",
+        "bytes": 8893796,
+        "sha256": "sha256:9422e88eaa641ab452784324a6cefcf0da2b99b02488af6ada1c6524a139c2ef"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-opposite.png",
+        "bytes": 745470,
+        "sha256": "sha256:773fd01b2c5c9924c50654a8d652d055ac818a396e48befba4bbffac348a6da2"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "rare-topology-preservation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201/opposite/render.png",
+        "bytes": 745470,
+        "sha256": "sha256:773fd01b2c5c9924c50654a8d652d055ac818a396e48befba4bbffac348a6da2"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-left",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718202,
+      "stance": "anatomical-completion",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "0ca34e12cbc2",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.075799,
+      "startedAt": 1784458667.669968,
+      "finishedAt": 1784458668.651992,
+      "durationSeconds": 0.9820241928100586,
+      "outputMtime": 1784458668.6068528,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb",
+        "bytes": 9355864,
+        "sha256": "sha256:cc3ebcb7cc78a330965ed1c429ef062f5fd0f9eb11296b638440c9e6941adece"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-left.png",
+        "bytes": 709476,
+        "sha256": "sha256:25f668b3f05467d6885a52918b09205df5c89caf39b5c275fd2e7a0bdba46a1f"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "clean-adherence-baseline",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/left/render.png",
+        "bytes": 709476,
+        "sha256": "sha256:25f668b3f05467d6885a52918b09205df5c89caf39b5c275fd2e7a0bdba46a1f"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-front",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718202,
+      "stance": "anatomical-completion",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "a44c42a542af",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.104013,
+      "startedAt": 1784458668.6542091,
+      "finishedAt": 1784458669.656728,
+      "durationSeconds": 1.002518892288208,
+      "outputMtime": 1784458669.596606,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb",
+        "bytes": 9355864,
+        "sha256": "sha256:cc3ebcb7cc78a330965ed1c429ef062f5fd0f9eb11296b638440c9e6941adece"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-front.png",
+        "bytes": 679323,
+        "sha256": "sha256:991b84079a5d2078efa8e0969f2afcd754c7670e929405848484ec3eb53af5ac"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "clean-adherence-baseline",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/front/render.png",
+        "bytes": 679323,
+        "sha256": "sha256:991b84079a5d2078efa8e0969f2afcd754c7670e929405848484ec3eb53af5ac"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-right",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718202,
+      "stance": "anatomical-completion",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "08a31c2d87f2",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.131753,
+      "startedAt": 1784458669.6605551,
+      "finishedAt": 1784458670.660043,
+      "durationSeconds": 0.9994878768920898,
+      "outputMtime": 1784458670.5937788,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb",
+        "bytes": 9355864,
+        "sha256": "sha256:cc3ebcb7cc78a330965ed1c429ef062f5fd0f9eb11296b638440c9e6941adece"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-right.png",
+        "bytes": 700141,
+        "sha256": "sha256:f2a98a063c606348a54a3f85afdd37a7e19b0bb33011b3f27b7a578819fc1d10"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "clean-adherence-baseline",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/right/render.png",
+        "bytes": 700141,
+        "sha256": "sha256:f2a98a063c606348a54a3f85afdd37a7e19b0bb33011b3f27b7a578819fc1d10"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-opposite",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718202,
+      "stance": "anatomical-completion",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "4052bcbc0328",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.159412,
+      "startedAt": 1784458670.661941,
+      "finishedAt": 1784458671.600845,
+      "durationSeconds": 0.9389040470123291,
+      "outputMtime": 1784458671.5163472,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202.glb",
+        "bytes": 9355864,
+        "sha256": "sha256:cc3ebcb7cc78a330965ed1c429ef062f5fd0f9eb11296b638440c9e6941adece"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-opposite.png",
+        "bytes": 652783,
+        "sha256": "sha256:50b6cc7b38f254d88e18c2985d971668cb739ffe45c3ed8b29175284ac1618c5"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "clean-adherence-baseline",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202/opposite/render.png",
+        "bytes": 652783,
+        "sha256": "sha256:50b6cc7b38f254d88e18c2985d971668cb739ffe45c3ed8b29175284ac1618c5"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-left",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718201,
+      "stance": "prior-led-invention",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "jobId": "8282525df95b",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/left/render.png -0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "-0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.187884,
+      "startedAt": 1784458671.602856,
+      "finishedAt": 1784458672.592886,
+      "durationSeconds": 0.99003005027771,
+      "outputMtime": 1784458672.512553,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb",
+        "bytes": 8928688,
+        "sha256": "sha256:e35495a69505f396423b61e02154f2c75017b2a3e9cd812f781628e47093d4f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-left.png",
+        "bytes": 679934,
+        "sha256": "sha256:2a2f64e67d5fb8b8dd2a5ae9ad1a67dbee3f30b5bfb9e0e9b703267035ac7963"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "productive-prior-extrapolation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/left/render.png",
+        "bytes": 679934,
+        "sha256": "sha256:2a2f64e67d5fb8b8dd2a5ae9ad1a67dbee3f30b5bfb9e0e9b703267035ac7963"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-front",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718201,
+      "stance": "prior-led-invention",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "jobId": "43c1793f3163",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/front/render.png 0 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.215592,
+      "startedAt": 1784458672.594614,
+      "finishedAt": 1784458673.489883,
+      "durationSeconds": 0.8952689170837402,
+      "outputMtime": 1784458673.4419484,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb",
+        "bytes": 8928688,
+        "sha256": "sha256:e35495a69505f396423b61e02154f2c75017b2a3e9cd812f781628e47093d4f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-front.png",
+        "bytes": 665982,
+        "sha256": "sha256:696de2a0bf9a52cb1a996ee25a238c886edd9ffcdb3231a75b14bbb0deae9664"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "productive-prior-extrapolation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/front/render.png",
+        "bytes": 665982,
+        "sha256": "sha256:696de2a0bf9a52cb1a996ee25a238c886edd9ffcdb3231a75b14bbb0deae9664"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-right",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718201,
+      "stance": "prior-led-invention",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "jobId": "88d16dc2f316",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/right/render.png 0.85 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "0.85",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.2437172,
+      "startedAt": 1784458673.492138,
+      "finishedAt": 1784458674.4385018,
+      "durationSeconds": 0.9463639259338379,
+      "outputMtime": 1784458674.3788815,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb",
+        "bytes": 8928688,
+        "sha256": "sha256:e35495a69505f396423b61e02154f2c75017b2a3e9cd812f781628e47093d4f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-right.png",
+        "bytes": 691128,
+        "sha256": "sha256:5f592c8450e88a661fcfafbfbb971a39453aef8808ce419389b610a61d78712c"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "productive-prior-extrapolation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/right/render.png",
+        "bytes": 691128,
+        "sha256": "sha256:5f592c8450e88a661fcfafbfbb971a39453aef8808ce419389b610a61d78712c"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0",
+      "status": "accepted-frame-uninspected",
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-opposite",
+      "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+      "candidateId": "asymmetric-bead-chain-lirm07",
+      "imagegenSeed": 718201,
+      "stance": "prior-led-invention",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "jobId": "483561ad3cfe",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/opposite/render.png 3.141593 0.2",
+      "effectiveParams": {
+        "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "yaw": "3.141593",
+        "pitch": "0.2"
+      },
+      "submittedAt": 1784458663.272177,
+      "startedAt": 1784458674.4407349,
+      "finishedAt": 1784458675.4408479,
+      "durationSeconds": 1.0001130104064941,
+      "outputMtime": 1784458675.352424,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/outputs/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201.glb",
+        "bytes": 8928688,
+        "sha256": "sha256:e35495a69505f396423b61e02154f2c75017b2a3e9cd812f781628e47093d4f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "output": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-branching-imagegen-pressure-assay-v0/trellis/witness/frames/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-opposite.png",
+        "bytes": 631358,
+        "sha256": "sha256:55e73fd38a1cecf13bc38e5b97be75f11bc2b2a83b5172401392b1ba6c522dbd"
+      },
+      "visualInspectionClaim": "not-yet-inspected",
+      "evidenceRole": "productive-prior-extrapolation",
+      "greenroomOutput": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-branching-trellis-promotion-20260718/witness/asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201/opposite/render.png",
+        "bytes": 631358,
+        "sha256": "sha256:55e73fd38a1cecf13bc38e5b97be75f11bc2b2a83b5172401392b1ba6c522dbd"
+      }
+    }
+  ],
+  "nonterminal": [],
+  "rejected": [],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "12/12 route-validated witness frames copied durably; visual inspection pending",
+  "visualInspectionClaim": "not-yet-inspected"
+}

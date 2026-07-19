@@ -1,0 +1,201 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-bundle.v0",
+  "route": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "crawler-basin22",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.crawler.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "initial": 0.92,
+        "min": 0.58,
+        "max": 1.58,
+        "step": 0.18
+      },
+      {
+        "id": "bodyWidth",
+        "semanticRole": "lateralMass",
+        "initial": 0.46,
+        "min": 0.25,
+        "max": 0.92,
+        "step": 0.12
+      },
+      {
+        "id": "bodyHeight",
+        "semanticRole": "verticalMass",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.78,
+        "step": 0.1
+      },
+      {
+        "id": "headScale",
+        "semanticRole": "headOrientation",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.18,
+        "step": 0.13
+      },
+      {
+        "id": "bellyScale",
+        "semanticRole": "bodyMass",
+        "initial": 0.72,
+        "min": 0.4,
+        "max": 1.42,
+        "step": 0.15
+      },
+      {
+        "id": "tailScale",
+        "semanticRole": "posteriorTaper",
+        "initial": 0.42,
+        "min": 0.18,
+        "max": 0.95,
+        "step": 0.12
+      },
+      {
+        "id": "dorsalLift",
+        "semanticRole": "dorsalProfile",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.36,
+        "step": 0.08
+      },
+      {
+        "id": "curveAmplitude",
+        "semanticRole": "axialCurvature",
+        "initial": 0.04,
+        "min": 0,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "limbLength",
+        "semanticRole": "contactLimb",
+        "initial": 0.28,
+        "min": 0.12,
+        "max": 0.68,
+        "step": 0.09
+      },
+      {
+        "id": "limbSpread",
+        "semanticRole": "contactFootprint",
+        "initial": 0.54,
+        "min": 0.3,
+        "max": 1.02,
+        "step": 0.1
+      },
+      {
+        "id": "limbThickness",
+        "semanticRole": "contactLimb",
+        "initial": 0.09,
+        "min": 0.045,
+        "max": 0.22,
+        "step": 0.035
+      },
+      {
+        "id": "contactHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.25,
+        "min": -0.62,
+        "max": -0.08,
+        "step": 0.08
+      },
+      {
+        "id": "headLift",
+        "semanticRole": "headOrientation",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.34,
+        "step": 0.07
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 1.1,
+    "bodyWidth": 0.40735456000000003,
+    "bodyHeight": 0.44587119999999997,
+    "headScale": 0.34090344000000006,
+    "bellyScale": 0.8069999999999999,
+    "tailScale": 0.67338144,
+    "dorsalLift": 0.04,
+    "curveAmplitude": 0.00989016,
+    "limbLength": 0.19000000000000003,
+    "limbSpread": 0.38200000000000006,
+    "limbThickness": 0.125,
+    "contactHeight": -0.26799104,
+    "headLift": -0.010490160000000004
+  },
+  "renderMode": "raymarched-implicit-field",
+  "fieldModel": {
+    "kind": "smooth-sdf-armature-program",
+    "surfaceThreshold": 0.0065,
+    "smoothUnionK": 0.075,
+    "primitiveKinds": [
+      "ellipsoid",
+      "capsule"
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "implicitPrimitiveCount": 14,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "contactLimb",
+    "groundContact"
+  ],
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "crawler-basin22/clay-implicit.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "crawler-basin22/depth-implicit.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "crawler-basin22/normal-implicit.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "crawler-basin22/mask-implicit.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "crawler-basin22/semantic-implicit.svg"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "crawler-basin22/trellis-source.svg",
+    "rasterPath": "crawler-basin22/trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x192",
+      "displayedPixels": "512x512"
+    }
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

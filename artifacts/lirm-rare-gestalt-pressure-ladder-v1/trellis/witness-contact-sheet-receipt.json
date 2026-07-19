@@ -1,0 +1,132 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "failurePhase": null,
+  "visualInspectionClaim": "all four promoted rare gestalts preserve load-bearing authored topology across left, front, right, and opposite witnesses",
+  "lastTrustworthyEvidence": "sixteen route-validated witness frames visually inspected as four uncontaminated per-asset rows; spatial survival 4/4",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness-plan.json",
+    "bytes": 28773,
+    "sha256": "sha256:e7c254fe915a8095b56031919b498a9b0bb45c5a312b3c3bbcd11469a9d0a5d0"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness-completion-report.json",
+    "bytes": 53835,
+    "sha256": "sha256:2b3b038cfa17f5b4efb03e8b1ed78bbed34e0ce40aa492d9ad2970c2cc6fdcc4"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 5167,
+    "sha256": "sha256:c9f5576d843ff433f6769e7ef6abd5dcf3dd9749f1e13bc9170a0ba4d1d93712"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/trellis-witness-contact-sheet.png",
+    "bytes": 2800511,
+    "sha256": "sha256:c817eed3fc46b54a1d5343b00306642c64bd3f55c72d2a4b877958661e9faf85"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-left.png",
+      "bytes": 738984,
+      "sha256": "sha256:1d38b77835f00d28ef81f8c96a97544ae3024f1fa6fa4ade871d1fd3c3ce112b"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-front.png",
+      "bytes": 774840,
+      "sha256": "sha256:a09ea6043d2d1ad9af64562607e67ef0bf9d72df805d1c914a721b622b4376d7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-right.png",
+      "bytes": 752280,
+      "sha256": "sha256:78bdc8f4a2c66f1159382326d7db8e13e6f4573d1024025891469f4dd12d97d6"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-opposite.png",
+      "bytes": 763854,
+      "sha256": "sha256:a60628aae4140de7457079a5f9983b25e930bb6c67b8d772d18c4bbf48f33709"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-left.png",
+      "bytes": 726759,
+      "sha256": "sha256:14ac12c1eeb29442c21a24504490ff6af559df0a3508ee04408c15efb0823ba7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-front.png",
+      "bytes": 743833,
+      "sha256": "sha256:994ca97ca11aa5a46f539987e714939007dd22e89924be6168b23d9d281e4804"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-right.png",
+      "bytes": 731458,
+      "sha256": "sha256:0ef6d8da21aaab3d581fca2d5e534954aa6a068fcf3c1e4dc1109b93b84fbbe7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-opposite.png",
+      "bytes": 725957,
+      "sha256": "sha256:7b53d408fe8deb7c9ed704eba3c5b216745e6af11198535927677e49426fe1d9"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-left.png",
+      "bytes": 717119,
+      "sha256": "sha256:67875555668c328543be6f8aa88134af98fb1927d3a9b2bb38e99ad7daf904ec"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-front.png",
+      "bytes": 756344,
+      "sha256": "sha256:4b84f6b2fa998021adde7f31079997826b1f78a8e5526aebae32d380524a64c7"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-right.png",
+      "bytes": 713893,
+      "sha256": "sha256:9fe68af59ee0372bf9e832006110ff658f4470630451f4a729d243e3063c26aa"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-opposite.png",
+      "bytes": 737020,
+      "sha256": "sha256:aa77804295df6ea0123c31c79e7b6821c425ee025b675a8af5da43e7b8cc8c67"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-left.png",
+      "bytes": 712962,
+      "sha256": "sha256:526a5164d63dd5f857a09802ecd3cefd0a2f6a1d809ceaffd879aaedd5b3fe22"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-front.png",
+      "bytes": 761080,
+      "sha256": "sha256:52beeb0df814be9d1a56868869b4fd09000e554e9741f0da74d0c8e65b4a61d4"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-right.png",
+      "bytes": 734308,
+      "sha256": "sha256:96c0abade44a02c4db90521f745b8e8ccb7fc787add7c1b93f71d5aafb20df06"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-opposite.png",
+      "bytes": 739374,
+      "sha256": "sha256:19226cea41c4bcfeaea2b202dab88c66532ecf905efb99153fbc0f459fd48ba0"
+    }
+  ],
+  "falseClosureGuards": {
+    "partialFrameSetAccepted": false,
+    "routeValidatedFramesImplySpatialSuccess": false,
+    "frontViewOnlyAccepted": false
+  },
+  "adjudication": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/report.json",
+    "bytes": 4300,
+    "sha256": "sha256:e29d51c3d8c81f6596a4087a544b7c59afb89ff7cd32889976a94c73664f8f7f"
+  },
+  "visualInspection": {
+    "inspectedAt": "2026-07-19T12:14:53.346Z",
+    "inspectedAssetCount": 4,
+    "inspectedFrameCount": 16,
+    "spatialSurvivalRate": "4/4",
+    "frontOnlyReliefCount": 0,
+    "conventionalCreatureHomogenizationCount": 0
+  }
+}

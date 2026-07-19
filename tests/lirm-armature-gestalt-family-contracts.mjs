@@ -16,12 +16,24 @@ const family = await loadLirmArmatureGestaltFamily({ repoRoot });
 assert.equal(family.schema, 'kaminos.lirm-armature-gestalt-family.v0');
 assert.equal(family.requestedRoute, 'kaminos/lirm-armature-gestalt-family/source-anchored-conditioning-v0');
 assert.equal(family.requestedRoute, family.effectiveRoute);
-assert.equal(family.candidates.length, 5);
-assert.equal(new Set(family.candidates.map(candidate => candidate.id)).size, 5);
-assert.equal(new Set(family.candidates.map(candidate => candidate.armatureProgram.id)).size, 3);
+assert.equal(family.candidates.length, 7);
+assert.equal(new Set(family.candidates.map(candidate => candidate.id)).size, 7);
+assert.equal(new Set(family.candidates.map(candidate => candidate.armatureProgram.id)).size, 5);
+assert.deepEqual(
+  family.candidates.slice(-2).map(candidate => candidate.id),
+  ['forked-saddle-lirm02', 'asymmetric-bead-chain-lirm07'],
+);
 assert.deepEqual(
   family.candidates.map(candidate => candidate.acceptance.outcome),
-  ['assay-passed-inspected', 'recovered', 'recovered', 'recovered', 'assay-passed-inspected'],
+  [
+    'assay-passed-inspected',
+    'recovered',
+    'recovered',
+    'recovered',
+    'assay-passed-inspected',
+    'assay-passed-inspected',
+    'assay-passed-inspected',
+  ],
 );
 
 for (const candidate of family.candidates) {
@@ -61,8 +73,8 @@ assert.equal(receipt.status, 'complete');
 assert.equal(receipt.phase, 'family_witness_written');
 assert.equal(receipt.requestedRoute, receipt.effectiveRoute);
 assert.deepEqual(receipt.effectiveConfig, { pixelWidth: 48, pixelHeight: 36 });
-assert.equal(receipt.candidates.length, 5);
-assert.equal(receipt.sourceEvidence.length, 6);
+assert.equal(receipt.candidates.length, 7);
+assert.equal(receipt.sourceEvidence.length, 8);
 for (const candidate of receipt.candidates) {
   const candidateReceiptPath = join(outDir, candidate.receiptPath);
   assert.ok(existsSync(candidateReceiptPath));

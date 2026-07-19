@@ -1,0 +1,1906 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-pressure-witness.v0",
+  "status": "complete-inspected",
+  "phase": "control-witnesses-written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 224
+  },
+  "requestedCandidateIds": [
+    "annular-tripod-open-crown",
+    "annular-tripod-wide-slant",
+    "annular-tripod-tall-keyhole",
+    "tripod-canopy-suspended",
+    "tripod-canopy-wide-low-pendant",
+    "tripod-canopy-asymmetric-deep"
+  ],
+  "candidates": [
+    {
+      "id": "annular-tripod-open-crown",
+      "armatureProgramId": "kaminos.lirm-armature-program.annular-tripod.v0",
+      "lineagePressure": "baseline rejoining loop topology with a load-bearing aperture and tripod grounding",
+      "receiptPath": "candidates/annular-tripod-open-crown/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "annular-tripod-open-crown",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "annular-tripod-open-crown/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "annular-tripod-open-crown/clay-implicit.svg",
+              "rasterPath": "annular-tripod-open-crown/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "annular-tripod-open-crown/depth-implicit.svg",
+              "rasterPath": "annular-tripod-open-crown/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "annular-tripod-open-crown/normal-implicit.svg",
+              "rasterPath": "annular-tripod-open-crown/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "annular-tripod-open-crown/mask-implicit.svg",
+              "rasterPath": "annular-tripod-open-crown/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "annular-tripod-open-crown/semantic-implicit.svg",
+              "rasterPath": "annular-tripod-open-crown/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "annular-tripod-open-crown/trellis-source.svg",
+            "rasterPath": "annular-tripod-open-crown/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "annular-tripod-open-crown/bundle.json",
+            "byteSize": 5844,
+            "sha256": "sha256:3fae1d04919ca33b191a38a433a707b127c749596d47588b39fb8b19609eab0a"
+          },
+          {
+            "path": "annular-tripod-open-crown/clay-implicit.svg",
+            "byteSize": 1328790,
+            "sha256": "sha256:3da009e2d8a9cbd8669db75337e83fa1adc3baf587bcdb98deca03154972813e"
+          },
+          {
+            "path": "annular-tripod-open-crown/clay-implicit.png",
+            "byteSize": 42062,
+            "sha256": "sha256:06bc7fb6e7d32ca49c3b6acaa3483e8457bdbee2fb0b3384eaf83bb50f3ed076"
+          },
+          {
+            "path": "annular-tripod-open-crown/depth-implicit.svg",
+            "byteSize": 1365035,
+            "sha256": "sha256:45086f5398b1d9247e43ca30066d76f35631b3e1def61b4c6df4cbc4ed1f6f1e"
+          },
+          {
+            "path": "annular-tripod-open-crown/depth-implicit.png",
+            "byteSize": 24678,
+            "sha256": "sha256:22bcf107d7d7dbca8d584d660fbb6420ff74ed62592dcc8b114a353a5807f058"
+          },
+          {
+            "path": "annular-tripod-open-crown/normal-implicit.svg",
+            "byteSize": 1347154,
+            "sha256": "sha256:c45f95bca236b2a439896635adb190a6f9bf06763030011bea35e2c005fb61d7"
+          },
+          {
+            "path": "annular-tripod-open-crown/normal-implicit.png",
+            "byteSize": 49072,
+            "sha256": "sha256:bd1e7ef4cb11d61b724261c4ce3d983f42f90f2a05099a4ac6435a24abfb3ea0"
+          },
+          {
+            "path": "annular-tripod-open-crown/mask-implicit.svg",
+            "byteSize": 1365111,
+            "sha256": "sha256:5362180ade6e7a5cbfca2062bd81172393a6e6aba4c7f6fbddd58d4a0fa8250c"
+          },
+          {
+            "path": "annular-tripod-open-crown/mask-implicit.png",
+            "byteSize": 13267,
+            "sha256": "sha256:1e00ab9b614cdb24918c6f94c415d3101cac86c6c3b332865fe36572b42e7fe2"
+          },
+          {
+            "path": "annular-tripod-open-crown/semantic-implicit.svg",
+            "byteSize": 1476941,
+            "sha256": "sha256:7f099f1cde254df39827f2327e8a3665f643c427c19732725098f6947b71a6d3"
+          },
+          {
+            "path": "annular-tripod-open-crown/semantic-implicit.png",
+            "byteSize": 16476,
+            "sha256": "sha256:346ba6d73f2c3896c0263c2002076ae313100db35cc851df1ae30da71dafd0ab"
+          },
+          {
+            "path": "annular-tripod-open-crown/trellis-source.svg",
+            "byteSize": 1330868,
+            "sha256": "sha256:a1d814ec1c4791a0fe5d18b6a7c8fe044ce8d41f044f89c661b058fc9e511784"
+          },
+          {
+            "path": "annular-tripod-open-crown/trellis-source.png",
+            "byteSize": 205552,
+            "sha256": "sha256:74a33d5af281b2be722d3561a36c40ff1c2b38c71dc2b9280eb1eb21615d4132"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+          "parameterSpecs": [
+            {
+              "id": "apertureWidth",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.94,
+              "min": 0.56,
+              "max": 1.52,
+              "step": 0.12
+            },
+            {
+              "id": "apertureHeight",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.96,
+              "min": 0.54,
+              "max": 1.5,
+              "step": 0.12
+            },
+            {
+              "id": "ringThickness",
+              "semanticRole": "annularBody",
+              "initial": 0.17,
+              "min": 0.1,
+              "max": 0.31,
+              "step": 0.035
+            },
+            {
+              "id": "ringDepth",
+              "semanticRole": "annularBody",
+              "initial": 0.22,
+              "min": 0.12,
+              "max": 0.42,
+              "step": 0.05
+            },
+            {
+              "id": "ringRise",
+              "semanticRole": "annularElevation",
+              "initial": 0.82,
+              "min": 0.5,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "ringTwist",
+              "semanticRole": "controlledDepthAsymmetry",
+              "initial": 0.1,
+              "min": -0.32,
+              "max": 0.32,
+              "step": 0.07
+            },
+            {
+              "id": "ringSkew",
+              "semanticRole": "controlledLateralAsymmetry",
+              "initial": 0.08,
+              "min": -0.3,
+              "max": 0.3,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryWidth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "sensoryHeight",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.36,
+              "min": 0.2,
+              "max": 0.62,
+              "step": 0.06
+            },
+            {
+              "id": "sensoryDepth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.38,
+              "min": 0.2,
+              "max": 0.66,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryAngle",
+              "semanticRole": "sensoryPlacement",
+              "initial": 0.7,
+              "min": 0.28,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.72,
+              "min": 0.42,
+              "max": 1.12,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.34,
+              "min": 0.16,
+              "max": 0.62,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.09,
+              "min": 0.05,
+              "max": 0.18,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.16,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.38,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.7,
+              "min": -0.9,
+              "max": -0.48,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "apertureWidth": 0.94,
+          "apertureHeight": 0.96,
+          "ringThickness": 0.17,
+          "ringDepth": 0.22,
+          "ringRise": 0.82,
+          "ringTwist": 0.1,
+          "ringSkew": 0.08,
+          "sensoryWidth": 0.42,
+          "sensoryHeight": 0.36,
+          "sensoryDepth": 0.38,
+          "sensoryAngle": 0.7,
+          "supportSpread": 0.72,
+          "supportForeAft": 0.34,
+          "supportThickness": 0.09,
+          "footWidth": 0.16,
+          "footDepth": 0.22,
+          "groundHeight": -0.7
+        },
+        "implicitPrimitiveCount": 31,
+        "semanticRoles": [
+          "annularBody",
+          "offAxisSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    },
+    {
+      "id": "annular-tripod-wide-slant",
+      "armatureProgramId": "kaminos.lirm-armature-program.annular-tripod.v0",
+      "lineagePressure": "wide low aperture, slanted loop, and displaced sensory mass without quadruped fallback",
+      "receiptPath": "candidates/annular-tripod-wide-slant/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "annular-tripod-wide-slant",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "annular-tripod-wide-slant/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "annular-tripod-wide-slant/clay-implicit.svg",
+              "rasterPath": "annular-tripod-wide-slant/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "annular-tripod-wide-slant/depth-implicit.svg",
+              "rasterPath": "annular-tripod-wide-slant/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "annular-tripod-wide-slant/normal-implicit.svg",
+              "rasterPath": "annular-tripod-wide-slant/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "annular-tripod-wide-slant/mask-implicit.svg",
+              "rasterPath": "annular-tripod-wide-slant/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "annular-tripod-wide-slant/semantic-implicit.svg",
+              "rasterPath": "annular-tripod-wide-slant/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "annular-tripod-wide-slant/trellis-source.svg",
+            "rasterPath": "annular-tripod-wide-slant/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "annular-tripod-wide-slant/bundle.json",
+            "byteSize": 5846,
+            "sha256": "sha256:c524de6d32a817c323d6562a91da3f62e699f10b1977c1fdcab9d13a4c4683bd"
+          },
+          {
+            "path": "annular-tripod-wide-slant/clay-implicit.svg",
+            "byteSize": 1466724,
+            "sha256": "sha256:902654947c3012c3c22bca92d7c38bcd1f0d0537f3bc670a5196e26190f205f0"
+          },
+          {
+            "path": "annular-tripod-wide-slant/clay-implicit.png",
+            "byteSize": 45632,
+            "sha256": "sha256:896777a427ed64e0309a88c4bbb37652939ab3cc10afaaa4bbd0c41e8fcd8cad"
+          },
+          {
+            "path": "annular-tripod-wide-slant/depth-implicit.svg",
+            "byteSize": 1506189,
+            "sha256": "sha256:aedc46d4c1bf208274c48f151c7006bb2ffe9c20febaa74eae2bd4684ef3e9be"
+          },
+          {
+            "path": "annular-tripod-wide-slant/depth-implicit.png",
+            "byteSize": 26418,
+            "sha256": "sha256:c99f58b8a15dc420e0009be0bbf6517c910aba21b8aec5bd5400a1e40d4ec151"
+          },
+          {
+            "path": "annular-tripod-wide-slant/normal-implicit.svg",
+            "byteSize": 1486151,
+            "sha256": "sha256:c353b5884fc62f4f4162ccf4f3e6a057ca149958b0719edf5752503f5f965728"
+          },
+          {
+            "path": "annular-tripod-wide-slant/normal-implicit.png",
+            "byteSize": 54343,
+            "sha256": "sha256:730674bf0f70f4d0214cdcb376950285248645b1cae51e35f89b78eae616e000"
+          },
+          {
+            "path": "annular-tripod-wide-slant/mask-implicit.svg",
+            "byteSize": 1506538,
+            "sha256": "sha256:c10063055bfd2096c729567fe872071de92f245f37f1705f079b28649af33c38"
+          },
+          {
+            "path": "annular-tripod-wide-slant/mask-implicit.png",
+            "byteSize": 14108,
+            "sha256": "sha256:b118648c053022bc8cd9ed8bb82ac084b7481dadb075d43fb99fd98c34c89875"
+          },
+          {
+            "path": "annular-tripod-wide-slant/semantic-implicit.svg",
+            "byteSize": 1630174,
+            "sha256": "sha256:ef647f1c42eb7c67a4eaada59c2481bf61d2102f80b4fa8d456c5cdf62e36630"
+          },
+          {
+            "path": "annular-tripod-wide-slant/semantic-implicit.png",
+            "byteSize": 17312,
+            "sha256": "sha256:f029519a059ecbf72de829e2872da92f5f462db654a604981156de904d802183"
+          },
+          {
+            "path": "annular-tripod-wide-slant/trellis-source.svg",
+            "byteSize": 1468595,
+            "sha256": "sha256:3030277c0688bd67108822e667588e56743a45e7b59350cfdb1e70153909a3aa"
+          },
+          {
+            "path": "annular-tripod-wide-slant/trellis-source.png",
+            "byteSize": 198828,
+            "sha256": "sha256:22a03867150658459187f5e128ed211b22dd33774d302f17d6aca8a6eb04bada"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+          "parameterSpecs": [
+            {
+              "id": "apertureWidth",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.94,
+              "min": 0.56,
+              "max": 1.52,
+              "step": 0.12
+            },
+            {
+              "id": "apertureHeight",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.96,
+              "min": 0.54,
+              "max": 1.5,
+              "step": 0.12
+            },
+            {
+              "id": "ringThickness",
+              "semanticRole": "annularBody",
+              "initial": 0.17,
+              "min": 0.1,
+              "max": 0.31,
+              "step": 0.035
+            },
+            {
+              "id": "ringDepth",
+              "semanticRole": "annularBody",
+              "initial": 0.22,
+              "min": 0.12,
+              "max": 0.42,
+              "step": 0.05
+            },
+            {
+              "id": "ringRise",
+              "semanticRole": "annularElevation",
+              "initial": 0.82,
+              "min": 0.5,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "ringTwist",
+              "semanticRole": "controlledDepthAsymmetry",
+              "initial": 0.1,
+              "min": -0.32,
+              "max": 0.32,
+              "step": 0.07
+            },
+            {
+              "id": "ringSkew",
+              "semanticRole": "controlledLateralAsymmetry",
+              "initial": 0.08,
+              "min": -0.3,
+              "max": 0.3,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryWidth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "sensoryHeight",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.36,
+              "min": 0.2,
+              "max": 0.62,
+              "step": 0.06
+            },
+            {
+              "id": "sensoryDepth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.38,
+              "min": 0.2,
+              "max": 0.66,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryAngle",
+              "semanticRole": "sensoryPlacement",
+              "initial": 0.7,
+              "min": 0.28,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.72,
+              "min": 0.42,
+              "max": 1.12,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.34,
+              "min": 0.16,
+              "max": 0.62,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.09,
+              "min": 0.05,
+              "max": 0.18,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.16,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.38,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.7,
+              "min": -0.9,
+              "max": -0.48,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "apertureWidth": 1.22,
+          "apertureHeight": 0.76,
+          "ringThickness": 0.17,
+          "ringDepth": 0.22,
+          "ringRise": 0.82,
+          "ringTwist": 0.18,
+          "ringSkew": 0.22,
+          "sensoryWidth": 0.42,
+          "sensoryHeight": 0.36,
+          "sensoryDepth": 0.38,
+          "sensoryAngle": 0.42,
+          "supportSpread": 0.86,
+          "supportForeAft": 0.34,
+          "supportThickness": 0.09,
+          "footWidth": 0.16,
+          "footDepth": 0.22,
+          "groundHeight": -0.7
+        },
+        "implicitPrimitiveCount": 31,
+        "semanticRoles": [
+          "annularBody",
+          "offAxisSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    },
+    {
+      "id": "annular-tripod-tall-keyhole",
+      "armatureProgramId": "kaminos.lirm-armature-program.annular-tripod.v0",
+      "lineagePressure": "tall keyhole aperture with depth divergence and an elevated off-axis sensory lobe",
+      "receiptPath": "candidates/annular-tripod-tall-keyhole/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "annular-tripod-tall-keyhole",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "annular-tripod-tall-keyhole/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "annular-tripod-tall-keyhole/clay-implicit.svg",
+              "rasterPath": "annular-tripod-tall-keyhole/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "annular-tripod-tall-keyhole/depth-implicit.svg",
+              "rasterPath": "annular-tripod-tall-keyhole/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "annular-tripod-tall-keyhole/normal-implicit.svg",
+              "rasterPath": "annular-tripod-tall-keyhole/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "annular-tripod-tall-keyhole/mask-implicit.svg",
+              "rasterPath": "annular-tripod-tall-keyhole/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "annular-tripod-tall-keyhole/semantic-implicit.svg",
+              "rasterPath": "annular-tripod-tall-keyhole/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "annular-tripod-tall-keyhole/trellis-source.svg",
+            "rasterPath": "annular-tripod-tall-keyhole/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "annular-tripod-tall-keyhole/bundle.json",
+            "byteSize": 5862,
+            "sha256": "sha256:036024d90b042f2938b4d9a8cdea54a6d2df67908558eb01fca0ca87f2097c89"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/clay-implicit.svg",
+            "byteSize": 1309129,
+            "sha256": "sha256:ba71537550d5528c2e903bd6320195b7592490344dc2ab9df8cee721c3bea666"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/clay-implicit.png",
+            "byteSize": 41474,
+            "sha256": "sha256:66b484a53d14bc5aec87dcdece4d580d987bf5824b0973418f8fbbfc04a836cf"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/depth-implicit.svg",
+            "byteSize": 1348069,
+            "sha256": "sha256:7a78b89845f461984fb9285e3691fbcdb51463cbbbee86281364a8ca1684fdfd"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/depth-implicit.png",
+            "byteSize": 24410,
+            "sha256": "sha256:803220ffc180e6680bcb5f2d0085bd3b5830284263353e7bf17a5545155e6403"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/normal-implicit.svg",
+            "byteSize": 1329709,
+            "sha256": "sha256:ef13d4615e63bed984e338f0bf2880cc76c01e43b1f63012d785e1bd419d9be1"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/normal-implicit.png",
+            "byteSize": 49517,
+            "sha256": "sha256:730858de7fb03cc552b139598de7a4ff054e9eab201b2b461f08d95de6306790"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/mask-implicit.svg",
+            "byteSize": 1348469,
+            "sha256": "sha256:064f9d23a334cff8a4384a20ec9345d186a21d29275437601b41941fc897206d"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/mask-implicit.png",
+            "byteSize": 13487,
+            "sha256": "sha256:a73cc17b61c9d67caf1a5f359a3e551ef018e1354633baf291a4e74ffdfc5b06"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/semantic-implicit.svg",
+            "byteSize": 1459097,
+            "sha256": "sha256:44f4fa4418478a52d4ae6887f62fc60f8c57a741ce356980a2e2834208686ca2"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/semantic-implicit.png",
+            "byteSize": 17569,
+            "sha256": "sha256:9b54f084ff5a68508c0c113683d6b0f5c81934f2aabe5f0ac568c60179bc464f"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/trellis-source.svg",
+            "byteSize": 1311272,
+            "sha256": "sha256:3726c0f348f175fae581db8ec395151808a4c763e8aabdc96c1cf93414189f56"
+          },
+          {
+            "path": "annular-tripod-tall-keyhole/trellis-source.png",
+            "byteSize": 208025,
+            "sha256": "sha256:e5ba0d7d4aa6f1a8bd629762f8074d71805252da82c2409065ed452c729548ca"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+          "parameterSpecs": [
+            {
+              "id": "apertureWidth",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.94,
+              "min": 0.56,
+              "max": 1.52,
+              "step": 0.12
+            },
+            {
+              "id": "apertureHeight",
+              "semanticRole": "loadBearingAperture",
+              "initial": 0.96,
+              "min": 0.54,
+              "max": 1.5,
+              "step": 0.12
+            },
+            {
+              "id": "ringThickness",
+              "semanticRole": "annularBody",
+              "initial": 0.17,
+              "min": 0.1,
+              "max": 0.31,
+              "step": 0.035
+            },
+            {
+              "id": "ringDepth",
+              "semanticRole": "annularBody",
+              "initial": 0.22,
+              "min": 0.12,
+              "max": 0.42,
+              "step": 0.05
+            },
+            {
+              "id": "ringRise",
+              "semanticRole": "annularElevation",
+              "initial": 0.82,
+              "min": 0.5,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "ringTwist",
+              "semanticRole": "controlledDepthAsymmetry",
+              "initial": 0.1,
+              "min": -0.32,
+              "max": 0.32,
+              "step": 0.07
+            },
+            {
+              "id": "ringSkew",
+              "semanticRole": "controlledLateralAsymmetry",
+              "initial": 0.08,
+              "min": -0.3,
+              "max": 0.3,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryWidth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "sensoryHeight",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.36,
+              "min": 0.2,
+              "max": 0.62,
+              "step": 0.06
+            },
+            {
+              "id": "sensoryDepth",
+              "semanticRole": "offAxisSensoryMass",
+              "initial": 0.38,
+              "min": 0.2,
+              "max": 0.66,
+              "step": 0.065
+            },
+            {
+              "id": "sensoryAngle",
+              "semanticRole": "sensoryPlacement",
+              "initial": 0.7,
+              "min": 0.28,
+              "max": 1.22,
+              "step": 0.1
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.72,
+              "min": 0.42,
+              "max": 1.12,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.34,
+              "min": 0.16,
+              "max": 0.62,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.09,
+              "min": 0.05,
+              "max": 0.18,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.16,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.38,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.7,
+              "min": -0.9,
+              "max": -0.48,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "apertureWidth": 0.7,
+          "apertureHeight": 1.24,
+          "ringThickness": 0.17,
+          "ringDepth": 0.22,
+          "ringRise": 0.82,
+          "ringTwist": 0.24,
+          "ringSkew": -0.12,
+          "sensoryWidth": 0.42,
+          "sensoryHeight": 0.36,
+          "sensoryDepth": 0.38,
+          "sensoryAngle": 1.08,
+          "supportSpread": 0.72,
+          "supportForeAft": 0.46,
+          "supportThickness": 0.09,
+          "footWidth": 0.16,
+          "footDepth": 0.22,
+          "groundHeight": -0.7
+        },
+        "implicitPrimitiveCount": 31,
+        "semanticRoles": [
+          "annularBody",
+          "offAxisSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    },
+    {
+      "id": "tripod-canopy-suspended",
+      "armatureProgramId": "kaminos.lirm-armature-program.tripod-canopy.v0",
+      "lineagePressure": "baseline top-heavy canopy with a distinct suspended sensory body and three supports",
+      "receiptPath": "candidates/tripod-canopy-suspended/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "tripod-canopy-suspended",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "tripod-canopy-suspended/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "tripod-canopy-suspended/clay-implicit.svg",
+              "rasterPath": "tripod-canopy-suspended/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "tripod-canopy-suspended/depth-implicit.svg",
+              "rasterPath": "tripod-canopy-suspended/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "tripod-canopy-suspended/normal-implicit.svg",
+              "rasterPath": "tripod-canopy-suspended/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "tripod-canopy-suspended/mask-implicit.svg",
+              "rasterPath": "tripod-canopy-suspended/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "tripod-canopy-suspended/semantic-implicit.svg",
+              "rasterPath": "tripod-canopy-suspended/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "tripod-canopy-suspended/trellis-source.svg",
+            "rasterPath": "tripod-canopy-suspended/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "tripod-canopy-suspended/bundle.json",
+            "byteSize": 6076,
+            "sha256": "sha256:f4648d5f5b449dd2357dbda68608f7cbaadef948ff41509f423bc0616e4995cb"
+          },
+          {
+            "path": "tripod-canopy-suspended/clay-implicit.svg",
+            "byteSize": 1041878,
+            "sha256": "sha256:c8d9f421ce426999c91fec2c69b014a2ce2ee42c3cd47bf62eee794af27cc31d"
+          },
+          {
+            "path": "tripod-canopy-suspended/clay-implicit.png",
+            "byteSize": 33224,
+            "sha256": "sha256:cee5aeea7b2806d44cffba6281c2c117fde5ee872901fa6138007ace5fe7876a"
+          },
+          {
+            "path": "tripod-canopy-suspended/depth-implicit.svg",
+            "byteSize": 1070882,
+            "sha256": "sha256:f5b6b8369797c51e681de05c47e5d3e1694e144ce6125518718fc74f6830938b"
+          },
+          {
+            "path": "tripod-canopy-suspended/depth-implicit.png",
+            "byteSize": 20521,
+            "sha256": "sha256:f45cfe9fcc985124b6637a48d6cd2158f59865c17e31f0c2e3fa5ab6e7be0905"
+          },
+          {
+            "path": "tripod-canopy-suspended/normal-implicit.svg",
+            "byteSize": 1056132,
+            "sha256": "sha256:99106db094170f5be8895a2fa78efa6a5cab440d796e32313913f727f357d6a8"
+          },
+          {
+            "path": "tripod-canopy-suspended/normal-implicit.png",
+            "byteSize": 40343,
+            "sha256": "sha256:2c6458caf19da3287f80ec3b0ca3b4ddf6fe0f6261169986ab939579f6897c9d"
+          },
+          {
+            "path": "tripod-canopy-suspended/mask-implicit.svg",
+            "byteSize": 1071072,
+            "sha256": "sha256:4116d06c9a4c8b3aae7c1d1aec8c17653e31c8fbf4e851f96a52e2a288554754"
+          },
+          {
+            "path": "tripod-canopy-suspended/mask-implicit.png",
+            "byteSize": 11313,
+            "sha256": "sha256:94d7f0bf42dffb1fd7ad5775b341cb70d7ee7e9abc4b4564e062f3b161a34208"
+          },
+          {
+            "path": "tripod-canopy-suspended/semantic-implicit.svg",
+            "byteSize": 1158135,
+            "sha256": "sha256:9197d9900e8babb4134a883697dde89c24e647b5a2d4a8742f85526e80ca84fd"
+          },
+          {
+            "path": "tripod-canopy-suspended/semantic-implicit.png",
+            "byteSize": 13751,
+            "sha256": "sha256:f13cddcf209de2f883a03710fc9ffe2f70a753aa5dc3b4bb27a0fcf221da451e"
+          },
+          {
+            "path": "tripod-canopy-suspended/trellis-source.svg",
+            "byteSize": 1043256,
+            "sha256": "sha256:85e95bf2a3a44fcede6ed5c5c13a07d777185e03b39bc7deb59dbd16255f43e0"
+          },
+          {
+            "path": "tripod-canopy-suspended/trellis-source.png",
+            "byteSize": 155764,
+            "sha256": "sha256:65130179cba23ec1dddb1e5a58061059fdb6b188d8753b5903be421a75e4eaac"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+          "parameterSpecs": [
+            {
+              "id": "canopyWidth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 1.42,
+              "min": 0.86,
+              "max": 2.02,
+              "step": 0.15
+            },
+            {
+              "id": "canopyHeight",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.42,
+              "min": 0.24,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "canopyDepth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.92,
+              "min": 0.52,
+              "max": 1.42,
+              "step": 0.12
+            },
+            {
+              "id": "canopyArch",
+              "semanticRole": "dorsalCanopyArch",
+              "initial": 0.2,
+              "min": -0.08,
+              "max": 0.48,
+              "step": 0.07
+            },
+            {
+              "id": "canopyRise",
+              "semanticRole": "dorsalCanopyElevation",
+              "initial": 0.88,
+              "min": 0.62,
+              "max": 1.28,
+              "step": 0.09
+            },
+            {
+              "id": "canopyAsymmetry",
+              "semanticRole": "controlledAsymmetry",
+              "initial": 0.12,
+              "min": -0.38,
+              "max": 0.38,
+              "step": 0.075
+            },
+            {
+              "id": "pendantWidth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "pendantHeight",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.46,
+              "min": 0.24,
+              "max": 0.76,
+              "step": 0.075
+            },
+            {
+              "id": "pendantDepth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.4,
+              "min": 0.22,
+              "max": 0.68,
+              "step": 0.065
+            },
+            {
+              "id": "pendantDrop",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.56,
+              "min": 0.28,
+              "max": 0.92,
+              "step": 0.09
+            },
+            {
+              "id": "pendantForward",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.34,
+              "min": 0.08,
+              "max": 0.68,
+              "step": 0.08
+            },
+            {
+              "id": "suspensorSpread",
+              "semanticRole": "sensorySuspensor",
+              "initial": 0.3,
+              "min": 0.14,
+              "max": 0.52,
+              "step": 0.055
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.68,
+              "min": 0.38,
+              "max": 1.08,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.38,
+              "min": 0.18,
+              "max": 0.68,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.1,
+              "min": 0.055,
+              "max": 0.2,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.17,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.4,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.72,
+              "min": -0.92,
+              "max": -0.5,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "canopyWidth": 1.42,
+          "canopyHeight": 0.42,
+          "canopyDepth": 0.92,
+          "canopyArch": 0.2,
+          "canopyRise": 0.88,
+          "canopyAsymmetry": 0.12,
+          "pendantWidth": 0.42,
+          "pendantHeight": 0.46,
+          "pendantDepth": 0.4,
+          "pendantDrop": 0.56,
+          "pendantForward": 0.34,
+          "suspensorSpread": 0.3,
+          "supportSpread": 0.68,
+          "supportForeAft": 0.38,
+          "supportThickness": 0.1,
+          "footWidth": 0.17,
+          "footDepth": 0.22,
+          "groundHeight": -0.72
+        },
+        "implicitPrimitiveCount": 15,
+        "semanticRoles": [
+          "dorsalCanopy",
+          "sensorySuspensor",
+          "suspendedSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    },
+    {
+      "id": "tripod-canopy-wide-low-pendant",
+      "armatureProgramId": "kaminos.lirm-armature-program.tripod-canopy.v0",
+      "lineagePressure": "extreme table-like canopy with a low hanging head and a sparse tripod silhouette",
+      "receiptPath": "candidates/tripod-canopy-wide-low-pendant/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "tripod-canopy-wide-low-pendant",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "tripod-canopy-wide-low-pendant/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "tripod-canopy-wide-low-pendant/clay-implicit.svg",
+              "rasterPath": "tripod-canopy-wide-low-pendant/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "tripod-canopy-wide-low-pendant/depth-implicit.svg",
+              "rasterPath": "tripod-canopy-wide-low-pendant/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "tripod-canopy-wide-low-pendant/normal-implicit.svg",
+              "rasterPath": "tripod-canopy-wide-low-pendant/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "tripod-canopy-wide-low-pendant/mask-implicit.svg",
+              "rasterPath": "tripod-canopy-wide-low-pendant/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "tripod-canopy-wide-low-pendant/semantic-implicit.svg",
+              "rasterPath": "tripod-canopy-wide-low-pendant/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "tripod-canopy-wide-low-pendant/trellis-source.svg",
+            "rasterPath": "tripod-canopy-wide-low-pendant/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "tripod-canopy-wide-low-pendant/bundle.json",
+            "byteSize": 6132,
+            "sha256": "sha256:ed797ca664ce968408695a66bd104345a24c79dade3ade3a95d4b8bdcecf8c7c"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/clay-implicit.svg",
+            "byteSize": 1048626,
+            "sha256": "sha256:370efdfb525f95fca68719914dc332a3472229d0f9cceb985cd8247c4078dbe3"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/clay-implicit.png",
+            "byteSize": 33874,
+            "sha256": "sha256:458e525a7455d16f8d216641bccc437eee0c32c974efb6e0d0c260c60bec40b5"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/depth-implicit.svg",
+            "byteSize": 1076169,
+            "sha256": "sha256:0b3a76d1df6c69aeaafb52829d22a10ee7d78a649ce6775dcdf5f44b4cc9baa9"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/depth-implicit.png",
+            "byteSize": 20701,
+            "sha256": "sha256:d5ceec0db0c92234ac56ef508cf32086b54accde54f8216256ce702962020112"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/normal-implicit.svg",
+            "byteSize": 1063478,
+            "sha256": "sha256:9cc91f2e2663448d09761158f11299180f630005fa42d6255fb086826e85bb37"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/normal-implicit.png",
+            "byteSize": 40792,
+            "sha256": "sha256:da3dab73d9a04e4ce5391b71b033e2f5e40e646922587d570fb0ae161beacc69"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/mask-implicit.svg",
+            "byteSize": 1077964,
+            "sha256": "sha256:c413253e5029b930cf9bbe68863d42341fbd5f618c50506be71aa11d7393babb"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/mask-implicit.png",
+            "byteSize": 12601,
+            "sha256": "sha256:7319541312aa7dfb561ce2fcd53548e5f278876153f88a2ae053b0a308c591e6"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/semantic-implicit.svg",
+            "byteSize": 1165897,
+            "sha256": "sha256:a8318fc4174e250779c45da46860b7cecf4b950fabcc1b47c913a8600c188abd"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/semantic-implicit.png",
+            "byteSize": 15481,
+            "sha256": "sha256:4bc2417e4c25d95a980952aec092b9b6bc0c52f4f0a53364b57f828a15783a64"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/trellis-source.svg",
+            "byteSize": 1050198,
+            "sha256": "sha256:0a5d4ddedf9b868d1d1f98f7250d4495932fa292c3129ef1ffda265372f381f5"
+          },
+          {
+            "path": "tripod-canopy-wide-low-pendant/trellis-source.png",
+            "byteSize": 158397,
+            "sha256": "sha256:10a8b40d1fc962e9ff29495bca44c6f354f40cecf2eb1aae15c33aa33e7ffe82"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+          "parameterSpecs": [
+            {
+              "id": "canopyWidth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 1.42,
+              "min": 0.86,
+              "max": 2.02,
+              "step": 0.15
+            },
+            {
+              "id": "canopyHeight",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.42,
+              "min": 0.24,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "canopyDepth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.92,
+              "min": 0.52,
+              "max": 1.42,
+              "step": 0.12
+            },
+            {
+              "id": "canopyArch",
+              "semanticRole": "dorsalCanopyArch",
+              "initial": 0.2,
+              "min": -0.08,
+              "max": 0.48,
+              "step": 0.07
+            },
+            {
+              "id": "canopyRise",
+              "semanticRole": "dorsalCanopyElevation",
+              "initial": 0.88,
+              "min": 0.62,
+              "max": 1.28,
+              "step": 0.09
+            },
+            {
+              "id": "canopyAsymmetry",
+              "semanticRole": "controlledAsymmetry",
+              "initial": 0.12,
+              "min": -0.38,
+              "max": 0.38,
+              "step": 0.075
+            },
+            {
+              "id": "pendantWidth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "pendantHeight",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.46,
+              "min": 0.24,
+              "max": 0.76,
+              "step": 0.075
+            },
+            {
+              "id": "pendantDepth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.4,
+              "min": 0.22,
+              "max": 0.68,
+              "step": 0.065
+            },
+            {
+              "id": "pendantDrop",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.56,
+              "min": 0.28,
+              "max": 0.92,
+              "step": 0.09
+            },
+            {
+              "id": "pendantForward",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.34,
+              "min": 0.08,
+              "max": 0.68,
+              "step": 0.08
+            },
+            {
+              "id": "suspensorSpread",
+              "semanticRole": "sensorySuspensor",
+              "initial": 0.3,
+              "min": 0.14,
+              "max": 0.52,
+              "step": 0.055
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.68,
+              "min": 0.38,
+              "max": 1.08,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.38,
+              "min": 0.18,
+              "max": 0.68,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.1,
+              "min": 0.055,
+              "max": 0.2,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.17,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.4,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.72,
+              "min": -0.92,
+              "max": -0.5,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "canopyWidth": 1.78,
+          "canopyHeight": 0.32,
+          "canopyDepth": 0.92,
+          "canopyArch": 0.12,
+          "canopyRise": 0.88,
+          "canopyAsymmetry": 0.12,
+          "pendantWidth": 0.42,
+          "pendantHeight": 0.46,
+          "pendantDepth": 0.4,
+          "pendantDrop": 0.76,
+          "pendantForward": 0.5,
+          "suspensorSpread": 0.3,
+          "supportSpread": 0.86,
+          "supportForeAft": 0.38,
+          "supportThickness": 0.1,
+          "footWidth": 0.17,
+          "footDepth": 0.22,
+          "groundHeight": -0.72
+        },
+        "implicitPrimitiveCount": 15,
+        "semanticRoles": [
+          "dorsalCanopy",
+          "sensorySuspensor",
+          "suspendedSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    },
+    {
+      "id": "tripod-canopy-asymmetric-deep",
+      "armatureProgramId": "kaminos.lirm-armature-program.tripod-canopy.v0",
+      "lineagePressure": "deep asymmetric canopy that tests whether depth-heavy gestalt remains readable from one conditioning view",
+      "receiptPath": "candidates/tripod-canopy-asymmetric-deep/receipt.json",
+      "receipt": {
+        "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+        "status": "complete",
+        "phase": "witness_written",
+        "failurePhase": null,
+        "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+        "candidateId": "tripod-canopy-asymmetric-deep",
+        "requestedArmatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0"
+        },
+        "requestedConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224
+        },
+        "effectiveConfig": {
+          "pixelWidth": 256,
+          "pixelHeight": 224,
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "raySource": "software-sdf-raymarch"
+        },
+        "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+        "outputInventory": {
+          "bundle": "tripod-canopy-asymmetric-deep/bundle.json",
+          "maps": [
+            {
+              "kind": "clay",
+              "path": "tripod-canopy-asymmetric-deep/clay-implicit.svg",
+              "rasterPath": "tripod-canopy-asymmetric-deep/clay-implicit.png"
+            },
+            {
+              "kind": "depth",
+              "path": "tripod-canopy-asymmetric-deep/depth-implicit.svg",
+              "rasterPath": "tripod-canopy-asymmetric-deep/depth-implicit.png"
+            },
+            {
+              "kind": "normal",
+              "path": "tripod-canopy-asymmetric-deep/normal-implicit.svg",
+              "rasterPath": "tripod-canopy-asymmetric-deep/normal-implicit.png"
+            },
+            {
+              "kind": "mask",
+              "path": "tripod-canopy-asymmetric-deep/mask-implicit.svg",
+              "rasterPath": "tripod-canopy-asymmetric-deep/mask-implicit.png"
+            },
+            {
+              "kind": "semantic",
+              "path": "tripod-canopy-asymmetric-deep/semantic-implicit.svg",
+              "rasterPath": "tripod-canopy-asymmetric-deep/semantic-implicit.png"
+            }
+          ],
+          "trellisSource": {
+            "kind": "trellis-clay",
+            "path": "tripod-canopy-asymmetric-deep/trellis-source.svg",
+            "rasterPath": "tripod-canopy-asymmetric-deep/trellis-source.png"
+          }
+        },
+        "outputEvidence": [
+          {
+            "path": "tripod-canopy-asymmetric-deep/bundle.json",
+            "byteSize": 6124,
+            "sha256": "sha256:f3c2b33ba571f7814c5c287cdf38138748596bc76de56cbf0830ca47429cefe2"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/clay-implicit.svg",
+            "byteSize": 1158584,
+            "sha256": "sha256:984f1508b973c3cba61c9cb348047732da84736ce102af808d0d202f1893d5b7"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/clay-implicit.png",
+            "byteSize": 37027,
+            "sha256": "sha256:7c59e91d26477da437f078cc5fe0499bf8399b5398d305305b510a66043568b9"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/depth-implicit.svg",
+            "byteSize": 1190506,
+            "sha256": "sha256:a59a4f4f4a1272e0154f42fda658e54760c08f03fa7fb81c140be2196d842ce7"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/depth-implicit.png",
+            "byteSize": 22568,
+            "sha256": "sha256:d6add6557d7301daa33056d639e028b5e8cf3a86168a9f9ae2c3c674c77f0c4c"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/normal-implicit.svg",
+            "byteSize": 1171842,
+            "sha256": "sha256:e41f1f1fe235c6907bb1c9b04433749bef7d3fd8aea791474d5934e22b335035"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/normal-implicit.png",
+            "byteSize": 44992,
+            "sha256": "sha256:82e91af35c34c79cf0cea278e7fe0e719f296111b313b1763e889008ecb23652"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/mask-implicit.svg",
+            "byteSize": 1191038,
+            "sha256": "sha256:41e7ade7a64ca3fb443b4652421466a55c42b3559066ff80442849aeec68dbd2"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/mask-implicit.png",
+            "byteSize": 12227,
+            "sha256": "sha256:fc2be54c5c25ec7f135aa53869416d0caf9525f4ab9143e8a5486bca7e15c8f2"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/semantic-implicit.svg",
+            "byteSize": 1288485,
+            "sha256": "sha256:cb5f424172858245e58cec016d534ce422c3cdce66f0a7bd7591dcf170c5753c"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/semantic-implicit.png",
+            "byteSize": 15130,
+            "sha256": "sha256:2b3f11707b3f572ef83fb84267636158e4d40d47f8dd08411f5827cc5d05470d"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/trellis-source.svg",
+            "byteSize": 1159445,
+            "sha256": "sha256:1e1e316f10277f49bd9939515ca556f77aec80afef8929f6b9aae7775ecae919"
+          },
+          {
+            "path": "tripod-canopy-asymmetric-deep/trellis-source.png",
+            "byteSize": 168959,
+            "sha256": "sha256:2106229e1cdb3cfc9967f73b71a46b3d3427912d633d35b9969567c6f654d018"
+          }
+        ],
+        "armatureProgram": {
+          "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+          "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+          "parameterSpecs": [
+            {
+              "id": "canopyWidth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 1.42,
+              "min": 0.86,
+              "max": 2.02,
+              "step": 0.15
+            },
+            {
+              "id": "canopyHeight",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.42,
+              "min": 0.24,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "canopyDepth",
+              "semanticRole": "dorsalCanopy",
+              "initial": 0.92,
+              "min": 0.52,
+              "max": 1.42,
+              "step": 0.12
+            },
+            {
+              "id": "canopyArch",
+              "semanticRole": "dorsalCanopyArch",
+              "initial": 0.2,
+              "min": -0.08,
+              "max": 0.48,
+              "step": 0.07
+            },
+            {
+              "id": "canopyRise",
+              "semanticRole": "dorsalCanopyElevation",
+              "initial": 0.88,
+              "min": 0.62,
+              "max": 1.28,
+              "step": 0.09
+            },
+            {
+              "id": "canopyAsymmetry",
+              "semanticRole": "controlledAsymmetry",
+              "initial": 0.12,
+              "min": -0.38,
+              "max": 0.38,
+              "step": 0.075
+            },
+            {
+              "id": "pendantWidth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.42,
+              "min": 0.22,
+              "max": 0.7,
+              "step": 0.07
+            },
+            {
+              "id": "pendantHeight",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.46,
+              "min": 0.24,
+              "max": 0.76,
+              "step": 0.075
+            },
+            {
+              "id": "pendantDepth",
+              "semanticRole": "suspendedSensoryMass",
+              "initial": 0.4,
+              "min": 0.22,
+              "max": 0.68,
+              "step": 0.065
+            },
+            {
+              "id": "pendantDrop",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.56,
+              "min": 0.28,
+              "max": 0.92,
+              "step": 0.09
+            },
+            {
+              "id": "pendantForward",
+              "semanticRole": "sensorySuspension",
+              "initial": 0.34,
+              "min": 0.08,
+              "max": 0.68,
+              "step": 0.08
+            },
+            {
+              "id": "suspensorSpread",
+              "semanticRole": "sensorySuspensor",
+              "initial": 0.3,
+              "min": 0.14,
+              "max": 0.52,
+              "step": 0.055
+            },
+            {
+              "id": "supportSpread",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.68,
+              "min": 0.38,
+              "max": 1.08,
+              "step": 0.09
+            },
+            {
+              "id": "supportForeAft",
+              "semanticRole": "tripodSupportField",
+              "initial": 0.38,
+              "min": 0.18,
+              "max": 0.68,
+              "step": 0.07
+            },
+            {
+              "id": "supportThickness",
+              "semanticRole": "tripodSupport",
+              "initial": 0.1,
+              "min": 0.055,
+              "max": 0.2,
+              "step": 0.025
+            },
+            {
+              "id": "footWidth",
+              "semanticRole": "groundContact",
+              "initial": 0.17,
+              "min": 0.09,
+              "max": 0.3,
+              "step": 0.035
+            },
+            {
+              "id": "footDepth",
+              "semanticRole": "groundContact",
+              "initial": 0.22,
+              "min": 0.11,
+              "max": 0.4,
+              "step": 0.045
+            },
+            {
+              "id": "groundHeight",
+              "semanticRole": "groundContact",
+              "initial": -0.72,
+              "min": -0.92,
+              "max": -0.5,
+              "step": 0.06
+            }
+          ]
+        },
+        "parameters": {
+          "canopyWidth": 1.28,
+          "canopyHeight": 0.42,
+          "canopyDepth": 1.28,
+          "canopyArch": 0.36,
+          "canopyRise": 0.88,
+          "canopyAsymmetry": 0.3,
+          "pendantWidth": 0.42,
+          "pendantHeight": 0.46,
+          "pendantDepth": 0.4,
+          "pendantDrop": 0.62,
+          "pendantForward": 0.58,
+          "suspensorSpread": 0.3,
+          "supportSpread": 0.68,
+          "supportForeAft": 0.54,
+          "supportThickness": 0.1,
+          "footWidth": 0.17,
+          "footDepth": 0.22,
+          "groundHeight": -0.72
+        },
+        "implicitPrimitiveCount": 15,
+        "semanticRoles": [
+          "dorsalCanopy",
+          "sensorySuspensor",
+          "suspendedSensoryMass",
+          "tripodSupport",
+          "groundContact"
+        ],
+        "falseClosureGuards": {
+          "finishedCreatureClaim": "forbidden",
+          "generatorFiringClaim": "not_yet_fired",
+          "programFitClaim": "parameters_supplied_by_caller",
+          "implicitBodyClaim": "raymarched_control_surface_only"
+        }
+      }
+    }
+  ],
+  "visualInspectionClaim": "six controls inspected at original resolution; all admitted to the two-stance imagegen pressure ladder",
+  "lastTrustworthyEvidence": "six implicit-body control packages written with per-output byte and hash evidence and visually confirmed as distinct, legible rare gestalts",
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 224
+  },
+  "falseClosureGuards": {
+    "blankOrMissingControlCountsAsSuccess": false,
+    "generatorFiringClaim": "forbidden",
+    "finishedCreatureClaim": "forbidden",
+    "visualSelectionRequiresInspection": true
+  }
+}

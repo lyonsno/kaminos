@@ -1,0 +1,2729 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-pressure-plan.v0",
+  "status": "planned",
+  "createdAt": "2026-07-19T11:33:27.556Z",
+  "purpose": "Measure whether two deliberately rare topology programs survive strict completion and prior-led invention.",
+  "comparisonContract": {
+    "kind": "six-gestalt-two-stance-one-seed-pressure-ladder",
+    "candidateIds": [
+      "annular-tripod-open-crown",
+      "annular-tripod-wide-slant",
+      "annular-tripod-tall-keyhole",
+      "tripod-canopy-suspended",
+      "tripod-canopy-wide-low-pendant",
+      "tripod-canopy-asymmetric-deep"
+    ],
+    "stances": [
+      "anatomical-completion",
+      "prior-led-invention"
+    ],
+    "seeds": [
+      718301
+    ],
+    "fixedReferenceSet": "clay-depth-normal",
+    "fixedModel": "flux2-klein-9b",
+    "fixedSteps": 8,
+    "fixedGuidance": 1,
+    "loadBearingDiscriminator": "The organism must preserve its authored aperture, canopy, suspended mass, or tripod support gestalt while completing enough anatomy to read as a living creature."
+  },
+  "falseClosureGuards": {
+    "directInferenceForbidden": true,
+    "fallbackRouteAccepted": false,
+    "missingOrEmptyPrimaryOutputAccepted": false,
+    "everyConditioningInputMustMatchWitnessHash": true,
+    "requestedRouteMustEqualEffectiveJobType": true,
+    "visuallyNovelWithoutLineage": "does_not_satisfy",
+    "filledApertureOrLostSuspension": "does_not_satisfy"
+  },
+  "cells": [
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-open-crown",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.94,
+        "apertureHeight": 0.96,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.1,
+        "ringSkew": 0.08,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 0.7,
+        "supportSpread": 0.72,
+        "supportForeAft": 0.34,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png",
+        "bytes": 42062,
+        "sha256": "sha256:06bc7fb6e7d32ca49c3b6acaa3483e8457bdbee2fb0b3384eaf83bb50f3ed076",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-open-crown/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+          "bytes": 24678,
+          "sha256": "sha256:22bcf107d7d7dbca8d584d660fbb6420ff74ed62592dcc8b114a353a5807f058",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-open-crown/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+          "bytes": 49072,
+          "sha256": "sha256:bd1e7ef4cb11d61b724261c4ce3d983f42f90f2a05099a4ac6435a24abfb3ea0",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-open-crown/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "abfdb343d696"
+    },
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-open-crown",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.94,
+        "apertureHeight": 0.96,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.1,
+        "ringSkew": 0.08,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 0.7,
+        "supportSpread": 0.72,
+        "supportForeAft": 0.34,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/clay-implicit.png",
+        "bytes": 42062,
+        "sha256": "sha256:06bc7fb6e7d32ca49c3b6acaa3483e8457bdbee2fb0b3384eaf83bb50f3ed076",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-open-crown/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/depth-implicit.png",
+          "bytes": 24678,
+          "sha256": "sha256:22bcf107d7d7dbca8d584d660fbb6420ff74ed62592dcc8b114a353a5807f058",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-open-crown/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-open-crown/annular-tripod-open-crown/normal-implicit.png",
+          "bytes": 49072,
+          "sha256": "sha256:bd1e7ef4cb11d61b724261c4ce3d983f42f90f2a05099a4ac6435a24abfb3ea0",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-open-crown/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "5117a2aee0ab"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-wide-slant",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 1.22,
+        "apertureHeight": 0.76,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.18,
+        "ringSkew": 0.22,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 0.42,
+        "supportSpread": 0.86,
+        "supportForeAft": 0.34,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png",
+        "bytes": 45632,
+        "sha256": "sha256:896777a427ed64e0309a88c4bbb37652939ab3cc10afaaa4bbd0c41e8fcd8cad",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-wide-slant/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+          "bytes": 26418,
+          "sha256": "sha256:c99f58b8a15dc420e0009be0bbf6517c910aba21b8aec5bd5400a1e40d4ec151",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-wide-slant/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+          "bytes": 54343,
+          "sha256": "sha256:730674bf0f70f4d0214cdcb376950285248645b1cae51e35f89b78eae616e000",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-wide-slant/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "6fe4a2079189"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-wide-slant",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 1.22,
+        "apertureHeight": 0.76,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.18,
+        "ringSkew": 0.22,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 0.42,
+        "supportSpread": 0.86,
+        "supportForeAft": 0.34,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/clay-implicit.png",
+        "bytes": 45632,
+        "sha256": "sha256:896777a427ed64e0309a88c4bbb37652939ab3cc10afaaa4bbd0c41e8fcd8cad",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-wide-slant/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/depth-implicit.png",
+          "bytes": 26418,
+          "sha256": "sha256:c99f58b8a15dc420e0009be0bbf6517c910aba21b8aec5bd5400a1e40d4ec151",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-wide-slant/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-wide-slant/annular-tripod-wide-slant/normal-implicit.png",
+          "bytes": 54343,
+          "sha256": "sha256:730674bf0f70f4d0214cdcb376950285248645b1cae51e35f89b78eae616e000",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-wide-slant/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "4761701c9884"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-tall-keyhole",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.7,
+        "apertureHeight": 1.24,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.24,
+        "ringSkew": -0.12,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 1.08,
+        "supportSpread": 0.72,
+        "supportForeAft": 0.46,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png",
+        "bytes": 41474,
+        "sha256": "sha256:66b484a53d14bc5aec87dcdece4d580d987bf5824b0973418f8fbbfc04a836cf",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-tall-keyhole/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+          "bytes": 24410,
+          "sha256": "sha256:803220ffc180e6680bcb5f2d0085bd3b5830284263353e7bf17a5545155e6403",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-tall-keyhole/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+          "bytes": 49517,
+          "sha256": "sha256:730858de7fb03cc552b139598de7a4ff054e9eab201b2b461f08d95de6306790",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-tall-keyhole/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "ac0236a545f0"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "annular-tripod-tall-keyhole",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+        "parameterSpecs": [
+          {
+            "id": "apertureWidth",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.94,
+            "min": 0.56,
+            "max": 1.52,
+            "step": 0.12
+          },
+          {
+            "id": "apertureHeight",
+            "semanticRole": "loadBearingAperture",
+            "initial": 0.96,
+            "min": 0.54,
+            "max": 1.5,
+            "step": 0.12
+          },
+          {
+            "id": "ringThickness",
+            "semanticRole": "annularBody",
+            "initial": 0.17,
+            "min": 0.1,
+            "max": 0.31,
+            "step": 0.035
+          },
+          {
+            "id": "ringDepth",
+            "semanticRole": "annularBody",
+            "initial": 0.22,
+            "min": 0.12,
+            "max": 0.42,
+            "step": 0.05
+          },
+          {
+            "id": "ringRise",
+            "semanticRole": "annularElevation",
+            "initial": 0.82,
+            "min": 0.5,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "ringTwist",
+            "semanticRole": "controlledDepthAsymmetry",
+            "initial": 0.1,
+            "min": -0.32,
+            "max": 0.32,
+            "step": 0.07
+          },
+          {
+            "id": "ringSkew",
+            "semanticRole": "controlledLateralAsymmetry",
+            "initial": 0.08,
+            "min": -0.3,
+            "max": 0.3,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryWidth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "sensoryHeight",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.36,
+            "min": 0.2,
+            "max": 0.62,
+            "step": 0.06
+          },
+          {
+            "id": "sensoryDepth",
+            "semanticRole": "offAxisSensoryMass",
+            "initial": 0.38,
+            "min": 0.2,
+            "max": 0.66,
+            "step": 0.065
+          },
+          {
+            "id": "sensoryAngle",
+            "semanticRole": "sensoryPlacement",
+            "initial": 0.7,
+            "min": 0.28,
+            "max": 1.22,
+            "step": 0.1
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.72,
+            "min": 0.42,
+            "max": 1.12,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.34,
+            "min": 0.16,
+            "max": 0.62,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.09,
+            "min": 0.05,
+            "max": 0.18,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.16,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.38,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.7,
+            "min": -0.9,
+            "max": -0.48,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "apertureWidth": 0.7,
+        "apertureHeight": 1.24,
+        "ringThickness": 0.17,
+        "ringDepth": 0.22,
+        "ringRise": 0.82,
+        "ringTwist": 0.24,
+        "ringSkew": -0.12,
+        "sensoryWidth": 0.42,
+        "sensoryHeight": 0.36,
+        "sensoryDepth": 0.38,
+        "sensoryAngle": 1.08,
+        "supportSpread": 0.72,
+        "supportForeAft": 0.46,
+        "supportThickness": 0.09,
+        "footWidth": 0.16,
+        "footDepth": 0.22,
+        "groundHeight": -0.7
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/clay-implicit.png",
+        "bytes": 41474,
+        "sha256": "sha256:66b484a53d14bc5aec87dcdece4d580d987bf5824b0973418f8fbbfc04a836cf",
+        "role": "clay",
+        "sourceRelativePath": "annular-tripod-tall-keyhole/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/depth-implicit.png",
+          "bytes": 24410,
+          "sha256": "sha256:803220ffc180e6680bcb5f2d0085bd3b5830284263353e7bf17a5545155e6403",
+          "role": "depth",
+          "sourceRelativePath": "annular-tripod-tall-keyhole/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/annular-tripod-tall-keyhole/annular-tripod-tall-keyhole/normal-implicit.png",
+          "bytes": 49517,
+          "sha256": "sha256:730858de7fb03cc552b139598de7a4ff054e9eab201b2b461f08d95de6306790",
+          "role": "normal",
+          "sourceRelativePath": "annular-tripod-tall-keyhole/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "594d6b51b1ac"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-suspended",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.42,
+        "canopyHeight": 0.42,
+        "canopyDepth": 0.92,
+        "canopyArch": 0.2,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.12,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.56,
+        "pendantForward": 0.34,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.68,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png",
+        "bytes": 33224,
+        "sha256": "sha256:cee5aeea7b2806d44cffba6281c2c117fde5ee872901fa6138007ace5fe7876a",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-suspended/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+          "bytes": 20521,
+          "sha256": "sha256:f45cfe9fcc985124b6637a48d6cd2158f59865c17e31f0c2e3fa5ab6e7be0905",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-suspended/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+          "bytes": 40343,
+          "sha256": "sha256:2c6458caf19da3287f80ec3b0ca3b4ddf6fe0f6261169986ab939579f6897c9d",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-suspended/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "716c624608d4"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-suspended",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.42,
+        "canopyHeight": 0.42,
+        "canopyDepth": 0.92,
+        "canopyArch": 0.2,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.12,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.56,
+        "pendantForward": 0.34,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.68,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/clay-implicit.png",
+        "bytes": 33224,
+        "sha256": "sha256:cee5aeea7b2806d44cffba6281c2c117fde5ee872901fa6138007ace5fe7876a",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-suspended/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/depth-implicit.png",
+          "bytes": 20521,
+          "sha256": "sha256:f45cfe9fcc985124b6637a48d6cd2158f59865c17e31f0c2e3fa5ab6e7be0905",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-suspended/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-suspended/tripod-canopy-suspended/normal-implicit.png",
+          "bytes": 40343,
+          "sha256": "sha256:2c6458caf19da3287f80ec3b0ca3b4ddf6fe0f6261169986ab939579f6897c9d",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-suspended/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "6ea1681c006e"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.78,
+        "canopyHeight": 0.32,
+        "canopyDepth": 0.92,
+        "canopyArch": 0.12,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.12,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.76,
+        "pendantForward": 0.5,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.86,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png",
+        "bytes": 33874,
+        "sha256": "sha256:458e525a7455d16f8d216641bccc437eee0c32c974efb6e0d0c260c60bec40b5",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-wide-low-pendant/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+          "bytes": 20701,
+          "sha256": "sha256:d5ceec0db0c92234ac56ef508cf32086b54accde54f8216256ce702962020112",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-wide-low-pendant/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+          "bytes": 40792,
+          "sha256": "sha256:da3dab73d9a04e4ce5391b71b033e2f5e40e646922587d570fb0ae161beacc69",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-wide-low-pendant/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "6d6c3d597bc9"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.78,
+        "canopyHeight": 0.32,
+        "canopyDepth": 0.92,
+        "canopyArch": 0.12,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.12,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.76,
+        "pendantForward": 0.5,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.86,
+        "supportForeAft": 0.38,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/clay-implicit.png",
+        "bytes": 33874,
+        "sha256": "sha256:458e525a7455d16f8d216641bccc437eee0c32c974efb6e0d0c260c60bec40b5",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-wide-low-pendant/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/depth-implicit.png",
+          "bytes": 20701,
+          "sha256": "sha256:d5ceec0db0c92234ac56ef508cf32086b54accde54f8216256ce702962020112",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-wide-low-pendant/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-wide-low-pendant/tripod-canopy-wide-low-pendant/normal-implicit.png",
+          "bytes": 40792,
+          "sha256": "sha256:da3dab73d9a04e4ce5391b71b033e2f5e40e646922587d570fb0ae161beacc69",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-wide-low-pendant/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "56f83b9562af"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.28,
+        "canopyHeight": 0.42,
+        "canopyDepth": 1.28,
+        "canopyArch": 0.36,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.3,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.62,
+        "pendantForward": 0.58,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.68,
+        "supportForeAft": 0.54,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "anatomical-completion",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png",
+        "bytes": 37027,
+        "sha256": "sha256:7c59e91d26477da437f078cc5fe0499bf8399b5398d305305b510a66043568b9",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-asymmetric-deep/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+          "bytes": 22568,
+          "sha256": "sha256:d6add6557d7301daa33056d639e028b5e8cf3a86168a9f9ae2c3c674c77f0c4c",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-asymmetric-deep/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+          "bytes": 44992,
+          "sha256": "sha256:82e91af35c34c79cf0cea278e7fe0e719f296111b313b1763e889008ecb23652",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-asymmetric-deep/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/anatomical-completion.txt",
+        "bytes": 1093,
+        "sha256": "sha256:fbe051862bed4b0235ab4b8c10e8155aa2d1a7ba070a3087ea8da9892e9629af"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "ef50a8226611"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301",
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "armatureProgram": {
+        "id": "kaminos.lirm-armature-program.tripod-canopy.v0",
+        "parameterVocabulary": "kaminos.rare-gestalt-armature.tripod-canopy-18.v0",
+        "parameterSpecs": [
+          {
+            "id": "canopyWidth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 1.42,
+            "min": 0.86,
+            "max": 2.02,
+            "step": 0.15
+          },
+          {
+            "id": "canopyHeight",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.42,
+            "min": 0.24,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "canopyDepth",
+            "semanticRole": "dorsalCanopy",
+            "initial": 0.92,
+            "min": 0.52,
+            "max": 1.42,
+            "step": 0.12
+          },
+          {
+            "id": "canopyArch",
+            "semanticRole": "dorsalCanopyArch",
+            "initial": 0.2,
+            "min": -0.08,
+            "max": 0.48,
+            "step": 0.07
+          },
+          {
+            "id": "canopyRise",
+            "semanticRole": "dorsalCanopyElevation",
+            "initial": 0.88,
+            "min": 0.62,
+            "max": 1.28,
+            "step": 0.09
+          },
+          {
+            "id": "canopyAsymmetry",
+            "semanticRole": "controlledAsymmetry",
+            "initial": 0.12,
+            "min": -0.38,
+            "max": 0.38,
+            "step": 0.075
+          },
+          {
+            "id": "pendantWidth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.42,
+            "min": 0.22,
+            "max": 0.7,
+            "step": 0.07
+          },
+          {
+            "id": "pendantHeight",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.46,
+            "min": 0.24,
+            "max": 0.76,
+            "step": 0.075
+          },
+          {
+            "id": "pendantDepth",
+            "semanticRole": "suspendedSensoryMass",
+            "initial": 0.4,
+            "min": 0.22,
+            "max": 0.68,
+            "step": 0.065
+          },
+          {
+            "id": "pendantDrop",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.56,
+            "min": 0.28,
+            "max": 0.92,
+            "step": 0.09
+          },
+          {
+            "id": "pendantForward",
+            "semanticRole": "sensorySuspension",
+            "initial": 0.34,
+            "min": 0.08,
+            "max": 0.68,
+            "step": 0.08
+          },
+          {
+            "id": "suspensorSpread",
+            "semanticRole": "sensorySuspensor",
+            "initial": 0.3,
+            "min": 0.14,
+            "max": 0.52,
+            "step": 0.055
+          },
+          {
+            "id": "supportSpread",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.68,
+            "min": 0.38,
+            "max": 1.08,
+            "step": 0.09
+          },
+          {
+            "id": "supportForeAft",
+            "semanticRole": "tripodSupportField",
+            "initial": 0.38,
+            "min": 0.18,
+            "max": 0.68,
+            "step": 0.07
+          },
+          {
+            "id": "supportThickness",
+            "semanticRole": "tripodSupport",
+            "initial": 0.1,
+            "min": 0.055,
+            "max": 0.2,
+            "step": 0.025
+          },
+          {
+            "id": "footWidth",
+            "semanticRole": "groundContact",
+            "initial": 0.17,
+            "min": 0.09,
+            "max": 0.3,
+            "step": 0.035
+          },
+          {
+            "id": "footDepth",
+            "semanticRole": "groundContact",
+            "initial": 0.22,
+            "min": 0.11,
+            "max": 0.4,
+            "step": 0.045
+          },
+          {
+            "id": "groundHeight",
+            "semanticRole": "groundContact",
+            "initial": -0.72,
+            "min": -0.92,
+            "max": -0.5,
+            "step": 0.06
+          }
+        ]
+      },
+      "parameters": {
+        "canopyWidth": 1.28,
+        "canopyHeight": 0.42,
+        "canopyDepth": 1.28,
+        "canopyArch": 0.36,
+        "canopyRise": 0.88,
+        "canopyAsymmetry": 0.3,
+        "pendantWidth": 0.42,
+        "pendantHeight": 0.46,
+        "pendantDepth": 0.4,
+        "pendantDrop": 0.62,
+        "pendantForward": 0.58,
+        "suspensorSpread": 0.3,
+        "supportSpread": 0.68,
+        "supportForeAft": 0.54,
+        "supportThickness": 0.1,
+        "footWidth": 0.17,
+        "footDepth": 0.22,
+        "groundHeight": -0.72
+      },
+      "conditioningRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+      "conditioningConfig": {
+        "pixelWidth": 256,
+        "pixelHeight": 224,
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "raySource": "software-sdf-raymarch"
+      },
+      "referenceSet": "clay-depth-normal",
+      "stance": "prior-led-invention",
+      "seed": 718301,
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/clay-implicit.png",
+        "bytes": 37027,
+        "sha256": "sha256:7c59e91d26477da437f078cc5fe0499bf8399b5398d305305b510a66043568b9",
+        "role": "clay",
+        "sourceRelativePath": "tripod-canopy-asymmetric-deep/clay-implicit.png"
+      },
+      "references": [
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/depth-implicit.png",
+          "bytes": 22568,
+          "sha256": "sha256:d6add6557d7301daa33056d639e028b5e8cf3a86168a9f9ae2c3c674c77f0c4c",
+          "role": "depth",
+          "sourceRelativePath": "tripod-canopy-asymmetric-deep/depth-implicit.png"
+        },
+        {
+          "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/candidates/tripod-canopy-asymmetric-deep/tripod-canopy-asymmetric-deep/normal-implicit.png",
+          "bytes": 44992,
+          "sha256": "sha256:82e91af35c34c79cf0cea278e7fe0e719f296111b313b1763e889008ecb23652",
+          "role": "normal",
+          "sourceRelativePath": "tripod-canopy-asymmetric-deep/normal-implicit.png"
+        }
+      ],
+      "prompt": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/prompts/prior-led-invention.txt",
+        "bytes": 1139,
+        "sha256": "sha256:f6248e99f5770866a67b86d19597e39d3f032be2f171c278dbefc45ff8b0b462"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-pressure-20260719/cells/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301/output.png",
+      "settings": {
+        "model": "flux2-klein-9b",
+        "quantize": 4,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1,
+        "mlxCacheLimitGb": 48
+      },
+      "jobId": "bac9057d0b22"
+    }
+  ],
+  "sourceEvidence": {
+    "witnessReceipt": {
+      "path": "receipt.json",
+      "byteSize": 67035,
+      "sha256": "sha256:5648b5d9a8afd00b04a15287158a8e40e7294ac3a6c3758ea07f40ddd3059d04"
+    }
+  }
+}

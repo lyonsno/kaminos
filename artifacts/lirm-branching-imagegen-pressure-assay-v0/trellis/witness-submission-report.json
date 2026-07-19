@@ -1,0 +1,93 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 12,
+  "submitted": [
+    {
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-left",
+      "jobId": "f1b73dd0a3ec",
+      "response": {
+        "job_id": "f1b73dd0a3ec"
+      }
+    },
+    {
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-front",
+      "jobId": "50b7a428b3ae",
+      "response": {
+        "job_id": "50b7a428b3ae"
+      }
+    },
+    {
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-right",
+      "jobId": "1ccf98f8354a",
+      "response": {
+        "job_id": "1ccf98f8354a"
+      }
+    },
+    {
+      "witnessId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201-opposite",
+      "jobId": "adac9d2048c3",
+      "response": {
+        "job_id": "adac9d2048c3"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-left",
+      "jobId": "0ca34e12cbc2",
+      "response": {
+        "job_id": "0ca34e12cbc2"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-front",
+      "jobId": "a44c42a542af",
+      "response": {
+        "job_id": "a44c42a542af"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-right",
+      "jobId": "08a31c2d87f2",
+      "response": {
+        "job_id": "08a31c2d87f2"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202-opposite",
+      "jobId": "4052bcbc0328",
+      "response": {
+        "job_id": "4052bcbc0328"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-left",
+      "jobId": "8282525df95b",
+      "response": {
+        "job_id": "8282525df95b"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-front",
+      "jobId": "43c1793f3163",
+      "response": {
+        "job_id": "43c1793f3163"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-right",
+      "jobId": "88d16dc2f316",
+      "response": {
+        "job_id": "88d16dc2f316"
+      }
+    },
+    {
+      "witnessId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201-opposite",
+      "jobId": "483561ad3cfe",
+      "response": {
+        "job_id": "483561ad3cfe"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "12/12 witness jobs submitted through Greenroom"
+}

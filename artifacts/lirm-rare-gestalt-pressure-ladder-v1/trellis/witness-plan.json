@@ -1,0 +1,451 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-trellis-witness-plan.v0",
+  "status": "planned",
+  "requiredViews": [
+    {
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ],
+  "evidencePredicate": {
+    "expectedWitnessCount": 16,
+    "blankOrMissingFrameCountsAsSuccess": false,
+    "routeFallbackAllowed": false,
+    "apertureAndSuspensionRequireOppositeViewInspection": true,
+    "spatialClaimRequiresHumanVisualInspection": true
+  },
+  "cells": [
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-left",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "open-annulus-single-pendant",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9317384,
+        "sha256": "sha256:dbefc325d42120051aeda36402cac594117686174dbd81aa9ca0122c41e7a1b0"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-front",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "open-annulus-single-pendant",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9317384,
+        "sha256": "sha256:dbefc325d42120051aeda36402cac594117686174dbd81aa9ca0122c41e7a1b0"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-right",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "open-annulus-single-pendant",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9317384,
+        "sha256": "sha256:dbefc325d42120051aeda36402cac594117686174dbd81aa9ca0122c41e7a1b0"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-opposite",
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "open-annulus-single-pendant",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9317384,
+        "sha256": "sha256:dbefc325d42120051aeda36402cac594117686174dbd81aa9ca0122c41e7a1b0"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-left",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "slanted-annulus-prior-invention",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 9671428,
+        "sha256": "sha256:42174f196494e017b6b921f5a3d4e928cf2f11efd26b3f721bcce73a665669f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-front",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "slanted-annulus-prior-invention",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 9671428,
+        "sha256": "sha256:42174f196494e017b6b921f5a3d4e928cf2f11efd26b3f721bcce73a665669f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-right",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "slanted-annulus-prior-invention",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 9671428,
+        "sha256": "sha256:42174f196494e017b6b921f5a3d4e928cf2f11efd26b3f721bcce73a665669f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-opposite",
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "slanted-annulus-prior-invention",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 9671428,
+        "sha256": "sha256:42174f196494e017b6b921f5a3d4e928cf2f11efd26b3f721bcce73a665669f6"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-left",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "broad-canopy-multiple-pendants",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 8640376,
+        "sha256": "sha256:971bf6f016d262eeeb843881352a98d5f36e4ec184d69ccf348c575c5ff715c7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-front",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "broad-canopy-multiple-pendants",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 8640376,
+        "sha256": "sha256:971bf6f016d262eeeb843881352a98d5f36e4ec184d69ccf348c575c5ff715c7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-right",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "broad-canopy-multiple-pendants",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 8640376,
+        "sha256": "sha256:971bf6f016d262eeeb843881352a98d5f36e4ec184d69ccf348c575c5ff715c7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-opposite",
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "evidenceRole": "broad-canopy-multiple-pendants",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.glb",
+        "bytes": 8640376,
+        "sha256": "sha256:971bf6f016d262eeeb843881352a98d5f36e4ec184d69ccf348c575c5ff715c7"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-left",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "clustered-canopy-single-pendant",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9259068,
+        "sha256": "sha256:aff24c1a819cddfac114bd68e449e05aab6cf99a5f9247bc5c56c56a2c297604"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-front",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "clustered-canopy-single-pendant",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9259068,
+        "sha256": "sha256:aff24c1a819cddfac114bd68e449e05aab6cf99a5f9247bc5c56c56a2c297604"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-right",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "clustered-canopy-single-pendant",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9259068,
+        "sha256": "sha256:aff24c1a819cddfac114bd68e449e05aab6cf99a5f9247bc5c56c56a2c297604"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-opposite",
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "evidenceRole": "clustered-canopy-single-pendant",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "imagegenSeed": 718301,
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.glb",
+        "bytes": 9259068,
+        "sha256": "sha256:aff24c1a819cddfac114bd68e449e05aab6cf99a5f9247bc5c56c56a2c297604"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-rare-gestalt-trellis-20260719/witness/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ]
+}

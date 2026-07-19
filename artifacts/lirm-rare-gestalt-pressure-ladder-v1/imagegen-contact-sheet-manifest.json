@@ -1,0 +1,108 @@
+{
+  "schema": "kaminos.lirm-rare-gestalt-imagegen-contact-sheet-manifest.v0",
+  "columns": 2,
+  "rows": 6,
+  "width": 1024,
+  "cellWidth": 512,
+  "cellHeight": 570,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "annular-tripod-open-crown",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "annular-tripod-open-crown",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-open-crown-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "annular-tripod-open-crown",
+      "viewLabel": "PRIOR-LED"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-wide-slant-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "annular-tripod-wide-slant",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "annular-tripod-wide-slant",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "annular-tripod-wide-slant",
+      "viewLabel": "PRIOR-LED"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "annular-tripod-tall-keyhole",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-tall-keyhole-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "annular-tripod-tall-keyhole",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "annular-tripod-tall-keyhole",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/annular-tripod-tall-keyhole-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "annular-tripod-tall-keyhole",
+      "viewLabel": "PRIOR-LED"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "tripod-canopy-suspended",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-suspended-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "tripod-canopy-suspended",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "tripod-canopy-suspended",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-suspended-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "tripod-canopy-suspended",
+      "viewLabel": "PRIOR-LED"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "tripod-canopy-wide-low-pendant",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "tripod-canopy-wide-low-pendant",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "tripod-canopy-wide-low-pendant",
+      "viewLabel": "PRIOR-LED"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "anatomical-completion",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301.png",
+      "title": "tripod-canopy-asymmetric-deep",
+      "viewLabel": "ANATOMICAL"
+    },
+    {
+      "cellId": "tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301",
+      "candidateId": "tripod-canopy-asymmetric-deep",
+      "stance": "prior-led-invention",
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/imagegen-outputs/tripod-canopy-asymmetric-deep-clay-depth-normal-prior-led-invention-seed718301.png",
+      "title": "tripod-canopy-asymmetric-deep",
+      "viewLabel": "PRIOR-LED"
+    }
+  ]
+}

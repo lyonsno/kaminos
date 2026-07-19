@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-left.png",
+      "title": "OPEN ANNULUS / ANATOMICAL",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-front.png",
+      "title": "OPEN ANNULUS / ANATOMICAL",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-right.png",
+      "title": "OPEN ANNULUS / ANATOMICAL",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-open-crown-clay-depth-normal-anatomical-completion-seed718301-opposite.png",
+      "title": "OPEN ANNULUS / ANATOMICAL",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-left.png",
+      "title": "SLANT ANNULUS / PRIOR",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-front.png",
+      "title": "SLANT ANNULUS / PRIOR",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-right.png",
+      "title": "SLANT ANNULUS / PRIOR",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/annular-tripod-wide-slant-clay-depth-normal-prior-led-invention-seed718301-opposite.png",
+      "title": "SLANT ANNULUS / PRIOR",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-left.png",
+      "title": "LOW CANOPY / PRIOR",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-front.png",
+      "title": "LOW CANOPY / PRIOR",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-right.png",
+      "title": "LOW CANOPY / PRIOR",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-wide-low-pendant-clay-depth-normal-prior-led-invention-seed718301-opposite.png",
+      "title": "LOW CANOPY / PRIOR",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-left.png",
+      "title": "CLUSTER CANOPY / ANATOMICAL",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-front.png",
+      "title": "CLUSTER CANOPY / ANATOMICAL",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-right.png",
+      "title": "CLUSTER CANOPY / ANATOMICAL",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-rare-gestalt-pressure-ladder-v1/trellis/witness/frames/tripod-canopy-asymmetric-deep-clay-depth-normal-anatomical-completion-seed718301-opposite.png",
+      "title": "CLUSTER CANOPY / ANATOMICAL",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "schema": "kaminos.lirm-branching-trellis-adjudication.v0",
+  "status": "visually-inspected-three-spatial-hits",
+  "inspectedAt": "2026-07-19T11:08:14Z",
+  "route": {
+    "requested": "gpu-greenroom/trellis2mlx_fast",
+    "effectiveJobType": "trellis2mlx_fast",
+    "fallbackObserved": false,
+    "settings": {
+      "seed": 42,
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true
+    }
+  },
+  "runtimeSeconds": {
+    "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201": 98.45954918861389,
+    "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202": 77.93873500823975,
+    "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201": 74.06330275535583
+  },
+  "visualInspection": {
+    "inspectedAtOriginalResolution": true,
+    "evidence": {
+      "contactSheet": "trellis-witness-contact-sheet.png",
+      "contactSheetSha256": "sha256:92f70ac5b5ff3a4003ff951bf1ffac47bbd411e10971b478c0ec2567dfb40dbf",
+      "viewsPerAsset": [
+        "left",
+        "front",
+        "right",
+        "opposite"
+      ],
+      "sourceImagesCompared": true
+    },
+    "assets": [
+      {
+        "cellId": "forked-saddle-lirm02-clay-depth-normal-anatomical-completion-seed718201",
+        "evidenceRole": "rare-topology-preservation",
+        "spatialCoherence": "confirmed",
+        "lineageSurvival": "strong",
+        "visibleAssessment": "The bifurcated organism remains one coherent volume across all four views. Both neck and head branches, the shared saddle torso, the two large negative-space arches, grounded limb stubs, pores, and head asymmetry survive. The opposite view proves the fork is volumetric anatomy rather than a front-view texture or silhouette trick.",
+        "limitations": [
+          "The rear is simpler than the authored front and carries little explicit tail or dorsal anatomy.",
+          "The clay surface and circular pores remain visually close to the conditioning language."
+        ]
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-anatomical-completion-seed718202",
+        "evidenceRole": "clean-adherence-baseline",
+        "spatialCoherence": "confirmed",
+        "lineageSurvival": "moderate",
+        "visibleAssessment": "The side-view source resolves into a coherent squat crawler with a readable face, paired forelimbs, rear appendages, dorsal masses, and a complete back. The broad low body and lopsided front-to-rear mass survive, while much of the discrete bead rhythm is smoothed into one soft organism.",
+        "limitations": [
+          "Segment separation is substantially weaker than in the source armature and source image.",
+          "The inferred rear becomes a broad undifferentiated body mass."
+        ]
+      },
+      {
+        "cellId": "asymmetric-bead-chain-lirm07-clay-depth-normal-prior-led-invention-seed718201",
+        "evidenceRole": "productive-prior-extrapolation",
+        "spatialCoherence": "confirmed",
+        "lineageSurvival": "strong",
+        "visibleAssessment": "Imagegen-added lobes, pores, head anatomy, and extra locomotor structure become stable 3D features. Trellis preserves visibly separated side and dorsal modules, builds a coherent multi-limb crawler, and closes the unseen rear without flattening the segmentation into paint. This is the richest cast of the pair and the clearest proof that model-prior invention can remain lineage-bearing through 3D reconstruction.",
+        "limitations": [
+          "The face moves toward a familiar cute-creature prior.",
+          "The rear is coherent but less articulated than the source-facing side."
+        ]
+      }
+    ]
+  },
+  "findings": {
+    "rareForkTopologySurvivedFullRoute": true,
+    "priorAddedAnatomyBecameCoherent3d": true,
+    "strictAdherenceProducesCleanSpatialBaseline": true,
+    "priorPressureCanPreserveLineageWhileIncreasingAnatomy": true,
+    "trellisHomogenizesSomeFineSegmentation": true,
+    "fullRouteConclusion": "Procedural SDF armatures can carry rare organism gestalt through conditioned image generation and into coherent textured Trellis casts. The route now supports both topology-preserving completion and bounded prior-led anatomical invention."
+  },
+  "nextAssay": {
+    "status": "selected",
+    "name": "rare-gestalt-pressure-ladder-v1",
+    "objective": "Increase silhouette and topology diversity while measuring where imagegen and Trellis preserve, enrich, or collapse each lineage.",
+    "design": {
+      "armatureFamilies": [
+        "forked-saddle descendants with branch-height, aperture, and support-count variation",
+        "asymmetric bead-chain descendants with module-count, mass-order, and locomotor-support variation",
+        "at least two new rare gestalts whose identity depends on large negative space or non-quadruped support topology"
+      ],
+      "imagegenPressure": [
+        "anatomical-completion",
+        "prior-led-invention"
+      ],
+      "promotionRule": "Promote cells that preserve the authored gestalt or produce a clearly lineage-bearing anatomical extrapolation; visual novelty without lineage remains insufficient.",
+      "trellisProbe": "Promote a small discriminating subset through the same six-step 512 route so topology survival remains directly comparable."
+    }
+  },
+  "lastTrustworthyEvidence": "Three route-validated GLBs were rendered from four azimuths each and inspected against their selected imagegen sources at original resolution. All three are spatially coherent; fork preservation and bead prior-led invention are strong lineage hits."
+}

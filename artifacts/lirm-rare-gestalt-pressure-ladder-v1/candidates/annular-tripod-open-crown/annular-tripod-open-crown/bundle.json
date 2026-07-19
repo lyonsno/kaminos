@@ -1,0 +1,237 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-bundle.v0",
+  "route": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "annular-tripod-open-crown",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.annular-tripod.v0",
+    "parameterVocabulary": "kaminos.rare-gestalt-armature.annular-tripod-17.v0",
+    "parameterSpecs": [
+      {
+        "id": "apertureWidth",
+        "semanticRole": "loadBearingAperture",
+        "initial": 0.94,
+        "min": 0.56,
+        "max": 1.52,
+        "step": 0.12
+      },
+      {
+        "id": "apertureHeight",
+        "semanticRole": "loadBearingAperture",
+        "initial": 0.96,
+        "min": 0.54,
+        "max": 1.5,
+        "step": 0.12
+      },
+      {
+        "id": "ringThickness",
+        "semanticRole": "annularBody",
+        "initial": 0.17,
+        "min": 0.1,
+        "max": 0.31,
+        "step": 0.035
+      },
+      {
+        "id": "ringDepth",
+        "semanticRole": "annularBody",
+        "initial": 0.22,
+        "min": 0.12,
+        "max": 0.42,
+        "step": 0.05
+      },
+      {
+        "id": "ringRise",
+        "semanticRole": "annularElevation",
+        "initial": 0.82,
+        "min": 0.5,
+        "max": 1.22,
+        "step": 0.1
+      },
+      {
+        "id": "ringTwist",
+        "semanticRole": "controlledDepthAsymmetry",
+        "initial": 0.1,
+        "min": -0.32,
+        "max": 0.32,
+        "step": 0.07
+      },
+      {
+        "id": "ringSkew",
+        "semanticRole": "controlledLateralAsymmetry",
+        "initial": 0.08,
+        "min": -0.3,
+        "max": 0.3,
+        "step": 0.065
+      },
+      {
+        "id": "sensoryWidth",
+        "semanticRole": "offAxisSensoryMass",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.7,
+        "step": 0.07
+      },
+      {
+        "id": "sensoryHeight",
+        "semanticRole": "offAxisSensoryMass",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.62,
+        "step": 0.06
+      },
+      {
+        "id": "sensoryDepth",
+        "semanticRole": "offAxisSensoryMass",
+        "initial": 0.38,
+        "min": 0.2,
+        "max": 0.66,
+        "step": 0.065
+      },
+      {
+        "id": "sensoryAngle",
+        "semanticRole": "sensoryPlacement",
+        "initial": 0.7,
+        "min": 0.28,
+        "max": 1.22,
+        "step": 0.1
+      },
+      {
+        "id": "supportSpread",
+        "semanticRole": "tripodSupportField",
+        "initial": 0.72,
+        "min": 0.42,
+        "max": 1.12,
+        "step": 0.09
+      },
+      {
+        "id": "supportForeAft",
+        "semanticRole": "tripodSupportField",
+        "initial": 0.34,
+        "min": 0.16,
+        "max": 0.62,
+        "step": 0.07
+      },
+      {
+        "id": "supportThickness",
+        "semanticRole": "tripodSupport",
+        "initial": 0.09,
+        "min": 0.05,
+        "max": 0.18,
+        "step": 0.025
+      },
+      {
+        "id": "footWidth",
+        "semanticRole": "groundContact",
+        "initial": 0.16,
+        "min": 0.09,
+        "max": 0.3,
+        "step": 0.035
+      },
+      {
+        "id": "footDepth",
+        "semanticRole": "groundContact",
+        "initial": 0.22,
+        "min": 0.11,
+        "max": 0.38,
+        "step": 0.045
+      },
+      {
+        "id": "groundHeight",
+        "semanticRole": "groundContact",
+        "initial": -0.7,
+        "min": -0.9,
+        "max": -0.48,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "apertureWidth": 0.94,
+    "apertureHeight": 0.96,
+    "ringThickness": 0.17,
+    "ringDepth": 0.22,
+    "ringRise": 0.82,
+    "ringTwist": 0.1,
+    "ringSkew": 0.08,
+    "sensoryWidth": 0.42,
+    "sensoryHeight": 0.36,
+    "sensoryDepth": 0.38,
+    "sensoryAngle": 0.7,
+    "supportSpread": 0.72,
+    "supportForeAft": 0.34,
+    "supportThickness": 0.09,
+    "footWidth": 0.16,
+    "footDepth": 0.22,
+    "groundHeight": -0.7
+  },
+  "renderMode": "raymarched-implicit-field",
+  "fieldModel": {
+    "kind": "smooth-sdf-armature-program",
+    "surfaceThreshold": 0.0065,
+    "smoothUnionK": 0.075,
+    "primitiveKinds": [
+      "capsule",
+      "ellipsoid"
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 224,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "implicitPrimitiveCount": 31,
+  "semanticRoles": [
+    "annularBody",
+    "offAxisSensoryMass",
+    "tripodSupport",
+    "groundContact"
+  ],
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "annular-tripod-open-crown/clay-implicit.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "annular-tripod-open-crown/depth-implicit.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "annular-tripod-open-crown/normal-implicit.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "annular-tripod-open-crown/mask-implicit.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "annular-tripod-open-crown/semantic-implicit.svg"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "annular-tripod-open-crown/trellis-source.svg",
+    "rasterPath": "annular-tripod-open-crown/trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x224",
+      "displayedPixels": "512x512"
+    }
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}
