@@ -378,7 +378,8 @@ assert.match(benchWitnessSource, /receivingTransportZones\.length\s*<\s*2/, 'ben
 assert.match(benchWitnessSource, /wgsl-four-neighbor-topology-retention-v0/, 'bench witness requires the live topology diagnostic contract');
 assert.match(benchWitnessSource, /averageNeighborRetention/, 'bench witness requires quantitative topology retention evidence');
 assert.match(benchWitnessSource, /movingLockedParticleCount/, 'bench witness requires the moving-lock population rather than visual inference alone');
-assert.match(benchWitnessSource, /neighborRetentionHistogram\.reduce\(\(sum, count\) => sum \+ count, 0\) !== lastDebugState\.runtime\.particleCount/, 'bench witness requires exact topology histogram population accounting');
+assert.match(benchWitnessSource, /activeParticleCount \+ dormantParticleCount !== lastDebugState\.runtime\.particleCount/, 'bench witness requires exact active and dormant population accounting');
+assert.match(benchWitnessSource, /neighborRetentionHistogram\.reduce\(\(sum, count\) => sum \+ count, 0\) !== activeParticleCount/, 'bench witness requires exact active topology histogram population accounting');
 assert.match(benchWitnessSource, /requestedColorMode\s*!==\s*effectiveColorMode/, 'bench witness rejects silent color-mode fallback');
 assert.match(benchWitnessSource, /requestedParticleShiftStrength\s*!==\s*effectiveParticleShiftStrength/, 'bench witness rejects silent particle-shift fallback');
 assert.match(benchWitnessSource, /effectiveParticleShiftStrength === 0 && lastDebugState\.runtime\?\.particleShiftPassCount !== 0/, 'zero-strength witness rejects hidden particle-shift work');

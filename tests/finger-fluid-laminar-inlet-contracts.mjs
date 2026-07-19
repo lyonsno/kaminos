@@ -18,6 +18,11 @@ assert.equal(
   'wgsl-analytic-laminar-inlet-fixture-presentation-v0',
   'the mathematical apertures have a named operator-visible presentation route',
 );
+assert.equal(
+  webgpuCore.KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT,
+  'wgsl-distinct-flux-cadenced-inlet-population-v0',
+  'laminar sources distinguish a finite physical reservoir population from the dormant recycle pool',
+);
 assert.deepEqual(
   webgpuCore.KAMINOS_FINGER_FLUID_INLET_PROFILES,
   ['round_poiseuille', 'slot_poiseuille', 'porous_darcy'],
@@ -63,12 +68,42 @@ assert.ok(Math.abs(slotFlux - (8 / 3) * slot.halfWidth * slot.halfHeight * slot.
 assert.ok(Math.abs(porousFlux - 4 * porous.halfWidth * porous.halfHeight * porous.maximumSpeed) < 1e-12);
 
 const allocations = [0, 0, 0];
+const nextSourceOrdinals = [0, 0, 0];
 for (let index = 0; index < 1000; index += 1) {
   const allocation = webgpuCore.allocateFingerFluidLaminarInletParticle(index);
   allocations[allocation.sourceIndex] += 1;
-  assert.equal(allocation.localOrdinal, Math.floor(index / 10));
+  assert.equal(
+    allocation.localOrdinal,
+    nextSourceOrdinals[allocation.sourceIndex],
+    'each source owns one contiguous ordinal sequence without coincident allocation-block aliases',
+  );
+  nextSourceOrdinals[allocation.sourceIndex] += 1;
 }
 assert.deepEqual(allocations, [400, 300, 300], 'finite particle pool allocation remains exact and uncapped');
+
+const population = webgpuCore.createFingerFluidLaminarSourcePopulation(24_576, descriptors);
+assert.equal(population.contract, webgpuCore.KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT);
+assert.equal(population.particleCount, 24_576);
+assert.equal(population.sources.reduce((sum, source) => sum + source.particleCount, 0), 24_576);
+assert.equal(population.sources.reduce((sum, source) => sum + source.initialActiveCount + source.initialDormantCount, 0), 24_576);
+for (const source of population.sources) {
+  assert.ok(source.initialActiveCount > 0, JSON.stringify(source));
+  assert.ok(source.initialActiveCount <= source.reservoirCapacity, JSON.stringify(source));
+  assert.ok(source.initialDormantCount > source.initialActiveCount, JSON.stringify(source));
+  assert.equal(source.uniqueInitialActivePositionCount, source.initialActiveCount, JSON.stringify(source));
+  assert.ok(source.minimumInitialActiveSeparation >= 0.035, JSON.stringify(source));
+  assert.ok(source.releaseRateRelativeError <= 0.03, JSON.stringify(source));
+  assert.ok(source.cycleFrames > source.reservoirResidenceFrames, JSON.stringify(source));
+}
+
+for (const descriptor of descriptors) {
+  const deepCore = webgpuCore.evaluateFingerFluidLaminarInletBoundaryBlend(descriptor, -descriptor.reservoirLength * 0.5);
+  const mouth = webgpuCore.evaluateFingerFluidLaminarInletBoundaryBlend(descriptor, 0);
+  const released = webgpuCore.evaluateFingerFluidLaminarInletBoundaryBlend(descriptor, descriptor.mouthTransitionLength);
+  assert.equal(deepCore.profileWeight, 1);
+  assert.ok(mouth.profileWeight > 0 && mouth.profileWeight < 1, JSON.stringify(mouth));
+  assert.equal(released.profileWeight, 0);
+}
 
 for (let index = 0; index < 300; index += 1) {
   const sample = webgpuCore.sampleFingerFluidLaminarInletParticle(index, descriptors);
@@ -84,11 +119,11 @@ for (let index = 0; index < 300; index += 1) {
 const diagnosticParticleCount = 1000;
 const diagnosticParticles = new Float32Array(diagnosticParticleCount * 16);
 for (let index = 0; index < diagnosticParticleCount; index += 1) {
-  const sample = webgpuCore.sampleFingerFluidLaminarInletParticle(index, descriptors);
+  const sample = webgpuCore.sampleFingerFluidLaminarInletParticle(index, descriptors, { particleCount: diagnosticParticleCount });
   const offset = index * 16;
   diagnosticParticles.set(sample.position, offset);
   diagnosticParticles.set(sample.velocity, offset + 8);
-  diagnosticParticles[offset + 11] = sample.phase;
+  diagnosticParticles[offset + 11] = sample.activeAtFrameZero ? sample.phase : -sample.phase;
 }
 const inletDiagnostics = webgpuCore.measureFingerFluidLaminarInletDiagnostics(
   diagnosticParticles,
@@ -101,7 +136,10 @@ assert.equal(inletDiagnostics.accountedParticleCount, diagnosticParticleCount);
 assert.deepEqual(inletDiagnostics.inlets.map(inlet => inlet.taggedParticleCount), [400, 300, 300]);
 for (const inlet of inletDiagnostics.inlets) {
   assert.equal(inlet.taggedParticleCount, inlet.expectedParticleCount);
-  assert.equal(inlet.inletCoreParticleCount, inlet.taggedParticleCount);
+  assert.equal(inlet.activeParticleCount + inlet.dormantParticleCount, inlet.taggedParticleCount);
+  assert.ok(inlet.activeParticleCount > 0, JSON.stringify(inlet));
+  assert.equal(inlet.inletCoreParticleCount, inlet.activeParticleCount);
+  assert.equal(inlet.sourceLeakParticleCount, 0);
   assert.ok(inlet.profileNormalizedRmse < 1e-6, JSON.stringify(inlet));
   assert.ok(inlet.meanCrossflowRatio < 1e-6, JSON.stringify(inlet));
   assert.equal(inlet.positiveAxialFlowRatio, 1);
@@ -110,6 +148,10 @@ for (const inlet of inletDiagnostics.inlets) {
 }
 
 assert.match(webgpuCoreSource, /fn laminar_inlet_sample\(index: u32\) -> LaminarInletSample/);
+assert.match(webgpuCoreSource, /fn laminar_inlet_source_local_ordinal/);
+assert.match(webgpuCoreSource, /fn laminar_inlet_release_phase/);
+assert.match(webgpuCoreSource, /lanePhaseOffset/);
+assert.match(webgpuCoreSource, /particle\.velocity\.w < 0\.0/);
 assert.match(webgpuCoreSource, /fn apply_laminar_inlet_boundary/);
 assert.match(webgpuCoreSource, /params\.particleShift\.z > 0\.5/);
 assert.match(webgpuCoreSource, /inletCoreWeight/);
@@ -125,5 +167,7 @@ assert.match(witnessSource, /laminar inlet diagnostics missing or partial/);
 assert.match(witnessSource, /laminar inlet profile fit escaped its analytic contract/);
 assert.match(witnessSource, /laminar inlet flux escaped its analytic contract/);
 assert.match(witnessSource, /laminar inlet developed material crossflow before release/);
+assert.match(witnessSource, /laminar inlet source population is coincident or overpacked/);
+assert.match(witnessSource, /laminar inlet startup leaked outside its attributable aperture/);
 
 console.log('finger fluid laminar inlet contracts passed');
