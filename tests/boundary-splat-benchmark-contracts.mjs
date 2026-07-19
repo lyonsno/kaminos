@@ -80,6 +80,11 @@ assert.match(
 );
 assert.match(
   witness,
+  /tierSweepEval\.exceptionDetails[\s\S]*footprint-tier-sweep-runtime-exception/,
+  'a browser-side oracle failure is preserved as an exact durable execution error instead of collapsing to an empty sweep',
+);
+assert.match(
+  witness,
   /target\.visual\.camera[\s\S]*target-oracle-camera-mismatch/,
   'oracle sweep binds its target salience receipt to the camera that rendered the exact target',
 );

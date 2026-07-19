@@ -3435,6 +3435,12 @@ async function main() {
         awaitPromise: true,
         returnByValue: true,
       });
+      if (tierSweepEval.exceptionDetails) {
+        const exceptionDescription = tierSweepEval.exceptionDetails.exception?.description
+          || tierSweepEval.exceptionDetails.text
+          || 'unknown-browser-exception';
+        throw new Error(`footprint-tier-sweep-runtime-exception:${exceptionDescription}`);
+      }
       boundarySplatFootprintTierSweep = tierSweepEval.result.value;
       const arms = boundarySplatFootprintTierSweep?.arms;
       if (!Array.isArray(arms) || arms.length !== boundarySplatFootprintTierArms.length) {
