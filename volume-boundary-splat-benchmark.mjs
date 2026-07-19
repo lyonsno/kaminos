@@ -279,6 +279,7 @@ function initialFalseClosureChecks() {
     incompleteFootprintTierSweep: false,
     mismatchedFootprintTierPopulation: false,
     mismatchedFootprintTierCalibration: false,
+    missingFootprintTierTargetComparison: false,
     incompleteWorkloadReceipt: false,
     staleCountAuthority: false,
     capacityTruncatedWorkload: false,
@@ -393,6 +394,7 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
       incompleteFootprintTierSweep: false,
       mismatchedFootprintTierPopulation: false,
       mismatchedFootprintTierCalibration: false,
+      missingFootprintTierTargetComparison: false,
     };
   }
   const expectedArmIds = expectedArms.map(arm => arm.id);
@@ -433,12 +435,45 @@ export function footprintTierSweepReceiptChecks({ requested, expectedArms, sweep
       || Number(calibration?.mediumThreshold) !== Number(treatment?.mediumThreshold)
       || Number(calibration?.heroThreshold) !== Number(treatment?.heroThreshold);
   });
+  const target = sweep?.target;
+  const targetVisual = target?.visual;
+  const targetPassReceipt = targetVisual?.selectiveHeadLivePassReceipt;
+  const targetPreview = targetVisual?.preview;
+  const baselineVisual = sweep?.arms?.find(arm => arm?.id === expectedArmIds[0])?.visual;
+  const missingFootprintTierTargetComparison = target?.effectiveMode !== 'off'
+    || target?.fallbackReason != null
+    || target?.volumeReconstructionStyle !== 'native-3d-compute-fluid-raymarch-v0'
+    || targetVisual?.sampleAuthority !== 'render-only-frozen-sim-state'
+    || targetVisual?.simAdvanced !== false
+    || targetVisual?.sameStateCaptureId !== 'footprint-tier-raymarch-target'
+    || !Number.isInteger(Number(targetVisual?.simStepCount))
+    || targetVisual?.simStepCount !== baselineVisual?.simStepCount
+    || targetVisual?.effectiveRoute !== baselineVisual?.effectiveRoute
+    || !Number.isInteger(Number(targetPreview?.width))
+    || Number(targetPreview?.width) <= 0
+    || !Number.isInteger(Number(targetPreview?.height))
+    || Number(targetPreview?.height) <= 0
+    || targetPassReceipt?.raymarchApplied !== true
+    || targetPassReceipt?.splatApplied !== false
+    || expectedArms.some(expectedArm => {
+      const arm = sweep?.arms?.find(candidate => candidate?.id === expectedArm.id);
+      const comparison = arm?.targetComparison;
+      return comparison?.identity !== 'same-state-rgba8-target-relative-footprint-tier-metrics-v0'
+        || arm?.visual?.simStepCount !== targetVisual?.simStepCount
+        || arm?.visual?.effectiveRoute !== targetVisual?.effectiveRoute
+        || Number(comparison?.width) !== Number(targetPreview?.width)
+        || Number(comparison?.height) !== Number(targetPreview?.height)
+        || !Number.isFinite(Number(comparison?.rgbMaeNormalized))
+        || !Number.isFinite(Number(comparison?.targetWeightedRgbMaeNormalized))
+        || !Number.isFinite(Number(comparison?.targetPeakLumaRetention));
+    });
   return {
     incompleteFootprintTierSweep: sweep?.ok !== true
       || receivedArmIds.length !== expectedArmIds.length
       || receivedArmIds.some((id, index) => id !== expectedArmIds[index]),
     mismatchedFootprintTierPopulation,
     mismatchedFootprintTierCalibration,
+    missingFootprintTierTargetComparison,
   };
 }
 

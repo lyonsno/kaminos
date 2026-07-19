@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
+import { compareRgbaPreviews } from './volume-rgba-comparison.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -3243,6 +3244,7 @@ async function main() {
           const activeBefore = prototype.debugState().active === true;
           const controlsBefore = { ...(prototype.debugState().controls || {}) };
           const arms = [];
+          let target = null;
           await prototype.setActive(false);
           await new Promise(resolve => setTimeout(resolve, 100));
           try {
@@ -3326,6 +3328,7 @@ async function main() {
                   sampleAuthority: visual.sampleAuthority,
                   simAdvanced: visual.simAdvanced,
                   sameStateCaptureId: visual.sameStateCaptureId,
+                  effectiveRoute: visual.effectiveRoute,
                   frameCount: visual.frameCount,
                   simStepCount: visual.simStepCount,
                   candidateCount: visual.boundarySplatCandidateCount,
@@ -3343,6 +3346,42 @@ async function main() {
                 },
               });
             }
+            prototype.setControls({
+              ...controlsBefore,
+              lookFreeze: 1,
+              boundarySplatMode: 'off',
+            });
+            await new Promise(resolve => setTimeout(resolve, 40));
+            const targetVisual = await prototype.sampleFrame({
+              advanceSim: false,
+              allowInactive: true,
+              includeRgba: false,
+              sameStateCaptureId: 'footprint-tier-raymarch-target',
+            });
+            if (targetVisual?.ok !== true) {
+              throw new Error('footprint-tier-raymarch-target-failed:' + (targetVisual?.reason || 'unknown'));
+            }
+            const targetState = prototype.debugState();
+            target = {
+              effectiveMode: targetState.boundarySplatMode,
+              fallbackReason: targetState.boundarySplatFallbackReason,
+              volumeReconstructionStyle: targetVisual.volumeReconstructionStyle,
+              visual: {
+                sampleAuthority: targetVisual.sampleAuthority,
+                simAdvanced: targetVisual.simAdvanced,
+                sameStateCaptureId: targetVisual.sameStateCaptureId,
+                frameCount: targetVisual.frameCount,
+                simStepCount: targetVisual.simStepCount,
+                effectiveRoute: targetVisual.effectiveRoute,
+                selectiveHeadLivePassReceipt: targetVisual.selectiveHeadLivePassReceipt,
+                litPixels: targetVisual.litPixels,
+                meanLuma: targetVisual.meanLuma,
+                fireLikePixels: targetVisual.fireLikePixels,
+                emissiveLikePixels: targetVisual.emissiveLikePixels,
+                smokeLikePixels: targetVisual.smokeLikePixels,
+                preview: targetVisual.preview,
+              },
+            };
           } finally {
             prototype.setControls(controlsBefore);
             if (activeBefore) await prototype.setActive(true);
@@ -3353,6 +3392,7 @@ async function main() {
             activeBefore,
             warmupSamples: ${boundarySplatGpuProfileWarmupSamples},
             measuredSamples: ${Math.max(0, boundarySplatGpuProfileSamples - boundarySplatGpuProfileWarmupSamples)},
+            target,
             arms,
           };
         })()`,
@@ -3365,6 +3405,35 @@ async function main() {
         throw new Error(`footprint-tier-sweep-incomplete:${arms?.length ?? 'missing'}:${boundarySplatFootprintTierArms.length}`);
       }
       const baseline = arms[0];
+      const target = boundarySplatFootprintTierSweep.target;
+      const targetPreview = target?.visual?.preview;
+      if (!targetPreview
+        || !Array.isArray(targetPreview.rgba)
+        || !Number.isFinite(targetPreview.width)
+        || !Number.isFinite(targetPreview.height)) {
+        throw new Error('footprint-tier-raymarch-target-preview-missing');
+      }
+      const targetPreviewPath = resolve(dirname(out), 'footprint-tier-raymarch-target.png');
+      writeRgbaPng(targetPreviewPath, targetPreview.width, targetPreview.height, targetPreview.rgba);
+      if (target.effectiveMode !== 'off'
+        || target.fallbackReason != null
+        || target.visual?.sampleAuthority !== 'render-only-frozen-sim-state'
+        || target.visual?.simAdvanced !== false
+        || target.visual?.sameStateCaptureId !== 'footprint-tier-raymarch-target'
+        || target.visual?.simStepCount !== baseline.simStepCount
+        || target.visual?.effectiveRoute !== baseline.visual?.effectiveRoute
+        || target.visual?.selectiveHeadLivePassReceipt?.raymarchApplied !== true
+        || target.visual?.selectiveHeadLivePassReceipt?.splatApplied !== false
+        || !Number.isFinite(Number(target.visual?.meanLuma))
+        || Number(target.visual?.litPixels) <= 0) {
+        throw new Error(`footprint-tier-raymarch-target-invalid:${JSON.stringify(target)}`);
+      }
+      target.visual.preview = {
+        path: targetPreviewPath,
+        width: targetPreview.width,
+        height: targetPreview.height,
+      };
+      target.previewPath = targetPreviewPath;
       for (const arm of arms) {
         const preview = arm?.visual?.preview;
         if (!preview || !Array.isArray(preview.rgba) || !Number.isFinite(preview.width) || !Number.isFinite(preview.height)) {
@@ -3372,6 +3441,12 @@ async function main() {
         }
         const previewPath = resolve(dirname(out), `footprint-tier-${arm.id}.png`);
         writeRgbaPng(previewPath, preview.width, preview.height, preview.rgba);
+        arm.targetComparison = compareRgbaPreviews(preview, targetPreview);
+        if (!Number.isFinite(arm.targetComparison.rgbMaeNormalized)
+          || !Number.isFinite(arm.targetComparison.targetWeightedRgbMaeNormalized)
+          || !Number.isFinite(arm.targetComparison.targetPeakLumaRetention)) {
+          throw new Error(`footprint-tier-target-comparison-invalid:${arm.id}:${JSON.stringify(arm.targetComparison)}`);
+        }
         arm.visual.preview = { path: previewPath, width: preview.width, height: preview.height };
         arm.previewPath = previewPath;
         const effectiveTier = arm.effectiveTier;

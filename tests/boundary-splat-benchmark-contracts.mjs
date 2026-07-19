@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import * as benchmarkModule from '../volume-boundary-splat-benchmark.mjs';
+import { compareRgbaPreviews } from '../volume-rgba-comparison.mjs';
 import {
   acceptedFullSupportBasinReceipt,
   basinReceiptChecks,
@@ -76,13 +77,30 @@ assert.match(
   /footprint-tier-effective-control-mismatch[\s\S]*footprint-tier-candidate-identity-changed[\s\S]*footprint-tier-energy-conservation-failed/,
   'tier sweep fails loud on fallback controls, candidate drift, or broken optical conservation',
 );
+const footprintRadiusSweepSource = witness.slice(
+  witness.indexOf('if (boundarySplatFootprintSweepRadii.length > 0)'),
+  witness.indexOf('if (boundarySplatFootprintTierArms.length > 0)'),
+);
+const footprintTierSweepSource = witness.slice(
+  witness.indexOf('if (boundarySplatFootprintTierArms.length > 0)'),
+  witness.indexOf("phase = 'collect-report'"),
+);
+assert.doesNotMatch(
+  footprintRadiusSweepSource,
+  /footprint-tier-raymarch-target|footprint-tier-target-comparison/,
+  'the ordinary radius sweep does not impersonate the held-tier target transaction',
+);
+assert.match(
+  footprintTierSweepSource,
+  /boundarySplatMode:\s*'off'[\s\S]*footprint-tier-raymarch-target[\s\S]*footprint-tier-target-comparison/,
+  'tier sweep captures one exact same-state native raymarch target and compares every splat arm against it',
+);
 assert.equal(
   typeof benchmarkModule.footprintTierSweepReceiptChecks,
   'function',
   'tier-arm completeness is an executable false-closure predicate',
 );
-assert.deepEqual(
-  benchmarkModule.footprintTierSweepReceiptChecks({
+const authenticTierSweepFixture = {
     requested: true,
     expectedArms: [
       { id: 'base-056' },
@@ -91,12 +109,31 @@ assert.deepEqual(
     ],
     sweep: {
       ok: true,
+      target: {
+        effectiveMode: 'off',
+        volumeReconstructionStyle: 'native-3d-compute-fluid-raymarch-v0',
+        visual: {
+          sampleAuthority: 'render-only-frozen-sim-state',
+          simAdvanced: false,
+          sameStateCaptureId: 'footprint-tier-raymarch-target',
+          simStepCount: 61,
+          effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+          selectiveHeadLivePassReceipt: { raymarchApplied: true, splatApplied: false },
+          preview: { width: 2, height: 1 },
+        },
+      },
       arms: [
-        { id: 'base-056' },
-        { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+        { id: 'base-056', visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' }, targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.1, targetWeightedRgbMaeNormalized: 0.11, targetPeakLumaRetention: 0.9 } },
+        {
+          id: 'importance-070-098',
+          visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.09, targetWeightedRgbMaeNormalized: 0.1, targetPeakLumaRetention: 0.95 },
+          audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+        },
         {
           id: 'random-070-098',
           matchCountsFrom: 'importance-070-098',
+          visual: { simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
           mediumThreshold: 0.82,
           heroThreshold: 0.94,
           matchedRandomTierThresholds: {
@@ -106,18 +143,39 @@ assert.deepEqual(
             mediumThreshold: 0.82,
             heroThreshold: 0.94,
           },
+          targetComparison: { identity: 'same-state-rgba8-target-relative-footprint-tier-metrics-v0', width: 2, height: 1, rgbMaeNormalized: 0.11, targetWeightedRgbMaeNormalized: 0.12, targetPeakLumaRetention: 0.91 },
           audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
         },
       ],
     },
-  }),
+};
+assert.deepEqual(
+  benchmarkModule.footprintTierSweepReceiptChecks(authenticTierSweepFixture),
   {
     incompleteFootprintTierSweep: false,
     mismatchedFootprintTierPopulation: false,
     mismatchedFootprintTierCalibration: false,
+    missingFootprintTierTargetComparison: false,
   },
   'a complete exact count-matched tier sweep preserves bounded optimization authority',
 );
+for (const malformedTarget of [
+  { sameStateCaptureId: 'stale-target', simStepCount: 61, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
+  { sameStateCaptureId: 'footprint-tier-raymarch-target', simStepCount: 60, effectiveRoute: 'native-3d-compute-fluid-raymarch-v0' },
+  { sameStateCaptureId: 'footprint-tier-raymarch-target', simStepCount: 61, effectiveRoute: 'fallback-route' },
+]) {
+  const sweep = structuredClone(authenticTierSweepFixture.sweep);
+  Object.assign(sweep.target.visual, malformedTarget);
+  assert.equal(
+    benchmarkModule.footprintTierSweepReceiptChecks({
+      requested: true,
+      expectedArms: authenticTierSweepFixture.expectedArms,
+      sweep,
+    }).missingFootprintTierTargetComparison,
+    true,
+    'stale target capture identity, simulator step, or route denies optimization authority',
+  );
+}
 assert.equal(
   benchmarkModule.footprintTierSweepReceiptChecks({
     requested: true,
@@ -180,6 +238,46 @@ for (const malformedRandomArm of [
     'a malformed count-match source or missing calibration receipt denies optimization authority',
   );
 }
+assert.equal(
+  benchmarkModule.footprintTierSweepReceiptChecks({
+    requested: true,
+    expectedArms: [
+      { id: 'base-056' },
+      { id: 'importance-070-098' },
+      { id: 'random-070-098', matchCountsFrom: 'importance-070-098' },
+    ],
+    sweep: {
+      ok: true,
+      arms: [
+        { id: 'base-056' },
+        { id: 'importance-070-098', audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } } },
+        {
+          id: 'random-070-098',
+          matchCountsFrom: 'importance-070-098',
+          audit: { footprintTier: { counts: { base: 422, medium: 61, hero: 29 } } },
+        },
+      ],
+    },
+  }).missingFootprintTierTargetComparison,
+  true,
+  'a target-free tier sweep cannot retain bounded optimization authority',
+);
+const rgbaComparison = compareRgbaPreviews(
+  { width: 2, height: 1, rgba: [0, 0, 0, 255, 200, 100, 0, 255] },
+  { width: 2, height: 1, rgba: [100, 0, 0, 255, 200, 100, 0, 255] },
+);
+assert.equal(rgbaComparison.identity, 'same-state-rgba8-target-relative-footprint-tier-metrics-v0');
+assert.ok(Math.abs(rgbaComparison.rgbMaeNormalized - (100 / (2 * 3 * 255))) < 1e-12);
+assert.equal(rgbaComparison.targetPeakPixelCount, 1);
+assert.equal(rgbaComparison.targetPeakLumaRetention, 1);
+assert.throws(
+  () => compareRgbaPreviews(
+    { width: 1, height: 1, rgba: [0, 0, 0, 255] },
+    { width: 2, height: 1, rgba: [0, 0, 0, 255, 0, 0, 0, 255] },
+  ),
+  /rgba-preview-shape-mismatch/,
+  'target-relative metrics fail loud on stale or partial image dimensions',
+);
 for (const sweep of [
   null,
   { ok: false, arms: [] },
