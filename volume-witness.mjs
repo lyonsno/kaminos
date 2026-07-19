@@ -3495,7 +3495,7 @@ async function main() {
             prototype.setControls(controlsBefore);
             if (activeBefore) await prototype.setActive(true);
           }
-          return {
+          const sweepResult = {
             identity: tierArms.some(arm => arm.policy === 'target_oracle')
               ? 'held-state-target-salience-oracle-footprint-tier-sweep-v0'
               : 'held-state-candidate-local-conserved-footprint-tier-sweep-v0',
@@ -3505,6 +3505,29 @@ async function main() {
             measuredSamples: ${Math.max(0, boundarySplatGpuProfileSamples - boundarySplatGpuProfileWarmupSamples)},
             target,
             arms,
+          };
+          window.__kaminosBoundarySplatFootprintTierSweepResult = sweepResult;
+          const compactPreview = preview => preview ? {
+            width: preview.width,
+            height: preview.height,
+            rgba: null,
+          } : null;
+          return {
+            ...sweepResult,
+            target: target ? {
+              ...target,
+              visual: {
+                ...target.visual,
+                preview: compactPreview(target.visual?.preview),
+              },
+            } : null,
+            arms: arms.map(arm => ({
+              ...arm,
+              visual: {
+                ...arm.visual,
+                preview: compactPreview(arm.visual?.preview),
+              },
+            })),
           };
         })()`,
         awaitPromise: true,
@@ -3520,6 +3543,38 @@ async function main() {
       const arms = boundarySplatFootprintTierSweep?.arms;
       if (!Array.isArray(arms) || arms.length !== boundarySplatFootprintTierArms.length) {
         throw new Error(`footprint-tier-sweep-incomplete:${arms?.length ?? 'missing'}:${boundarySplatFootprintTierArms.length}`);
+      }
+      const previewFetches = [
+        { id: 'target', target: true },
+        ...arms.map(arm => ({ id: arm.id, target: false })),
+      ];
+      for (const previewFetch of previewFetches) {
+        const previewFetchIdLiteral = JSON.stringify(previewFetch.id);
+        const previewEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const sweep = window.__kaminosBoundarySplatFootprintTierSweepResult;
+            const preview = ${previewFetch.target
+              ? 'sweep?.target?.visual?.preview'
+              : `sweep?.arms?.find(arm => arm.id === ${JSON.stringify(previewFetch.id)})?.visual?.preview`};
+            if (!preview || !Array.isArray(preview.rgba)) {
+              throw new Error('footprint-tier-preview-fetch-missing:' + ${previewFetchIdLiteral});
+            }
+            return preview;
+          })()`,
+          returnByValue: true,
+        });
+        if (previewEval.exceptionDetails) {
+          const exceptionDescription = previewEval.exceptionDetails.exception?.description
+            || previewEval.exceptionDetails.text
+            || 'unknown-browser-exception';
+          throw new Error(`footprint-tier-preview-fetch-runtime-exception:${previewFetch.id}:${exceptionDescription}`);
+        }
+        if (previewFetch.target) {
+          boundarySplatFootprintTierSweep.target.visual.preview = previewEval.result.value;
+        } else {
+          const arm = arms.find(candidate => candidate.id === previewFetch.id);
+          arm.visual.preview = previewEval.result.value;
+        }
       }
       const baseline = arms[0];
       const target = boundarySplatFootprintTierSweep.target;

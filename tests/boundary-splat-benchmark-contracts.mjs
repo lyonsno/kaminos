@@ -110,6 +110,16 @@ assert.match(
 );
 assert.match(
   witness,
+  /window\.__kaminosBoundarySplatFootprintTierSweepResult\s*=\s*sweepResult[\s\S]*compactPreview[\s\S]*rgba:\s*null[\s\S]*window\.__kaminosBoundarySplatFootprintTierSweepResult[\s\S]*footprint-tier-preview-fetch/,
+  'the completed sweep pins its full browser result and transfers compact metadata before fetching each target and arm preview separately',
+);
+assert.match(
+  witness,
+  /const previewFetchIdLiteral = JSON\.stringify\(previewFetch\.id\)[\s\S]*footprint-tier-preview-fetch-missing:' \+ \$\{previewFetchIdLiteral\}/,
+  'preview fetch arm identifiers are escaped before entering generated browser source',
+);
+assert.match(
+  witness,
   /function browserProcessStatus[\s\S]*exitCode[\s\S]*signalCode[\s\S]*browserProcessStatus: browserProcessStatus\(browserSession\)/,
   'a failed witness preserves any browser process exit and signal evidence available to its launcher',
 );
