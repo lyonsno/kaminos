@@ -28,6 +28,10 @@ export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WITNESS_SCHEMA = 'kamino
 export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-gestalt-composite-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_ROUTE = 'kaminos/lirm-speciation-armature/gestalt-composite-v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-write-result.v0';
+export const LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_BUNDLE_SCHEMA = 'kaminos.lirm-armature-program-implicit-body-bundle.v0';
+export const LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_WITNESS_SCHEMA = 'kaminos.lirm-armature-program-implicit-body-witness.v0';
+export const LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_WRITE_RESULT_SCHEMA = 'kaminos.lirm-armature-program-implicit-body-write-result.v0';
+export const LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE = 'kaminos/lirm-armature-program/implicit-body-v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
 const DEFAULT_SEED = 'molten-lirm-speciation-armature-v0';
@@ -920,6 +924,13 @@ function semanticFill(role) {
     limb_bud: 'rgba(163,105,58,0.88)',
     shell_plate: 'rgba(91,101,128,0.92)',
     contact_point: 'rgba(190,81,220,0.82)',
+    posteriorBulbousMass: 'rgba(109,142,68,0.94)',
+    bodyBridge: 'rgba(132,157,77,0.94)',
+    anteriorChestMass: 'rgba(159,133,67,0.95)',
+    anteriorUprightNeck: 'rgba(188,112,60,0.95)',
+    anteriorHead: 'rgba(198,75,53,0.97)',
+    radialContactLimb: 'rgba(139,90,58,0.9)',
+    groundContact: 'rgba(190,81,220,0.86)',
   };
   return palette[role] || 'rgba(215,220,185,0.84)';
 }
@@ -1184,9 +1195,20 @@ function sdRoundedBox(point, primitive) {
   return outside + inside - primitive.radius;
 }
 
+function sdEllipsoid(point, primitive) {
+  const offset = sub3(point, primitive.center);
+  const normalized = vec3(
+    offset.x / primitive.radius.x,
+    offset.y / primitive.radius.y,
+    offset.z / primitive.radius.z,
+  );
+  return (len3(normalized) - 1) * Math.min(primitive.radius.x, primitive.radius.y, primitive.radius.z);
+}
+
 function primitiveDistance(point, primitive) {
   if (primitive.implicitKind === 'capsule') return sdCapsule(point, primitive);
   if (primitive.implicitKind === 'rounded_box') return sdRoundedBox(point, primitive);
+  if (primitive.implicitKind === 'ellipsoid') return sdEllipsoid(point, primitive);
   return sdSphere(point, primitive);
 }
 
@@ -1391,6 +1413,13 @@ function implicitClayFill(hit) {
     limb_bud: [157, 102, 62],
     shell_plate: [86, 94, 122],
     contact_point: [183, 87, 205],
+    posteriorBulbousMass: [111, 137, 72],
+    bodyBridge: [129, 146, 78],
+    anteriorChestMass: [157, 124, 70],
+    anteriorUprightNeck: [178, 98, 57],
+    anteriorHead: [190, 72, 50],
+    radialContactLimb: [142, 87, 57],
+    groundContact: [183, 87, 205],
   };
   const base = roleBase[hit.primitive.role] || [128, 137, 93];
   const lightDir = norm3(vec3(-0.45, 0.64, 0.62));
@@ -1409,6 +1438,13 @@ function implicitTrellisClayFill(hit) {
     limb_bud: [118, 93, 66],
     shell_plate: [96, 93, 84],
     contact_point: [112, 88, 104],
+    posteriorBulbousMass: [137, 126, 101],
+    bodyBridge: [143, 127, 96],
+    anteriorChestMass: [151, 122, 87],
+    anteriorUprightNeck: [157, 112, 79],
+    anteriorHead: [164, 102, 75],
+    radialContactLimb: [119, 91, 64],
+    groundContact: [112, 88, 104],
   };
   const base = roleBase[hit.primitive.role] || [138, 126, 102];
   const lightDir = norm3(vec3(-0.36, 0.7, 0.62));
@@ -1440,9 +1476,7 @@ function implicitMapFill(hit, kind) {
   return implicitClayFill(hit);
 }
 
-function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null }) {
-  const pixelWidth = 192;
-  const pixelHeight = 144;
+function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, pixelWidth = 192, pixelHeight = 144 }) {
   const displayWidth = 320;
   const displayHeight = 240;
   const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
@@ -1489,9 +1523,7 @@ function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null }
   });
 }
 
-function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope = null }) {
-  const pixelWidth = 256;
-  const pixelHeight = 192;
+function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope = null, pixelWidth = 256, pixelHeight = 192 }) {
   const displaySize = 512;
   const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
   const envelopeAttribute = gestaltEnvelope ? ` data-gestalt-envelope-id="${xml(gestaltEnvelope.id)}"` : '';
@@ -1583,6 +1615,239 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
       projectionProxyClaim: 'superseded_by_implicit_surface',
     },
   };
+}
+
+function validateArmatureProgramParameters(armatureProgram, parameters) {
+  if (!armatureProgram || typeof armatureProgram !== 'object') throw new Error('armature program is required');
+  if (typeof armatureProgram.id !== 'string' || !armatureProgram.id.trim()) throw new Error('armature program requires stable id');
+  if (typeof armatureProgram.parameterVocabulary !== 'string' || !armatureProgram.parameterVocabulary.trim()) {
+    throw new Error('armature program requires parameter vocabulary');
+  }
+  if (!Array.isArray(armatureProgram.parameterSpecs) || armatureProgram.parameterSpecs.length === 0) {
+    throw new Error('armature program requires parameter specs');
+  }
+  if (typeof armatureProgram.createPrimitives !== 'function') throw new Error('armature program requires primitive factory');
+  const normalized = {};
+  for (const spec of armatureProgram.parameterSpecs) {
+    const value = Number(parameters?.[spec.id]);
+    if (!Number.isFinite(value)) throw new Error(`missing armature program parameter: ${spec.id}`);
+    if (value < spec.min || value > spec.max) throw new Error(`armature program parameter out of range: ${spec.id}`);
+    normalized[spec.id] = value;
+  }
+  if (Object.keys(parameters ?? {}).length !== armatureProgram.parameterSpecs.length) {
+    throw new Error('armature program parameter identity mismatch');
+  }
+  return normalized;
+}
+
+function adaptArmatureProgramPrimitive(primitive, index) {
+  if (!primitive || typeof primitive.role !== 'string' || !primitive.role.trim()) {
+    throw new Error(`armature primitive ${index} requires semantic role`);
+  }
+  if (primitive.kind === 'ellipsoid') {
+    const radii = [primitive.radius?.x, primitive.radius?.y, primitive.radius?.z];
+    if (![primitive.center?.x, primitive.center?.y, primitive.center?.z, ...radii].every(Number.isFinite)
+        || radii.some(value => value <= 0)) {
+      throw new Error(`invalid ellipsoid armature primitive: ${index}`);
+    }
+    return { ...primitive, index, implicitKind: 'ellipsoid' };
+  }
+  if (primitive.kind === 'capsule') {
+    if (![primitive.a?.x, primitive.a?.y, primitive.a?.z, primitive.b?.x, primitive.b?.y, primitive.b?.z, primitive.radius]
+      .every(Number.isFinite) || primitive.radius <= 0) {
+      throw new Error(`invalid capsule armature primitive: ${index}`);
+    }
+    return {
+      ...primitive,
+      index,
+      implicitKind: 'capsule',
+      center: mul3(add3(primitive.a, primitive.b), 0.5),
+      endpoints: { a: primitive.a, b: primitive.b },
+    };
+  }
+  throw new Error(`unsupported armature primitive kind: ${primitive.kind}`);
+}
+
+export function createLirmArmatureProgramImplicitBodyBundle({
+  armatureProgram,
+  parameters,
+  candidateId = 'lirm-armature-program-candidate',
+  pixelWidth = 192,
+  pixelHeight = 144,
+} = {}) {
+  if (typeof candidateId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(candidateId)) {
+    throw new Error('armature program candidateId must be filesystem-safe');
+  }
+  if (!Number.isInteger(pixelWidth) || !Number.isInteger(pixelHeight) || pixelWidth < 32 || pixelHeight < 24) {
+    throw new Error('armature program conditioning raster must be at least 32x24');
+  }
+  const normalizedParameters = validateArmatureProgramParameters(armatureProgram, parameters);
+  const sourcePrimitives = armatureProgram.createPrimitives(normalizedParameters);
+  if (!Array.isArray(sourcePrimitives) || sourcePrimitives.length === 0) {
+    throw new Error('armature program primitive factory returned no primitives');
+  }
+  const implicitPrimitives = sourcePrimitives.map(adaptArmatureProgramPrimitive);
+  const candidate = { id: candidateId };
+  const renderMaps = renderImplicitMapsSvg({ candidate, primitives: implicitPrimitives, pixelWidth, pixelHeight });
+  const trellisSource = renderImplicitTrellisSourceSvg({
+    candidate,
+    primitives: implicitPrimitives,
+    pixelWidth,
+    pixelHeight,
+  });
+  return {
+    schema: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_BUNDLE_SCHEMA,
+    route: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE,
+    requestedRoute: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE,
+    effectiveRoute: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE,
+    candidateId,
+    armatureProgram: {
+      id: armatureProgram.id,
+      parameterVocabulary: armatureProgram.parameterVocabulary,
+      parameterSpecs: armatureProgram.parameterSpecs,
+    },
+    parameters: normalizedParameters,
+    renderMode: 'raymarched-implicit-field',
+    fieldModel: {
+      kind: 'smooth-sdf-armature-program',
+      surfaceThreshold: 0.0065,
+      smoothUnionK: 0.075,
+      primitiveKinds: [...new Set(implicitPrimitives.map(primitive => primitive.implicitKind))],
+    },
+    effectiveConfig: {
+      pixelWidth,
+      pixelHeight,
+      projection: 'orthographic',
+      view: 'front-three-quarter',
+      raySource: 'software-sdf-raymarch',
+    },
+    implicitPrimitiveCount: implicitPrimitives.length,
+    semanticRoles: [...new Set(implicitPrimitives.map(primitive => primitive.role))],
+    renderMaps,
+    trellisSource,
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      programFitClaim: 'parameters_supplied_by_caller',
+      implicitBodyClaim: 'raymarched_control_surface_only',
+    },
+  };
+}
+
+export async function writeLirmArmatureProgramImplicitBodyWitness({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-armature-program-implicit-body-v0'),
+  armatureProgram,
+  parameters,
+  candidateId = 'lirm-armature-program-candidate',
+  pixelWidth = 192,
+  pixelHeight = 144,
+} = {}) {
+  await mkdir(outDir, { recursive: true });
+  const receiptPath = join(outDir, 'receipt.json');
+  const requestedConfig = { pixelWidth, pixelHeight };
+  const initialized = {
+    schema: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_WITNESS_SCHEMA,
+    status: 'running',
+    phase: 'writer_initialized',
+    failurePhase: null,
+    requestedRoute: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE,
+    effectiveRoute: null,
+    candidateId,
+    requestedArmatureProgram: {
+      id: armatureProgram?.id ?? null,
+      parameterVocabulary: armatureProgram?.parameterVocabulary ?? null,
+    },
+    requestedConfig,
+    effectiveConfig: null,
+    lastTrustworthyEvidence: 'invocation recorded; no bundle accepted',
+    outputInventory: { bundle: null, maps: [], trellisSource: null },
+    outputEvidence: [],
+  };
+  await writeFile(receiptPath, `${JSON.stringify(initialized, null, 2)}\n`);
+  try {
+    const bundle = createLirmArmatureProgramImplicitBodyBundle({
+      armatureProgram,
+      parameters,
+      candidateId,
+      pixelWidth,
+      pixelHeight,
+    });
+    const candidateDir = join(outDir, candidateId);
+    await mkdir(candidateDir, { recursive: true });
+    const outputEvidence = [];
+    const bundleRelativePath = `${candidateId}/bundle.json`;
+    const bundlePath = join(outDir, bundleRelativePath);
+    await writeFile(bundlePath, `${JSON.stringify({
+      ...bundle,
+      renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+      trellisSource: { ...bundle.trellisSource, svg: undefined },
+    }, null, 2)}\n`);
+    outputEvidence.push(await createOutputEvidence(bundlePath, bundleRelativePath));
+
+    const maps = [];
+    for (const map of bundle.renderMaps) {
+      const svgPath = join(outDir, map.path);
+      const rasterPath = map.path.replace(/\.svg$/, '.png');
+      const pngPath = join(outDir, rasterPath);
+      await writeFile(svgPath, map.svg);
+      rasterizeSvgWithSips(svgPath, pngPath);
+      outputEvidence.push(
+        await createOutputEvidence(svgPath, map.path),
+        await createOutputEvidence(pngPath, rasterPath),
+      );
+      maps.push({ kind: map.kind, path: map.path, rasterPath });
+    }
+
+    const trellisSvgPath = join(outDir, bundle.trellisSource.path);
+    const trellisRasterPath = join(outDir, bundle.trellisSource.rasterPath);
+    await writeFile(trellisSvgPath, bundle.trellisSource.svg);
+    rasterizeSvgWithSips(trellisSvgPath, trellisRasterPath);
+    outputEvidence.push(
+      await createOutputEvidence(trellisSvgPath, bundle.trellisSource.path),
+      await createOutputEvidence(trellisRasterPath, bundle.trellisSource.rasterPath),
+    );
+    const receipt = {
+      ...initialized,
+      status: 'complete',
+      phase: 'witness_written',
+      effectiveRoute: bundle.effectiveRoute,
+      armatureProgram: bundle.armatureProgram,
+      parameters: bundle.parameters,
+      effectiveConfig: bundle.effectiveConfig,
+      implicitPrimitiveCount: bundle.implicitPrimitiveCount,
+      semanticRoles: bundle.semanticRoles,
+      lastTrustworthyEvidence: 'all conditioning maps and Trellis source written with byte and hash evidence',
+      falseClosureGuards: bundle.falseClosureGuards,
+      outputInventory: {
+        bundle: bundleRelativePath,
+        maps,
+        trellisSource: {
+          kind: bundle.trellisSource.kind,
+          path: bundle.trellisSource.path,
+          rasterPath: bundle.trellisSource.rasterPath,
+        },
+      },
+      outputEvidence,
+    };
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+    return {
+      schema: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_WRITE_RESULT_SCHEMA,
+      route: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_ROUTE,
+      outDir,
+      receiptPath,
+      candidateId,
+      bundlePath,
+    };
+  } catch (error) {
+    await writeFile(receiptPath, `${JSON.stringify({
+      ...initialized,
+      status: 'failed',
+      phase: 'bundle-creation-or-write',
+      failurePhase: 'bundle-creation-or-write',
+      errorMessage: String(error?.message || error),
+    }, null, 2)}\n`);
+    throw error;
+  }
 }
 
 export function createLirmSpeciationArmatureGestaltCompositeBundle({ witness, candidate, candidateId, gestaltEnvelope } = {}) {

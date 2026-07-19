@@ -1,0 +1,385 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "lirm02-bulbous-radial-upright-fitted",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.bulbous-radial-upright.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.bulbous-radial-upright-26.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "lirm02-bulbous-radial-upright-fitted/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "lirm02-bulbous-radial-upright-fitted/clay-implicit.svg",
+        "rasterPath": "lirm02-bulbous-radial-upright-fitted/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "lirm02-bulbous-radial-upright-fitted/depth-implicit.svg",
+        "rasterPath": "lirm02-bulbous-radial-upright-fitted/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "lirm02-bulbous-radial-upright-fitted/normal-implicit.svg",
+        "rasterPath": "lirm02-bulbous-radial-upright-fitted/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "lirm02-bulbous-radial-upright-fitted/mask-implicit.svg",
+        "rasterPath": "lirm02-bulbous-radial-upright-fitted/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "lirm02-bulbous-radial-upright-fitted/semantic-implicit.svg",
+        "rasterPath": "lirm02-bulbous-radial-upright-fitted/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "lirm02-bulbous-radial-upright-fitted/trellis-source.svg",
+      "rasterPath": "lirm02-bulbous-radial-upright-fitted/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/bundle.json",
+      "byteSize": 8189,
+      "sha256": "sha256:557f2a68ba4c995768c25fa2ed265ee0564f7df63665eb5179304867ac783968"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/clay-implicit.svg",
+      "byteSize": 514149,
+      "sha256": "sha256:a1332b0c1150cda9e2cf68c180678bdad118bf62b3e7db3212b828e411fdad8f"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/clay-implicit.png",
+      "byteSize": 28068,
+      "sha256": "sha256:de0e602512190f5571ab890482ad403ad4ce33f75db6dbd8a5aa715ad04c24c4"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/depth-implicit.svg",
+      "byteSize": 528164,
+      "sha256": "sha256:c0bfd4c2bb04bfffb4f385e8d7243e8c7ea5a26f0e145f864fc17b258bc54647"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/depth-implicit.png",
+      "byteSize": 17376,
+      "sha256": "sha256:7418dbb3608748c7b305d4c5e7b86b66ea4179569aa55fe1647fd790ef42f497"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/normal-implicit.svg",
+      "byteSize": 520818,
+      "sha256": "sha256:0c21a41d77b7f4d765f8ea7e55814ba787e7e75c0336384b1973afcde5f78241"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/normal-implicit.png",
+      "byteSize": 32821,
+      "sha256": "sha256:6eea1ea64092c47eeadf50ac3dba7c00077fe28bce0eff3f3e2290e49aeea43b"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/mask-implicit.svg",
+      "byteSize": 528165,
+      "sha256": "sha256:ffd7da1ae9871f40242028a38ffa8a2e72562ca32cea4990f1073d212c58db00"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/mask-implicit.png",
+      "byteSize": 5960,
+      "sha256": "sha256:d47e02a26684243d46a09d375342edda314d30e27e714def916a138624cad0b6"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/semantic-implicit.svg",
+      "byteSize": 561750,
+      "sha256": "sha256:4c568dfd9bcc96c46c7c19e159f0ba8841cca82f35448c452acbaffe2e44f376"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/semantic-implicit.png",
+      "byteSize": 9811,
+      "sha256": "sha256:726bccf0af65009b1338343bb2471833b05928f574def3aa597dd3dcc7b33d41"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/trellis-source.svg",
+      "byteSize": 513177,
+      "sha256": "sha256:08db079e0ec01cd4ae90a032e22d63ab44e93c5ec5670fd020c0c319773966da"
+    },
+    {
+      "path": "lirm02-bulbous-radial-upright-fitted/trellis-source.png",
+      "byteSize": 89927,
+      "sha256": "sha256:54d90d500fca22aa9cc6491cde416590cf52eddc1f1b9b2b608862f65b53c26c"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.bulbous-radial-upright.v0",
+    "parameterVocabulary": "kaminos.reference-fitted-armature.bulbous-radial-upright-26.v0",
+    "parameterSpecs": [
+      {
+        "id": "posteriorBulbLength",
+        "semanticRole": "posteriorBulbousMass",
+        "initial": 0.92,
+        "min": 0.56,
+        "max": 1.46,
+        "step": 0.14
+      },
+      {
+        "id": "posteriorBulbWidth",
+        "semanticRole": "posteriorBulbousMass",
+        "initial": 0.72,
+        "min": 0.4,
+        "max": 1.12,
+        "step": 0.11
+      },
+      {
+        "id": "posteriorBulbHeight",
+        "semanticRole": "posteriorBulbousMass",
+        "initial": 0.68,
+        "min": 0.38,
+        "max": 1.08,
+        "step": 0.1
+      },
+      {
+        "id": "posteriorLift",
+        "semanticRole": "posteriorElevation",
+        "initial": 0.04,
+        "min": -0.18,
+        "max": 0.3,
+        "step": 0.07
+      },
+      {
+        "id": "bridgeLength",
+        "semanticRole": "bodyBridge",
+        "initial": 0.88,
+        "min": 0.52,
+        "max": 1.42,
+        "step": 0.13
+      },
+      {
+        "id": "bridgeWidth",
+        "semanticRole": "bodyBridge",
+        "initial": 0.42,
+        "min": 0.24,
+        "max": 0.74,
+        "step": 0.08
+      },
+      {
+        "id": "bridgeHeight",
+        "semanticRole": "bodyBridge",
+        "initial": 0.32,
+        "min": 0.18,
+        "max": 0.58,
+        "step": 0.07
+      },
+      {
+        "id": "bridgeLift",
+        "semanticRole": "bridgeElevation",
+        "initial": 0.02,
+        "min": -0.16,
+        "max": 0.3,
+        "step": 0.06
+      },
+      {
+        "id": "chestWidth",
+        "semanticRole": "anteriorChestMass",
+        "initial": 0.56,
+        "min": 0.3,
+        "max": 0.92,
+        "step": 0.09
+      },
+      {
+        "id": "chestHeight",
+        "semanticRole": "anteriorChestMass",
+        "initial": 0.6,
+        "min": 0.3,
+        "max": 0.98,
+        "step": 0.1
+      },
+      {
+        "id": "chestDepth",
+        "semanticRole": "anteriorChestMass",
+        "initial": 0.5,
+        "min": 0.28,
+        "max": 0.86,
+        "step": 0.08
+      },
+      {
+        "id": "chestLift",
+        "semanticRole": "anteriorChestElevation",
+        "initial": 0.06,
+        "min": -0.18,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "neckHeight",
+        "semanticRole": "anteriorUprightNeck",
+        "initial": 0.86,
+        "min": 0.42,
+        "max": 1.34,
+        "step": 0.13
+      },
+      {
+        "id": "neckThickness",
+        "semanticRole": "anteriorUprightNeck",
+        "initial": 0.25,
+        "min": 0.13,
+        "max": 0.46,
+        "step": 0.06
+      },
+      {
+        "id": "neckForward",
+        "semanticRole": "anteriorNeckTrajectory",
+        "initial": 0.2,
+        "min": -0.18,
+        "max": 0.52,
+        "step": 0.08
+      },
+      {
+        "id": "neckCurve",
+        "semanticRole": "anteriorNeckTrajectory",
+        "initial": 0.08,
+        "min": -0.28,
+        "max": 0.3,
+        "step": 0.07
+      },
+      {
+        "id": "headWidth",
+        "semanticRole": "anteriorHead",
+        "initial": 0.42,
+        "min": 0.22,
+        "max": 0.72,
+        "step": 0.08
+      },
+      {
+        "id": "headHeight",
+        "semanticRole": "anteriorHead",
+        "initial": 0.38,
+        "min": 0.2,
+        "max": 0.68,
+        "step": 0.07
+      },
+      {
+        "id": "headDepth",
+        "semanticRole": "anteriorHead",
+        "initial": 0.36,
+        "min": 0.2,
+        "max": 0.66,
+        "step": 0.07
+      },
+      {
+        "id": "headForward",
+        "semanticRole": "anteriorHeadProjection",
+        "initial": 0.12,
+        "min": -0.16,
+        "max": 0.38,
+        "step": 0.07
+      },
+      {
+        "id": "contactSpread",
+        "semanticRole": "radialContactField",
+        "initial": 0.66,
+        "min": 0.4,
+        "max": 1.08,
+        "step": 0.1
+      },
+      {
+        "id": "contactLength",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.34,
+        "min": 0.16,
+        "max": 0.68,
+        "step": 0.08
+      },
+      {
+        "id": "contactThickness",
+        "semanticRole": "radialContactLimb",
+        "initial": 0.075,
+        "min": 0.04,
+        "max": 0.17,
+        "step": 0.025
+      },
+      {
+        "id": "contactBias",
+        "semanticRole": "longitudinalContactDistribution",
+        "initial": 0.1,
+        "min": -0.42,
+        "max": 0.42,
+        "step": 0.08
+      },
+      {
+        "id": "radialTwist",
+        "semanticRole": "radialContactField",
+        "initial": 0.08,
+        "min": -0.34,
+        "max": 0.34,
+        "step": 0.07
+      },
+      {
+        "id": "asymmetry",
+        "semanticRole": "controlledAsymmetry",
+        "initial": 0.06,
+        "min": -0.3,
+        "max": 0.3,
+        "step": 0.06
+      }
+    ]
+  },
+  "parameters": {
+    "posteriorBulbLength": 0.62438832,
+    "posteriorBulbWidth": 0.4752855344,
+    "posteriorBulbHeight": 0.457532304,
+    "posteriorLift": -0.07852154720000001,
+    "bridgeLength": 0.64923544,
+    "bridgeWidth": 0.42892095999999996,
+    "bridgeHeight": 0.24660584,
+    "bridgeLift": 0.045200000000000004,
+    "chestWidth": 0.7602209263999999,
+    "chestHeight": 0.6756399999999999,
+    "chestDepth": 0.5065557632,
+    "chestLift": 0.019399999999999994,
+    "neckHeight": 0.5961565552,
+    "neckThickness": 0.13,
+    "neckForward": 0.09308800000000002,
+    "neckCurve": 0.05502645280000001,
+    "headWidth": 0.24202584319999998,
+    "headHeight": 0.23219415999999996,
+    "headDepth": 0.225852,
+    "headForward": 0.009399999999999985,
+    "contactSpread": 0.8180000000000001,
+    "contactLength": 0.2936,
+    "contactThickness": 0.10609,
+    "contactBias": -0.07797415679999997,
+    "radialTwist": 0.11070984000000002,
+    "asymmetry": 0.0583126176
+  },
+  "implicitPrimitiveCount": 25,
+  "semanticRoles": [
+    "posteriorBulbousMass",
+    "bodyBridge",
+    "anteriorChestMass",
+    "anteriorUprightNeck",
+    "anteriorHead",
+    "radialContactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}
