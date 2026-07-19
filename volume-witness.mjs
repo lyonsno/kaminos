@@ -172,6 +172,7 @@ const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -1495,9 +1496,26 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
+function quantizeFlowKernelControl(value, min, max, step, decimals) {
+  const clamped = Math.max(min, Math.min(max, value));
+  const quantized = min + Math.round((clamped - min) / step) * step;
+  return Number(quantized.toFixed(decimals));
+}
+const requestedFlowKernelStrength = Number(routeParams.get('volume_flow_kernel_strength'));
+const expectedFlowKernelStrength = routeParams.has('volume_flow_kernel_strength') && Number.isFinite(requestedFlowKernelStrength)
+  ? quantizeFlowKernelControl(requestedFlowKernelStrength, 0, 1, 0.02, 2)
+  : 0;
+const requestedFlowKernelRadius = Number(routeParams.get('volume_flow_kernel_radius'));
+const expectedFlowKernelRadius = routeParams.has('volume_flow_kernel_radius') && Number.isFinite(requestedFlowKernelRadius)
+  ? quantizeFlowKernelControl(requestedFlowKernelRadius, 0.0025, 0.12, 0.0025, 4)
+  : 0.03;
+const requestedFlowKernelCoherence = Number(routeParams.get('volume_flow_kernel_coherence'));
+const expectedFlowKernelCoherence = routeParams.has('volume_flow_kernel_coherence') && Number.isFinite(requestedFlowKernelCoherence)
+  ? quantizeFlowKernelControl(requestedFlowKernelCoherence, 0, 2, 0.05, 2)
+  : 1;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
 const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
   ? requestedMajorantGrid
@@ -2634,6 +2652,14 @@ async function main() {
         return;
       }
     }
+    assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
+    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'structural-splat-candidates-v0', 'flow kernel changed or obscured splat admission authority');
+    assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');
+    assert.ok(Math.abs((state.flowKernelEffective?.strength ?? -1) - expectedFlowKernelStrength) < 0.001, 'effective flow kernel strength did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.radiusWorld ?? -1) - expectedFlowKernelRadius) < 0.001, 'effective world-space flow kernel radius did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.coherence ?? -1) - expectedFlowKernelCoherence) < 0.001, 'effective flow kernel coherence did not match the requested route');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {

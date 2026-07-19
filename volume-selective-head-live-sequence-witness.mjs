@@ -15,9 +15,20 @@ const ROLE_AUTHORITIES = Object.freeze({
   lowPhaseAligned: 'phase-aligned-low-field-control-v0',
   selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
 });
+const PRESET_VIEW_COMPOSITIONS = Object.freeze({
+  'splat-only': 'splat-only-v0',
+  'raymarch-only': 'raymarch-only-v0',
+  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
+  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
-const expectedComposition = new URL(url).searchParams.get('composition') || 'smoke-raymarch-under-splats-v0';
+const requestedUrl = new URL(url);
+const requestedParams = requestedUrl.searchParams;
+const requestedPresetView = requestedUrl.pathname.endsWith('/volume-settings-preset.html')
+  ? requestedParams.get('view')
+  : null;
+const expectedComposition = expectedCompositionFromAxes(requestedParams, requestedPresetView);
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live-sequence.mp4'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live-sequence.json'));
 const contactPath = resolve(String(args.get('--contact') || out.replace(/\.mp4$/i, '-contact.png')));
@@ -97,6 +108,9 @@ try {
     state = await evaluate(socket, 'window.__kaminosSelectiveHeadLive?.debugState?.()');
     expectedRoleAuthority = ROLE_AUTHORITIES[state?.requestedRole] || null;
     if (state?.status === 'failed') throw new Error(state.error || state.fallbackReason || 'live route failed');
+    if (state?.compositionOverrideReason) {
+      throw new Error(`unexpected-composition-override:${state.compositionOverrideReason}`);
+    }
     if (
       state?.routeIdentity === ROUTE
       && state?.status === 'running'
@@ -118,6 +132,7 @@ try {
   assert.equal(state?.warmupReceipt?.completedSteps, state?.warmupTarget, 'warmup receipt did not match the requested horizon');
   assert.equal(state?.effectiveRole, state?.requestedRole, 'requested role silently fell back');
   assert.equal(state?.effectiveComposition, expectedComposition, 'requested composition silently fell back');
+  assert.equal(state?.compositionOverrideReason, null, 'unexpected-composition-override');
   assert.equal(state?.roleAuthority, expectedRoleAuthority, 'requested role used the wrong composition authority');
   assert.equal(state?.modelIdentity, MODEL, 'wrong frozen model identity');
 
@@ -196,6 +211,7 @@ try {
     requestedComposition: state.requestedComposition,
     effectiveComposition: state.effectiveComposition,
     compositionAuthority: state.compositionAuthority,
+    compositionOverrideReason: state.compositionOverrideReason,
     compositionFallbackReason: state.compositionFallbackReason,
     selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt,
     modelIdentity: state.modelIdentity,
@@ -236,6 +252,17 @@ try {
   try { ffmpeg?.stdin?.destroy(); } catch {}
   try { socket?.close(); } catch {}
   browser?.kill('SIGTERM');
+}
+
+function expectedCompositionFromAxes(params, presetView = null) {
+  const requestedComposition = params.get('composition')
+    || PRESET_VIEW_COMPOSITIONS[presetView]
+    || 'smoke-raymarch-under-splats-v0';
+  if (requestedComposition === 'full-raymarch-under-splats-diagnostic-v0') return requestedComposition;
+  if (requestedComposition === 'raymarch-only-v0') return requestedComposition;
+  const requestedSmoke = params.get('volume_raymarch_smoke')
+    || (requestedComposition === 'splat-only-v0' ? 'off' : 'on');
+  return requestedSmoke === 'off' ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0';
 }
 
 function assertConsecutiveSteps(steps) {

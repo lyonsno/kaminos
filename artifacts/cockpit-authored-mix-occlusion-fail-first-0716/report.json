@@ -1,0 +1,245 @@
+{
+  "identity": "kaminos-volume-settings-preset-witness-v1",
+  "status": "failed",
+  "failurePhase": "operator-command",
+  "error": "AssertionError [ERR_ASSERTION]: authored-mix controls are hidden beneath the outer assay toolbar\n\ntrue !== false\n\n    at file://./volume-settings-preset-witness.mjs:335:10",
+  "requestedUrl": "http://127.0.0.1:18780/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2&view=raymarch-only",
+  "lastTrustworthyEvidence": {
+    "initialState": {
+      "routeIdentity": "exact-basin-selective-head-live-v0",
+      "status": "running",
+      "requestedRole": "truthHigh",
+      "requestedComposition": "raymarch-only-v0",
+      "requestedPresentation": "beauty",
+      "effectivePresentation": "beauty",
+      "volumePresentationReceipt": {
+        "identity": "volume-presentation-mode-receipt-v0",
+        "requestedMode": "beauty",
+        "effectiveMode": "beauty",
+        "fallbackReason": null,
+        "targetIdentity": "authored-beauty-renderer-v0",
+        "effectiveRayQuality": {
+          "raySteps": 160,
+          "adaptiveRays": 0,
+          "renderScale": 0.296917052331791
+        },
+        "temporalHistoryContribution": "authored-control",
+        "authoredControlsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "passes": {
+          "raymarch": "authored-beauty-renderer-v0",
+          "splats": "authored-control",
+          "residual": "authored-control",
+          "featureCapture": "authored-control",
+          "smoke": "authored-control"
+        },
+        "application": {
+          "identity": "volume-presentation-applied-pass-receipt-v0",
+          "effectiveMode": "beauty",
+          "targetIdentity": "authored-beauty-renderer-v0",
+          "compositionEffective": "raymarch-only-v0",
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatsEncoded": false,
+          "splatsApplied": false,
+          "residualEncoded": false,
+          "residualApplied": false,
+          "featureCaptureEncoded": false,
+          "featureCaptureApplied": false,
+          "smokeContribution": "authored-control",
+          "raymarchSmokePresentationRequestedMode": "on",
+          "raymarchSmokePresentationEffectiveMode": "on",
+          "raymarchSmokePresentationTargetIdentity": "authored-raymarch-smoke-radiance-extinction-v0",
+          "fallbackReason": null
+        }
+      },
+      "requestedRaymarchSmokePresentation": "on",
+      "effectiveRaymarchSmokePresentation": "on",
+      "raymarchSmokePresentationReceipt": {
+        "identity": "raymarch-smoke-presentation-receipt-v0",
+        "requestedMode": "on",
+        "normalizedRequestedMode": "on",
+        "effectiveMode": "on",
+        "effectiveReason": "requested-raymarch-smoke-presentation",
+        "fallbackReason": null,
+        "targetIdentity": "authored-raymarch-smoke-radiance-extinction-v0",
+        "authoredSmokeControl": 0.1,
+        "authoredSmokeControlMutated": false,
+        "smokeProducingDynamicsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "contributions": {
+          "radiance": "authored-control",
+          "extinction": "authored-control",
+          "dynamics": "preserved"
+        }
+      },
+      "requestedAppearanceAssay": "off",
+      "effectiveAppearanceAssay": "off",
+      "appearanceDecompositionReceipt": {
+        "identity": "appearance-decomposition-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "fallbackReason": null,
+        "targetIdentity": "appearance-decomposition-off-v0",
+        "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+        "structuralAIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "broadCarrierIdentity": "signed-control-minus-structural-a-local-coefficients-v0",
+        "completeFlameIdentity": "smoke-off-complete-flame-local-emission-extinction-v0",
+        "positivePartitionIdentity": "nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0",
+        "ridgeOwnershipIdentity": "state-derived-direct-flame-candidate-support-allocation-v0",
+        "opticalTransportIdentity": null,
+        "requestedEmissionMask": null,
+        "effectiveEmissionMask": null,
+        "requestedExtinctionMask": null,
+        "effectiveExtinctionMask": null,
+        "contributionChannels": null,
+        "numericPrecision": null,
+        "postprocess": {
+          "sumDomain": "pre-tone-map-linear-radiance",
+          "toneMap": "shared-contribution-sum-then-global-exponential-v0",
+          "independentlyToneMappedAddition": false
+        },
+        "coefficientSigns": {
+          "completeFlame": "nonnegative",
+          "ridgeOwned": "nonnegative",
+          "nonRidge": "nonnegative",
+          "signedClosureComparator": "signed"
+        },
+        "opticalRecurrence": "front-to-back-emission-with-exponential-transmittance-v0",
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "controlsMutated": false,
+        "requestedPasses": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "passes": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "application": null,
+        "couplingTerms": [
+          "b-emission-transported-through-a-plus-b-transmittance",
+          "b-extinction-modulates-downstream-a-and-b-emission",
+          "signed-b-coefficients-are-not-an-independent-positive-radiance-field",
+          "shared-ridge-and-nonridge-contributions-sum-before-tone-map"
+        ]
+      },
+      "sourceCaptureId": null,
+      "sourceSettingsPresetRequestedId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+      "sourceSettingsPresetId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+      "sourceSettingsPresetAuthority": "shared-volume-settings-preset-v2",
+      "sourceSettingsPresetAlias": null,
+      "sourceSettingsPresetLabel": "big_raymarch_hero_flamebowl",
+      "sourceSettingsPresetContentHash": "sha256:5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+      "sourceSettingsPresetStorePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+      "sourceSettingsPresetSchemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+      "sourceSettingsPresetControlCount": 186,
+      "warmupAuthority": "fresh-live-settings-no-anchor-v0",
+      "warmupTarget": 0,
+      "warmupComplete": true,
+      "warmupStarted": true,
+      "warmupReceipt": {
+        "ok": true,
+        "authority": "fresh-live-settings-no-anchor-v0",
+        "completedSteps": 0,
+        "importedAnchor": false
+      },
+      "effectiveRole": "truthHigh",
+      "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+      "compositionAuthority": "diagnostic-raymarch-full-selected-field-authority-v0",
+      "effectiveComposition": "raymarch-only-v0",
+      "compositionFallbackReason": null,
+      "selectiveHeadLivePassReceipt": {
+        "identity": "selective-head-live-render-pass-receipt-v0",
+        "composition": "raymarch-only-v0",
+        "compositionAuthority": "diagnostic-raymarch-full-selected-field-authority-v0",
+        "raymarchAuthority": "diagnostic-raymarch-selected-fields-fire-smoke-v0",
+        "splatAuthority": "off",
+        "raymarchFireAuthority": 1,
+        "raymarchEncoded": true,
+        "raymarchApplied": true,
+        "splatEncoded": false,
+        "splatApplied": false,
+        "fallbackReason": null
+      },
+      "fallbackReason": null,
+      "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+      "featureAuthority": "full-low-field-plus-spatial-rbf-features-v0",
+      "pairAuthority": "downsampled-same-high-history-input-to-exact-high-target",
+      "backend": "WebGPU:apple",
+      "simGrid": 128,
+      "frameCount": 14,
+      "simStepCount": 14,
+      "encodedFrameCount": 0,
+      "timing": {
+        "timingEvidenceSource": "raf-and-queue-proxy",
+        "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+        "rafFps": 40.16064257028116,
+        "frameDeltaMs": 16.700000000000045,
+        "frameP95Ms": 24.899999999999977,
+        "cpuFrameMs": 0.40000000037252903,
+        "cpuFrameP95Ms": 2.5,
+        "queueDoneMs": 93.3999999994412,
+        "queueDoneP95Ms": 93.3999999994412,
+        "queueProbePending": false,
+        "queueSamples": 1,
+        "queueTimingAvailable": true
+      },
+      "boundarySplatFallbackReason": null,
+      "error": null
+    },
+    "button": {
+      "width": 55.078125,
+      "height": 26,
+      "text": "Save"
+    },
+    "labelState": {
+      "value": "authored-mix-cockpit-occlusion-fail-first-0716",
+      "width": 315
+    },
+    "commandResult": {
+      "ok": true,
+      "identity": "kaminos-volume-settings-preset-write-receipt-v1",
+      "requested": {
+        "label": "authored-mix-cockpit-occlusion-fail-first-0716",
+        "storePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+        "controlCount": 186
+      },
+      "effective": {
+        "alias": "authored-mix-cockpit-occlusion-fail-first-0716",
+        "label": "authored-mix-cockpit-occlusion-fail-first-0716",
+        "presetId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+        "contentHash": "sha256:5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+        "storePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+        "controlCount": 186,
+        "idempotent": true
+      },
+      "presetUrl": "/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+      "presetViewUrls": {
+        "splat-only": "/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2&view=splat-only",
+        "raymarch-only": "/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2&view=raymarch-only",
+        "smoke-hybrid": "/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2&view=smoke-hybrid",
+        "full-hybrid-diagnostic": "/volume-settings-preset.html?preset=vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2&view=full-hybrid-diagnostic"
+      }
+    },
+    "commandDiagnostic": {
+      "captureState": "authored-mix-cockpit-occlusion-fail-first-0716 | vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2 | 186/186 | /Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+      "info": null
+    }
+  }
+}

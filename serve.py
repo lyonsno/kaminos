@@ -2,20 +2,455 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import fcntl
+import hashlib
 import json
 import os
 import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
+PORT = 8090
 ROOT = Path(__file__).parent.resolve()
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
+VOLUME_SETTINGS_PRESET_SCHEMA_PATH = ROOT / "volume-settings-preset-schema-v2.json"
+VOLUME_SETTINGS_STORE_DEFAULT = Path(os.environ.get(
+    "KAMINOS_VOLUME_SETTINGS_STORE",
+    os.path.expanduser("~/.local/share/kaminos/volume-settings-presets"),
+)).expanduser().resolve()
+VOLUME_SETTINGS_STORE = VOLUME_SETTINGS_STORE_DEFAULT
+VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
+VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
+VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
+
+
+def _settings_preset_route_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
+def validate_volume_settings_preset_payload(payload, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if schema.get("identity") != VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY:
+        raise ValueError("settings preset canonical schema identity mismatch")
+    if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
+        raise ValueError("settings preset identity mismatch")
+    if payload.get("schemaIdentity") != schema.get("identity"):
+        raise ValueError("settings preset schema identity mismatch")
+
+    allowed_fields = set(schema.get("allowedNativePresetFields") or [])
+    unexpected_fields = sorted(set(payload) - allowed_fields)
+    if unexpected_fields:
+        raise ValueError(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
+
+    dom_controls = payload.get("domControls")
+    expected_controls = schema.get("controls") or []
+    if not isinstance(dom_controls, dict) or payload.get("controlCount") != len(expected_controls) or len(dom_controls) != len(expected_controls):
+        raise ValueError(f"settings preset requires exactly {len(expected_controls)} canonical controls")
+    expected_by_key = {entry["key"]: entry for entry in expected_controls}
+    if set(dom_controls) != set(expected_by_key):
+        raise ValueError("settings preset control inventory does not match the canonical schema")
+
+    expected_renderer_controls = schema.get("rendererControls") or []
+    renderer_controls = payload.get("rendererControls")
+    if renderer_controls is None:
+        if payload.get("rendererControlCount") not in (None, 0):
+            raise ValueError("settings preset renderer control count is invalid")
+        renderer_controls = {}
+    elif (
+        not isinstance(renderer_controls, dict)
+        or payload.get("rendererControlCount") != len(expected_renderer_controls)
+        or len(renderer_controls) != len(expected_renderer_controls)
+    ):
+        raise ValueError(
+            f"settings preset requires exactly {len(expected_renderer_controls)} renderer controls when that axis is authored"
+        )
+    expected_renderer_by_key = {entry["key"]: entry for entry in expected_renderer_controls}
+    if renderer_controls and set(renderer_controls) != set(expected_renderer_by_key):
+        raise ValueError("settings preset renderer control inventory does not match the canonical schema")
+
+    routed_values = {}
+    for key, descriptor in {**dom_controls, **renderer_controls}.items():
+        expected = expected_by_key.get(key) or expected_renderer_by_key.get(key)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"settings preset control descriptor is invalid: {key}")
+        if (
+            descriptor.get("param") != expected.get("param")
+            or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
+            or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
+        ):
+            raise ValueError(f"settings preset control inventory mismatch for {key}")
+        routed_values[expected["param"]] = _settings_preset_route_value(
+            descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
+        )
+
+    exclusions = payload.get("stateExclusions") or {}
+    if any(exclusions.get(field) is not True for field in schema.get("excludedStateFields") or []):
+        raise ValueError("settings preset must explicitly exclude runtime and replay state")
+    if any(field in payload for field in schema.get("forbiddenPresetFields") or []):
+        raise ValueError("settings preset must not contain runtime, renderer, camera, or replay state")
+
+    route = payload.get("route")
+    if not isinstance(route, str) or not route:
+        raise ValueError("settings preset requires an exact control route")
+    route_entries = parse_qsl(urlparse(route).query, keep_blank_values=True)
+    route_values = {}
+    for key, value in route_entries:
+        if key in route_values:
+            raise ValueError(f"settings preset route duplicates parameter {key}")
+        route_values[key] = value
+    activation = schema.get("activationParam") or {}
+    if route_values.pop(activation.get("key"), None) != activation.get("value"):
+        raise ValueError("settings preset route omitted the native volume activation gate")
+    for key, expected_value in routed_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset route/control mismatch for {key}")
+    for key in schema.get("routeExtraParams") or []:
+        if key not in route_values:
+            raise ValueError(f"settings preset route omitted metadata parameter {key}")
+        route_values.pop(key)
+    if route_values:
+        raise ValueError(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
+    return True
+
+
+def _volume_settings_store_path(store_path):
+    return Path(store_path).expanduser().resolve()
+
+
+def _volume_settings_alias_slug(label):
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(label or "").strip()).strip(".-").lower()[:96]
+    return slug or "unnamed-preset"
+
+
+def _volume_settings_control_values(payload, schema):
+    return {
+        descriptor["key"]: (
+            payload["domControls"][descriptor["key"]].get("rawValue")
+            if "rawValue" in payload["domControls"][descriptor["key"]]
+            else payload["domControls"][descriptor["key"]].get("value")
+        )
+        for descriptor in schema["controls"]
+    }
+
+
+def _volume_settings_renderer_control_values(payload, schema):
+    controls = payload.get("rendererControls")
+    if not controls:
+        return None
+    return {
+        descriptor["key"]: (
+            controls[descriptor["key"]].get("rawValue")
+            if "rawValue" in controls[descriptor["key"]]
+            else controls[descriptor["key"]].get("value")
+        )
+        for descriptor in schema.get("rendererControls") or []
+    }
+
+
+def _volume_settings_content_hash(payload, schema):
+    canonical = {
+        "schemaIdentity": schema["identity"],
+        "controls": _volume_settings_control_values(payload, schema),
+    }
+    renderer_controls = _volume_settings_renderer_control_values(payload, schema)
+    if renderer_controls is not None:
+        canonical["rendererControls"] = renderer_controls
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _atomic_write_json(path, document):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_path = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(document, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _atomic_create_json(path, document):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_path = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(document, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary_path, path)
+        except FileExistsError:
+            return False
+        return True
+    finally:
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+
+
+@contextmanager
+def _volume_settings_store_lock(store):
+    store = _volume_settings_store_path(store)
+    store.mkdir(parents=True, exist_ok=True)
+    lock_path = store / ".write.lock"
+    with lock_path.open("a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield store
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _read_json_object(path, role):
+    try:
+        document = json.loads(Path(path).read_text())
+    except FileNotFoundError:
+        raise
+    except Exception as error:
+        raise ValueError(f"volume settings preset {role} is unreadable: {error}") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"volume settings preset {role} is not a JSON object")
+    return document
+
+
+def _volume_settings_alias_for_label(store, label):
+    base = _volume_settings_alias_slug(label)
+
+    def existing_label(alias):
+        path = store / "aliases" / f"{alias}.json"
+        if not path.exists():
+            return None
+        document = _read_json_object(path, "alias")
+        if document.get("identity") != "kaminos-volume-settings-preset-alias-v1" or document.get("alias") != alias:
+            raise ValueError(f"volume settings preset alias identity mismatch: {alias}")
+        current_label = document.get("label")
+        if not isinstance(current_label, str) or not current_label.strip():
+            raise ValueError(f"volume settings preset alias label is invalid: {alias}")
+        return current_label
+
+    current_label = existing_label(base)
+    if current_label is None or current_label == label:
+        return base
+    suffix = hashlib.sha256(label.encode("utf-8")).hexdigest()[:12]
+    disambiguated = f"{base[:81].rstrip('.-')}--{suffix}"
+    current_label = existing_label(disambiguated)
+    if current_label is not None and current_label != label:
+        raise ValueError("volume settings preset alias hash collision")
+    return disambiguated
+
+
+def write_volume_settings_preset(store_path, label, payload, source, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    validate_volume_settings_preset_payload(payload, schema)
+    store = _volume_settings_store_path(store_path)
+    effective_label = str(label or "").strip() or "Unnamed preset"
+    content_hash = _volume_settings_content_hash(payload, schema)
+    preset_id = f"vsp-{content_hash}"
+    written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    document = {
+        "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
+        "presetId": preset_id,
+        "contentHash": f"sha256:{content_hash}",
+        "schemaIdentity": schema["identity"],
+        "controlCount": schema["controlCount"],
+        "initialLabel": effective_label,
+        "writtenAt": written_at,
+        "source": dict(source or {}),
+        "preset": payload,
+    }
+    with _volume_settings_store_lock(store):
+        alias = _volume_settings_alias_for_label(store, effective_label)
+        preset_path = store / "presets" / f"{preset_id}.json"
+        alias_path = store / "aliases" / f"{alias}.json"
+        created = _atomic_create_json(preset_path, document)
+        idempotent = not created
+        if idempotent:
+            existing = read_volume_settings_preset(store, preset_id, schema)
+            if existing.get("contentHash") != document["contentHash"]:
+                raise ValueError("volume settings preset content identity collision")
+
+        alias_document = {
+            "identity": "kaminos-volume-settings-preset-alias-v1",
+            "alias": alias,
+            "label": effective_label,
+            "presetId": preset_id,
+            "contentHash": document["contentHash"],
+            "schemaIdentity": schema["identity"],
+            "updatedAt": written_at,
+            "source": dict(source or {}),
+        }
+        _atomic_write_json(alias_path, alias_document)
+    preset_url = f"/volume-settings-preset.html?preset={preset_id}"
+    return {
+        "ok": True,
+        "identity": "kaminos-volume-settings-preset-write-receipt-v1",
+        "requested": {
+            "label": label,
+            "storePath": str(store),
+            "schemaIdentity": payload.get("schemaIdentity"),
+            "controlCount": payload.get("controlCount"),
+        },
+        "effective": {
+            "alias": alias,
+            "label": effective_label,
+            "presetId": preset_id,
+            "contentHash": document["contentHash"],
+            "storePath": str(store),
+            "schemaIdentity": schema["identity"],
+            "controlCount": schema["controlCount"],
+            "rendererControlCount": len(payload.get("rendererControls") or {}),
+            "idempotent": idempotent,
+        },
+        "presetUrl": preset_url,
+        "presetViewUrls": {
+            view: f"{preset_url}&view={view}"
+            for view in ("splat-only", "raymarch-only", "smoke-hybrid", "full-hybrid-diagnostic")
+        },
+    }
+
+
+def read_volume_settings_preset(store_path, preset_ref, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    store = _volume_settings_store_path(store_path)
+    requested = str(preset_ref or "").strip()
+    if not requested:
+        raise ValueError("volume settings preset id or alias is required")
+    alias_document = None
+    if requested.startswith("vsp-"):
+        if not re.fullmatch(r"vsp-[0-9a-f]{64}", requested):
+            raise ValueError("volume settings preset content id is invalid")
+        preset_id = requested
+    else:
+        alias = _volume_settings_alias_slug(requested)
+        if alias != requested:
+            raise ValueError("volume settings preset alias is invalid")
+        alias_path = store / "aliases" / f"{alias}.json"
+        try:
+            alias_document = _read_json_object(alias_path, "alias")
+        except FileNotFoundError as error:
+            raise FileNotFoundError(f"volume settings preset alias not found: {alias}") from error
+        if alias_document.get("identity") != "kaminos-volume-settings-preset-alias-v1" or alias_document.get("alias") != alias:
+            raise ValueError("volume settings preset alias identity mismatch")
+        if alias_document.get("schemaIdentity") != schema.get("identity"):
+            raise ValueError("volume settings preset alias schema mismatch")
+        if not isinstance(alias_document.get("label"), str) or not alias_document["label"].strip():
+            raise ValueError("volume settings preset alias label is invalid")
+        preset_id = alias_document.get("presetId")
+        if not isinstance(preset_id, str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", preset_id):
+            raise ValueError("volume settings preset alias target is invalid")
+
+    preset_path = store / "presets" / f"{preset_id}.json"
+    try:
+        document = _read_json_object(preset_path, "artifact")
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"volume settings preset not found: {preset_id}") from error
+    if document.get("identity") != VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY or document.get("presetId") != preset_id:
+        raise ValueError("volume settings preset artifact identity mismatch")
+    if document.get("schemaIdentity") != schema.get("identity") or document.get("controlCount") != schema.get("controlCount"):
+        raise ValueError("volume settings preset artifact schema mismatch")
+    validate_volume_settings_preset_payload(document.get("preset") or {}, schema)
+    content_hash = _volume_settings_content_hash(document["preset"], schema)
+    if document.get("contentHash") != f"sha256:{content_hash}" or preset_id != f"vsp-{content_hash}":
+        raise ValueError("volume settings preset artifact content hash mismatch")
+    if alias_document and alias_document.get("contentHash") != document.get("contentHash"):
+        raise ValueError("volume settings preset alias content hash mismatch")
+    return {
+        **document,
+        "requestedPresetRef": requested,
+        "alias": alias_document.get("alias") if alias_document else None,
+        "label": alias_document.get("label") if alias_document else document.get("initialLabel"),
+        "storePath": str(store),
+    }
+
+
+def list_volume_settings_presets(store_path, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    store = _volume_settings_store_path(store_path)
+    aliases_dir = store / "aliases"
+    aliases_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for alias_path in aliases_dir.glob("*.json"):
+        try:
+            alias_document = _read_json_object(alias_path, "alias")
+        except ValueError as error:
+            raise ValueError(f"volume settings preset alias index is corrupt at {alias_path.name}: {error}") from error
+        alias = alias_document.get("alias")
+        if alias_path.stem != alias:
+            raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
+        document = read_volume_settings_preset(store, alias, schema)
+        entries.append({
+            "alias": alias,
+            "label": document["label"],
+            "presetId": document["presetId"],
+            "contentHash": document["contentHash"],
+            "schemaIdentity": document["schemaIdentity"],
+            "controlCount": document["controlCount"],
+            "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
+            "updatedAt": alias_document.get("updatedAt"),
+            "source": alias_document.get("source") or {},
+        })
+    entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    return {
+        "identity": "kaminos-volume-settings-preset-index-v1",
+        "storePath": str(store),
+        "schemaIdentity": schema["identity"],
+        "controlCount": schema["controlCount"],
+        "rendererControlCount": len(schema.get("rendererControls") or []),
+        "entries": entries,
+    }
+
+
+def volume_settings_server_source():
+    source = {"repoRoot": str(ROOT), "serverPort": PORT}
+    for field, command in (
+        ("branch", ["git", "rev-parse", "--abbrev-ref", "HEAD"]),
+        ("commit", ["git", "rev-parse", "HEAD"]),
+    ):
+        try:
+            source[field] = subprocess.check_output(command, cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
+        except (OSError, subprocess.SubprocessError):
+            source[field] = "unavailable"
+    return source
+
+
+def parse_server_arguments(argv):
+    port = 8090
+    store = VOLUME_SETTINGS_STORE_DEFAULT
+    arguments = list(argv)
+    if arguments and not arguments[0].startswith("-"):
+        try:
+            port = int(arguments.pop(0))
+        except ValueError as error:
+            raise ValueError("server port must be an integer") from error
+    while arguments:
+        argument = arguments.pop(0)
+        if argument != "--volume-settings-store" or not arguments:
+            raise ValueError(f"unsupported server argument: {argument}")
+        store = _volume_settings_store_path(arguments.pop(0))
+    return port, store
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -951,6 +1386,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-captures":
             self.handle_volume_captures()
+        elif parsed.path == "/api/volume-settings-preset":
+            self.handle_volume_settings_preset_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-settings-presets":
+            self.handle_volume_settings_presets_get()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -978,6 +1417,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
             self.handle_volume_capture()
+        elif parsed.path == "/api/volume-settings-presets":
+            self.handle_volume_settings_presets_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -998,7 +1439,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def volume_capture_slug(self, payload):
         requested = str(payload.get("name") or payload.get("captureId") or payload.get("kind") or "volume-capture")
         slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", requested).strip(".-").lower()[:72] or "volume-capture"
-        stamp = time.strftime("%Y%m%d-%H%M%S")
+        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 1_000_000:06d}"
         return f"{stamp}-{slug}"
 
     def volume_capture_path_for_id(self, capture_id):
@@ -1046,6 +1487,75 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         self.send_json(document)
 
+    def handle_volume_settings_presets_get(self):
+        try:
+            self.send_json(list_volume_settings_presets(VOLUME_SETTINGS_STORE))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-index",
+            }, 500)
+
+    def handle_volume_settings_preset_get(self, query):
+        preset_ref = (query.get("id") or query.get("preset") or [""])[0]
+        try:
+            document = read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_ref)
+        except FileNotFoundError as error:
+            self.send_json({
+                "error": str(error),
+                "requestedPresetRef": preset_ref,
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-read",
+            }, 404)
+            return
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedPresetRef": preset_ref,
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-read",
+            }, 400)
+            return
+        self.send_json(document)
+
+    def handle_volume_settings_presets_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        if not isinstance(request, dict) or set(request) != {"label", "preset"}:
+            self.send_json({"error": "settings preset write requires exactly label and preset inputs"}, 400)
+            return
+        if not isinstance(request.get("label"), str) or not request["label"].strip():
+            self.send_json({"error": "settings preset label is required"}, 400)
+            return
+        if not isinstance(request.get("preset"), dict):
+            self.send_json({"error": "settings preset payload must be a JSON object"}, 400)
+            return
+        try:
+            receipt = write_volume_settings_preset(
+                VOLUME_SETTINGS_STORE,
+                request["label"],
+                request["preset"],
+                volume_settings_server_source(),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedLabel": request.get("label"),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-write",
+            }, 400)
+            return
+        self.send_json(receipt)
+
     def handle_volume_capture(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -1061,18 +1571,62 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "capture payload must be a JSON object"}, 400)
             return
 
+        if payload.get("kind") == "settings-preset":
+            self.send_json({"error": "settings presets must use the shared /api/volume-settings-presets store"}, 410)
+            return
+
+        if payload.get("kind") == "prototype-basin":
+            scene_authority = payload.get("sceneAuthority") or {}
+            requested_smoke = payload.get("requestedSmoke") or {}
+            exclusions = payload.get("stateExclusions") or {}
+            forbidden_runtime_fields = ("href", "camera", "volumeDebugState", "viewport")
+            excluded_fields = (
+                "fluidField", "frontField", "boundarySidecar", "splatInstances",
+                "historyBuffers", "pressureState", "replayState",
+            )
+            if scene_authority.get("status") != "prototype" or scene_authority.get("effective") != "tall_plume":
+                self.send_json({"error": "prototype-basin capture requires tall_plume prototype authority"}, 400)
+                return
+            if requested_smoke.get("role") != "truthHigh" or requested_smoke.get("composition") != "splat-only-v0" or requested_smoke.get("warmupSteps") != 0:
+                self.send_json({"error": "prototype-basin capture requires explicit truthHigh splat-only fresh-smoke identity"}, 400)
+                return
+            if ((payload.get("domControls") or {}).get("boundarySplatMode", {}).get("value") != "learned"):
+                self.send_json({"error": "prototype-basin splat-only smoke requires learned boundary splats"}, 400)
+                return
+            if str(((payload.get("domControls") or {}).get("resolution", {}).get("value"))) != "160":
+                self.send_json({"error": "prototype-basin selective-head smoke requires resolution 160"}, 400)
+                return
+            if any(exclusions.get(field) is not True for field in excluded_fields):
+                self.send_json({"error": "prototype-basin capture must explicitly exclude runtime and replay state"}, 400)
+                return
+            if any(field in payload for field in forbidden_runtime_fields):
+                self.send_json({"error": "prototype-basin capture must not contain runtime, camera, or viewport state"}, 400)
+                return
+
         VOLUME_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
         capture_id = self.volume_capture_slug(payload)
         path = self.volume_capture_path_for_id(capture_id)
         relative_path = str(path.relative_to(ROOT))
+        smoke_url = f"/volume-basin-smoke.html?capture={capture_id}" if payload.get("kind") == "prototype-basin" else None
+        preset_url = f"/volume-settings-preset.html?preset={capture_id}" if payload.get("kind") == "settings-preset" else None
+        witness_command = (
+            f"node volume-settings-preset-witness.mjs --url "
+            f"http://127.0.0.1:{PORT}{preset_url}"
+            if preset_url else
+            f"node volume-witness.mjs --capture {relative_path}"
+        )
         document = {
             "identity": "kaminos-volume-agent-capture-artifact-v1",
             "captureId": capture_id,
             "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "artifactRelativePath": relative_path,
-            "witnessCommand": f"node volume-witness.mjs --capture {relative_path}",
+            "witnessCommand": witness_command,
             "capture": payload,
         }
+        if smoke_url:
+            document["smokeUrl"] = smoke_url
+        if preset_url:
+            document["presetUrl"] = preset_url
         path.write_text(json.dumps(document, indent=2))
         self.send_json({
             "ok": True,
@@ -1080,6 +1634,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "relativePath": relative_path,
             "path": str(path),
             "witnessCommand": document["witnessCommand"],
+            "smokeUrl": smoke_url,
+            "presetUrl": preset_url,
             "document": document,
         })
 
@@ -1606,6 +2162,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    try:
+        PORT, VOLUME_SETTINGS_STORE = parse_server_arguments(sys.argv[1:])
+    except ValueError as error:
+        print(f"serve.py: {error}", file=sys.stderr)
+        raise SystemExit(2)
     for path in (BROWSE_ROOTS.get("splat-inbox"), BROWSE_ROOTS.get("splat-production")):
         if path:
             path.mkdir(parents=True, exist_ok=True)
@@ -1614,6 +2175,7 @@ if __name__ == "__main__":
     print(f"  Greenroom: {BROWSE_ROOTS['greenroom']}")
     print(f"  Splat inbox: {BROWSE_ROOTS['splat-inbox']}")
     print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
+    print(f"  Volume settings store: {VOLUME_SETTINGS_STORE}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()

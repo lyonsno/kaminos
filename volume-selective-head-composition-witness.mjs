@@ -146,6 +146,10 @@ try {
     assert.ok(screenshotBytes.length > 1000, `${composition} screenshot was blank or missing`);
     writeFileSync(screenshotPath, screenshotBytes);
     const afterState = await evaluate('window.__kaminosSelectiveHeadLive.debugState()');
+    if (composition === 'splat-only-v0') {
+      assert.equal(afterState.requestedRaymarchSmokePresentation, 'on', 'splat-only smoke accounting control did not preserve Smoke On');
+      assert.equal(afterState.raymarchSmokeApplied, false, 'splat-only reported raymarched smoke applied while its raymarch pass was absent');
+    }
     captures.push({
       composition,
       requestedComposition: receipt.selectiveHeadLiveCompositionRequested,
@@ -160,6 +164,7 @@ try {
       renderElapsedMs,
       screenshotElapsedMs,
       timing: afterState.timing || null,
+      raymarchSmokeApplied: afterState.raymarchSmokeApplied,
       boundarySplatGpuProfile: afterState.boundarySplatGpuProfile || null,
       screenshot: {
         ...artifact(screenshotPath),

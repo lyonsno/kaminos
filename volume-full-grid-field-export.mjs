@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomInt } from 'node:crypto';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -42,6 +42,9 @@ const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const secondaryRenderPngPath = args.has('--secondary-render-png') ? resolve(String(args.get('--secondary-render-png'))) : null;
+const flowKernelDescriptorBinPath = args.has('--flow-kernel-descriptor-bin')
+  ? resolve(String(args.get('--flow-kernel-descriptor-bin')))
+  : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const renderCompositionExplicit = args.has('--render-composition');
@@ -96,6 +99,98 @@ function sha256(value) {
 
 function sha256File(path) {
   return sha256(readFileSync(path));
+}
+
+async function drainFlowKernelDescriptorCapture(ws, capture, outputPath) {
+  if (!capture) return null;
+  if (!outputPath) throw new Error('flow kernel descriptor capture requires --flow-kernel-descriptor-bin');
+  const session = capture.exportSession;
+  if (session?.identity !== 'session-bound-float32-chunk-export-v0'
+    || typeof session.sessionId !== 'string'
+    || !Number.isInteger(session.floatCount)
+    || session.floatCount <= 0
+    || Number(session.byteLength) !== session.floatCount * Float32Array.BYTES_PER_ELEMENT) {
+    throw new Error(`invalid flow kernel descriptor export session: ${JSON.stringify(session)}`);
+  }
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const partialPath = `${outputPath}.partial-${process.pid}-${randomInt(100000, 1000000)}`;
+  let fd = null;
+  let writtenBytes = 0;
+  let actualSha256 = null;
+  let release = null;
+  let exportError = null;
+  try {
+    fd = openSync(partialPath, 'w');
+    for (let startFloat = 0; startFloat < session.floatCount; startFloat += chunkFloats) {
+      const floatCount = Math.min(chunkFloats, session.floatCount - startFloat);
+      const chunk = await evaluateByValue(
+        ws,
+        `window.__kaminosVolumePrototype.readFlowKernelDescriptorCaptureChunk(${JSON.stringify({
+          sessionId: session.sessionId,
+          startFloat,
+          floatCount,
+        })})`,
+        'drain-flow-kernel-descriptor-chunk',
+      );
+      if (chunk?.ok !== true
+        || chunk.sessionId !== session.sessionId
+        || Number(chunk.startFloat) !== startFloat
+        || Number(chunk.floatCount) !== floatCount
+        || typeof chunk.base64 !== 'string') {
+        throw new Error(`invalid flow kernel descriptor chunk: ${JSON.stringify(chunk)}`);
+      }
+      const bytes = Buffer.from(chunk.base64, 'base64');
+      if (bytes.byteLength !== floatCount * Float32Array.BYTES_PER_ELEMENT) {
+        throw new Error(`flow kernel descriptor chunk byte mismatch: ${bytes.byteLength}`);
+      }
+      writeSync(fd, bytes);
+      writtenBytes += bytes.byteLength;
+    }
+    if (writtenBytes !== session.byteLength) {
+      throw new Error(`flow kernel descriptor artifact byte mismatch: ${writtenBytes} != ${session.byteLength}`);
+    }
+    actualSha256 = sha256File(partialPath);
+    if (actualSha256 !== capture.descriptorSha256) {
+      throw new Error(`flow kernel descriptor SHA-256 mismatch: ${actualSha256} != ${capture.descriptorSha256}`);
+    }
+  } catch (error) {
+    exportError = error;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+  try {
+    release = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.releaseFlowKernelDescriptorCapture(${JSON.stringify({ sessionId: session.sessionId })})`,
+      'release-flow-kernel-descriptor-capture',
+    );
+    if (release?.ok !== true
+      || release.sessionId !== session.sessionId
+      || release.descriptorSha256 !== capture.descriptorSha256) {
+      throw new Error(`flow kernel descriptor release failed: ${JSON.stringify(release)}`);
+    }
+  } catch (releaseError) {
+    exportError = exportError
+      ? new Error(`${exportError.message}; descriptor session release also failed: ${releaseError.message}`, { cause: exportError })
+      : releaseError;
+  }
+  if (exportError) {
+    rmSync(partialPath, { force: true });
+    throw exportError;
+  }
+  renameSync(partialPath, outputPath);
+  return {
+    identity: 'checksum-bound-flow-kernel-descriptor-binary-v0',
+    path: outputPath,
+    byteLength: writtenBytes,
+    floatCount: session.floatCount,
+    rowCount: capture.rowCount,
+    strideFloats: capture.strideFloats,
+    sha256: actualSha256,
+    browserDescriptorSha256: capture.descriptorSha256,
+    sourceHashes: capture.sourceHashes,
+    release,
+  };
 }
 
 function resolveInitialFieldManifest() {
@@ -531,6 +626,13 @@ async function main() {
     if (!renderControlOverrides || typeof renderControlOverrides !== 'object' || Array.isArray(renderControlOverrides)) {
       throw new Error('--render-control-overrides-json must decode to an object');
     }
+    if (flowKernelDescriptorBinPath) {
+      if (!renderPngPath) throw new Error('--flow-kernel-descriptor-bin requires --render-png');
+      renderControlOverrides = {
+        ...renderControlOverrides,
+        flowKernelDescriptorCapture: true,
+      };
+    }
     secondaryRenderControlOverrides = args.has('--secondary-render-control-overrides-json')
       ? JSON.parse(String(args.get('--secondary-render-control-overrides-json')))
       : {};
@@ -752,6 +854,15 @@ async function main() {
         if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
+        if (flowKernelDescriptorBinPath && !renderReceipt.flowKernelDescriptorCapture) {
+          throw new Error('flow kernel descriptor artifact was requested but the renderer produced no descriptor capture');
+        }
+        phase = 'drain-flow-kernel-descriptor';
+        const flowKernelDescriptorArtifact = await drainFlowKernelDescriptorCapture(
+          ws,
+          renderReceipt.flowKernelDescriptorCapture,
+          flowKernelDescriptorBinPath,
+        );
         const rect = renderReceipt.canvasCssRect;
         if (rect.x < 0
           || rect.y < 0
@@ -784,6 +895,7 @@ async function main() {
           importedFieldManifestSha256: initialField.manifestSha256,
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+          flowKernelDescriptorArtifact,
         };
         if (secondaryRenderPngPath) {
           phase = 'render-imported-field-secondary';
