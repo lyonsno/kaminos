@@ -5488,6 +5488,12 @@ export function createKaminosVolumePrototype({
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
   if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
+  const productTransform = {
+    translate: Array.isArray(externalProductTransform?.translate)
+      ? externalProductTransform.translate.slice(0, 3).map(value => Number(value) || 0)
+      : [0, 0, 0],
+    scale: Math.max(0.001, Number(externalProductTransform?.scale) || 1),
+  };
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -13542,6 +13548,10 @@ export function createKaminosVolumePrototype({
       smokeDepthFarBoundEffective: false,
       splatFireEncoded: true,
       splatSharedDepthEffective: true,
+      productTransform: {
+        translate: [...productTransform.translate],
+        scale: productTransform.scale,
+      },
       privateSubmitApplied: false,
       colorFormat: format,
       depthFormat: externalDepthFormat,
