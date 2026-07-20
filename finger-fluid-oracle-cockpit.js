@@ -13,7 +13,7 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
   routeGateKey: 'finger_fluid_waterfall_oracle_cockpit',
   requiredBenchKey: 'kaminos_finger_fluid_bench',
   requiredTruthSceneKey: 'finger_fluid_truth_scene',
-  requiredTruthScene: 'laminar_inlets',
+  requiredTruthScene: 'waterfall_resolution_oracle',
   restartRequiredKey: 'finger_fluid_oracle_restart_required',
   queryKeys: {
     resolutionPreset: 'finger_fluid_oracle_resolution',
@@ -38,16 +38,15 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
     pressureIterations: ['densityIterationsPerStep', 'densityIterationCount'],
     viscosity: ['freeFlightViscosityBoost', 'effectiveFreeFlightViscosityBoost'],
     cohesion: ['capillaryStrength', 'effectiveCapillaryStrength'],
-    particleSpacing: ['oracleParticleSpacing', 'effectiveParticleSpacing'],
+    particleSpacing: ['oracleParticleSpacingScale', 'effectiveParticleSpacingScale'],
     kernelScale: ['oracleKernelScale', 'effectiveKernelScale'],
-    sourceFlux: ['oracleSourceFlux', 'effectiveSourceFlux'],
+    sourceFlux: ['oracleSourceFluxScale', 'effectiveSourceFluxScale'],
     solverRoute: ['solverRoute'],
     waterfallContinuityContract: ['waterfallContinuityContract'],
   },
   presets: {
-    low: { particleCount: 24576, label: 'low', camera: { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] } },
-    standard: { particleCount: 49152, label: 'standard', camera: { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] } },
-    high: { particleCount: 98304, label: 'high', camera: { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] } },
+    baseline: { particleCount: 12288, label: 'baseline', spacingScale: 1, kernelScale: 1, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
+    high: { particleCount: 98304, label: 'high', spacingScale: 0.5, kernelScale: 0.5, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
   },
   structuralControls: ['resolutionPreset', 'particleSpacing', 'kernelScale', 'sourceFlux', 'pressureIterations', 'viscosity', 'cohesion'],
   unsupportedUntilBigPapaFields: ['particleSpacing', 'kernelScale', 'sourceFlux'],
@@ -85,7 +84,7 @@ function boolParam(value, fallback = false) {
 }
 
 function normalizeResolutionPreset(value) {
-  return Object.hasOwn(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets, value) ? value : 'standard';
+  return Object.hasOwn(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets, value) ? value : 'baseline';
 }
 
 function readEffectiveField(runtime, names) {
@@ -116,8 +115,8 @@ export function fingerFluidOracleRequestedConfigFromParams(paramsInput = new URL
   return {
     resolutionPreset,
     particleCount: preset.particleCount,
-    particleSpacing: boundedNumber(params.get(keys.particleSpacing), 1, 0.25, 2.5),
-    kernelScale: boundedNumber(params.get(keys.kernelScale), 1, 0.5, 2.5),
+    particleSpacing: boundedNumber(params.get(keys.particleSpacing), preset.spacingScale, 0.25, 2.5),
+    kernelScale: boundedNumber(params.get(keys.kernelScale), preset.kernelScale, 0.25, 2.5),
     sourceFlux: boundedNumber(params.get(keys.sourceFlux), 1, 0, 4),
     pressureIterations: boundedInteger(params.get(keys.pressureIterations), 3, 1, 12),
     viscosity: boundedNumber(params.get(keys.viscosity), 0.17, 0, 0.75),
@@ -167,8 +166,8 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
     effective: {
       resolutionPreset: effectiveParticleCount === FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.high.particleCount
         ? 'high'
-        : effectiveParticleCount === FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.low.particleCount
-          ? 'low'
+        : effectiveParticleCount === FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.baseline.particleCount
+          ? 'baseline'
           : requested.resolutionPreset,
       particleCount: Number.isFinite(Number(effectiveParticleCount)) ? Number(effectiveParticleCount) : requested.particleCount,
       pressureIterations: Number.isFinite(Number(effectivePressureIterations)) ? Number(effectivePressureIterations) : requested.pressureIterations,
@@ -242,8 +241,8 @@ export function createFingerFluidOracleABReplayUrls({ url, replayId = 'waterfall
     target.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthSceneKey, FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthScene);
     target.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.routeGateKey, '1');
   }
-  low.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.resolutionPreset, 'low');
-  low.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.legacyBridgeKeys.particleCount, String(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.low.particleCount));
+  low.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.resolutionPreset, 'baseline');
+  low.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.legacyBridgeKeys.particleCount, String(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.baseline.particleCount));
   low.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.replayId, `${replayId}-low`);
   high.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.resolutionPreset, 'high');
   high.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.legacyBridgeKeys.particleCount, String(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.high.particleCount));

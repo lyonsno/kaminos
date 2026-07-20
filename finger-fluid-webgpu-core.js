@@ -23,6 +23,8 @@ export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-
 export const KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT = 'wgsl-unilateral-free-surface-pressure-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT = 'isolated-slot-waterfall-uniform-resolution-oracle-v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA = 'kaminos.finger-fluid.waterfall-resolution-oracle-evidence.v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webgpu-device-limit-derived-particle-allocation-preflight-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
@@ -115,7 +117,8 @@ const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
-export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets']);
+export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze(['baseline', 'high']);
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
@@ -134,6 +137,166 @@ export function resolveFingerFluidTruthScene(value = 'multi_regime_playground') 
     throw new RangeError(`Unsupported finger fluid truth scene: ${scene}`);
   }
   return scene;
+}
+
+function isFingerFluidLaminarSourceScene(scene) {
+  return scene === 'laminar_inlets' || scene === 'waterfall_resolution_oracle';
+}
+
+export function resolveFingerFluidWaterfallOraclePreset(value = 'baseline') {
+  const preset = String(value || 'baseline');
+  if (!KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS.includes(preset)) {
+    throw new RangeError(`Unsupported finger fluid waterfall oracle preset: ${preset}`);
+  }
+  return preset;
+}
+
+export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
+  const preset = resolveFingerFluidWaterfallOraclePreset(value);
+  const refinementFactor = preset === 'high' ? 2 : 1;
+  const particleSpacing = LAMINAR_SOURCE_AXIAL_SPACING / refinementFactor;
+  const descriptor = createFingerFluidLaminarInletDescriptors()[1];
+  const physicalSourceFlux = measureFingerFluidLaminarInletFlux(descriptor);
+  const particleVolume = particleSpacing ** 3;
+  const laneColumns = descriptor.laneColumns * refinementFactor;
+  const laneRows = descriptor.laneRows * refinementFactor;
+  return Object.freeze({
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    preset,
+    sourceId: descriptor.id,
+    sourceIndex: 1,
+    refinementFactor,
+    particleSpacing,
+    particleVolume,
+    kernelRadius: 0.185 / refinementFactor,
+    visibleParticleRadius: 0.046 / refinementFactor,
+    defaultParticleCount: 12_288 * refinementFactor ** 3,
+    laneColumns,
+    laneRows,
+    laneCount: laneColumns * laneRows,
+    physicalSourceFlux,
+    expectedParticleReleaseRate: physicalSourceFlux / particleVolume,
+    camera: Object.freeze({
+      yaw: -0.46,
+      pitch: 0.30,
+      distance: 3.05,
+      target: Object.freeze([0, -0.35, -0.92]),
+    }),
+  });
+}
+
+function requireFingerFluidOracleArtifact(artifact, label) {
+  if (!artifact
+    || typeof artifact.path !== 'string'
+    || !/^[a-f0-9]{64}$/.test(String(artifact.sha256 || ''))
+    || !Number.isSafeInteger(artifact.width)
+    || artifact.width <= 0
+    || !Number.isSafeInteger(artifact.height)
+    || artifact.height <= 0) {
+    throw new Error(`${label} artifact missing or partial`);
+  }
+  return { ...artifact };
+}
+
+export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
+  const requestedPreset = resolveFingerFluidWaterfallOraclePreset(values.requestedPreset);
+  const effectivePreset = resolveFingerFluidWaterfallOraclePreset(values.effectivePreset);
+  const config = createFingerFluidWaterfallOracleConfig(effectivePreset);
+  const identity = {
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA,
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    truthScene: values.truthScene,
+    requestedPreset,
+    effectivePreset,
+    sourceId: values.sourceId,
+    refinementFactor: Number(values.refinementFactor),
+    particleSpacing: Number(values.particleSpacing),
+    particleVolume: Number(values.particleVolume),
+    kernelRadius: Number(values.kernelRadius),
+    visibleParticleRadius: Number(values.visibleParticleRadius),
+    particleCount: Number(values.particleCount),
+    laneColumns: Number(values.laneColumns),
+    laneRows: Number(values.laneRows),
+    laneCount: Number(values.laneCount),
+    physicalSourceFlux: Number(values.physicalSourceFlux),
+    expectedParticleReleaseRate: Number(values.expectedParticleReleaseRate),
+    rendererMode: values.rendererMode,
+    colorMode: values.colorMode,
+    opticalDebugMode: values.opticalDebugMode,
+    fixedTimeStepSeconds: Number(values.fixedTimeStepSeconds),
+    capturedStep: Number(values.capturedStep),
+    densityIterations: Number(values.densityIterations),
+    capillaryStrength: Number(values.capillaryStrength),
+    supportFriction: Number(values.supportFriction),
+    freeFlightViscosityBoost: Number(values.freeFlightViscosityBoost),
+    thinSheetVorticityAttenuation: Number(values.thinSheetVorticityAttenuation),
+    camera: values.camera ? JSON.parse(JSON.stringify(values.camera)) : null,
+  };
+  const numericKeys = [
+    'refinementFactor', 'particleSpacing', 'particleVolume', 'kernelRadius', 'visibleParticleRadius',
+    'particleCount', 'laneColumns', 'laneRows', 'laneCount', 'physicalSourceFlux',
+    'expectedParticleReleaseRate', 'fixedTimeStepSeconds', 'capturedStep', 'densityIterations',
+    'capillaryStrength', 'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
+  ];
+  if (identity.truthScene !== 'waterfall_resolution_oracle'
+    || identity.sourceId !== config.sourceId
+    || numericKeys.some(key => !Number.isFinite(identity[key]))) {
+    throw new Error(`Waterfall oracle evidence identity missing or incoherent: ${JSON.stringify(identity)}`);
+  }
+  return identity;
+}
+
+export function evaluateFingerFluidWaterfallOraclePair({
+  baselineIdentity,
+  highIdentity,
+  baselineArtifact,
+  highArtifact,
+} = {}) {
+  if (baselineIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+    || highIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA) {
+    throw new Error('waterfall oracle evidence identity missing');
+  }
+  if (baselineIdentity.effectivePreset !== 'baseline' || highIdentity.effectivePreset !== 'high') {
+    throw new Error('waterfall oracle pair does not contain baseline and high presets');
+  }
+  const exactCommonKeys = [
+    'contract', 'truthScene', 'sourceId', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
+    'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
+  ];
+  for (const key of exactCommonKeys) {
+    if (JSON.stringify(baselineIdentity[key]) !== JSON.stringify(highIdentity[key])) {
+      throw new Error(`waterfall oracle common identity mismatch at ${key}`);
+    }
+  }
+  if (JSON.stringify(baselineIdentity.camera) !== JSON.stringify(highIdentity.camera)) {
+    throw new Error('waterfall oracle camera mismatch');
+  }
+  if (Math.abs(baselineIdentity.physicalSourceFlux - highIdentity.physicalSourceFlux) > 1e-9) {
+    throw new Error('waterfall oracle physical source flux mismatch');
+  }
+  if (highIdentity.particleSpacing !== baselineIdentity.particleSpacing / 2) {
+    throw new Error('waterfall oracle high-resolution spacing is not exactly half baseline');
+  }
+  if (highIdentity.kernelRadius !== baselineIdentity.kernelRadius / 2
+    || highIdentity.visibleParticleRadius !== baselineIdentity.visibleParticleRadius / 2
+    || highIdentity.particleVolume !== baselineIdentity.particleVolume / 8
+    || highIdentity.particleCount !== baselineIdentity.particleCount * 8
+    || highIdentity.laneCount !== baselineIdentity.laneCount * 4) {
+    throw new Error('waterfall oracle high-resolution scale law mismatch');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.waterfall-resolution-oracle-pair.v0',
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    mechanicalChecksOk: true,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualContinuityAccepted: null,
+    baselineIdentity,
+    highIdentity,
+    baselineArtifact: requireFingerFluidOracleArtifact(baselineArtifact, 'baseline'),
+    highArtifact: requireFingerFluidOracleArtifact(highArtifact, 'high'),
+  };
 }
 
 export function resolveFingerFluidParticleCount(value = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT) {
@@ -629,6 +792,70 @@ export function sampleFingerFluidLaminarInletParticle(index, descriptors = creat
   };
 }
 
+export function sampleFingerFluidWaterfallOracleParticle(index, preset = 'baseline', {
+  particleCount = createFingerFluidWaterfallOracleConfig(preset).defaultParticleCount,
+} = {}) {
+  if (!Number.isSafeInteger(index) || index < 0) {
+    throw new RangeError(`Finger fluid waterfall oracle particle index must be a nonnegative integer: ${index}`);
+  }
+  const config = createFingerFluidWaterfallOracleConfig(preset);
+  const descriptor = createFingerFluidLaminarInletDescriptors()[1];
+  const laneIndex = index % config.laneCount;
+  const laneOrdinal = Math.floor(index / config.laneCount);
+  const column = laneIndex % config.laneColumns;
+  const row = Math.floor(laneIndex / config.laneColumns);
+  const u = (((column + 0.5) / config.laneColumns) * 2 - 1) * descriptor.halfWidth * 0.92;
+  const v = (((row + 0.5) / config.laneRows) * 2 - 1) * descriptor.halfHeight * 0.88;
+  const profile = evaluateFingerFluidLaminarInletProfile(descriptor, [u, v]);
+  let laneSpeedSum = 0;
+  for (let lane = 0; lane < config.laneCount; lane += 1) {
+    const laneColumn = lane % config.laneColumns;
+    const laneRow = Math.floor(lane / config.laneColumns);
+    const laneU = (((laneColumn + 0.5) / config.laneColumns) * 2 - 1) * descriptor.halfWidth * 0.92;
+    const laneV = (((laneRow + 0.5) / config.laneRows) * 2 - 1) * descriptor.halfHeight * 0.88;
+    laneSpeedSum += evaluateFingerFluidLaminarInletProfile(descriptor, [laneU, laneV]).axialSpeed;
+  }
+  const laneParticleCount = Math.floor((particleCount - 1 - laneIndex) / config.laneCount) + 1;
+  const laneReleaseRate = config.expectedParticleReleaseRate * profile.axialSpeed / Math.max(laneSpeedSum, 1e-9);
+  const releasePeriodFrames = Math.max(1, Math.round(LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9)));
+  const cycleFrames = Math.max(1, laneParticleCount * releasePeriodFrames);
+  const lanePhaseOffset = Math.floor((laneIndex + 0.5) * releasePeriodFrames / config.laneCount);
+  const releaseFrame = laneOrdinal * releasePeriodFrames + lanePhaseOffset;
+  const ageFramesAtStart = releaseFrame === 0 ? 0 : cycleFrames - releaseFrame;
+  const initialAxialPosition = -descriptor.reservoirLength
+    + config.particleSpacing * 0.5
+    + profile.axialSpeed * (ageFramesAtStart / LAMINAR_SOURCE_REFERENCE_FPS);
+  const activeAtFrameZero = initialAxialPosition <= 0;
+  const axialPosition = activeAtFrameZero
+    ? initialAxialPosition
+    : -descriptor.reservoirLength + config.particleSpacing * 0.5;
+  const axis = descriptor.axis;
+  const tangent = descriptor.tangent;
+  const bitangent = normalizeFingerFluidInletVector([
+    axis[1] * tangent[2] - axis[2] * tangent[1],
+    axis[2] * tangent[0] - axis[0] * tangent[2],
+    axis[0] * tangent[1] - axis[1] * tangent[0],
+  ], `${descriptor.id} waterfall oracle bitangent`);
+  return {
+    sourceIndex: 1,
+    localOrdinal: index,
+    laneIndex,
+    laneOrdinal,
+    profile: descriptor.profile,
+    phase: descriptor.phase,
+    activeAtFrameZero,
+    releasePeriodFrames,
+    cycleFrames,
+    releaseFrame,
+    position: descriptor.origin.map((value, component) => (
+      value + tangent[component] * u + bitangent[component] * v + axis[component] * axialPosition
+    )),
+    velocity: axis.map(value => value * profile.axialSpeed),
+    localCoordinates: [u, v],
+    profileWeight: profile.profileWeight,
+  };
+}
+
 export function createFingerFluidLaminarSourcePopulation(
   particleCount = DEFAULT_PARTICLE_COUNT,
   descriptors = createFingerFluidLaminarInletDescriptors(),
@@ -1064,6 +1291,7 @@ fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
 }
 
 fn laminar_inlet_source_index(index: u32) -> u32 {
+  if (params.particleShift.z > 1.5) { return 1u; }
   let allocationSlot = index % 10u;
   if (allocationSlot < 4u) { return 0u; }
   if (allocationSlot < 7u) { return 1u; }
@@ -1071,6 +1299,7 @@ fn laminar_inlet_source_index(index: u32) -> u32 {
 }
 
 fn laminar_inlet_source_local_ordinal(index: u32) -> u32 {
+  if (params.particleShift.z > 1.5) { return index; }
   let allocationSlot = index % 10u;
   let completeBlocks = index / 10u;
   if (allocationSlot < 4u) { return completeBlocks * 4u + allocationSlot; }
@@ -1079,6 +1308,7 @@ fn laminar_inlet_source_local_ordinal(index: u32) -> u32 {
 }
 
 fn laminar_inlet_source_particle_count(sourceIndex: u32) -> u32 {
+  if (params.particleShift.z > 1.5) { return select(0u, params.particleCount, sourceIndex == 1u); }
   let completeBlocks = params.particleCount / 10u;
   let remainder = params.particleCount % 10u;
   if (sourceIndex == 0u) { return completeBlocks * 4u + min(remainder, 4u); }
@@ -1095,7 +1325,10 @@ fn laminar_inlet_source_from_phase(phase: f32) -> u32 {
 
 fn laminar_inlet_lane_count(sourceIndex: u32) -> u32 {
   if (sourceIndex == 0u) { return 72u; }
-  if (sourceIndex == 1u) { return 60u; }
+  if (sourceIndex == 1u) {
+    let refinementFactor = u32(params.particleShift.w + 0.5);
+    return 60u * refinementFactor * refinementFactor;
+  }
   return 176u;
 }
 
@@ -1109,6 +1342,11 @@ fn laminar_inlet_lane_coordinates(sourceIndex: u32, laneIndex: u32) -> vec2<f32>
   var rows = 4u;
   var halfWidth = 0.48;
   var halfHeight = 0.13;
+  if (sourceIndex == 1u && params.particleShift.z > 1.5) {
+    let refinementFactor = u32(params.particleShift.w + 0.5);
+    columns *= refinementFactor;
+    rows *= refinementFactor;
+  }
   if (sourceIndex == 2u) {
     columns = 16u;
     rows = 11u;
@@ -1148,8 +1386,9 @@ fn laminar_inlet_release_phase(index: u32) -> vec2<u32> {
   var laneSpeedSum = 41.744448;
   var expectedReleaseRate = 781.7396595559;
   if (sourceIndex == 1u) {
-    laneSpeedSum = 32.7456;
-    expectedReleaseRate = 720.1081893313;
+    let refinementFactor = max(1.0, params.particleShift.w);
+    laneSpeedSum = select(32.7456, 128.89152, refinementFactor > 1.5);
+    expectedReleaseRate = 720.1081893313 * refinementFactor * refinementFactor * refinementFactor;
   } else if (sourceIndex == 2u) {
     laneSpeedSum = 38.72;
     expectedReleaseRate = 827.2396694215;
@@ -1191,7 +1430,7 @@ fn laminar_inlet_sample(index: u32) -> LaminarInletSample {
   }
 
   let axialSpeed = laminar_inlet_profile_speed(sourceIndex, localCoordinates);
-  let axialPosition = -reservoirLength + 0.0275;
+  let axialPosition = -reservoirLength + 0.0275 / max(1.0, params.particleShift.w);
   let releasePhase = laminar_inlet_release_phase(index);
   var sample: LaminarInletSample;
   sample.positionPhase = vec4<f32>(origin + tangent * localU + bitangent * localV + axis * axialPosition, phase);
@@ -1418,6 +1657,8 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (index >= params.particleCount) { return; }
   var particle = particles[index];
   let laminarInletScene = params.particleShift.z > 0.5;
+  let waterfallOracleScene = params.particleShift.z > 1.5;
+  _ = waterfallOracleScene;
   if (laminarInletScene && particle.velocity.w < 0.0) {
     let inletSample = laminar_inlet_sample(index);
     let releaseFrame = inletSample.releaseSchedule.x;
@@ -4012,6 +4253,27 @@ function createLaminarInletParticles(particleCount) {
   return data;
 }
 
+function createWaterfallOracleParticles(particleCount, preset) {
+  const data = new Float32Array(particleCount * PARTICLE_FLOATS);
+  for (let index = 0; index < particleCount; index += 1) {
+    const sample = sampleFingerFluidWaterfallOracleParticle(index, preset, { particleCount });
+    const offset = index * PARTICLE_FLOATS;
+    data[offset + 0] = sample.position[0];
+    data[offset + 1] = sample.position[1];
+    data[offset + 2] = sample.position[2];
+    data[offset + 3] = 1;
+    data[offset + 4] = sample.position[0];
+    data[offset + 5] = sample.position[1];
+    data[offset + 6] = sample.position[2];
+    data[offset + 7] = 0;
+    data[offset + 8] = sample.velocity[0];
+    data[offset + 9] = sample.velocity[1];
+    data[offset + 10] = sample.velocity[2];
+    data[offset + 11] = sample.activeAtFrameZero ? sample.phase : -sample.phase;
+  }
+  return data;
+}
+
 function createPackedTruthSceneParticles(particleCount, {
   center,
   horizontalAspect = [1, 1],
@@ -4048,11 +4310,16 @@ function createPackedTruthSceneParticles(particleCount, {
   return data;
 }
 
-export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground') {
+export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground', {
+  waterfallOraclePreset = 'baseline',
+} = {}) {
   const safeParticleCount = Math.max(1, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
   const effectiveScene = resolveFingerFluidTruthScene(scene);
   if (effectiveScene === 'multi_regime_playground') return createMultiRegimePlaygroundParticles(safeParticleCount);
   if (effectiveScene === 'laminar_inlets') return createLaminarInletParticles(safeParticleCount);
+  if (effectiveScene === 'waterfall_resolution_oracle') {
+    return createWaterfallOracleParticles(safeParticleCount, resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset));
+  }
   if (effectiveScene === 'deep_pool_rest') {
     return createPackedTruthSceneParticles(safeParticleCount, {
       center: [-1.25, 0.58],
@@ -4095,7 +4362,7 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     const density = particleData[offset + 15];
     if (![...position, ...velocity, density].every(Number.isFinite)) continue;
     finiteParticleCount += 1;
-    const active = effectiveScene !== 'laminar_inlets' || particleData[offset + 11] >= 0;
+    const active = !isFingerFluidLaminarSourceScene(effectiveScene) || particleData[offset + 11] >= 0;
     if (!active) {
       dormantParticleCount += 1;
       retainedParticleCount += Number(position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]));
@@ -4136,7 +4403,7 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     contract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
     boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
     scene: effectiveScene,
-    populationMode: effectiveScene === 'multi_regime_playground' || effectiveScene === 'laminar_inlets'
+    populationMode: effectiveScene === 'multi_regime_playground' || isFingerFluidLaminarSourceScene(effectiveScene)
       ? 'finite_source_recirculation'
       : 'closed_particle_population',
     particleCount: count,
@@ -4216,10 +4483,10 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     }
     const activeParticleCount = Number.isInteger(snapshot.activeParticleCount)
       ? snapshot.activeParticleCount
-      : effectiveScene === 'laminar_inlets' ? NaN : snapshot.finiteParticleCount;
+      : isFingerFluidLaminarSourceScene(effectiveScene) ? NaN : snapshot.finiteParticleCount;
     const dormantParticleCount = Number.isInteger(snapshot.dormantParticleCount)
       ? snapshot.dormantParticleCount
-      : effectiveScene === 'laminar_inlets' ? NaN : 0;
+      : isFingerFluidLaminarSourceScene(effectiveScene) ? NaN : 0;
     const required = [
       snapshot.particleCount,
       snapshot.finiteParticleCount,
@@ -4289,7 +4556,7 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     if (snapshot.occupiedVolumeProxy < MIN_TRUTH_OCCUPIED_VOLUME) {
       throw new Error(`Finger fluid truth checkpoint ${index} has collapsed absolute support: ${snapshot.occupiedVolumeProxy}; minimum ${MIN_TRUTH_OCCUPIED_VOLUME}`);
     }
-    if (effectiveScene !== 'multi_regime_playground' && effectiveScene !== 'laminar_inlets' && snapshot.sourceRecirculationCount !== 0) {
+    if (effectiveScene !== 'multi_regime_playground' && !isFingerFluidLaminarSourceScene(effectiveScene) && snapshot.sourceRecirculationCount !== 0) {
       throw new Error(`Finger fluid truth checkpoint ${index} recirculated a closed population`);
     }
     return snapshot;
@@ -4379,6 +4646,7 @@ export async function createWebGPUFingerFluidSolver({
   capillaryStrength = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  waterfallOraclePreset = 'baseline',
   transparentBackground = false,
 } = {}) {
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
@@ -4409,8 +4677,16 @@ export async function createWebGPUFingerFluidSolver({
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
+  const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
+  const waterfallOracleConfig = safeTruthScene === 'waterfall_resolution_oracle'
+    ? createFingerFluidWaterfallOracleConfig(safeWaterfallOraclePreset)
+    : null;
+  const safeKernelRadius = waterfallOracleConfig?.kernelRadius ?? 0.185;
+  const safeVisibleParticleRadius = waterfallOracleConfig?.visibleParticleRadius ?? 0.046;
+  const safeRestDensity = 24.3;
+  const safeSourceRefinementFactor = waterfallOracleConfig?.refinementFactor ?? 1;
   const analyticSupportVertexCount = ANALYTIC_SUPPORT_BASE_VERTEX_COUNT
-    + (safeTruthScene === 'laminar_inlets' ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0);
+    + (isFingerFluidLaminarSourceScene(safeTruthScene) ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0);
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
@@ -4423,7 +4699,9 @@ export async function createWebGPUFingerFluidSolver({
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const particleData = createFingerFluidTruthSceneParticles(safeParticleCount, safeTruthScene);
+  const particleData = createFingerFluidTruthSceneParticles(safeParticleCount, safeTruthScene, {
+    waterfallOraclePreset: safeWaterfallOraclePreset,
+  });
   const laminarSourcePopulation = safeTruthScene === 'laminar_inlets'
     ? createFingerFluidLaminarSourcePopulation(safeParticleCount)
     : null;
@@ -4962,8 +5240,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(28, GRID_CELL_COUNT, true);
     BOUNDS_MIN.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
     BOUNDS_MAX.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
-    view.setFloat32(64, 0.185, true);
-    view.setFloat32(68, 24.3, true);
+    view.setFloat32(64, safeKernelRadius, true);
+    view.setFloat32(68, safeRestDensity, true);
     view.setFloat32(72, 0.012, true);
     view.setFloat32(76, 0.22, true);
     view.setFloat32(80, -9.2, true);
@@ -4972,7 +5250,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
     view.setFloat32(100, safeSupportFriction, true);
-    view.setFloat32(104, safeTruthScene === 'laminar_inlets' ? 1 : 0, true);
+    view.setFloat32(104, safeTruthScene === 'waterfall_resolution_oracle' ? 2 : safeTruthScene === 'laminar_inlets' ? 1 : 0, true);
+    view.setFloat32(108, safeSourceRefinementFactor, true);
     view.setFloat32(112, safeChemistryDiffusion, true);
     view.setFloat32(116, safeCapillaryStrength, true);
     view.setFloat32(120, safeThinSheetVorticityAttenuation, true);
@@ -5101,7 +5380,7 @@ export async function createWebGPUFingerFluidSolver({
     renderData.set(viewProjection, 0);
     renderData.set([...right, colorModeIndex], 16);
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
-    renderData.set([extent.width, extent.height, 0.046, safeParticleCount], 24);
+    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 24);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
 
     const currentTexture = context.getCurrentTexture();
@@ -5299,7 +5578,7 @@ export async function createWebGPUFingerFluidSolver({
         chemistryMax = Math.max(chemistryMax, concentration);
         chemistryRecipeDeviationSum += Math.abs(concentration - recipe);
         chemistryHistogram[Math.min(7, Math.max(0, Math.floor(concentration * 8)))] += 1;
-        const active = safeTruthScene !== 'laminar_inlets' || values[offset + 11] >= 0;
+        const active = !isFingerFluidLaminarSourceScene(safeTruthScene) || values[offset + 11] >= 0;
         if (!active) {
           dormantParticleCount += 1;
           continue;
@@ -5418,7 +5697,8 @@ export async function createWebGPUFingerFluidSolver({
       }
       const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
         scene: safeTruthScene,
-        restDensity: 24.3,
+        restDensity: safeRestDensity,
+        kernelRadius: safeKernelRadius,
         sourceRecirculationCount: interfaceCounters[2],
       });
       const energyLedger = summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount);
@@ -5506,6 +5786,15 @@ export async function createWebGPUFingerFluidSolver({
           malformedRecordCount,
           contactRecordCount,
           minimumContactSupportAlignment: contactRecordCount > 0 ? Number(minimumContactSupportAlignment.toFixed(4)) : null,
+          curvatureResolutionMode: 'kernel-bandwidth-reject-unresolved-v0',
+          maximumResolvableCurvature: Number((2 / safeKernelRadius).toFixed(6)),
+          resolvedCurvatureRecordCount,
+          unresolvedCurvatureRecordCount,
+          curvatureResolutionRatio: Number((resolvedCurvatureRecordCount / Math.max(1, activeInterfaceCount)).toFixed(6)),
+          averageCurvature: resolvedCurvatureRecordCount > 0 ? Number((curvatureSum / resolvedCurvatureRecordCount).toFixed(6)) : 0,
+          averageAbsoluteCurvature: resolvedCurvatureRecordCount > 0 ? Number((absoluteCurvatureSum / resolvedCurvatureRecordCount).toFixed(6)) : 0,
+          minimumCurvature: resolvedCurvatureRecordCount > 0 ? Number(minimumCurvature.toFixed(6)) : 0,
+          maximumCurvature: resolvedCurvatureRecordCount > 0 ? Number(maximumCurvature.toFixed(6)) : 0,
           sampleCoverageMode: 'stratified_across_active_compacted_population_v0',
           sampleRecords,
         },
@@ -5563,6 +5852,14 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
+      waterfallOracleContract: waterfallOracleConfig?.contract || null,
+      requestedWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? waterfallOraclePreset : null,
+      effectiveWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? safeWaterfallOraclePreset : null,
+      oracleParticleSpacing: waterfallOracleConfig?.particleSpacing ?? null,
+      oracleParticleSpacingScale: waterfallOracleConfig ? 1 / waterfallOracleConfig.refinementFactor : null,
+      oracleKernelScale: waterfallOracleConfig ? safeKernelRadius / 0.185 : null,
+      oracleSourceFlux: waterfallOracleConfig?.physicalSourceFlux ?? null,
+      oracleSourceFluxScale: waterfallOracleConfig ? 1 : null,
       interfacePressureContract: KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT,
       restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,
       supportTransportContract: KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT,
@@ -5580,6 +5877,16 @@ export async function createWebGPUFingerFluidSolver({
           ...descriptor,
           expectedFlux: Number(measureFingerFluidLaminarInletFlux(descriptor).toFixed(6)),
         })),
+      } : null,
+      waterfallResolutionOracle: waterfallOracleConfig ? {
+        ...waterfallOracleConfig,
+        requestedPreset: waterfallOraclePreset,
+        effectivePreset: safeWaterfallOraclePreset,
+        particleCount: safeParticleCount,
+        densityIterations: safeDensityIterations,
+        fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+        requestedEqualsEffective: waterfallOraclePreset === safeWaterfallOraclePreset,
+        visualDisposition: 'pending_operator_observation',
       } : null,
       truthGauntletContract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
       truthScene: safeTruthScene,
@@ -5603,8 +5910,8 @@ export async function createWebGPUFingerFluidSolver({
         obstacleVertexCount: ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT,
         inletFixtureContract: KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT,
         inletFixtureCollisionMode: 'implicit_prescribed_inlet_core_no_separate_mesh_collision_v0',
-        inletFixtureVertexCount: safeTruthScene === 'laminar_inlets' ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0,
-        inletFixtures: safeTruthScene === 'laminar_inlets' ? [
+        inletFixtureVertexCount: isFingerFluidLaminarSourceScene(safeTruthScene) ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0,
+        inletFixtures: isFingerFluidLaminarSourceScene(safeTruthScene) ? [
           { id: 'round-spout', presentation: 'open_round_tube', vertexCount: ANALYTIC_SUPPORT_ROUND_INLET_VERTEX_COUNT },
           { id: 'slot-spout', presentation: 'open_rectangular_duct', vertexCount: ANALYTIC_SUPPORT_SLOT_INLET_VERTEX_COUNT },
           { id: 'porous-patch', presentation: 'homogenized_visual_boundary_not_resolved_pore_geometry', vertexCount: ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT },
@@ -5659,6 +5966,8 @@ export async function createWebGPUFingerFluidSolver({
         ? 'material_tagged_finite_particle_loop_v0'
         : safeTruthScene === 'laminar_inlets'
           ? 'descriptor_laminar_inlet_finite_particle_loop_v0'
+          : safeTruthScene === 'waterfall_resolution_oracle'
+            ? 'isolated_slot_uniform_resolution_finite_particle_loop_v0'
         : 'closed_particle_population_no_source_recirculation_v0',
       sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
@@ -5684,6 +5993,8 @@ export async function createWebGPUFingerFluidSolver({
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: safeDensityIterations,
       restDensity: 24.3,
+      kernelRadius: safeKernelRadius,
+      visibleParticleRadius: safeVisibleParticleRadius,
       maxFluidSpeed: MAX_FLUID_SPEED,
       substeps: safeSubsteps,
       stepCount,

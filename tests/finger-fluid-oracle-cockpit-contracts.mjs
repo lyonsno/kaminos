@@ -13,7 +13,7 @@ const indexSource = readFileSync(indexUrl, 'utf8');
 
 assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.schema, 'kaminos.finger-fluid.oracle-cockpit.adapter.v0');
 assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.routeGateKey, 'finger_fluid_waterfall_oracle_cockpit');
-assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthScene, 'laminar_inlets');
+assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthScene, 'waterfall_resolution_oracle');
 assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.resolutionPreset, 'finger_fluid_oracle_resolution');
 assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.particleSpacing, 'finger_fluid_oracle_particle_spacing');
 assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.kernelScale, 'finger_fluid_oracle_kernel_scale');
@@ -24,7 +24,7 @@ assert.equal(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys.cohesion, 'fi
 assert.ok(Object.isFrozen(cockpit.FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.queryKeys), 'query keys are centralized and immutable');
 
 assert.equal(
-  cockpit.isFingerFluidOracleCockpitRoute(new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=laminar_inlets&finger_fluid_waterfall_oracle_cockpit=1')),
+  cockpit.isFingerFluidOracleCockpitRoute(new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle&finger_fluid_waterfall_oracle_cockpit=1')),
   true,
   'cockpit opts into only the waterfall oracle bench route',
 );
@@ -34,15 +34,15 @@ assert.equal(
   'cockpit does not attach to the ordinary multi-regime bench',
 );
 assert.equal(
-  cockpit.isFingerFluidOracleCockpitRoute(new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=laminar_inlets')),
+  cockpit.isFingerFluidOracleCockpitRoute(new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle')),
   false,
   'waterfall route still requires explicit cockpit opt-in',
 );
 const defaultRequested = cockpit.fingerFluidOracleRequestedConfigFromParams(
-  new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=laminar_inlets&finger_fluid_waterfall_oracle_cockpit=1'),
+  new URLSearchParams('kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle&finger_fluid_waterfall_oracle_cockpit=1'),
 );
-assert.equal(defaultRequested.resolutionPreset, 'standard');
-assert.equal(defaultRequested.particleCount, 49_152);
+assert.equal(defaultRequested.resolutionPreset, 'baseline');
+assert.equal(defaultRequested.particleCount, 12_288);
 assert.equal(defaultRequested.particleSpacing, 1);
 assert.equal(defaultRequested.kernelScale, 1);
 assert.equal(defaultRequested.sourceFlux, 1);
@@ -50,11 +50,11 @@ assert.equal(defaultRequested.pressureIterations, 3);
 assert.equal(defaultRequested.viscosity, 0.17);
 assert.equal(defaultRequested.cohesion, 0.72);
 
-const requestedUrl = new URL('http://127.0.0.1:8090/?kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=laminar_inlets&finger_fluid_waterfall_oracle_cockpit=1&finger_fluid_oracle_resolution=high&finger_fluid_oracle_particle_spacing=0.62&finger_fluid_oracle_kernel_scale=1.18&finger_fluid_oracle_source_flux=1.35&finger_fluid_oracle_pressure_iterations=5&finger_fluid_oracle_viscosity=0.21&finger_fluid_oracle_cohesion=0.88&finger_fluid_oracle_fixed_camera=1&finger_fluid_oracle_pause=1&finger_fluid_oracle_replay=wet-ab');
+const requestedUrl = new URL('http://127.0.0.1:8090/?kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle&finger_fluid_waterfall_oracle_cockpit=1&finger_fluid_oracle_resolution=high&finger_fluid_oracle_particle_spacing=0.62&finger_fluid_oracle_kernel_scale=1.18&finger_fluid_oracle_source_flux=1.35&finger_fluid_oracle_pressure_iterations=5&finger_fluid_oracle_viscosity=0.21&finger_fluid_oracle_cohesion=0.88&finger_fluid_oracle_fixed_camera=1&finger_fluid_oracle_pause=1&finger_fluid_oracle_replay=wet-ab');
 const routeState = cockpit.createFingerFluidOracleCockpitState({
   url: requestedUrl,
   effective: {
-    truthScene: 'laminar_inlets',
+    truthScene: 'waterfall_resolution_oracle',
     effectiveParticleCount: 98_304,
     densityIterationsPerStep: 5,
     freeFlightViscosityBoost: 0.21,
@@ -112,11 +112,11 @@ assert.equal(new URL(pauseEdit.url).searchParams.get('finger_fluid_oracle_pause'
 const resolutionEdit = cockpit.updateFingerFluidOracleCockpitUrl({
   url: requestedUrl,
   control: 'resolutionPreset',
-  value: 'low',
+  value: 'baseline',
 });
 assert.equal(resolutionEdit.restartRequired, true);
-assert.equal(new URL(resolutionEdit.url).searchParams.get('finger_fluid_oracle_resolution'), 'low');
-assert.equal(new URL(resolutionEdit.url).searchParams.get('finger_fluid_particle_count'), '24576');
+assert.equal(new URL(resolutionEdit.url).searchParams.get('finger_fluid_oracle_resolution'), 'baseline');
+assert.equal(new URL(resolutionEdit.url).searchParams.get('finger_fluid_particle_count'), '12288');
 
 const replayUrls = cockpit.createFingerFluidOracleABReplayUrls({
   url: requestedUrl,
@@ -124,11 +124,11 @@ const replayUrls = cockpit.createFingerFluidOracleABReplayUrls({
 });
 assert.match(replayUrls.low, /finger_fluid_waterfall_oracle_cockpit=1/);
 assert.match(replayUrls.high, /finger_fluid_waterfall_oracle_cockpit=1/);
-assert.match(replayUrls.low, /finger_fluid_truth_scene=laminar_inlets/);
-assert.match(replayUrls.high, /finger_fluid_truth_scene=laminar_inlets/);
-assert.match(replayUrls.low, /finger_fluid_oracle_resolution=low/);
+assert.match(replayUrls.low, /finger_fluid_truth_scene=waterfall_resolution_oracle/);
+assert.match(replayUrls.high, /finger_fluid_truth_scene=waterfall_resolution_oracle/);
+assert.match(replayUrls.low, /finger_fluid_oracle_resolution=baseline/);
 assert.match(replayUrls.high, /finger_fluid_oracle_resolution=high/);
-assert.match(replayUrls.low, /finger_fluid_particle_count=24576/);
+assert.match(replayUrls.low, /finger_fluid_particle_count=12288/);
 assert.match(replayUrls.high, /finger_fluid_particle_count=98304/);
 assert.match(replayUrls.low, /finger_fluid_oracle_replay=wet-sheet-0719-low/);
 assert.match(replayUrls.high, /finger_fluid_oracle_replay=wet-sheet-0719-high/);
@@ -137,6 +137,7 @@ assert.match(indexSource, /finger-fluid-oracle-cockpit\.js/, 'app shell imports 
 assert.match(indexSource, /finger-fluid-oracle-cockpit-panel/, 'app shell provides compact cockpit markup');
 assert.match(indexSource, /kaminosFingerFluidOracleCockpitDebugState/, 'app exposes cockpit route/config debug state');
 assert.match(indexSource, /restartFingerFluidBenchForOracleCockpit/, 'structural cockpit edits restart the bench explicitly');
+assert.doesNotMatch(indexSource, /FINGER_FLUID_ORACLE_COCKPIT_ADAPTER\.presets\.standard/, 'fixed-camera control must reference an actual oracle preset');
 assert.doesNotMatch(indexSource, /waterfall oracle accepted|physical acceptance|continuous sheet accepted/i, 'cockpit text must not claim physical acceptance');
 
 console.log('finger fluid oracle cockpit contracts passed');
