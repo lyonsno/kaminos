@@ -63,6 +63,20 @@ assert.equal(receipt.effectiveRoute.steps, 4);
 assert.equal(receipt.effectiveRoute.durationSeconds, 65.6);
 assert.equal(receipt.mesh.vertices, 153090);
 assert.equal(receipt.mesh.postCleanupFaces, 129804);
+assert.deepEqual(receipt.files, {
+  'creature.glb': {
+    bytes: 8886968,
+    sha256: '31036e3e2eea85a14b8921daba67c27779d2a31a4ae61301edc25703817c4ea3',
+  },
+  'registration.json': {
+    bytes: 1912,
+    sha256: 'c07e0580fd2076fc68f426fba28370fc27d496ca23eb8228ca7b3047c59c18fe',
+  },
+  'source.png': {
+    bytes: 235245,
+    sha256: '0f0cc9dbebd384b437a07001236f917b762804732121d5a8295dbd3e0e502eec',
+  },
+});
 
 assert.equal(manifest.schema, 'kaminos.species-asset.v0');
 assert.equal(manifest.speciesId, 'lirm-crustacean-4203');
@@ -70,8 +84,19 @@ assert.equal(
   manifest.packageRef,
   'kaminos:cc/molten-silhouette-basin-0717@3171ec92:artifacts/motion-ready-lirm03-4203/',
 );
-assert.equal(manifest.asset.vertices, 153090);
-assert.equal(manifest.asset.faces, 129804);
+assert.deepEqual(manifest.asset, {
+  path: 'artifacts/motion-ready-lirm03-4203/creature.glb',
+  format: 'glTF-2.0-GLB',
+  sha256: '31036e3e2eea85a14b8921daba67c27779d2a31a4ae61301edc25703817c4ea3',
+  vertices: 153090,
+  faces: 129804,
+  primitives: 1,
+});
+assert.deepEqual(manifest.registration, {
+  path: 'artifacts/motion-ready-lirm03-4203/registration.json',
+  schema: 'kaminos.axial-crawler-registration.v0',
+  sha256: 'c07e0580fd2076fc68f426fba28370fc27d496ca23eb8228ca7b3047c59c18fe',
+});
 assert.deepEqual(manifest.coordinates, {
   handedness: 'right',
   up: [0, 1, 0],
@@ -79,11 +104,15 @@ assert.deepEqual(manifest.coordinates, {
   right: [1, 0, 0],
   unit: 'meter',
 });
+assert.deepEqual(manifest.bounds, {
+  min: [-0.2313016653060913, -0.15831834077835083, -0.5001913905143738],
+  max: [0.26317015290260315, 0.18766506016254425, 0.49993234872817993],
+  width: 0.49447181820869446,
+  authoredHeight: 0.3459834009408951,
+  bodyLength: 1.0001237392425537,
+});
 assert.deepEqual(manifest.bounds.min, registration.bounds.min);
 assert.deepEqual(manifest.bounds.max, registration.bounds.max);
-assert.equal(manifest.bounds.width, registration.bounds.max[0] - registration.bounds.min[0]);
-assert.equal(manifest.bounds.authoredHeight, registration.bounds.max[1] - registration.bounds.min[1]);
-assert.equal(manifest.bounds.bodyLength, registration.bounds.max[2] - registration.bounds.min[2]);
 assert.equal(manifest.root.kind, 'terrain-contact-root');
 assert.equal(manifest.root.localPoint[1], manifest.bounds.min[1]);
 assert.deepEqual(manifest.root.localToRootTranslation, manifest.root.localPoint.map(value => -value));
