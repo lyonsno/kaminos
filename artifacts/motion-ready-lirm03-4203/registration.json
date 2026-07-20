@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.axial-crawler-registration.v0",
+  "asset": "creature.glb",
+  "source": "source.png",
+  "fitMode": "manual-bounds-and-four-view-witness-v0",
+  "localForwardAxis": [0, 0, -1],
+  "localUpAxis": [0, 1, 0],
+  "localRightAxis": [1, 0, 0],
+  "contactPlaneY": -0.15831834077835083,
+  "bounds": {
+    "min": [-0.2313016653060913, -0.15831834077835083, -0.5001913905143738],
+    "max": [0.26317015290260315, 0.18766506016254425, 0.49993234872817993]
+  },
+  "headAnchor": [0.01593424379825592, 0, -0.47],
+  "tailAnchor": [0.01593424379825592, 0, 0.47],
+  "spineStations": [
+    { "id": "tail", "t": 0, "localPosition": [0.01593424379825592, 0, 0.47] },
+    { "id": "caudal", "t": 0.166667, "localPosition": [0.01593424379825592, 0, 0.313333] },
+    { "id": "rear-trunk", "t": 0.333333, "localPosition": [0.01593424379825592, 0, 0.156667] },
+    { "id": "mid-trunk", "t": 0.5, "localPosition": [0.01593424379825592, 0, 0] },
+    { "id": "front-trunk", "t": 0.666667, "localPosition": [0.01593424379825592, 0, -0.156667] },
+    { "id": "neck", "t": 0.833333, "localPosition": [0.01593424379825592, 0, -0.313333] },
+    { "id": "head", "t": 1, "localPosition": [0.01593424379825592, 0, -0.47] }
+  ],
+  "deformationHint": {
+    "mode": "axial-bend-with-attached-radial-detail",
+    "stationWeightAxis": "Z",
+    "preserveCrossSectionAxes": ["X", "Y"],
+    "settleOnLowRouteVelocity": true
+  },
+  "evidence": {
+    "orientation": "The source and four-view Trellis witness preserve a low armored head-to-tail body axis. This cast uses the same normalized Trellis export convention as 719024: headward is raw glTF -Z.",
+    "mesh": "One indexed triangle primitive, one opaque double-sided material, 153090 vertices and 129804 faces.",
+    "selection": "Selected because its flattened shell plates, clustered legs, and broad lateral silhouette materially differ from 719024 while retaining a lawful axial registration.",
+    "limitation": "This is a hand-registered second-cast reuse assay, not a generalized skeleton, autorig, or non-axial deformation contract."
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.motion-ready-cast-receipt.v0",
+  "castId": "motion-ready-lirm03-4203",
+  "purpose": "Second-cast species-contract reuse discriminator",
+  "branch": "cc/molten-silhouette-basin-0717",
+  "sourceImage": {
+    "seed": 4203,
+    "model": "flux2-klein-9b",
+    "route": "mflux_flux2_edit_promptfile",
+    "steps": 8,
+    "guidance": 1,
+    "resolution": [512, 512],
+    "durationSeconds": 66,
+    "provenance": "artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/lirm03-hallucinate-beyond/output.png"
+  },
+  "effectiveRoute": {
+    "generator": "trellis2mlx",
+    "jobType": "trellis2mlx_fast",
+    "profile": "fast",
+    "seed": 42,
+    "resolution": 512,
+    "steps": 4,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "durationSeconds": 65.6,
+    "provenance": "artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm03-hallucinate-beyond-trellis-fast4/output.glb"
+  },
+  "mesh": {
+    "primitives": 1,
+    "materials": 1,
+    "vertices": 153090,
+    "postCleanupFaces": 129804,
+    "alphaMode": "OPAQUE",
+    "doubleSided": true
+  },
+  "files": {
+    "creature.glb": {
+      "bytes": 8886968,
+      "sha256": "31036e3e2eea85a14b8921daba67c27779d2a31a4ae61301edc25703817c4ea3"
+    },
+    "registration.json": {
+      "bytes": 2074,
+      "sha256": "c73a67f0b10a0b6c1cf76955390167f7ed2317b76d79fac1e4b294cde538eeb8"
+    },
+    "source.png": {
+      "bytes": 235245,
+      "sha256": "0f0cc9dbebd384b437a07001236f917b762804732121d5a8295dbd3e0e502eec"
+    }
+  },
+  "reuseAssay": {
+    "baselineCast": "motion-ready-719024",
+    "frozenSemantics": [
+      "kaminos.species-asset.v0",
+      "axial-parallel-transport-wave-v1",
+      "deform-before-root-and-world-transforms",
+      "single shared-depth Living World instance"
+    ],
+    "allowedAdaptation": [
+      "asset bytes and provenance",
+      "bounds and terrain-contact root",
+      "head-tail registration",
+      "instance scale and field-response defaults"
+    ],
+    "successPredicate": "The distinct crustacean cast reaches the existing consumer without changing the deformation algorithm and preserves coherent attached plates and limbs under an in-place wave."
+  },
+  "ownership": {
+    "molten": ["cast selection", "provenance", "body-frame registration", "immutable package", "reuse verdict"],
+    "mushfinger": ["deformation algorithm fixes", "route locomotion boundary"],
+    "green": ["Living World consumption", "shared-depth placement", "visual witness"]
+  },
+  "nonGoals": [
+    "route locomotion before pending support findings close",
+    "generalized autorigger",
+    "non-axial organism support",
+    "multi-species UI",
+    "brood behavior"
+  ]
+}
