@@ -251,7 +251,8 @@ assert.match(staleMount.stderr, /revision/i);
 
 const escapedChannelPath = join(relocatedRoot, 'cheap-firebowl', 'escaped-current.json');
 const escapedChannel = structuredClone(channel);
-escapedChannel.current.packageRelativePath = '../../outside-package.json';
+escapedChannel.current.packageRelativePath = `revisions/${exportReceipt.revision}/../../../outside-package.json`;
+cpSync(relocatedPackagePath, join(relocatedRoot, 'outside-package.json'));
 writeFileSync(escapedChannelPath, `${JSON.stringify(escapedChannel, null, 2)}\n`);
 const escapedMount = spawnSync(process.execPath, [
   cli,
@@ -263,6 +264,6 @@ const escapedMount = spawnSync(process.execPath, [
   '--origin', 'https://product.example/kaminos/',
 ], { encoding: 'utf8', timeout: 30_000 });
 assert.notEqual(escapedMount.status, 0, 'consumer mount must reject a channel that escapes its portable root');
-assert.match(escapedMount.stderr, /not portable/i);
+assert.match(escapedMount.stderr, /not portable|canonical/i);
 
 console.log('volume basin promotion package contracts passed');
