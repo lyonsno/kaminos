@@ -299,7 +299,7 @@ export function validateBasinPromotionPackage(packageDocument) {
   if (document.stableRef !== `${document.handle}@${document.revision}`) throw new Error('basin promotion package stable ref mismatch');
   const settingsReceipt = validateVolumeSettingsPresetDocument(
     document.settingsPreset?.artifact,
-    document.settingsPreset?.presetId,
+    document.settingsPreset?.artifact?.requestedPresetRef || document.settingsPreset?.presetId,
     document.settingsPreset?.schema,
   );
   assertSettingsPresetSummary(document.settingsPreset, settingsReceipt);
