@@ -13182,6 +13182,8 @@ function sharpInlineSchedulerProfile(profileId) {
       cpuChunkItems: 16384,
       routeTailYieldMs: 3,
       spnFusionChunkItems: 524288,
+      plyAssemblyMode: 'worker',
+      retirePostInferenceBuffers: true,
     };
   }
   return { mode: 'default' };

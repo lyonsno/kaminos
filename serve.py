@@ -160,6 +160,8 @@ SHARP_SCHEDULER_PROFILES = {
             "cpuChunkItems": 16384,
             "routeTailYieldMs": 3,
             "spnFusionChunkItems": 524288,
+            "plyAssemblyMode": "worker",
+            "retirePostInferenceBuffers": True,
         },
         "env": {
             "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
@@ -174,6 +176,8 @@ SHARP_SCHEDULER_PROFILES = {
                 "cpuChunkItems": 16384,
                 "routeTailYieldMs": 3,
                 "spnFusionChunkItems": 524288,
+                "plyAssemblyMode": "worker",
+                "retirePostInferenceBuffers": True,
             }, separators=(",", ":")),
         },
         "unsupportedFields": [],
@@ -201,6 +205,8 @@ SHARP_SCHEDULER_PROFILES = {
             "cpuChunkItems": 16384,
             "routeTailYieldMs": 16,
             "spnFusionChunkItems": 524288,
+            "plyAssemblyMode": "worker",
+            "retirePostInferenceBuffers": True,
         },
         "env": {
             "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
@@ -215,6 +221,8 @@ SHARP_SCHEDULER_PROFILES = {
                 "cpuChunkItems": 16384,
                 "routeTailYieldMs": 16,
                 "spnFusionChunkItems": 524288,
+                "plyAssemblyMode": "worker",
+                "retirePostInferenceBuffers": True,
             }, separators=(",", ":")),
         },
         "unsupportedFields": [],
@@ -242,6 +250,8 @@ SHARP_SCHEDULER_PROFILES = {
             "cpuChunkItems": 16384,
             "routeTailYieldMs": 3,
             "spnFusionChunkItems": 524288,
+            "plyAssemblyMode": "worker",
+            "retirePostInferenceBuffers": True,
         },
         "env": {
             "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
@@ -256,6 +266,8 @@ SHARP_SCHEDULER_PROFILES = {
                 "cpuChunkItems": 16384,
                 "routeTailYieldMs": 3,
                 "spnFusionChunkItems": 524288,
+                "plyAssemblyMode": "worker",
+                "retirePostInferenceBuffers": True,
             }, separators=(",", ":")),
         },
         "unsupportedFields": [],

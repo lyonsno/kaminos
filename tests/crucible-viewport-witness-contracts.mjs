@@ -122,6 +122,8 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
+    plyAssemblyMode: 'worker',
+    retirePostInferenceBuffers: true,
   },
   'ordinary Friendly must exercise reviewed ViT microduties and tiled SPN fusion',
 );
@@ -139,6 +141,8 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 16,
     spnFusionChunkItems: 524288,
+    plyAssemblyMode: 'worker',
+    retirePostInferenceBuffers: true,
   },
   'fixed-boundary experiment must not change chunk granularity or silently inherit ordinary Friendly donations',
 );
@@ -156,6 +160,8 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
+    plyAssemblyMode: 'worker',
+    retirePostInferenceBuffers: true,
   },
   'SPN fusion tiling experiment must add only the reviewed output tile size to ordinary Friendly',
 );

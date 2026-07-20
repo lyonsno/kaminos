@@ -140,6 +140,8 @@ function expectedSchedulerForProfile(profileId) {
     vitMicrodutyMode: 'dispatch-major',
     cpuChunkItems: 16384,
     spnFusionChunkItems: 524288,
+    plyAssemblyMode: 'worker',
+    retirePostInferenceBuffers: true,
   };
   if (profileId === 'cooperative-spn-gaussian') {
     return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };

@@ -237,6 +237,8 @@ assert.equal(profiles.profiles[1].scheduler.vitBlockChunkSize, 1);
 assert.equal(profiles.profiles[1].scheduler.vitMicroduty, true);
 assert.equal(profiles.profiles[1].scheduler.vitMicrodutyMode, 'dispatch-major');
 assert.equal(profiles.profiles[1].scheduler.spnFusionChunkItems, 524288);
+assert.equal(profiles.profiles[1].scheduler.plyAssemblyMode, 'worker');
+assert.equal(profiles.profiles[1].scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(profiles.profiles[1].unsupportedFields, []);
 assert.equal(profiles.profiles[1].env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE, 'friendly');
 
@@ -249,6 +251,8 @@ assert.equal(friendlyProfile.scheduler.vitBlockChunkSize, 1);
 assert.equal(friendlyProfile.scheduler.vitMicroduty, true);
 assert.equal(friendlyProfile.scheduler.vitMicrodutyMode, 'dispatch-major');
 assert.equal(friendlyProfile.scheduler.spnFusionChunkItems, 524288);
+assert.equal(friendlyProfile.scheduler.plyAssemblyMode, 'worker');
+assert.equal(friendlyProfile.scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(friendlyProfile.unsupportedFields, []);
 assert.equal(sharpBreathingRoomSchedulerProfileForMode('cooperative-spn-gaussian').schedulerMode, 'friendly');
 assert.throws(

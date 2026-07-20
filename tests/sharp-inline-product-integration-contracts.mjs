@@ -23,8 +23,10 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
+    plyAssemblyMode: 'worker',
+    retirePostInferenceBuffers: true,
   },
-  'the visible Friendly button must request the reviewed ViT microduty and SPN tiling controls',
+  'the visible Friendly button must request the reviewed liveness, assembly, and retirement controls',
 );
 
 assert.match(
