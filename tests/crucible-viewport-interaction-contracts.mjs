@@ -137,8 +137,8 @@ assert.match(
 );
 assert.match(
   html,
-  /progressLabel\.textContent\s*=\s*Number\.isFinite\(routeProgress\)[\s\S]*Math\.round\(routeProgress\s*\*\s*100\)/,
-  'The firing mouth must turn real route progress into a legible percentage when one exists',
+  /const routeProgressPresentation\s*=\s*kilnRouteBenchProgressPresentation\([\s\S]*progressLabel\.textContent\s*=\s*routeProgressPresentation\.label/,
+  'The firing mouth must render route progress through the authority-aware presentation helper',
 );
 assert.match(
   html,

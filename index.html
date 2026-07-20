@@ -164,7 +164,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-kiln-progress-track { height: 6px; overflow: hidden; border: 1px solid rgba(231,180,96,0.3); border-radius: 4px; background: rgba(3,4,4,0.72); }
     .crucible-kiln-progress-fill { width: var(--crucible-route-progress, 8%); height: 100%; background: linear-gradient(90deg, #bd572d, #ffc565); transition: width 180ms ease; }
     .crucible-kiln-progress.indeterminate .crucible-kiln-progress-fill { width: 28%; animation: crucible-kiln-search 1.4s ease-in-out infinite alternate; }
-    .crucible-kiln-progress-label { color: #e8cca1; font-size: 10px; }
+    .crucible-kiln-progress-label { min-height: 26px; color: #e8cca1; font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }
     @keyframes crucible-kiln-search { from { transform: translateX(-35%); } to { transform: translateX(280%); } }
     .crucible-viewport-slot-body { color: #b9b3a2; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; position: relative; z-index: 1; }
     .crucible-viewport-slot-body.present { color: #f0e7c9; }
@@ -2939,6 +2939,10 @@ import {
 import {
   createSharpSameDeviceKilnOpportunityHook,
 } from './lib/sharp-same-device-kiln-interlock.mjs';
+import {
+  kilnRouteBenchProgressPresentation,
+  kilnRouteBenchReceiveProgressEvent,
+} from './lib/kiln-progress-presentation.mjs';
 import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
   createExpectedHybridKilnFirePresentation,
@@ -14298,20 +14302,21 @@ function renderCrucibleViewportWorkspace() {
     fireButton.disabled = running || !currentSource?.source;
     fireButton.textContent = running ? 'Firing...' : 'Fire image';
   }
-  const routeProgress = kilnRouteBenchState.progressEvent?.progress;
+  const routeProgressPresentation = kilnRouteBenchProgressPresentation(
+    kilnRouteBenchState.progressEvent,
+    performance.now(),
+  );
   if (progress) {
     progress.hidden = routeStatus !== 'running';
-    progress.classList.toggle('indeterminate', !Number.isFinite(routeProgress));
+    progress.classList.toggle('indeterminate', routeProgressPresentation.fillPercent === null);
   }
   if (progressFill) {
-    progressFill.style.setProperty('--crucible-route-progress', Number.isFinite(routeProgress)
-      ? `${Math.max(0, Math.min(100, routeProgress * 100))}%`
+    progressFill.style.setProperty('--crucible-route-progress', routeProgressPresentation.fillPercent !== null
+      ? `${routeProgressPresentation.fillPercent}%`
       : '8%');
   }
   if (progressLabel) {
-    progressLabel.textContent = Number.isFinite(routeProgress)
-      ? `${Math.round(routeProgress * 100)}% complete`
-      : 'The model is working.';
+    progressLabel.textContent = routeProgressPresentation.label;
   }
   if (fireHelp) {
     fireHelp.textContent = running
@@ -14502,6 +14507,18 @@ function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
   renderCrucibleViewportWorkspace();
   if (message) setInfo(message);
 }
+
+function refreshKilnRouteBenchProgressPresentation() {
+  if (kilnRouteBenchState.status !== 'running') return;
+  const progressLabel = document.getElementById('crucible-viewport-progress-label');
+  if (!progressLabel) return;
+  progressLabel.textContent = kilnRouteBenchProgressPresentation(
+    kilnRouteBenchState.progressEvent,
+    performance.now(),
+  ).label;
+}
+
+setInterval(refreshKilnRouteBenchProgressPresentation, 1000);
 
 function sharpBreathingRoomManualSource() {
   const manual = document.getElementById('sharp-breathing-room-source-input')?.value?.trim();
@@ -18980,7 +18997,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
           routeId: route.id,
           source,
           runningProfileId: profileId,
-          progressEvent: event,
+          progressEvent: kilnRouteBenchReceiveProgressEvent(event, performance.now()),
         });
       };
     run = pipelineId === 'sharp-image-to-splat-live-v0'
