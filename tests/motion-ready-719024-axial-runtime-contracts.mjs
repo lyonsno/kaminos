@@ -8,7 +8,9 @@ import {
   createAxialSquirmState,
   deformAxialGeometryBinding,
   deformAxialPoint,
+  sampleHillTerrainSurface,
   samplePolylineRoute,
+  solveAxialTerrainSupportEnvelope,
   stepAxialSquirmController,
   validateAxialCrawlerRegistration,
 } from '../motion-ready-719024-core.js';
@@ -41,6 +43,109 @@ const late = samplePolylineRoute(route, 0.8);
 assert.ok(late.distance > early.distance, 'route travel must advance monotonically');
 assert.ok(Math.hypot(...early.forward) > 0.999, 'route heading must be normalized');
 assert.ok(Number.isFinite(early.position[1]), 'route sampling must retain terrain height');
+
+const cadenceRuns = [
+  [
+    { deltaSeconds: 1 / 30, routeSpeed: 0.41, routeDistance: 0.11 },
+    { deltaSeconds: 1 / 120, routeSpeed: 1.9, routeDistance: 0.37 },
+    { deltaSeconds: 1 / 24, routeSpeed: 0.18, routeDistance: 0.82 },
+  ],
+  [
+    { deltaSeconds: 1 / 144, routeSpeed: 3.7, routeDistance: 0.29 },
+    { deltaSeconds: 1 / 55, routeSpeed: 0.08, routeDistance: 0.51 },
+    { deltaSeconds: 1 / 90, routeSpeed: 2.2, routeDistance: 0.82 },
+  ],
+].map(steps => steps.reduce(
+  (state, step) => stepAxialSquirmController(state, step),
+  createAxialSquirmState(),
+));
+assert.ok(
+  Math.abs(cadenceRuns[0].phase - cadenceRuns[1].phase) < 1e-10,
+  'axial phase must be determined by traveled route distance, not noisy frame cadence or instantaneous speed',
+);
+assert.equal(cadenceRuns[0].phaseSource, 'route-distance-v0');
+assert.equal(cadenceRuns[0].routeDistance, 0.82);
+
+function syntheticTerrain(heightAt, resolution = 5) {
+  const columns = resolution;
+  const rows = resolution;
+  const values = [];
+  for (let row = 0; row < rows; row++) {
+    const z = -1 + row * 2 / (rows - 1);
+    for (let column = 0; column < columns; column++) {
+      const x = -1 + column * 2 / (columns - 1);
+      values.push(heightAt(x, z));
+    }
+  }
+  return {
+    grid: { columns, rows },
+    worldBounds: { x: { min: -1, max: 1 }, z: { min: -1, max: 1 } },
+    channels: { height: { componentCount: 1, values } },
+  };
+}
+
+const cliffTerrain = syntheticTerrain(x => x <= 0 ? 0 : x);
+const quarterSurface = sampleHillTerrainSurface(cliffTerrain, 0.25, 0);
+assert.ok(Math.abs(quarterSurface.height - 0.25) < 1e-9, 'terrain support must sample sub-cell height bilinearly');
+assert.equal(quarterSurface.inBounds, true);
+
+const cliffSupport = solveAxialTerrainSupportEnvelope(cliffTerrain, normalized, {
+  rootSurface: [0, 0, 0],
+  forward: [1, 0, 0],
+  scale: 1,
+  clearance: 0.02,
+  lateralExcursion: 0.08,
+  maxPitchRadians: Math.PI / 5,
+  maxBendRadiansPerStation: Math.PI / 12,
+  maxSuspensionLift: 0.08,
+});
+assert.equal(cliffSupport.schema, 'kaminos.axial-terrain-support-envelope.v0');
+assert.ok(cliffSupport.profile.length >= normalized.spineStations.length);
+assert.ok(
+  cliffSupport.rootLift <= Math.max(...cliffSupport.samples.map(sample => sample.requiredOffset)) + 1e-10,
+  'support solve must remain bounded by a real terrain demand instead of ratcheting upward',
+);
+for (const sample of cliffSupport.samples) {
+  assert.ok(
+    sample.supportedContactY + 1e-8 >= sample.terrainHeight + cliffSupport.clearance,
+    `${sample.stationId} terrain support must clear the full creature corridor`,
+  );
+}
+assert.equal(cliffSupport.compliance.exceeded, true, 'a cliff under one body length must exceed local axial compliance');
+assert.equal(cliffSupport.plannerDisposition, 'reroute-required');
+
+const gentleSupport = solveAxialTerrainSupportEnvelope(
+  syntheticTerrain(x => x * 0.08),
+  normalized,
+  {
+    rootSurface: [0, 0, 0],
+    forward: [1, 0, 0],
+    scale: 1,
+    clearance: 0.02,
+    maxSuspensionLift: 0.08,
+  },
+);
+assert.equal(gentleSupport.compliance.exceeded, false, 'a gentle slope belongs to local body support');
+assert.equal(gentleSupport.plannerDisposition, 'local-support');
+
+const narrowFeatureSupport = solveAxialTerrainSupportEnvelope(
+  syntheticTerrain(x => Math.abs(x - 0.1) < 0.025 ? 0.32 : 0, 41),
+  normalized,
+  {
+    rootSurface: [0, 0, 0],
+    forward: [1, 0, 0],
+    scale: 1,
+    clearance: 0.02,
+  },
+);
+assert.ok(
+  narrowFeatureSupport.profile.length > normalized.spineStations.length,
+  'support sampling must densify when terrain cells are finer than authored spine-station spacing',
+);
+assert.ok(
+  narrowFeatureSupport.samples.some(sample => sample.terrainHeight > 0.2),
+  'a narrow terrain feature between authored stations must enter the support envelope',
+);
 
 let controller = stepAxialSquirmController(null, {
   deltaSeconds: 1 / 60,

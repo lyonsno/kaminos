@@ -11,6 +11,10 @@ const packet = JSON.parse(await readFile(new URL('artifacts/motion-ready-719024/
 const data = JSON.parse(await readFile(new URL('artifacts/motion-ready-719024/hill/motion-affordance-data.json', root), 'utf8'));
 const page = await readFile(new URL('motion-ready-719024-witness.html', root), 'utf8');
 
+assert.match(page, /routeDistance:\s*sample\.distance/, 'live cadence is driven from traveled route distance');
+assert.match(page, /solveAxialTerrainSupportEnvelope/, 'live cast consumes the axial terrain support envelope');
+assert.match(page, /horizontalForward/, 'root orientation excludes vertical route tangent so axial support owns pitch');
+
 const source = decodeHillMotionAffordancePacket({ packet, data });
 assert.equal(source.sourceRef, 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348');
 assert.equal(source.authority, 'live_simulation');
