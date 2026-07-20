@@ -52,6 +52,10 @@ export const KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE = 'wgsl-regime-aware-
 export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER = 'deferred_depth_then_uncapped_world_mesh_then_hdr_environment-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE = 'uncapped-exact-triangle-scan-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE = 'deterministic-five-ray-cone-quadrature-v0';
+export const KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE = 'deterministic-nine-ray-trimmed-variance-footprint-quadrature-v0';
+export const KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE = 'wgsl-liquid-resolved-detail-reflection-footprint-v0';
+export const KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_FOOTPRINT_ROUTE = 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0';
+export const KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
 export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE = 'radiance-rgbe-equirectangular-environment-v0';
 export const KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE = 'webgpu-linear-hdr-scene-radiance-v0';
 export const KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE = 'wgsl-shared-hdr-world-background-v0';
@@ -265,8 +269,9 @@ export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particl
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets']);
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES = Object.freeze(['transport_only', 'bounded_ggx', 'legacy_shading']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES = Object.freeze(['resolved_detail', 'variance_filtered']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -849,6 +854,7 @@ export function estimateFingerFluidInterfaceGeometry(position, neighbors, {
 
 export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
   requestedOpticalDebugMode = 'shaded',
+  requestedOpticalFootprintMode = null,
 } = {}) {
   const expectedMode = resolveFingerFluidRendererMode(requestedMode);
   if (!runtime || typeof runtime !== 'object') {
@@ -876,7 +882,7 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
   const deferredSceneEvidence = runtime.deferredSceneEvidence;
   const renderFrameId = deferredSceneEvidence?.renderFrameId;
   const reflectionDiagnostic = expectedMode === 'screen_space_refraction'
-    && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'].includes(runtime.opticalDebugMode);
+    && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(runtime.opticalDebugMode);
   const dynamicMeshPresentationIsCurrent = reflectionDiagnostic
     ? deferredSceneEvidence?.dynamicMesh?.presentationMode === 'suppressed_in_reflection_debug_provider_remains_active_v0'
       && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId !== renderFrameId
@@ -984,6 +990,27 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
   let expectedOpticalDebugMode = null;
   if (expectedMode === 'screen_space_refraction') {
     expectedOpticalDebugMode = resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode);
+    const expectedOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(
+      requestedOpticalFootprintMode || runtime.requestedOpticalFootprintMode,
+    );
+    const expectedOpticalFootprintRoute = opticalFootprintRouteForMode(expectedOpticalFootprintMode);
+    if (
+      runtime.requestedOpticalFootprintMode !== expectedOpticalFootprintMode
+      || runtime.effectiveOpticalFootprintMode !== expectedOpticalFootprintMode
+      || runtime.requestedOpticalFootprintRoute !== expectedOpticalFootprintRoute
+      || runtime.effectiveOpticalFootprintRoute !== expectedOpticalFootprintRoute
+      || runtime.opticalFootprintFallbackReason
+    ) {
+      throw new Error(`Finger fluid truth optical footprint disagreement: ${JSON.stringify({
+        expectedOpticalFootprintMode,
+        expectedOpticalFootprintRoute,
+        requestedOpticalFootprintMode: runtime.requestedOpticalFootprintMode,
+        effectiveOpticalFootprintMode: runtime.effectiveOpticalFootprintMode,
+        requestedOpticalFootprintRoute: runtime.requestedOpticalFootprintRoute,
+        effectiveOpticalFootprintRoute: runtime.effectiveOpticalFootprintRoute,
+        opticalFootprintFallbackReason: runtime.opticalFootprintFallbackReason,
+      })}`);
+    }
     if (
       runtime.requestedOpticalDebugMode !== expectedOpticalDebugMode
       || runtime.effectiveOpticalDebugMode !== expectedOpticalDebugMode
@@ -1026,7 +1053,15 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
       || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || evidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
       || evidence?.opticalDebugMode !== expectedOpticalDebugMode
-      || evidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+      || evidence?.requestedOpticalFootprintMode !== expectedOpticalFootprintMode
+      || evidence?.effectiveOpticalFootprintMode !== expectedOpticalFootprintMode
+      || evidence?.requestedOpticalFootprintRoute !== expectedOpticalFootprintRoute
+      || evidence?.effectiveOpticalFootprintRoute !== expectedOpticalFootprintRoute
+      || evidence?.opticalFootprintFallbackReason
+      || evidence?.reflectionFootprintComposition !== (expectedOpticalFootprintMode === 'variance_filtered'
+        ? 'dense_unresolved_variance_widens_normalized_nine_ray_reflection_lobe_v0'
+        : 'resolved_detail_normalized_five_ray_reflection_lobe_v0')
+      || evidence?.sceneColorTexture?.source !== 'same-camera-linear-hdr-scene-radiance-v0'
       || !Number.isInteger(evidence?.accumulationPassCount)
       || evidence.accumulationPassCount <= 0
       || !Number.isInteger(evidence?.compositePassCount)
@@ -1048,6 +1083,16 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
       throw new Error(`Finger fluid truth interface diagnostic published inactive optical provider evidence: ${JSON.stringify({ queryEvidence, reflectionEvidence, environmentEvidence })}`);
     }
     if (!interfaceFidelityDiagnostic) {
+    const expectedQuadratureRoute = expectedOpticalFootprintMode === 'variance_filtered'
+      ? KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE
+      : KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE;
+    const expectedMaximumQuadratureSampleCount = expectedOpticalFootprintMode === 'variance_filtered' ? 9 : 5;
+    const expectedQuadratureSampleCountMode = expectedOpticalFootprintMode === 'variance_filtered'
+      ? 'adaptive_5_sparse_9_dense_v0'
+      : 'fixed_5_v0';
+    const expectedQuadratureEstimator = expectedOpticalFootprintMode === 'variance_filtered'
+      ? 'trimmed_min_max_7_of_9_equal_weight_v0'
+      : 'weighted_five_ray_mean_v0';
     if (
       queryEvidence?.schema !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA
       || queryEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
@@ -1078,7 +1123,17 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
       || reflectionEvidence?.effectiveProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
       || reflectionEvidence?.providerRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
       || reflectionEvidence?.accelerationRoute !== KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE
-      || reflectionEvidence?.quadratureRoute !== KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE
+      || reflectionEvidence?.quadratureRoute !== expectedQuadratureRoute
+      || reflectionEvidence?.requestedFootprintMode !== expectedOpticalFootprintMode
+      || reflectionEvidence?.effectiveFootprintMode !== expectedOpticalFootprintMode
+      || reflectionEvidence?.requestedFootprintRoute !== expectedOpticalFootprintRoute
+      || reflectionEvidence?.effectiveFootprintRoute !== expectedOpticalFootprintRoute
+      || reflectionEvidence?.footprintFallbackReason
+      || reflectionEvidence?.minimumQuadratureSampleCount !== 5
+      || reflectionEvidence?.maximumQuadratureSampleCount !== expectedMaximumQuadratureSampleCount
+      || reflectionEvidence?.quadratureSampleCountMode !== expectedQuadratureSampleCountMode
+      || reflectionEvidence?.quadratureEstimator !== expectedQuadratureEstimator
+      || reflectionEvidence?.quadratureWeightSum !== 1
       || reflectionEvidence?.hitKindDiagnosticScope !== 'center_ray_only_v0'
       || reflectionEvidence?.fallbackReason
       || reflectionEvidence?.candidateCapMode !== 'uncapped_exact_dynamic_mesh_triangle_population_v0'
@@ -1127,6 +1182,11 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
     ...(expectedMode === 'screen_space_refraction' ? {
       requestedOpticalDebugMode: runtime.requestedOpticalDebugMode,
       effectiveOpticalDebugMode: runtime.effectiveOpticalDebugMode,
+      requestedOpticalFootprintMode: runtime.requestedOpticalFootprintMode,
+      effectiveOpticalFootprintMode: runtime.effectiveOpticalFootprintMode,
+      requestedOpticalFootprintRoute: runtime.requestedOpticalFootprintRoute,
+      effectiveOpticalFootprintRoute: runtime.effectiveOpticalFootprintRoute,
+      opticalFootprintFallbackReason: runtime.opticalFootprintFallbackReason || null,
     } : {}),
     supportPresentationEvidence: {
       ...supportPresentationEvidence,
@@ -1192,6 +1252,14 @@ export function resolveFingerFluidOpticalLightingMode(value = 'transport_only') 
   return mode;
 }
 
+export function resolveFingerFluidOpticalFootprintMode(value = 'resolved_detail') {
+  const mode = String(value || 'resolved_detail');
+  if (!KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.includes(mode)) {
+    throw new RangeError(`Unsupported finger fluid optical footprint mode: ${mode}`);
+  }
+  return mode;
+}
+
 export function fingerFluidAbsorptionCoefficientsForLightingMode(value = 'transport_only') {
   const mode = resolveFingerFluidOpticalLightingMode(value);
   return mode === 'legacy_shading' ? [0.46, 0.15, 0.055] : [1.10, 0.42, 0.18];
@@ -1201,6 +1269,11 @@ function opticalLightingRouteForMode(mode) {
   if (mode === 'bounded_ggx') return KAMINOS_FINGER_FLUID_BOUNDED_GGX_LIGHTING_ROUTE;
   if (mode === 'legacy_shading') return KAMINOS_FINGER_FLUID_LEGACY_SHADING_ROUTE;
   return KAMINOS_FINGER_FLUID_TRANSPORT_ONLY_LIGHTING_ROUTE;
+}
+
+function opticalFootprintRouteForMode(mode) {
+  if (mode === 'variance_filtered') return KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_FOOTPRINT_ROUTE;
+  return KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE;
 }
 
 function rendererRouteForMode(mode) {
@@ -3831,6 +3904,7 @@ fn integrateWorldReflectionQuadrature(
   cameraRay: vec3<f32>,
   worldNormal: vec3<f32>,
   coneRadius: f32,
+  opticalFootprintMode: i32,
 ) -> ReflectionQuadrature {
   let centerDirection = normalize(reflect(cameraRay, worldNormal));
   let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
@@ -3843,10 +3917,54 @@ fn integrateWorldReflectionQuadrature(
   let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
   let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius));
   var quadrature: ReflectionQuadrature;
-  quadrature.radiance = center.radiance * 0.36
-    + (tangentPositive.radiance + tangentNegative.radiance + bitangentPositive.radiance + bitangentNegative.radiance) * 0.16;
-  quadrature.environmentRadiance = center.environmentRadiance * 0.36
-    + (tangentPositive.environmentRadiance + tangentNegative.environmentRadiance + bitangentPositive.environmentRadiance + bitangentNegative.environmentRadiance) * 0.16;
+  if (opticalFootprintMode == 0) {
+    quadrature.radiance = center.radiance * 0.36
+      + (tangentPositive.radiance + tangentNegative.radiance + bitangentPositive.radiance + bitangentNegative.radiance) * 0.16;
+    quadrature.environmentRadiance = center.environmentRadiance * 0.36
+      + (tangentPositive.environmentRadiance + tangentNegative.environmentRadiance + bitangentPositive.environmentRadiance + bitangentNegative.environmentRadiance) * 0.16;
+    return quadrature;
+  }
+  let diagonalRadius = coneRadius * 0.70710678;
+  let diagonalPositivePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent + bitangent) * diagonalRadius));
+  let diagonalPositiveNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent - bitangent) * diagonalRadius));
+  let diagonalNegativePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent + bitangent) * diagonalRadius));
+  let diagonalNegativeNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent - bitangent) * diagonalRadius));
+  var samples: array<ReflectionSample, 9>;
+  samples[0] = center;
+  samples[1] = tangentPositive;
+  samples[2] = tangentNegative;
+  samples[3] = bitangentPositive;
+  samples[4] = bitangentNegative;
+  samples[5] = diagonalPositivePositive;
+  samples[6] = diagonalPositiveNegative;
+  samples[7] = diagonalNegativePositive;
+  samples[8] = diagonalNegativeNegative;
+  var minimumIndex = 0;
+  var maximumIndex = 0;
+  var minimumLuminance = dot(samples[0].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
+  var maximumLuminance = minimumLuminance;
+  var radianceSum = vec3<f32>(0.0);
+  var environmentRadianceSum = vec3<f32>(0.0);
+  for (var sampleIndex = 0; sampleIndex < 9; sampleIndex += 1) {
+    let sampleLuminance = dot(samples[sampleIndex].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
+    if (sampleLuminance < minimumLuminance) {
+      minimumLuminance = sampleLuminance;
+      minimumIndex = sampleIndex;
+    }
+    if (sampleLuminance > maximumLuminance) {
+      maximumLuminance = sampleLuminance;
+      maximumIndex = sampleIndex;
+    }
+    radianceSum += samples[sampleIndex].radiance;
+    environmentRadianceSum += samples[sampleIndex].environmentRadiance;
+  }
+  if (maximumIndex == minimumIndex) {
+    maximumIndex = select(0, 1, minimumIndex == 0);
+  }
+  quadrature.radiance = (radianceSum - samples[minimumIndex].radiance - samples[maximumIndex].radiance) / 7.0;
+  quadrature.environmentRadiance = (environmentRadianceSum
+    - samples[minimumIndex].environmentRadiance
+    - samples[maximumIndex].environmentRadiance) / 7.0;
   return quadrature;
 }
 
@@ -4100,6 +4218,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let dimsFloat = vec2<f32>(dims);
   let pixel = vec2<i32>(fragmentPosition.xy);
   let opticalLightingMode = i32(round(params.cameraForward.w));
+  let opticalFootprintMode = i32(round(params.cameraPosition.w));
   let sceneUv = clamp((vec2<f32>(pixel) + vec2<f32>(0.5)) / dimsFloat, vec2<f32>(0.0), vec2<f32>(1.0));
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
@@ -4261,7 +4380,16 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     0.06,
     1.0,
   );
-  let reflectionConeRadius = clamp(0.018 + reflectionRoughness * 0.10, 0.018, 0.118);
+  let footprintActivation = interfaceNormal.denseBodyConfidence
+    * smoothstep(0.08, 0.42, unresolvedNormalVariance);
+  let baselineReflectionConeRadius = clamp(0.018 + reflectionRoughness * 0.10, 0.018, 0.118);
+  let varianceFilteredConeRadius = clamp(
+    baselineReflectionConeRadius + footprintActivation * (0.018 + reflectionRoughness * 0.024),
+    0.018,
+    0.16,
+  );
+  let reflectionConeRadius = select(baselineReflectionConeRadius, varianceFilteredConeRadius, opticalFootprintMode == 1);
+  let effectiveFootprintQuadratureMode = select(0, 1, opticalFootprintMode == 1 && footprintActivation > 0.05);
   if (opticalDebugMode == 15) {
     return refractionOutput(vec4<f32>(sampleEnvironmentFiltered(reflectionDirection, reflectionRoughness), 1.0), supportOrderingDepth);
   }
@@ -4283,7 +4411,13 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(distanceView, distanceView * 0.72, 1.0 - distanceView, 1.0), supportOrderingDepth);
   }
 
-  let reflectionQuadrature = integrateWorldReflectionQuadrature(worldPosition, cameraRay, worldNormal, reflectionConeRadius);
+  let reflectionQuadrature = integrateWorldReflectionQuadrature(
+    worldPosition,
+    cameraRay,
+    worldNormal,
+    reflectionConeRadius,
+    effectiveFootprintQuadratureMode,
+  );
   let reflectionRadiance = reflectionQuadrature.radiance;
   if (opticalDebugMode == 12) {
     return refractionOutput(vec4<f32>(reflectionRadiance, 1.0), supportOrderingDepth);
@@ -4306,8 +4440,30 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
   let broadSpecular = pow(directLight, broadSpecularExponent) * 0.32;
   let crestSpecular = pow(directLight, crestSpecularExponent) * 0.46 * mix(1.0, 0.82, directRoughnessWeight);
-  let reflectedTransport = mix(refractedRadiance * absorption, reflectionRadiance, fresnel);
-  let transportOnlyColor = reflectedTransport + waterScatter * (1.0 - fresnel);
+  let transmittedTransport = refractedRadiance * absorption * (1.0 - fresnel);
+  let reflectedTransport = reflectionRadiance * fresnel;
+  let scatterTransport = waterScatter * (1.0 - fresnel);
+  let transportOnlyColor = transmittedTransport + reflectedTransport + scatterTransport;
+  if (opticalDebugMode == 24) {
+    return refractionOutput(vec4<f32>(transmittedTransport, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 25) {
+    return refractionOutput(vec4<f32>(reflectedTransport, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 26) {
+    return refractionOutput(vec4<f32>(scatterTransport, 1.0), supportOrderingDepth);
+  }
+  let preToneLuminance = dot(transportOnlyColor, vec3<f32>(0.2126, 0.7152, 0.0722));
+  if (opticalDebugMode == 27) {
+    return refractionOutput(vec4<f32>(vec3<f32>(preToneLuminance), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 28) {
+    return refractionOutput(vec4<f32>(unresolvedNormalVariance, interfaceNormal.denseBodyConfidence, footprintActivation, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 29) {
+    let sampleCount = select(5.0, 9.0, effectiveFootprintQuadratureMode == 1);
+    return refractionOutput(vec4<f32>(baselineReflectionConeRadius / 0.16, reflectionConeRadius / 0.16, sampleCount / 9.0, 1.0), supportOrderingDepth);
+  }
   var color = transportOnlyColor;
   if (opticalLightingMode == 1) {
     let ggxRoughness = clamp(0.12 + directRoughness * 1.8, 0.12, 0.68);
@@ -5489,6 +5645,7 @@ export async function createWebGPUFingerFluidSolver({
   rendererMode = 'screen_space_surface',
   opticalDebugMode = 'shaded',
   opticalLightingMode = 'transport_only',
+  opticalFootprintMode = 'resolved_detail',
   particleShiftStrength = 0,
   supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
@@ -5528,6 +5685,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
   const safeOpticalLightingMode = resolveFingerFluidOpticalLightingMode(opticalLightingMode);
+  const safeOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(opticalFootprintMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
@@ -6183,6 +6341,11 @@ export async function createWebGPUFingerFluidSolver({
     ? safeOpticalLightingMode
     : 'not_executed';
   let lastOpticalLightingFallbackReason = null;
+  let lastRequestedOpticalFootprintMode = safeOpticalFootprintMode;
+  let lastEffectiveOpticalFootprintMode = safeRendererMode === 'screen_space_refraction'
+    ? safeOpticalFootprintMode
+    : 'not_executed';
+  let lastOpticalFootprintFallbackReason = null;
   let lastRendererFallbackReason = null;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -6469,6 +6632,7 @@ export async function createWebGPUFingerFluidSolver({
     rendererMode = safeRendererMode,
     opticalDebugMode = safeOpticalDebugMode,
     opticalLightingMode = safeOpticalLightingMode,
+    opticalFootprintMode = safeOpticalFootprintMode,
   } = {}) {
     if (destroyed) return;
     const extent = ensureExtent(width, height, pixelRatio);
@@ -6477,8 +6641,13 @@ export async function createWebGPUFingerFluidSolver({
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
     const requestedOpticalLightingMode = String(opticalLightingMode || safeOpticalLightingMode);
     const resolvedOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
+    const requestedOpticalFootprintMode = String(opticalFootprintMode || safeOpticalFootprintMode);
+    const resolvedOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(requestedOpticalFootprintMode);
     const effectiveOpticalLightingMode = effectiveRendererMode === 'screen_space_refraction'
       ? resolvedOpticalLightingMode
+      : 'not_executed';
+    const effectiveOpticalFootprintMode = effectiveRendererMode === 'screen_space_refraction'
+      ? resolvedOpticalFootprintMode
       : 'not_executed';
     const renderFrameId = directRenderFrameCount + 1;
     lastRequestedRendererMode = requestedRendererMode;
@@ -6487,6 +6656,9 @@ export async function createWebGPUFingerFluidSolver({
     lastRequestedOpticalLightingMode = requestedOpticalLightingMode;
     lastEffectiveOpticalLightingMode = effectiveOpticalLightingMode;
     lastOpticalLightingFallbackReason = null;
+    lastRequestedOpticalFootprintMode = requestedOpticalFootprintMode;
+    lastEffectiveOpticalFootprintMode = effectiveOpticalFootprintMode;
+    lastOpticalFootprintFallbackReason = null;
     lastRendererFallbackReason = null;
     if (!reflectionMeshWitnessOverride) {
       const animatedPhase = (stepCount * 0.012) % (Math.PI * 2);
@@ -6512,7 +6684,7 @@ export async function createWebGPUFingerFluidSolver({
     renderData.set([...right, colorModeIndex], 16);
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
     renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 24);
-    renderData.set([...eye, 1], 28);
+    renderData.set([...eye, KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.indexOf(resolvedOpticalFootprintMode)], 28);
     renderData.set([extent.width, extent.height, 0.046, safeParticleCount], 32);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
     writeDynamicReflectionSceneParams();
@@ -6601,7 +6773,7 @@ export async function createWebGPUFingerFluidSolver({
       },
     });
     const isolateWorldReflection = refractionEnabled
-      && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'].includes(effectiveOpticalDebugMode);
+      && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(effectiveOpticalDebugMode);
     if (!isolateWorldReflection) {
       dynamicIndexedMeshPass.setPipeline(dynamicIndexedMeshPipeline);
       dynamicIndexedMeshPass.setBindGroup(0, dynamicIndexedMeshBindGroup);
@@ -7218,6 +7390,13 @@ export async function createWebGPUFingerFluidSolver({
         ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
         : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
       opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
+      requestedOpticalFootprintMode: lastRequestedOpticalFootprintMode,
+      effectiveOpticalFootprintMode: lastEffectiveOpticalFootprintMode,
+      requestedOpticalFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
+      effectiveOpticalFootprintRoute: lastEffectiveOpticalFootprintMode === 'not_executed'
+        ? KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE
+        : opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
+      opticalFootprintFallbackReason: lastOpticalFootprintFallbackReason,
       opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
       sphereDebugRendererRoute: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
       screenSpaceSurfaceRendererRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
@@ -7345,7 +7524,23 @@ export async function createWebGPUFingerFluidSolver({
           effectiveProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
           providerRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
           accelerationRoute: KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
-          quadratureRoute: KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
+          quadratureRoute: lastEffectiveOpticalFootprintMode === 'variance_filtered'
+            ? KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE
+            : KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
+          requestedFootprintMode: lastRequestedOpticalFootprintMode,
+          effectiveFootprintMode: lastEffectiveOpticalFootprintMode,
+          requestedFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
+          effectiveFootprintRoute: opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
+          footprintFallbackReason: lastOpticalFootprintFallbackReason,
+          minimumQuadratureSampleCount: 5,
+          maximumQuadratureSampleCount: lastEffectiveOpticalFootprintMode === 'variance_filtered' ? 9 : 5,
+          quadratureSampleCountMode: lastEffectiveOpticalFootprintMode === 'variance_filtered'
+            ? 'adaptive_5_sparse_9_dense_v0'
+            : 'fixed_5_v0',
+          quadratureEstimator: lastEffectiveOpticalFootprintMode === 'variance_filtered'
+            ? 'trimmed_min_max_7_of_9_equal_weight_v0'
+            : 'weighted_five_ray_mean_v0',
+          quadratureWeightSum: 1,
           hitKindDiagnosticScope: 'center_ray_only_v0',
           fallbackReason: null,
           compositePassCount: worldSpaceReflectionCompositePassCount,
@@ -7455,6 +7650,18 @@ export async function createWebGPUFingerFluidSolver({
           ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
           : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
         opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
+        requestedOpticalFootprintMode: lastRequestedOpticalFootprintMode,
+        effectiveOpticalFootprintMode: lastEffectiveOpticalFootprintMode,
+        requestedOpticalFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
+        effectiveOpticalFootprintRoute: lastEffectiveOpticalFootprintMode === 'not_executed'
+          ? KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE
+          : opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
+        opticalFootprintFallbackReason: lastOpticalFootprintFallbackReason,
+        reflectionFootprintComposition: lastEffectiveOpticalFootprintMode === 'not_executed'
+          ? 'not_executed_non_refraction_renderer_v0'
+          : lastEffectiveOpticalFootprintMode === 'variance_filtered'
+            ? 'dense_unresolved_variance_widens_normalized_nine_ray_reflection_lobe_v0'
+            : 'resolved_detail_normalized_five_ray_reflection_lobe_v0',
         lightingComposition: lastEffectiveOpticalLightingMode === 'not_executed'
           ? 'not_executed_non_refraction_renderer_v0'
           : lastEffectiveOpticalLightingMode === 'transport_only'
@@ -7548,6 +7755,7 @@ export async function createWebGPUFingerFluidSolver({
     render_backend: 'webgpu_direct_render',
     renderer_mode: safeRendererMode,
     optical_lighting_mode: safeOpticalLightingMode,
+    optical_footprint_mode: safeOpticalFootprintMode,
     step,
     render,
     requestDiagnostics,

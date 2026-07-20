@@ -64,6 +64,17 @@ export function createFingerFluidBenchState(options = {}) {
     || (effectiveOpticalLightingMode === 'not_executed'
       ? 'not-executed-non-refraction-renderer-v0'
       : requestedOpticalLightingRoute);
+  const requestedOpticalFootprintMode = options.requestedOpticalFootprintMode || 'resolved_detail';
+  const requestedOpticalFootprintRoute = options.requestedOpticalFootprintRoute || {
+    resolved_detail: 'wgsl-liquid-resolved-detail-reflection-footprint-v0',
+    variance_filtered: 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0',
+  }[requestedOpticalFootprintMode] || `unsupported-optical-footprint-mode:${requestedOpticalFootprintMode}`;
+  const effectiveOpticalFootprintMode = options.effectiveOpticalFootprintMode
+    || (effectiveRendererMode === 'screen_space_refraction' ? requestedOpticalFootprintMode : 'not_executed');
+  const effectiveOpticalFootprintRoute = options.effectiveOpticalFootprintRoute
+    || (effectiveOpticalFootprintMode === 'not_executed'
+      ? 'not-executed-non-refraction-renderer-v0'
+      : requestedOpticalFootprintRoute);
 
   return {
     schema: KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
@@ -137,6 +148,11 @@ export function createFingerFluidBenchState(options = {}) {
       requestedOpticalLightingRoute,
       effectiveOpticalLightingRoute,
       opticalLightingFallbackReason: options.opticalLightingFallbackReason || null,
+      requestedOpticalFootprintMode,
+      effectiveOpticalFootprintMode,
+      requestedOpticalFootprintRoute,
+      effectiveOpticalFootprintRoute,
+      opticalFootprintFallbackReason: options.opticalFootprintFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
