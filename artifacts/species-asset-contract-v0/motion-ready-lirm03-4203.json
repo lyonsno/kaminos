@@ -70,6 +70,23 @@
     "occlusionTexture": null,
     "emissiveTexture": null
   },
+  "motionClass": {
+    "id": "plate-crawl-class",
+    "bodyPlan": "broad-plate",
+    "compatibility": [
+      {
+        "deformationMode": "axial-parallel-transport-wave-v1",
+        "mechanical": "pass",
+        "perceptual": "fail",
+        "promotion": "rejected",
+        "evidenceRef": "livingworld:cc/green-thumbsucker-foliage-spine-0720@baec295"
+      }
+    ],
+    "handoffGate": {
+      "requiredWitness": "world-like-moving",
+      "status": "rejected"
+    }
+  },
   "deformation": {
     "mode": "axial-parallel-transport-wave-v1",
     "space": "asset-local-before-root-transform",
@@ -127,6 +144,7 @@
     "consumer": "green-thumbsucker",
     "scene": "Living World shared-depth runtime",
     "maxCreatureInstances": 1,
+    "currentMotionPromotion": "rejected",
     "required": [
       "consumer rehashes the distinct package bytes",
       "consumer changes registration data without changing the v1 deformation algorithm",

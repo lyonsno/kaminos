@@ -30,10 +30,30 @@ assert.deepEqual(manifest.deformation.frame.upReference, [0, 1, 0]);
 assert.equal(manifest.deformation.endpointResidual.mode, 'preserve-signed-axial-residual');
 assert.equal(manifest.deformation.endpointResidual.verticesOutsideStationSpan, 1984);
 assert.equal(manifest.deformation.endpointResidual.vertexFraction, 0.0134);
+assert.deepEqual(manifest.motionClass, {
+  id: 'axial-squirm-class',
+  bodyPlan: 'elongated-crawler',
+  compatibility: [{
+    deformationMode: 'axial-parallel-transport-wave-v1',
+    mechanical: 'pass',
+    perceptual: 'pass',
+    promotion: 'allowed',
+    evidenceRef: 'livingworld:cc/green-thumbsucker-foliage-spine-0720@2313132',
+  }],
+  handoffGate: {
+    requiredWitness: 'world-like-moving',
+    status: 'passed',
+  },
+});
 assert.deepEqual(manifest.instance.scale, [1.14, 1.14, 1.14]);
 assert.equal(manifest.instance.terrainContactOffsetWorld, 0.23584578573703763);
 assert.match(manifest.root.applicationOrder, /instance scale/);
 assert.equal(manifest.runtimeGate.maxCreatureInstances, 1);
+assert.equal(manifest.runtimeGate.currentMotionPromotion, 'allowed');
+assert.equal(
+  manifest.motionClass.compatibility[0].promotion,
+  manifest.runtimeGate.currentMotionPromotion,
+);
 assert.equal(manifest.lods.length, 1);
 
 for (const entry of [manifest.asset, manifest.registration]) {

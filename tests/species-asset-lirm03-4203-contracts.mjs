@@ -132,7 +132,27 @@ assert.deepEqual(manifest.deformation.reuseProbe.state, {
 });
 assert.ok(manifest.deformation.reuseProbe.maxZeroStateError < 2e-6);
 assert.equal(manifest.deformation.reuseProbe.activeStateFinite, true);
+assert.deepEqual(manifest.motionClass, {
+  id: 'plate-crawl-class',
+  bodyPlan: 'broad-plate',
+  compatibility: [{
+    deformationMode: 'axial-parallel-transport-wave-v1',
+    mechanical: 'pass',
+    perceptual: 'fail',
+    promotion: 'rejected',
+    evidenceRef: 'livingworld:cc/green-thumbsucker-foliage-spine-0720@baec295',
+  }],
+  handoffGate: {
+    requiredWitness: 'world-like-moving',
+    status: 'rejected',
+  },
+});
 assert.equal(manifest.runtimeGate.maxCreatureInstances, 1);
+assert.equal(manifest.runtimeGate.currentMotionPromotion, 'rejected');
+assert.equal(
+  manifest.motionClass.compatibility[0].promotion,
+  manifest.runtimeGate.currentMotionPromotion,
+);
 assert.deepEqual(manifest.runtimeGate.required, [
   'consumer rehashes the distinct package bytes',
   'consumer changes registration data without changing the v1 deformation algorithm',
