@@ -7272,12 +7272,30 @@ const FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL = `
 fn fourArmHeldStateTimestampMarker() {}
 `;
 
-export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
+export function createKaminosVolumePrototype({
+  THREE,
+  viewport,
+  camera,
+  controls,
+  getControls,
+  onStatus,
+  productFrameOwner = 'prototype',
+  externalDevice = null,
+  externalAdapterInfo = null,
+  externalColorFormat = null,
+  externalDepthFormat = 'depth24plus',
+}) {
+  if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
+    throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
+  }
+  if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
+    throw new Error('caller-product-frame-requires-external-device-and-color-format');
+  }
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
-  viewport.appendChild(canvas);
+  if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -7322,6 +7340,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    productFrameOwner,
+    productFrameIdentity: productFrameOwner === 'caller'
+      ? 'product-frame-smoke-raymarch-under-splats-v0'
+      : null,
+    productFrameDepthFormat: productFrameOwner === 'caller' ? externalDepthFormat : null,
+    productFrameReceipt: null,
     volumePresentationModeRequestedRaw,
     volumePresentationModeRequested,
     volumePresentationModeEffective,
@@ -7894,6 +7918,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatCompactPipeline = null;
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
+  let productBoundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
   let boundarySplatBilinearRenderPipeline = null;
   let boundarySplatBilinearReadbackPipeline = null;
@@ -9550,6 +9575,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       primitive: { topology },
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    if (productFrameOwner === 'caller') {
+      productBoundarySplatRenderPipeline = device.createRenderPipeline({
+        label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`,
+        layout: boundarySplatRenderPipelineLayout,
+        vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+        fragment: {
+          module: boundarySplatShader,
+          entryPoint: 'boundarySplatFs',
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+        depthStencil: {
+          format: externalDepthFormat,
+          depthWriteEnabled: false,
+          depthCompare: 'less-equal',
+        },
+      });
+    }
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
     boundarySplatBilinearRenderPipeline = makeBoundarySplatRenderPipeline(
       format,
@@ -9848,7 +9897,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!navigator.gpu) {
       throw new Error('WebGPU unavailable');
     }
-    adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    adapter = productFrameOwner === 'caller'
+      ? {
+        limits: externalDevice.limits,
+        features: externalDevice.features,
+        info: externalAdapterInfo || { vendor: 'caller-device' },
+      }
+      : await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
     const maxRequestedGridSize = Math.max(...SUPPORTED_GRID_SIZES);
     const maxRequestedCellCapacity = gridCellCount(maxRequestedGridSize);
@@ -9880,28 +9935,41 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       );
     }
     requiredLimits.maxStorageBuffersPerShaderStage = BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT;
-    const requiredFeatures = [];
-    if (adapter.features?.has?.('timestamp-query')) {
-      requiredFeatures.push('timestamp-query');
+    if (productFrameOwner === 'caller') {
+      device = externalDevice;
+      const supportedStorageBufferBytes = Math.min(
+        device.limits?.maxBufferSize ?? 0,
+        device.limits?.maxStorageBufferBindingSize ?? 0,
+      );
+      if (supportedStorageBufferBytes < maxRequestedStorageBufferBytes) {
+        throw new Error(
+          `caller-device-storage-buffer-limit:required=${maxRequestedStorageBufferBytes}:supported=${supportedStorageBufferBytes}`,
+        );
+      }
+    } else {
+      const requiredFeatures = [];
+      if (adapter.features?.has?.('timestamp-query')) requiredFeatures.push('timestamp-query');
+      const deviceDescriptor = {};
+      if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
+      if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
+      device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
-    const deviceDescriptor = {};
-    if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
-    if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
-    device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
       candidateCopyBytes: 0,
       rendererIdentity: state.boundarySplatRendererIdentity,
     }));
-    context = canvas.getContext('webgpu');
-    format = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({
-      device,
-      format,
-      alphaMode: 'opaque',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-    });
+    format = productFrameOwner === 'caller' ? externalColorFormat : navigator.gpu.getPreferredCanvasFormat();
+    if (productFrameOwner !== 'caller') {
+      context = canvas.getContext('webgpu');
+      context.configure({
+        device,
+        format,
+        alphaMode: 'opaque',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+    }
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
       emitStatus({ phase: 'gpu-error', error: state.error });
@@ -12804,6 +12872,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         loadOp,
         storeOp: 'store',
       }],
+      ...(options.depthView ? {
+        depthStencilAttachment: {
+          view: options.depthView,
+          depthLoadOp: 'load',
+          depthStoreOp: 'store',
+        },
+      } : {}),
     });
     pass.setPipeline(effectivePipeline);
     pass.setBindGroup(0, boundarySplatRenderBindGroup);
@@ -14438,6 +14513,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function render(now) {
+    if (productFrameOwner === 'caller') {
+      throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
+    }
     if (!state.active) return;
     if (selectiveHeadLiveCapturePaused) {
       raf = 0;
@@ -20288,6 +20366,103 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, ...state.boundarySidecarOverrideReceipt };
   }
 
+  async function initializeCallerProductFrame() {
+    if (productFrameOwner !== 'caller') {
+      throw new Error('initialize-product-frame-requires-caller-frame-owner');
+    }
+    await ensureGpu();
+    state.active = true;
+    state.error = null;
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'initialized',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      privateSubmitApplied: false,
+      fallbackReason: null,
+    };
+    emitStatus({ phase: 'product-frame-initialized', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
+  }
+
+  function encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now = performance.now() }) {
+    if (productFrameOwner !== 'caller') throw new Error('encode-product-frame-requires-caller-frame-owner');
+    if (!device || !state.active) throw new Error('product-frame-not-initialized');
+    if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
+      throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
+    }
+    updateUniforms(now);
+    encodeSim(commandEncoder);
+    encodeSelectiveHeadLiveFields(commandEncoder);
+    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+    encodeMajorant(commandEncoder, {
+      readBindGroup: selectiveMajorant,
+      force: state.selectiveHeadLiveEffectiveRole !== 'off',
+    });
+    const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+    const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+    encodeBoundarySidecar(commandEncoder, { readBindGroup: selectiveSidecar });
+    if (selectiveSplat) {
+      encodeBoundarySplats(commandEncoder, {
+        computeBindGroup: selectiveSplat,
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+      });
+    } else {
+      encodeBoundarySplats(commandEncoder);
+    }
+
+    const composition = updateSelectiveHeadLiveCompositionState();
+    if (composition.effective !== 'smoke-raymarch-under-splats-v0') {
+      throw new Error(`product-frame-composition-mismatch:${composition.effective}`);
+    }
+    const splatApplied = encodeBoundarySplatPresentation(
+      commandEncoder,
+      colorView,
+      productBoundarySplatRenderPipeline,
+      boundarySplatPresentationRenderPipeline,
+      { loadOp: 'load', depthView },
+    );
+    if (!splatApplied) {
+      throw new Error(state.boundarySplatFallbackReason || 'product-frame-splat-fire-unavailable');
+    }
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'partial',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      requestedComposition: composition.requested,
+      effectiveComposition: composition.effective,
+      raymarchFireAuthority: composition.definition.raymarchFireAuthority,
+      smokeRaymarchEncoded: false,
+      smokeDepthViewProvided: Boolean(sceneDepthView),
+      smokeDepthFarBoundEffective: false,
+      splatFireEncoded: true,
+      splatSharedDepthEffective: true,
+      privateSubmitApplied: false,
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      fallbackReason: 'product-smoke-depth-far-bound-pending',
+    };
+    recordSelectiveHeadLivePassReceipt({
+      composition: composition.effective,
+      raymarchEncoded: false,
+      raymarchApplied: false,
+      splatEncoded: true,
+      splatApplied: true,
+      fallbackReason: state.productFrameReceipt.fallbackReason,
+    });
+    commitPreviousViewProjection();
+    state.frameCount += 1;
+    emitStatus({ phase: 'product-frame-encoded', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
+  }
+
   return {
     sampleSharedTransmittanceContributions,
     setVolumePresentationMode,
@@ -20297,6 +20472,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
     clearPersistentSparseCohortGpuState,
+    async initializeProductFrame() {
+      return initializeCallerProductFrame();
+    },
+    encodeProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now }) {
+      return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
+    },
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
