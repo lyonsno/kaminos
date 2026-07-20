@@ -24,6 +24,7 @@ const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.repla
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
 const invalidOpticalLightingOut = resolve(args.get('--invalid-optical-lighting-out') || out.replace(/\.png$/i, '.invalid-optical-lighting.png'));
 const invalidOpticalFootprintOut = resolve(args.get('--invalid-optical-footprint-out') || out.replace(/\.png$/i, '.invalid-optical-footprint.png'));
+const invalidTransmissionFootprintOut = resolve(args.get('--invalid-transmission-footprint-out') || out.replace(/\.png$/i, '.invalid-transmission-footprint.png'));
 const transportOnlyOut = resolve(args.get('--transport-only-out') || out.replace(/\.png$/i, '.optical-lighting-transport-only.png'));
 const boundedGgxOut = resolve(args.get('--bounded-ggx-out') || out.replace(/\.png$/i, '.optical-lighting-bounded-ggx.png'));
 const legacyShadingOut = resolve(args.get('--legacy-shading-out') || out.replace(/\.png$/i, '.optical-lighting-legacy-shading.png'));
@@ -33,7 +34,11 @@ const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') 
 const liquidSupportPhaseBOut = resolve(args.get('--liquid-support-phase-b-out') || out.replace(/\.png$/i, '.liquid-support-phase-b.png'));
 const resolvedDetailFootprintOut = resolve(args.get('--resolved-detail-footprint-out') || out.replace(/\.png$/i, '.optical-footprint-resolved-detail.png'));
 const varianceFilteredFootprintOut = resolve(args.get('--variance-filtered-footprint-out') || out.replace(/\.png$/i, '.optical-footprint-variance-filtered.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint'];
+const resolvedExitTransmissionOut = resolve(args.get('--resolved-exit-transmission-out') || out.replace(/\.png$/i, '.transmission-footprint-resolved-exit.png'));
+const denseExitFilteredTransmissionOut = resolve(args.get('--dense-exit-filtered-transmission-out') || out.replace(/\.png$/i, '.transmission-footprint-dense-exit-filtered.png'));
+const resolvedTransmissionTransportOut = resolve(args.get('--resolved-transmission-transport-out') || out.replace(/\.png$/i, '.transmission-footprint-resolved-transport.png'));
+const filteredTransmissionTransportOut = resolve(args.get('--filtered-transmission-transport-out') || out.replace(/\.png$/i, '.transmission-footprint-filtered-transport.png'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -72,6 +77,7 @@ let surfaceRegistrationViews = null;
 let sameStateOpticalComparison = null;
 let sameStateOpticalLightingComparison = null;
 let sameStateOpticalFootprintComparison = null;
+let sameStateTransmissionFootprintComparison = null;
 let transportComponentAttribution = null;
 let nonRefractionLightingApplicability = null;
 let frozenStateWorldReflectionWitness = null;
@@ -89,6 +95,7 @@ let rendererResizeWitness = null;
 let invalidRendererWitness = null;
 let invalidOpticalLightingWitness = null;
 let invalidOpticalFootprintWitness = null;
+let invalidTransmissionFootprintWitness = null;
 let opticalDebugViews = null;
 let slabValidityField = null;
 let primaryFrameBinding = null;
@@ -175,6 +182,7 @@ function writeReport(report = {}) {
     sameStateOpticalComparison,
     sameStateOpticalLightingComparison,
     sameStateOpticalFootprintComparison,
+    sameStateTransmissionFootprintComparison,
     transportComponentAttribution,
     nonRefractionLightingApplicability,
     frozenStateWorldReflectionWitness,
@@ -192,6 +200,7 @@ function writeReport(report = {}) {
     invalidRendererWitness,
     invalidOpticalLightingWitness,
     invalidOpticalFootprintWitness,
+    invalidTransmissionFootprintWitness,
     opticalDebugViews,
     slabValidityField,
     opticalDebugOutputs,
@@ -201,8 +210,13 @@ function writeReport(report = {}) {
     invalidRendererOut,
     invalidOpticalLightingOut,
     invalidOpticalFootprintOut,
+    invalidTransmissionFootprintOut,
     resolvedDetailFootprintOut,
     varianceFilteredFootprintOut,
+    resolvedExitTransmissionOut,
+    denseExitFilteredTransmissionOut,
+    resolvedTransmissionTransportOut,
+    filteredTransmissionTransportOut,
     transportOnlyOut,
     boundedGgxOut,
     legacyShadingOut,
@@ -712,6 +726,22 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   ) {
     throw new Error(`${label} optical footprint identity is missing, fallback, or inapplicable: ${JSON.stringify(receipt)}`);
   }
+  const requestedTransmissionFootprintMode = receipt?.requestedTransmissionFootprintMode;
+  const transmissionFootprintRoutes = {
+    resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
+    dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
+  };
+  if (
+    !transmissionFootprintRoutes[requestedTransmissionFootprintMode]
+    || receipt?.requestedTransmissionFootprintRoute !== transmissionFootprintRoutes[requestedTransmissionFootprintMode]
+    || receipt?.effectiveTransmissionFootprintMode !== (requireReflection ? requestedTransmissionFootprintMode : 'not_executed')
+    || receipt?.effectiveTransmissionFootprintRoute !== (requireReflection
+      ? transmissionFootprintRoutes[requestedTransmissionFootprintMode]
+      : 'not-executed-non-refraction-renderer-v0')
+    || receipt?.transmissionFootprintFallbackReason
+  ) {
+    throw new Error(`${label} transmission footprint identity is missing, fallback, or inapplicable: ${JSON.stringify(receipt)}`);
+  }
   if (!requireReflection && worldSpaceReflectionEvidence !== undefined) {
     throw new Error(`${label} published reflection provider evidence for a renderer frame that did not execute it: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
   }
@@ -868,6 +898,8 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
   const sparse = new Uint8Array(pixelCount);
   const baselineHighlight = new Uint8Array(pixelCount);
   const filteredHighlight = new Uint8Array(pixelCount);
+  const baselineBroadPale = new Uint8Array(pixelCount);
+  const filteredBroadPale = new Uint8Array(pixelCount);
   const luminance = (bytes, offset) => bytes[offset] * 0.2126 + bytes[offset + 1] * 0.7152 + bytes[offset + 2] * 0.0722;
   let supportPixels = 0;
   let densePixels = 0;
@@ -905,6 +937,8 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
       densePixels += 1;
       if (baselineY >= 220) baselineHighlight[pixel] = 1;
       if (filteredY >= 220) filteredHighlight[pixel] = 1;
+      if (baselineY >= 165) baselineBroadPale[pixel] = 1;
+      if (filteredY >= 165) filteredBroadPale[pixel] = 1;
     }
     const y = Math.floor(pixel / width);
     if (denseConfidence < 0.38 && y < height * 0.72) {
@@ -948,9 +982,10 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
     throw new Error(`optical footprint attribution masks are too sparse: ${JSON.stringify({ supportPixels, densePixels, sparseRimPixels, thinSheetPixels })}`);
   }
 
-  const countSmallComponents = field => {
+  const countComponents = field => {
     const visited = new Uint8Array(pixelCount);
     let smallComponents = 0;
+    let broadComponents = 0;
     let totalComponents = 0;
     for (let seed = 0; seed < pixelCount; seed += 1) {
       if (!field[seed] || visited[seed]) continue;
@@ -971,11 +1006,14 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
         }
       }
       if (area <= 32) smallComponents += 1;
+      if (area > 32) broadComponents += 1;
     }
-    return { totalComponents, smallComponents };
+    return { totalComponents, smallComponents, broadComponents };
   };
-  const baselineComponents = countSmallComponents(baselineHighlight);
-  const filteredComponents = countSmallComponents(filteredHighlight);
+  const baselineComponents = countComponents(baselineHighlight);
+  const filteredComponents = countComponents(filteredHighlight);
+  const baselineBroadPaleComponents = countComponents(baselineBroadPale);
+  const filteredBroadPaleComponents = countComponents(filteredBroadPale);
   const meanLuminanceRatio = filteredLuminance / Math.max(1e-6, baselineLuminance);
   const totalVariationRatio = filteredDenseVariation / Math.max(1e-6, baselineDenseVariation);
   const sparseRimRetention = (filteredSparseRimLuminance / sparseRimPixels) / Math.max(1e-6, baselineSparseRimLuminance / sparseRimPixels);
@@ -993,6 +1031,9 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
     baselineIsolatedHighlightComponents: baselineComponents.smallComponents,
     filteredIsolatedHighlightComponents: filteredComponents.smallComponents,
     isolatedHighlightComponentDelta: filteredComponents.smallComponents - baselineComponents.smallComponents,
+    baselineBroadPaleComponents: baselineBroadPaleComponents.broadComponents,
+    filteredBroadPaleComponents: filteredBroadPaleComponents.broadComponents,
+    broadPaleComponentDelta: filteredBroadPaleComponents.broadComponents - baselineBroadPaleComponents.broadComponents,
     totalVariationRatio: Number(totalVariationRatio.toFixed(6)),
     sparseRimPixels,
     sparseRimRetention: Number(sparseRimRetention.toFixed(6)),
@@ -2331,6 +2372,7 @@ async function main() {
     const requestedOpticalDebugMode = requestedRoute.searchParams.get('finger_fluid_optical_debug') || 'shaded';
     const requestedOpticalLightingMode = requestedRoute.searchParams.get('finger_fluid_optical_lighting') || 'transport_only';
     const requestedOpticalFootprintMode = requestedRoute.searchParams.get('finger_fluid_optical_footprint') || 'resolved_detail';
+    const requestedTransmissionFootprintMode = requestedRoute.searchParams.get('finger_fluid_transmission_footprint') || 'resolved_exit';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
@@ -2342,6 +2384,7 @@ async function main() {
     const effectiveOpticalDebugMode = lastDebugState.runtime?.effectiveOpticalDebugMode;
     const effectiveOpticalLightingMode = lastDebugState.runtime?.effectiveOpticalLightingMode;
     const effectiveOpticalFootprintMode = lastDebugState.runtime?.effectiveOpticalFootprintMode;
+    const effectiveTransmissionFootprintMode = lastDebugState.runtime?.effectiveTransmissionFootprintMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
@@ -2364,6 +2407,32 @@ async function main() {
         effectiveOpticalLightingMode,
         expectedEffectiveOpticalLightingMode,
         fallbackReason: lastDebugState.runtime?.opticalLightingFallbackReason,
+      })}`);
+    }
+    const transmissionFootprintExecuted = effectiveRendererMode === 'screen_space_refraction';
+    const expectedEffectiveTransmissionFootprintMode = transmissionFootprintExecuted ? requestedTransmissionFootprintMode : 'not_executed';
+    const expectedTransmissionFootprintRoute = {
+      resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
+      dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
+    }[requestedTransmissionFootprintMode];
+    if (
+      !expectedTransmissionFootprintRoute
+      || effectiveTransmissionFootprintMode !== expectedEffectiveTransmissionFootprintMode
+      || lastDebugState.runtime?.requestedTransmissionFootprintMode !== requestedTransmissionFootprintMode
+      || lastDebugState.runtime?.requestedTransmissionFootprintRoute !== expectedTransmissionFootprintRoute
+      || lastDebugState.runtime?.effectiveTransmissionFootprintRoute !== (transmissionFootprintExecuted
+        ? expectedTransmissionFootprintRoute
+        : 'not-executed-non-refraction-renderer-v0')
+      || lastDebugState.runtime?.transmissionFootprintFallbackReason
+    ) {
+      throw new Error(`transmission footprint route disagreement rejected: ${JSON.stringify({
+        requestedTransmissionFootprintMode,
+        effectiveTransmissionFootprintMode,
+        expectedEffectiveTransmissionFootprintMode,
+        expectedTransmissionFootprintRoute,
+        requestedRoute: lastDebugState.runtime?.requestedTransmissionFootprintRoute,
+        effectiveRoute: lastDebugState.runtime?.effectiveTransmissionFootprintRoute,
+        fallbackReason: lastDebugState.runtime?.transmissionFootprintFallbackReason,
       })}`);
     }
     const opticalFootprintExecuted = effectiveRendererMode === 'screen_space_refraction';
@@ -2488,7 +2557,7 @@ async function main() {
         const receipt = await evaluate(ws, `(() => {
           const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
           if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-          return render(${JSON.stringify(rendererMode)}, 'shaded', 'bounded_ggx', 'variance_filtered');
+          return render(${JSON.stringify(rendererMode)}, 'shaded', 'bounded_ggx', 'variance_filtered', 'dense_exit_filtered');
         })()`);
         if (
           receipt?.requestedRendererMode !== rendererMode
@@ -2501,9 +2570,14 @@ async function main() {
           || receipt?.effectiveOpticalFootprintMode !== 'not_executed'
           || receipt?.requestedOpticalFootprintRoute !== 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0'
           || receipt?.effectiveOpticalFootprintRoute !== 'not-executed-non-refraction-renderer-v0'
+          || receipt?.requestedTransmissionFootprintMode !== 'dense_exit_filtered'
+          || receipt?.effectiveTransmissionFootprintMode !== 'not_executed'
+          || receipt?.requestedTransmissionFootprintRoute !== 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0'
+          || receipt?.effectiveTransmissionFootprintRoute !== 'not-executed-non-refraction-renderer-v0'
           || receipt?.fallbackReason
           || receipt?.opticalLightingFallbackReason
           || receipt?.opticalFootprintFallbackReason
+          || receipt?.transmissionFootprintFallbackReason
         ) {
           throw new Error(`non-refraction renderer claimed optical lighting execution: ${JSON.stringify({ rendererMode, receipt })}`);
         }
@@ -2528,11 +2602,22 @@ async function main() {
         resolved_detail: 'wgsl-liquid-resolved-detail-reflection-footprint-v0',
         variance_filtered: 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0',
       };
-      const captureFrozenOptical = async (lightingMode, debugMode, path, label, footprintMode = 'resolved_detail') => {
+      const transmissionFootprintRoutes = {
+        resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
+        dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
+      };
+      const captureFrozenOptical = async (
+        lightingMode,
+        debugMode,
+        path,
+        label,
+        footprintMode = 'resolved_detail',
+        transmissionFootprintMode = 'resolved_exit',
+      ) => {
         const receipt = await evaluate(ws, `(() => {
           const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
           if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)});
+          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)}, ${JSON.stringify(transmissionFootprintMode)});
         })()`);
         if (
           receipt?.requestedRendererMode !== 'screen_space_refraction'
@@ -2547,9 +2632,14 @@ async function main() {
           || receipt?.effectiveOpticalFootprintMode !== footprintMode
           || receipt?.requestedOpticalFootprintRoute !== footprintRoutes[footprintMode]
           || receipt?.effectiveOpticalFootprintRoute !== footprintRoutes[footprintMode]
+          || receipt?.requestedTransmissionFootprintMode !== transmissionFootprintMode
+          || receipt?.effectiveTransmissionFootprintMode !== transmissionFootprintMode
+          || receipt?.requestedTransmissionFootprintRoute !== transmissionFootprintRoutes[transmissionFootprintMode]
+          || receipt?.effectiveTransmissionFootprintRoute !== transmissionFootprintRoutes[transmissionFootprintMode]
           || receipt?.fallbackReason
           || receipt?.opticalLightingFallbackReason
           || receipt?.opticalFootprintFallbackReason
+          || receipt?.transmissionFootprintFallbackReason
         ) {
           throw new Error(`renderer-only optical lighting disagreement: ${JSON.stringify({ lightingMode, debugMode, receipt })}`);
         }
@@ -2721,12 +2811,126 @@ async function main() {
         footprintVariance,
         ...footprintMeasurement,
       };
+
+      phase = 'same_state_transmission_footprint_comparison';
+      const resolvedExit = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        resolvedExitTransmissionOut,
+        'resolved_exit_transmission',
+        'variance_filtered',
+        'resolved_exit',
+      );
+      const denseExitFiltered = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        denseExitFilteredTransmissionOut,
+        'dense_exit_filtered_transmission',
+        'variance_filtered',
+        'dense_exit_filtered',
+      );
+      const resolvedTransmissionTransport = await captureFrozenOptical(
+        'transport_only',
+        'transmitted_transport',
+        resolvedTransmissionTransportOut,
+        'resolved_exit_transmitted_transport',
+        'variance_filtered',
+        'resolved_exit',
+      );
+      const filteredTransmissionTransport = await captureFrozenOptical(
+        'transport_only',
+        'transmitted_transport',
+        filteredTransmissionTransportOut,
+        'dense_exit_filtered_transmitted_transport',
+        'variance_filtered',
+        'dense_exit_filtered',
+      );
+      const exitVariance = await captureFrozenOptical(
+        'transport_only',
+        'exit_normal_variance',
+        opticalDebugOutputs.exit_normal_variance,
+        'transmission_exit_normal_variance',
+        'variance_filtered',
+        'resolved_exit',
+      );
+      const transmissionFootprint = await captureFrozenOptical(
+        'transport_only',
+        'transmission_footprint',
+        opticalDebugOutputs.transmission_footprint,
+        'transmission_footprint',
+        'variance_filtered',
+        'dense_exit_filtered',
+      );
+      if (
+        resolvedExit.receipt.stepCount !== lightingStepCount
+        || denseExitFiltered.receipt.stepCount !== lightingStepCount
+        || resolvedTransmissionTransport.receipt.stepCount !== lightingStepCount
+        || filteredTransmissionTransport.receipt.stepCount !== lightingStepCount
+        || exitVariance.receipt.stepCount !== lightingStepCount
+        || transmissionFootprint.receipt.stepCount !== lightingStepCount
+      ) {
+        throw new Error(`renderer-only transmission footprint comparison advanced simulation: ${JSON.stringify({
+          frozen: lightingStepCount,
+          resolvedExit: resolvedExit.receipt.stepCount,
+          denseExitFiltered: denseExitFiltered.receipt.stepCount,
+          resolvedTransmissionTransport: resolvedTransmissionTransport.receipt.stepCount,
+          filteredTransmissionTransport: filteredTransmissionTransport.receipt.stepCount,
+          exitVariance: exitVariance.receipt.stepCount,
+          transmissionFootprint: transmissionFootprint.receipt.stepCount,
+        })}`);
+      }
+      const transmissionMeasurement = measureOpticalFootprintComparison(
+        resolvedExitTransmissionOut,
+        denseExitFilteredTransmissionOut,
+        opticalDebugOutputs.liquid_support,
+        opticalDebugOutputs.exit_normal_variance,
+      );
+      const transmittedTransportDelta = measureCapturedPngDelta(
+        resolvedTransmissionTransportOut,
+        filteredTransmissionTransportOut,
+        'resolved_to_filtered_transmitted_transport',
+      );
+      const {
+        meanLuminanceRatio: transmissionMeanLuminanceRatio,
+        broadPaleComponentDelta,
+        totalVariationRatio: transmissionTotalVariationRatio,
+        sparseRimRetention: transmissionSparseRimRetention,
+        thinSheetRetention: transmissionThinSheetRetention,
+      } = transmissionMeasurement;
+      if (transmissionMeasurement.changedRatio < 0.0002) {
+        throw new Error(`dense exit footprint made no measurable same-state visual change: ${JSON.stringify(transmissionMeasurement)}`);
+      }
+      if (transmissionMeanLuminanceRatio < 0.82 || transmissionMeanLuminanceRatio > 1.18) {
+        throw new Error(`dense exit footprint materially changed transport energy: ${JSON.stringify(transmissionMeasurement)}`);
+      }
+      if (broadPaleComponentDelta > 3 || transmissionTotalVariationRatio > 1.02) {
+        throw new Error(`dense exit footprint increased broad pale fragmentation or variation: ${JSON.stringify(transmissionMeasurement)}`);
+      }
+      if (transmissionSparseRimRetention < 0.72 || transmissionThinSheetRetention < 0.75) {
+        throw new Error(`dense exit footprint erased sparse rims or thin sheets: ${JSON.stringify(transmissionMeasurement)}`);
+      }
+      sameStateTransmissionFootprintComparison = {
+        schema: 'kaminos.finger-fluid.same-state-transmission-footprint-comparison.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        sameCamera: true,
+        resolvedExit,
+        denseExitFiltered,
+        resolvedTransmissionTransport,
+        filteredTransmissionTransport,
+        transmittedTransportDelta,
+        exitVariance,
+        transmissionFootprint,
+        ...transmissionMeasurement,
+      };
       const primaryTransportOnly = await captureFrozenOptical(
         'transport_only',
         'shaded',
         out,
         'transport_only_variance_filtered_primary',
         'variance_filtered',
+        'dense_exit_filtered',
       );
       if (primaryTransportOnly.receipt.stepCount !== lightingStepCount) {
         throw new Error(`renderer-only primary transport capture advanced simulation: ${JSON.stringify(primaryTransportOnly.receipt)}`);
@@ -2734,13 +2938,15 @@ async function main() {
       primaryOutputWritten = true;
 
       phase = 'renderer_only_optical_diagnostics';
-      for (const debugMode of ['thickness', 'path_length', 'exit_validity', 'fresnel', 'absorption', 'reflection', 'environment_contribution', 'refraction_offset', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'refraction_hit_kind']) {
+      for (const debugMode of ['thickness', 'path_length', 'exit_validity', 'fresnel', 'absorption', 'reflection', 'environment_contribution', 'refraction_offset', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'refraction_hit_kind']) {
         if (opticalDebugViews[debugMode]) continue;
         opticalDebugViews[debugMode] = await captureFrozenOptical(
           'transport_only',
           debugMode,
           opticalDebugOutputs[debugMode],
           `renderer_only_${debugMode}`,
+          'variance_filtered',
+          'dense_exit_filtered',
         );
         if (opticalDebugViews[debugMode].receipt.stepCount !== lightingStepCount) {
           throw new Error(`renderer-only optical diagnostic advanced simulation: ${JSON.stringify(opticalDebugViews[debugMode].receipt)}`);
@@ -2884,6 +3090,76 @@ async function main() {
         configError: invalidOpticalFootprintState.runtime.configError,
         canvasActivity: invalidOpticalFootprintActivity,
         outputPath: invalidOpticalFootprintOut,
+      };
+
+      phase = 'invalid_transmission_footprint_route';
+      const invalidTransmissionFootprintUrl = new URL(url);
+      invalidTransmissionFootprintUrl.searchParams.set('finger_fluid_optical_lighting', 'transport_only');
+      invalidTransmissionFootprintUrl.searchParams.set('finger_fluid_transmission_footprint', 'silent_transmission_fallback');
+      await wsRequest(ws, 'Page.navigate', { url: invalidTransmissionFootprintUrl.href });
+      const invalidTransmissionFootprintDeadline = Date.now() + hookWaitMs;
+      let invalidTransmissionFootprintState = null;
+      while (Date.now() < invalidTransmissionFootprintDeadline) {
+        try {
+          invalidTransmissionFootprintState = await evaluate(ws, `(() => {
+            const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+            return typeof read === 'function' ? read() : null;
+          })()`);
+        } catch {
+          invalidTransmissionFootprintState = null;
+        }
+        if (invalidTransmissionFootprintState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidTransmissionFootprintState.status !== 'loading') break;
+        await delay(100);
+      }
+      if (
+        invalidTransmissionFootprintState?.status !== 'error'
+        || invalidTransmissionFootprintState?.solver?.backend !== 'config_rejected'
+        || invalidTransmissionFootprintState?.renderer?.backend !== 'config_rejected'
+        || invalidTransmissionFootprintState?.renderer?.requestedTransmissionFootprintMode !== 'silent_transmission_fallback'
+        || invalidTransmissionFootprintState?.renderer?.effectiveTransmissionFootprintMode !== 'config_rejected'
+        || invalidTransmissionFootprintState?.renderer?.requestedTransmissionFootprintRoute !== 'unsupported-transmission-footprint-mode:silent_transmission_fallback'
+        || invalidTransmissionFootprintState?.renderer?.effectiveTransmissionFootprintRoute !== 'not-executed-config-rejected-v0'
+        || !String(invalidTransmissionFootprintState?.renderer?.transmissionFootprintFallbackReason || '').includes('Unsupported finger fluid transmission footprint mode: silent_transmission_fallback')
+        || !String(invalidTransmissionFootprintState?.runtime?.configError || '').includes('Unsupported finger fluid transmission footprint mode: silent_transmission_fallback')
+      ) {
+        throw new Error(`renderer-only invalid transmission footprint route did not fail closed: ${JSON.stringify(invalidTransmissionFootprintState)}`);
+      }
+      const invalidTransmissionFootprintCanvasRect = await evaluate(ws, `(() => {
+        document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!invalidTransmissionFootprintCanvasRect || invalidTransmissionFootprintCanvasRect.width < 100 || invalidTransmissionFootprintCanvasRect.height < 100) {
+        throw new Error(`renderer-only invalid transmission footprint canvas unavailable: ${JSON.stringify(invalidTransmissionFootprintCanvasRect)}`);
+      }
+      const invalidTransmissionFootprintShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+        clip: { ...invalidTransmissionFootprintCanvasRect, scale: 1 },
+      });
+      mkdirSync(dirname(invalidTransmissionFootprintOut), { recursive: true });
+      writeFileSync(invalidTransmissionFootprintOut, Buffer.from(invalidTransmissionFootprintShot.data, 'base64'));
+      const invalidTransmissionFootprintActivity = measureCapturedPng(invalidTransmissionFootprintOut, 'invalid_transmission_footprint');
+      if (invalidTransmissionFootprintActivity.activeRatio > 0.002) {
+        throw new Error(`renderer-only invalid transmission footprint retained stale painted output: ${JSON.stringify(invalidTransmissionFootprintActivity)}`);
+      }
+      invalidTransmissionFootprintWitness = {
+        schema: 'kaminos.finger-fluid.invalid-transmission-footprint-witness.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        requestedUrl: invalidTransmissionFootprintUrl.href,
+        status: invalidTransmissionFootprintState.status,
+        solverBackend: invalidTransmissionFootprintState.solver.backend,
+        rendererBackend: invalidTransmissionFootprintState.renderer.backend,
+        requestedTransmissionFootprintMode: invalidTransmissionFootprintState.renderer.requestedTransmissionFootprintMode,
+        effectiveTransmissionFootprintMode: invalidTransmissionFootprintState.renderer.effectiveTransmissionFootprintMode,
+        requestedTransmissionFootprintRoute: invalidTransmissionFootprintState.renderer.requestedTransmissionFootprintRoute,
+        effectiveTransmissionFootprintRoute: invalidTransmissionFootprintState.renderer.effectiveTransmissionFootprintRoute,
+        transmissionFootprintFallbackReason: invalidTransmissionFootprintState.renderer.transmissionFootprintFallbackReason,
+        configError: invalidTransmissionFootprintState.runtime.configError,
+        canvasActivity: invalidTransmissionFootprintActivity,
+        outputPath: invalidTransmissionFootprintOut,
       };
       phase = null;
       writeReport({ ok: true, failure_phase: null, output: out });

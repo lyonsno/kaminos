@@ -61,17 +61,21 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE\s*=
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE\s*=\s*'wgsl-particle-projected-front-back-slab-v0'/, 'projected particle slab identity is explicit and separate from optical transport');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-debug-renderer-v0'/, 'particle sphere renderer survives as an explicit debug route');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'screen_space_refraction', 'sphere_debug'\]\)/, 'surface, refraction, and sphere-debug renderer modes are explicit');
-assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES\s*=\s*Object\.freeze\(\[[^\]]*'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint'[^\]]*\]\)/, 'transport decomposition, pre-presentation luminance, normal variance, and reflection footprint diagnostics are explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES\s*=\s*Object\.freeze\(\[[^\]]*'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint'[^\]]*\]\)/, 'transport decomposition and independent reflection/transmission footprint diagnostics are explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES\s*=\s*Object\.freeze\(\['transport_only', 'bounded_ggx', 'legacy_shading'\]\)/, 'transport-only, bounded-GGX, and legacy diagnostic lighting identities are explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES\s*=\s*Object\.freeze\(\['resolved_detail', 'variance_filtered'\]\)/, 'resolved-detail baseline and variance-filtered optical footprint identities are explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES\s*=\s*Object\.freeze\(\['resolved_exit', 'dense_exit_filtered'\]\)/, 'resolved-exit baseline and dense filtered transmission footprint identities are explicit');
 assert.match(webgpuCoreSource, /opticalDebugMode == 16u[\s\S]*return vec4<f32>\(1\.0\)/, 'sphere-debug exposes exact binary particle occupancy through the shared liquid-support diagnostic');
 assert.match(webgpuCoreSource, /resolveFingerFluidRendererMode/, 'renderer mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /resolveFingerFluidOpticalDebugMode/, 'optical debug mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /resolveFingerFluidOpticalLightingMode/, 'optical lighting mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /resolveFingerFluidOpticalFootprintMode/, 'optical footprint mode resolution is testable and fails loud');
+assert.match(webgpuCoreSource, /resolveFingerFluidTransmissionFootprintMode/, 'transmission footprint mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /requestedRendererMode[\s\S]*effectiveRendererMode[\s\S]*fallbackReason/, 'runtime state distinguishes requested/effective renderer identity and fallback');
 assert.match(webgpuCoreSource, /requestedOpticalLightingMode[\s\S]*effectiveOpticalLightingMode[\s\S]*opticalLightingFallbackReason/, 'runtime state distinguishes requested/effective optical lighting identity and fallback');
 assert.match(webgpuCoreSource, /requestedOpticalFootprintMode[\s\S]*effectiveOpticalFootprintMode[\s\S]*opticalFootprintFallbackReason/, 'runtime state distinguishes requested/effective optical footprint identity and fallback');
+assert.match(webgpuCoreSource, /requestedTransmissionFootprintMode[\s\S]*effectiveTransmissionFootprintMode[\s\S]*transmissionFootprintFallbackReason/, 'runtime state distinguishes requested/effective transmission footprint identity and fallback');
+assert.match(webgpuCoreSource, /transmissionQuadratureMinimumSampleCount:\s*lastEffectiveTransmissionFootprintMode === 'not_executed'[\s\S]*transmissionQuadratureMaximumSampleCount:[\s\S]*lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered' \? 5 : 1/, 'runtime evidence exposes exact adaptive transmission quadrature sample-count bounds');
 assert.match(webgpuCoreSource, /effectiveRendererMode === 'screen_space_refraction'[\s\S]*resolvedOpticalLightingMode[\s\S]*'not_executed'/, 'only the refraction renderer may claim an effective optical lighting mode');
 assert.match(webgpuCoreSource, /SCREEN_SPACE_SURFACE_SHADER/, 'screen-space renderer owns a separate shading pass');
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-surface-accumulation/, 'screen-space renderer allocates particle depth plus optical thickness accumulation');
@@ -101,6 +105,8 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDE
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE\s*=\s*'uncapped-exact-triangle-scan-v0'/, 'V0 names its exact uncapped traversal honestly rather than claiming a BVH');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE\s*=\s*'deterministic-five-ray-cone-quadrature-v0'/, 'finite-footprint world reflection names its quadrature route explicitly');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE\s*=\s*'deterministic-nine-ray-trimmed-variance-footprint-quadrature-v0'/, 'variance-filtered reflection counterfactual has a separate robust normalized quadrature identity');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_ROUTE\s*=\s*'deterministic-one-ray-exit-transport-v0'/, 'resolved transmission names its exact one-ray exit transport');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_QUADRATURE_ROUTE\s*=\s*'deterministic-five-ray-trimmed-exit-footprint-quadrature-v0'/, 'dense transmission names its robust finite exit footprint');
 assert.match(webgpuCoreSource, /fn integrateWorldReflectionQuadrature\([\s\S]*var samples: array<ReflectionSample, 9>[\s\S]*minimumIndex[\s\S]*maximumIndex[\s\S]*\/ 7\.0/, 'variance-filtered quadrature trims one dark and one bright query discontinuity before normalized integration');
 assert.match(webgpuCoreSource, /if \(maximumIndex == minimumIndex\)[\s\S]*maximumIndex = select\(0, 1, minimumIndex == 0\)/, 'trimmed quadrature always removes two distinct samples even when all sample luminances tie');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE\s*=\s*'radiance-rgbe-equirectangular-environment-v0'/, 'HDR environment route identity is explicit');
@@ -178,6 +184,10 @@ assert.match(webgpuCoreSource, /opticalDebugMode == 24[\s\S]*transmittedTranspor
 assert.match(webgpuCoreSource, /let opticalFootprintMode = i32\(round\(params\.cameraPosition\.w\)\);[\s\S]*let footprintActivation = interfaceNormal\.denseBodyConfidence[\s\S]*unresolvedNormalVariance[\s\S]*select\(baselineReflectionConeRadius, varianceFilteredConeRadius, opticalFootprintMode == 1\)/, 'variance filtering widens only the dense unresolved reflection footprint and does not alter solver geometry');
 assert.match(webgpuCoreSource, /fn integrateWorldReflectionQuadrature\([\s\S]*opticalFootprintMode: i32[\s\S]*if \(opticalFootprintMode == 0\)[\s\S]*center\.radiance \* 0\.36[\s\S]*radianceSum[\s\S]*\/ 7\.0/, 'baseline five-ray and variance-filtered trimmed nine-ray quadratures use explicit normalized weights');
 assert.match(webgpuCoreSource, /if \(opticalDebugMode == 28\)[\s\S]*unresolvedNormalVariance[\s\S]*footprintActivation[\s\S]*if \(opticalDebugMode == 29\)[\s\S]*baselineReflectionConeRadius[\s\S]*reflectionConeRadius/, 'normal variance and effective reflection footprint are independently inspectable');
+assert.match(webgpuCoreSource, /let transmissionFootprintMode = i32\(round\(params\.opticalModes\.x\)\);[\s\S]*let exitNormalVariance[\s\S]*let transmissionFootprintActivation = interfaceNormal\.denseBodyConfidence[\s\S]*effectiveTransmissionQuadratureMode/, 'transmission footprint uses its own uniform identity and activates only on dense unresolved exit geometry');
+assert.match(webgpuCoreSource, /let transmissionConeRadius = clamp\([\s\S]*0\.22,[\s\S]*transmissionConeRadius \/ 0\.22/, 'dense transmission footprint exposes a bounded but materially testable angular support and source-honest diagnostic normalization');
+assert.match(webgpuCoreSource, /fn integrateTransmissionQuadrature\([\s\S]*transmissionFootprintMode: i32[\s\S]*if \(transmissionFootprintMode == 0\)[\s\S]*var samples: array<OpticalQuerySample, 5>[\s\S]*minimumIndex[\s\S]*maximumIndex[\s\S]*\/ 3\.0/, 'filtered transmission uses a normalized trimmed five-ray hybrid-query footprint while baseline stays one ray');
+assert.match(webgpuCoreSource, /if \(opticalDebugMode == 30\)[\s\S]*exitNormalVariance[\s\S]*transmissionFootprintActivation[\s\S]*if \(opticalDebugMode == 31\)[\s\S]*transmissionConeRadius[\s\S]*effectiveTransmissionQuadratureMode/, 'exit-normal variance and effective transmission footprint are independently inspectable');
 assert.match(webgpuCoreSource, /deferredHit\.valid > 0\.5 && deferredHit\.confidence >= 0\.55/, 'hybrid optical queries reject marginal deferred crossings before they can punch dark scene-color holes');
 assert.match(webgpuCoreSource, /screenSpaceRefractionCompositePipeline = await device\.createRenderPipelineAsync\([\s\S]*format: LINEAR_SCENE_FORMAT,[\s\S]*srcFactor: 'src-alpha'/, 'refraction composites geometric coverage into the linear scene with alpha blending');
 assert.match(webgpuCoreSource, /return refractionOutput\(vec4<f32>\(color, geometricCoverage\)/, 'shaded liquid exports geometric coverage independently from optical color');
@@ -211,7 +221,8 @@ assert.match(webgpuCoreSource, /fn makeNoOpticalQuerySample\(\) -> OpticalQueryS
 assert.match(webgpuCoreSource, /var refractionQuery = makeNoOpticalQuerySample\(\);\s*if \(queryValidity > 0\.5\) \{\s*refractionQuery = sampleHybridOpticalQuery\(exitWorldPosition \+ outgoingWorldRay \* 0\.035, outgoingWorldRay\);\s*\}/, 'the hybrid exit-ray query executes only after the binary two-interface validity predicate authorizes it');
 assert.doesNotMatch(webgpuCoreSource, /let refractionQuery = sampleHybridOpticalQuery\(exitWorldPosition/, 'an unconditional refracted exit query cannot bypass slab validity');
 assert.match(webgpuCoreSource, /let queryValidity = select\(0\.0, 1\.0, exitValidity > 0\.5\)/, 'one binary predicate governs whether two-interface query transport contributes');
-assert.match(webgpuCoreSource, /mix\(entryOnlyOffset, twoInterfaceOffset, queryValidity\)[\s\S]*mix\(thickness \* 0\.12, geometricPathLength, queryValidity\)[\s\S]*mix\(refractedScene\.rgb, refractionQuery\.radiance, queryValidity\)/, 'no-query slabs retain the complete legacy entry-interface offset, absorption, and radiance path');
+assert.match(webgpuCoreSource, /mix\(entryOnlyOffset, twoInterfaceOffset, queryValidity\)[\s\S]*mix\(thickness \* 0\.12, geometricPathLength, queryValidity\)[\s\S]*mix\(refractedScene\.rgb, transmissionQuadratureRadiance, queryValidity\)/, 'no-query slabs retain the complete legacy entry-interface offset, absorption, and radiance path');
+assert.match(webgpuCoreSource, /var transmissionQuadratureRadiance = refractionQuery\.radiance;[\s\S]*if \(queryValidity > 0\.5\)[\s\S]*integrateTransmissionQuadrature[\s\S]*mix\(refractedScene\.rgb, transmissionQuadratureRadiance, queryValidity\)/, 'finite transmission integration remains behind the exact binary exit-validity predicate and preserves the legacy invalid-slab path');
 assert.doesNotMatch(webgpuCoreSource, /mix\(refractedScene\.rgb, refractionQuery\.radiance, exitValidity\)/, 'marginal no-query slabs cannot blend toward the zero sentinel radiance');
 assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]{0,120}-> CompositeOutput/, 'refraction emits reconstructed liquid fragment depth instead of bypassing support ordering');
 assert.match(webgpuCoreSource, /fn fs_refraction\(@builtin\(position\) fragmentPosition: vec4<f32>\) -> CompositeOutput[\s\S]*let pixel = vec2<i32>\(fragmentPosition\.xy\)/, 'refraction reads accumulation in framebuffer coordinates instead of vertically inverted fullscreen UV space');
@@ -594,7 +605,7 @@ assert.match(benchWitnessSource, /opticalQueryEvidence\?\.resolverOrder !== 'def
 assert.match(benchWitnessSource, /opticalQueryEvidence\?\.queryFrameId !== renderFrameId/, 'bench witness rejects optical query evidence inherited from a stale frame');
 assert.match(benchWitnessSource, /opticalQueryEvidence\?\.deferredInputs\?\.linearDepthObject\?\.format !== 'rgba16float'[\s\S]*worldNormalRoughness\?\.format !== 'rgba16float'[\s\S]*albedoMetallic\?\.format !== 'rgba8unorm'/, 'bench witness rejects missing or partial deferred query inputs');
 assert.match(benchWitnessSource, /const opticalDebugModes = \[[^\]]*'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity'[^\]]*\]/, 'bench witness captures the physical refracted-exit query fields and same-state interface-fidelity A/B');
-assert.match(benchWitnessSource, /const opticalDebugModes = \[[^\]]*'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint'\]/, 'bench witness captures the complete transport decomposition and effective footprint fields');
+assert.match(benchWitnessSource, /const opticalDebugModes = \[[^\]]*'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint'\]/, 'bench witness captures the complete transport decomposition and independent reflection/transmission footprint fields');
 assert.match(benchWitnessSource, /refractionHitKindField = measureRefractionHitKinds\([\s\S]*deferredScenePixels < 10000[\s\S]*environmentPixels < 500/, 'bench witness requires material deferred-scene and HDR-fallback populations on the refracted exit ray');
 assert.match(benchWitnessSource, /measureRefractionHitKinds\(hitKindPath, validityPath, maskPath\)/, 'refracted hit-kind attribution consumes the independently captured exit-validity field');
 assert.match(benchWitnessSource, /invalidQueryHitPixels !== 0[\s\S]*invalidNoQueryPixels < 100/, 'witness rejects any provider hit on an invalid slab and requires a material explicit no-query population');
@@ -651,8 +662,14 @@ assert.match(benchWitnessSource, /if \(!dense\[pixel\][\s\S]*for \(const neighbo
 assert.match(benchWitnessSource, /transportComponentAttribution[\s\S]*dominantTransmittedBrightPixels[\s\S]*dominantReflectedBrightPixels[\s\S]*dominantScatterBrightPixels[\s\S]*unattributedBrightPixels/, 'witness attributes final bright liquid pixels to additive transport components under authoritative support');
 assert.match(benchWitnessSource, /meanLuminanceRatio < 0\.82 \|\| meanLuminanceRatio > 1\.18/, 'footprint counterfactual rejects material transport-energy loss or gain');
 assert.match(benchWitnessSource, /invalidOpticalFootprintState[\s\S]*silent_footprint_fallback[\s\S]*config_rejected[\s\S]*invalidOpticalFootprintOut/, 'unsupported optical footprint requests preserve raw identity and fail to a blank captured frame');
+assert.match(benchWitnessSource, /captureFrozenOptical\([\s\S]*'resolved_exit'[\s\S]*captureFrozenOptical\([\s\S]*'dense_exit_filtered'/, 'witness compares both transmission footprint modes at an identical frozen simulation state and camera');
+assert.match(benchWitnessSource, /sameStateTransmissionFootprintComparison[\s\S]*meanLuminanceRatio[\s\S]*broadPaleComponentDelta[\s\S]*totalVariationRatio[\s\S]*sparseRimRetention[\s\S]*thinSheetRetention/, 'transmission witness records energy, broad pale structure, variation, droplet-rim, and thin-sheet counterfactual evidence');
+assert.match(benchWitnessSource, /resolvedTransmissionTransportOut[\s\S]*filteredTransmissionTransportOut[\s\S]*transmittedTransportDelta/, 'transmission witness isolates the same-state transmitted lobe instead of inferring estimator influence from the final composite');
+assert.match(benchWitnessSource, /invalidTransmissionFootprintState[\s\S]*silent_transmission_fallback[\s\S]*config_rejected[\s\S]*invalidTransmissionFootprintOut/, 'unsupported transmission footprint requests preserve raw identity and fail to a blank captured frame');
 assert.match(indexSource, /finger-fluid-bench-footprint-requested[\s\S]*finger-fluid-bench-footprint-effective/, 'human-visible readout distinguishes requested and effective optical footprint identity');
 assert.match(benchCoreSource, /requestedOpticalFootprintMode[\s\S]*effectiveOpticalFootprintMode[\s\S]*requestedOpticalFootprintRoute[\s\S]*effectiveOpticalFootprintRoute[\s\S]*opticalFootprintFallbackReason/, 'bench state carries exact optical footprint route evidence');
+assert.match(indexSource, /finger_fluid_transmission_footprint/, 'bench URL exposes an explicit transmission footprint request');
+assert.match(benchCoreSource, /requestedTransmissionFootprintMode[\s\S]*effectiveTransmissionFootprintMode[\s\S]*requestedTransmissionFootprintRoute[\s\S]*effectiveTransmissionFootprintRoute[\s\S]*transmissionFootprintFallbackReason/, 'bench state carries exact transmission footprint route evidence');
 assert.match(benchWitnessSource, /measureHdrEnvironmentField\(\s*opticalDebugOutputs\.environment,\s*opticalDebugOutputs\.liquid_support,?\s*\)/, 'bench witness measures a dedicated HDR environment diagnostic artifact on authoritative binary liquid support');
 assert.match(benchWitnessSource, /refractionEvidence\?\.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'/, 'bench witness rejects a missing or substituted optical slab route');
 assert.match(benchWitnessSource, /refractionEvidence\?\.slabGeometryPassCount < 1/, 'bench witness rejects slab evidence without an executed geometry pass');
@@ -1177,6 +1194,11 @@ const refractionRendererRuntime = {
   requestedOpticalFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE,
   effectiveOpticalFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE,
   opticalFootprintFallbackReason: null,
+  requestedTransmissionFootprintMode: 'resolved_exit',
+  effectiveTransmissionFootprintMode: 'resolved_exit',
+  requestedTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+  effectiveTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+  transmissionFootprintFallbackReason: null,
   supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
   linearHdrSceneEvidence,
   finalPresentationEvidence,
@@ -1215,6 +1237,16 @@ const refractionRendererRuntime = {
     effectiveOpticalFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE,
     opticalFootprintFallbackReason: null,
     reflectionFootprintComposition: 'resolved_detail_normalized_five_ray_reflection_lobe_v0',
+    requestedTransmissionFootprintMode: 'resolved_exit',
+    effectiveTransmissionFootprintMode: 'resolved_exit',
+    requestedTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+    effectiveTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+    transmissionFootprintFallbackReason: null,
+    transmissionFootprintComposition: 'resolved_exit_single_hybrid_query_radiance_v0',
+    transmissionQuadratureRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_ROUTE,
+    transmissionQuadratureSampleCountMode: 'fixed_1_v0',
+    transmissionQuadratureEstimator: 'resolved_center_ray_v0',
+    transmissionApplicability: 'dense_body_and_unresolved_entry_or_exit_normal_only_sparse_sheet_resolved_v0',
     sceneColorTexture: { source: 'same-camera-linear-hdr-scene-radiance-v0' },
     scenePassCount: 7,
     accumulationPassCount: 7,
@@ -1302,6 +1334,11 @@ assert.deepEqual(
     requestedOpticalFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE,
     effectiveOpticalFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE,
     opticalFootprintFallbackReason: null,
+    requestedTransmissionFootprintMode: 'resolved_exit',
+    effectiveTransmissionFootprintMode: 'resolved_exit',
+    requestedTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+    effectiveTransmissionFootprintRoute: webgpuMod.KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE,
+    transmissionFootprintFallbackReason: null,
     supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
     linearHdrSceneEvidence,
     finalPresentationEvidence,
@@ -1580,15 +1617,19 @@ assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_spac
     accumulationPassCount: 0,
   },
 }), /screen-space renderer evidence/);
-assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES, ['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES, ['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint']);
 assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES, ['transport_only', 'bounded_ggx', 'legacy_shading']);
 assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES, ['resolved_detail', 'variance_filtered']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES, ['resolved_exit', 'dense_exit_filtered']);
 assert.equal(webgpuMod.resolveFingerFluidOpticalLightingMode('transport_only'), 'transport_only');
 assert.equal(webgpuMod.resolveFingerFluidOpticalLightingMode('bounded_ggx'), 'bounded_ggx');
 assert.throws(() => webgpuMod.resolveFingerFluidOpticalLightingMode('silent_legacy_fallback'), /Unsupported finger fluid optical lighting mode/);
 assert.equal(webgpuMod.resolveFingerFluidOpticalFootprintMode('resolved_detail'), 'resolved_detail');
 assert.equal(webgpuMod.resolveFingerFluidOpticalFootprintMode('variance_filtered'), 'variance_filtered');
 assert.throws(() => webgpuMod.resolveFingerFluidOpticalFootprintMode('silent_footprint_fallback'), /Unsupported finger fluid optical footprint mode/);
+assert.equal(webgpuMod.resolveFingerFluidTransmissionFootprintMode('resolved_exit'), 'resolved_exit');
+assert.equal(webgpuMod.resolveFingerFluidTransmissionFootprintMode('dense_exit_filtered'), 'dense_exit_filtered');
+assert.throws(() => webgpuMod.resolveFingerFluidTransmissionFootprintMode('silent_transmission_fallback'), /Unsupported finger fluid transmission footprint mode/);
 assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('transport_only'), [1.10, 0.42, 0.18]);
 assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('bounded_ggx'), [1.10, 0.42, 0.18]);
 assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('legacy_shading'), [0.46, 0.15, 0.055]);
