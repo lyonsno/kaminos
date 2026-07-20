@@ -338,10 +338,25 @@ export function solveAxialTerrainSupportEnvelope(source, registrationInput, opti
   const maxEnvelopeLift = Math.max(...stations.map((station, index) => supportOffsets[index] - station.requiredOffset));
   const rootLiftAboveClearance = Math.max(0, rootLift - clearance);
   const outOfBounds = stations.some(station => !station.inBounds);
+  const suspensionDemand = Math.max(maxEnvelopeLift, rootLiftAboveClearance);
+  const normalizedMargin = (limit, measured) => {
+    const margin = limit > EPSILON
+      ? (limit - measured) / limit
+      : measured <= EPSILON ? 0 : -1;
+    return Math.abs(margin) < 1e-10 ? 0 : margin;
+  };
+  const complianceMargins = {
+    bounds: outOfBounds ? -1 : 1,
+    suspension: normalizedMargin(maxSuspensionLift, suspensionDemand),
+    pitch: normalizedMargin(maxPitchRadians, measuredPitch),
+    bend: normalizedMargin(maxBendRadiansPerStation, measuredBend),
+  };
+  const minimumNormalizedMargin = Math.min(...Object.values(complianceMargins));
   const exceeded = outOfBounds
-    || maxEnvelopeLift > maxSuspensionLift
-    || rootLiftAboveClearance > maxSuspensionLift
-    || measuredBend > maxBendRadiansPerStation;
+    || maxEnvelopeLift > maxSuspensionLift + EPSILON
+    || rootLiftAboveClearance > maxSuspensionLift + EPSILON
+    || measuredPitch > maxPitchRadians + EPSILON
+    || measuredBend > maxBendRadiansPerStation + EPSILON;
   const samples = stations.map((station, index) => ({
     ...station,
     supportOffset: supportOffsets[index],
@@ -367,8 +382,498 @@ export function solveAxialTerrainSupportEnvelope(source, registrationInput, opti
       measuredBendRadians: measuredBend,
       maxPitchRadians,
       maxBendRadiansPerStation,
+      margins: complianceMargins,
+      minimumNormalizedMargin,
     },
     plannerDisposition: exceeded ? 'reroute-required' : 'local-support',
+  };
+}
+
+export function createAxialTerrainRouteTransitionEvaluator(source, registrationInput, options = {}) {
+  const terrain = requireTerrainSource(source);
+  const registration = registrationInput?.axialSpan
+    ? registrationInput
+    : validateAxialCrawlerRegistration(registrationInput);
+  const terrainCellWidth = Math.min(
+    (terrain.xMax - terrain.xMin) / (terrain.columns - 1),
+    (terrain.zMax - terrain.zMin) / (terrain.rows - 1),
+  );
+  const transitionSampleSpacing = Math.max(
+    EPSILON,
+    Number(options.transitionSampleSpacing) || terrainCellWidth * 0.5,
+  );
+  const supportOptions = {
+    scale: Math.max(EPSILON, Number(options.scale) || 1),
+    clearance: Math.max(0, Number(options.clearance) || 0.018),
+    lateralExcursion: Math.max(0, Number(options.lateralExcursion) || 0),
+    maxPitchRadians: Number(options.maxPitchRadians) || Math.PI / 5,
+    maxBendRadiansPerStation: Number(options.maxBendRadiansPerStation) || Math.PI / 10,
+    maxSuspensionLift: Math.max(0, Number(options.maxSuspensionLift) || 0.09 * (Number(options.scale) || 1)),
+  };
+  const marginCostWeight = Math.max(0, Number(options.marginCostWeight) || 0.9);
+  const liftCostWeight = Math.max(0, Number(options.liftCostWeight) || 0.35);
+  const requiredMinimumNormalizedMargin = Math.max(
+    0,
+    Number(options.requiredMinimumNormalizedMargin) || 0,
+  );
+  const evaluateHeadingSweep = options.evaluateHeadingSweep === true;
+  const cache = new Map();
+  const evaluate = transition => {
+    const from = requireVector3(transition?.from?.world, 'route transition from world');
+    const to = requireVector3(transition?.to?.world, 'route transition to world');
+    const headingInput = transition?.heading
+      ? requireVector3(transition.heading, 'route transition heading')
+      : [to[0] - from[0], 0, to[2] - from[2]];
+    const heading = normalize3([headingInput[0], 0, headingInput[2]], [0, 0, -1]);
+    const previousHeadingInput = evaluateHeadingSweep && Array.isArray(transition?.previousHeading)
+      ? requireVector3(transition.previousHeading, 'route transition previous heading')
+      : heading;
+    const previousHeading = normalize3(
+      [previousHeadingInput[0], 0, previousHeadingInput[2]],
+      heading,
+    );
+    const cacheKey = `${transition?.from?.index ?? from.join(',')}:${transition?.to?.index ?? to.join(',')}:${transition?.previousDirectionIndex ?? 'start'}:${transition?.directionIndex ?? heading.join(',')}`;
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const transitionLength = Math.hypot(to[0] - from[0], to[2] - from[2]);
+    const intervals = Math.max(1, Math.ceil(transitionLength / transitionSampleSpacing));
+    const supports = [];
+    for (let index = 0; index <= intervals; index++) {
+      const t = index / intervals;
+      const x = mix(from[0], to[0], t);
+      const z = mix(from[2], to[2], t);
+      const surface = sampleHillTerrainSurface(source, x, z);
+      const startAngle = Math.atan2(previousHeading[0], previousHeading[2]);
+      const endAngle = Math.atan2(heading[0], heading[2]);
+      const turnDelta = Math.atan2(Math.sin(endAngle - startAngle), Math.cos(endAngle - startAngle));
+      const sampleAngle = startAngle + turnDelta * t;
+      const sampleHeading = [Math.sin(sampleAngle), 0, Math.cos(sampleAngle)];
+      supports.push(solveAxialTerrainSupportEnvelope(source, registration, {
+        ...supportOptions,
+        rootSurface: [x, surface.height, z],
+        forward: sampleHeading,
+      }));
+    }
+    const minimumNormalizedMargin = Math.min(
+      ...supports.map(support => support.compliance.minimumNormalizedMargin),
+    );
+    const maximumRootLift = Math.max(...supports.map(support => support.rootLift));
+    const rejectedSupportIndex = supports.findIndex(support => support.plannerDisposition !== 'local-support');
+    const admissible = rejectedSupportIndex < 0
+      && minimumNormalizedMargin >= requiredMinimumNormalizedMargin;
+    const result = {
+      schema: 'kaminos.axial-terrain-route-transition-evaluation.v0',
+      admissible,
+      additionalCost: admissible
+        ? marginCostWeight * (1 - clamp(minimumNormalizedMargin, 0, 1))
+          + liftCostWeight * maximumRootLift / Math.max(EPSILON, supportOptions.maxSuspensionLift)
+        : 0,
+      evidence: {
+        schema: 'kaminos.axial-terrain-route-transition-evidence.v0',
+        supportPolicy: 'full-body-corridor-v0',
+        headingPolicy: evaluateHeadingSweep ? 'transition-sweep-v0' : 'candidate-heading-v0',
+        sampleCount: supports.length,
+        minimumNormalizedMargin,
+        requiredMinimumNormalizedMargin,
+        maximumRootLift,
+        rejectedSupportIndex,
+        plannerDisposition: admissible ? 'local-support' : 'reroute-required',
+      },
+    };
+    cache.set(cacheKey, result);
+    return result;
+  };
+  evaluate.schema = 'kaminos.axial-terrain-route-transition-evaluator.v0';
+  evaluate.policy = 'full-body-corridor-v0';
+  evaluate.cache = cache;
+  return evaluate;
+}
+
+function routePointWorld(point, index) {
+  if (Array.isArray(point)) return requireVector3(point, `route point ${index}`);
+  return requireVector3(point?.world, `route point ${index} world`);
+}
+
+function hermiteRoutePoint(points, segment, t, tangentScale) {
+  const start = points[segment];
+  const end = points[segment + 1];
+  const before = points[Math.max(0, segment - 1)];
+  const after = points[Math.min(points.length - 1, segment + 2)];
+  const startTangent = [
+    (end[0] - before[0]) * 0.5 * tangentScale,
+    0,
+    (end[2] - before[2]) * 0.5 * tangentScale,
+  ];
+  const endTangent = [
+    (after[0] - start[0]) * 0.5 * tangentScale,
+    0,
+    (after[2] - start[2]) * 0.5 * tangentScale,
+  ];
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1;
+  const h10 = t3 - 2 * t2 + t;
+  const h01 = -2 * t3 + 3 * t2;
+  const h11 = t3 - t2;
+  return [
+    h00 * start[0] + h10 * startTangent[0] + h01 * end[0] + h11 * endTangent[0],
+    0,
+    h00 * start[2] + h10 * startTangent[2] + h01 * end[2] + h11 * endTangent[2],
+  ];
+}
+
+function cumulativeRouteLengths(points) {
+  const cumulative = [0];
+  let length = 0;
+  for (let index = 1; index < points.length; index++) {
+    length += length3([
+      points[index][0] - points[index - 1][0],
+      points[index][1] - points[index - 1][1],
+      points[index][2] - points[index - 1][2],
+    ]);
+    cumulative.push(length);
+  }
+  return { cumulative, length };
+}
+
+function interpolateRouteDistance(points, cumulative, distance) {
+  let segment = 0;
+  while (segment < cumulative.length - 2 && cumulative[segment + 1] < distance) segment++;
+  const span = Math.max(EPSILON, cumulative[segment + 1] - cumulative[segment]);
+  const t = clamp((distance - cumulative[segment]) / span, 0, 1);
+  return [
+    mix(points[segment][0], points[segment + 1][0], t),
+    mix(points[segment][1], points[segment + 1][1], t),
+    mix(points[segment][2], points[segment + 1][2], t),
+  ];
+}
+
+function signedHeadingDelta(a, b) {
+  return Math.atan2(a[0] * b[2] - a[2] * b[0], a[0] * b[0] + a[2] * b[2]);
+}
+
+function requireLocomotionRailTransitionEvaluation(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('locomotion rail transition evaluator must return an object with explicit boolean admissible');
+  }
+  if (typeof value.admissible !== 'boolean') {
+    throw new Error('locomotion rail transition evaluator must return an explicit boolean admissible');
+  }
+  if (!value.evidence || typeof value.evidence !== 'object' || Array.isArray(value.evidence)) {
+    throw new Error('locomotion rail transition evaluator must return routeable evidence');
+  }
+  const additionalCost = value.additionalCost == null ? 0 : Number(value.additionalCost);
+  if (!Number.isFinite(additionalCost) || additionalCost < 0) {
+    throw new Error('locomotion rail transition evaluator additionalCost must be a finite nonnegative number');
+  }
+  return {
+    admissible: value.admissible,
+    additionalCost,
+    evidence: value.evidence,
+  };
+}
+
+export function compileCreatureScaleLocomotionRail(source, registrationInput, routePlan, options = {}) {
+  const terrain = requireTerrainSource(source);
+  const registration = registrationInput?.axialSpan
+    ? registrationInput
+    : validateAxialCrawlerRegistration(registrationInput);
+  if (
+    routePlan?.evidence?.transitionAdmission !== 'caller-evaluated'
+    || !Array.isArray(routePlan?.routePoints)
+    || routePlan.routePoints.slice(1).some(point => !point?.transitionEvidence)
+  ) {
+    throw new Error('locomotion rail requires a caller-evaluated route plan with transition evidence');
+  }
+  const transitionEvaluator = options.transitionEvaluator;
+  if (typeof transitionEvaluator !== 'function') {
+    throw new Error('locomotion rail requires the route transition evaluator for dense revalidation');
+  }
+  const raw = (routePlan?.routePoints || []).map(routePointWorld).filter((point, index, points) => (
+    index === 0 || Math.hypot(point[0] - points[index - 1][0], point[2] - points[index - 1][2]) > EPSILON
+  ));
+  if (raw.length < 2) throw new Error('locomotion rail requires at least two distinct route points');
+  const terrainCellWidth = Math.min(
+    (terrain.xMax - terrain.xMin) / (terrain.columns - 1),
+    (terrain.zMax - terrain.zMin) / (terrain.rows - 1),
+  );
+  const sampleSpacing = Math.max(EPSILON, Number(options.sampleSpacing) || terrainCellWidth * 0.65);
+  const denseSpacing = Math.min(sampleSpacing * 0.35, terrainCellWidth * 0.3);
+  const supportOptions = {
+    scale: Math.max(EPSILON, Number(options.scale) || 1),
+    clearance: Math.max(0, Number(options.clearance) || 0.018),
+    lateralExcursion: Math.max(0, Number(options.lateralExcursion) || 0),
+    maxPitchRadians: Number(options.maxPitchRadians) || Math.PI / 5,
+    maxBendRadiansPerStation: Number(options.maxBendRadiansPerStation) || Math.PI / 10,
+    maxSuspensionLift: Math.max(0, Number(options.maxSuspensionLift) || 0.09 * (Number(options.scale) || 1)),
+  };
+  const tangentScales = Array.isArray(options.tangentScales)
+    ? options.tangentScales.map(value => clamp(Number(value) || 0, 0, 1))
+    : [0.9, 0.65, 0.4, 0.2, 0.08];
+  let bestFailure = null;
+  for (const tangentScale of tangentScales) {
+    const dense = [];
+    for (let segment = 0; segment < raw.length - 1; segment++) {
+      const segmentLength = Math.hypot(
+        raw[segment + 1][0] - raw[segment][0],
+        raw[segment + 1][2] - raw[segment][2],
+      );
+      const intervals = Math.max(2, Math.ceil(segmentLength / denseSpacing));
+      for (let step = segment === 0 ? 0 : 1; step <= intervals; step++) {
+        const point = hermiteRoutePoint(raw, segment, step / intervals, tangentScale);
+        const surface = sampleHillTerrainSurface(source, point[0], point[2]);
+        dense.push([point[0], surface.height, point[2]]);
+      }
+    }
+    const denseLengths = cumulativeRouteLengths(dense);
+    const intervals = Math.max(2, Math.ceil(denseLengths.length / sampleSpacing));
+    const positions = Array.from({ length: intervals + 1 }, (_, index) => interpolateRouteDistance(
+      dense,
+      denseLengths.cumulative,
+      denseLengths.length * index / intervals,
+    ));
+    const tangents = positions.map((position, index) => {
+      const before = positions[Math.max(0, index - 1)];
+      const after = positions[Math.min(positions.length - 1, index + 1)];
+      return normalize3([after[0] - before[0], 0, after[2] - before[2]], [0, 0, -1]);
+    });
+    const denseTransitionEvaluations = positions.slice(1).map((position, index) => (
+      requireLocomotionRailTransitionEvaluation(transitionEvaluator({
+        source,
+        from: {
+          index: `locomotion-rail:${tangentScale}:${index}`,
+          grid: null,
+          world: positions[index],
+          interpolation: 'locomotion-rail',
+        },
+        to: {
+          index: `locomotion-rail:${tangentScale}:${index + 1}`,
+          grid: null,
+          world: position,
+          interpolation: 'locomotion-rail',
+        },
+        heading: tangents[index + 1],
+        previousHeading: tangents[index],
+        directionIndex: null,
+        previousDirectionIndex: null,
+      }))
+    ));
+    const rejectedTransitionIndex = denseTransitionEvaluations.findIndex(evaluation => !evaluation.admissible);
+    if (rejectedTransitionIndex >= 0) {
+      bestFailure = {
+        tangentScale,
+        rejectedIndex: rejectedTransitionIndex + 1,
+        margin: denseTransitionEvaluations[rejectedTransitionIndex].evidence.minimumNormalizedMargin ?? -Infinity,
+        reason: 'dense transition admission',
+      };
+      continue;
+    }
+    const supports = positions.map((position, index) => solveAxialTerrainSupportEnvelope(
+      source,
+      registration,
+      {
+        ...supportOptions,
+        rootSurface: position,
+        forward: tangents[index],
+      },
+    ));
+    const rejectedIndex = supports.findIndex(support => support.plannerDisposition !== 'local-support');
+    if (rejectedIndex >= 0) {
+      const margin = supports[rejectedIndex].compliance.minimumNormalizedMargin;
+      if (!bestFailure || margin > bestFailure.margin) bestFailure = { tangentScale, rejectedIndex, margin };
+      continue;
+    }
+    const spacing = denseLengths.length / intervals;
+    let maximumHeadingDeltaRadians = 0;
+    let maximumCurvatureDelta = 0;
+    let maximumSupportCorrectionDelta = 0;
+    let previousCurvature = 0;
+    const samples = positions.map((position, index) => {
+      const headingDelta = index > 0 ? signedHeadingDelta(tangents[index - 1], tangents[index]) : 0;
+      const curvature = index > 0 ? headingDelta / Math.max(EPSILON, spacing) : 0;
+      maximumHeadingDeltaRadians = Math.max(maximumHeadingDeltaRadians, Math.abs(headingDelta));
+      if (index > 1) maximumCurvatureDelta = Math.max(maximumCurvatureDelta, Math.abs(curvature - previousCurvature));
+      if (index > 0) {
+        maximumSupportCorrectionDelta = Math.max(
+          maximumSupportCorrectionDelta,
+          Math.abs(supports[index].rootLift - supports[index - 1].rootLift),
+        );
+      }
+      previousCurvature = curvature;
+      return {
+        index,
+        sourceDistance: denseLengths.length * index / intervals,
+        position,
+        tangent: tangents[index],
+        curvature,
+        support: supports[index],
+        transitionEvidence: index > 0 ? denseTransitionEvaluations[index - 1].evidence : null,
+      };
+    });
+    return {
+      schema: 'kaminos.creature-scale-locomotion-rail.v0',
+      id: options.id || `${routePlan?.id || 'route'}-creature-rail`,
+      authority: 'creature-scale-route-compilation',
+      source: routePlan?.source || null,
+      routePlanId: routePlan?.id || null,
+      supportPolicy: 'full-body-corridor-v0',
+      interpolation: 'cubic-hermite-arc-length-v0',
+      tangentScale,
+      sampleSpacing: spacing,
+      length: denseLengths.length,
+      samples,
+      continuity: {
+        maximumHeadingDeltaRadians,
+        maximumCurvatureDelta,
+        maximumSupportCorrectionDelta,
+      },
+      evidence: {
+        rawPointCount: raw.length,
+        sampleCount: samples.length,
+        minimumSupportMargin: Math.min(...supports.map(support => support.compliance.minimumNormalizedMargin)),
+        rejectedSampleCount: 0,
+        transitionAdmission: 'caller-evaluated-dense-revalidation',
+        denseTransitionCount: denseTransitionEvaluations.length,
+      },
+    };
+  }
+  throw new Error(
+    `locomotion rail compilation failed: ${bestFailure?.reason || 'full-body support'} rejected sample ${bestFailure?.rejectedIndex ?? 'unknown'} at tangent scale ${bestFailure?.tangentScale ?? 'none'} with margin ${bestFailure?.margin ?? 'unknown'}`,
+  );
+}
+
+function interpolateSupportEnvelope(start, end, t) {
+  const interpolateProfile = (startProfile, endProfile) => startProfile.map((sample, index) => {
+    const next = endProfile[index];
+    if (!next || next.stationId !== sample.stationId) {
+      throw new Error('locomotion rail support profiles must retain station identity');
+    }
+    return {
+      stationId: sample.stationId,
+      t: mix(sample.t, next.t, t),
+      localOffset: mix(sample.localOffset, next.localOffset, t),
+      worldOffset: mix(sample.worldOffset, next.worldOffset, t),
+    };
+  });
+  const interpolateCorridor = (startCorridor, endCorridor) => startCorridor.map((point, index) => {
+    const next = endCorridor[index];
+    if (!next) throw new Error('locomotion rail support corridors must retain sample identity');
+    return point.map((component, axis) => mix(component, next[axis], t));
+  });
+  const interpolateSamples = (startSamples, endSamples) => startSamples.map((sample, index) => {
+    const next = endSamples[index];
+    if (!next || next.stationId !== sample.stationId) {
+      throw new Error('locomotion rail support samples must retain station identity');
+    }
+    return {
+      stationId: sample.stationId,
+      t: mix(sample.t, next.t, t),
+      longitudinal: mix(sample.longitudinal, next.longitudinal, t),
+      terrainHeight: mix(sample.terrainHeight, next.terrainHeight, t),
+      requiredOffset: mix(sample.requiredOffset, next.requiredOffset, t),
+      inBounds: sample.inBounds && next.inBounds,
+      corridor: interpolateCorridor(sample.corridor, next.corridor),
+      supportOffset: mix(sample.supportOffset, next.supportOffset, t),
+      supportedContactY: mix(sample.supportedContactY, next.supportedContactY, t),
+    };
+  });
+  const marginNames = new Set([
+    ...Object.keys(start.compliance.margins || {}),
+    ...Object.keys(end.compliance.margins || {}),
+  ]);
+  const margins = Object.fromEntries([...marginNames].map(name => [
+    name,
+    mix(start.compliance.margins?.[name] ?? 0, end.compliance.margins?.[name] ?? 0, t),
+  ]));
+  const compliance = {
+    exceeded: start.compliance.exceeded || end.compliance.exceeded,
+    outOfBounds: start.compliance.outOfBounds || end.compliance.outOfBounds,
+    maxEnvelopeLift: mix(start.compliance.maxEnvelopeLift, end.compliance.maxEnvelopeLift, t),
+    rootLiftAboveClearance: mix(start.compliance.rootLiftAboveClearance, end.compliance.rootLiftAboveClearance, t),
+    maxSuspensionLift: mix(start.compliance.maxSuspensionLift, end.compliance.maxSuspensionLift, t),
+    measuredPitchRadians: mix(start.compliance.measuredPitchRadians, end.compliance.measuredPitchRadians, t),
+    measuredBendRadians: mix(start.compliance.measuredBendRadians, end.compliance.measuredBendRadians, t),
+    maxPitchRadians: mix(start.compliance.maxPitchRadians, end.compliance.maxPitchRadians, t),
+    maxBendRadiansPerStation: mix(
+      start.compliance.maxBendRadiansPerStation,
+      end.compliance.maxBendRadiansPerStation,
+      t,
+    ),
+    margins,
+    minimumNormalizedMargin: Math.min(...Object.values(margins)),
+  };
+  return {
+    schema: 'kaminos.axial-terrain-support-envelope.v0',
+    clearance: mix(start.clearance, end.clearance, t),
+    scale: mix(start.scale, end.scale, t),
+    corridorRadius: mix(start.corridorRadius, end.corridorRadius, t),
+    supportSampleSpacing: mix(start.supportSampleSpacing, end.supportSampleSpacing, t),
+    terrainCellWidth: mix(start.terrainCellWidth, end.terrainCellWidth, t),
+    rootLift: mix(start.rootLift, end.rootLift, t),
+    profile: interpolateProfile(start.profile, end.profile),
+    samples: interpolateSamples(start.samples, end.samples),
+    compliance,
+    plannerDisposition: compliance.exceeded ? 'reroute-required' : 'local-support',
+    interpolation: 'locomotion-rail-linear-support-v0',
+  };
+}
+
+export function sampleCreatureScaleLocomotionRail(rail, distanceInput = 0, options = {}) {
+  if (rail?.schema !== 'kaminos.creature-scale-locomotion-rail.v0' || !Array.isArray(rail.samples) || rail.samples.length < 2) {
+    throw new Error('creature-scale locomotion rail is required');
+  }
+  const sourceDistance = clamp(Number(distanceInput) || 0, 0, rail.length);
+  let segment = 0;
+  while (
+    segment < rail.samples.length - 2
+    && rail.samples[segment + 1].sourceDistance < sourceDistance
+  ) segment++;
+  const start = rail.samples[segment];
+  const end = rail.samples[segment + 1];
+  const span = Math.max(EPSILON, end.sourceDistance - start.sourceDistance);
+  const t = clamp((sourceDistance - start.sourceDistance) / span, 0, 1);
+  const position = [
+    mix(start.position[0], end.position[0], t),
+    mix(start.position[1], end.position[1], t),
+    mix(start.position[2], end.position[2], t),
+  ];
+  const tangent = normalize3([
+    mix(start.tangent[0], end.tangent[0], t),
+    0,
+    mix(start.tangent[2], end.tangent[2], t),
+  ]);
+  const right = normalize3([-tangent[2], 0, tangent[0]], [1, 0, 0]);
+  const attentionTarget = Array.isArray(options.attentionTarget)
+    ? requireVector3(options.attentionTarget, 'attention target')
+    : null;
+  const attentionDirection = attentionTarget
+    ? normalize3([
+      attentionTarget[0] - position[0],
+      attentionTarget[1] - position[1],
+      attentionTarget[2] - position[2],
+    ], tangent)
+    : [...tangent];
+  const horizontalAttention = normalize3([attentionDirection[0], 0, attentionDirection[2]], tangent);
+  return {
+    schema: 'kaminos.creature-scale-locomotion-rail-sample.v0',
+    railId: rail.id,
+    sourceDistance,
+    progress: rail.length > EPSILON ? sourceDistance / rail.length : 0,
+    segmentIndex: segment,
+    position,
+    tangent,
+    curvature: mix(start.curvature, end.curvature, t),
+    support: interpolateSupportEnvelope(start.support, end.support, t),
+    locomotionFrame: {
+      forward: tangent,
+      right,
+      up: [0, 1, 0],
+    },
+    attention: {
+      target: attentionTarget,
+      direction: attentionDirection,
+      yawFromLocomotionRadians: signedHeadingDelta(tangent, horizontalAttention),
+      authority: attentionTarget ? 'target-relative' : 'locomotion-forward-default',
+    },
   };
 }
 

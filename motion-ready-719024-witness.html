@@ -66,11 +66,13 @@ import {
 import {
   MOTION_READY_719024_CAST_ID,
   MOTION_READY_719024_DEFORMATION_MODE,
+  compileCreatureScaleLocomotionRail,
   createAxialGeometryBinding,
   createAxialSquirmState,
+  createAxialTerrainRouteTransitionEvaluator,
   deformAxialGeometryBinding,
   sampleHillTerrainSurface,
-  samplePolylineRoute,
+  sampleCreatureScaleLocomotionRail,
   solveAxialTerrainSupportEnvelope,
   stepAxialSquirmController,
   validateAxialCrawlerRegistration,
@@ -154,7 +156,7 @@ const state = {
   controller: createAxialSquirmState(),
   source: null,
   routePlan: null,
-  routePoints: [],
+  locomotionRail: null,
   routeSample: null,
   terrainSupport: null,
   registration: null,
@@ -264,15 +266,6 @@ function createTerrain(source) {
   return terrain;
 }
 
-function smoothRoutePoints(routePlan, source) {
-  const raw = routePlan.routePoints.map(point => new THREE.Vector3(...point.world));
-  const curve = new THREE.CatmullRomCurve3(raw, false, 'centripetal', 0.18);
-  return curve.getPoints(Math.max(180, raw.length * 5)).map(point => {
-    point.y = sampleHillTerrainSurface(source, point.x, point.z).height + 0.018;
-    return point.toArray();
-  });
-}
-
 function createRouteLine(points) {
   const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => new THREE.Vector3(...point).add(new THREE.Vector3(0, 0.025, 0))));
   const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xf1d27a, transparent: true, opacity: 0.58, depthTest: true }));
@@ -373,7 +366,10 @@ function updateActor(nowSeconds) {
   state.previousFrameSeconds = nowSeconds;
   const travelLinear = (elapsed - TIMING.leadIn) / TIMING.travel;
   const progress = smoothProgress(travelLinear);
-  const sample = samplePolylineRoute(state.routePoints, progress);
+  const sample = sampleCreatureScaleLocomotionRail(
+    state.locomotionRail,
+    state.locomotionRail.length * progress,
+  );
   const routePosition = new THREE.Vector3(...sample.position);
   const previousPosition = state.previousRoutePosition;
   const routeSpeed = previousPosition && deltaSeconds > 1e-5
@@ -383,22 +379,13 @@ function updateActor(nowSeconds) {
   state.routeProgress = progress;
   state.routeSpeed = routeSpeed;
   state.routeSample = sample;
-  const horizontalForward = new THREE.Vector3(sample.forward[0], 0, sample.forward[2]).normalize();
+  const horizontalForward = new THREE.Vector3(sample.tangent[0], 0, sample.tangent[2]).normalize();
   const terrainSurface = sampleHillTerrainSurface(state.source, routePosition.x, routePosition.z);
-  state.terrainSupport = solveAxialTerrainSupportEnvelope(state.source, state.registration, {
-    rootSurface: [routePosition.x, terrainSurface.height, routePosition.z],
-    forward: horizontalForward.toArray(),
-    scale: state.creatureRoot.scale.y,
-    clearance: 0.018,
-    lateralExcursion: state.controller.amplitude * state.creatureRoot.scale.y,
-    maxPitchRadians: Math.PI / 5,
-    maxBendRadiansPerStation: Math.PI / 10,
-    maxSuspensionLift: 0.1 * state.creatureRoot.scale.y,
-  });
+  state.terrainSupport = sample.support;
   state.controller = stepAxialSquirmController(state.controller, {
     deltaSeconds,
     routeSpeed,
-    routeDistance: sample.distance,
+    routeDistance: sample.sourceDistance,
     terrainSupport: state.terrainSupport,
     elapsedSeconds: elapsed,
   });
@@ -481,29 +468,57 @@ async function initialize() {
   state.source = decodeHillMotionAffordancePacket({ packet, data });
   if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
 
-  const bounds = state.source.worldBounds;
-  const start = [
-    bounds.x.min + (bounds.x.max - bounds.x.min) * 0.13,
-    0,
-    bounds.z.min + (bounds.z.max - bounds.z.min) * 0.18,
-  ];
-  const goal = [
-    bounds.x.min + (bounds.x.max - bounds.x.min) * 0.82,
-    0,
-    bounds.z.min + (bounds.z.max - bounds.z.min) * 0.74,
-  ];
+  const strictRouteFixture = {
+    schema: 'kaminos.motion-ready-719024.strict-route-fixture.v0',
+    basis: 'measured-connected-full-body-support-corridor',
+    requested: { start: { column: 110, row: 50 }, goal: { column: 110, row: 141 } },
+  };
+  const fixtureWorld = ({ column, row }) => hillWorldFromGrid(
+    state.source,
+    column,
+    row,
+    hillChannelValue(state.source, 'height', row * state.source.grid.columns + column),
+  );
+  const start = fixtureWorld(strictRouteFixture.requested.start);
+  const goal = fixtureWorld(strictRouteFixture.requested.goal);
+  const supportPolicy = {
+    scale: 1.14,
+    clearance: 0.018,
+    lateralExcursion: 0.1,
+    maxPitchRadians: Math.PI / 5,
+    maxBendRadiansPerStation: Math.PI / 10,
+    maxSuspensionLift: 0.114,
+  };
+  const transitionEvaluator = createAxialTerrainRouteTransitionEvaluator(
+    state.source,
+    state.registration,
+    supportPolicy,
+  );
   state.routePlan = createMotionRoutePlanFromTerrainAffordance(state.source, {
-    id: 'motion-ready-719024-hill-route',
+    id: 'motion-ready-719024-strict-hill-route',
     start,
     goal,
     costProfile: 'ridge-runner',
+    transitionEvaluator,
+    headingTurnWeight: 0.3,
   });
-  state.routePoints = smoothRoutePoints(state.routePlan, state.source);
+  state.locomotionRail = compileCreatureScaleLocomotionRail(
+    state.source,
+    state.registration,
+    state.routePlan,
+    {
+      id: 'motion-ready-719024-creature-scale-rail',
+      ...supportPolicy,
+      sampleSpacing: 0.07,
+      transitionEvaluator,
+    },
+  );
+  state.routePlan.fixture = strictRouteFixture;
   createTerrain(state.source);
-  createRouteLine(state.routePoints);
+  createRouteLine(state.locomotionRail.samples.map(sample => sample.position));
   prepareCreature(creatureAsset.value, state.registration);
 
-  const startSample = samplePolylineRoute(state.routePoints, 0);
+  const startSample = sampleCreatureScaleLocomotionRail(state.locomotionRail, 0);
   const startPosition = new THREE.Vector3(...startSample.position);
   state.creatureRoot.position.set(startPosition.x, startPosition.y - state.registration.contactPlaneY * state.creatureRoot.scale.y, startPosition.z);
   controls.target.copy(state.creatureRoot.position).add(new THREE.Vector3(0, 0.25, 0));
@@ -511,7 +526,7 @@ async function initialize() {
   controls.update();
 
   sourceRefElement.textContent = state.source.sourceRef;
-  routeIdElement.textContent = `${state.routePlan.id} / ${state.routePlan.routePoints.length} source nodes`;
+  routeIdElement.textContent = `${state.locomotionRail.id} / ${state.locomotionRail.samples.length} admitted samples`;
   state.loaded = true;
   state.ok = true;
   resetPlayback();
@@ -555,6 +570,15 @@ window.kaminosMotionReady719024DebugState = () => ({
     routeProfile: state.routePlan?.cost?.profile?.id || null,
     routePointCount: state.routePlan?.routePoints?.length || 0,
     dynamicContinuity: state.routePlan?.evidence?.dynamicContinuity || null,
+    transitionAdmission: state.routePlan?.evidence?.transitionAdmission || null,
+    strictRouteFixture: state.routePlan?.fixture || null,
+    locomotionRailId: state.locomotionRail?.id || null,
+    locomotionRailSchema: state.locomotionRail?.schema || null,
+    locomotionRailAuthority: state.locomotionRail?.authority || null,
+    locomotionRailLength: state.locomotionRail?.length || null,
+    locomotionRailSampleCount: state.locomotionRail?.samples?.length || 0,
+    locomotionRailContinuity: state.locomotionRail?.continuity || null,
+    locomotionRailEvidence: state.locomotionRail?.evidence || null,
   },
   motion: {
     elapsedSeconds: state.elapsedSeconds,

@@ -418,6 +418,251 @@ function reconstructMotionTerrainRoute(cameFrom, current) {
   return path.reverse();
 }
 
+function createMotionTerrainRoutePoint(source, index, columns, weights, profile, transition = null) {
+  const row = Math.floor(index / columns);
+  const column = index - row * columns;
+  const height = hillChannelScalar(source, 'height', index, 0);
+  const costBreakdown = motionTerrainRouteCostBreakdown(source, index, weights, profile.id);
+  return {
+    index,
+    grid: { column, row },
+    world: hillWorldFromGrid(source.grid, source.worldBounds, column, row, height),
+    terrain: {
+      routePressure: stableRoundedNumber(hillChannelScalar(source, 'routePressure', index, 0)),
+      slope: stableRoundedNumber(hillChannelScalar(source, 'slope', index, 0)),
+      dirty: stableRoundedNumber(hillChannelScalar(source, 'dirty', index, 0)),
+      shock: stableRoundedNumber(hillChannelScalar(source, 'shock', index, 0)),
+    },
+    cost: stableRoundedNumber(motionTerrainRouteCost(source, index, weights)),
+    costBreakdown: {
+      ...costBreakdown,
+      total: stableRoundedNumber(costBreakdown.total),
+      components: Object.fromEntries(Object.entries(costBreakdown.components)
+        .map(([key, value]) => [key, stableRoundedNumber(value)])),
+    },
+    ...(transition ? {
+      heading: transition.heading.map(value => stableRoundedNumber(value)),
+      transitionEvidence: transition.evidence || {
+        schema: 'kaminos.motion-route-transition-evidence.v0',
+        admissible: true,
+      },
+    } : {}),
+  };
+}
+
+function finishMotionTerrainRoutePlan({
+  source,
+  options,
+  profile,
+  weights,
+  start,
+  goal,
+  columns,
+  rows,
+  indices,
+  transitionByPathIndex = [],
+  totalCost,
+  visitedCount,
+  transitionAdmission = 'root-point-only',
+}) {
+  const routePoints = indices.map((index, pathIndex) => createMotionTerrainRoutePoint(
+    source,
+    index,
+    columns,
+    weights,
+    profile,
+    transitionByPathIndex[pathIndex] || null,
+  ));
+  const routeLength = routePoints.slice(1).reduce((total, point, index) => {
+    const previous = routePoints[index].world;
+    return total + Math.hypot(point.world[0] - previous[0], point.world[2] - previous[2]);
+  }, 0);
+  return {
+    schema: MOTION_ROUTE_PLAN_SCHEMA,
+    id: options.id || `hill-route-${source.checksums.channels || 'unknown'}`,
+    authority: 'terrain-affordance-route-plan',
+    route: MOTION_ROUTE_IDENTITY,
+    source: {
+      schema: source.schema,
+      sourceRef: source.sourceRef,
+      authority: source.authority,
+      backend: source.backend,
+      configId: source.configId,
+      checksums: { ...source.checksums },
+    },
+    grid: {
+      columns,
+      rows,
+      start,
+      goal,
+    },
+    routePoints,
+    cost: {
+      total: stableRoundedNumber(totalCost ?? 0),
+      routeLength: stableRoundedNumber(routeLength),
+      visitedCount,
+      weights,
+      profile,
+    },
+    evidence: {
+      schema: 'kaminos.motion-route-plan-evidence.v0',
+      staticFieldMode: profile.staticFieldMode,
+      dynamicContinuity: profile.dynamicContinuity,
+      costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength'],
+      semanticBasis: [...profile.semanticBasis],
+      routeSource: 'hill-motion-affordance-grid',
+      sourceRef: source.sourceRef,
+      checksums: { ...source.checksums },
+      transitionAdmission,
+    },
+  };
+}
+
+function normalizeMotionRouteTransitionEvaluation(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('motion route transition evaluator must return an object with explicit boolean admissible');
+  }
+  if (typeof value.admissible !== 'boolean') {
+    throw new Error('motion route transition evaluator must return an explicit boolean admissible');
+  }
+  if (!value.evidence || typeof value.evidence !== 'object' || Array.isArray(value.evidence)) {
+    throw new Error('motion route transition evaluator must return routeable evidence');
+  }
+  const additionalCost = value.additionalCost == null ? 0 : Number(value.additionalCost);
+  if (!Number.isFinite(additionalCost) || additionalCost < 0) {
+    throw new Error('motion route transition evaluator additionalCost must be a finite nonnegative number');
+  }
+  return {
+    admissible: value.admissible,
+    additionalCost,
+    evidence: value.evidence,
+  };
+}
+
+function createEvaluatedMotionRoutePlan({
+  source,
+  options,
+  profile,
+  weights,
+  start,
+  goal,
+  startIndex,
+  goalIndex,
+  columns,
+  rows,
+  neighbors,
+  transitionEvaluator,
+}) {
+  const startKey = `${startIndex}:start`;
+  const open = new Set([startKey]);
+  const records = new Map([[startKey, {
+    key: startKey,
+    index: startIndex,
+    directionIndex: null,
+    heading: null,
+  }]]);
+  const cameFrom = new Map();
+  const transitionByKey = new Map();
+  const gScore = new Map([[startKey, 0]]);
+  const fScore = new Map([[startKey, Math.hypot(goal.column - start.column, goal.row - start.row)]]);
+  const headingTurnWeight = Math.max(0, Number(options.headingTurnWeight) || 0);
+  let visitedCount = 0;
+  while (open.size > 0) {
+    let currentKey = null;
+    let best = Infinity;
+    for (const key of open) {
+      const score = fScore.get(key) ?? Infinity;
+      if (score < best) {
+        best = score;
+        currentKey = key;
+      }
+    }
+    const current = records.get(currentKey);
+    if (current.index === goalIndex) {
+      const stateKeys = reconstructMotionTerrainRoute(cameFrom, currentKey);
+      const indices = stateKeys.map(key => records.get(key).index);
+      const transitionByPathIndex = stateKeys.map(key => transitionByKey.get(key) || null);
+      return finishMotionTerrainRoutePlan({
+        source,
+        options,
+        profile,
+        weights,
+        start,
+        goal,
+        columns,
+        rows,
+        indices,
+        transitionByPathIndex,
+        totalCost: gScore.get(currentKey),
+        visitedCount,
+        transitionAdmission: 'caller-evaluated',
+      });
+    }
+    open.delete(currentKey);
+    visitedCount++;
+    const row = Math.floor(current.index / columns);
+    const column = current.index - row * columns;
+    const currentHeight = hillChannelScalar(source, 'height', current.index, 0);
+    const currentWorld = hillWorldFromGrid(source.grid, source.worldBounds, column, row, currentHeight);
+    for (let directionIndex = 0; directionIndex < neighbors.length; directionIndex++) {
+      const [dc, dr] = neighbors[directionIndex];
+      const nextColumn = column + dc;
+      const nextRow = row + dr;
+      if (nextColumn < 0 || nextColumn >= columns || nextRow < 0 || nextRow >= rows) continue;
+      const nextIndex = hillGridIndex(source.grid, nextColumn, nextRow);
+      const nextHeight = hillChannelScalar(source, 'height', nextIndex, 0);
+      const nextWorld = hillWorldFromGrid(source.grid, source.worldBounds, nextColumn, nextRow, nextHeight);
+      const heading = normalizeVec3([
+        nextWorld[0] - currentWorld[0],
+        0,
+        nextWorld[2] - currentWorld[2],
+      ], [0, 0, 1]);
+      const evaluation = normalizeMotionRouteTransitionEvaluation(transitionEvaluator({
+        source,
+        from: { index: current.index, grid: { column, row }, world: currentWorld },
+        to: { index: nextIndex, grid: { column: nextColumn, row: nextRow }, world: nextWorld },
+        heading,
+        previousHeading: current.heading,
+        directionIndex,
+        previousDirectionIndex: current.directionIndex,
+      }));
+      if (!evaluation.admissible) continue;
+      const diagonal = dc !== 0 && dr !== 0;
+      const stepDistance = diagonal ? Math.SQRT2 : 1;
+      let turnCost = 0;
+      if (current.directionIndex != null && headingTurnWeight > 0) {
+        const previousStep = neighbors[current.directionIndex];
+        const previousLength = Math.hypot(previousStep[0], previousStep[1]) || 1;
+        const currentLength = Math.hypot(dc, dr) || 1;
+        const cosine = clamp(
+          (previousStep[0] * dc + previousStep[1] * dr) / (previousLength * currentLength),
+          -1,
+          1,
+        );
+        turnCost = headingTurnWeight * Math.acos(cosine) / Math.PI;
+      }
+      const nextKey = `${nextIndex}:${directionIndex}`;
+      const tentative = (gScore.get(currentKey) ?? Infinity)
+        + stepDistance * motionTerrainRouteCost(source, nextIndex, weights)
+        + evaluation.additionalCost
+        + turnCost;
+      if (tentative < (gScore.get(nextKey) ?? Infinity)) {
+        cameFrom.set(nextKey, currentKey);
+        records.set(nextKey, { key: nextKey, index: nextIndex, directionIndex, heading });
+        transitionByKey.set(nextKey, {
+          heading,
+          evidence: evaluation.evidence,
+        });
+        gScore.set(nextKey, tentative);
+        const heuristic = Math.hypot(goal.column - nextColumn, goal.row - nextRow);
+        fScore.set(nextKey, tentative + heuristic);
+        open.add(nextKey);
+      }
+    }
+  }
+  throw new Error('Motion route plan failed: no route through caller-admitted Hill terrain states');
+}
+
 export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options = {}) {
   const source = sourceInput?.schema === MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA
     ? sourceInput
@@ -439,6 +684,22 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
     [-1, 0], [1, 0], [0, -1], [0, 1],
     [-1, -1], [1, -1], [-1, 1], [1, 1],
   ];
+  if (typeof options.transitionEvaluator === 'function') {
+    return createEvaluatedMotionRoutePlan({
+      source,
+      options,
+      profile,
+      weights,
+      start,
+      goal,
+      startIndex,
+      goalIndex,
+      columns: cols,
+      rows,
+      neighbors,
+      transitionEvaluator: options.transitionEvaluator,
+    });
+  }
   let visitedCount = 0;
   while (open.size > 0) {
     let current = null;
@@ -452,72 +713,19 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
     }
     if (current === goalIndex) {
       const indices = reconstructMotionTerrainRoute(cameFrom, current);
-      const routePoints = indices.map((index) => {
-        const row = Math.floor(index / cols);
-        const column = index - row * cols;
-        const height = hillChannelScalar(source, 'height', index, 0);
-        const costBreakdown = motionTerrainRouteCostBreakdown(source, index, weights, profile.id);
-        return {
-          index,
-          grid: { column, row },
-          world: hillWorldFromGrid(grid, source.worldBounds, column, row, height),
-          terrain: {
-            routePressure: stableRoundedNumber(hillChannelScalar(source, 'routePressure', index, 0)),
-            slope: stableRoundedNumber(hillChannelScalar(source, 'slope', index, 0)),
-            dirty: stableRoundedNumber(hillChannelScalar(source, 'dirty', index, 0)),
-            shock: stableRoundedNumber(hillChannelScalar(source, 'shock', index, 0)),
-          },
-          cost: stableRoundedNumber(motionTerrainRouteCost(source, index, weights)),
-          costBreakdown: {
-            ...costBreakdown,
-            total: stableRoundedNumber(costBreakdown.total),
-            components: Object.fromEntries(Object.entries(costBreakdown.components)
-              .map(([key, value]) => [key, stableRoundedNumber(value)])),
-          },
-        };
+      return finishMotionTerrainRoutePlan({
+        source,
+        options,
+        profile,
+        weights,
+        start,
+        goal,
+        columns: cols,
+        rows,
+        indices,
+        totalCost: gScore.get(goalIndex),
+        visitedCount,
       });
-      const routeLength = routePoints.slice(1).reduce((total, point, index) => {
-        const previous = routePoints[index].world;
-        return total + Math.hypot(point.world[0] - previous[0], point.world[2] - previous[2]);
-      }, 0);
-      return {
-        schema: MOTION_ROUTE_PLAN_SCHEMA,
-        id: options.id || `hill-route-${source.checksums.channels || 'unknown'}`,
-        authority: 'terrain-affordance-route-plan',
-        route: MOTION_ROUTE_IDENTITY,
-        source: {
-          schema: source.schema,
-          sourceRef: source.sourceRef,
-          authority: source.authority,
-          backend: source.backend,
-          configId: source.configId,
-          checksums: { ...source.checksums },
-        },
-        grid: {
-          columns: cols,
-          rows,
-          start,
-          goal,
-        },
-        routePoints,
-        cost: {
-          total: stableRoundedNumber(gScore.get(goalIndex) ?? 0),
-          routeLength: stableRoundedNumber(routeLength),
-          visitedCount,
-          weights,
-          profile,
-        },
-        evidence: {
-          schema: 'kaminos.motion-route-plan-evidence.v0',
-          staticFieldMode: profile.staticFieldMode,
-          dynamicContinuity: profile.dynamicContinuity,
-          costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength'],
-          semanticBasis: [...profile.semanticBasis],
-          routeSource: 'hill-motion-affordance-grid',
-          sourceRef: source.sourceRef,
-          checksums: { ...source.checksums },
-        },
-      };
     }
     open.delete(current);
     visitedCount++;

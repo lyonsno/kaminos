@@ -7,6 +7,7 @@ import {
   closeCdpBrowser,
   requestCdp,
 } from './motion-ready-719024-cdp.js';
+import { assertMotionReady719024EffectiveIdentity } from './motion-ready-719024-live-identity.js';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -18,6 +19,8 @@ const EXPECTED = Object.freeze({
   castHash: args.get('--expected-cast-hash') || '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
   registrationHash: args.get('--expected-registration-hash') || 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   hillSource: args.get('--expected-hill-source') || 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
+  routePlanId: 'motion-ready-719024-strict-hill-route',
+  locomotionRailId: 'motion-ready-719024-creature-scale-rail',
 });
 const url = args.get('--url') || 'http://127.0.0.1:18124/motion-ready-719024-witness.html';
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -180,27 +183,7 @@ async function waitForWitness(ws) {
 }
 
 function assertIdentity(debug) {
-  effectiveIdentity = {
-    castId: debug.effective.castId,
-    castHash: debug.effective.castHash,
-    registrationHash: debug.effective.registrationHash,
-    deformationMode: debug.effective.deformationMode,
-    hillSource: debug.effective.hillSourceRef,
-    hillAuthority: debug.effective.hillAuthority,
-    hillIdentityProjection: debug.effective.hillIdentityProjection,
-    hillChecksums: debug.effective.hillChecksums,
-    routePlanId: debug.effective.routePlanId,
-    routeProfile: debug.effective.routeProfile,
-  };
-  assert.equal(effectiveIdentity.castId, EXPECTED.castId, 'effective cast ID does not match requested cast ID');
-  assert.equal(effectiveIdentity.castHash, EXPECTED.castHash, 'effective cast hash does not match requested cast hash');
-  assert.equal(effectiveIdentity.registrationHash, EXPECTED.registrationHash, 'effective registration hash does not match requested registration hash');
-  assert.equal(effectiveIdentity.hillSource, EXPECTED.hillSource, 'effective Hill source does not match requested Hill source');
-  assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');
-  assert.equal(effectiveIdentity.hillAuthority, 'live_simulation', 'Hill packet is not source-owned live-simulation evidence');
-  assert.equal(effectiveIdentity.hillIdentityProjection, 'public-surface-identifiers-v0', 'Hill packet does not declare its public identity projection');
-  assert.equal(debug.effective.dynamicContinuity, 'not-claimed', 'static Hill packet must explicitly decline dynamic continuity');
-  assert.ok(debug.effective.routePointCount >= 8, 'route is too sparse to establish terrain traversal');
+  effectiveIdentity = assertMotionReady719024EffectiveIdentity(debug, EXPECTED);
 }
 
 async function clickReplay(ws) {
@@ -363,7 +346,17 @@ try {
   assert.ok(frames.some(frame => frame.debug.motion.controller.amplitude > 0.08), 'travel never produced a legible axial wave');
   assert.ok(last.performance.smoothedFps >= 30, `motion cadence remained below 30 fps (${last.performance.smoothedFps.toFixed(1)})`);
   assert.ok(last.performance.lastDeformationMs < 20, `batch deformation remained above 20 ms (${last.performance.lastDeformationMs.toFixed(1)} ms)`);
-  assert.ok(frames.at(-1).debug.motion.root[2] < frames[0].debug.motion.root[2] || frames.at(-1).debug.motion.root[0] !== frames[0].debug.motion.root[0], 'cast did not translate through world space');
+  const initialRoot = frames[0].debug.motion.root;
+  const finalRoot = frames.at(-1).debug.motion.root;
+  const translationDistance = Math.hypot(
+    finalRoot[0] - initialRoot[0],
+    finalRoot[1] - initialRoot[1],
+    finalRoot[2] - initialRoot[2],
+  );
+  assert.ok(
+    translationDistance > 0.5,
+    `cast translated only ${translationDistance.toFixed(3)} world units`,
+  );
 
   phase = 'writing-report';
   writeReport({ ok: true, frames, filmstrip, finalDebugState: last });

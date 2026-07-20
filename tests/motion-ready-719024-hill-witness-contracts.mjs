@@ -11,9 +11,13 @@ const packet = JSON.parse(await readFile(new URL('artifacts/motion-ready-719024/
 const data = JSON.parse(await readFile(new URL('artifacts/motion-ready-719024/hill/motion-affordance-data.json', root), 'utf8'));
 const page = await readFile(new URL('motion-ready-719024-witness.html', root), 'utf8');
 
-assert.match(page, /routeDistance:\s*sample\.distance/, 'live cadence is driven from traveled route distance');
+assert.match(page, /routeDistance:\s*sample\.sourceDistance/, 'live cadence is driven from traveled rail distance');
 assert.match(page, /solveAxialTerrainSupportEnvelope/, 'live cast consumes the axial terrain support envelope');
 assert.match(page, /horizontalForward/, 'root orientation excludes vertical route tangent so axial support owns pitch');
+assert.match(page, /createAxialTerrainRouteTransitionEvaluator/, 'live route admission uses the creature footprint oracle');
+assert.match(page, /compileCreatureScaleLocomotionRail/, 'live route compiles to a creature-scale rail');
+assert.match(page, /sampleCreatureScaleLocomotionRail/, 'live playback consumes the distance-parameterized rail');
+assert.doesNotMatch(page, /smoothRoutePoints/, 'browser-only post-plan smoothing must not bypass route admission');
 assert.match(page, /crypto\.subtle\.digest\('SHA-256'/, 'browser witness hashes the bytes it actually fetched');
 assert.match(page, /state\.assetEvidence/, 'browser effective identity comes from loaded-byte evidence');
 assert.match(page, /registration_url/, 'browser witness exposes a registration-byte false-closure probe');
