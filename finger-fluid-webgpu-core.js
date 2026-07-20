@@ -7255,6 +7255,12 @@ export async function createWebGPUFingerFluidSolver({
       let malformedRecordCount = 0;
       let contactRecordCount = 0;
       let minimumContactSupportAlignment = 1;
+      let curvatureSum = 0;
+      let absoluteCurvatureSum = 0;
+      let minimumCurvature = Infinity;
+      let maximumCurvature = -Infinity;
+      let resolvedCurvatureRecordCount = 0;
+      let unresolvedCurvatureRecordCount = 0;
       for (let index = 0; index < activeInterfaceCount; index += 1) {
         const record = readInterfaceRecord(index);
         const fields = [...record.position, ...record.velocity, ...record.normal, record.confidence, record.curvature, record.thickness, record.contact, record.wetness, record.material, record.stability, record.ageSeconds, record.sourceFrame, record.supportAlignment];
@@ -7265,6 +7271,15 @@ export async function createWebGPUFingerFluidSolver({
         if (record.contact >= 0.5) {
           contactRecordCount += 1;
           minimumContactSupportAlignment = Math.min(minimumContactSupportAlignment, record.supportAlignment);
+        }
+        if (record.confidence > 0) {
+          resolvedCurvatureRecordCount += 1;
+          curvatureSum += record.curvature;
+          absoluteCurvatureSum += Math.abs(record.curvature);
+          minimumCurvature = Math.min(minimumCurvature, record.curvature);
+          maximumCurvature = Math.max(maximumCurvature, record.curvature);
+        } else {
+          unresolvedCurvatureRecordCount += 1;
         }
       }
       const sampleRecords = [];

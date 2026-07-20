@@ -50,6 +50,11 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE\s*=\s*'w
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE\s*=\s*'webgpu-screen-space-liquid-surface-v0'/, 'screen-space liquid renderer route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE\s*=\s*'webgpu-screen-space-liquid-refraction-v0'/, 'screen-space liquid refraction renderer route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE\s*=\s*'snell-two-interface-screen-space-slab-v0'/, 'two-interface optical transport identity is explicit');
+assert.match(
+  webgpuCoreSource,
+  /let curvatureSum = 0;[\s\S]*let resolvedCurvatureRecordCount = 0;[\s\S]*for \(let index = 0; index < activeInterfaceCount; index \+= 1\)[\s\S]*if \(record\.confidence > 0\)[\s\S]*resolvedCurvatureRecordCount \+= 1;[\s\S]*absoluteCurvatureSum \+= Math\.abs\(record\.curvature\)/,
+  'interface diagnostics define and populate curvature accumulators before reporting them',
+);
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE\s*=\s*'wgsl-particle-projected-front-back-slab-v0'/, 'projected particle slab identity is explicit and separate from optical transport');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-debug-renderer-v0'/, 'particle sphere renderer survives as an explicit debug route');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'screen_space_refraction', 'sphere_debug'\]\)/, 'surface, refraction, and sphere-debug renderer modes are explicit');
