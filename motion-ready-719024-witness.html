@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Kaminos Motion-Ready 719024</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #090b0d; color: #d9ded8; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #viewport { position: absolute; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud { position: absolute; top: 14px; left: 14px; z-index: 4; width: min(330px, calc(100vw - 28px)); padding: 10px 11px; border: 1px solid rgba(169, 194, 147, 0.24); border-radius: 7px; background: rgba(10, 13, 13, 0.84); backdrop-filter: blur(10px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32); }
+  #title { font-size: 12px; font-weight: 750; color: #f2dfaa; }
+  #status { margin-top: 3px; color: #88b99b; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #status.error { color: #ef8880; }
+  #evidence { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 3px 8px; margin-top: 8px; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .key { color: #58645e; }
+  .value { color: #aeb9b1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #controls { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+  button { height: 28px; padding: 0 10px; border: 1px solid #3d493f; border-radius: 5px; background: #202722; color: #d5ddd6; font-size: 10px; cursor: pointer; }
+  button:hover { background: #2a342d; border-color: #5b6d5f; }
+  label { display: inline-flex; align-items: center; gap: 5px; color: #8d9990; font-size: 10px; }
+  input[type="checkbox"] { accent-color: #8eb56f; }
+  #progress { position: absolute; left: 14px; right: 14px; bottom: 13px; height: 3px; z-index: 4; background: rgba(255, 255, 255, 0.08); }
+  #progress > div { width: 0; height: 100%; background: #e0c876; transform-origin: left center; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./lib/three.webgpu.js",
+    "three/webgpu": "./lib/three.webgpu.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="viewport"></div>
+<section id="hud" aria-label="Motion witness state">
+  <div id="title">Motion-ready 719024 / Hill carrier</div>
+  <div id="status">Loading exact cast and source-owned terrain...</div>
+  <div id="evidence">
+    <span class="key">cast</span><span class="value">motion-ready-719024</span>
+    <span class="key">deformation</span><span class="value">axial-parallel-transport-wave-v0</span>
+    <span class="key">hill source</span><span class="value" id="source-ref">pending</span>
+    <span class="key">route</span><span class="value" id="route-id">pending</span>
+    <span class="key">motion</span><span class="value" id="motion-state">pending</span>
+  </div>
+  <div id="controls">
+    <button id="replay" type="button">Replay</button>
+    <button id="pause" type="button">Pause</button>
+    <label><input id="track" type="checkbox" checked> Track</label>
+  </div>
+</section>
+<div id="progress"><div></div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {
+  createMotionRoutePlanFromTerrainAffordance,
+  decodeHillMotionAffordancePacket,
+} from './motion-core.js';
+import {
+  MOTION_READY_719024_CAST_ID,
+  MOTION_READY_719024_DEFORMATION_MODE,
+  createAxialGeometryBinding,
+  createAxialSquirmState,
+  deformAxialGeometryBinding,
+  samplePolylineRoute,
+  stepAxialSquirmController,
+  validateAxialCrawlerRegistration,
+} from './motion-ready-719024-core.js';
+
+const PATHS = Object.freeze({
+  creature: './artifacts/motion-ready-719024/creature.glb',
+  registration: './artifacts/motion-ready-719024/registration.json',
+  receipt: './artifacts/motion-ready-719024/receipt.json',
+  hillPacket: './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
+  hillData: './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
+});
+const EXPECTED = Object.freeze({
+  castHash: '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
+  registrationHash: 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
+  hillSourceRef: 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
+});
+const TIMING = Object.freeze({ leadIn: 1.15, travel: 10.4, settle: 3.2 });
+const consoleFailures = [];
+window.addEventListener('error', event => consoleFailures.push(String(event.error?.stack || event.message || event.error || 'window error')));
+window.addEventListener('unhandledrejection', event => consoleFailures.push(String(event.reason?.stack || event.reason || 'unhandled rejection')));
+
+const viewport = document.getElementById('viewport');
+const statusElement = document.getElementById('status');
+const sourceRefElement = document.getElementById('source-ref');
+const routeIdElement = document.getElementById('route-id');
+const motionStateElement = document.getElementById('motion-state');
+const progressElement = document.querySelector('#progress > div');
+const pauseButton = document.getElementById('pause');
+const trackInput = document.getElementById('track');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x090b0d);
+scene.fog = new THREE.FogExp2(0x090b0d, 0.025);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.02, 120);
+camera.position.set(-4.2, 4.1, 5.8);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.shadowMap.enabled = true;
+viewport.appendChild(renderer.domElement);
+await renderer.init();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 1.2;
+controls.maxDistance = 18;
+controls.target.set(0, 0.5, 0);
+
+scene.add(new THREE.HemisphereLight(0xd8e5cf, 0x28322e, 1.55));
+const key = new THREE.DirectionalLight(0xffe1b2, 3.1);
+key.position.set(-4, 9, 2);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -9;
+key.shadow.camera.right = 9;
+key.shadow.camera.top = 9;
+key.shadow.camera.bottom = -9;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x8fc6be, 1.65);
+rim.position.set(6, 4, -8);
+scene.add(rim);
+
+const state = {
+  schema: 'kaminos.motion-ready-719024-live-state.v0',
+  ok: false,
+  loaded: false,
+  paused: false,
+  completed: false,
+  startSeconds: performance.now() / 1000,
+  elapsedSeconds: 0,
+  routeProgress: 0,
+  routeSpeed: 0,
+  previousRoutePosition: null,
+  previousFrameSeconds: null,
+  controller: createAxialSquirmState(),
+  source: null,
+  routePlan: null,
+  routePoints: [],
+  routeSample: null,
+  registration: null,
+  receipt: null,
+  creatureRoot: null,
+  deformableMeshes: [],
+  frameCount: 0,
+  performance: {
+    lastFrameMs: null,
+    smoothedFps: 0,
+    lastDeformationMs: 0,
+    maxDeformationMs: 0,
+  },
+};
+
+function setStatus(message, error = false) {
+  statusElement.textContent = message;
+  statusElement.classList.toggle('error', error);
+}
+
+function hillChannelValue(source, name, index, component = 0, fallback = 0) {
+  const channel = source?.channels?.[name];
+  const stride = Math.max(1, Number(channel?.componentCount) || 1);
+  const value = Number(channel?.values?.[index * stride + component]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function hillWorldFromGrid(source, column, row, height = 0) {
+  const columns = Math.max(1, source.grid.columns);
+  const rows = Math.max(1, source.grid.rows);
+  const tx = columns <= 1 ? 0 : column / (columns - 1);
+  const tz = rows <= 1 ? 0 : row / (rows - 1);
+  return [
+    THREE.MathUtils.lerp(source.worldBounds.x.min, source.worldBounds.x.max, tx),
+    height,
+    THREE.MathUtils.lerp(source.worldBounds.z.min, source.worldBounds.z.max, tz),
+  ];
+}
+
+function terrainColor(color, source, index) {
+  const materialClass = Math.round(hillChannelValue(source, 'materialClass', index));
+  const regionClass = Math.round(hillChannelValue(source, 'regionClass', index));
+  const growth = THREE.MathUtils.clamp(hillChannelValue(source, 'growthPotential', index), 0, 1);
+  const wetness = THREE.MathUtils.clamp(hillChannelValue(source, 'wetness', index), 0, 1);
+  const ridge = THREE.MathUtils.clamp(hillChannelValue(source, 'ridgeStrength', index), 0, 1);
+  const palette = [0x5f8e55, 0x7ca865, 0x9a9d63, 0x667f65, 0xa18c5b, 0x557d73, 0x809b55, 0x6e8462];
+  color.setHex(palette[Math.abs(materialClass + regionClass * 3) % palette.length]);
+  const hsl = {};
+  color.getHSL(hsl);
+  color.setHSL(
+    (hsl.h + wetness * 0.035 - ridge * 0.018 + 1) % 1,
+    THREE.MathUtils.clamp(hsl.s + growth * 0.18, 0.28, 0.72),
+    THREE.MathUtils.clamp(hsl.l + growth * 0.08 - wetness * 0.06, 0.2, 0.52),
+  );
+  return color;
+}
+
+function createTerrain(source) {
+  const columns = source.grid.columns;
+  const rows = source.grid.rows;
+  const positions = new Float32Array(columns * rows * 3);
+  const colors = new Float32Array(columns * rows * 3);
+  const indices = new Uint32Array((columns - 1) * (rows - 1) * 6);
+  const color = new THREE.Color();
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const index = row * columns + column;
+      const world = hillWorldFromGrid(source, column, row, hillChannelValue(source, 'height', index));
+      positions.set(world, index * 3);
+      terrainColor(color, source, index);
+      colors.set([color.r, color.g, color.b], index * 3);
+    }
+  }
+  let cursor = 0;
+  for (let row = 0; row < rows - 1; row++) {
+    for (let column = 0; column < columns - 1; column++) {
+      const a = row * columns + column;
+      const b = a + 1;
+      const c = a + columns;
+      const d = c + 1;
+      indices.set([a, c, b, b, c, d], cursor);
+      cursor += 6;
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  geometry.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.91,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const terrain = new THREE.Mesh(geometry, material);
+  terrain.name = 'motion-ready-719024-hill-support';
+  terrain.receiveShadow = true;
+  terrain.userData = {
+    schema: 'kaminos.motion-ready-719024.hill-support.v0',
+    sourceRef: source.sourceRef,
+    authority: source.authority,
+    checksums: source.checksums,
+  };
+  scene.add(terrain);
+  return terrain;
+}
+
+function smoothRoutePoints(routePlan, source) {
+  const raw = routePlan.routePoints.map(point => new THREE.Vector3(...point.world));
+  const curve = new THREE.CatmullRomCurve3(raw, false, 'centripetal', 0.18);
+  return curve.getPoints(Math.max(180, raw.length * 5)).map(point => {
+    const tx = THREE.MathUtils.clamp((point.x - source.worldBounds.x.min) / (source.worldBounds.x.max - source.worldBounds.x.min), 0, 1);
+    const tz = THREE.MathUtils.clamp((point.z - source.worldBounds.z.min) / (source.worldBounds.z.max - source.worldBounds.z.min), 0, 1);
+    const column = Math.round(tx * (source.grid.columns - 1));
+    const row = Math.round(tz * (source.grid.rows - 1));
+    point.y = hillChannelValue(source, 'height', row * source.grid.columns + column) + 0.018;
+    return point.toArray();
+  });
+}
+
+function createRouteLine(points) {
+  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => new THREE.Vector3(...point).add(new THREE.Vector3(0, 0.025, 0))));
+  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xf1d27a, transparent: true, opacity: 0.58, depthTest: true }));
+  line.name = 'motion-ready-719024-hill-route';
+  scene.add(line);
+}
+
+function prepareCreature(gltf, registration) {
+  const root = gltf.scene;
+  root.name = 'motion-ready-719024-creature';
+  root.traverse(child => {
+    if (!child.isMesh || !child.geometry?.attributes?.position) return;
+    child.geometry = child.geometry.clone();
+    const position = child.geometry.attributes.position;
+    const original = new Float32Array(position.array.length);
+    original.set(position.array);
+    const normal = child.geometry.attributes.normal;
+    if (!normal) throw new Error('deformable mesh requires vertex normals');
+    const originalNormals = new Float32Array(normal.array.length);
+    originalNormals.set(normal.array);
+    child.userData.axialBinding = createAxialGeometryBinding(
+      original,
+      originalNormals,
+      registration,
+      { segments: 128 },
+    );
+    child.geometry.computeBoundingSphere();
+    child.geometry.boundingSphere.radius *= 1.35;
+    child.castShadow = true;
+    child.receiveShadow = true;
+    if (child.material) {
+      child.material = child.material.clone();
+      child.material.envMapIntensity = 0.7;
+      child.material.roughness = Math.max(0.52, Number(child.material.roughness) || 0.52);
+    }
+    state.deformableMeshes.push(child);
+  });
+  if (state.deformableMeshes.length !== 1) throw new Error(`expected one deformable mesh, found ${state.deformableMeshes.length}`);
+  root.scale.setScalar(1.14);
+  root.userData = {
+    schema: 'kaminos.motion-ready-719024.creature-instance.v0',
+    castId: MOTION_READY_719024_CAST_ID,
+    castHash: EXPECTED.castHash,
+    registrationHash: EXPECTED.registrationHash,
+    deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
+  };
+  scene.add(root);
+  state.creatureRoot = root;
+  return root;
+}
+
+function applyCreatureDeformation() {
+  const started = performance.now();
+  for (const mesh of state.deformableMeshes) {
+    const position = mesh.geometry.attributes.position;
+    const normal = mesh.geometry.attributes.normal;
+    deformAxialGeometryBinding(
+      mesh.userData.axialBinding,
+      state.controller,
+      position.array,
+      normal.array,
+    );
+    position.needsUpdate = true;
+    normal.needsUpdate = true;
+  }
+  state.performance.lastDeformationMs = performance.now() - started;
+  state.performance.maxDeformationMs = Math.max(
+    state.performance.maxDeformationMs,
+    state.performance.lastDeformationMs,
+  );
+}
+
+function smoothProgress(linear) {
+  const t = THREE.MathUtils.clamp(linear, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function resetPlayback() {
+  state.startSeconds = performance.now() / 1000;
+  state.elapsedSeconds = 0;
+  state.routeProgress = 0;
+  state.routeSpeed = 0;
+  state.previousRoutePosition = null;
+  state.previousFrameSeconds = null;
+  state.controller = createAxialSquirmState();
+  state.completed = false;
+  state.paused = false;
+  pauseButton.textContent = 'Pause';
+  setStatus('Playing exact cast on source-owned Hill route');
+}
+
+function updateActor(nowSeconds) {
+  if (!state.loaded || state.paused) return;
+  const elapsed = Math.max(0, nowSeconds - state.startSeconds);
+  state.elapsedSeconds = elapsed;
+  const previousFrame = state.previousFrameSeconds ?? nowSeconds;
+  const deltaSeconds = THREE.MathUtils.clamp(nowSeconds - previousFrame, 0, 0.05);
+  state.previousFrameSeconds = nowSeconds;
+  const travelLinear = (elapsed - TIMING.leadIn) / TIMING.travel;
+  const progress = smoothProgress(travelLinear);
+  const sample = samplePolylineRoute(state.routePoints, progress);
+  const routePosition = new THREE.Vector3(...sample.position);
+  const previousPosition = state.previousRoutePosition;
+  const routeSpeed = previousPosition && deltaSeconds > 1e-5
+    ? routePosition.distanceTo(previousPosition) / deltaSeconds
+    : 0;
+  state.previousRoutePosition = routePosition.clone();
+  state.routeProgress = progress;
+  state.routeSpeed = routeSpeed;
+  state.routeSample = sample;
+  state.controller = stepAxialSquirmController(state.controller, {
+    deltaSeconds,
+    routeSpeed,
+    elapsedSeconds: elapsed,
+  });
+
+  applyCreatureDeformation();
+  const forward = new THREE.Vector3(...sample.forward).normalize();
+  state.creatureRoot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), forward);
+  state.creatureRoot.position.set(
+    routePosition.x,
+    routePosition.y - state.registration.contactPlaneY * state.creatureRoot.scale.y,
+    routePosition.z,
+  );
+
+  if (trackInput.checked) {
+    const target = state.creatureRoot.position.clone().add(new THREE.Vector3(0, 0.24, 0));
+    const delta = target.clone().sub(controls.target);
+    controls.target.lerp(target, 0.12);
+    camera.position.addScaledVector(delta, 0.12);
+  }
+  progressElement.style.transform = `scaleX(${progress})`;
+  motionStateElement.textContent = `${progress.toFixed(3)} / ${routeSpeed.toFixed(2)} u·s⁻¹ / wave ${state.controller.amplitude.toFixed(3)}`;
+
+  if (elapsed >= TIMING.leadIn + TIMING.travel + TIMING.settle && !state.completed) {
+    state.completed = true;
+    setStatus('Route complete / low-velocity settle held');
+  }
+}
+
+async function loadJson(path) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+
+async function loadGltf(path) {
+  return new Promise((resolve, reject) => new GLTFLoader().load(path, resolve, undefined, reject));
+}
+
+async function initialize() {
+  const [registrationRaw, receipt, packet, data, gltf] = await Promise.all([
+    loadJson(PATHS.registration),
+    loadJson(PATHS.receipt),
+    loadJson(PATHS.hillPacket),
+    loadJson(PATHS.hillData),
+    loadGltf(PATHS.creature),
+  ]);
+  if (receipt.castId !== MOTION_READY_719024_CAST_ID) throw new Error(`unexpected cast ${receipt.castId}`);
+  if (receipt.files?.['creature.glb']?.sha256 !== EXPECTED.castHash) throw new Error('creature receipt hash mismatch');
+  if (receipt.files?.['registration.json']?.sha256 !== EXPECTED.registrationHash) throw new Error('registration receipt hash mismatch');
+  state.registration = validateAxialCrawlerRegistration(registrationRaw);
+  state.receipt = receipt;
+  state.source = decodeHillMotionAffordancePacket({ packet, data });
+  if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
+
+  const bounds = state.source.worldBounds;
+  const start = [
+    bounds.x.min + (bounds.x.max - bounds.x.min) * 0.13,
+    0,
+    bounds.z.min + (bounds.z.max - bounds.z.min) * 0.18,
+  ];
+  const goal = [
+    bounds.x.min + (bounds.x.max - bounds.x.min) * 0.82,
+    0,
+    bounds.z.min + (bounds.z.max - bounds.z.min) * 0.74,
+  ];
+  state.routePlan = createMotionRoutePlanFromTerrainAffordance(state.source, {
+    id: 'motion-ready-719024-hill-route',
+    start,
+    goal,
+    costProfile: 'ridge-runner',
+  });
+  state.routePoints = smoothRoutePoints(state.routePlan, state.source);
+  createTerrain(state.source);
+  createRouteLine(state.routePoints);
+  prepareCreature(gltf, state.registration);
+
+  const startSample = samplePolylineRoute(state.routePoints, 0);
+  const startPosition = new THREE.Vector3(...startSample.position);
+  state.creatureRoot.position.set(startPosition.x, startPosition.y - state.registration.contactPlaneY * state.creatureRoot.scale.y, startPosition.z);
+  controls.target.copy(state.creatureRoot.position).add(new THREE.Vector3(0, 0.25, 0));
+  camera.position.copy(controls.target).add(new THREE.Vector3(-3.2, 2.55, 4.2));
+  controls.update();
+
+  sourceRefElement.textContent = state.source.sourceRef;
+  routeIdElement.textContent = `${state.routePlan.id} / ${state.routePlan.routePoints.length} source nodes`;
+  state.loaded = true;
+  state.ok = true;
+  resetPlayback();
+}
+
+document.getElementById('replay').addEventListener('click', resetPlayback);
+pauseButton.addEventListener('click', () => {
+  state.paused = !state.paused;
+  pauseButton.textContent = state.paused ? 'Resume' : 'Pause';
+  if (!state.paused) {
+    state.startSeconds = performance.now() / 1000 - state.elapsedSeconds;
+    state.previousFrameSeconds = null;
+  }
+});
+
+window.kaminosMotionReady719024DebugState = () => ({
+  schema: 'kaminos.motion-ready-719024.debug-state.v0',
+  ok: state.ok && consoleFailures.length === 0,
+  loaded: state.loaded,
+  paused: state.paused,
+  completed: state.completed,
+  frameCount: state.frameCount,
+  requested: {
+    castId: MOTION_READY_719024_CAST_ID,
+    castPath: PATHS.creature,
+    registrationPath: PATHS.registration,
+    hillPacketPath: PATHS.hillPacket,
+    hillDataPath: PATHS.hillData,
+  },
+  effective: {
+    castId: state.receipt?.castId || null,
+    castHash: state.receipt?.files?.['creature.glb']?.sha256 || null,
+    registrationHash: state.receipt?.files?.['registration.json']?.sha256 || null,
+    deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
+    hillSourceRef: state.source?.sourceRef || null,
+    hillAuthority: state.source?.authority || null,
+    hillIdentityProjection: state.source?.identityProjection || null,
+    hillChecksums: state.source?.checksums || null,
+    routePlanId: state.routePlan?.id || null,
+    routeProfile: state.routePlan?.cost?.profile?.id || null,
+    routePointCount: state.routePlan?.routePoints?.length || 0,
+    dynamicContinuity: state.routePlan?.evidence?.dynamicContinuity || null,
+  },
+  motion: {
+    elapsedSeconds: state.elapsedSeconds,
+    routeProgress: state.routeProgress,
+    routeSpeed: state.routeSpeed,
+    routeSample: state.routeSample,
+    controller: { ...state.controller },
+    root: state.creatureRoot ? state.creatureRoot.position.toArray() : null,
+  },
+  performance: { ...state.performance },
+  consoleFailures: [...consoleFailures],
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+try {
+  await initialize();
+} catch (error) {
+  state.ok = false;
+  consoleFailures.push(String(error?.stack || error));
+  setStatus(`Witness failed: ${error?.message || error}`, true);
+  console.error(error);
+}
+
+function animate(nowMs) {
+  requestAnimationFrame(animate);
+  if (state.performance.lastFrameMs != null) {
+    const frameSeconds = Math.max(1e-4, (nowMs - state.performance.lastFrameMs) / 1000);
+    const instantFps = 1 / frameSeconds;
+    state.performance.smoothedFps = state.performance.smoothedFps > 0
+      ? state.performance.smoothedFps * 0.9 + instantFps * 0.1
+      : instantFps;
+  }
+  state.performance.lastFrameMs = nowMs;
+  state.frameCount++;
+  updateActor(nowMs / 1000);
+  controls.update();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

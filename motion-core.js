@@ -7,9 +7,16 @@ export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
 export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
+export const GENERATED_MOTION_CLIPLETS_SCHEMA = 'kaminos.generated-motion-cliplets.v0';
+export const GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA = 'kaminos.generated-motion-cliplet-interrupt.v0';
+export const HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA = 'lerms.hill-of-hills.motion-affordance-packet.v0';
+export const HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA = 'lerms.hill-of-hills.motion-affordance-data.v0';
+export const MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA = 'kaminos.motion-terrain-affordance-source.v0';
+export const MOTION_ROUTE_PLAN_SCHEMA = 'kaminos.motion-route-plan.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
+export const MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA = 'kaminos.motion-source-orientation-remap.v0';
 
 const SOMA77_TEMPORAL_JOINT = {
   Hips: 0,
@@ -50,14 +57,617 @@ function lengthVec3(a) {
   return Math.hypot(a[0], a[1], a[2]);
 }
 
+function dotVec3(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
 function normalizeVec3(a, fallback = [0, 0, 1]) {
   const len = lengthVec3(a);
   if (len <= 1e-8) return [...fallback];
   return [a[0] / len, a[1] / len, a[2] / len];
 }
 
+const HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT = [
+  'height',
+  'normal',
+  'gradient',
+  'slope',
+  'heightDelta',
+  'surfaceVelocity',
+  'routePressure',
+  'flowAccumulation',
+  'ridgeStrength',
+  'valleyStrength',
+  'ditchPotential',
+  'growthPotential',
+  'phaseAmount',
+  'topologyAmount',
+  'wetness',
+  'growthTint',
+  'materialClass',
+  'regionClass',
+  'motionHint',
+  'assetHint',
+  'dirty',
+  'shock',
+];
+
+function stableRoundedNumber(value, digits = 5) {
+  return Number(Number(value || 0).toFixed(digits));
+}
+
+function base64ToBytes(base64) {
+  const text = String(base64 || '');
+  if (typeof Buffer !== 'undefined') return Uint8Array.from(Buffer.from(text, 'base64'));
+  const binary = globalThis.atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function decodeBase64Float32LE(base64) {
+  const bytes = base64ToBytes(base64);
+  if (bytes.byteLength % 4 !== 0) throw new Error(`Hill motion affordance channel byte length is not f32-aligned: ${bytes.byteLength}`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const values = new Float32Array(bytes.byteLength / 4);
+  for (let i = 0; i < values.length; i++) values[i] = view.getFloat32(i * 4, true);
+  return values;
+}
+
+function assertHillAffordance(condition, message) {
+  if (!condition) throw new Error(`Hill motion affordance packet invalid: ${message}`);
+}
+
+function sameStringList(a = [], b = []) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function hillWorldFromGrid(grid, worldBounds, column, row, height = 0) {
+  const cols = Math.max(1, Number(grid?.columns) || 1);
+  const rows = Math.max(1, Number(grid?.rows) || 1);
+  const xMin = Number(worldBounds?.x?.min ?? 0);
+  const xMax = Number(worldBounds?.x?.max ?? xMin);
+  const zMin = Number(worldBounds?.z?.min ?? 0);
+  const zMax = Number(worldBounds?.z?.max ?? zMin);
+  const xT = cols <= 1 ? 0 : column / (cols - 1);
+  const zT = rows <= 1 ? 0 : row / (rows - 1);
+  return [
+    stableRoundedNumber(lerp(xMin, xMax, xT)),
+    stableRoundedNumber(height),
+    stableRoundedNumber(lerp(zMin, zMax, zT)),
+  ];
+}
+
+function hillGridFromWorld(grid, worldBounds, point) {
+  const cols = Math.max(1, Number(grid?.columns) || 1);
+  const rows = Math.max(1, Number(grid?.rows) || 1);
+  const xMin = Number(worldBounds?.x?.min ?? 0);
+  const xMax = Number(worldBounds?.x?.max ?? xMin);
+  const zMin = Number(worldBounds?.z?.min ?? 0);
+  const zMax = Number(worldBounds?.z?.max ?? zMin);
+  const x = Number(point?.[0] ?? xMin);
+  const z = Number(point?.[2] ?? zMin);
+  const xT = xMax === xMin ? 0 : (x - xMin) / (xMax - xMin);
+  const zT = zMax === zMin ? 0 : (z - zMin) / (zMax - zMin);
+  return {
+    column: Math.max(0, Math.min(cols - 1, Math.round(xT * (cols - 1)))),
+    row: Math.max(0, Math.min(rows - 1, Math.round(zT * (rows - 1)))),
+  };
+}
+
+function hillGridIndex(grid, column, row) {
+  return row * Math.max(1, Number(grid?.columns) || 1) + column;
+}
+
+function hillChannelScalar(source, name, index, component = 0, fallback = 0) {
+  const channel = source?.channels?.[name];
+  if (!channel?.values) return fallback;
+  return Number(channel.values[index * channel.componentCount + component] ?? fallback);
+}
+
+function decodeHillMotionChannel(name, encoded, sampleCount) {
+  assertHillAffordance(encoded && encoded.encoding === 'base64-f32-le', `channel ${name} must use base64-f32-le encoding`);
+  const components = Array.isArray(encoded.components) && encoded.components.length > 0
+    ? encoded.components.map(component => String(component))
+    : ['value'];
+  const componentCount = components.length;
+  const shape = Array.isArray(encoded.shape) ? encoded.shape.map(value => Number(value)) : [];
+  assertHillAffordance(shape.length > 0, `channel ${name} is missing shape`);
+  assertHillAffordance(shape[0] === sampleCount, `channel ${name} shape does not match grid sample count`);
+  if (shape.length > 1) assertHillAffordance(shape[1] === componentCount, `channel ${name} component shape does not match components`);
+  const expectedByteLength = sampleCount * componentCount * 4;
+  assertHillAffordance(Number(encoded.byteLength) === expectedByteLength, `channel ${name} byteLength does not match shape`);
+  const values = decodeBase64Float32LE(encoded.data);
+  assertHillAffordance(values.length === sampleCount * componentCount, `channel ${name} decoded length does not match shape`);
+  return {
+    name,
+    encoding: encoded.encoding,
+    components,
+    componentCount,
+    shape,
+    byteLength: expectedByteLength,
+    checksum: encoded.checksum || null,
+    values,
+  };
+}
+
+export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
+  assertHillAffordance(packet?.schema === HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA, `packet schema must be ${HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA}`);
+  assertHillAffordance(data?.schema === HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA, `data schema must be ${HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA}`);
+  assertHillAffordance(packet.status === 'fresh-live-motion-affordance', 'packet status must be fresh-live-motion-affordance');
+  assertHillAffordance(packet.freshness?.status === 'fresh-live-motion-affordance', 'packet freshness must be fresh-live-motion-affordance');
+  assertHillAffordance(packet.source?.authority === 'live_simulation', 'packet source authority must be live_simulation');
+  assertHillAffordance(data.sourceTruth?.authority === 'live_simulation', 'data source authority must be live_simulation');
+  assertHillAffordance(packet.source?.producerSurface === 'lerms-hill-of-hills', 'packet producer surface must be lerms-hill-of-hills');
+  assertHillAffordance(packet.source?.intendedConsumerSurface === 'kaminos-motion', 'packet consumer surface must be kaminos-motion');
+  assertHillAffordance(packet.source?.identityProjection === 'public-surface-identifiers-v0', 'packet must declare its public identity projection');
+  assertHillAffordance(packet.affordance?.intentEvidenceOnly === true && data.intentEvidenceOnly === true, 'packet/data must declare intent evidence only');
+  const packetLayout = packet.affordance?.channelLayout || [];
+  const dataLayout = data.channelLayout || [];
+  assertHillAffordance(sameStringList(packetLayout, HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT), 'packet channel layout does not match Hill motion affordance v0');
+  assertHillAffordance(sameStringList(dataLayout, HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT), 'data channel layout does not match Hill motion affordance v0');
+  const packetChecksums = packet.affordance?.checksums || {};
+  const dataChecksums = data.checksums || {};
+  for (const key of ['supportFrame', 'topology', 'material', 'phase', 'phaseInfluence', 'dirtyRegion', 'channels']) {
+    assertHillAffordance(packetChecksums[key] && packetChecksums[key] === dataChecksums[key], `checksum mismatch for ${key}`);
+  }
+  const grid = data.grid;
+  assertHillAffordance(grid && Number(grid.columns) > 0 && Number(grid.rows) > 0, 'data grid must include positive rows/columns');
+  const sampleCount = Number(grid.sampleCount);
+  assertHillAffordance(sampleCount === Number(grid.columns) * Number(grid.rows), 'grid sample count must equal rows * columns');
+  const channels = {};
+  for (const name of HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT) {
+    channels[name] = decodeHillMotionChannel(name, data.channels?.[name], sampleCount);
+  }
+  return {
+    schema: MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA,
+    source: {
+      schema: packet.schema,
+      route: packet.route,
+      frameId: packet.frameId,
+      status: packet.status,
+    },
+    data: {
+      schema: data.schema,
+    },
+    sourceRef: packet.source.sourceRef,
+    route: packet.source.route,
+    authority: packet.source.authority,
+    backend: packet.source.backend || data.sourceTruth?.backend || null,
+    configId: packet.source.configId || data.sourceTruth?.configId || null,
+    producerSurface: packet.source.producerSurface,
+    intendedConsumerSurface: packet.source.intendedConsumerSurface,
+    identityProjection: packet.source.identityProjection,
+    intentEvidenceOnly: true,
+    grid: {
+      columns: Number(grid.columns),
+      rows: Number(grid.rows),
+      sampleCount,
+      spacing: {
+        x: Number(grid.spacing?.x ?? 0),
+        z: Number(grid.spacing?.z ?? 0),
+      },
+    },
+    worldBounds: data.worldBounds,
+    domainBounds: data.domainBounds,
+    checksums: { ...dataChecksums },
+    channelLayout: [...dataLayout],
+    channels,
+    rejectedDebugSurfaces: Array.isArray(packet.rejectedDebugSurfaces) ? packet.rejectedDebugSurfaces.map(surface => ({ ...surface })) : [],
+    custody: packet.custody || null,
+    freshness: packet.freshness || null,
+    affordanceSummary: packet.affordance,
+  };
+}
+
+const MOTION_TERRAIN_ROUTE_COST_PROFILES = {
+  'cautious-lerm': {
+    id: 'cautious-lerm',
+    label: 'Cautious lerm',
+    weights: {
+      routePressure: 2.2,
+      slope: 4.8,
+      dirty: 32,
+      shock: 48,
+      heightDelta: 3,
+      surfaceVelocity: 2,
+      topologyAmount: 3,
+      growthPotential: -0.6,
+      ridgeStrength: 0.8,
+      valleyStrength: 0.4,
+    },
+    semanticBasis: [
+      'prefer existing route pressure',
+      'avoid unstable topology',
+      'avoid steep terrain',
+      'avoid dirty/shock samples',
+      'accept growth/cover as mild attraction',
+    ],
+  },
+  'ridge-runner': {
+    id: 'ridge-runner',
+    label: 'Ridge runner',
+    weights: {
+      routePressure: 2.8,
+      slope: 2,
+      dirty: 24,
+      shock: 32,
+      heightDelta: 1.5,
+      surfaceVelocity: 1,
+      topologyAmount: 1.5,
+      growthPotential: 0.2,
+      ridgeStrength: -1.6,
+      valleyStrength: 1.8,
+    },
+    semanticBasis: [
+      'prefer ridge/route exposure',
+      'avoid valley gathering',
+      'tolerate moderate slope',
+    ],
+  },
+  meadow: {
+    id: 'meadow',
+    label: 'Meadow seeker',
+    weights: {
+      routePressure: 1.8,
+      slope: 3.2,
+      dirty: 20,
+      shock: 36,
+      heightDelta: 2,
+      surfaceVelocity: 1,
+      topologyAmount: 2,
+      growthPotential: -2.2,
+      ridgeStrength: 0.6,
+      valleyStrength: 0.3,
+    },
+    semanticBasis: [
+      'prefer growth/meadow cover',
+      'prefer existing route pressure',
+      'avoid unstable topology',
+    ],
+  },
+};
+
+export function normalizeMotionTerrainRouteCostProfile(profile = 'cautious-lerm', overrides = {}) {
+  const requested = typeof profile === 'string' ? profile : profile?.id;
+  const base = MOTION_TERRAIN_ROUTE_COST_PROFILES[requested] || MOTION_TERRAIN_ROUTE_COST_PROFILES['cautious-lerm'];
+  return {
+    id: base.id,
+    requestedId: requested || base.id,
+    label: base.label,
+    staticFieldMode: 'frozen-source-snapshot',
+    dynamicContinuity: 'not-claimed',
+    weights: {
+      ...base.weights,
+      ...(profile && typeof profile === 'object' ? profile.weights || {} : {}),
+      ...(overrides || {}),
+    },
+    semanticBasis: [...base.semanticBasis],
+  };
+}
+
+export function listMotionTerrainRouteCostProfiles() {
+  return Object.values(MOTION_TERRAIN_ROUTE_COST_PROFILES).map(profile => ({
+    id: profile.id,
+    label: profile.label,
+    staticFieldMode: 'frozen-source-snapshot',
+    dynamicContinuity: 'not-claimed',
+    semanticBasis: [...profile.semanticBasis],
+    weights: { ...profile.weights },
+  }));
+}
+
+function motionTerrainRouteCostBreakdown(source, index, weights, profileId = null) {
+  const routePressure = hillChannelScalar(source, 'routePressure', index, 0);
+  const slope = hillChannelScalar(source, 'slope', index, 0);
+  const dirty = hillChannelScalar(source, 'dirty', index, 0);
+  const shock = hillChannelScalar(source, 'shock', index, 0);
+  const heightDelta = Math.abs(hillChannelScalar(source, 'heightDelta', index, 0));
+  const topologyAmount = hillChannelScalar(source, 'topologyAmount', index, 0);
+  const growthPotential = hillChannelScalar(source, 'growthPotential', index, 0);
+  const ridgeStrength = hillChannelScalar(source, 'ridgeStrength', index, 0);
+  const valleyStrength = hillChannelScalar(source, 'valleyStrength', index, 0);
+  const velocity = Math.hypot(
+    hillChannelScalar(source, 'surfaceVelocity', index, 0),
+    hillChannelScalar(source, 'surfaceVelocity', index, 1, 0),
+    hillChannelScalar(source, 'surfaceVelocity', index, 2, 0),
+  );
+  const components = {
+    base: 1,
+    routePressure: -Number(weights.routePressure || 0) * routePressure * 0.25,
+    slope: Number(weights.slope || 0) * slope,
+    dirty: Number(weights.dirty || 0) * dirty,
+    shock: Number(weights.shock || 0) * shock,
+    heightDelta: Number(weights.heightDelta || 0) * heightDelta,
+    surfaceVelocity: Number(weights.surfaceVelocity || 0) * velocity,
+    topologyAmount: Number(weights.topologyAmount || 0) * topologyAmount,
+    growthPotential: Number(weights.growthPotential || 0) * growthPotential,
+    ridgeStrength: Number(weights.ridgeStrength || 0) * ridgeStrength,
+    valleyStrength: Number(weights.valleyStrength || 0) * valleyStrength,
+  };
+  const raw = Object.values(components).reduce((total, value) => total + value, 0);
+  const total = Math.max(0.01, raw);
+  return {
+    schema: 'kaminos.motion-route-cost-breakdown.v0',
+    profileId,
+    total,
+    components,
+  };
+}
+
+export function sampleMotionTerrainRouteCostBreakdown(sourceInput, index, profile = 'cautious-lerm', overrides = {}) {
+  const source = sourceInput?.schema === MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA
+    ? sourceInput
+    : decodeHillMotionAffordancePacket(sourceInput);
+  const costProfile = normalizeMotionTerrainRouteCostProfile(profile, overrides || {});
+  return motionTerrainRouteCostBreakdown(source, Number(index) || 0, costProfile.weights, costProfile.id);
+}
+
+function motionTerrainRouteCost(source, index, weights) {
+  return motionTerrainRouteCostBreakdown(source, index, weights).total;
+}
+
+function reconstructMotionTerrainRoute(cameFrom, current) {
+  const path = [current];
+  let cursor = current;
+  while (cameFrom.has(cursor)) {
+    cursor = cameFrom.get(cursor);
+    path.push(cursor);
+  }
+  return path.reverse();
+}
+
+export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options = {}) {
+  const source = sourceInput?.schema === MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA
+    ? sourceInput
+    : decodeHillMotionAffordancePacket(sourceInput);
+  const grid = source.grid;
+  const profile = normalizeMotionTerrainRouteCostProfile(options.costProfile, options.costWeights || {});
+  const weights = profile.weights;
+  const start = hillGridFromWorld(grid, source.worldBounds, options.start || [source.worldBounds?.x?.min || 0, 0, source.worldBounds?.z?.min || 0]);
+  const goal = hillGridFromWorld(grid, source.worldBounds, options.goal || [source.worldBounds?.x?.max || 0, 0, source.worldBounds?.z?.max || 0]);
+  const startIndex = hillGridIndex(grid, start.column, start.row);
+  const goalIndex = hillGridIndex(grid, goal.column, goal.row);
+  const open = new Set([startIndex]);
+  const cameFrom = new Map();
+  const gScore = new Map([[startIndex, 0]]);
+  const fScore = new Map([[startIndex, Math.hypot(goal.column - start.column, goal.row - start.row)]]);
+  const cols = grid.columns;
+  const rows = grid.rows;
+  const neighbors = [
+    [-1, 0], [1, 0], [0, -1], [0, 1],
+    [-1, -1], [1, -1], [-1, 1], [1, 1],
+  ];
+  let visitedCount = 0;
+  while (open.size > 0) {
+    let current = null;
+    let best = Infinity;
+    for (const index of open) {
+      const score = fScore.get(index) ?? Infinity;
+      if (score < best) {
+        best = score;
+        current = index;
+      }
+    }
+    if (current === goalIndex) {
+      const indices = reconstructMotionTerrainRoute(cameFrom, current);
+      const routePoints = indices.map((index) => {
+        const row = Math.floor(index / cols);
+        const column = index - row * cols;
+        const height = hillChannelScalar(source, 'height', index, 0);
+        const costBreakdown = motionTerrainRouteCostBreakdown(source, index, weights, profile.id);
+        return {
+          index,
+          grid: { column, row },
+          world: hillWorldFromGrid(grid, source.worldBounds, column, row, height),
+          terrain: {
+            routePressure: stableRoundedNumber(hillChannelScalar(source, 'routePressure', index, 0)),
+            slope: stableRoundedNumber(hillChannelScalar(source, 'slope', index, 0)),
+            dirty: stableRoundedNumber(hillChannelScalar(source, 'dirty', index, 0)),
+            shock: stableRoundedNumber(hillChannelScalar(source, 'shock', index, 0)),
+          },
+          cost: stableRoundedNumber(motionTerrainRouteCost(source, index, weights)),
+          costBreakdown: {
+            ...costBreakdown,
+            total: stableRoundedNumber(costBreakdown.total),
+            components: Object.fromEntries(Object.entries(costBreakdown.components)
+              .map(([key, value]) => [key, stableRoundedNumber(value)])),
+          },
+        };
+      });
+      const routeLength = routePoints.slice(1).reduce((total, point, index) => {
+        const previous = routePoints[index].world;
+        return total + Math.hypot(point.world[0] - previous[0], point.world[2] - previous[2]);
+      }, 0);
+      return {
+        schema: MOTION_ROUTE_PLAN_SCHEMA,
+        id: options.id || `hill-route-${source.checksums.channels || 'unknown'}`,
+        authority: 'terrain-affordance-route-plan',
+        route: MOTION_ROUTE_IDENTITY,
+        source: {
+          schema: source.schema,
+          sourceRef: source.sourceRef,
+          authority: source.authority,
+          backend: source.backend,
+          configId: source.configId,
+          checksums: { ...source.checksums },
+        },
+        grid: {
+          columns: cols,
+          rows,
+          start,
+          goal,
+        },
+        routePoints,
+        cost: {
+          total: stableRoundedNumber(gScore.get(goalIndex) ?? 0),
+          routeLength: stableRoundedNumber(routeLength),
+          visitedCount,
+          weights,
+          profile,
+        },
+        evidence: {
+          schema: 'kaminos.motion-route-plan-evidence.v0',
+          staticFieldMode: profile.staticFieldMode,
+          dynamicContinuity: profile.dynamicContinuity,
+          costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength'],
+          semanticBasis: [...profile.semanticBasis],
+          routeSource: 'hill-motion-affordance-grid',
+          sourceRef: source.sourceRef,
+          checksums: { ...source.checksums },
+        },
+      };
+    }
+    open.delete(current);
+    visitedCount++;
+    const row = Math.floor(current / cols);
+    const column = current - row * cols;
+    for (const [dc, dr] of neighbors) {
+      const nextColumn = column + dc;
+      const nextRow = row + dr;
+      if (nextColumn < 0 || nextColumn >= cols || nextRow < 0 || nextRow >= rows) continue;
+      const next = hillGridIndex(grid, nextColumn, nextRow);
+      const diagonal = dc !== 0 && dr !== 0;
+      const stepDistance = diagonal ? Math.SQRT2 : 1;
+      const tentative = (gScore.get(current) ?? Infinity) + stepDistance * motionTerrainRouteCost(source, next, weights);
+      if (tentative < (gScore.get(next) ?? Infinity)) {
+        cameFrom.set(next, current);
+        gScore.set(next, tentative);
+        const heuristic = Math.hypot(goal.column - nextColumn, goal.row - nextRow);
+        fScore.set(next, tentative + heuristic);
+        open.add(next);
+      }
+    }
+  }
+  throw new Error('Motion route plan failed: no route through Hill terrain affordance grid');
+}
+
+export function sampleMotionRoutePlan(routePlan, progress = 0) {
+  const points = routePlan?.routePoints || [];
+  if (points.length === 0) throw new Error('Motion route plan sample failed: route has no points');
+  const u = clamp(Number(progress) || 0, 0, 1);
+  if (points.length === 1) {
+    return {
+      schema: 'kaminos.motion-route-plan-sample.v0',
+      routePlanId: routePlan.id || null,
+      progress: u,
+      routePointIndex: 0,
+      root: [...points[0].world],
+      facing: [0, 0, 1],
+      source: routePlan.source,
+    };
+  }
+  const lengths = [0];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].world[0] - points[i - 1].world[0], points[i].world[2] - points[i - 1].world[2]);
+    lengths.push(total);
+  }
+  const target = total * u;
+  let segment = 0;
+  while (segment < lengths.length - 2 && lengths[segment + 1] < target) segment++;
+  const a = points[segment].world;
+  const b = points[Math.min(points.length - 1, segment + 1)].world;
+  const span = Math.max(1e-6, lengths[segment + 1] - lengths[segment]);
+  const t = clamp((target - lengths[segment]) / span, 0, 1);
+  const root = mixVec3(a, b, t).map(value => stableRoundedNumber(value));
+  const facing = normalizeVec3([b[0] - a[0], 0, b[2] - a[2]], [0, 0, 1]).map(value => stableRoundedNumber(value));
+  return {
+    schema: 'kaminos.motion-route-plan-sample.v0',
+    routePlanId: routePlan.id || null,
+    progress: stableRoundedNumber(u),
+    routePointIndex: segment,
+    root,
+    facing,
+    source: routePlan.source,
+  };
+}
+
 function mixVec3(a, b, t) {
   return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+}
+
+const SOURCE_AXIS_NAMES = ['x', 'y', 'z'];
+
+function parseSourceAxis(value, fallback = '+y') {
+  const raw = String(value || fallback).trim().toLowerCase();
+  const match = raw.match(/^([+-]?)([xyz])$/);
+  if (!match) return parseSourceAxis(fallback, '+y');
+  const sign = match[1] === '-' ? -1 : 1;
+  const axis = SOURCE_AXIS_NAMES.indexOf(match[2]);
+  return {
+    raw: `${sign < 0 ? '-' : '+'}${match[2]}`,
+    axis,
+    axisName: match[2],
+    sign,
+  };
+}
+
+function sourceAxisVector(axis) {
+  const vector = [0, 0, 0];
+  vector[axis.axis] = axis.sign;
+  return vector;
+}
+
+export function normalizeMotionSourceOrientationRemap(input = {}) {
+  if (input?.schema === MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA) {
+    return {
+      ...input,
+      mode: input.mode === 'explicit' ? 'explicit' : 'inferred',
+    };
+  }
+  const requestedUp = String(input?.sourceUpAxis || input?.upAxis || 'auto');
+  const requestedForward = String(input?.sourceForwardAxis || input?.forwardAxis || 'auto');
+  let up = parseSourceAxis(requestedUp === 'auto' ? '+y' : requestedUp, '+y');
+  let forward = parseSourceAxis(requestedForward === 'auto' ? '+z' : requestedForward, '+z');
+  if (up.axis === forward.axis) {
+    if (requestedUp === 'auto' && requestedForward !== 'auto') {
+      up = parseSourceAxis(forward.axis === 2 ? '+y' : '+z', '+y');
+    } else {
+      forward = parseSourceAxis(up.axis === 2 ? '+y' : '+z', '+z');
+    }
+  }
+  const rightAxis = [0, 1, 2].find(axis => axis !== up.axis && axis !== forward.axis) ?? 0;
+  const right = { raw: `+${SOURCE_AXIS_NAMES[rightAxis]}`, axis: rightAxis, axisName: SOURCE_AXIS_NAMES[rightAxis], sign: 1 };
+  const mode = requestedUp === 'auto' && requestedForward === 'auto' ? 'inferred' : 'explicit';
+  return {
+    schema: MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA,
+    mode,
+    source: String(input?.source || (mode === 'explicit' ? 'operator' : 'auto-inferred')),
+    requestedUpAxis: requestedUp,
+    requestedForwardAxis: requestedForward,
+    upAxis: up.axis,
+    upAxisName: up.axisName,
+    upSign: up.sign,
+    upAxisToken: up.raw,
+    forwardAxis: forward.axis,
+    forwardAxisName: forward.axisName,
+    forwardSign: forward.sign,
+    forwardAxisToken: forward.raw,
+    rightAxis: right.axis,
+    rightAxisName: right.axisName,
+    rightSign: right.sign,
+    rightAxisToken: right.raw,
+    displayMapping: {
+      x: right.raw,
+      y: up.raw,
+      z: forward.raw,
+    },
+    upVector: sourceAxisVector(up),
+    forwardVector: sourceAxisVector(forward),
+    rightVector: sourceAxisVector(right),
+  };
+}
+
+export function applyMotionSourceOrientationRemap(point, remapInput = {}) {
+  const remap = normalizeMotionSourceOrientationRemap(remapInput);
+  const source = vec3(point);
+  return [
+    source[remap.rightAxis] * remap.rightSign,
+    source[remap.upAxis] * remap.upSign,
+    source[remap.forwardAxis] * remap.forwardSign,
+  ];
 }
 
 function smooth01(t) {
@@ -1629,8 +2239,10 @@ function normalizeGeneratedPoseTemporalInput(generatedInput = DEFAULT_KIMODO_BOW
   if (samples.length < 2) throw new Error(`Generated pose temporal input ${generatedInput.id || 'unknown'} needs at least two temporal samples`);
   return {
     ...generatedInput,
+    sourceOrientationRemap: normalizeMotionSourceOrientationRemap(generatedInput.sourceOrientationRemap || {}),
     temporalSamples: samples.map((sample, index) => ({
       frame: Math.round(Number(sample.frame) || index),
+      sourceFrame: Number.isFinite(Number(sample.sourceFrame)) ? Number(sample.sourceFrame) : Math.round(Number(sample.frame) || index),
       time: Number.isFinite(Number(sample.time)) ? Number(sample.time) : index / Math.max(1, Number(generatedInput.fps) || 30),
       phaseLabel: String(sample.phaseLabel || 'carry'),
       root: vec3(sample.root),
@@ -1665,6 +2277,658 @@ function temporalFixtureMetrics(generatedInput) {
   };
 }
 
+function clipletSourceFrame(sample) {
+  return Number.isFinite(Number(sample?.sourceFrame)) ? Number(sample.sourceFrame) : Number(sample?.frame) || 0;
+}
+
+function generatedPoseTemporalMotionEdges(samples) {
+  const edges = samples.map((sample, index) => ({
+    index,
+    speed: 0,
+    acceleration: 0,
+    directionChange: 0,
+    direction: [0, 0, 1],
+    stepDistance: 0,
+  }));
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const delta = subVec3(vec3(current.root), vec3(previous.root));
+    const distance = lengthVec3(delta);
+    const dt = Math.max(1e-6, Number(current.time) - Number(previous.time));
+    const direction = normalizeVec3(delta, edges[index - 1]?.direction || [0, 0, 1]);
+    const dot = clamp(dotVec3(direction, edges[index - 1]?.direction || direction), -1, 1);
+    edges[index] = {
+      index,
+      speed: distance / dt,
+      acceleration: Math.abs((distance / dt) - edges[index - 1].speed) / dt,
+      directionChange: index > 1 ? clamp((1 - dot) / 2, 0, 1) : 0,
+      direction,
+      stepDistance: distance,
+    };
+  }
+  return edges;
+}
+
+function generatedPoseTemporalClipletLabel({
+  phaseLabels,
+  metrics,
+  segmentIndex,
+  segmentCount,
+}) {
+  const phases = new Set(phaseLabels.map(label => String(label || '').toLowerCase()));
+  const has = value => phases.has(value);
+  if (has('brake') || metrics.compressionPeak > 0.68 || (metrics.accelerationPeak > 1.8 && metrics.speedEnd < metrics.speedStart * 0.55)) {
+    return 'brake / compress';
+  }
+  if (has('escape') || (metrics.directionChangePeak > 0.45 && metrics.rootTravel > 0.12)) {
+    return 'escape / sprint';
+  }
+  if (has('recover') || has('return') || has('settle') || segmentIndex === segmentCount - 1) {
+    return metrics.velocityPeak < 0.18 ? 'settle / recover' : 'recover / return';
+  }
+  if (has('notice') || has('anticipate') || metrics.velocityPeak < 0.12) return 'hesitate / notice';
+  if (has('compress') || has('release')) return 'flourish / compress';
+  if (has('commit') || metrics.rootTravel > 0.18) return 'approach / commit';
+  return segmentIndex === 0 ? 'enter / approach' : 'source motion';
+}
+
+function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endIndex, segmentIndex, segmentCount, {
+  schema = 'kaminos.generated-motion-cliplet-segment.v0',
+  layer = 'raw',
+  idPrefix = 'cliplet',
+} = {}) {
+  const samples = input.temporalSamples.slice(startIndex, endIndex + 1);
+  const edgeSlice = edges.slice(startIndex, endIndex + 1);
+  const first = samples[0];
+  const last = samples.at(-1);
+  const phaseLabels = [...new Set(samples.map(sample => sample.phaseLabel))];
+  const rootTravel = edgeSlice.reduce((sum, edge) => sum + Number(edge.stepDistance || 0), 0);
+  const velocityPeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.speed) || 0));
+  const accelerationPeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.acceleration) || 0));
+  const directionChangePeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.directionChange) || 0));
+  const compressionPeak = Math.max(0, ...samples.map(sample => Number(sample.bowCompression) || 0));
+  const effortPeak = Math.max(0, ...samples.map(sample => (
+    0.18 + (Number(sample.bowCompression) || 0) * 0.78 + (Number(sample.handSpan) || 0) * 0.08
+  )));
+  const metrics = {
+    rootTravel: Number(rootTravel.toFixed(5)),
+    velocityPeak: Number(velocityPeak.toFixed(5)),
+    accelerationPeak: Number(accelerationPeak.toFixed(5)),
+    directionChangePeak: Number(directionChangePeak.toFixed(5)),
+    effortPeak: Number(effortPeak.toFixed(5)),
+    compressionPeak: Number(compressionPeak.toFixed(5)),
+    speedStart: Number((edgeSlice[0]?.speed || 0).toFixed(5)),
+    speedEnd: Number((edgeSlice.at(-1)?.speed || 0).toFixed(5)),
+  };
+  const idRoot = String(input.id || 'generated_pose_temporal').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  return {
+    schema,
+    layer,
+    id: `${idRoot}_${idPrefix}_${String(segmentIndex).padStart(3, '0')}`,
+    index: segmentIndex,
+    labelGuess: generatedPoseTemporalClipletLabel({ phaseLabels, metrics, segmentIndex, segmentCount }),
+    sourceClipId: input.id,
+    startIndex,
+    endIndex,
+    startFrame: Number(first.frame),
+    endFrame: Number(last.frame),
+    startSourceFrame: Number(clipletSourceFrame(first).toFixed(5)),
+    endSourceFrame: Number(clipletSourceFrame(last).toFixed(5)),
+    startTime: Number(first.time.toFixed(5)),
+    endTime: Number(last.time.toFixed(5)),
+    duration: Number(Math.max(0, last.time - first.time).toFixed(5)),
+    sampleCount: samples.length,
+    phaseLabels,
+    metrics,
+  };
+}
+
+function generatedPoseClipletLabelCategory(segment) {
+  const label = String(segment?.labelGuess || '').toLowerCase();
+  const phases = new Set((segment?.phaseLabels || []).map(value => String(value || '').toLowerCase()));
+  const hasPhase = value => phases.has(value);
+  if (hasPhase('escape')) return 'escape';
+  if (hasPhase('settle') || hasPhase('recover') || hasPhase('return')) return 'settle';
+  if (hasPhase('notice') || hasPhase('anticipate')) return 'hesitate';
+  if (hasPhase('brake')) return 'brake';
+  if (hasPhase('commit') || hasPhase('enter')) return 'approach';
+  if (label.includes('escape') || label.includes('sprint')) return 'escape';
+  if (label.includes('settle') || label.includes('recover') || label.includes('return')) return 'settle';
+  if (label.includes('hesitate') || label.includes('notice')) return 'hesitate';
+  if (label.includes('brake') || label.includes('compress') || label.includes('flourish')) return 'brake';
+  if (label.includes('approach') || label.includes('commit') || label.includes('enter')) return 'approach';
+  return 'source';
+}
+
+function generatedPoseClipletCategories(rawSegments) {
+  return new Set(rawSegments.map(generatedPoseClipletLabelCategory));
+}
+
+function generatedPoseClipletGroupCanAbsorb(group, next) {
+  if (!group.length || !next) return false;
+  const categories = generatedPoseClipletCategories(group);
+  const nextCategory = generatedPoseClipletLabelCategory(next);
+  const last = group.at(-1);
+  const nextDuration = Number(next.duration) || 0;
+  const lastDuration = Number(last?.duration) || 0;
+  const groupDuration = Math.max(0, Number(group.at(-1)?.endTime) - Number(group[0]?.startTime));
+  const approachBrakeCluster = [...categories, nextCategory].every(category => category === 'approach' || category === 'brake')
+    && (nextDuration <= 0.34 || lastDuration <= 0.34 || groupDuration <= 0.75);
+  if (approachBrakeCluster) return true;
+  const sameCategory = categories.size === 1 && categories.has(nextCategory);
+  if (sameCategory && (nextDuration <= 0.22 || lastDuration <= 0.22)) return true;
+  return false;
+}
+
+function generatedPosePhraseClipletLabel(rawSegments) {
+  const categories = generatedPoseClipletCategories(rawSegments);
+  if ((categories.has('hesitate') || categories.has('brake')) && categories.has('escape')) return 'startle-recoil / escape';
+  if (categories.has('approach') && categories.has('brake')) return 'approach-impact / compress';
+  if (categories.has('settle')) return 'recover-settle / return';
+  if (categories.has('approach') && categories.has('brake')) return 'approach-brake / commit-compress';
+  if (categories.has('escape')) return 'escape / sprint';
+  if (categories.has('settle')) return 'settle / recover';
+  if (categories.has('hesitate')) return 'hesitate / notice';
+  if (categories.has('brake')) return 'brake / compress';
+  if (categories.has('approach')) return rawSegments[0]?.index === 0 ? 'enter / approach' : 'approach / commit';
+  return rawSegments[0]?.labelGuess || 'source motion';
+}
+
+function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, phraseCount, {
+  labelGuess = null,
+  reasons = null,
+} = {}) {
+  const first = rawSegments[0];
+  const last = rawSegments.at(-1);
+  const phaseLabels = [...new Set(rawSegments.flatMap(segment => segment.phaseLabels || []))];
+  const maxMetric = key => Math.max(0, ...rawSegments.map(segment => Number(segment.metrics?.[key]) || 0));
+  const metrics = {
+    rootTravel: Number(rawSegments.reduce((sum, segment) => sum + Number(segment.metrics?.rootTravel || 0), 0).toFixed(5)),
+    velocityPeak: Number(maxMetric('velocityPeak').toFixed(5)),
+    accelerationPeak: Number(maxMetric('accelerationPeak').toFixed(5)),
+    directionChangePeak: Number(maxMetric('directionChangePeak').toFixed(5)),
+    effortPeak: Number(maxMetric('effortPeak').toFixed(5)),
+    compressionPeak: Number(maxMetric('compressionPeak').toFixed(5)),
+    speedStart: Number((first?.metrics?.speedStart || 0).toFixed(5)),
+    speedEnd: Number((last?.metrics?.speedEnd || 0).toFixed(5)),
+  };
+  const idRoot = String(input.id || 'generated_pose_temporal').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const rawSegmentIds = rawSegments.map(segment => segment.id);
+  return {
+    schema: 'kaminos.generated-motion-phrase-cliplet-segment.v0',
+    layer: 'phrase',
+    id: `${idRoot}_phrase_${String(phraseIndex).padStart(3, '0')}`,
+    index: phraseIndex,
+    labelGuess: labelGuess || generatedPosePhraseClipletLabel(rawSegments),
+    sourceClipId: input.id,
+    startIndex: first.startIndex,
+    endIndex: last.endIndex,
+    startFrame: first.startFrame,
+    endFrame: last.endFrame,
+    startSourceFrame: first.startSourceFrame,
+    endSourceFrame: last.endSourceFrame,
+    startTime: first.startTime,
+    endTime: last.endTime,
+    duration: Number(Math.max(0, Number(last.endTime) - Number(first.startTime)).toFixed(5)),
+    sampleCount: rawSegments.reduce((sum, segment) => sum + Number(segment.sampleCount || 0), 0),
+    phaseLabels,
+    metrics,
+    rawSegmentIds,
+    rawSegmentRange: {
+      startIndex: Number(first.index),
+      endIndex: Number(last.index),
+    },
+    coalescing: {
+      schema: 'kaminos.generated-motion-phrase-cliplet-coalescing.v0',
+      method: 'duration-compatible-raw-preserving-v0',
+      reasons: reasons || (rawSegments.length > 1 ? ['short-compatible-phrase'] : ['single-raw-segment']),
+      rawSegmentCount: rawSegments.length,
+      phraseIndex,
+      phraseCount,
+    },
+  };
+}
+
+function findGeneratedPoseStartleRecoilEnd(rawSegments, start) {
+  const firstCategory = generatedPoseClipletLabelCategory(rawSegments[start]);
+  if (firstCategory !== 'hesitate' && firstCategory !== 'brake') return null;
+  let sawAnticipation = firstCategory === 'hesitate';
+  let sawBrake = firstCategory === 'brake';
+  let escapeEnd = null;
+  let shockEnd = start;
+  let shockCount = firstCategory === 'hesitate' || firstCategory === 'brake' ? 1 : 0;
+  let sawApproachBridge = false;
+  for (let index = start + 1; index < Math.min(rawSegments.length, start + 6); index++) {
+    const category = generatedPoseClipletLabelCategory(rawSegments[index]);
+    if (category === 'settle') break;
+    if (category === 'approach' && sawAnticipation && !escapeEnd) {
+      sawApproachBridge = true;
+      continue;
+    }
+    if (category === 'hesitate') sawAnticipation = true;
+    if (category === 'brake') sawBrake = true;
+    if (category === 'hesitate' || category === 'brake') {
+      shockEnd = index;
+      shockCount++;
+    }
+    if (category === 'escape') escapeEnd = index;
+    if (escapeEnd !== null && category !== 'escape') break;
+  }
+  if (escapeEnd !== null && (sawAnticipation || sawBrake)) {
+    const totalDuration = Number(rawSegments[escapeEnd].endTime) - Number(rawSegments[start].startTime);
+    return totalDuration <= 1.25 ? escapeEnd : null;
+  }
+  if (sawAnticipation && sawBrake && (shockCount >= 3 || sawApproachBridge)) {
+    const totalDuration = Number(rawSegments[shockEnd].endTime) - Number(rawSegments[start].startTime);
+    return totalDuration <= 5.5 ? shockEnd : null;
+  }
+  return null;
+}
+
+function findGeneratedPoseApproachImpactEnd(rawSegments, start) {
+  if (generatedPoseClipletLabelCategory(rawSegments[start]) !== 'approach') return null;
+  let sawBrake = false;
+  let end = start;
+  for (let index = start + 1; index < rawSegments.length; index++) {
+    const category = generatedPoseClipletLabelCategory(rawSegments[index]);
+    if (category !== 'approach' && category !== 'brake') break;
+    if (category === 'brake') sawBrake = true;
+    end = index;
+  }
+  if (!sawBrake || end === start) return null;
+  const totalDuration = Number(rawSegments[end].endTime) - Number(rawSegments[start].startTime);
+  return totalDuration <= 1.2 ? end : null;
+}
+
+function findGeneratedPoseRecoverSettleEnd(rawSegments, start) {
+  if (generatedPoseClipletLabelCategory(rawSegments[start]) !== 'settle') return null;
+  let end = start;
+  while (end + 1 < rawSegments.length && generatedPoseClipletLabelCategory(rawSegments[end + 1]) === 'settle') end++;
+  return end;
+}
+
+function buildGeneratedPosePhraseCliplets(input, rawSegments) {
+  const groups = [];
+  for (let index = 0; index < rawSegments.length;) {
+    const startleEnd = findGeneratedPoseStartleRecoilEnd(rawSegments, index);
+    if (startleEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, startleEnd + 1),
+        labelGuess: 'startle-recoil / escape',
+        reasons: ['named-startle-recoil'],
+      });
+      index = startleEnd + 1;
+      continue;
+    }
+    const impactEnd = findGeneratedPoseApproachImpactEnd(rawSegments, index);
+    if (impactEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, impactEnd + 1),
+        labelGuess: 'approach-impact / compress',
+        reasons: ['named-approach-impact'],
+      });
+      index = impactEnd + 1;
+      continue;
+    }
+    const recoverEnd = findGeneratedPoseRecoverSettleEnd(rawSegments, index);
+    if (recoverEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, recoverEnd + 1),
+        labelGuess: 'recover-settle / return',
+        reasons: ['named-recover-settle'],
+      });
+      index = recoverEnd + 1;
+      continue;
+    }
+    const segment = rawSegments[index];
+    const current = groups.at(-1);
+    if (current && generatedPoseClipletGroupCanAbsorb(current.segments, segment)) {
+      current.segments.push(segment);
+      current.labelGuess = current.labelGuess || generatedPosePhraseClipletLabel(current.segments);
+      current.reasons = current.reasons || ['short-compatible-phrase'];
+    } else {
+      groups.push({
+        segments: [segment],
+        labelGuess: null,
+        reasons: null,
+      });
+    }
+    index++;
+  }
+  return groups.map((group, index) => summarizeGeneratedPosePhraseCliplet(input, group.segments, index, groups.length, {
+    labelGuess: group.labelGuess,
+    reasons: group.reasons,
+  }));
+}
+
+export function generatedPoseClipletForSourceFrame(cliplets, sourceFrame = 0) {
+  const frame = Number(sourceFrame);
+  if (!cliplets?.segments?.length || !Number.isFinite(frame)) return null;
+  return cliplets.segments.find(segment => (
+    frame >= Number(segment.startSourceFrame) && frame <= Number(segment.endSourceFrame)
+  )) || cliplets.segments.at(-1) || null;
+}
+
+export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const samples = input.temporalSamples;
+  const edges = generatedPoseTemporalMotionEdges(samples);
+  const speeds = edges.map(edge => Number(edge.speed) || 0);
+  const accelerations = edges.map(edge => Number(edge.acceleration) || 0);
+  const maxAcceleration = Math.max(0, ...accelerations);
+  const maxSpeed = Math.max(0, ...speeds);
+  const boundaries = new Set([0]);
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const phaseChanged = previous.phaseLabel !== current.phaseLabel;
+    const directionBreak = edges[index].directionChange > 0.42 && edges[index].stepDistance > 0.002;
+    const accelerationBreak = maxAcceleration > 1e-6
+      && edges[index].acceleration > maxAcceleration * 0.72
+      && edges[index].speed > maxSpeed * 0.18;
+    if (phaseChanged || directionBreak || accelerationBreak) boundaries.add(index);
+  }
+  const starts = [...boundaries].sort((a, b) => a - b);
+  const rawRanges = starts.map((start, index) => ({
+    start,
+    end: (starts[index + 1] ?? samples.length) - 1,
+  })).filter(segment => segment.end >= segment.start);
+  const rawSegments = rawRanges.map((segment, index) => summarizeGeneratedPoseTemporalSegment(
+    input,
+    edges,
+    segment.start,
+    segment.end,
+    index,
+    rawRanges.length,
+  ));
+  const segments = buildGeneratedPosePhraseCliplets(input, rawSegments);
+  const metrics = {
+    rootTravel: Number(edges.reduce((sum, edge) => sum + Number(edge.stepDistance || 0), 0).toFixed(5)),
+    velocityPeak: Number(maxSpeed.toFixed(5)),
+    accelerationPeak: Number(maxAcceleration.toFixed(5)),
+    directionChangePeak: Number(Math.max(0, ...edges.map(edge => Number(edge.directionChange) || 0)).toFixed(5)),
+    effortPeak: Number(Math.max(0, ...samples.map(sample => (
+      0.18 + (Number(sample.bowCompression) || 0) * 0.78 + (Number(sample.handSpan) || 0) * 0.08
+    ))).toFixed(5)),
+    compressionPeak: Number(Math.max(0, ...samples.map(sample => Number(sample.bowCompression) || 0)).toFixed(5)),
+  };
+  return {
+    schema: GENERATED_MOTION_CLIPLETS_SCHEMA,
+    route: MOTION_ROUTE_IDENTITY,
+    sourceClipId: input.id,
+    sourceKind: input.sourceKind || 'generated-pose-temporal',
+    sourceStatus: input.sourceStatus || 'fixture',
+    sourceModel: input.sourceModel || 'unknown',
+    sourceRoute: input.sourceRoute || 'unknown',
+    sourceFrameCount: Number(input.rawFrameCount || samples.length),
+    sampleCount: samples.length,
+    fps: Math.max(1, Math.round(Number(input.fps) || 30)),
+    duration: Number((Number(input.duration) || samples.at(-1).time || 0).toFixed(5)),
+    sourceFrameStride: Number(input.sourceFrameStride || 1),
+    segmentation: {
+      schema: 'kaminos.generated-motion-cliplet-segmentation.v0',
+      method: 'phase-root-velocity-acceleration-direction-v0',
+      outputLayer: 'phrase',
+      rawLayer: 'rawSegments',
+      phraseLayer: 'segments',
+      coalescingMethod: 'duration-compatible-raw-preserving-v0',
+      boundarySignals: ['phaseLabel', 'rootVelocity', 'rootAcceleration', 'rootDirectionChange', 'bowCompression'],
+      labelAuthority: 'heuristic-v0-source-witness-not-gameplay-state',
+    },
+    metrics,
+    rawSegments,
+    segments,
+  };
+}
+
+export function buildGeneratedPoseClipletPlayback({
+  cliplets,
+  segmentIds = [],
+  mode = 'loop',
+  id = null,
+} = {}) {
+  if (cliplets?.schema !== GENERATED_MOTION_CLIPLETS_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLETS_SCHEMA}, got ${cliplets?.schema || 'missing schema'}`);
+  }
+  const requestedIds = Array.isArray(segmentIds) ? segmentIds.map(value => String(value)) : [];
+  const selected = requestedIds.length
+    ? requestedIds.map(segmentId => {
+      const segment = cliplets.segments.find(candidate => candidate.id === segmentId);
+      if (!segment) throw new Error(`Unknown generated motion cliplet segment id: ${segmentId}`);
+      return segment;
+    })
+    : [...cliplets.segments];
+  if (!selected.length) throw new Error('Generated motion cliplet playback needs at least one segment');
+  const fps = Math.max(1, Number(cliplets.fps) || 30);
+  let cursor = 0;
+  const segments = selected.map((segment, index) => {
+    const rawDuration = Number(segment.duration) || 0;
+    const duration = Math.max(rawDuration, 1 / fps);
+    const playbackSegment = {
+      schema: 'kaminos.generated-motion-cliplet-playback-segment.v0',
+      index,
+      sourceSegmentId: segment.id,
+      labelGuess: segment.labelGuess,
+      playbackStartTime: Number(cursor.toFixed(5)),
+      playbackEndTime: Number((cursor + duration).toFixed(5)),
+      duration: Number(duration.toFixed(5)),
+      sourceStartTime: Number(segment.startTime),
+      sourceEndTime: Number(segment.endTime),
+      startSourceFrame: Number(segment.startSourceFrame),
+      endSourceFrame: Number(segment.endSourceFrame),
+      layer: segment.layer || 'phrase',
+      rawSegmentIds: Array.isArray(segment.rawSegmentIds) ? [...segment.rawSegmentIds] : [segment.id],
+      rawSegmentRange: segment.rawSegmentRange || { startIndex: Number(segment.index), endIndex: Number(segment.index) },
+      sourceSegment: segment,
+    };
+    cursor += duration;
+    return playbackSegment;
+  });
+  return {
+    schema: 'kaminos.generated-motion-cliplet-playback.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    id: String(id || `${cliplets.sourceClipId || 'generated'}_cliplet_playback_v0`),
+    sourceClipId: cliplets.sourceClipId,
+    sourceKind: cliplets.sourceKind,
+    sourceStatus: cliplets.sourceStatus,
+    sourceModel: cliplets.sourceModel,
+    sourceRoute: cliplets.sourceRoute,
+    mode: String(mode || (segments.length > 1 ? 'splice' : 'loop')),
+    loop: true,
+    duration: Number(cursor.toFixed(5)),
+    segmentCount: segments.length,
+    segmentIds: segments.map(segment => segment.sourceSegmentId),
+    sourceRanges: segments.map(segment => ({
+      sourceSegmentId: segment.sourceSegmentId,
+      labelGuess: segment.labelGuess,
+      startSourceFrame: segment.startSourceFrame,
+      endSourceFrame: segment.endSourceFrame,
+      sourceStartTime: segment.sourceStartTime,
+      sourceEndTime: segment.sourceEndTime,
+      layer: segment.layer || 'phrase',
+      rawSegmentIds: Array.isArray(segment.rawSegmentIds) ? [...segment.rawSegmentIds] : [],
+      rawSegmentRange: segment.rawSegmentRange || null,
+    })),
+    segments,
+  };
+}
+
+function generatedPoseClipletPlaybackSegmentAt(playback, t = 0) {
+  if (!playback?.segments?.length) return null;
+  const duration = Math.max(1e-6, Number(playback.duration) || 0);
+  const wrappedTime = ((Number(t) || 0) % duration + duration) % duration;
+  return playback.segments.find(segment => (
+    wrappedTime >= Number(segment.playbackStartTime) && wrappedTime <= Number(segment.playbackEndTime)
+  )) || playback.segments.at(-1);
+}
+
+export function sampleGeneratedPoseClipletPlayback(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE, playback, t = 0) {
+  if (playback?.schema !== 'kaminos.generated-motion-cliplet-playback.v0') {
+    throw new Error(`Expected kaminos.generated-motion-cliplet-playback.v0, got ${playback?.schema || 'missing schema'}`);
+  }
+  const segment = generatedPoseClipletPlaybackSegmentAt(playback, t);
+  if (!segment) throw new Error('Generated motion cliplet playback has no active segment');
+  const duration = Math.max(1e-6, Number(playback.duration) || 0);
+  const wrappedTime = ((Number(t) || 0) % duration + duration) % duration;
+  const localTime = clamp(wrappedTime - Number(segment.playbackStartTime), 0, Number(segment.duration) || 0);
+  const u = Number(segment.duration) > 1e-6 ? clamp(localTime / Number(segment.duration), 0, 1) : 0;
+  const sourceTime = Number(lerp(Number(segment.sourceStartTime) || 0, Number(segment.sourceEndTime) || 0, u).toFixed(5));
+  const sourceFrame = Number(lerp(Number(segment.startSourceFrame) || 0, Number(segment.endSourceFrame) || 0, u).toFixed(5));
+  const motionSample = sampleGeneratedPoseTemporalMotion(generatedInput, sourceTime);
+  return {
+    schema: 'kaminos.generated-motion-cliplet-playback-sample-envelope.v0',
+    playback: {
+      schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
+      playbackId: playback.id,
+      sourceClipId: playback.sourceClipId,
+      mode: playback.mode,
+      t: Number((Number(t) || 0).toFixed(5)),
+      wrappedTime: Number(wrappedTime.toFixed(5)),
+      localTime: Number(localTime.toFixed(5)),
+      interpolation: Number(u.toFixed(5)),
+      segmentId: segment.sourceSegmentId,
+      segmentIndex: segment.index,
+      labelGuess: segment.labelGuess,
+      sourceTime,
+      sourceFrame,
+      sourceRange: {
+        startSourceFrame: segment.startSourceFrame,
+        endSourceFrame: segment.endSourceFrame,
+        sourceStartTime: segment.sourceStartTime,
+        sourceEndTime: segment.sourceEndTime,
+      },
+    },
+    motionSample,
+  };
+}
+
+function generatedPoseClipletSegmentById(cliplets, segmentId) {
+  const id = String(segmentId || '');
+  if (!cliplets?.segments?.length) return null;
+  return cliplets.segments.find(segment => segment.id === id) || null;
+}
+
+function generatedPoseClipletTriggerSegment(cliplets, selected) {
+  if (!selected) return null;
+  const rawSegments = Array.isArray(cliplets?.rawSegments) ? cliplets.rawSegments : [];
+  const rawIds = new Set(Array.isArray(selected.rawSegmentIds) ? selected.rawSegmentIds : []);
+  const children = rawIds.size
+    ? rawSegments.filter(segment => rawIds.has(segment.id))
+    : [];
+  if (!children.length) return selected;
+  const selectedCategory = generatedPoseClipletLabelCategory(selected);
+  const sameCategory = children.find(segment => generatedPoseClipletLabelCategory(segment) === selectedCategory);
+  if (sameCategory && selectedCategory !== 'approach') return sameCategory;
+  const salient = children.find(segment => {
+    const category = generatedPoseClipletLabelCategory(segment);
+    return category === 'brake' || category === 'escape' || category === 'hesitate';
+  });
+  return salient || children[0] || selected;
+}
+
+export function buildGeneratedPoseClipletPathInterrupt({
+  generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  cliplets,
+  segmentId,
+  radius = 0.18,
+  id = null,
+} = {}) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  if (cliplets?.schema !== GENERATED_MOTION_CLIPLETS_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLETS_SCHEMA}, got ${cliplets?.schema || 'missing schema'}`);
+  }
+  const selected = generatedPoseClipletSegmentById(cliplets, segmentId);
+  if (!selected) throw new Error(`Unknown generated motion cliplet interrupt segment id: ${segmentId || 'missing'}`);
+  const triggerSegment = generatedPoseClipletTriggerSegment(cliplets, selected);
+  const triggerSample = input.temporalSamples[Math.max(0, Math.min(input.temporalSamples.length - 1, Number(triggerSegment.startIndex) || 0))]
+    || sampleGeneratedPoseTemporalMotion(input, triggerSegment.startTime).temporalSample;
+  const triggerRoot = vec3(triggerSample?.root);
+  const playback = buildGeneratedPoseClipletPlayback({
+    cliplets,
+    segmentIds: [selected.id],
+    mode: 'interrupt-loop',
+    id: `${cliplets.sourceClipId || input.id || 'generated'}_${selected.index}_path_interrupt_playback_v0`,
+  });
+  const triggerRadius = Math.max(0.001, Number(radius) || 0.18);
+  return {
+    schema: GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA,
+    route: MOTION_ROUTE_IDENTITY,
+    id: String(id || `${cliplets.sourceClipId || input.id || 'generated'}_${selected.index}_path_interrupt_v0`),
+    mode: 'path-trigger',
+    state: 'armed',
+    sourceClipId: input.id,
+    sourceKind: cliplets.sourceKind || input.sourceKind,
+    sourceStatus: cliplets.sourceStatus || input.sourceStatus,
+    sourceModel: cliplets.sourceModel || input.sourceModel,
+    sourceRoute: cliplets.sourceRoute || input.sourceRoute,
+    selectedSegmentId: selected.id,
+    selectedLabel: selected.labelGuess,
+    selectedSegment: selected,
+    trigger: {
+      schema: 'kaminos.generated-motion-cliplet-path-trigger.v0',
+      sourceSegmentId: selected.id,
+      labelGuess: selected.labelGuess,
+      sourceTime: Number(triggerSegment.startTime),
+      sourceFrame: Number(triggerSegment.startSourceFrame),
+      sourceIndex: Number(triggerSegment.startIndex) || 0,
+      triggerSegmentId: triggerSegment.id,
+      triggerSegmentLayer: triggerSegment.layer || selected.layer || 'phrase',
+      triggerLabel: triggerSegment.labelGuess,
+      radius: Number(triggerRadius.toFixed(5)),
+      root: triggerRoot.map(value => Number(value.toFixed(5))),
+    },
+    playback,
+  };
+}
+
+export function sampleGeneratedPoseClipletPathInterrupt(
+  generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  interrupt,
+  t = 0,
+) {
+  if (interrupt?.schema !== GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA}, got ${interrupt?.schema || 'missing schema'}`);
+  }
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const duration = Math.max(1e-6, Number(input.duration) || Number(input.temporalSamples.at(-1)?.time) || 0);
+  const sourceTime = ((Number(t) || 0) % duration + duration) % duration;
+  const fullSample = sampleGeneratedPoseTemporalMotion(input, sourceTime);
+  const triggerRoot = vec3(interrupt.trigger?.root);
+  const sampleRoot = vec3(fullSample.root);
+  const distanceToTrigger = lengthVec3(subVec3(sampleRoot, triggerRoot));
+  const radius = Math.max(0.001, Number(interrupt.trigger?.radius) || 0.18);
+  const timelineReached = sourceTime >= Number(interrupt.trigger?.sourceTime || 0);
+  const fired = distanceToTrigger <= radius || timelineReached;
+  const playbackSample = fired
+    ? sampleGeneratedPoseClipletPlayback(input, interrupt.playback, Math.max(0, sourceTime - Number(interrupt.trigger?.sourceTime || 0)))
+    : null;
+  const motionSample = playbackSample?.motionSample || fullSample;
+  const sourceFrame = Number(fullSample.temporalSample?.sourceFrame ?? 0);
+  return {
+    schema: 'kaminos.generated-motion-cliplet-interrupt-sample-envelope.v0',
+    interrupt: {
+      schema: 'kaminos.generated-motion-cliplet-interrupt-sample.v0',
+      interruptId: interrupt.id,
+      sourceClipId: interrupt.sourceClipId,
+      mode: interrupt.mode,
+      state: fired ? 'fired' : 'armed',
+      fired,
+      activeSource: fired ? 'cliplet-playback' : 'full-source',
+      selectedSegmentId: interrupt.selectedSegmentId,
+      selectedLabel: interrupt.selectedLabel,
+      sourceTime: Number(sourceTime.toFixed(5)),
+      sourceFrame: Number(sourceFrame.toFixed(5)),
+      distanceToTrigger: Number(distanceToTrigger.toFixed(5)),
+      trigger: interrupt.trigger,
+      playbackId: interrupt.playback?.id || null,
+      playbackSample: playbackSample?.playback || null,
+    },
+    motionSample,
+    playbackSample,
+  };
+}
+
 function motionServerPhaseLabel(frameIndex, frameCount, sample) {
   const p = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1);
   if (sample?.bowCompression > 0.62) return 'compress';
@@ -1691,6 +2955,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
   if (joints.length < 2) throw new Error('Motion server result needs at least two joint frames');
   const jointCount = Array.isArray(joints[0]) ? joints[0].length : 0;
   if (jointCount < 77) throw new Error(`Motion server result needs SOMA77 joints; got ${jointCount}`);
+  const sourceOrientationRemap = normalizeMotionSourceOrientationRemap(options.sourceOrientationRemap || result.sourceOrientationRemap || {});
   const fps = Math.max(1, Math.round(Number(result.fps || options.fps || 30)));
   const duration = Number.isFinite(Number(result.duration))
     ? Number(result.duration)
@@ -1700,18 +2965,20 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
   const sourceRoute = String(options.sourceRoute || result.sourceRoute || 'motion-server:unknown/generate');
   const sourceModel = String(options.sourceModel || result.model || 'kimodo');
   const rawSamples = joints.map((frame, frameIndex) => {
-    const root = motionServerRootForFrame(result, frameIndex, frame);
-    const head = motionServerJoint(frame, 'Head', root);
-    const chest = motionServerJoint(frame, 'Chest', root);
-    const leftHand = motionServerJoint(frame, 'LeftHand', root);
-    const rightHand = motionServerJoint(frame, 'RightHand', root);
-    const leftFoot = motionServerJoint(frame, 'LeftFoot', root);
-    const rightFoot = motionServerJoint(frame, 'RightFoot', root);
+    const rawRoot = motionServerRootForFrame(result, frameIndex, frame);
+    const root = applyMotionSourceOrientationRemap(rawRoot, sourceOrientationRemap);
+    const sourceJoint = jointName => applyMotionSourceOrientationRemap(motionServerJoint(frame, jointName, rawRoot), sourceOrientationRemap);
+    const head = sourceJoint('Head');
+    const chest = sourceJoint('Chest');
+    const leftHand = sourceJoint('LeftHand');
+    const rightHand = sourceJoint('RightHand');
+    const leftFoot = sourceJoint('LeftFoot');
+    const rightFoot = sourceJoint('RightFoot');
     const xs = [];
     const ys = [];
     const zs = [];
     for (const joint of frame) {
-      const point = vec3(joint, root);
+      const point = applyMotionSourceOrientationRemap(vec3(joint, rawRoot), sourceOrientationRemap);
       xs.push(point[0]);
       ys.push(point[1]);
       zs.push(point[2]);
@@ -1780,6 +3047,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
     rawFrameCount: Number(result.num_frames || joints.length),
     fps,
     duration,
+    sourceOrientationRemap,
     sourceFrameStride: 1,
     jointMapping: { ...SOMA77_TEMPORAL_JOINT },
     extractionAssumptions: [
@@ -1787,6 +3055,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
       'all source frames are preserved for live panel preview; no temporal cap is applied',
       'root_positions drive root when present, otherwise SOMA77 Hips is used',
       'head/chest/hand/foot channels drive orb attention, effort, envelope, and behavior evidence',
+      `source orientation remap ${sourceOrientationRemap.displayMapping.x},${sourceOrientationRemap.displayMapping.y},${sourceOrientationRemap.displayMapping.z} maps raw source axes into Kaminos display/adaptation axes`,
     ],
     generatedFrom: {
       schema: 'kaminos.motion-server-result.v0',
@@ -1795,6 +3064,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
       skeletonType: result.skeleton_type || null,
       genTime: Number.isFinite(Number(result.gen_time)) ? Number(result.gen_time) : null,
       sourceRoute,
+      sourceOrientationRemap,
     },
     temporalSamples,
   };
@@ -1894,7 +3164,7 @@ export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KI
     schema: 'kaminos.generated-pose-temporal-sample.v0',
     sampler: 'catmull-rom-continuous-velocity',
     time: Number(time.toFixed(5)),
-    sourceFrame: Number(lerp(Number(before.frame) || 0, Number(after.frame) || 0, rawU).toFixed(5)),
+    sourceFrame: Number(lerp(clipletSourceFrame(before), clipletSourceFrame(after), rawU).toFixed(5)),
     sourceTime: Number(lerp(Number(before.time) || 0, Number(after.time) || 0, rawU).toFixed(5)),
     phaseLabel: rawU < 0.5 ? before.phaseLabel : after.phaseLabel,
     interpolation: Number(u.toFixed(5)),
@@ -1962,6 +3232,57 @@ export function sampleGeneratedPoseTemporalMotion(trackOrInput = DEFAULT_KIMODO_
     headRootSeparation: Number(headRootSeparation.toFixed(5)),
     attentionMassContrast: Number(attentionMassContrast.toFixed(5)),
     temporalSample,
+  };
+}
+
+export function mapGeneratedPoseTemporalGroundedDisplaySample(sample = {}, options = {}) {
+  const horizontalDisplayScale = Number.isFinite(Number(options.horizontalDisplayScale)) ? Number(options.horizontalDisplayScale) : 1;
+  const verticalDisplayScale = Number.isFinite(Number(options.verticalDisplayScale)) ? Number(options.verticalDisplayScale) : 1;
+  const attentionVerticalScale = Number.isFinite(Number(options.attentionVerticalScale))
+    ? Number(options.attentionVerticalScale)
+    : Math.min(2.2, verticalDisplayScale);
+  const baseY = Number.isFinite(Number(options.baseY)) ? Number(options.baseY) : 0.24;
+  const floorY = Number.isFinite(Number(options.floorY)) ? Number(options.floorY) : 0;
+  const minCenterY = Number.isFinite(Number(options.minCenterY)) ? Number(options.minCenterY) : floorY + 0.18;
+  const root = vec3(sample.root);
+  const attention = vec3(sample.attention || sample.head || sample.root);
+  const rawRootY = root[1] * verticalDisplayScale;
+  const unclampedRootY = baseY + rawRootY;
+  const belowFloorDepth = Math.max(0, minCenterY - unclampedRootY);
+  const groundedRootY = belowFloorDepth > 0
+    ? minCenterY + Math.min(0.035, belowFloorDepth * 0.08)
+    : unclampedRootY;
+  const attentionRelativeY = (attention[1] - root[1]) * attentionVerticalScale;
+  const groundedAttentionY = Math.max(floorY + 0.08, groundedRootY + attentionRelativeY);
+  const groundedCompression = clamp(belowFloorDepth / 0.54, 0, 1);
+  const verticalLift = Math.max(0, unclampedRootY - minCenterY);
+  return {
+    schema: 'kaminos.generated-pose-temporal-grounded-display.v0',
+    mode: 'grounded-default',
+    sourceVerticalPolicy: 'ground-negative-preserve-positive',
+    horizontalDisplayScale: Number(horizontalDisplayScale.toFixed(5)),
+    verticalDisplayScale: Number(verticalDisplayScale.toFixed(5)),
+    attentionVerticalScale: Number(attentionVerticalScale.toFixed(5)),
+    baseY: Number(baseY.toFixed(5)),
+    floorY: Number(floorY.toFixed(5)),
+    minCenterY: Number(minCenterY.toFixed(5)),
+    rawRootY: Number(rawRootY.toFixed(5)),
+    unclampedRootY: Number(unclampedRootY.toFixed(5)),
+    belowFloorDepth: Number(belowFloorDepth.toFixed(5)),
+    verticalLift: Number(verticalLift.toFixed(5)),
+    groundedCompression: Number(groundedCompression.toFixed(5)),
+    root: [
+      Number((root[0] * horizontalDisplayScale).toFixed(5)),
+      Number(groundedRootY.toFixed(5)),
+      Number((root[2] * horizontalDisplayScale).toFixed(5)),
+    ],
+    attention: [
+      Number((attention[0] * horizontalDisplayScale).toFixed(5)),
+      Number(groundedAttentionY.toFixed(5)),
+      Number((attention[2] * horizontalDisplayScale).toFixed(5)),
+    ],
+    rawRoot: root.map(value => Number(value.toFixed(5))),
+    rawAttention: attention.map(value => Number(value.toFixed(5))),
   };
 }
 
@@ -2059,6 +3380,7 @@ export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMOD
     rawFrameCount: input.rawFrameCount || input.temporalSamples.length,
     jointMapping: input.jointMapping || null,
     extractionAssumptions: input.extractionAssumptions || [],
+    sourceOrientationRemap: input.sourceOrientationRemap,
     fps,
     duration,
     units: 'meters',
@@ -2081,6 +3403,7 @@ export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMOD
     registryClipId: input.id,
     registrySource: input.registrySource || null,
     sourceFrameStride: input.sourceFrameStride || 1,
+    sourceOrientationRemap: input.sourceOrientationRemap,
     temporalSamples: input.temporalSamples,
     temporalMetrics: temporalFixtureMetrics(input),
   };
@@ -2093,6 +3416,7 @@ export function buildGeneratedPoseTemporalHarness({
   filmstripFrames = 7,
 } = {}) {
   const track = adaptGeneratedPoseTemporalToTrack(generatedInput);
+  const cliplets = buildGeneratedPoseTemporalCliplets(generatedInput);
   const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
   const simFps = Math.max(1, Math.round(Number(fps) || 12));
   const simulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'mass-attention' });
@@ -2126,12 +3450,18 @@ export function buildGeneratedPoseTemporalHarness({
       ...simulation.metrics,
       ...track.temporalMetrics,
     },
+    cliplets,
     simulation,
-    filmstrip: frameIndexes.map(index => ({
-      frameIndex: index,
-      t: simulation.frames[index].t,
-      actors: [motionTrackActorSample(actor, simulation.frames[index].sample, [0, 0, 0])],
-    })),
+    filmstrip: frameIndexes.map(index => {
+      const frame = simulation.frames[index];
+      const sourceFrame = interpolateGeneratedPoseTemporalSample(track, frame.t)?.sourceFrame ?? null;
+      return {
+        frameIndex: index,
+        t: frame.t,
+        cliplet: generatedPoseClipletForSourceFrame(cliplets, sourceFrame),
+        actors: [motionTrackActorSample(actor, frame.sample, [0, 0, 0])],
+      };
+    }),
   };
 }
 
