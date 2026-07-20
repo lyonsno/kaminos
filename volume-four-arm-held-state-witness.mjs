@@ -82,6 +82,24 @@ const args = parseArgs(process.argv.slice(2));
 const routeReceiptPath = requiredPath('--route-receipt');
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-four-arm-held-state/report.json'));
 const screenshotPath = resolve(String(args.get('--screenshot') || '/tmp/kaminos-four-arm-held-state/state-120-positive-complement.png'));
+const requestedScaleA = Number(args.get('--scale-a') ?? 1);
+const requestedScaleB = args.has('--scale-b') ? Number(args.get('--scale-b')) : null;
+const scaleArms = requestedScaleB === null
+  ? [{ id: 'scale-a', requestedScale: requestedScaleA, screenshotPath, linearHdrPath: resolve(dirname(reportPath), 'linear-hdr-scale-a.f32') }]
+  : [
+      {
+        id: 'scale-a',
+        requestedScale: requestedScaleA,
+        screenshotPath: resolve(String(args.get('--screenshot-a') || resolve(dirname(reportPath), 'beauty-scale-a.png'))),
+        linearHdrPath: resolve(String(args.get('--linear-hdr-a') || resolve(dirname(reportPath), 'linear-hdr-scale-a.f32'))),
+      },
+      {
+        id: 'scale-b',
+        requestedScale: requestedScaleB,
+        screenshotPath: resolve(String(args.get('--screenshot-b') || resolve(dirname(reportPath), 'beauty-scale-b.png'))),
+        linearHdrPath: resolve(String(args.get('--linear-hdr-b') || resolve(dirname(reportPath), 'linear-hdr-scale-b.f32'))),
+      },
+    ];
 const timeoutMs = Number(args.get('--timeout-ms') || 900_000);
 const viewportWidth = Number(args.get('--viewport-width') || 1200);
 const viewportHeight = Number(args.get('--viewport-height') || 1000);
@@ -94,9 +112,15 @@ let socket = null;
 let failurePhase = 'route-and-resource-admission';
 let lastTrustworthyEvidence = { schema: SCHEMA, routeReceiptPath };
 mkdirSync(dirname(reportPath), { recursive: true });
-mkdirSync(dirname(screenshotPath), { recursive: true });
+for (const arm of scaleArms) {
+  mkdirSync(dirname(arm.screenshotPath), { recursive: true });
+  mkdirSync(dirname(arm.linearHdrPath), { recursive: true });
+}
 
 try {
+  failurePhase = 'input-admission';
+  assert.ok(Number.isFinite(requestedScaleA) && requestedScaleA > 0, '--scale-a must be finite and positive');
+  assert.ok(requestedScaleB === null || (Number.isFinite(requestedScaleB) && requestedScaleB > 0), '--scale-b must be finite and positive');
   assert.equal(routeReceipt.status, 'serving', 'source route receipt is not serving');
   const expectedUrl = new URL(routeReceipt.effectiveRoute);
   assert.equal(expectedUrl.origin, 'http://127.0.0.1:18789', 'effective server route was substituted');
@@ -279,33 +303,6 @@ try {
   assert.equal(application.debugState?.simStepCount, 120, 'application advanced the held state');
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, application };
 
-  failurePhase = 'linear-hdr-tau-transmittance-readback';
-  const capture = await evaluate(socket, `(async () => {
-    const runtime = document.querySelector('#basin')?.contentWindow || window;
-    const prototype = runtime.__kaminosVolumePrototype;
-    const application = window.__kaminosFourArmHeldStateApplication;
-    const api = await import('/volume-four-arm-held-state-runtime.mjs');
-    const receipt = await prototype.sampleFourArmHeldStateLedger({
-      sameStateCaptureId: 'four-arm-state120-positive-complement-live-0719',
-      captureNonce: 'state120-positive-complement-' + crypto.randomUUID(),
-    });
-    if (receipt?.status !== 'captured') {
-      const { payload: failedPayload, ...failedSummary } = receipt || {};
-      throw new Error('four-arm-capture-failed:' + JSON.stringify(failedSummary));
-    }
-    api.validateFourArmHeldStateCaptureReceipt(receipt, application);
-    const { payload, ...summary } = receipt;
-    return summary;
-  })()`);
-  assert.equal(capture.status, 'captured', `held-state capture failed: ${JSON.stringify(capture)}`);
-  assert.equal(capture.route.requestedRoute, ROUTE_IDENTITY, 'requested route drifted');
-  assert.equal(capture.route.effectiveRoute, ROUTE_IDENTITY, 'effective route was substituted');
-  assert.equal(capture.route.backend, 'WebGPU:apple', 'backend was substituted');
-  assert.equal(capture.fallbackUsed, false, 'capture fallback looked authoritative');
-  assert.equal(capture.capturedSimStepCount, 120, 'capture advanced the held state');
-  assert.ok(capture.litPixels > 0, 'capture was blank');
-  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, capture };
-
   failurePhase = 'operator-visible-canvas-capture';
   const canvas = await evaluate(socket, `(() => {
     const runtime = document.querySelector('#basin')?.contentWindow || window;
@@ -314,22 +311,59 @@ try {
     return { x: basin.x + rect.x, y: basin.y + rect.y, width: rect.width, height: rect.height };
   })()`);
   assert.ok(canvas.width > 1 && canvas.height > 1, 'operator canvas dimensions were invalid');
-  const screenshot = await socket.call('Page.captureScreenshot', {
-    format: 'png',
-    fromSurface: true,
-    captureBeyondViewport: false,
-    clip: { ...canvas, scale: 1 },
-  });
-  const screenshotBytes = Buffer.from(screenshot?.data || '', 'base64');
-  assert.ok(screenshotBytes.length > 1000, 'operator canvas screenshot was missing or partial');
-  writeFileSync(screenshotPath, screenshotBytes);
+  const sameStateCaptureId = `four-arm-state120-optical-path-scale-${Date.now()}`;
+  const armResults = [];
+  for (const arm of scaleArms) {
+    failurePhase = `optical-path-scale-arm:${arm.id}`;
+    const result = await captureScaleArm({ socket, arm, canvas, sameStateCaptureId });
+    const capture = result.capture;
+    assert.equal(capture.status, 'captured', `held-state capture failed: ${JSON.stringify(capture)}`);
+    assert.equal(capture.route.requestedRoute, ROUTE_IDENTITY, 'requested route drifted');
+    assert.equal(capture.route.effectiveRoute, ROUTE_IDENTITY, 'effective route was substituted');
+    assert.equal(capture.route.backend, 'WebGPU:apple', 'backend was substituted');
+    assert.equal(capture.fallbackUsed, false, 'capture fallback looked authoritative');
+    assert.equal(capture.capturedSimStepCount, 120, 'capture advanced the held state');
+    assert.equal(capture.grid.simulation, 160, 'simulation grid was substituted');
+    assert.equal(capture.population.splatCandidates, 481_447, 'splat population drifted');
+    assert.equal(capture.population.residualCandidates, 1_444_341, 'residual population drifted');
+    assert.equal(capture.depthBins.effective, 16, 'depth-bin count drifted');
+    assert.equal(capture.opticalPathScale.requestedOpticalPathScale, arm.requestedScale, 'requested optical path scale drifted');
+    assert.equal(capture.opticalPathScale.effectiveOpticalPathScale, Math.fround(arm.requestedScale), 'effective optical path scale drifted');
+    assert.ok(capture.litPixels > 0, 'capture was blank');
+    assert.equal(capture.finitePixelCount, capture.width * capture.height, 'capture was partial or nonfinite');
+    armResults.push(result);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, arm: arm.id, capture };
+  }
+  if (armResults.length === 2) {
+    const [armA, armB] = armResults;
+    assert.equal(armB.capture.sameStateCaptureId, armA.capture.sameStateCaptureId, 'A/B same-state identity drifted');
+    assert.equal(armB.capture.capturedSimStepCount, armA.capture.capturedSimStepCount, 'A/B simulation state drifted');
+    assert.equal(armB.capture.camera.signature, armA.capture.camera.signature, 'A/B camera drifted');
+    assert.equal(
+      armB.capture.depositionPayload.sha256,
+      armA.capture.depositionPayload.sha256,
+      'A/B raw deposited optical bins differ',
+    );
+    assert.notEqual(armB.capture.hashes.linearHdrSha256, armA.capture.hashes.linearHdrSha256, 'path-scale A/B produced identical linear HDR');
+    assert.ok(
+      armB.capture.linearHdrStatistics.meanLuma > armA.capture.linearHdrStatistics.meanLuma,
+      'calibrated-scale arm did not increase pre-presentation mean luma',
+    );
+    assert.notEqual(armB.screenshot.sha256, armA.screenshot.sha256, 'path-scale A/B produced identical Beauty pixels');
+  }
 
   failurePhase = 'browser-event-audit';
   const browserEventAudit = auditBrowserEvents(socket.browserEvents);
   const report = {
-    schema: SCHEMA,
+    schema: armResults.length === 2
+      ? 'kaminos.integration.optical-path-scale-ab-witness.v0'
+      : SCHEMA,
     status: 'passed',
     failurePhase: null,
+    evidenceAuthority: 'operator-exploration-only',
+    scaleAuthority: armResults.length === 2
+      ? 'grid96-calibrated-mechanism-probe-applied-to-grid160-non-production-v0'
+      : 'explicit-request-v0',
     stateId: STATE_ID,
     armId: ARM_ID,
     requestedRoute: routeReceipt.requestedRoute,
@@ -340,8 +374,19 @@ try {
     resourceRoots: RESOURCE_ROOTS,
     bootstrap,
     application,
-    capture,
-    screenshot: { path: screenshotPath, bytes: screenshotBytes.length, sha256: sha256(screenshotBytes) },
+    sameStateCaptureId,
+    invariantControls: {
+      coefficientRetune: false,
+      exposureRetune: false,
+      supportChange: false,
+      presentationCompensation: false,
+      depositionChange: false,
+    },
+    arms: armResults,
+    ...(armResults.length === 1 ? {
+      capture: armResults[0].capture,
+      screenshot: armResults[0].screenshot,
+    } : {}),
     browserEventAudit,
     elapsedMs: performance.now() - startedAt,
   };
@@ -349,8 +394,17 @@ try {
   console.log(JSON.stringify({
     status: report.status,
     reportPath,
-    screenshotPath,
-    capture: report.capture,
+    arms: report.arms.map(arm => ({
+      id: arm.id,
+      requestedScale: arm.requestedScale,
+      effectiveScale: arm.capture.opticalPathScale.effectiveOpticalPathScale,
+      meanLuma: arm.capture.linearHdrStatistics.meanLuma,
+      maxRgb: arm.capture.linearHdrStatistics.maxRgb,
+      depositionSha256: arm.capture.depositionPayload.sha256,
+      linearHdrSha256: arm.capture.hashes.linearHdrSha256,
+      screenshotPath: arm.screenshot.path,
+      linearHdrPath: arm.linearHdrArtifact.path,
+    })),
     elapsedMs: report.elapsedMs,
   }, null, 2));
 } catch (error) {
@@ -369,6 +423,130 @@ try {
 } finally {
   socket?.close();
   if (browser && browser.exitCode === null) browser.kill('SIGTERM');
+}
+
+async function captureScaleArm({ socket: socketValue, arm, canvas, sameStateCaptureId }) {
+  const payloadKey = `__kaminosOpticalPathScaleLinearHdr_${arm.id.replaceAll('-', '_')}`;
+  const captured = await evaluate(socketValue, `(async () => {
+    const runtime = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = runtime.__kaminosVolumePrototype;
+    const application = window.__kaminosFourArmHeldStateApplication;
+    const api = await import('/volume-four-arm-held-state-runtime.mjs');
+    const scaleReceipt = prototype.setOpticalPathScale(${JSON.stringify(arm.requestedScale)});
+    const receipt = await prototype.sampleFourArmHeldStateLedger({
+      sameStateCaptureId: ${JSON.stringify(sameStateCaptureId)},
+      captureNonce: ${JSON.stringify(arm.id)} + '-' + crypto.randomUUID(),
+    });
+    if (receipt?.status !== 'captured') {
+      const { payload: failedPayload, ...failedSummary } = receipt || {};
+      throw new Error('four-arm-capture-failed:' + JSON.stringify(failedSummary));
+    }
+    api.validateFourArmHeldStateCaptureReceipt(receipt, application);
+    const visibleFrame = await prototype.renderFrozenScaleToCanvas({
+      boundarySplatComposition: 'splat-only-v0',
+      renderScale: 1,
+      includeRgba: false,
+      sameStateCaptureId: ${JSON.stringify(sameStateCaptureId)},
+    });
+    if (!visibleFrame?.ok) {
+      throw new Error('operator-visible-frame-failed:' + JSON.stringify({
+        reason: visibleFrame?.reason || 'unknown',
+        validationError: visibleFrame?.validationError || null,
+        fallbackReason: visibleFrame?.boundarySplatFallbackReason || null,
+      }));
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const { payload, ...summary } = receipt;
+    window[${JSON.stringify(payloadKey)}] = new Uint8Array(
+      payload.linearHdr.buffer,
+      payload.linearHdr.byteOffset,
+      payload.linearHdr.byteLength,
+    );
+    return {
+      scaleReceipt,
+      capture: summary,
+      payloadByteLength: payload.linearHdr.byteLength,
+      visibleFrame: {
+        ok: visibleFrame.ok,
+        frameCount: visibleFrame.frameCount,
+        simStepCount: visibleFrame.simStepCount,
+        effectiveRoute: visibleFrame.effectiveRoute,
+        backend: visibleFrame.backend,
+        fallbackReason: visibleFrame.boundarySplatFallbackReason || null,
+        presentationFallbackReason: visibleFrame.boundarySplatPresentationReceipt?.fallbackReason || null,
+        presentationReceipt: visibleFrame.boundarySplatPresentationReceipt || null,
+      },
+    };
+  })()`);
+  assert.equal(captured.scaleReceipt.requestedOpticalPathScale, arm.requestedScale, 'scale setter changed the request');
+  assert.equal(captured.scaleReceipt.effectiveOpticalPathScale, Math.fround(arm.requestedScale), 'scale setter changed the effective value');
+  assert.equal(captured.visibleFrame.ok, true, 'operator-visible frame was not rendered');
+  assert.equal(captured.visibleFrame.fallbackReason, null, 'operator-visible frame used a renderer fallback');
+  assert.equal(captured.visibleFrame.presentationFallbackReason, null, 'operator-visible frame used a presentation fallback');
+  assert.equal(
+    captured.visibleFrame.presentationReceipt?.opticalPathScale?.effective,
+    Math.fround(arm.requestedScale),
+    'Beauty presentation receipt did not apply the requested optical path scale',
+  );
+
+  const linearHdrBytes = await readBrowserBytes(socketValue, payloadKey, captured.payloadByteLength);
+  await evaluate(socketValue, `(() => { delete window[${JSON.stringify(payloadKey)}]; return true; })()`);
+  assert.equal(linearHdrBytes.length, captured.payloadByteLength, 'linear HDR artifact was partial');
+  assert.equal(sha256(linearHdrBytes), captured.capture.hashes.linearHdrSha256, 'linear HDR artifact hash drifted during export');
+  writeFileSync(arm.linearHdrPath, linearHdrBytes);
+
+  const screenshot = await socketValue.call('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+    clip: { ...canvas, scale: 1 },
+  });
+  const screenshotBytes = Buffer.from(screenshot?.data || '', 'base64');
+  assert.ok(screenshotBytes.length > 1000, 'operator canvas screenshot was missing or partial');
+  writeFileSync(arm.screenshotPath, screenshotBytes);
+
+  return {
+    id: arm.id,
+    requestedScale: arm.requestedScale,
+    effectiveScale: Math.fround(arm.requestedScale),
+    scaleReceipt: captured.scaleReceipt,
+    capture: captured.capture,
+    visibleFrame: captured.visibleFrame,
+    linearHdrArtifact: {
+      path: arm.linearHdrPath,
+      byteLength: linearHdrBytes.length,
+      sha256: sha256(linearHdrBytes),
+      dtype: 'float32-little-endian',
+      shape: [captured.capture.height, captured.capture.width, 4],
+      authority: 'exact-gpu-rgba16float-decoded-to-float32-v0',
+    },
+    screenshot: {
+      path: arm.screenshotPath,
+      bytes: screenshotBytes.length,
+      sha256: sha256(screenshotBytes),
+      authority: 'matched-beauty-canvas-after-held-state-resolve-v0',
+    },
+  };
+}
+
+async function readBrowserBytes(socketValue, key, byteLength) {
+  const chunkBytes = 512 * 1024;
+  const chunks = [];
+  for (let offset = 0; offset < byteLength; offset += chunkBytes) {
+    const length = Math.min(chunkBytes, byteLength - offset);
+    const encoded = await evaluate(socketValue, `(() => {
+      const source = window[${JSON.stringify(key)}];
+      if (!(source instanceof Uint8Array)) throw new Error('linear-hdr-browser-payload-missing');
+      const slice = source.subarray(${offset}, ${offset + length});
+      let binary = '';
+      for (let cursor = 0; cursor < slice.length; cursor += 32768) {
+        binary += String.fromCharCode(...slice.subarray(cursor, Math.min(slice.length, cursor + 32768)));
+      }
+      return btoa(binary);
+    })()`);
+    chunks.push(Buffer.from(encoded, 'base64'));
+  }
+  return Buffer.concat(chunks);
 }
 
 async function evaluate(socketValue, expression) {

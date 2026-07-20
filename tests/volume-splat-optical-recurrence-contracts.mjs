@@ -9,7 +9,7 @@ const core = readFileSync(join(root, 'volume-core.js'), 'utf8');
 assert.match(core, /BOUNDARY_SPLAT_OPTICAL_MODE\s*=\s*['"]matched-optical-recurrence-v0['"]/, 'live splats lack the distinct matched optical recurrence arm');
 assert.match(core, /BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS\s*=\s*16/, 'matched optical recurrence must expose the exact depth-bin count');
 assert.match(core, /fn boundarySplatOpticalFs[\s\S]*return\s+vec4<f32>\(in\.colorOpacity\.rgb\s*\*\s*alpha,\s*alpha\)/, 'optical raster must accumulate premultiplied emission and optical depth separately');
-assert.match(core, /fn boundarySplatOpticalPresentationFs[\s\S]*for\s*\(var binIndex[\s\S]*1\.0\s*-\s*exp\(-opticalDepth\)[\s\S]*binColor\s*\*\s*binAlpha\s*\+\s*color\s*\*\s*\(1\.0\s*-\s*binAlpha\)/, 'optical resolve must apply exponential far-to-near self-transmittance');
+assert.match(core, /fn boundarySplatOpticalPresentationFs[\s\S]*for\s*\(var binIndex[\s\S]*sourceColor[\s\S]*1\.0\s*-\s*exp\(-opticalDepth\)[\s\S]*sourceColor\s*\*\s*binAlpha\s*\+\s*color\s*\*\s*\(1\.0\s*-\s*binAlpha\)/, 'optical resolve must apply exponential far-to-near source-function self-transmittance');
 assert.match(core, /depth-binned-emission-optical-depth-v0/, 'live receipt must identify depth-binned accumulation');
 assert.match(core, /depth-binned-exponential-self-transmittance-v0/, 'live receipt must identify the optical recurrence');
 assert.match(core, /camera-linear-volume-aabb-near-zero-far-one-v0/, 'live receipt must identify the effective camera-linear depth interval');

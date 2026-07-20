@@ -17930,6 +17930,10 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  const requestedOpticalPathScale = params.has('volume_optical_path_scale')
+    ? params.get('volume_optical_path_scale')
+    : 1;
+  window.__kaminosOpticalPathScaleReceipt = volumePrototype.setOpticalPathScale?.(requestedOpticalPathScale) || null;
   const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
   window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
   syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
