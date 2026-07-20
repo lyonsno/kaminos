@@ -181,7 +181,7 @@ function assertIdentity(debug) {
   assert.equal(effectiveIdentity.castId, EXPECTED.castId, 'effective cast ID does not match requested cast ID');
   assert.equal(effectiveIdentity.castHash, EXPECTED.castHash, 'effective cast hash does not match requested cast hash');
   assert.equal(effectiveIdentity.hillSource, EXPECTED.hillSource, 'effective Hill source does not match requested Hill source');
-  assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v0', 'unexpected deformation mode');
+  assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');
   assert.equal(effectiveIdentity.hillAuthority, 'live_simulation', 'Hill packet is not source-owned live-simulation evidence');
   assert.equal(effectiveIdentity.hillIdentityProjection, 'public-surface-identifiers-v0', 'Hill packet does not declare its public identity projection');
   assert.equal(debug.effective.dynamicContinuity, 'not-claimed', 'static Hill packet must explicitly decline dynamic continuity');

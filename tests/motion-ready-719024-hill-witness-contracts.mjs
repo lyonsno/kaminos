@@ -50,7 +50,7 @@ for (const required of [
   './artifacts/motion-ready-719024/receipt.json',
   './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
-  'axial-parallel-transport-wave-v0',
+  'axial-parallel-transport-wave-v1',
   'window.kaminosMotionReady719024DebugState',
 ]) {
   assert.ok(page.includes(required), `witness must bind ${required}`);

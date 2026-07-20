@@ -1,5 +1,5 @@
 export const MOTION_READY_719024_CAST_ID = 'motion-ready-719024';
-export const MOTION_READY_719024_DEFORMATION_MODE = 'axial-parallel-transport-wave-v0';
+export const MOTION_READY_719024_DEFORMATION_MODE = 'axial-parallel-transport-wave-v1';
 
 const EPSILON = 1e-8;
 
@@ -373,8 +373,8 @@ function axialFrameAtT(t, registration, state) {
     after[1] - before[1],
     after[2] - before[2],
   ], [0, 0, -1]);
-  const right = normalize3(cross3([0, 1, 0], tangentHeadward), [1, 0, 0]);
-  const up = normalize3(cross3(tangentHeadward, right), [0, 1, 0]);
+  const right = normalize3(cross3(tangentHeadward, [0, 1, 0]), [1, 0, 0]);
+  const up = normalize3(cross3(right, tangentHeadward), [0, 1, 0]);
   return { right, up, tangentHeadward };
 }
 
@@ -387,12 +387,14 @@ export function deformAxialPoint(pointInput, registrationInput, stateInput) {
     ? stateInput
     : createAxialSquirmState(stateInput);
   const t = clamp((registration.tailZ - point[2]) / registration.axialSpan, 0, 1);
+  const restCenterZ = mix(registration.tailZ, registration.headZ, t);
+  const signedAxialResidual = restCenterZ - point[2];
   const center = axialCenterAtT(t, registration, state);
   const frame = axialFrameAtT(t, registration, state);
   return [
-    center[0] + frame.right[0] * point[0] + frame.up[0] * point[1],
-    center[1] + frame.right[1] * point[0] + frame.up[1] * point[1],
-    center[2] + frame.right[2] * point[0] + frame.up[2] * point[1],
+    center[0] + frame.right[0] * point[0] + frame.up[0] * point[1] + frame.tangentHeadward[0] * signedAxialResidual,
+    center[1] + frame.right[1] * point[0] + frame.up[1] * point[1] + frame.tangentHeadward[1] * signedAxialResidual,
+    center[2] + frame.right[2] * point[0] + frame.up[2] * point[1] + frame.tangentHeadward[2] * signedAxialResidual,
   ];
 }
 
@@ -410,15 +412,18 @@ export function createAxialGeometryBinding(originalPositions, originalNormals, r
   const vertexCount = originalPositions.length / 3;
   const segmentIndices = new Uint16Array(vertexCount);
   const segmentMix = new Float32Array(vertexCount);
+  const axialResiduals = new Float32Array(vertexCount);
   for (let vertex = 0; vertex < vertexCount; vertex++) {
     const t = clamp((registration.tailZ - originalPositions[vertex * 3 + 2]) / registration.axialSpan, 0, 1);
+    const restCenterZ = mix(registration.tailZ, registration.headZ, t);
     const scaled = t * segments;
     const segment = Math.min(segments - 1, Math.floor(scaled));
     segmentIndices[vertex] = segment;
     segmentMix[vertex] = scaled - segment;
+    axialResiduals[vertex] = restCenterZ - originalPositions[vertex * 3 + 2];
   }
   return {
-    schema: 'kaminos.motion-ready-719024.axial-geometry-binding.v0',
+    schema: 'kaminos.motion-ready-719024.axial-geometry-binding.v1',
     castId: MOTION_READY_719024_CAST_ID,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     registration,
@@ -428,6 +433,7 @@ export function createAxialGeometryBinding(originalPositions, originalNormals, r
     originalNormals,
     segmentIndices,
     segmentMix,
+    axialResiduals,
     frameLut: new Float32Array((segments + 1) * 12),
   };
 }
@@ -455,7 +461,7 @@ function writeAxialFrameLut(binding, state) {
 }
 
 export function deformAxialGeometryBinding(binding, stateInput, outputPositions, outputNormals) {
-  if (binding?.schema !== 'kaminos.motion-ready-719024.axial-geometry-binding.v0') {
+  if (binding?.schema !== 'kaminos.motion-ready-719024.axial-geometry-binding.v1') {
     throw new Error('axial geometry binding is required');
   }
   if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== binding.originalPositions.length) {
@@ -474,6 +480,7 @@ export function deformAxialGeometryBinding(binding, stateInput, outputPositions,
     originalPositions,
     segmentIndices,
     segmentMix,
+    axialResiduals,
     vertexCount,
   } = binding;
   for (let vertex = 0; vertex < vertexCount; vertex++) {
@@ -496,16 +503,17 @@ export function deformAxialGeometryBinding(binding, stateInput, outputPositions,
     const tangentZ = frameLut[frameOffset + 11] * inverseBlend + frameLut[nextFrameOffset + 11] * blend;
     const localX = originalPositions[vectorOffset];
     const localY = originalPositions[vectorOffset + 1];
-    outputPositions[vectorOffset] = centerX + rightX * localX + upX * localY;
-    outputPositions[vectorOffset + 1] = centerY + rightY * localX + upY * localY;
-    outputPositions[vectorOffset + 2] = centerZ + rightZ * localX + upZ * localY;
+    const signedAxialResidual = axialResiduals[vertex];
+    outputPositions[vectorOffset] = centerX + rightX * localX + upX * localY + tangentX * signedAxialResidual;
+    outputPositions[vectorOffset + 1] = centerY + rightY * localX + upY * localY + tangentY * signedAxialResidual;
+    outputPositions[vectorOffset + 2] = centerZ + rightZ * localX + upZ * localY + tangentZ * signedAxialResidual;
 
     const normalX = originalNormals[vectorOffset];
     const normalY = originalNormals[vectorOffset + 1];
     const normalZ = originalNormals[vectorOffset + 2];
-    let deformedNormalX = rightX * normalX + upX * normalY + tangentX * normalZ;
-    let deformedNormalY = rightY * normalX + upY * normalY + tangentY * normalZ;
-    let deformedNormalZ = rightZ * normalX + upZ * normalY + tangentZ * normalZ;
+    let deformedNormalX = rightX * normalX + upX * normalY - tangentX * normalZ;
+    let deformedNormalY = rightY * normalX + upY * normalY - tangentY * normalZ;
+    let deformedNormalZ = rightZ * normalX + upZ * normalY - tangentZ * normalZ;
     const normalLength = Math.hypot(deformedNormalX, deformedNormalY, deformedNormalZ) || 1;
     deformedNormalX /= normalLength;
     deformedNormalY /= normalLength;
@@ -515,7 +523,7 @@ export function deformAxialGeometryBinding(binding, stateInput, outputPositions,
     outputNormals[vectorOffset + 2] = deformedNormalZ;
   }
   return {
-    schema: 'kaminos.motion-ready-719024.axial-geometry-deformation.v0',
+    schema: 'kaminos.motion-ready-719024.axial-geometry-deformation.v1',
     castId: MOTION_READY_719024_CAST_ID,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     vertexCount,

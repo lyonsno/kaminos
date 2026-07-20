@@ -19,7 +19,7 @@ const root = new URL('../artifacts/motion-ready-719024/', import.meta.url);
 const registration = JSON.parse(await readFile(new URL('registration.json', root), 'utf8'));
 
 assert.equal(MOTION_READY_719024_CAST_ID, 'motion-ready-719024');
-assert.equal(MOTION_READY_719024_DEFORMATION_MODE, 'axial-parallel-transport-wave-v0');
+assert.equal(MOTION_READY_719024_DEFORMATION_MODE, 'axial-parallel-transport-wave-v1');
 
 const normalized = validateAxialCrawlerRegistration(registration);
 assert.equal(normalized.spineStations.length, 7);
