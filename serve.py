@@ -29,6 +29,7 @@ VOLUME_SETTINGS_STORE = VOLUME_SETTINGS_STORE_DEFAULT
 VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
 VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
 VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
+VOLUME_BASIN_PROMOTION_CLI = ROOT / "volume-basin-promotion-package.mjs"
 
 
 def _settings_preset_route_value(value):
@@ -434,6 +435,84 @@ def volume_settings_server_source():
         except (OSError, subprocess.SubprocessError):
             source[field] = "unavailable"
     return source
+
+
+def current_kaminos_source_commit():
+    commit = volume_settings_server_source().get("commit")
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError(f"invalid Kaminos source commit: {commit}")
+    return commit
+
+
+def write_volume_basin_promotion_package(request):
+    if not isinstance(request, dict):
+        raise ValueError("basin promotion request must be a JSON object")
+    label = request.get("label")
+    handle = request.get("handle")
+    package_path = request.get("packagePath")
+    channel_path = request.get("channelPath")
+    preset = request.get("preset")
+    effective_state = request.get("effectiveState")
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError("basin promotion label is required")
+    if not isinstance(handle, str) or not handle.strip():
+        raise ValueError("basin promotion handle is required")
+    if not isinstance(package_path, str) or not package_path.strip():
+        raise ValueError("caller-selected basin promotion packagePath is required")
+    if channel_path is not None and (not isinstance(channel_path, str) or not channel_path.strip()):
+        raise ValueError("basin promotion channelPath must be a non-empty string when supplied")
+    if not isinstance(preset, dict):
+        raise ValueError("basin promotion preset must be a JSON object")
+    if not isinstance(effective_state, dict):
+        raise ValueError("basin promotion effectiveState must be a JSON object")
+
+    source = {
+        **volume_settings_server_source(),
+        "promotionPackagePath": str(Path(package_path).expanduser()),
+        "promotionChannelPath": str(Path(channel_path).expanduser()) if channel_path else None,
+    }
+    preset_receipt = write_volume_settings_preset(VOLUME_SETTINGS_STORE, label, preset, source)
+    preset_path = VOLUME_SETTINGS_STORE / "presets" / f"{preset_receipt['effective']['presetId']}.json"
+    if not preset_path.exists():
+        raise FileNotFoundError(f"settings preset artifact was not written: {preset_path}")
+
+    with tempfile.TemporaryDirectory(prefix="kaminos-basin-promotion-") as temporary:
+        effective_state_path = Path(temporary) / "effective-state.json"
+        effective_state_path.write_text(json.dumps(effective_state, indent=2) + "\n")
+        command = [
+            "node",
+            str(VOLUME_BASIN_PROMOTION_CLI),
+            "export",
+            "--handle", handle,
+            "--label", label,
+            "--package", str(Path(package_path).expanduser()),
+            "--settings-preset", str(preset_path),
+            "--settings-schema", str(VOLUME_SETTINGS_PRESET_SCHEMA_PATH),
+            "--effective-state", str(effective_state_path),
+            "--source-commit", str(request.get("sourceCommit") or current_kaminos_source_commit()),
+            "--origin", f"http://127.0.0.1:{PORT}",
+        ]
+        if channel_path:
+            command.extend(["--channel", str(Path(channel_path).expanduser())])
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    if result.returncode != 0:
+        raise ValueError(f"basin promotion package export failed: {result.stderr.strip() or result.stdout.strip()}")
+    try:
+        promotion_receipt = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"basin promotion exporter returned invalid JSON: {error}") from error
+    return {
+        "ok": True,
+        "identity": "kaminos.volume.basin-promotion-write-receipt.v0",
+        "settingsPreset": preset_receipt["effective"],
+        "promotion": promotion_receipt,
+    }
 
 
 def parse_server_arguments(argv):
@@ -1419,6 +1498,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture()
         elif parsed.path == "/api/volume-settings-presets":
             self.handle_volume_settings_presets_post()
+        elif parsed.path == "/api/volume-basin-promotions":
+            self.handle_volume_basin_promotions_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -1552,6 +1633,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "requestedLabel": request.get("label"),
                 "storePath": str(VOLUME_SETTINGS_STORE),
                 "failurePhase": "shared-preset-write",
+            }, 400)
+            return
+        self.send_json(receipt)
+
+    def handle_volume_basin_promotions_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            receipt = write_volume_basin_promotion_package(request)
+        except (OSError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedHandle": request.get("handle") if isinstance(request, dict) else None,
+                "requestedPackagePath": request.get("packagePath") if isinstance(request, dict) else None,
+                "failurePhase": "basin-promotion-write",
             }, 400)
             return
         self.send_json(receipt)

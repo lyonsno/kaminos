@@ -1023,6 +1023,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
+      <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
         <button class="btn active" type="button" data-volume-presentation-mode="beauty">Beauty</button>
         <button class="btn" type="button" data-volume-presentation-mode="intrinsic">Intrinsic</button>
@@ -1062,6 +1063,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         </select>
         <button class="btn" id="settings-preset-load-here">Load Here</button>
         <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
+      </div>
+      <div class="volume-actions">
+        <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
+        <input id="basin-promotion-package-path" class="search-input" type="text" placeholder="Package path" aria-label="Basin promotion package path">
+      </div>
+      <div class="volume-actions">
+        <input id="basin-promotion-channel-path" class="search-input" type="text" placeholder="Channel path" aria-label="Basin promotion channel path">
+        <button class="btn" id="basin-promotion-export">Export</button>
       </div>
     </div>
     <div class="slider-row">
@@ -12202,6 +12211,15 @@ function volumeSettingsPresetStatus(message, failed = false) {
   state.classList.toggle('present', !failed);
 }
 
+function volumeBasinPromotionStatus(message, failed = false) {
+  const state = document.getElementById('volume-basin-promotion-state');
+  if (!state) return;
+  state.textContent = message;
+  state.title = message;
+  state.classList.toggle('missing', failed);
+  state.classList.toggle('present', !failed);
+}
+
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   const select = document.getElementById('settings-preset-select');
   try {
@@ -12274,6 +12292,108 @@ async function saveVolumeSettingsPreset() {
   }
 }
 
+function buildVolumeBasinPromotionEffectiveState() {
+  const debug = volumePrototype?.debugState?.() || {};
+  const rendererState = currentVolumeSettingsPresetRendererState();
+  const settingsPreset = buildVolumeSettingsPreset();
+  const route = new URL(settingsPreset.route, window.location.href);
+  return {
+    schema: 'kaminos.volume.effective-basin-state.v0',
+    capturedAt: new Date().toISOString(),
+    simulator: {
+      identity: debug.volumeSceneAuthority?.effective || debug.volumeScene || 'unknown',
+      grid: debug.simGrid || null,
+      simStepCount: debug.simStepCount ?? debug.frameCount ?? null,
+      frameCount: debug.frameCount ?? null,
+      routeIdentity: debug.routeIdentity || 'native-3d-compute-fluid-raymarch-v0',
+    },
+    renderer: {
+      identity: debug.routeIdentity || rendererState?.effectiveComposition || 'native-3d-compute-fluid-raymarch-v0',
+      backend: debug.backend || 'unknown',
+      active: debug.active === true,
+      fallbackReason: debug.error || debug.selectiveHeadLiveFallbackReason || null,
+    },
+    presentation: {
+      volumePresentation: debug.volumePresentationReceipt?.effectiveMode || debug.volumePresentationModeEffective || 'beauty',
+      raymarchSmoke: debug.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationModeEffective || 'on',
+      appearanceDecomposition: debug.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionModeEffective || 'off',
+    },
+    source: {
+      requestedSource: debug.fullSupportSourceRequested || debug.requestedSource || null,
+      effectiveSource: debug.fullSupportSourceEffective || debug.effectiveSource || null,
+      settingsPresetId: activeVolumeSettingsPresetReceipt?.presetId || null,
+    },
+    initialization: {
+      authority: activeVolumeSettingsPresetReceipt?.sourcePresetAuthority || 'live-cockpit-effective-state-v0',
+      settingsPresetId: activeVolumeSettingsPresetReceipt?.presetId || null,
+      routeActivation: route.searchParams.get('kaminos_volume_smoke') || null,
+    },
+    route: {
+      requestedPath: route.pathname || '/',
+      effectivePath: route.pathname || '/',
+      targetOrigin: window.location.origin,
+      href: route.toString(),
+    },
+    backend: {
+      requested: 'WebGPU',
+      effective: debug.backend || 'unknown',
+    },
+    composition: {
+      requested: rendererState?.requestedComposition || debug.selectiveHeadLiveCompositionRequested || 'ordinary-live-prototype',
+      effective: rendererState?.effectiveComposition || debug.selectiveHeadLiveCompositionEffective || 'ordinary-live-prototype',
+      fallbackReason: rendererState?.compositionFallbackReason || debug.selectiveHeadLiveCompositionFallbackReason || null,
+    },
+    schemaIdentity: settingsPreset.schemaIdentity,
+    controls: {
+      basinControlCount: settingsPreset.controlCount,
+      rendererControlCount: settingsPreset.rendererControlCount,
+    },
+  };
+}
+
+async function exportBasinPromotionPackage() {
+  const labelInput = document.getElementById('settings-preset-label');
+  const handleInput = document.getElementById('basin-promotion-handle');
+  const packageInput = document.getElementById('basin-promotion-package-path');
+  const channelInput = document.getElementById('basin-promotion-channel-path');
+  const label = String(labelInput?.value || handleInput?.value || '').trim()
+    || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const handle = String(handleInput?.value || label).trim();
+  const packagePath = String(packageInput?.value || '').trim();
+  const channelPath = String(channelInput?.value || '').trim();
+  volumeBasinPromotionStatus(`exporting ${handle}...`);
+  try {
+    if (!packagePath) throw new Error('package path is required');
+    await volumeCockpitLayoutReady;
+    const preset = buildVolumeSettingsPreset();
+    const effectiveState = buildVolumeBasinPromotionEffectiveState();
+    const response = await fetch('/api/volume-basin-promotions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label,
+        handle,
+        packagePath,
+        channelPath: channelPath || null,
+        preset,
+        effectiveState,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `basin promotion export failed: ${response.status}`);
+    const promotion = result.promotion;
+    volumeBasinPromotionStatus(`${promotion.handle} | ${promotion.revision} | ${promotion.packagePath}${promotion.channelPath ? ` | ${promotion.channelPath}` : ''}`);
+    if (handleInput) handleInput.value = promotion.handle;
+    console.log(JSON.stringify(result, null, 2));
+    setInfo(`Basin promotion exported: ${promotion.stableRef}`);
+    return result;
+  } catch (error) {
+    volumeBasinPromotionStatus(`PROMOTION EXPORT FAILED | ${error.message || error}`, true);
+    setInfo(`Basin promotion export failed: ${error.message || error}`);
+    throw error;
+  }
+}
+
 function currentVolumeSettingsPresetRendererState() {
   try {
     const wrapper = window.parent !== window
@@ -12336,12 +12456,14 @@ function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
 }
 
 window.__kaminosSaveVolumeSettingsPreset = saveVolumeSettingsPreset;
+window.__kaminosExportBasinPromotionPackage = exportBasinPromotionPackage;
 window.__kaminosRefreshVolumeSettingsPresetList = refreshVolumeSettingsPresetList;
 window.__kaminosNavigateToSelectedVolumeSettingsPreset = navigateToSelectedVolumeSettingsPreset;
 for (const [id, command] of [
   ['settings-preset-save', () => void saveVolumeSettingsPreset()],
   ['settings-preset-load-here', () => navigateToSelectedVolumeSettingsPreset(false)],
   ['settings-preset-open-fresh', () => navigateToSelectedVolumeSettingsPreset(true)],
+  ['basin-promotion-export', () => void exportBasinPromotionPackage()],
 ]) {
   const button = document.getElementById(id);
   if (!button) continue;
