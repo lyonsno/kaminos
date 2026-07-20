@@ -86,6 +86,17 @@ export function createFingerFluidBenchState(options = {}) {
     || (effectiveTransmissionFootprintMode === 'not_executed'
       ? 'not-executed-non-refraction-renderer-v0'
       : requestedTransmissionFootprintRoute);
+  const requestedBodyTransportMode = options.requestedBodyTransportMode || 'geometric_slab';
+  const requestedBodyTransportRoute = options.requestedBodyTransportRoute || {
+    geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
+    robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
+  }[requestedBodyTransportMode] || `unsupported-body-transport-mode:${requestedBodyTransportMode}`;
+  const effectiveBodyTransportMode = options.effectiveBodyTransportMode
+    || (effectiveRendererMode === 'screen_space_refraction' ? requestedBodyTransportMode : 'not_executed');
+  const effectiveBodyTransportRoute = options.effectiveBodyTransportRoute
+    || (effectiveBodyTransportMode === 'not_executed'
+      ? 'not-executed-non-refraction-renderer-v0'
+      : requestedBodyTransportRoute);
 
   return {
     schema: KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
@@ -169,6 +180,11 @@ export function createFingerFluidBenchState(options = {}) {
       requestedTransmissionFootprintRoute,
       effectiveTransmissionFootprintRoute,
       transmissionFootprintFallbackReason: options.transmissionFootprintFallbackReason || null,
+      requestedBodyTransportMode,
+      effectiveBodyTransportMode,
+      requestedBodyTransportRoute,
+      effectiveBodyTransportRoute,
+      bodyTransportFallbackReason: options.bodyTransportFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',

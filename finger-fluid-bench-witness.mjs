@@ -25,6 +25,7 @@ const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.rep
 const invalidOpticalLightingOut = resolve(args.get('--invalid-optical-lighting-out') || out.replace(/\.png$/i, '.invalid-optical-lighting.png'));
 const invalidOpticalFootprintOut = resolve(args.get('--invalid-optical-footprint-out') || out.replace(/\.png$/i, '.invalid-optical-footprint.png'));
 const invalidTransmissionFootprintOut = resolve(args.get('--invalid-transmission-footprint-out') || out.replace(/\.png$/i, '.invalid-transmission-footprint.png'));
+const invalidBodyTransportOut = resolve(args.get('--invalid-body-transport-out') || out.replace(/\.png$/i, '.invalid-body-transport.png'));
 const transportOnlyOut = resolve(args.get('--transport-only-out') || out.replace(/\.png$/i, '.optical-lighting-transport-only.png'));
 const boundedGgxOut = resolve(args.get('--bounded-ggx-out') || out.replace(/\.png$/i, '.optical-lighting-bounded-ggx.png'));
 const legacyShadingOut = resolve(args.get('--legacy-shading-out') || out.replace(/\.png$/i, '.optical-lighting-legacy-shading.png'));
@@ -38,7 +39,10 @@ const resolvedExitTransmissionOut = resolve(args.get('--resolved-exit-transmissi
 const denseExitFilteredTransmissionOut = resolve(args.get('--dense-exit-filtered-transmission-out') || out.replace(/\.png$/i, '.transmission-footprint-dense-exit-filtered.png'));
 const resolvedTransmissionTransportOut = resolve(args.get('--resolved-transmission-transport-out') || out.replace(/\.png$/i, '.transmission-footprint-resolved-transport.png'));
 const filteredTransmissionTransportOut = resolve(args.get('--filtered-transmission-transport-out') || out.replace(/\.png$/i, '.transmission-footprint-filtered-transport.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint'];
+const geometricSlabBodyOut = resolve(args.get('--geometric-slab-body-out') || out.replace(/\.png$/i, '.body-transport-geometric-slab.png'));
+const robustDenseBodyOut = resolve(args.get('--robust-dense-body-out') || out.replace(/\.png$/i, '.body-transport-robust-dense-body.png'));
+const bodyTransportViewDir = resolve(args.get('--body-transport-view-dir') || out.replace(/\.png$/i, '.body-transport-views'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -78,6 +82,8 @@ let sameStateOpticalComparison = null;
 let sameStateOpticalLightingComparison = null;
 let sameStateOpticalFootprintComparison = null;
 let sameStateTransmissionFootprintComparison = null;
+let sameStateBodyTransportComparison = null;
+let sameStateBodyTransportViewComparisons = null;
 let transportComponentAttribution = null;
 let nonRefractionLightingApplicability = null;
 let frozenStateWorldReflectionWitness = null;
@@ -96,6 +102,7 @@ let invalidRendererWitness = null;
 let invalidOpticalLightingWitness = null;
 let invalidOpticalFootprintWitness = null;
 let invalidTransmissionFootprintWitness = null;
+let invalidBodyTransportWitness = null;
 let opticalDebugViews = null;
 let slabValidityField = null;
 let primaryFrameBinding = null;
@@ -183,6 +190,8 @@ function writeReport(report = {}) {
     sameStateOpticalLightingComparison,
     sameStateOpticalFootprintComparison,
     sameStateTransmissionFootprintComparison,
+    sameStateBodyTransportComparison,
+    sameStateBodyTransportViewComparisons,
     transportComponentAttribution,
     nonRefractionLightingApplicability,
     frozenStateWorldReflectionWitness,
@@ -201,6 +210,7 @@ function writeReport(report = {}) {
     invalidOpticalLightingWitness,
     invalidOpticalFootprintWitness,
     invalidTransmissionFootprintWitness,
+    invalidBodyTransportWitness,
     opticalDebugViews,
     slabValidityField,
     opticalDebugOutputs,
@@ -211,12 +221,16 @@ function writeReport(report = {}) {
     invalidOpticalLightingOut,
     invalidOpticalFootprintOut,
     invalidTransmissionFootprintOut,
+    invalidBodyTransportOut,
     resolvedDetailFootprintOut,
     varianceFilteredFootprintOut,
     resolvedExitTransmissionOut,
     denseExitFilteredTransmissionOut,
     resolvedTransmissionTransportOut,
     filteredTransmissionTransportOut,
+    geometricSlabBodyOut,
+    robustDenseBodyOut,
+    bodyTransportViewDir,
     transportOnlyOut,
     boundedGgxOut,
     legacyShadingOut,
@@ -1040,6 +1054,63 @@ function measureOpticalFootprintComparison(baselinePath, filteredPath, maskPath,
     thinSheetPixels,
     thinSheetRetention: Number(thinSheetRetention.toFixed(6)),
     measurement: 'same_state_binary_support_normal_variance_optical_footprint_attribution_v0',
+  };
+}
+
+function measureDenseBodyTransportComparison(
+  baselinePath,
+  robustPath,
+  maskPath,
+  variancePath,
+  { requirePalePopulation = true } = {},
+) {
+  const base = measureOpticalFootprintComparison(baselinePath, robustPath, maskPath, variancePath);
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const baseline = decode(baselinePath);
+  const robust = decode(robustPath);
+  const mask = decode(maskPath);
+  const variance = decode(variancePath);
+  const frames = [baseline, robust, mask, variance];
+  if (frames.some(frame => frame.status !== 0 || !frame.stdout?.length)
+    || frames.some(frame => frame.stdout.length !== baseline.stdout.length)) {
+    throw new Error('dense body transport comparison decode failed or dimensions disagree');
+  }
+  const luminance = (bytes, offset) => bytes[offset] * 0.2126 + bytes[offset + 1] * 0.7152 + bytes[offset + 2] * 0.0722;
+  const cyanDepth = (bytes, offset) => Math.max(0, (bytes[offset + 1] + bytes[offset + 2]) * 0.5 - bytes[offset]);
+  let densePixels = 0;
+  let baselinePalePixels = 0;
+  let robustPalePixels = 0;
+  let baselineCyanDepth = 0;
+  let robustCyanDepth = 0;
+  for (let offset = 0; offset < baseline.stdout.length; offset += 3) {
+    const supported = Math.min(mask.stdout[offset], mask.stdout[offset + 1], mask.stdout[offset + 2]) >= 250;
+    const denseConfidence = variance.stdout[offset + 1] / 255;
+    if (!supported || denseConfidence < 0.38) continue;
+    densePixels += 1;
+    if (luminance(baseline.stdout, offset) >= 165) baselinePalePixels += 1;
+    if (luminance(robust.stdout, offset) >= 165) robustPalePixels += 1;
+    baselineCyanDepth += cyanDepth(baseline.stdout, offset);
+    robustCyanDepth += cyanDepth(robust.stdout, offset);
+  }
+  if (densePixels < 100 || baselineCyanDepth <= 0 || (requirePalePopulation && baselinePalePixels < 25)) {
+    throw new Error(`dense body transport attribution population is too sparse: ${JSON.stringify({ densePixels, baselinePalePixels, baselineCyanDepth })}`);
+  }
+  return {
+    ...base,
+    densePixels,
+    baselinePalePixels,
+    robustPalePixels,
+    denseBodyPaleRatio: baselinePalePixels > 0
+      ? Number((robustPalePixels / baselinePalePixels).toFixed(6))
+      : null,
+    palePopulationAcceptanceApplicable: baselinePalePixels >= 25,
+    baselineMeanCyanDepth: Number((baselineCyanDepth / densePixels).toFixed(6)),
+    robustMeanCyanDepth: Number((robustCyanDepth / densePixels).toFixed(6)),
+    cyanDepthRetention: Number((robustCyanDepth / baselineCyanDepth).toFixed(6)),
+    measurement: 'same_state_dense_body_pale_population_and_cyan_depth_v1',
   };
 }
 
@@ -2373,6 +2444,7 @@ async function main() {
     const requestedOpticalLightingMode = requestedRoute.searchParams.get('finger_fluid_optical_lighting') || 'transport_only';
     const requestedOpticalFootprintMode = requestedRoute.searchParams.get('finger_fluid_optical_footprint') || 'resolved_detail';
     const requestedTransmissionFootprintMode = requestedRoute.searchParams.get('finger_fluid_transmission_footprint') || 'resolved_exit';
+    const requestedBodyTransportMode = requestedRoute.searchParams.get('finger_fluid_body_transport') || 'geometric_slab';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
@@ -2385,6 +2457,7 @@ async function main() {
     const effectiveOpticalLightingMode = lastDebugState.runtime?.effectiveOpticalLightingMode;
     const effectiveOpticalFootprintMode = lastDebugState.runtime?.effectiveOpticalFootprintMode;
     const effectiveTransmissionFootprintMode = lastDebugState.runtime?.effectiveTransmissionFootprintMode;
+    const effectiveBodyTransportMode = lastDebugState.runtime?.effectiveBodyTransportMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
@@ -2407,6 +2480,32 @@ async function main() {
         effectiveOpticalLightingMode,
         expectedEffectiveOpticalLightingMode,
         fallbackReason: lastDebugState.runtime?.opticalLightingFallbackReason,
+      })}`);
+    }
+    const bodyTransportExecuted = effectiveRendererMode === 'screen_space_refraction';
+    const expectedEffectiveBodyTransportMode = bodyTransportExecuted ? requestedBodyTransportMode : 'not_executed';
+    const expectedBodyTransportRoute = {
+      geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
+      robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
+    }[requestedBodyTransportMode];
+    if (
+      !expectedBodyTransportRoute
+      || effectiveBodyTransportMode !== expectedEffectiveBodyTransportMode
+      || lastDebugState.runtime?.requestedBodyTransportMode !== requestedBodyTransportMode
+      || lastDebugState.runtime?.requestedBodyTransportRoute !== expectedBodyTransportRoute
+      || lastDebugState.runtime?.effectiveBodyTransportRoute !== (bodyTransportExecuted
+        ? expectedBodyTransportRoute
+        : 'not-executed-non-refraction-renderer-v0')
+      || lastDebugState.runtime?.bodyTransportFallbackReason
+    ) {
+      throw new Error(`body transport route disagreement rejected: ${JSON.stringify({
+        requestedBodyTransportMode,
+        effectiveBodyTransportMode,
+        expectedEffectiveBodyTransportMode,
+        expectedBodyTransportRoute,
+        requestedRoute: lastDebugState.runtime?.requestedBodyTransportRoute,
+        effectiveRoute: lastDebugState.runtime?.effectiveBodyTransportRoute,
+        fallbackReason: lastDebugState.runtime?.bodyTransportFallbackReason,
       })}`);
     }
     const transmissionFootprintExecuted = effectiveRendererMode === 'screen_space_refraction';
@@ -2557,7 +2656,7 @@ async function main() {
         const receipt = await evaluate(ws, `(() => {
           const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
           if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-          return render(${JSON.stringify(rendererMode)}, 'shaded', 'bounded_ggx', 'variance_filtered', 'dense_exit_filtered');
+          return render(${JSON.stringify(rendererMode)}, 'shaded', 'bounded_ggx', 'variance_filtered', 'dense_exit_filtered', 'robust_dense_body');
         })()`);
         if (
           receipt?.requestedRendererMode !== rendererMode
@@ -2574,10 +2673,15 @@ async function main() {
           || receipt?.effectiveTransmissionFootprintMode !== 'not_executed'
           || receipt?.requestedTransmissionFootprintRoute !== 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0'
           || receipt?.effectiveTransmissionFootprintRoute !== 'not-executed-non-refraction-renderer-v0'
+          || receipt?.requestedBodyTransportMode !== 'robust_dense_body'
+          || receipt?.effectiveBodyTransportMode !== 'not_executed'
+          || receipt?.requestedBodyTransportRoute !== 'wgsl-liquid-robust-dense-body-transport-v1'
+          || receipt?.effectiveBodyTransportRoute !== 'not-executed-non-refraction-renderer-v0'
           || receipt?.fallbackReason
           || receipt?.opticalLightingFallbackReason
           || receipt?.opticalFootprintFallbackReason
           || receipt?.transmissionFootprintFallbackReason
+          || receipt?.bodyTransportFallbackReason
         ) {
           throw new Error(`non-refraction renderer claimed optical lighting execution: ${JSON.stringify({ rendererMode, receipt })}`);
         }
@@ -2606,6 +2710,10 @@ async function main() {
         resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
         dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
       };
+      const bodyTransportRoutes = {
+        geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
+        robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
+      };
       const captureFrozenOptical = async (
         lightingMode,
         debugMode,
@@ -2613,11 +2721,12 @@ async function main() {
         label,
         footprintMode = 'resolved_detail',
         transmissionFootprintMode = 'resolved_exit',
+        bodyTransportMode = 'geometric_slab',
       ) => {
         const receipt = await evaluate(ws, `(() => {
           const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
           if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)}, ${JSON.stringify(transmissionFootprintMode)});
+          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)}, ${JSON.stringify(transmissionFootprintMode)}, ${JSON.stringify(bodyTransportMode)});
         })()`);
         if (
           receipt?.requestedRendererMode !== 'screen_space_refraction'
@@ -2636,10 +2745,15 @@ async function main() {
           || receipt?.effectiveTransmissionFootprintMode !== transmissionFootprintMode
           || receipt?.requestedTransmissionFootprintRoute !== transmissionFootprintRoutes[transmissionFootprintMode]
           || receipt?.effectiveTransmissionFootprintRoute !== transmissionFootprintRoutes[transmissionFootprintMode]
+          || receipt?.requestedBodyTransportMode !== bodyTransportMode
+          || receipt?.effectiveBodyTransportMode !== bodyTransportMode
+          || receipt?.requestedBodyTransportRoute !== bodyTransportRoutes[bodyTransportMode]
+          || receipt?.effectiveBodyTransportRoute !== bodyTransportRoutes[bodyTransportMode]
           || receipt?.fallbackReason
           || receipt?.opticalLightingFallbackReason
           || receipt?.opticalFootprintFallbackReason
           || receipt?.transmissionFootprintFallbackReason
+          || receipt?.bodyTransportFallbackReason
         ) {
           throw new Error(`renderer-only optical lighting disagreement: ${JSON.stringify({ lightingMode, debugMode, receipt })}`);
         }
@@ -2924,6 +3038,212 @@ async function main() {
         transmissionFootprint,
         ...transmissionMeasurement,
       };
+      phase = 'same_state_body_transport_comparison';
+      const geometricSlab = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        geometricSlabBodyOut,
+        'geometric_slab_body_transport',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'geometric_slab',
+      );
+      const robustDenseBody = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        robustDenseBodyOut,
+        'robust_dense_body_transport',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'robust_dense_body',
+      );
+      const bodyTransportPath = await captureFrozenOptical(
+        'transport_only',
+        'body_transport_path',
+        opticalDebugOutputs.body_transport_path,
+        'body_transport_path',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'robust_dense_body',
+      );
+      const bodyTransportResidual = await captureFrozenOptical(
+        'transport_only',
+        'body_transport_residual',
+        opticalDebugOutputs.body_transport_residual,
+        'body_transport_residual',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'robust_dense_body',
+      );
+      if (
+        geometricSlab.receipt.stepCount !== lightingStepCount
+        || robustDenseBody.receipt.stepCount !== lightingStepCount
+        || bodyTransportPath.receipt.stepCount !== lightingStepCount
+        || bodyTransportResidual.receipt.stepCount !== lightingStepCount
+      ) {
+        throw new Error(`renderer-only body transport comparison advanced simulation: ${JSON.stringify({
+          frozen: lightingStepCount,
+          geometricSlab: geometricSlab.receipt.stepCount,
+          robustDenseBody: robustDenseBody.receipt.stepCount,
+          bodyTransportPath: bodyTransportPath.receipt.stepCount,
+          bodyTransportResidual: bodyTransportResidual.receipt.stepCount,
+        })}`);
+      }
+      const bodyTransportMeasurement = measureDenseBodyTransportComparison(
+        geometricSlabBodyOut,
+        robustDenseBodyOut,
+        opticalDebugOutputs.liquid_support,
+        opticalDebugOutputs.normal_variance,
+      );
+      const {
+        denseBodyPaleRatio,
+        cyanDepthRetention,
+        sparseRimRetention: bodySparseRimRetention,
+        thinSheetRetention: bodyThinSheetRetention,
+        meanLuminanceRatio: bodyMeanLuminanceRatio,
+      } = bodyTransportMeasurement;
+      if (bodyTransportMeasurement.changedRatio < 0.002) {
+        throw new Error(`robust dense-body transport made no measurable same-state visual change: ${JSON.stringify(bodyTransportMeasurement)}`);
+      }
+      if (bodyMeanLuminanceRatio < 0.82 || bodyMeanLuminanceRatio > 1.08) {
+        throw new Error(`robust dense-body transport globally dimmed or amplified the liquid: ${JSON.stringify(bodyTransportMeasurement)}`);
+      }
+      if (denseBodyPaleRatio >= 0.995 || cyanDepthRetention < 1.0) {
+        throw new Error(`robust dense-body transport did not reduce pale dense support while retaining cyan depth: ${JSON.stringify(bodyTransportMeasurement)}`);
+      }
+      if (bodySparseRimRetention < 0.78 || bodyThinSheetRetention < 0.78) {
+        throw new Error(`robust dense-body transport erased sparse rims or thin sheets: ${JSON.stringify(bodyTransportMeasurement)}`);
+      }
+      sameStateBodyTransportComparison = {
+        schema: 'kaminos.finger-fluid.same-state-body-transport-comparison.v1',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        sameCamera: true,
+        geometricSlab,
+        robustDenseBody,
+        bodyTransportPath,
+        bodyTransportResidual,
+        ...bodyTransportMeasurement,
+      };
+      phase = 'same_state_body_transport_multi_view_comparison';
+      const originalBodyTransportCamera = await evaluate(ws, `window.kaminosFingerFluidCompositionCameraState?.()`);
+      if (!originalBodyTransportCamera) throw new Error('missing original camera state for multi-view body transport comparison');
+      const bodyTransportCameras = [
+        { id: 'body_bright_oblique', yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] },
+        { id: 'body_low_side', yaw: -1.35, pitch: 0.08, distance: 7.0, target: [0, -0.48, 0.2] },
+        { id: 'body_opposite_high', yaw: 2.15, pitch: 0.72, distance: 7.0, target: [0, -0.48, 0.2] },
+        { id: 'body_support_grazing', yaw: -1.35, pitch: -0.15, distance: 6.4, target: [0, -0.48, 0.2] },
+      ];
+      mkdirSync(bodyTransportViewDir, { recursive: true });
+      const bodyTransportViews = [];
+      for (const camera of bodyTransportCameras) {
+        const effectiveCamera = await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(camera)})`);
+        if (!effectiveCamera) throw new Error(`camera setter unavailable for body transport view ${camera.id}`);
+        const geometricPath = resolve(bodyTransportViewDir, `${camera.id}.body-transport-geometric-slab.png`);
+        const robustPath = resolve(bodyTransportViewDir, `${camera.id}.body-transport-robust-dense-body.png`);
+        const liquidSupportPath = resolve(bodyTransportViewDir, `${camera.id}.liquid-support.png`);
+        const normalVariancePath = resolve(bodyTransportViewDir, `${camera.id}.normal-variance.png`);
+        const viewGeometricSlab = await captureFrozenOptical(
+          'transport_only',
+          'shaded',
+          geometricPath,
+          `${camera.id}:geometric_slab_body_transport`,
+          'variance_filtered',
+          'dense_exit_filtered',
+          'geometric_slab',
+        );
+        const viewRobustDenseBody = await captureFrozenOptical(
+          'transport_only',
+          'shaded',
+          robustPath,
+          `${camera.id}:robust_dense_body_transport`,
+          'variance_filtered',
+          'dense_exit_filtered',
+          'robust_dense_body',
+        );
+        const viewLiquidSupport = await captureFrozenOptical(
+          'transport_only',
+          'liquid_support',
+          liquidSupportPath,
+          `${camera.id}:liquid_support`,
+          'variance_filtered',
+          'dense_exit_filtered',
+          'robust_dense_body',
+        );
+        const viewNormalVariance = await captureFrozenOptical(
+          'transport_only',
+          'normal_variance',
+          normalVariancePath,
+          `${camera.id}:normal_variance`,
+          'variance_filtered',
+          'dense_exit_filtered',
+          'robust_dense_body',
+        );
+        const viewStepCounts = [
+          viewGeometricSlab.receipt.stepCount,
+          viewRobustDenseBody.receipt.stepCount,
+          viewLiquidSupport.receipt.stepCount,
+          viewNormalVariance.receipt.stepCount,
+        ];
+        if (viewStepCounts.some(stepCount => stepCount !== lightingStepCount)) {
+          throw new Error(`body transport view ${camera.id} advanced the frozen simulation: ${JSON.stringify({ lightingStepCount, viewStepCounts })}`);
+        }
+        const measurement = measureDenseBodyTransportComparison(
+          geometricPath,
+          robustPath,
+          liquidSupportPath,
+          normalVariancePath,
+          { requirePalePopulation: false },
+        );
+        if (
+          measurement.meanLuminanceRatio < 0.75
+          || measurement.meanLuminanceRatio > 1.15
+          || measurement.sparseRimRetention < 0.78
+          || measurement.thinSheetRetention < 0.78
+        ) {
+          throw new Error(`body transport view ${camera.id} lost dense-body energy or sparse support: ${JSON.stringify(measurement)}`);
+        }
+        bodyTransportViews.push({
+          id: camera.id,
+          camera: effectiveCamera,
+          stepCount: lightingStepCount,
+          sameSimulationState: true,
+          sameCamera: true,
+          geometricSlab: viewGeometricSlab,
+          robustDenseBody: viewRobustDenseBody,
+          liquidSupport: viewLiquidSupport,
+          normalVariance: viewNormalVariance,
+          measurement,
+        });
+      }
+      const bodyTransportViewIdentityComplete = bodyTransportViews.every(view => (
+        view.id
+        && view.sameSimulationState === true
+        && view.sameCamera === true
+        && view.stepCount === lightingStepCount
+        && view.geometricSlab.receipt.requestedBodyTransportMode === 'geometric_slab'
+        && view.geometricSlab.receipt.effectiveBodyTransportMode === 'geometric_slab'
+        && view.geometricSlab.receipt.requestedBodyTransportRoute === bodyTransportRoutes.geometric_slab
+        && view.geometricSlab.receipt.effectiveBodyTransportRoute === bodyTransportRoutes.geometric_slab
+        && view.robustDenseBody.receipt.requestedBodyTransportMode === 'robust_dense_body'
+        && view.robustDenseBody.receipt.effectiveBodyTransportMode === 'robust_dense_body'
+        && view.robustDenseBody.receipt.requestedBodyTransportRoute === bodyTransportRoutes.robust_dense_body
+        && view.robustDenseBody.receipt.effectiveBodyTransportRoute === bodyTransportRoutes.robust_dense_body
+      ));
+      if (!bodyTransportViewIdentityComplete || bodyTransportViews.length !== bodyTransportCameras.length) {
+        throw new Error(`multi-view body transport evidence is missing, partial, stale, or route-incoherent: ${JSON.stringify(bodyTransportViews)}`);
+      }
+      await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(originalBodyTransportCamera)})`);
+      sameStateBodyTransportViewComparisons = {
+        schema: 'kaminos.finger-fluid.same-state-body-transport-multi-view-comparison.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        identityComplete: bodyTransportViewIdentityComplete,
+        cameraCount: bodyTransportViews.length,
+        views: bodyTransportViews,
+      };
       const primaryTransportOnly = await captureFrozenOptical(
         'transport_only',
         'shaded',
@@ -2931,6 +3251,7 @@ async function main() {
         'transport_only_variance_filtered_primary',
         'variance_filtered',
         'dense_exit_filtered',
+        'robust_dense_body',
       );
       if (primaryTransportOnly.receipt.stepCount !== lightingStepCount) {
         throw new Error(`renderer-only primary transport capture advanced simulation: ${JSON.stringify(primaryTransportOnly.receipt)}`);
@@ -2938,7 +3259,7 @@ async function main() {
       primaryOutputWritten = true;
 
       phase = 'renderer_only_optical_diagnostics';
-      for (const debugMode of ['thickness', 'path_length', 'exit_validity', 'fresnel', 'absorption', 'reflection', 'environment_contribution', 'refraction_offset', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'refraction_hit_kind']) {
+      for (const debugMode of ['thickness', 'path_length', 'exit_validity', 'fresnel', 'absorption', 'reflection', 'environment_contribution', 'refraction_offset', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual', 'refraction_hit_kind']) {
         if (opticalDebugViews[debugMode]) continue;
         opticalDebugViews[debugMode] = await captureFrozenOptical(
           'transport_only',
@@ -2947,6 +3268,7 @@ async function main() {
           `renderer_only_${debugMode}`,
           'variance_filtered',
           'dense_exit_filtered',
+          'robust_dense_body',
         );
         if (opticalDebugViews[debugMode].receipt.stepCount !== lightingStepCount) {
           throw new Error(`renderer-only optical diagnostic advanced simulation: ${JSON.stringify(opticalDebugViews[debugMode].receipt)}`);
@@ -3160,6 +3482,75 @@ async function main() {
         configError: invalidTransmissionFootprintState.runtime.configError,
         canvasActivity: invalidTransmissionFootprintActivity,
         outputPath: invalidTransmissionFootprintOut,
+      };
+      phase = 'invalid_body_transport_route';
+      const invalidBodyTransportUrl = new URL(url);
+      invalidBodyTransportUrl.searchParams.set('finger_fluid_optical_lighting', 'transport_only');
+      invalidBodyTransportUrl.searchParams.set('finger_fluid_body_transport', 'silent_body_transport_fallback');
+      await wsRequest(ws, 'Page.navigate', { url: invalidBodyTransportUrl.href });
+      const invalidBodyTransportDeadline = Date.now() + hookWaitMs;
+      let invalidBodyTransportState = null;
+      while (Date.now() < invalidBodyTransportDeadline) {
+        try {
+          invalidBodyTransportState = await evaluate(ws, `(() => {
+            const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+            return typeof read === 'function' ? read() : null;
+          })()`);
+        } catch {
+          invalidBodyTransportState = null;
+        }
+        if (invalidBodyTransportState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidBodyTransportState.status !== 'loading') break;
+        await delay(100);
+      }
+      if (
+        invalidBodyTransportState?.status !== 'error'
+        || invalidBodyTransportState?.solver?.backend !== 'config_rejected'
+        || invalidBodyTransportState?.renderer?.backend !== 'config_rejected'
+        || invalidBodyTransportState?.renderer?.requestedBodyTransportMode !== 'silent_body_transport_fallback'
+        || invalidBodyTransportState?.renderer?.effectiveBodyTransportMode !== 'config_rejected'
+        || invalidBodyTransportState?.renderer?.requestedBodyTransportRoute !== 'unsupported-body-transport-mode:silent_body_transport_fallback'
+        || invalidBodyTransportState?.renderer?.effectiveBodyTransportRoute !== 'not-executed-config-rejected-v0'
+        || !String(invalidBodyTransportState?.renderer?.bodyTransportFallbackReason || '').includes('Unsupported finger fluid body transport mode: silent_body_transport_fallback')
+        || !String(invalidBodyTransportState?.runtime?.configError || '').includes('Unsupported finger fluid body transport mode: silent_body_transport_fallback')
+      ) {
+        throw new Error(`renderer-only invalid body transport route did not fail closed: ${JSON.stringify(invalidBodyTransportState)}`);
+      }
+      const invalidBodyTransportCanvasRect = await evaluate(ws, `(() => {
+        document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!invalidBodyTransportCanvasRect || invalidBodyTransportCanvasRect.width < 100 || invalidBodyTransportCanvasRect.height < 100) {
+        throw new Error(`renderer-only invalid body transport canvas unavailable: ${JSON.stringify(invalidBodyTransportCanvasRect)}`);
+      }
+      const invalidBodyTransportShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+        clip: { ...invalidBodyTransportCanvasRect, scale: 1 },
+      });
+      mkdirSync(dirname(invalidBodyTransportOut), { recursive: true });
+      writeFileSync(invalidBodyTransportOut, Buffer.from(invalidBodyTransportShot.data, 'base64'));
+      const invalidBodyTransportActivity = measureCapturedPng(invalidBodyTransportOut, 'invalid_body_transport');
+      if (invalidBodyTransportActivity.activeRatio > 0.002) {
+        throw new Error(`renderer-only invalid body transport retained stale painted output: ${JSON.stringify(invalidBodyTransportActivity)}`);
+      }
+      invalidBodyTransportWitness = {
+        schema: 'kaminos.finger-fluid.invalid-body-transport-witness.v1',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        requestedUrl: invalidBodyTransportUrl.href,
+        status: invalidBodyTransportState.status,
+        solverBackend: invalidBodyTransportState.solver.backend,
+        rendererBackend: invalidBodyTransportState.renderer.backend,
+        requestedBodyTransportMode: invalidBodyTransportState.renderer.requestedBodyTransportMode,
+        effectiveBodyTransportMode: invalidBodyTransportState.renderer.effectiveBodyTransportMode,
+        requestedBodyTransportRoute: invalidBodyTransportState.renderer.requestedBodyTransportRoute,
+        effectiveBodyTransportRoute: invalidBodyTransportState.renderer.effectiveBodyTransportRoute,
+        bodyTransportFallbackReason: invalidBodyTransportState.renderer.bodyTransportFallbackReason,
+        configError: invalidBodyTransportState.runtime.configError,
+        canvasActivity: invalidBodyTransportActivity,
+        outputPath: invalidBodyTransportOut,
       };
       phase = null;
       writeReport({ ok: true, failure_phase: null, output: out });
