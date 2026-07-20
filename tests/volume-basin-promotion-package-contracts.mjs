@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,9 +15,10 @@ const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-basin-promotion-'));
 const schemaPath = join(fixtureRoot, 'schema.json');
 const presetPath = join(fixtureRoot, 'preset.json');
 const effectiveStatePath = join(fixtureRoot, 'effective-state.json');
-const packagePath = join(fixtureRoot, 'packages', 'cheap-firebowl.json');
-const channelPath = join(fixtureRoot, 'channels', 'cheap-firebowl-current.json');
-const mountPath = join(fixtureRoot, 'consumer', 'mounted-current.json');
+const promotionRoot = join(fixtureRoot, 'author-repo', 'artifacts', 'basin-promotions');
+const relocatedRoot = join(fixtureRoot, 'product-repo', 'basin-promotions');
+const mountPath = join(fixtureRoot, 'product-repo', 'config', 'mounted-current.json');
+const consumerSettingsStore = join(fixtureRoot, 'product-repo', 'runtime', 'settings-store');
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -102,6 +103,7 @@ const presetArtifact = {
 
 const effectiveState = {
   schema: 'kaminos.volume.effective-basin-state.v0',
+  capturedAt: '2026-07-20T06:45:01.000Z',
   simulator: { identity: 'coefficient-state-120-f120-s120', grid: 160, simStepCount: 120 },
   renderer: { identity: 'native-3d-compute-fluid-raymarch-v0', backend: 'WebGPU:apple' },
   presentation: { volumePresentation: 'beauty', raymarchSmoke: 'on' },
@@ -119,80 +121,149 @@ writeFileSync(effectiveStatePath, `${JSON.stringify(effectiveState, null, 2)}\n`
 
 const exported = spawnSync(process.execPath, [
   cli,
-  'export',
+  'promote',
   '--handle', 'Cheap Firebowl',
-  '--package', packagePath,
+  '--root', promotionRoot,
   '--settings-preset', presetPath,
   '--settings-schema', schemaPath,
   '--effective-state', effectiveStatePath,
   '--source-commit', '91374fa8297119d6513a927b00892bdbda7c9a45',
-  '--origin', 'http://127.0.0.1:18782',
-  '--channel', channelPath,
 ], { encoding: 'utf8', timeout: 30_000 });
 assert.equal(exported.status, 0, `${exported.stderr}\n${exported.stdout}`);
 const exportReceipt = JSON.parse(exported.stdout);
 assert.equal(exportReceipt.status, 'written');
-assert.equal(exportReceipt.packagePath, packagePath);
-assert.equal(exportReceipt.channelPath, channelPath);
 assert.match(exportReceipt.handle, /^cheap-firebowl$/);
 assert.match(exportReceipt.revision, /^basinrev-[a-f0-9]{64}$/);
+const packagePath = join(
+  promotionRoot,
+  'cheap-firebowl',
+  'revisions',
+  exportReceipt.revision,
+  'package.json',
+);
+const channelPath = join(promotionRoot, 'cheap-firebowl', 'current.json');
+assert.equal(exportReceipt.packagePath, packagePath);
+assert.equal(exportReceipt.channelPath, channelPath);
+assert.equal(exportReceipt.packageRelativePath, `revisions/${exportReceipt.revision}/package.json`);
 
 const packageDocument = JSON.parse(readFileSync(packagePath, 'utf8'));
-assert.equal(packageDocument.schema, 'kaminos.volume.basin-promotion-package.v0');
+assert.equal(packageDocument.schema, 'kaminos.volume.basin-promotion-package.v1');
 assert.equal(packageDocument.handle, 'cheap-firebowl');
 assert.equal(packageDocument.label, 'Cheap Firebowl');
 assert.equal(packageDocument.revision, exportReceipt.revision);
 assert.equal(packageDocument.sourceCommit, '91374fa8297119d6513a927b00892bdbda7c9a45');
 assert.equal(packageDocument.settingsPreset.presetId, presetArtifact.presetId);
+assert.deepEqual(
+  packageDocument.settingsPreset.artifact,
+  Object.fromEntries(Object.entries(presetArtifact).filter(([key]) => key !== 'storePath')),
+  'promotion package must embed the exact loader-validated settings preset artifact',
+);
+assert.deepEqual(packageDocument.settingsPreset.schema, schema);
+assert.equal(Object.hasOwn(packageDocument.effectiveState, 'capturedAt'), false);
 assert.equal(packageDocument.effectiveState.renderer.backend, 'WebGPU:apple');
-assert.equal(packageDocument.routes.loaderUrl, `http://127.0.0.1:18782/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_flow_kernel_strength=0.56&volume_quality_reason=promotion-roundtrip&settings_preset=${presetArtifact.presetId}&settings_preset_authority=shared-volume-settings-preset-v2`);
-assert.equal(packageDocument.routing.controlPlane.schema, 'kaminos.volume.basin-promotion-routing.v0');
+assert.equal(packageDocument.routes.loader, `/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_flow_kernel_strength=0.56&volume_quality_reason=promotion-roundtrip&settings_preset=${presetArtifact.presetId}&settings_preset_authority=shared-volume-settings-preset-v2`);
+assert.equal(packageDocument.routing.controlPlane.schema, 'kaminos.volume.basin-promotion-routing.v1');
 assert.equal(packageDocument.routing.controlPlane.sourceCommit, packageDocument.sourceCommit);
-assert.equal(packageDocument.routing.consumer.mountContract, 'kaminos.volume.basin-promotion-mount.v0');
+assert.equal(packageDocument.routing.consumer.mountContract, 'kaminos.volume.basin-promotion-mount.v1');
+assert.equal(JSON.stringify(packageDocument).includes(fixtureRoot), false, 'immutable package must not embed author paths');
 
 const channel = JSON.parse(readFileSync(channelPath, 'utf8'));
-assert.equal(channel.schema, 'kaminos.volume.basin-promotion-channel.v0');
+assert.equal(channel.schema, 'kaminos.volume.basin-promotion-channel.v1');
 assert.equal(channel.handle, 'cheap-firebowl');
 assert.equal(channel.current.revision, exportReceipt.revision);
-assert.equal(channel.current.packagePath, packagePath);
+assert.equal(channel.current.packageRelativePath, `revisions/${exportReceipt.revision}/package.json`);
 assert.equal(channel.history.length, 1);
+assert.equal(JSON.stringify(channel).includes(fixtureRoot), false, 'channel must not embed author paths');
+
+effectiveState.capturedAt = '2026-07-20T06:46:01.000Z';
+writeFileSync(effectiveStatePath, `${JSON.stringify(effectiveState, null, 2)}\n`);
+const repeated = spawnSync(process.execPath, [
+  cli,
+  'promote',
+  '--handle', 'Cheap Firebowl',
+  '--root', promotionRoot,
+  '--settings-preset', presetPath,
+  '--settings-schema', schemaPath,
+  '--effective-state', effectiveStatePath,
+  '--source-commit', '91374fa8297119d6513a927b00892bdbda7c9a45',
+], { encoding: 'utf8', timeout: 30_000 });
+assert.equal(repeated.status, 0, `${repeated.stderr}\n${repeated.stdout}`);
+const repeatedReceipt = JSON.parse(repeated.stdout);
+assert.equal(repeatedReceipt.revision, exportReceipt.revision, 'capture time must not create a false basin revision');
+assert.equal(JSON.parse(readFileSync(channelPath, 'utf8')).history.length, 1);
+
+cpSync(promotionRoot, relocatedRoot, { recursive: true });
+const relocatedChannelPath = join(relocatedRoot, 'cheap-firebowl', 'current.json');
+const relocatedPackagePath = join(
+  relocatedRoot,
+  'cheap-firebowl',
+  'revisions',
+  exportReceipt.revision,
+  'package.json',
+);
 
 const mounted = spawnSync(process.execPath, [
   cli,
   'mount',
-  '--package', packagePath,
-  '--channel', channelPath,
+  '--channel', relocatedChannelPath,
   '--handle', 'cheap-firebowl',
   '--revision', exportReceipt.revision,
+  '--settings-store', consumerSettingsStore,
+  '--origin', 'https://product.example/kaminos/',
   '--out', mountPath,
 ], { encoding: 'utf8', timeout: 30_000 });
 assert.equal(mounted.status, 0, `${mounted.stderr}\n${mounted.stdout}`);
 const mountReceipt = JSON.parse(mounted.stdout);
 assert.equal(mountReceipt.status, 'mounted');
 assert.equal(mountReceipt.mountPath, mountPath);
-assert.equal(mountReceipt.packagePath, packagePath);
+assert.equal(mountReceipt.packagePath, relocatedPackagePath);
 assert.equal(mountReceipt.revision, exportReceipt.revision);
+assert.equal(
+  mountReceipt.settingsPresetPath,
+  join(consumerSettingsStore, 'presets', `${presetArtifact.presetId}.json`),
+);
 
 const mount = JSON.parse(readFileSync(mountPath, 'utf8'));
-assert.equal(mount.schema, 'kaminos.volume.basin-promotion-mount.v0');
+assert.equal(mount.schema, 'kaminos.volume.basin-promotion-mount.v1');
 assert.equal(mount.handle, 'cheap-firebowl');
 assert.equal(mount.revision, exportReceipt.revision);
-assert.equal(mount.currentChannel.path, channelPath);
 assert.equal(mount.currentChannel.revision, exportReceipt.revision);
-assert.equal(mount.sourcePackage.path, packagePath);
 assert.equal(mount.sourcePackage.sha256, exportReceipt.packageSha256);
-assert.equal(mount.loader.targetUrl, packageDocument.routes.loaderUrl);
+assert.equal(mount.loader.targetUrl, `https://product.example/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_flow_kernel_strength=0.56&volume_quality_reason=promotion-roundtrip&settings_preset=${presetArtifact.presetId}&settings_preset_authority=shared-volume-settings-preset-v2`);
 assert.equal(mount.consumerContract.replaceRevisionByUpdatingChannel, true);
+assert.equal(JSON.stringify(mount).includes(fixtureRoot), false, 'consumer mount must use relocatable source locators');
+assert.deepEqual(
+  JSON.parse(readFileSync(mountReceipt.settingsPresetPath, 'utf8')),
+  packageDocument.settingsPreset.artifact,
+  'consumer mount must install the embedded loader-valid preset',
+);
 
 const staleMount = spawnSync(process.execPath, [
   cli,
   'mount',
-  '--package', packagePath,
-  '--channel', channelPath,
+  '--channel', relocatedChannelPath,
   '--handle', 'cheap-firebowl',
   '--revision', 'basinrev-' + '0'.repeat(64),
+  '--settings-store', consumerSettingsStore,
+  '--origin', 'https://product.example/kaminos/',
 ], { encoding: 'utf8', timeout: 30_000 });
 assert.notEqual(staleMount.status, 0, 'consumer mount must reject stale or wrong revision claims');
 assert.match(staleMount.stderr, /revision/i);
+
+const escapedChannelPath = join(relocatedRoot, 'cheap-firebowl', 'escaped-current.json');
+const escapedChannel = structuredClone(channel);
+escapedChannel.current.packageRelativePath = '../../outside-package.json';
+writeFileSync(escapedChannelPath, `${JSON.stringify(escapedChannel, null, 2)}\n`);
+const escapedMount = spawnSync(process.execPath, [
+  cli,
+  'mount',
+  '--channel', escapedChannelPath,
+  '--handle', 'cheap-firebowl',
+  '--revision', exportReceipt.revision,
+  '--settings-store', consumerSettingsStore,
+  '--origin', 'https://product.example/kaminos/',
+], { encoding: 'utf8', timeout: 30_000 });
+assert.notEqual(escapedMount.status, 0, 'consumer mount must reject a channel that escapes its portable root');
+assert.match(escapedMount.stderr, /not portable/i);
 
 console.log('volume basin promotion package contracts passed');

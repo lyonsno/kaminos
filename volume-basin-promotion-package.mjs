@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   buildVolumeSettingsPresetTarget,
@@ -9,14 +9,15 @@ import {
   validateVolumeSettingsPresetDocument,
 } from './volume-settings-preset-contract.mjs';
 
-export const BASIN_PROMOTION_PACKAGE_SCHEMA = 'kaminos.volume.basin-promotion-package.v0';
-export const BASIN_PROMOTION_CHANNEL_SCHEMA = 'kaminos.volume.basin-promotion-channel.v0';
-export const BASIN_PROMOTION_MOUNT_SCHEMA = 'kaminos.volume.basin-promotion-mount.v0';
-export const BASIN_PROMOTION_ROUTING_SCHEMA = 'kaminos.volume.basin-promotion-routing.v0';
+export const BASIN_PROMOTION_PACKAGE_SCHEMA = 'kaminos.volume.basin-promotion-package.v1';
+export const BASIN_PROMOTION_CHANNEL_SCHEMA = 'kaminos.volume.basin-promotion-channel.v1';
+export const BASIN_PROMOTION_MOUNT_SCHEMA = 'kaminos.volume.basin-promotion-mount.v1';
+export const BASIN_PROMOTION_ROUTING_SCHEMA = 'kaminos.volume.basin-promotion-routing.v1';
 
 const VIEWS = Object.freeze(['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-diagnostic']);
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const REVISION = /^basinrev-[a-f0-9]{64}$/;
+const ROUTE_ORIGIN = 'http://kaminos.invalid';
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -70,14 +71,15 @@ function assertObject(value, label) {
 }
 
 function normalizeEffectiveState(value = {}) {
-  const state = assertObject(value, 'effective basin state');
+  const state = structuredClone(assertObject(value, 'effective basin state'));
   for (const key of ['simulator', 'renderer', 'presentation', 'source', 'initialization', 'route', 'backend', 'composition']) {
     if (!state[key] || typeof state[key] !== 'object' || Array.isArray(state[key])) {
       throw new Error(`effective basin state is missing ${key}`);
     }
   }
   if (!state.schemaIdentity && !state.schema) throw new Error('effective basin state is missing schema identity');
-  return structuredClone(state);
+  delete state.capturedAt;
+  return state;
 }
 
 function resolveSourceCommit(inputCommit = null) {
@@ -93,95 +95,158 @@ function resolveSourceCommit(inputCommit = null) {
   return result.stdout.trim();
 }
 
-function buildRoutes(settingsReceipt, origin) {
-  const loaderTarget = buildVolumeSettingsPresetTarget(settingsReceipt, origin);
-  const visual = {};
-  for (const view of VIEWS) visual[view] = buildVolumeSettingsPresetVisualTarget(settingsReceipt, origin, view).href;
+function portablePresetArtifact(document) {
   return {
-    loaderUrl: loaderTarget.href,
-    visualUrls: visual,
+    identity: document.identity,
+    presetId: document.presetId,
+    requestedPresetRef: document.requestedPresetRef,
+    alias: document.alias || null,
+    label: document.label || document.initialLabel || null,
+    contentHash: document.contentHash,
+    schemaIdentity: document.schemaIdentity,
+    controlCount: document.controlCount,
+    preset: structuredClone(document.preset),
+  };
+}
+
+function relativeTarget(target) {
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
+function buildRouteTemplates(settingsReceipt) {
+  const loaderTarget = buildVolumeSettingsPresetTarget(settingsReceipt, ROUTE_ORIGIN);
+  const visual = {};
+  for (const view of VIEWS) {
+    visual[view] = relativeTarget(buildVolumeSettingsPresetVisualTarget(settingsReceipt, ROUTE_ORIGIN, view));
+  }
+  return {
+    loader: relativeTarget(loaderTarget),
+    visual,
     sourcePresetAuthority: settingsReceipt.sourcePresetAuthority,
   };
 }
 
-function revisionBasisFor({ handle, label, sourceCommit, settingsReceipt, effectiveState, routes }) {
+function materializeRoutes(routes, origin) {
+  let base;
+  try {
+    base = new URL(String(origin || ''));
+  } catch (error) {
+    throw new Error(`consumer origin is invalid: ${error.message}`);
+  }
+  if (!['http:', 'https:'].includes(base.protocol)) throw new Error('consumer origin must use http or https');
+  const visualUrls = {};
+  for (const [view, target] of Object.entries(routes.visual || {})) {
+    visualUrls[view] = new URL(target, base).href;
+  }
+  return {
+    targetUrl: new URL(routes.loader, base).href,
+    visualUrls,
+  };
+}
+
+function revisionBasisFor({ handle, label, sourceCommit, settingsArtifact, settingsSchema, effectiveState, routes }) {
   return {
     schema: BASIN_PROMOTION_PACKAGE_SCHEMA,
     handle,
     label,
     sourceCommit,
     settingsPreset: {
-      presetId: settingsReceipt.presetId,
-      contentHash: settingsReceipt.contentHash,
-      schemaIdentity: settingsReceipt.schemaIdentity,
-      controlCount: settingsReceipt.preset.controlCount,
-      rendererControlCount: settingsReceipt.rendererControlCount,
-      routeEntries: settingsReceipt.routeEntries,
+      artifact: settingsArtifact,
+      schema: settingsSchema,
     },
     effectiveState,
     routes,
   };
 }
 
-function buildPackageDocument({
-  handle,
-  label,
-  packagePath,
-  settingsReceipt,
-  settingsPresetDocument,
-  sourceCommit,
-  effectiveState,
-  origin,
-}) {
-  const routes = buildRoutes(settingsReceipt, origin);
-  const basis = revisionBasisFor({ handle, label, sourceCommit, settingsReceipt, effectiveState, routes });
+function preparePackage(options = {}) {
+  const handle = slugifyHandle(options.handle);
+  const label = String(options.label || options.handle || handle).trim();
+  const sourceCommit = resolveSourceCommit(options.sourceCommit);
+  const settingsSchema = structuredClone(
+    options.settingsSchema || readJson(options.settingsSchemaPath, 'settings preset schema'),
+  );
+  const sourcePresetDocument = options.settingsPresetDocument
+    || readJson(options.settingsPresetPath, 'settings preset artifact');
+  validateVolumeSettingsPresetDocument(
+    sourcePresetDocument,
+    sourcePresetDocument.requestedPresetRef || sourcePresetDocument.presetId,
+    settingsSchema,
+  );
+  const settingsArtifact = portablePresetArtifact(sourcePresetDocument);
+  const settingsReceipt = validateVolumeSettingsPresetDocument(
+    settingsArtifact,
+    settingsArtifact.requestedPresetRef || settingsArtifact.presetId,
+    settingsSchema,
+  );
+  const effectiveState = normalizeEffectiveState(
+    options.effectiveState || readJson(options.effectiveStatePath, 'effective basin state'),
+  );
+  const routes = buildRouteTemplates(settingsReceipt);
+  const basis = revisionBasisFor({
+    handle,
+    label,
+    sourceCommit,
+    settingsArtifact,
+    settingsSchema,
+    effectiveState,
+    routes,
+  });
   const revisionHash = sha256(canonicalJson(basis));
   const revision = `basinrev-${revisionHash}`;
-  const resolvedPackagePath = resolve(packagePath);
+  const stableRef = `${handle}@${revision}`;
   return {
-    schema: BASIN_PROMOTION_PACKAGE_SCHEMA,
+    packageDocument: {
+      schema: BASIN_PROMOTION_PACKAGE_SCHEMA,
+      handle,
+      label,
+      revision,
+      stableRef,
+      sourceCommit,
+      packageIdentity: {
+        revisionBasisSha256: revisionHash,
+        canonicalRelativePath: `revisions/${revision}/package.json`,
+      },
+      settingsPreset: {
+        presetId: settingsReceipt.presetId,
+        requestedPresetRef: settingsReceipt.requestedPresetRef,
+        alias: settingsReceipt.alias,
+        label: settingsReceipt.label,
+        contentHash: settingsReceipt.contentHash,
+        schemaIdentity: settingsReceipt.schemaIdentity,
+        controlCount: settingsReceipt.preset.controlCount,
+        rendererControlCount: settingsReceipt.rendererControlCount,
+        sourcePresetAuthority: settingsReceipt.sourcePresetAuthority,
+        artifact: settingsArtifact,
+        schema: settingsSchema,
+      },
+      effectiveState,
+      routes,
+      routing: {
+        controlPlane: {
+          schema: BASIN_PROMOTION_ROUTING_SCHEMA,
+          handle,
+          revision,
+          sourceCommit,
+          stableRef,
+          packageSchema: BASIN_PROMOTION_PACKAGE_SCHEMA,
+          canonicalRelativePath: `revisions/${revision}/package.json`,
+        },
+        consumer: {
+          mountContract: BASIN_PROMOTION_MOUNT_SCHEMA,
+          channelSchema: BASIN_PROMOTION_CHANNEL_SCHEMA,
+          replaceRevisionByUpdatingChannel: true,
+          immutablePackageContents: true,
+          installEmbeddedPreset: true,
+          consumerOriginRequired: true,
+        },
+      },
+    },
     handle,
     label,
     revision,
-    stableRef: `${handle}@${revision}`,
+    stableRef,
     sourceCommit,
-    writtenAt: new Date().toISOString(),
-    packagePath: resolvedPackagePath,
-    packageIdentity: {
-      revisionBasisSha256: revisionHash,
-      revisionBasis: basis,
-    },
-    settingsPreset: {
-      presetId: settingsReceipt.presetId,
-      requestedPresetRef: settingsReceipt.requestedPresetRef,
-      alias: settingsReceipt.alias,
-      label: settingsReceipt.label,
-      contentHash: settingsReceipt.contentHash,
-      schemaIdentity: settingsReceipt.schemaIdentity,
-      controlCount: settingsReceipt.preset.controlCount,
-      rendererControlCount: settingsReceipt.rendererControlCount,
-      sourcePresetAuthority: settingsReceipt.sourcePresetAuthority,
-      storePath: settingsReceipt.storePath || settingsPresetDocument.storePath || null,
-    },
-    effectiveState,
-    routes,
-    routing: {
-      controlPlane: {
-        schema: BASIN_PROMOTION_ROUTING_SCHEMA,
-        handle,
-        revision,
-        packagePath: resolvedPackagePath,
-        sourceCommit,
-        stableRef: `${handle}@${revision}`,
-        packageSchema: BASIN_PROMOTION_PACKAGE_SCHEMA,
-      },
-      consumer: {
-        mountContract: BASIN_PROMOTION_MOUNT_SCHEMA,
-        channelSchema: BASIN_PROMOTION_CHANNEL_SCHEMA,
-        replaceRevisionByUpdatingChannel: true,
-        immutablePackageContents: true,
-      },
-    },
   };
 }
 
@@ -193,24 +258,34 @@ export function validateBasinPromotionPackage(packageDocument) {
   if (!REVISION.test(String(document.revision || ''))) throw new Error('basin promotion package revision is invalid');
   if (!GIT_COMMIT.test(String(document.sourceCommit || ''))) throw new Error('basin promotion package source commit is invalid');
   if (document.stableRef !== `${document.handle}@${document.revision}`) throw new Error('basin promotion package stable ref mismatch');
+  const settingsReceipt = validateVolumeSettingsPresetDocument(
+    document.settingsPreset?.artifact,
+    document.settingsPreset?.presetId,
+    document.settingsPreset?.schema,
+  );
+  const effectiveState = normalizeEffectiveState(document.effectiveState);
+  const expectedRoutes = buildRouteTemplates(settingsReceipt);
+  if (canonicalJson(document.routes) !== canonicalJson(expectedRoutes)) {
+    throw new Error('basin promotion package route templates do not match embedded preset');
+  }
   const basis = revisionBasisFor({
     handle: document.handle,
     label: document.label,
     sourceCommit: document.sourceCommit,
-    settingsReceipt: {
-      presetId: document.settingsPreset?.presetId,
-      contentHash: document.settingsPreset?.contentHash,
-      schemaIdentity: document.settingsPreset?.schemaIdentity,
-      preset: { controlCount: document.settingsPreset?.controlCount },
-      rendererControlCount: document.settingsPreset?.rendererControlCount,
-      routeEntries: document.packageIdentity?.revisionBasis?.settingsPreset?.routeEntries,
-    },
-    effectiveState: document.effectiveState,
+    settingsArtifact: document.settingsPreset.artifact,
+    settingsSchema: document.settingsPreset.schema,
+    effectiveState,
     routes: document.routes,
   });
   const expected = `basinrev-${sha256(canonicalJson(basis))}`;
-  if (document.revision !== expected || document.packageIdentity?.revisionBasisSha256 !== expected.slice('basinrev-'.length)) {
+  if (document.revision !== expected
+    || document.packageIdentity?.revisionBasisSha256 !== expected.slice('basinrev-'.length)) {
     throw new Error('basin promotion package revision hash mismatch');
+  }
+  const canonicalRelativePath = `revisions/${document.revision}/package.json`;
+  if (document.packageIdentity?.canonicalRelativePath !== canonicalRelativePath
+    || document.routing?.controlPlane?.canonicalRelativePath !== canonicalRelativePath) {
+    throw new Error('basin promotion package canonical relative path mismatch');
   }
   if (document.routing?.controlPlane?.schema !== BASIN_PROMOTION_ROUTING_SCHEMA) {
     throw new Error('basin promotion package control-plane routing metadata is missing');
@@ -221,76 +296,30 @@ export function validateBasinPromotionPackage(packageDocument) {
   return document;
 }
 
-export function writeBasinPromotionPackage(options = {}) {
-  const packagePath = options.packagePath || options.package;
-  if (!packagePath) throw new Error('caller-selected package path is required');
-  const handle = slugifyHandle(options.handle);
-  const label = String(options.label || options.handle || handle).trim();
-  const sourceCommit = resolveSourceCommit(options.sourceCommit);
-  const settingsSchema = options.settingsSchema || readJson(options.settingsSchemaPath, 'settings preset schema');
-  const settingsPresetDocument = options.settingsPresetDocument || readJson(options.settingsPresetPath, 'settings preset artifact');
-  const settingsReceipt = validateVolumeSettingsPresetDocument(
-    settingsPresetDocument,
-    settingsPresetDocument.requestedPresetRef || settingsPresetDocument.presetId,
-    settingsSchema,
-  );
-  const effectiveState = normalizeEffectiveState(options.effectiveState || readJson(options.effectiveStatePath, 'effective basin state'));
-  const origin = String(options.origin || effectiveState.route?.targetOrigin || 'http://127.0.0.1:8090');
-  const packageDocument = buildPackageDocument({
-    handle,
-    label,
-    packagePath,
-    settingsReceipt,
-    settingsPresetDocument,
-    sourceCommit,
-    effectiveState,
-    origin,
-  });
-  const resolvedPackagePath = atomicWriteJson(packagePath, packageDocument);
-  const packageSha256 = sha256File(resolvedPackagePath);
-  let channelPath = null;
-  if (options.channelPath || options.channel) {
-    channelPath = writeBasinPromotionChannel({
-      channelPath: options.channelPath || options.channel,
-      packagePath: resolvedPackagePath,
-      packageDocument,
-      packageSha256,
-    }).channelPath;
+function portableRelativePath(fromDirectory, targetPath, label, allowParent = false) {
+  const candidate = relative(resolve(fromDirectory), resolve(targetPath)).split(sep).join('/');
+  if (!candidate || isAbsolute(candidate) || (!allowParent && (candidate === '..' || candidate.startsWith('../')))) {
+    throw new Error(`${label} must remain inside its portable root`);
   }
-  return {
-    ok: true,
-    status: 'written',
-    schema: 'kaminos.volume.basin-promotion-package-write-receipt.v0',
-    handle,
-    label,
-    revision: packageDocument.revision,
-    stableRef: packageDocument.stableRef,
-    packagePath: resolvedPackagePath,
-    packageSha256,
-    channelPath,
-    loaderUrl: packageDocument.routes.loaderUrl,
-    sourceCommit,
-  };
+  return candidate;
 }
 
 export function writeBasinPromotionChannel({ channelPath, packagePath, packageDocument, packageSha256 }) {
   if (!channelPath) throw new Error('caller-selected channel path is required');
-  const existing = existsSync(channelPath) ? readJson(resolve(channelPath), 'basin promotion channel') : null;
+  const resolvedChannelPath = resolve(channelPath);
+  const existing = existsSync(resolvedChannelPath) ? readJson(resolvedChannelPath, 'basin promotion channel') : null;
   if (existing && existing.schema !== BASIN_PROMOTION_CHANNEL_SCHEMA) throw new Error('basin promotion channel schema mismatch');
   if (existing && existing.handle !== packageDocument.handle) throw new Error('basin promotion channel handle mismatch');
   const current = {
     revision: packageDocument.revision,
     stableRef: packageDocument.stableRef,
-    packagePath: resolve(packagePath),
+    packageRelativePath: portableRelativePath(dirname(resolvedChannelPath), packagePath, 'channel package path'),
     packageSha256,
     sourceCommit: packageDocument.sourceCommit,
-    updatedAt: packageDocument.writtenAt,
+    updatedAt: new Date().toISOString(),
   };
   const previous = Array.isArray(existing?.history) ? existing.history : [];
-  const history = [
-    ...previous.filter(entry => entry.revision !== current.revision),
-    current,
-  ];
+  const history = [...previous.filter(entry => entry.revision !== current.revision), current];
   const channel = {
     schema: BASIN_PROMOTION_CHANNEL_SCHEMA,
     handle: packageDocument.handle,
@@ -299,38 +328,127 @@ export function writeBasinPromotionChannel({ channelPath, packagePath, packageDo
     history,
   };
   return {
-    channelPath: atomicWriteJson(channelPath, channel),
+    channelPath: atomicWriteJson(resolvedChannelPath, channel),
     channel,
   };
 }
 
-export function mountBasinPromotionPackage(options = {}) {
+function writePreparedPackage(prepared, packagePath, channelPath = null) {
+  const resolvedPackagePath = atomicWriteJson(packagePath, prepared.packageDocument);
+  const packageSha256 = sha256File(resolvedPackagePath);
+  const resolvedChannelPath = channelPath
+    ? writeBasinPromotionChannel({
+      channelPath,
+      packagePath: resolvedPackagePath,
+      packageDocument: prepared.packageDocument,
+      packageSha256,
+    }).channelPath
+    : null;
+  return {
+    ok: true,
+    status: 'written',
+    schema: 'kaminos.volume.basin-promotion-package-write-receipt.v1',
+    handle: prepared.handle,
+    label: prepared.label,
+    revision: prepared.revision,
+    stableRef: prepared.stableRef,
+    packagePath: resolvedPackagePath,
+    packageSha256,
+    channelPath: resolvedChannelPath,
+    routeTemplates: prepared.packageDocument.routes,
+    sourceCommit: prepared.sourceCommit,
+  };
+}
+
+export function writeBasinPromotionPackage(options = {}) {
   const packagePath = options.packagePath || options.package;
-  if (!packagePath) throw new Error('package path is required');
-  const resolvedPackagePath = resolve(packagePath);
+  if (!packagePath) throw new Error('caller-selected package path is required');
+  return writePreparedPackage(
+    preparePackage(options),
+    packagePath,
+    options.channelPath || options.channel || null,
+  );
+}
+
+export function promoteBasinPackage(options = {}) {
+  const promotionRoot = options.promotionRoot || options.root;
+  if (!promotionRoot) throw new Error('caller-selected promotion root is required');
+  const prepared = preparePackage(options);
+  const basinRoot = join(resolve(promotionRoot), prepared.handle);
+  const packagePath = join(basinRoot, 'revisions', prepared.revision, 'package.json');
+  const channelPath = join(basinRoot, 'current.json');
+  return {
+    ...writePreparedPackage(prepared, packagePath, channelPath),
+    promotionRoot: resolve(promotionRoot),
+    basinRoot,
+    packageRelativePath: portableRelativePath(basinRoot, packagePath, 'promotion package path'),
+    channelRelativePath: portableRelativePath(resolve(promotionRoot), channelPath, 'promotion channel path'),
+  };
+}
+
+function validateChannel(channel) {
+  assertObject(channel, 'basin promotion channel');
+  if (channel.schema !== BASIN_PROMOTION_CHANNEL_SCHEMA) throw new Error('basin promotion channel schema mismatch');
+  if (slugifyHandle(channel.handle) !== channel.handle) throw new Error('basin promotion channel handle is not stable');
+  if (!REVISION.test(String(channel.current?.revision || ''))) throw new Error('basin promotion channel current revision is invalid');
+  const packageRelativePath = String(channel.current?.packageRelativePath || '');
+  if (!packageRelativePath || isAbsolute(packageRelativePath)
+    || packageRelativePath === '..' || packageRelativePath.startsWith('../')) {
+    throw new Error('basin promotion channel package path is not portable');
+  }
+  return channel;
+}
+
+function installPresetArtifact(settingsStorePath, packageDocument) {
+  const storePath = resolve(settingsStorePath);
+  const presetPath = join(storePath, 'presets', `${packageDocument.settingsPreset.presetId}.json`);
+  const artifact = packageDocument.settingsPreset.artifact;
+  if (existsSync(presetPath)) {
+    const existing = readJson(presetPath, 'consumer settings preset');
+    if (canonicalJson(existing) !== canonicalJson(artifact)) {
+      throw new Error('consumer settings store contains conflicting preset content');
+    }
+  } else {
+    atomicWriteJson(presetPath, artifact);
+  }
+  return presetPath;
+}
+
+export function mountBasinPromotionPackage(options = {}) {
+  const channelInput = options.channelPath || options.channel;
+  if (!channelInput) throw new Error('channel path is required');
+  if (!options.handle) throw new Error('exact mount handle is required');
+  if (!options.revision) throw new Error('exact mount revision is required');
+  const settingsStoreInput = options.settingsStorePath || options.settingsStore;
+  if (!settingsStoreInput) throw new Error('caller-selected consumer settings store is required');
+  if (!options.origin) throw new Error('consumer origin is required');
+
+  const channelPath = resolve(channelInput);
+  const channel = validateChannel(readJson(channelPath, 'basin promotion channel'));
+  const resolvedPackagePath = resolve(dirname(channelPath), channel.current.packageRelativePath);
+  const requestedPackagePath = options.packagePath || options.package;
+  if (requestedPackagePath && resolve(requestedPackagePath) !== resolvedPackagePath) {
+    throw new Error('basin promotion channel package path mismatch');
+  }
   const packageDocument = validateBasinPromotionPackage(readJson(resolvedPackagePath, 'basin promotion package'));
   const packageSha256 = sha256File(resolvedPackagePath);
-  const expectedHandle = options.handle ? slugifyHandle(options.handle) : packageDocument.handle;
-  if (expectedHandle !== packageDocument.handle) throw new Error(`mount handle mismatch: ${expectedHandle} != ${packageDocument.handle}`);
-  if (options.revision && options.revision !== packageDocument.revision) {
+  const expectedHandle = slugifyHandle(options.handle);
+  if (expectedHandle !== packageDocument.handle || channel.handle !== packageDocument.handle) {
+    throw new Error(`mount handle mismatch: ${expectedHandle} != ${packageDocument.handle}`);
+  }
+  if (options.revision !== packageDocument.revision) {
     throw new Error(`mount revision mismatch: ${options.revision} != ${packageDocument.revision}`);
   }
-  let currentChannel = null;
-  if (options.channelPath || options.channel) {
-    const channelPath = resolve(options.channelPath || options.channel);
-    const channel = readJson(channelPath, 'basin promotion channel');
-    if (channel.schema !== BASIN_PROMOTION_CHANNEL_SCHEMA) throw new Error('basin promotion channel schema mismatch');
-    if (channel.handle !== packageDocument.handle) throw new Error('basin promotion channel handle mismatch');
-    if (channel.current?.revision !== packageDocument.revision) throw new Error('basin promotion channel current revision mismatch');
-    if (resolve(channel.current?.packagePath || '') !== resolvedPackagePath) {
-      throw new Error('basin promotion channel package path mismatch');
-    }
-    currentChannel = {
-      path: channelPath,
-      revision: channel.current.revision,
-      packagePath: channel.current.packagePath,
-    };
+  if (channel.current.revision !== packageDocument.revision) {
+    throw new Error('basin promotion channel current revision mismatch');
   }
+  if (channel.current.packageSha256 !== packageSha256) throw new Error('basin promotion channel package hash mismatch');
+
+  const presetPath = installPresetArtifact(settingsStoreInput, packageDocument);
+  const materializedRoutes = materializeRoutes(packageDocument.routes, options.origin);
+  const mountPathInput = options.outPath || options.out;
+  const mountPath = mountPathInput ? resolve(mountPathInput) : null;
+  const locatorBase = mountPath ? dirname(mountPath) : dirname(channelPath);
   const mount = {
     schema: BASIN_PROMOTION_MOUNT_SCHEMA,
     status: 'mounted',
@@ -338,28 +456,31 @@ export function mountBasinPromotionPackage(options = {}) {
     label: packageDocument.label,
     revision: packageDocument.revision,
     stableRef: packageDocument.stableRef,
-    mountedAt: new Date().toISOString(),
     sourcePackage: {
-      path: resolvedPackagePath,
+      relativePath: portableRelativePath(locatorBase, resolvedPackagePath, 'mount package path', true),
       sha256: packageSha256,
       schema: packageDocument.schema,
       sourceCommit: packageDocument.sourceCommit,
     },
-    currentChannel,
-    loader: {
-      targetUrl: packageDocument.routes.loaderUrl,
-      visualUrls: packageDocument.routes.visualUrls,
-      settingsPresetId: packageDocument.settingsPreset.presetId,
-      settingsPresetAuthority: packageDocument.settingsPreset.sourcePresetAuthority,
+    currentChannel: {
+      relativePath: portableRelativePath(locatorBase, channelPath, 'mount channel path', true),
+      revision: channel.current.revision,
+      packageRelativePath: channel.current.packageRelativePath,
     },
+    settingsPreset: {
+      presetId: packageDocument.settingsPreset.presetId,
+      authority: packageDocument.settingsPreset.sourcePresetAuthority,
+      storeRelativePath: portableRelativePath(locatorBase, presetPath, 'mount settings store path', true),
+    },
+    loader: materializedRoutes,
     consumerContract: {
       schema: BASIN_PROMOTION_MOUNT_SCHEMA,
       exactRevisionRequired: true,
       replaceRevisionByUpdatingChannel: true,
       packageContentsImmutable: true,
+      embeddedPresetInstalled: true,
     },
   };
-  const mountPath = options.outPath || options.out;
   if (mountPath) atomicWriteJson(mountPath, mount);
   return {
     ok: true,
@@ -368,7 +489,9 @@ export function mountBasinPromotionPackage(options = {}) {
     revision: mount.revision,
     packagePath: resolvedPackagePath,
     packageSha256,
-    mountPath: mountPath ? resolve(mountPath) : null,
+    channelPath,
+    settingsPresetPath: presetPath,
+    mountPath,
     mount,
   };
 }
@@ -394,18 +517,31 @@ function option(args, name) {
   return value === true ? null : value;
 }
 
+function packageOptions(args) {
+  return {
+    handle: option(args, '--handle'),
+    label: option(args, '--label') || option(args, '--handle'),
+    settingsPresetPath: option(args, '--settings-preset'),
+    settingsSchemaPath: option(args, '--settings-schema'),
+    effectiveStatePath: option(args, '--effective-state'),
+    sourceCommit: option(args, '--source-commit'),
+  };
+}
+
 function main() {
   const { command, args } = parseArgs(process.argv.slice(2));
+  if (command === 'promote') {
+    const receipt = promoteBasinPackage({
+      ...packageOptions(args),
+      promotionRoot: option(args, '--root'),
+    });
+    process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+    return;
+  }
   if (command === 'export') {
     const receipt = writeBasinPromotionPackage({
-      handle: option(args, '--handle'),
-      label: option(args, '--label') || option(args, '--handle'),
+      ...packageOptions(args),
       packagePath: option(args, '--package'),
-      settingsPresetPath: option(args, '--settings-preset'),
-      settingsSchemaPath: option(args, '--settings-schema'),
-      effectiveStatePath: option(args, '--effective-state'),
-      sourceCommit: option(args, '--source-commit'),
-      origin: option(args, '--origin'),
       channelPath: option(args, '--channel'),
     });
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
@@ -417,12 +553,14 @@ function main() {
       channelPath: option(args, '--channel'),
       handle: option(args, '--handle'),
       revision: option(args, '--revision'),
+      settingsStorePath: option(args, '--settings-store'),
+      origin: option(args, '--origin'),
       outPath: option(args, '--out'),
     });
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
-  throw new Error('usage: volume-basin-promotion-package.mjs <export|mount> [options]');
+  throw new Error('usage: volume-basin-promotion-package.mjs <promote|export|mount> [options]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
