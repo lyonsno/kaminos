@@ -9908,7 +9908,9 @@ export function createKaminosVolumePrototype({
     const maxRequestedGridSize = productFrameOwner === 'caller'
       ? gridSize
       : Math.max(...SUPPORTED_GRID_SIZES);
-    const maxRequestedCellCapacity = gridCellCount(maxRequestedGridSize);
+    const maxRequestedCellCapacity = productFrameOwner === 'caller'
+      ? boundarySplatCapacity
+      : gridCellCount(maxRequestedGridSize);
     const maxRequestedFluidBufferBytes = fluidBufferBytes(maxRequestedGridSize);
     const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
     const maxRequestedBoundarySplatBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
