@@ -23,6 +23,7 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
     pressureIterations: 'finger_fluid_oracle_pressure_iterations',
     viscosity: 'finger_fluid_oracle_viscosity',
     cohesion: 'finger_fluid_oracle_cohesion',
+    unsupportedSheetStrength: 'finger_fluid_oracle_sheet_support',
     paused: 'finger_fluid_oracle_pause',
     fixedCamera: 'finger_fluid_oracle_fixed_camera',
     replayId: 'finger_fluid_oracle_replay',
@@ -32,12 +33,14 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
     truthScene: 'finger_fluid_truth_scene',
     capillaryStrength: 'finger_fluid_capillary_strength',
     freeFlightViscosityBoost: 'finger_fluid_free_flight_viscosity_boost',
+    unsupportedSheetStrength: 'finger_fluid_unsupported_sheet_strength',
   },
   effectiveDebugFields: {
     particleCount: ['effectiveParticleCount', 'particleCount'],
     pressureIterations: ['densityIterationsPerStep', 'densityIterationCount'],
     viscosity: ['freeFlightViscosityBoost', 'effectiveFreeFlightViscosityBoost'],
     cohesion: ['capillaryStrength', 'effectiveCapillaryStrength'],
+    unsupportedSheetStrength: ['unsupportedSheetStrength', 'effectiveUnsupportedSheetStrength'],
     particleSpacing: ['oracleParticleSpacingScale', 'effectiveParticleSpacingScale'],
     kernelScale: ['oracleKernelScale', 'effectiveKernelScale'],
     sourceFlux: ['oracleSourceFluxScale', 'effectiveSourceFluxScale'],
@@ -48,7 +51,7 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
     baseline: { particleCount: 12288, label: 'baseline', spacingScale: 1, kernelScale: 1, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
     high: { particleCount: 98304, label: 'high', spacingScale: 0.5, kernelScale: 0.5, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
   },
-  structuralControls: ['resolutionPreset', 'particleSpacing', 'kernelScale', 'sourceFlux', 'pressureIterations', 'viscosity', 'cohesion'],
+  structuralControls: ['resolutionPreset', 'particleSpacing', 'kernelScale', 'sourceFlux', 'pressureIterations', 'viscosity', 'cohesion', 'unsupportedSheetStrength'],
   unsupportedUntilBigPapaFields: ['particleSpacing', 'kernelScale', 'sourceFlux'],
 });
 
@@ -121,6 +124,7 @@ export function fingerFluidOracleRequestedConfigFromParams(paramsInput = new URL
     pressureIterations: boundedInteger(params.get(keys.pressureIterations), 3, 1, 12),
     viscosity: boundedNumber(params.get(keys.viscosity), 0.17, 0, 0.75),
     cohesion: boundedNumber(params.get(keys.cohesion), 0.72, 0, 1.5),
+    unsupportedSheetStrength: boundedNumber(params.get(keys.unsupportedSheetStrength), 0, 0, 2),
     paused: boolParam(params.get(keys.paused), false),
     fixedCamera: boolParam(params.get(keys.fixedCamera), false),
     replayId: params.get(keys.replayId) || 'default',
@@ -137,6 +141,7 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
   const effectivePressureIterations = readEffectiveField(effective, fields.pressureIterations);
   const effectiveViscosity = readEffectiveField(effective, fields.viscosity);
   const effectiveCohesion = readEffectiveField(effective, fields.cohesion);
+  const effectiveUnsupportedSheetStrength = readEffectiveField(effective, fields.unsupportedSheetStrength);
   const routeIdentity = {
     solverRoute: readEffectiveField(effective, fields.solverRoute) || 'unsupported',
     waterfallContinuityContract: readEffectiveField(effective, fields.waterfallContinuityContract) || 'unsupported',
@@ -173,6 +178,9 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
       pressureIterations: Number.isFinite(Number(effectivePressureIterations)) ? Number(effectivePressureIterations) : requested.pressureIterations,
       viscosity: Number.isFinite(Number(effectiveViscosity)) ? Number(effectiveViscosity) : requested.viscosity,
       cohesion: Number.isFinite(Number(effectiveCohesion)) ? Number(effectiveCohesion) : requested.cohesion,
+      unsupportedSheetStrength: Number.isFinite(Number(effectiveUnsupportedSheetStrength))
+        ? Number(effectiveUnsupportedSheetStrength)
+        : requested.unsupportedSheetStrength,
       particleSpacing: readEffectiveField(effective, fields.particleSpacing) ?? 'unsupported',
       kernelScale: readEffectiveField(effective, fields.kernelScale) ?? 'unsupported',
       sourceFlux: readEffectiveField(effective, fields.sourceFlux) ?? 'unsupported',
@@ -193,8 +201,8 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
     acceptanceClaimAllowed: false,
     operatorJudgment: 'operator observation owns continuity judgment; cockpit only exposes requested/effective route identity',
     display: {
-      requestedSummary: `req ${requested.resolutionPreset} P${requested.pressureIterations} flux ${formatValue(requested.sourceFlux)}`,
-      effectiveSummary: `eff ${routeIdentity.solverRoute} particles ${formatValue(effectiveParticleCount ?? requested.particleCount)}`,
+      requestedSummary: `req ${requested.resolutionPreset} P${requested.pressureIterations} sheet ${formatValue(requested.unsupportedSheetStrength)}`,
+      effectiveSummary: `eff ${routeIdentity.solverRoute} particles ${formatValue(effectiveParticleCount ?? requested.particleCount)} sheet ${formatValue(effectiveUnsupportedSheetStrength ?? requested.unsupportedSheetStrength)}`,
       unsupportedSummary: unsupported.length ? unsupported.map(row => row.control).join(', ') : 'none',
     },
   };
@@ -210,6 +218,9 @@ export function updateFingerFluidOracleCockpitUrl({ url, control, value } = {}) 
   if (control === 'resolutionPreset') {
     const preset = FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets[normalizeResolutionPreset(String(value))];
     nextUrl.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.legacyBridgeKeys.particleCount, String(preset.particleCount));
+  }
+  if (control === 'unsupportedSheetStrength') {
+    nextUrl.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.legacyBridgeKeys.unsupportedSheetStrength, String(value));
   }
   nextUrl.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredBenchKey, '1');
   nextUrl.searchParams.set(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthSceneKey, FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.requiredTruthScene);

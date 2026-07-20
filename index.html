@@ -2586,6 +2586,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <input id="finger-fluid-oracle-cohesion" type="number" min="0" max="1.5" step="0.01" value="0.72">
           </div>
           <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-sheet-support">Sheet</label>
+            <input id="finger-fluid-oracle-sheet-support" type="number" min="0" max="2" step="0.05" value="0">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
             <label for="finger-fluid-oracle-replay">Replay</label>
             <input id="finger-fluid-oracle-replay" type="text" value="default">
           </div>
@@ -2779,6 +2783,7 @@ import {
   KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
+  KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
   createFingerFluidWaterfallOracleConfig,
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
@@ -2791,6 +2796,7 @@ import {
   resolveFingerFluidCapillaryStrength,
   resolveFingerFluidThinSheetVorticityAttenuation,
   resolveFingerFluidFreeFlightViscosityBoost,
+  resolveFingerFluidUnsupportedSheetStrength,
   resolveFingerFluidParticleCount,
   resolveFingerFluidWaterfallOraclePreset,
 } from './finger-fluid-webgpu-core.js';
@@ -2953,6 +2959,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedCapillaryStrength = Number(params.get('finger_fluid_capillary_strength') ?? oracleCockpitRequested?.cohesion ?? KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH);
   const requestedThinSheetVorticityAttenuation = Number(params.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION);
   const requestedFreeFlightViscosityBoost = Number(params.get('finger_fluid_free_flight_viscosity_boost') ?? oracleCockpitRequested?.viscosity ?? KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST);
+  const requestedUnsupportedSheetStrength = Number(params.get('finger_fluid_unsupported_sheet_strength')
+    ?? oracleCockpitRequested?.unsupportedSheetStrength
+    ?? KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
@@ -2994,6 +3003,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveThinSheetVorticityAttenuation: resolveFingerFluidThinSheetVorticityAttenuation(requestedThinSheetVorticityAttenuation),
     requestedFreeFlightViscosityBoost,
     effectiveFreeFlightViscosityBoost: resolveFingerFluidFreeFlightViscosityBoost(requestedFreeFlightViscosityBoost),
+    requestedUnsupportedSheetStrength,
+    effectiveUnsupportedSheetStrength: resolveFingerFluidUnsupportedSheetStrength(requestedUnsupportedSheetStrength),
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedPressureIterations,
@@ -10038,6 +10049,7 @@ function renderFingerFluidOracleCockpit() {
   setValue('finger-fluid-oracle-pressure', requested.pressureIterations);
   setValue('finger-fluid-oracle-viscosity', requested.viscosity);
   setValue('finger-fluid-oracle-cohesion', requested.cohesion);
+  setValue('finger-fluid-oracle-sheet-support', requested.unsupportedSheetStrength);
   setValue('finger-fluid-oracle-replay', requested.replayId);
   document.getElementById('finger-fluid-oracle-pause').textContent = requested.paused ? 'Resume' : 'Pause';
   document.getElementById('finger-fluid-oracle-fixed-camera').textContent = requested.fixedCamera ? 'Fixed Cam' : 'Camera';
@@ -10097,6 +10109,7 @@ function installFingerFluidOracleCockpitControls() {
     ['finger-fluid-oracle-pressure', 'pressureIterations'],
     ['finger-fluid-oracle-viscosity', 'viscosity'],
     ['finger-fluid-oracle-cohesion', 'cohesion'],
+    ['finger-fluid-oracle-sheet-support', 'unsupportedSheetStrength'],
     ['finger-fluid-oracle-replay', 'replayId'],
   ];
   for (const [id, control] of bindings) {
@@ -10470,6 +10483,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveParticleCount = gpuState.particleCount;
   gpuState.requestedPressureIterations = fingerFluidBenchConfig.requestedPressureIterations;
   gpuState.effectivePressureIterations = fingerFluidBenchConfig.effectivePressureIterations;
+  gpuState.requestedUnsupportedSheetStrength = fingerFluidBenchConfig.requestedUnsupportedSheetStrength;
+  gpuState.effectiveUnsupportedSheetStrength = fingerFluidBenchConfig.effectiveUnsupportedSheetStrength;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
@@ -10526,6 +10541,9 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     capillaryStrength: gpuState.capillaryStrength,
     thinSheetVorticityAttenuation: gpuState.thinSheetVorticityAttenuation,
     freeFlightViscosityBoost: gpuState.freeFlightViscosityBoost,
+    unsupportedSheetContract: gpuState.unsupportedSheetContract,
+    unsupportedSheetStrength: gpuState.unsupportedSheetStrength,
+    sheetSupportPassCount: gpuState.sheetSupportPassCount,
     colorMode: gpuState.colorMode,
     config: fingerFluidBenchConfig,
     playgroundContract: gpuState.playgroundContract,
@@ -10607,6 +10625,7 @@ async function startFingerFluidBench() {
       capillaryStrength: fingerFluidBenchConfig.effectiveCapillaryStrength,
       thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
+      unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
       waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });

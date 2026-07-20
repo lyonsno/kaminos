@@ -20,6 +20,7 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT = 'wgsl-descriptor-lami
 export const KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT = 'wgsl-analytic-laminar-inlet-fixture-presentation-v0';
 export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-distinct-flux-cadenced-inlet-population-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
+export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT = 'wgsl-unilateral-free-surface-pressure-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
@@ -29,6 +30,7 @@ export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webg
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
 export const KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST = 0.17;
+export const KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH = 0;
 export const KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT = 49_152;
 export const KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS = 1 / 60;
 export const KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT = 'fixed-step-60hz-one-simulation-step-per-render-frame-v0';
@@ -107,7 +109,7 @@ const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
 const REST_STATE_FLOATS = 4;
 const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
-const NEIGHBOR_TOPOLOGY_WORDS = 8;
+const NEIGHBOR_TOPOLOGY_WORDS = 20;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
@@ -230,6 +232,7 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     supportFriction: Number(values.supportFriction),
     freeFlightViscosityBoost: Number(values.freeFlightViscosityBoost),
     thinSheetVorticityAttenuation: Number(values.thinSheetVorticityAttenuation),
+    unsupportedSheetStrength: Number(values.unsupportedSheetStrength),
     camera: values.camera ? JSON.parse(JSON.stringify(values.camera)) : null,
   };
   const numericKeys = [
@@ -237,6 +240,7 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     'particleCount', 'laneColumns', 'laneRows', 'laneCount', 'physicalSourceFlux',
     'expectedParticleReleaseRate', 'fixedTimeStepSeconds', 'capturedStep', 'densityIterations',
     'capillaryStrength', 'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
+    'unsupportedSheetStrength',
   ];
   if (identity.truthScene !== 'waterfall_resolution_oracle'
     || identity.sourceId !== config.sourceId
@@ -262,7 +266,7 @@ export function evaluateFingerFluidWaterfallOraclePair({
   const exactCommonKeys = [
     'contract', 'truthScene', 'sourceId', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
-    'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
+    'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'unsupportedSheetStrength',
   ];
   for (const key of exactCommonKeys) {
     if (JSON.stringify(baselineIdentity[key]) !== JSON.stringify(highIdentity[key])) {
@@ -296,6 +300,50 @@ export function evaluateFingerFluidWaterfallOraclePair({
     highIdentity,
     baselineArtifact: requireFingerFluidOracleArtifact(baselineArtifact, 'baseline'),
     highArtifact: requireFingerFluidOracleArtifact(highArtifact, 'high'),
+  };
+}
+
+export function evaluateFingerFluidUnsupportedSheetOraclePair({
+  controlIdentity,
+  treatmentIdentity,
+  controlArtifact,
+  treatmentArtifact,
+} = {}) {
+  if (controlIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+    || treatmentIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA) {
+    throw new Error('unsupported-sheet oracle evidence identity missing');
+  }
+  if (controlIdentity.effectivePreset !== 'high' || treatmentIdentity.effectivePreset !== 'high') {
+    throw new Error('unsupported-sheet oracle requires the high-resolution preset for control and treatment');
+  }
+  const exactCommonKeys = [
+    'contract', 'truthScene', 'sourceId', 'refinementFactor', 'particleSpacing', 'particleVolume',
+    'kernelRadius', 'visibleParticleRadius', 'particleCount', 'laneColumns', 'laneRows', 'laneCount',
+    'physicalSourceFlux', 'expectedParticleReleaseRate', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',
+    'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'camera',
+  ];
+  for (const key of exactCommonKeys) {
+    if (JSON.stringify(controlIdentity[key]) !== JSON.stringify(treatmentIdentity[key])) {
+      throw new Error(`unsupported-sheet oracle common identity mismatch at ${key}`);
+    }
+  }
+  if (controlIdentity.unsupportedSheetStrength !== 0
+    || !Number.isFinite(treatmentIdentity.unsupportedSheetStrength)
+    || treatmentIdentity.unsupportedSheetStrength <= 0) {
+    throw new Error('unsupported-sheet oracle requires zero-strength control and positive-strength treatment');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.unsupported-sheet-oracle-pair.v0',
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    mechanicalChecksOk: true,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualContinuityAccepted: null,
+    controlIdentity,
+    treatmentIdentity,
+    controlArtifact: requireFingerFluidOracleArtifact(controlArtifact, 'unsupported-sheet control'),
+    treatmentArtifact: requireFingerFluidOracleArtifact(treatmentArtifact, 'unsupported-sheet treatment'),
   };
 }
 
@@ -1173,6 +1221,9 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -1239,6 +1290,7 @@ struct Params {
   forces: vec4<f32>,
   particleShift: vec4<f32>,
   chemistry: vec4<f32>,
+  sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
 }
 
@@ -1636,6 +1688,12 @@ fn containsNeighbor(ids: vec4<u32>, candidate: u32) -> bool {
   return candidate != ${INVALID_NEIGHBOR_ID}u && any(ids == vec4<u32>(candidate));
 }
 
+fn clear_unsupported_sheet_state(index: u32) {
+  neighborTopology[index].sheet = vec4<f32>(0.0);
+  neighborTopology[index].sheetNeighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
+  neighborTopology[index].sheetRestDistances = vec4<f32>(0.0);
+}
+
 fn supportNormalAt(position: vec3<f32>) -> vec3<f32> {
   let radius = params.fluid.x * 0.22;
   let floorDistance = abs(position.y - (floorHeight(position) + radius));
@@ -1684,6 +1742,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     atomicAdd(&interfaceCounters[2], 1u);
   }
   let recycleLaminarInlet = laminarInletScene && particle.velocity.w >= 0.0 && particle.position.z > 2.35;
@@ -1696,6 +1755,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     return;
   }
   if (recyclePlaygroundSource) {
@@ -1717,6 +1777,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     atomicAdd(&interfaceCounters[2], 1u);
     return;
   }
@@ -1757,6 +1818,7 @@ fn measure_neighbor_topology(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (particles[index].velocity.w < 0.0) {
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     return;
   }
   let position = particles[index].predicted.xyz;
@@ -2178,6 +2240,207 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index].position.w = min(omegaMagnitude, 4096.0);
 }
 
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let priorSheetActivity = neighborTopology[index].sheet.w;
+  neighborTopology[index].sheet = vec4<f32>(0.0);
+  if (params.sheet.x <= 0.0 || params.particleShift.z <= 1.5 || particle.velocity.w < 0.0) {
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+
+  let position = particle.predicted.xyz;
+  let velocity = particle.delta.xyz;
+  let speed = length(velocity);
+  if (speed < 0.18) { clear_unsupported_sheet_state(index); return; }
+  let supportContact = supportContactFrame(position).w;
+  if (supportContact >= 0.20) { clear_unsupported_sheet_state(index); return; }
+  let densityRatio = particle.delta.w / max(params.fluid.y, 0.0001);
+  let surfaceFactor = particle.predicted.w;
+  let topology = neighborTopology[index].metrics;
+  if (densityRatio < 0.10 || densityRatio > 1.05 || surfaceFactor < 0.20 || topology.x < 0.25 || topology.y < 0.03) {
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+
+  let flowTangent = velocity / speed;
+  var seed = vec3<f32>(1.0, 0.0, 0.0);
+  if (abs(flowTangent.x) >= 0.82) { seed = vec3<f32>(0.0, 0.0, 1.0); }
+  let transverseU = normalize(cross(flowTangent, seed));
+  let transverseV = normalize(cross(flowTangent, transverseU));
+  let baseCell = gridCoord(position);
+  var covarianceUU = 0.0;
+  var covarianceUV = 0.0;
+  var covarianceVV = 0.0;
+  var velocityCoherenceSum = 0.0;
+  var acceptedNeighborCount = 0u;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index && particles[neighborIndex].velocity.w >= 0.0) {
+            let offset = particles[neighborIndex].predicted.xyz - position;
+            let distance = length(offset);
+            if (distance > 0.00001 && distance < params.fluid.x) {
+              let u = dot(offset, transverseU);
+              let v = dot(offset, transverseV);
+              covarianceUU = covarianceUU + u * u;
+              covarianceUV = covarianceUV + u * v;
+              covarianceVV = covarianceVV + v * v;
+              let neighborVelocity = particles[neighborIndex].delta.xyz;
+              let neighborSpeed = length(neighborVelocity);
+              if (neighborSpeed > 0.0001) {
+                velocityCoherenceSum = velocityCoherenceSum + clamp(dot(neighborVelocity / neighborSpeed, flowTangent), -1.0, 1.0);
+              }
+              acceptedNeighborCount = acceptedNeighborCount + 1u;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  if (acceptedNeighborCount < 3u) { clear_unsupported_sheet_state(index); return; }
+  let neighborCount = f32(acceptedNeighborCount);
+  let covarianceTrace = covarianceUU + covarianceVV;
+  let covarianceDiscriminant = sqrt(max(0.0, (covarianceUU - covarianceVV) * (covarianceUU - covarianceVV) + 4.0 * covarianceUV * covarianceUV));
+  let dominantVariance = (covarianceTrace + covarianceDiscriminant) * 0.5;
+  let transverseAnisotropy = dominantVariance / max(covarianceTrace, 0.0000001);
+  let velocityCoherence = velocityCoherenceSum / neighborCount;
+  if (velocityCoherence < 0.72 || transverseAnisotropy < 0.66) {
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+
+  var eigenvector = vec2<f32>(covarianceUV, dominantVariance - covarianceUU);
+  if (length(eigenvector) < 0.000001) {
+    eigenvector = select(vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), covarianceUU >= covarianceVV);
+  }
+  eigenvector = normalize(eigenvector);
+  let widthTangent = normalize(transverseU * eigenvector.x + transverseV * eigenvector.y);
+  let sheetNormal = normalize(cross(flowTangent, widthTangent));
+  let inletCoreWeight = apply_laminar_inlet_boundary(position, particle.velocity.w, velocity).w;
+  let activity = clamp(
+    params.sheet.x
+      * (1.0 - smoothstep(0.04, 0.20, supportContact))
+      * smoothstep(0.10, 0.32, densityRatio)
+      * (1.0 - smoothstep(0.90, 1.05, densityRatio))
+      * smoothstep(0.20, 0.58, surfaceFactor)
+      * smoothstep(0.25, 0.65, topology.x)
+      * smoothstep(0.03, 0.22, topology.y)
+      * smoothstep(0.72, 0.92, velocityCoherence)
+      * smoothstep(0.66, 0.86, transverseAnisotropy)
+      * smoothstep(2.0, 6.0, neighborCount)
+      * (1.0 - inletCoreWeight),
+    0.0,
+    1.0,
+  );
+  if (activity <= 0.0001) {
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (priorSheetActivity <= 0.0001) {
+    let links = neighborTopology[index].neighborIds;
+    var restDistances = vec4<f32>(0.0);
+    for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+      let neighborIndex = links[slot];
+      if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount) {
+        restDistances[slot] = length(particles[neighborIndex].predicted.xyz - position);
+      }
+    }
+    neighborTopology[index].sheetNeighborIds = links;
+    neighborTopology[index].sheetRestDistances = restDistances;
+  }
+  neighborTopology[index].sheet = vec4<f32>(sheetNormal, activity);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn apply_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let sheetState = neighborTopology[index].sheet;
+  let sheetActivity = sheetState.w;
+  let particle = particles[index];
+  if (sheetActivity <= 0.0001) {
+    particles[index].position = vec4<f32>(vec3<f32>(0.0), particle.position.w);
+    return;
+  }
+  let position = particle.predicted.xyz;
+  let sheetNormal = sheetState.xyz;
+  let sheetNeighborIds = neighborTopology[index].sheetNeighborIds;
+  let sheetRestDistances = neighborTopology[index].sheetRestDistances;
+  var tangentAttraction = vec3<f32>(0.0);
+  var normalOffsetSum = 0.0;
+  var normalWeight = 0.0;
+  var coherentPairCount = 0u;
+
+  for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+    let neighborIndex = sheetNeighborIds[slot];
+    let restDistance = sheetRestDistances[slot];
+    if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount && restDistance > 0.00001) {
+      let neighborSheet = neighborTopology[neighborIndex].sheet;
+      let offset = particles[neighborIndex].predicted.xyz - position;
+      let distance = length(offset);
+      let normalAlignment = abs(dot(sheetNormal, neighborSheet.xyz));
+      if (distance > 0.00001 && distance < params.fluid.x * 1.75 && neighborSheet.w > 0.0001 && normalAlignment > 0.72) {
+        let pairActivity = min(sheetActivity, neighborSheet.w) * smoothstep(0.72, 0.94, normalAlignment);
+        let normalOffset = dot(offset, sheetNormal);
+        let tangentOffset = offset - sheetNormal * normalOffset;
+        let tangentDistance = length(tangentOffset);
+        let stretch = max(0.0, tangentDistance - restDistance * 1.08);
+        let bridgeRelease = 1.0 - smoothstep(1.55, 1.75, distance / params.fluid.x);
+        if (tangentDistance > 0.00001 && stretch > 0.0) {
+          tangentAttraction = tangentAttraction + tangentOffset / tangentDistance * stretch * bridgeRelease * pairActivity;
+        }
+        let thicknessWeight = bridgeRelease * pairActivity;
+        normalOffsetSum = normalOffsetSum + normalOffset * thicknessWeight;
+        normalWeight = normalWeight + thicknessWeight;
+        coherentPairCount = coherentPairCount + 1u;
+      }
+    }
+  }
+  if (coherentPairCount < 2u || normalWeight <= 0.0001) {
+    particles[index].position = vec4<f32>(vec3<f32>(0.0), particle.position.w);
+    return;
+  }
+  let normalError = normalOffsetSum / normalWeight;
+  let pairScale = 1.0 / f32(coherentPairCount);
+  var correction = tangentAttraction * pairScale * (0.42 * params.sheet.x)
+    + sheetNormal * normalError * (0.18 * sheetActivity);
+  let correctionLimit = params.fluid.x * 0.055;
+  let correctionLength = length(correction);
+  if (correctionLength > correctionLimit) { correction = correction * (correctionLimit / correctionLength); }
+  particles[index].position = vec4<f32>(correction, particle.position.w);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn commit_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  var particle = particles[index];
+  let correction = particle.position.xyz;
+  let correctionLength = length(correction);
+  if (correctionLength > 0.0000001) {
+    let sheetState = neighborTopology[index].sheet;
+    var velocity = particle.delta.xyz + correction / max(params.dt, 0.00001);
+    let normalSpeed = dot(velocity, sheetState.xyz);
+    velocity = velocity - sheetState.xyz * normalSpeed * min(0.18, sheetState.w * params.sheet.x * 0.12);
+    let speed = length(velocity);
+    if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+    particle.predicted = vec4<f32>(particle.predicted.xyz + correction, particle.predicted.w);
+    particle.delta = vec4<f32>(velocity, particle.delta.w);
+    particles[index] = particle;
+  }
+}
+
 fn capillary_pair_weight(
   distance: f32,
   surfaceFactor: f32,
@@ -2535,6 +2798,7 @@ struct Params {
   forces: vec4<f32>,
   particleShift: vec4<f32>,
   chemistry: vec4<f32>,
+  sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
 }
 
@@ -2584,6 +2848,9 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -2935,6 +3202,9 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3534,6 +3804,148 @@ function measureAnalyticBoundaryDistance(position, kernelRadius) {
 function smoothstepNumber(edge0, edge1, value) {
   const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
+}
+
+export function resolveFingerFluidUnsupportedSheetStrength(
+  value = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+) {
+  const strength = finite(value, KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
+  if (strength < 0 || strength > 2) {
+    throw new RangeError(`Finger fluid unsupported-sheet strength must be within [0, 2]: ${value}`);
+  }
+  return strength;
+}
+
+export function evaluateFingerFluidUnsupportedSheetNeighborhood({
+  velocity = [0, 0, 0],
+  densityRatio = 1,
+  surfaceFactor = 0,
+  supportContact = 1,
+  neighborRetention = 0,
+  neighborRetentionAge = 0,
+  kernelRadius = 0.185,
+  strength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  neighbors = [],
+} = {}) {
+  if (!Array.isArray(velocity) || velocity.length !== 3 || !velocity.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid unsupported-sheet neighborhood requires a finite 3D velocity');
+  }
+  if (!Array.isArray(neighbors) || neighbors.some(neighbor => (
+    !Array.isArray(neighbor?.offset)
+      || neighbor.offset.length !== 3
+      || !neighbor.offset.every(Number.isFinite)
+      || !Array.isArray(neighbor?.velocity)
+      || neighbor.velocity.length !== 3
+      || !neighbor.velocity.every(Number.isFinite)
+  ))) {
+    throw new TypeError('Finger fluid unsupported-sheet neighborhood requires finite offset/velocity samples');
+  }
+  if (!Number.isFinite(kernelRadius) || kernelRadius <= 0) {
+    throw new RangeError(`Finger fluid unsupported-sheet neighborhood requires a positive kernel radius: ${kernelRadius}`);
+  }
+  const safeStrength = resolveFingerFluidUnsupportedSheetStrength(strength);
+  const contact = clamp(finite(supportContact, 1), 0, 1);
+  const safeDensityRatio = Math.max(0, finite(densityRatio, 0));
+  const safeSurfaceFactor = clamp(finite(surfaceFactor, 0), 0, 1);
+  const retention = clamp(finite(neighborRetention, 0), 0, 1);
+  const retentionAge = Math.max(0, finite(neighborRetentionAge, 0));
+  const speed = Math.hypot(...velocity);
+  const flow = normalize3(velocity);
+  const seed = Math.abs(flow[0]) < 0.82 ? [1, 0, 0] : [0, 0, 1];
+  const transverseU = normalize3(cross3(flow, seed));
+  const transverseV = normalize3(cross3(flow, transverseU));
+  let covarianceUU = 0;
+  let covarianceUV = 0;
+  let covarianceVV = 0;
+  let velocityCoherenceSum = 0;
+  let acceptedNeighborCount = 0;
+  for (const neighbor of neighbors) {
+    const distance = Math.hypot(...neighbor.offset);
+    if (distance <= 1e-9 || distance >= kernelRadius) continue;
+    const u = neighbor.offset.reduce((sum, component, axis) => sum + component * transverseU[axis], 0);
+    const v = neighbor.offset.reduce((sum, component, axis) => sum + component * transverseV[axis], 0);
+    covarianceUU += u * u;
+    covarianceUV += u * v;
+    covarianceVV += v * v;
+    const neighborSpeed = Math.hypot(...neighbor.velocity);
+    velocityCoherenceSum += neighborSpeed > 1e-9
+      ? clamp(neighbor.velocity.reduce((sum, component, axis) => sum + component * flow[axis], 0) / neighborSpeed, -1, 1)
+      : 0;
+    acceptedNeighborCount += 1;
+  }
+  const covarianceTrace = covarianceUU + covarianceVV;
+  const covarianceDiscriminant = Math.sqrt(Math.max(0, (covarianceUU - covarianceVV) ** 2 + 4 * covarianceUV ** 2));
+  const transverseAnisotropy = covarianceTrace > 1e-12
+    ? (covarianceTrace + covarianceDiscriminant) * 0.5 / covarianceTrace
+    : 0;
+  const velocityCoherence = acceptedNeighborCount > 0 ? velocityCoherenceSum / acceptedNeighborCount : 0;
+
+  let releaseReason = null;
+  if (safeStrength === 0) releaseReason = 'disabled';
+  else if (contact >= 0.2) releaseReason = 'support_contact';
+  else if (acceptedNeighborCount < 3) releaseReason = 'neighbor_loss';
+  else if (speed < 0.18) releaseReason = 'low_transport_speed';
+  else if (safeDensityRatio < 0.1) releaseReason = 'density_loss';
+  else if (safeDensityRatio > 1.05) releaseReason = 'bulk_density';
+  else if (safeSurfaceFactor < 0.2) releaseReason = 'not_interface';
+  else if (retention < 0.25 || retentionAge < 0.03) releaseReason = 'topology_loss';
+  else if (velocityCoherence < 0.72) releaseReason = 'velocity_incoherent';
+  else if (transverseAnisotropy < 0.66) releaseReason = 'not_planar';
+
+  const activity = releaseReason ? 0 : clamp(
+    safeStrength
+      * (1 - smoothstepNumber(0.04, 0.20, contact))
+      * smoothstepNumber(0.10, 0.32, safeDensityRatio)
+      * (1 - smoothstepNumber(0.90, 1.05, safeDensityRatio))
+      * smoothstepNumber(0.20, 0.58, safeSurfaceFactor)
+      * smoothstepNumber(0.25, 0.65, retention)
+      * smoothstepNumber(0.03, 0.22, retentionAge)
+      * smoothstepNumber(0.72, 0.92, velocityCoherence)
+      * smoothstepNumber(0.66, 0.86, transverseAnisotropy)
+      * smoothstepNumber(2, 6, acceptedNeighborCount),
+    0,
+    1,
+  );
+  return {
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    activity: Number(activity.toFixed(6)),
+    releaseReason,
+    neighborCount: acceptedNeighborCount,
+    transverseAnisotropy: Number(transverseAnisotropy.toFixed(6)),
+    velocityCoherence: Number(velocityCoherence.toFixed(6)),
+  };
+}
+
+export function evaluateFingerFluidUnsupportedSheetPair({
+  distance,
+  kernelRadius,
+  normalAlignment,
+  particleActivity,
+  neighborActivity,
+} = {}) {
+  if (![distance, kernelRadius, normalAlignment, particleActivity, neighborActivity].every(Number.isFinite)
+    || kernelRadius <= 0 || distance < 0) {
+    throw new TypeError('Finger fluid unsupported-sheet pair requires finite non-negative geometry and activity');
+  }
+  const q = distance / kernelRadius;
+  let releaseReason = null;
+  if (q >= 1.75) releaseReason = 'outside_bridge_radius';
+  else if (q <= 0.0001) releaseReason = 'degenerate_pair';
+  else if (normalAlignment < 0.72) releaseReason = 'normal_incoherent';
+  else if (particleActivity <= 0 || neighborActivity <= 0) releaseReason = 'inactive_pair';
+  const pairActivity = releaseReason
+    ? 0
+    : Math.min(particleActivity, neighborActivity) * smoothstepNumber(0.72, 0.94, normalAlignment);
+  const gapClosureWeight = releaseReason
+    ? 0
+    : pairActivity * smoothstepNumber(0.55, 0.90, q) * (1 - smoothstepNumber(1.55, 1.75, q));
+  return {
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    q: Number(q.toFixed(6)),
+    pairActivity: Number(pairActivity.toFixed(6)),
+    gapClosureWeight: Number(gapClosureWeight.toFixed(6)),
+    releaseReason,
+  };
 }
 
 export function evaluateFingerFluidInterfaceDensityConstraint({
@@ -4646,6 +5058,7 @@ export async function createWebGPUFingerFluidSolver({
   capillaryStrength = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  unsupportedSheetStrength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
   waterfallOraclePreset = 'baseline',
   transparentBackground = false,
 } = {}) {
@@ -4696,6 +5109,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeCapillaryStrength = resolveFingerFluidCapillaryStrength(capillaryStrength);
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
   const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
+  const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
@@ -4724,7 +5138,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 144,
+    size: 160,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -4815,6 +5229,7 @@ export async function createWebGPUFingerFluidSolver({
   const initialTopology = new Uint32Array(safeParticleCount * NEIGHBOR_TOPOLOGY_WORDS);
   for (let index = 0; index < safeParticleCount; index += 1) {
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS, index * NEIGHBOR_TOPOLOGY_WORDS + 4);
+    initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS + 12, index * NEIGHBOR_TOPOLOGY_WORDS + 16);
   }
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
   device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
@@ -4855,6 +5270,9 @@ export async function createWebGPUFingerFluidSolver({
       velocity: await pipelineFor('compute_velocity_viscosity'),
       vorticity: await pipelineFor('compute_vorticity'),
       confinement: await pipelineFor('apply_vorticity_confinement'),
+      classifyUnsupportedSheet: await pipelineFor('classify_unsupported_sheet'),
+      applyUnsupportedSheet: await pipelineFor('apply_unsupported_sheet_support'),
+      commitUnsupportedSheet: await pipelineFor('commit_unsupported_sheet_support'),
       cohesion: await pipelineFor('apply_surface_cohesion'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
       clearInterface: await pipelineFor('clear_interface_counters'),
@@ -5121,6 +5539,7 @@ export async function createWebGPUFingerFluidSolver({
   let postProjectionGridRefreshCount = 0;
   let freeSurfaceClassificationPassCount = 0;
   let surfaceCohesionPassCount = 0;
+  let sheetSupportPassCount = 0;
   let interfaceCompactionPassCount = 0;
   let topologyMeasurementPassCount = 0;
   let particleShiftPassCount = 0;
@@ -5228,7 +5647,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(144);
+    const buffer = new ArrayBuffer(160);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -5256,10 +5675,14 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(116, safeCapillaryStrength, true);
     view.setFloat32(120, safeThinSheetVorticityAttenuation, true);
     view.setFloat32(124, safeFreeFlightViscosityBoost, true);
-    view.setUint32(128, liquidFireContactAllocationGeneration, true);
-    view.setUint32(132, liquidFireContactEpoch, true);
-    view.setUint32(136, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
-    view.setUint32(140, 1, true);
+    view.setFloat32(128, safeUnsupportedSheetStrength, true);
+    view.setFloat32(132, 0.62, true);
+    view.setFloat32(136, 0.66, true);
+    view.setFloat32(140, 0.78, true);
+    view.setUint32(144, liquidFireContactAllocationGeneration, true);
+    view.setUint32(148, liquidFireContactEpoch, true);
+    view.setUint32(152, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
+    view.setUint32(156, 1, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -5317,6 +5740,12 @@ export async function createWebGPUFingerFluidSolver({
         vorticityPassCount += 2;
       }
       dispatchEnergy(pass, energyPipelines.vorticity);
+      if (safeUnsupportedSheetStrength > 0) {
+        dispatch(pass, pipelines.classifyUnsupportedSheet, safeParticleCount);
+        dispatch(pass, pipelines.applyUnsupportedSheet, safeParticleCount);
+        dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
+        sheetSupportPassCount += 3;
+      }
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatchEnergy(pass, energyPipelines.cohesion);
@@ -5556,6 +5985,9 @@ export async function createWebGPUFingerFluidSolver({
       let neighborRetentionSum = 0;
       let neighborRetentionAgeSum = 0;
       let movingLockedParticleCount = 0;
+      let unsupportedSheetActiveParticleCount = 0;
+      let unsupportedSheetActivitySum = 0;
+      let maximumUnsupportedSheetActivity = 0;
       const neighborRetentionHistogram = [0, 0, 0, 0];
       const chemistryHistogram = [0, 0, 0, 0, 0, 0, 0, 0];
       let chemistryMass = 0;
@@ -5569,6 +6001,7 @@ export async function createWebGPUFingerFluidSolver({
         const offset = index * PARTICLE_FLOATS;
         const restOffset = index * REST_STATE_FLOATS;
         const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 4;
+        const sheetOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 8;
         const chemistryOffset = index * MATERIAL_TRACER_FLOATS;
         const concentration = materialTracerValues[chemistryOffset];
         const recipe = materialTracerValues[chemistryOffset + 2];
@@ -5620,6 +6053,10 @@ export async function createWebGPUFingerFluidSolver({
         neighborRetentionSum += neighborRetention;
         neighborRetentionAgeSum += topologyValues[topologyOffset + 1];
         if (topologyValues[topologyOffset + 3] >= 0.5) movingLockedParticleCount += 1;
+        const unsupportedSheetActivity = topologyValues[sheetOffset + 3];
+        unsupportedSheetActivitySum += unsupportedSheetActivity;
+        maximumUnsupportedSheetActivity = Math.max(maximumUnsupportedSheetActivity, unsupportedSheetActivity);
+        if (unsupportedSheetActivity >= 0.01) unsupportedSheetActiveParticleCount += 1;
         neighborRetentionHistogram[Math.min(3, Math.max(0, Math.floor(neighborRetention * 4)))] += 1;
       }
       const physicalParticleCount = Math.max(1, activeParticleCount);
@@ -5732,6 +6169,12 @@ export async function createWebGPUFingerFluidSolver({
         averageNeighborRetentionAge: Number((neighborRetentionAgeSum / physicalParticleCount).toFixed(4)),
         movingLockedParticleCount,
         movingLockedParticleRatio: Number((movingLockedParticleCount / physicalParticleCount).toFixed(4)),
+        unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+        unsupportedSheetStrength: safeUnsupportedSheetStrength,
+        unsupportedSheetActiveParticleCount,
+        unsupportedSheetActiveParticleRatio: Number((unsupportedSheetActiveParticleCount / physicalParticleCount).toFixed(6)),
+        averageUnsupportedSheetActivity: Number((unsupportedSheetActivitySum / physicalParticleCount).toFixed(6)),
+        maximumUnsupportedSheetActivity: Number(maximumUnsupportedSheetActivity.toFixed(6)),
         neighborRetentionHistogram,
         neighborRetentionHistogramEdges: [0, 0.25, 0.5, 0.75, 1.001],
         chemistry: {
@@ -5852,6 +6295,7 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
+      unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
       waterfallOracleContract: waterfallOracleConfig?.contract || null,
       requestedWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? waterfallOraclePreset : null,
       effectiveWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? safeWaterfallOraclePreset : null,
@@ -5897,6 +6341,11 @@ export async function createWebGPUFingerFluidSolver({
       capillaryStrength: safeCapillaryStrength,
       thinSheetVorticityAttenuation: safeThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: safeFreeFlightViscosityBoost,
+      unsupportedSheetStrength: safeUnsupportedSheetStrength,
+      sheetSupportPassCount,
+      energyLedgerAttribution: safeUnsupportedSheetStrength > 0
+        ? 'cohesion_stage_includes_unsupported_sheet_support_then_surface_cohesion'
+        : 'nominal_projection_viscosity_vorticity_cohesion_stages',
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,

@@ -77,6 +77,7 @@ const common = {
   supportFriction: 1.6,
   freeFlightViscosityBoost: 0.17,
   thinSheetVorticityAttenuation: 0.88,
+  unsupportedSheetStrength: 0,
   densityIterations: 3,
   camera: baseline.camera,
 };
