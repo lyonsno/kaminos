@@ -3,6 +3,17 @@ import { normalizeWorldFingerJuiceEmitterPacket } from './lerms-finger-juice-cor
 export const MANO_DISPLAY_ORIENTATION_CONTRACT = 'mano-camera-display-x-preserved-y-inverted-v1';
 export const LIVE_FINGER_JUICE_ADAPTER_CONTRACT = 'hand-state-distal-axis-full-extension-emitters-v0';
 export const FULL_EXTENSION_THRESHOLD = 0.86;
+export const LIVE_HAND_CAMERA = Object.freeze({
+  fovDegrees: 33,
+  position: Object.freeze([0, 0.05, 5.3]),
+});
+export const LIVE_FLUID_CAMERA = Object.freeze({
+  fovRadians: Math.PI / 3.15,
+  yaw: 0,
+  pitch: 0,
+  distance: 6.2,
+  target: Object.freeze([0, 0, -0.2]),
+});
 
 const FINGERS = Object.freeze([
   { id: 'thumb', joints: [1, 2, 3, 4], chemistry: 'splash' },
@@ -91,13 +102,13 @@ export function projectDisplayPointToFingerJuiceWorld(display, viewport = {}) {
   const width = Math.max(1, finite(viewport.width, 1340));
   const height = Math.max(1, finite(viewport.height, 1080));
   const fluidZ = -0.8 + display[2] * 0.16;
-  const handFocalLength = height / (2 * Math.tan((33 * Math.PI / 180) / 2));
-  const handDepth = Math.max(0.01, 3.8 - display[2]);
+  const handFocalLength = height / (2 * Math.tan((LIVE_HAND_CAMERA.fovDegrees * Math.PI / 180) / 2));
+  const handDepth = Math.max(0.01, LIVE_HAND_CAMERA.position[2] - display[2]);
   const screenX = width * 0.5 + display[0] * handFocalLength / handDepth;
-  const screenY = height * 0.5 - (display[1] - 0.05) * handFocalLength / handDepth;
-  const fluidEyeZ = -0.2 + 4.45;
+  const screenY = height * 0.5 - (display[1] - LIVE_HAND_CAMERA.position[1]) * handFocalLength / handDepth;
+  const fluidEyeZ = LIVE_FLUID_CAMERA.target[2] + LIVE_FLUID_CAMERA.distance;
   const fluidDepth = Math.max(0.01, fluidEyeZ - fluidZ);
-  const fluidFocalLength = height / (2 * Math.tan((Math.PI / 3.15) / 2));
+  const fluidFocalLength = height / (2 * Math.tan(LIVE_FLUID_CAMERA.fovRadians / 2));
   return [
     (screenX - width * 0.5) * fluidDepth / fluidFocalLength,
     -(screenY - height * 0.5) * fluidDepth / fluidFocalLength,

@@ -6,11 +6,21 @@ import {
   createLiveFingerJuiceEmitterPacket,
   normalizeManoSurface,
 } from '../hand-state-finger-juice.mjs';
+import * as handStateAdapter from '../hand-state-finger-juice.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const page = readFileSync(join(root, 'hand-state-runtime.html'), 'utf8');
 const viewer = readFileSync(join(root, 'hand-state-runtime.mjs'), 'utf8');
 const solver = readFileSync(join(root, 'lerms-finger-juice-webgpu-core.js'), 'utf8');
+
+assert.ok(handStateAdapter.LIVE_HAND_CAMERA, 'live Hand publishes one shared display-camera contract');
+assert.ok(handStateAdapter.LIVE_FLUID_CAMERA, 'live Hand publishes one shared fluid-camera contract');
+assert.ok(handStateAdapter.LIVE_HAND_CAMERA.position[2] >= 5.2, 'live MANO camera pulls back enough to expose the coupled response');
+assert.ok(handStateAdapter.LIVE_FLUID_CAMERA.distance >= 6.1, 'live fluid camera pulls back enough to expose the coupled response');
+assert.equal(handStateAdapter.LIVE_FLUID_CAMERA.yaw, 0, 'wide framing preserves the accepted zero-yaw alignment route');
+assert.equal(handStateAdapter.LIVE_FLUID_CAMERA.pitch, 0, 'wide framing preserves the accepted zero-pitch alignment route');
+assert.match(viewer, /LIVE_HAND_CAMERA/, 'viewer configures the MANO camera from the shared projection contract');
+assert.match(viewer, /LIVE_FLUID_CAMERA/, 'viewer configures the fluid camera from the shared projection contract');
 
 const surface = normalizeManoSurface([
   [-1, -2, 0.5],
@@ -70,14 +80,15 @@ assert.ok(packet.emitters.filter(emitter => emitter.active).every(emitter => emi
 assert.ok(packet.emitters.every(emitter => emitter.emission_state !== 'dribble'), 'first live slice has no dribble state');
 
 const indexEmitter = packet.emitters.find(emitter => emitter.id === 'index');
-const handFocalLength = 1080 / (2 * Math.tan((33 * Math.PI / 180) / 2));
-const handDepth = 3.8;
+const handFocalLength = 1080 / (2 * Math.tan((handStateAdapter.LIVE_HAND_CAMERA.fovDegrees * Math.PI / 180) / 2));
+const handDepth = handStateAdapter.LIVE_HAND_CAMERA.position[2];
 const expectedIndexScreen = [
   1340 * 0.5 + points[8][0] * handFocalLength / handDepth,
   1080 * 0.5 - (-points[8][1] - 0.05) * handFocalLength / handDepth,
 ];
-const fluidProjectionDepth = 4.25 - indexEmitter.origin_world[2];
-const fluidProjectionScale = 1080 / (2 * Math.tan((Math.PI / 3.15) / 2)) / fluidProjectionDepth;
+const fluidEyeZ = handStateAdapter.LIVE_FLUID_CAMERA.target[2] + handStateAdapter.LIVE_FLUID_CAMERA.distance;
+const fluidProjectionDepth = fluidEyeZ - indexEmitter.origin_world[2];
+const fluidProjectionScale = 1080 / (2 * Math.tan(handStateAdapter.LIVE_FLUID_CAMERA.fovRadians / 2)) / fluidProjectionDepth;
 const actualIndexScreen = [
   1340 * 0.5 + indexEmitter.origin_world[0] * fluidProjectionScale,
   1080 * 0.5 - indexEmitter.origin_world[1] * fluidProjectionScale,

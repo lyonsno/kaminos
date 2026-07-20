@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { summarizeLatencySamples } from './hand-state-latency-benchmark.mjs';
 import {
   createLiveFingerJuiceEmitterPacket,
+  LIVE_FLUID_CAMERA,
+  LIVE_HAND_CAMERA,
   MANO_DISPLAY_ORIENTATION_CONTRACT,
   normalizeManoSurface,
   projectDisplayPointToFingerJuiceWorld,
@@ -29,8 +31,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(33, 1, 0.01, 30);
-camera.position.set(0, 0.05, 3.8);
+const camera = new THREE.PerspectiveCamera(LIVE_HAND_CAMERA.fovDegrees, 1, 0.01, 30);
+camera.position.set(...LIVE_HAND_CAMERA.position);
 
 const keyLight = new THREE.DirectionalLight(0x8ce7ff, 4.2);
 keyLight.position.set(-2.4, 2.8, 3.5);
@@ -199,10 +201,10 @@ async function probeFingerJuice(emitterPacket, steps = 24) {
       width: window.innerWidth,
       height: window.innerHeight,
       pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
-      yaw: 0,
-      pitch: 0,
-      distance: 4.45,
-      target: [0, 0, -0.2],
+      yaw: LIVE_FLUID_CAMERA.yaw,
+      pitch: LIVE_FLUID_CAMERA.pitch,
+      distance: LIVE_FLUID_CAMERA.distance,
+      target: LIVE_FLUID_CAMERA.target,
       rendererMode: 'screen_space_refraction',
     });
   }
@@ -500,10 +502,10 @@ function animate(now) {
         width: window.innerWidth,
         height: window.innerHeight,
         pixelRatio: Math.min(window.devicePixelRatio || 1, 1) * 0.72,
-        yaw: 0,
-        pitch: 0,
-        distance: 4.45,
-        target: [0, 0, -0.2],
+        yaw: LIVE_FLUID_CAMERA.yaw,
+        pitch: LIVE_FLUID_CAMERA.pitch,
+        distance: LIVE_FLUID_CAMERA.distance,
+        target: LIVE_FLUID_CAMERA.target,
         rendererMode: 'screen_space_refraction',
       });
     } catch (error) {
