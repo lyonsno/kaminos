@@ -10445,9 +10445,26 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     requestedOpticalDebugMode: effectiveOpticalDebugMode,
     effectiveOpticalDebugMode: runtime.opticalDebugMode,
     supportPresentationEvidence: runtime.supportPresentationEvidence,
+    linearHdrSceneEvidence: runtime.linearHdrSceneEvidence,
+    finalPresentationEvidence: runtime.finalPresentationEvidence,
+    deferredSceneEvidence: runtime.deferredSceneEvidence,
     screenSpaceSurfaceEvidence: runtime.screenSpaceSurfaceEvidence,
     refractionEvidence: runtime.refractionEvidence,
+    ...(runtime.worldSpaceReflectionEvidence ? {
+      worldSpaceReflectionEvidence: runtime.worldSpaceReflectionEvidence,
+    } : {}),
+    ...(runtime.opticalQueryEvidence ? {
+      opticalQueryEvidence: runtime.opticalQueryEvidence,
+    } : {}),
+    ...(runtime.environmentMapEvidence ? {
+      environmentMapEvidence: runtime.environmentMapEvidence,
+    } : {}),
   };
+}
+
+function setFingerFluidBenchReflectionMeshPhaseForWitness(phase) {
+  if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for reflection mesh witness');
+  return fingerFluidBenchSolver.setReflectionMeshPhaseForWitness(phase);
 }
 
 function resumeFingerFluidBenchAfterWitness() {
@@ -10748,6 +10765,7 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidOracleCockpitDebugState = () => fingerFluidOracleCockpitState || updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
   window.__kaminosFingerFluidOracleCockpitDebugState = window.kaminosFingerFluidOracleCockpitDebugState;
   window.restartFingerFluidBenchForOracleCockpit = restartFingerFluidBenchForOracleCockpit;
+  window.kaminosFingerFluidBenchSetReflectionMeshPhaseForWitness = setFingerFluidBenchReflectionMeshPhaseForWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
     volume: volumePrototype?.debugState?.() || null,

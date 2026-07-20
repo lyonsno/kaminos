@@ -70,9 +70,145 @@ export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sph
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE = 'wgsl-fluid-screen-space-surface-v0';
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE = 'wgsl-analytic-heightfield-obstacle-depth-v0';
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE = 'wgsl-analytic-heightfield-obstacle-presentation-v0';
+export const KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE = 'webgpu-deferred-indexed-mesh-scene-v0';
+export const KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE = 'wgsl-indexed-mesh-world-space-reflection-v0';
+export const KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA = 'kaminos.reflection-query-provider.v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA = 'kaminos.optical-query-provider.v0';
+export const KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE = 'wgsl-hybrid-deferred-world-optical-query-v0';
+export const KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE = 'wgsl-deferred-linear-depth-ray-traversal-v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE = 'wgsl-regime-aware-interface-footprint-v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER = 'deferred_depth_then_uncapped_world_mesh_then_hdr_environment-v0';
+export const KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE = 'uncapped-exact-triangle-scan-v0';
+export const KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE = 'deterministic-five-ray-cone-quadrature-v0';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE = 'radiance-rgbe-equirectangular-environment-v0';
+export const KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE = 'webgpu-linear-hdr-scene-radiance-v0';
+export const KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE = 'wgsl-shared-hdr-world-background-v0';
+export const KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE = 'deterministic-five-tap-roughness-cone-v0';
+export const KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE = 'wgsl-linear-exposure-aces-presentation-v0';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID = 'polyhaven-studio-small-09-1k';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256 = 'e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL = './assets/hdr/studio_small_09_1k.hdr';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr';
+export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL = 'https://polyhaven.com/a/studio_small_09';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 export const KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT = 'deterministic-binary-volume-weighted-sheet-refinement-v0';
+
+function radianceFailure(message) {
+  throw new Error(`Radiance HDR ${message}`);
+}
+
+export function decodeRadianceHdrRgbe(source) {
+  const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+  let cursor = 0;
+  const readLine = () => {
+    const start = cursor;
+    while (cursor < bytes.length && bytes[cursor] !== 0x0a) cursor += 1;
+    if (cursor >= bytes.length) radianceFailure('header is truncated');
+    let end = cursor;
+    cursor += 1;
+    if (end > start && bytes[end - 1] === 0x0d) end -= 1;
+    return new TextDecoder('ascii').decode(bytes.subarray(start, end));
+  };
+
+  const signature = readLine();
+  if (signature !== '#?RADIANCE' && signature !== '#?RGBE') {
+    radianceFailure(`signature is unsupported: ${signature || 'missing'}`);
+  }
+  let format = null;
+  while (true) {
+    const line = readLine();
+    if (!line) break;
+    if (line.startsWith('FORMAT=')) format = line.slice('FORMAT='.length);
+  }
+  if (format !== '32-bit_rle_rgbe') radianceFailure(`format is unsupported: ${format || 'missing'}`);
+
+  const resolution = readLine();
+  const resolutionMatch = /^-Y\s+(\d+)\s+\+X\s+(\d+)$/.exec(resolution);
+  if (!resolutionMatch) radianceFailure(`orientation is unsupported: ${resolution || 'missing'}`);
+  const height = Number(resolutionMatch[1]);
+  const width = Number(resolutionMatch[2]);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 8 || width > 0x7fff || height < 1) {
+    radianceFailure(`dimensions are unsupported: ${width}x${height}`);
+  }
+
+  const rgbe = new Uint8Array(width * height * 4);
+  const channels = new Uint8Array(width * 4);
+  for (let y = 0; y < height; y += 1) {
+    if (cursor + 4 > bytes.length) radianceFailure(`scanline ${y} header is truncated`);
+    if (bytes[cursor] !== 2 || bytes[cursor + 1] !== 2 || (bytes[cursor + 2] & 0x80) !== 0) {
+      radianceFailure(`scanline ${y} does not use supported RLE`);
+    }
+    const scanlineWidth = (bytes[cursor + 2] << 8) | bytes[cursor + 3];
+    cursor += 4;
+    if (scanlineWidth !== width) radianceFailure(`scanline ${y} width ${scanlineWidth} disagrees with ${width}`);
+
+    for (let channel = 0; channel < 4; channel += 1) {
+      let x = 0;
+      while (x < width) {
+        if (cursor >= bytes.length) radianceFailure(`scanline ${y} channel ${channel} run is truncated`);
+        const code = bytes[cursor];
+        cursor += 1;
+        if (code > 128) {
+          const runLength = code - 128;
+          if (runLength === 0 || x + runLength > width || cursor >= bytes.length) {
+            radianceFailure(`scanline ${y} channel ${channel} repeat run is invalid`);
+          }
+          channels.fill(bytes[cursor], channel * width + x, channel * width + x + runLength);
+          cursor += 1;
+          x += runLength;
+        } else {
+          const runLength = code;
+          if (runLength === 0 || x + runLength > width || cursor + runLength > bytes.length) {
+            radianceFailure(`scanline ${y} channel ${channel} literal run is invalid or truncated`);
+          }
+          channels.set(bytes.subarray(cursor, cursor + runLength), channel * width + x);
+          cursor += runLength;
+          x += runLength;
+        }
+      }
+    }
+
+    const rowOffset = y * width * 4;
+    for (let x = 0; x < width; x += 1) {
+      const texelOffset = rowOffset + x * 4;
+      rgbe[texelOffset] = channels[x];
+      rgbe[texelOffset + 1] = channels[width + x];
+      rgbe[texelOffset + 2] = channels[width * 2 + x];
+      rgbe[texelOffset + 3] = channels[width * 3 + x];
+    }
+  }
+
+  return {
+    width,
+    height,
+    format,
+    orientation: '-Y +X',
+    rgbe,
+    encodedByteLength: bytes.byteLength,
+  };
+}
+
+async function sha256Hex(bytes) {
+  if (!globalThis.crypto?.subtle) throw new Error('Web Crypto SHA-256 is unavailable');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function loadFingerFluidHdrEnvironment() {
+  const response = await fetch(KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`HDR environment request failed with HTTP ${response.status}`);
+  const encoded = await response.arrayBuffer();
+  const assetSha256 = await sha256Hex(encoded);
+  if (assetSha256 !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256) {
+    throw new Error(`HDR environment SHA-256 mismatch: expected ${KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256}, received ${assetSha256}`);
+  }
+  const decoded = decodeRadianceHdrRgbe(encoded);
+  if (decoded.width !== 1024 || decoded.height !== 512) {
+    throw new Error(`HDR environment dimensions mismatch: expected 1024x512, received ${decoded.width}x${decoded.height}`);
+  }
+  return { ...decoded, assetSha256 };
+}
 
 const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
@@ -130,6 +266,18 @@ const ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT = 6 * 6;
 const ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT = ANALYTIC_SUPPORT_ROUND_INLET_VERTEX_COUNT
   + ANALYTIC_SUPPORT_SLOT_INLET_VERTEX_COUNT
   + ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT;
+const DYNAMIC_REFLECTION_MESH_OBJECT_ID = 101;
+const DYNAMIC_REFLECTION_MESH_VERTEX_COUNT = 24;
+const DYNAMIC_REFLECTION_MESH_INDEX_COUNT = 36;
+const DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT = DYNAMIC_REFLECTION_MESH_INDEX_COUNT / 3;
+const LINEAR_SCENE_FORMAT = 'rgba16float';
+const LINEAR_SCENE_EXPOSURE = 0.58;
+const LINEAR_HDR_WORLD_LIGHTING_CONSUMERS = Object.freeze([
+  'visible_world_background',
+  'analytic_support',
+  'dynamic_indexed_mesh',
+  'liquid_world_reflection',
+]);
 const INTERFACE_THRESHOLD = 0.32;
 const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
@@ -345,7 +493,7 @@ const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS = Object.freeze({
 });
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -1398,6 +1546,83 @@ export function resolveFingerFluidRendererMode(value = 'screen_space_surface') {
   return mode;
 }
 
+export function estimateFingerFluidInterfaceGeometry(position, neighbors, {
+  kernelRadius = 0.185,
+  fallbackNormal = [0, 1, 0],
+} = {}) {
+  if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid interface geometry requires a finite 3D source position');
+  }
+  if (!Array.isArray(neighbors)) {
+    throw new TypeError('Finger fluid interface geometry requires a neighbor array');
+  }
+  if (!Number.isFinite(kernelRadius) || kernelRadius <= 0) {
+    throw new RangeError(`Finger fluid interface geometry requires a positive kernel radius, received: ${kernelRadius}`);
+  }
+  if (!Array.isArray(fallbackNormal) || fallbackNormal.length !== 3 || !fallbackNormal.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
+  }
+  const fallbackLength = Math.hypot(...fallbackNormal);
+  if (fallbackLength <= 1e-9) throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
+
+  const directionalSupport = [0, 0, 0];
+  const accepted = [];
+  let supportWeight = 0;
+  for (const neighbor of neighbors) {
+    const neighborPosition = neighbor?.position;
+    const confidence = Number(neighbor?.confidence ?? 1);
+    if (!Array.isArray(neighborPosition) || neighborPosition.length !== 3 || !neighborPosition.every(Number.isFinite) || !Number.isFinite(confidence)) {
+      throw new TypeError('Finger fluid interface geometry received a malformed neighbor');
+    }
+    if (confidence < 0.32) continue;
+    const offset = position.map((value, axis) => value - neighborPosition[axis]);
+    const distance = Math.hypot(...offset);
+    if (distance <= 1e-9 || distance >= kernelRadius) continue;
+    const normalizedDistance = distance / kernelRadius;
+    const weight = ((1 - normalizedDistance) ** 3) * confidence;
+    supportWeight += weight;
+    for (let axis = 0; axis < 3; axis += 1) directionalSupport[axis] += offset[axis] / distance * weight;
+    accepted.push({ offset, weight });
+  }
+
+  const supportLength = Math.hypot(...directionalSupport);
+  const normal = supportLength > 1e-9
+    ? directionalSupport.map(value => value / supportLength)
+    : fallbackNormal.map(value => value / fallbackLength);
+  let weightedNormalOffset = 0;
+  let weightedTangentSpan = 0;
+  for (const { offset, weight } of accepted) {
+    const normalOffset = offset.reduce((sum, value, axis) => sum + value * normal[axis], 0);
+    const tangentOffset = offset.map((value, axis) => value - normal[axis] * normalOffset);
+    weightedNormalOffset += normalOffset * weight;
+    weightedTangentSpan += tangentOffset.reduce((sum, value) => sum + value * value, 0) * weight;
+  }
+  const smoothstep = (edge0, edge1, value) => {
+    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  };
+  const meanTangentSpanSquared = weightedTangentSpan / Math.max(1e-9, supportWeight);
+  const countConfidence = smoothstep(3, 8, accepted.length);
+  const spanConfidence = smoothstep((kernelRadius * 0.08) ** 2, (kernelRadius * 0.2) ** 2, meanTangentSpanSquared);
+  const resolutionConfidence = countConfidence * spanConfidence;
+  const rawCurvature = weightedTangentSpan > 1e-9
+    ? 2 * weightedNormalOffset / weightedTangentSpan
+    : 0;
+  const maximumResolvableCurvature = 2 / kernelRadius;
+  const resolved = resolutionConfidence >= 0.2 && Math.abs(rawCurvature) <= maximumResolvableCurvature;
+  const curvature = resolved ? rawCurvature : 0;
+  const supportConfidence = Math.min(1, supportWeight / Math.max(1e-9, accepted.length * 0.08));
+  return {
+    contract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
+    normal,
+    curvature,
+    confidence: resolved ? supportConfidence * resolutionConfidence : 0,
+    resolved,
+    maximumResolvableCurvature,
+    neighborCount: accepted.length,
+  };
+}
+
 export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   const expectedMode = resolveFingerFluidRendererMode(requestedMode);
   if (!runtime || typeof runtime !== 'object') {
@@ -1422,17 +1647,85 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     throw new Error(`Finger fluid truth renderer fallback is not accepted: ${runtime.fallbackReason}`);
   }
 
+  const deferredSceneEvidence = runtime.deferredSceneEvidence;
+  const renderFrameId = deferredSceneEvidence?.renderFrameId;
+  const reflectionDiagnostic = expectedMode === 'screen_space_refraction'
+    && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'].includes(runtime.opticalDebugMode);
+  const dynamicMeshPresentationIsCurrent = reflectionDiagnostic
+    ? deferredSceneEvidence?.dynamicMesh?.presentationMode === 'suppressed_in_reflection_debug_provider_remains_active_v0'
+      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId !== renderFrameId
+    : deferredSceneEvidence?.dynamicMesh?.presentationMode === 'deferred_scene_visible_v0'
+      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId === renderFrameId;
+  if (
+    deferredSceneEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
+    || deferredSceneEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
+    || deferredSceneEvidence?.route !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
+    || deferredSceneEvidence?.fallbackReason
+    || !Number.isInteger(deferredSceneEvidence?.passCount)
+    || deferredSceneEvidence.passCount <= 0
+    || !Number.isInteger(deferredSceneEvidence?.dynamicIndexedMeshDrawCount)
+    || deferredSceneEvidence.dynamicIndexedMeshDrawCount < 0
+    || !Number.isInteger(renderFrameId)
+    || renderFrameId <= 0
+    || deferredSceneEvidence?.deferredSceneFrameId !== renderFrameId
+    || !dynamicMeshPresentationIsCurrent
+    || deferredSceneEvidence?.dynamicMesh?.objectId !== DYNAMIC_REFLECTION_MESH_OBJECT_ID
+    || deferredSceneEvidence?.dynamicMesh?.indexCount !== DYNAMIC_REFLECTION_MESH_INDEX_COUNT
+    || deferredSceneEvidence?.attachments?.worldNormalRoughness?.format !== 'rgba16float'
+    || deferredSceneEvidence?.attachments?.albedoMetallic?.format !== 'rgba8unorm'
+    || deferredSceneEvidence?.attachments?.linearDepthObject?.format !== 'rgba16float'
+  ) {
+    throw new Error(`Finger fluid truth deferred scene evidence is missing or partial: ${JSON.stringify(deferredSceneEvidence)}`);
+  }
+
   const supportPresentationEvidence = runtime.supportPresentationEvidence;
   if (
     supportPresentationEvidence?.route !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE
     || supportPresentationEvidence?.depthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
     || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
-    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_deferred_scene_v0'
     || !Number.isInteger(supportPresentationEvidence?.passCount)
     || supportPresentationEvidence.passCount <= 0
     || supportPresentationEvidence?.particleSupportDrawCount !== 0
   ) {
     throw new Error(`Finger fluid truth support presentation evidence is missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
+  }
+
+  const linearHdrSceneEvidence = runtime.linearHdrSceneEvidence;
+  const worldLightingConsumers = linearHdrSceneEvidence?.worldLightingConsumers;
+  const hasExactWorldLightingConsumers = Array.isArray(worldLightingConsumers)
+    && worldLightingConsumers.length === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
+    && new Set(worldLightingConsumers).size === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
+    && LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.every((consumer) => worldLightingConsumers.includes(consumer));
+  if (
+    linearHdrSceneEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
+    || linearHdrSceneEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
+    || linearHdrSceneEvidence?.format !== LINEAR_SCENE_FORMAT
+    || linearHdrSceneEvidence?.colorSpace !== 'scene_linear_rec2020_agnostic_rgb_v0'
+    || linearHdrSceneEvidence?.backgroundRoute !== KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE
+    || linearHdrSceneEvidence?.environmentFilterRoute !== KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE
+    || !Number.isInteger(linearHdrSceneEvidence?.backgroundPassCount)
+    || linearHdrSceneEvidence.backgroundPassCount <= 0
+    || !hasExactWorldLightingConsumers
+    || linearHdrSceneEvidence?.fallbackReason
+  ) {
+    throw new Error(`Finger fluid truth linear HDR scene evidence is missing or partial: ${JSON.stringify(linearHdrSceneEvidence)}`);
+  }
+  const finalPresentationEvidence = runtime.finalPresentationEvidence;
+  if (
+    finalPresentationEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
+    || finalPresentationEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
+    || finalPresentationEvidence?.sourceFormat !== LINEAR_SCENE_FORMAT
+    || finalPresentationEvidence?.toneMap !== 'aces-fitted-v0'
+    || finalPresentationEvidence?.exposure !== LINEAR_SCENE_EXPOSURE
+    || finalPresentationEvidence?.displayTransformCountPerFrame !== 1
+    || finalPresentationEvidence?.exactDiagnosticBypass !== 'liquid_support'
+    || finalPresentationEvidence?.diagnosticVisibilityRoute !== 'post-composite-depth24plus-identity-v0'
+    || !Number.isInteger(finalPresentationEvidence?.passCount)
+    || finalPresentationEvidence.passCount <= 0
+    || finalPresentationEvidence?.fallbackReason
+  ) {
+    throw new Error(`Finger fluid truth final presentation evidence is missing or partial: ${JSON.stringify(finalPresentationEvidence)}`);
   }
 
   let screenSpaceSurfaceEvidence = null;
@@ -1442,6 +1735,8 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       evidence?.route !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
+      || evidence?.accumulationTexture?.format !== 'rgba16float'
+      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
       || evidence.analyticSupportDepthPassCount <= 0
       || !Number.isInteger(evidence?.accumulationPassCount)
@@ -1457,12 +1752,26 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   }
 
   let refractionEvidence = null;
+  let worldSpaceReflectionEvidence = null;
+  let opticalQueryEvidence = null;
+  let environmentMapEvidence = null;
   if (expectedMode === 'screen_space_refraction') {
     const evidence = runtime.refractionEvidence;
+    const interfaceFidelityDiagnostic = runtime.opticalDebugMode === 'interface_fidelity';
+    const expectedOpticalTransportExecution = interfaceFidelityDiagnostic
+      ? 'not_executed_early_interface_diagnostic_v0'
+      : 'executed_refraction_and_reflection_transport_v0';
     if (
       evidence?.route !== KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.opticalTransportRoute !== KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE
+      || evidence?.opticalQueryRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || evidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
+      || evidence?.interfaceFidelityRoute !== KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE
+      || evidence?.coverageClosure !== 'dense_support_footprint_closure_sparse_identity_v0'
+      || evidence?.normalFiltering !== 'detail_macro_chord_variance_blend_v0'
+      || evidence?.legacyDebugMode !== 'legacy_interface'
+      || evidence?.opticalTransportExecution !== expectedOpticalTransportExecution
       || evidence?.slabRoute !== KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
@@ -1472,7 +1781,11 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       || !Number.isInteger(evidence?.slabGeometryPassCount)
       || evidence.slabGeometryPassCount <= 0
       || evidence?.frontDepthTexture?.format !== 'rgba16float'
+      || evidence?.frontDepthTexture?.channels?.join('|') !== 'projected_particle_sphere_front_view_depth_min|nearest_particle_center_view_depth_min'
       || evidence?.backDepthTexture?.format !== 'rgba16float'
+      || evidence?.backDepthTexture?.channel !== 'projected_particle_sphere_back_view_depth_max'
+      || evidence?.accumulationTexture?.format !== 'rgba16float'
+      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || evidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
       || !Number.isInteger(evidence?.accumulationPassCount)
       || evidence.accumulationPassCount <= 0
@@ -1484,6 +1797,84 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     refractionEvidence = {
       ...evidence,
     };
+    const queryEvidence = runtime.opticalQueryEvidence;
+    const reflectionEvidence = runtime.worldSpaceReflectionEvidence;
+    const environmentEvidence = runtime.environmentMapEvidence;
+    if (interfaceFidelityDiagnostic && (
+      queryEvidence !== undefined
+      || reflectionEvidence !== undefined
+      || environmentEvidence !== undefined
+    )) {
+      throw new Error(`Finger fluid truth interface diagnostic published inactive optical provider evidence: ${JSON.stringify({ queryEvidence, reflectionEvidence, environmentEvidence })}`);
+    }
+    if (!interfaceFidelityDiagnostic) {
+    if (
+      queryEvidence?.schema !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA
+      || queryEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.route !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
+      || queryEvidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
+      || queryEvidence?.worldProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
+      || queryEvidence?.environmentRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
+      || queryEvidence?.resolverOrder !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER
+      || queryEvidence?.fallbackReason
+      || queryEvidence?.queryFrameId !== renderFrameId
+      || !Number.isInteger(queryEvidence?.compositePassCount)
+      || queryEvidence.compositePassCount <= 0
+      || queryEvidence?.maximumDeferredMarchSteps !== 24
+      || queryEvidence?.minimumDeferredConfidence !== 0.55
+      || queryEvidence?.deferredInputs?.linearDepthObject?.format !== 'rgba16float'
+      || queryEvidence?.deferredInputs?.worldNormalRoughness?.format !== 'rgba16float'
+      || queryEvidence?.deferredInputs?.albedoMetallic?.format !== 'rgba8unorm'
+      || queryEvidence?.consumers?.join('|') !== 'reflection_center_ray|two_interface_refraction_exit_ray'
+      || queryEvidence?.resultFields?.join('|') !== 'origin|direction|cone|interval|hit_kind|object_id|distance|normal|material|radiance|transmittance|confidence|provider|fallback'
+    ) {
+      throw new Error(`Finger fluid truth hybrid optical query evidence is missing or partial: ${JSON.stringify(queryEvidence)}`);
+    }
+    opticalQueryEvidence = { ...queryEvidence };
+    if (
+      reflectionEvidence?.schema !== KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA
+      || reflectionEvidence?.requestedProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
+      || reflectionEvidence?.effectiveProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
+      || reflectionEvidence?.providerRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
+      || reflectionEvidence?.accelerationRoute !== KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE
+      || reflectionEvidence?.quadratureRoute !== KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE
+      || reflectionEvidence?.hitKindDiagnosticScope !== 'center_ray_only_v0'
+      || reflectionEvidence?.fallbackReason
+      || reflectionEvidence?.candidateCapMode !== 'uncapped_exact_dynamic_mesh_triangle_population_v0'
+      || reflectionEvidence?.exactTriangleCount !== DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT
+      || !Number.isInteger(reflectionEvidence?.compositePassCount)
+      || reflectionEvidence.compositePassCount <= 0
+      || reflectionEvidence?.reflectionProviderFrameId !== renderFrameId
+      || reflectionEvidence?.dynamicMeshTransformGeneration !== deferredSceneEvidence?.dynamicMesh?.transformGeneration
+      || !reflectionEvidence?.hitKinds?.includes('environment')
+      || !reflectionEvidence?.hitKinds?.includes('analytic_sphere')
+      || !reflectionEvidence?.hitKinds?.includes('indexed_mesh')
+    ) {
+      throw new Error(`Finger fluid truth world-space reflection evidence is missing or partial: ${JSON.stringify(reflectionEvidence)}`);
+    }
+    worldSpaceReflectionEvidence = { ...reflectionEvidence };
+    if (
+      environmentEvidence?.schema !== 'kaminos.hdr-environment-map.v0'
+      || environmentEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
+      || environmentEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
+      || environmentEvidence?.assetId !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID
+      || environmentEvidence?.assetSha256 !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256
+      || environmentEvidence?.runtimeAssetUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL
+      || environmentEvidence?.sourceAssetUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL
+      || environmentEvidence?.sourcePageUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL
+      || environmentEvidence?.license !== 'CC0-1.0'
+      || environmentEvidence?.decodeRoute !== 'cpu-radiance-rle-rgbe-v0'
+      || environmentEvidence?.samplingRoute !== 'wgsl-manual-bilinear-rgbe-equirectangular-v0'
+      || environmentEvidence?.width !== 1024
+      || environmentEvidence?.height !== 512
+      || environmentEvidence?.gpuTextureFormat !== 'rgba8unorm'
+      || environmentEvidence?.fallbackReason
+    ) {
+      throw new Error(`Finger fluid truth HDR environment evidence is missing or partial: ${JSON.stringify(environmentEvidence)}`);
+    }
+    environmentMapEvidence = { ...environmentEvidence };
+    }
   }
 
   return {
@@ -1492,11 +1883,14 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     requestedRenderer: runtime.requestedRenderer,
     effectiveRenderer: runtime.effectiveRenderer,
     fallbackReason: runtime.fallbackReason || null,
+    deferredSceneEvidence: { ...deferredSceneEvidence },
     supportPresentationEvidence: {
       ...supportPresentationEvidence,
     },
+    linearHdrSceneEvidence: { ...linearHdrSceneEvidence },
+    finalPresentationEvidence: { ...finalPresentationEvidence },
     screenSpaceSurfaceEvidence,
-    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence } : {}),
+    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence, opticalQueryEvidence, worldSpaceReflectionEvidence, environmentMapEvidence } : {}),
   };
 }
 
@@ -3629,6 +4023,8 @@ struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
 }
 
@@ -3763,6 +4159,8 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
   let radiusSquared = dot(input.uv, input.uv);
   if (radiusSquared > 1.0) { discard; }
+  let opticalDebugMode = u32(params.cameraUp.w + 0.5);
+  if (opticalDebugMode == 16u) { return vec4<f32>(1.0); }
   let normal = normalize(vec3<f32>(input.uv.x, -input.uv.y, sqrt(max(0.0, 1.0 - radiusSquared))));
   let light = normalize(vec3<f32>(-0.42, 0.70, 0.58));
   let diffuse = max(dot(normal, light), 0.0);
@@ -3780,15 +4178,161 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
+const HDR_ENVIRONMENT_SAMPLING_WGSL = /* wgsl */`
+fn decodeRgbe(encoded: vec4<f32>) -> vec3<f32> {
+  let bytes = floor(encoded * 255.0 + vec4<f32>(0.5));
+  if (bytes.a < 1.0) { return vec3<f32>(0.0); }
+  return bytes.rgb * exp2(bytes.a - 136.0);
+}
+
+fn loadEnvironmentTexel(pixel: vec2<i32>) -> vec3<f32> {
+  let dims = vec2<i32>(textureDimensions(hdrEnvironmentTexture));
+  let wrappedX = ((pixel.x % dims.x) + dims.x) % dims.x;
+  let safePixel = vec2<i32>(wrappedX, clamp(pixel.y, 0, dims.y - 1));
+  return decodeRgbe(textureLoad(hdrEnvironmentTexture, safePixel, 0));
+}
+
+fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
+  let direction = normalize(rayDirection);
+  let longitude = atan2(direction.z, direction.x);
+  let uv = vec2<f32>(fract(0.5 + longitude / (2.0 * 3.14159265)), acos(clamp(direction.y, -1.0, 1.0)) / 3.14159265);
+  let dims = vec2<f32>(textureDimensions(hdrEnvironmentTexture));
+  let texelPosition = uv * dims - vec2<f32>(0.5);
+  let base = vec2<i32>(floor(texelPosition));
+  let blend = fract(texelPosition);
+  let top = mix(loadEnvironmentTexel(base), loadEnvironmentTexel(base + vec2<i32>(1, 0)), blend.x);
+  let bottom = mix(loadEnvironmentTexel(base + vec2<i32>(0, 1)), loadEnvironmentTexel(base + vec2<i32>(1, 1)), blend.x);
+  return mix(top, bottom, blend.y) * 0.72;
+}
+
+fn sampleEnvironmentFiltered(rayDirection: vec3<f32>, roughness: f32) -> vec3<f32> {
+  let direction = normalize(rayDirection);
+  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(direction.y) > 0.92);
+  let tangent = normalize(cross(helperAxis, direction));
+  let bitangent = normalize(cross(direction, tangent));
+  let coneRadius = 0.015 + clamp(roughness * roughness, 0.0, 1.0) * 0.36;
+  return sampleEnvironment(direction) * 0.40
+    + sampleEnvironment(normalize(direction + tangent * coneRadius)) * 0.15
+    + sampleEnvironment(normalize(direction - tangent * coneRadius)) * 0.15
+    + sampleEnvironment(normalize(direction + bitangent * coneRadius)) * 0.15
+    + sampleEnvironment(normalize(direction - bitangent * coneRadius)) * 0.15;
+}
+`;
+
+const HDR_WORLD_BACKGROUND_SHADER = /* wgsl */`
+struct RenderParams {
+  viewProjection: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
+  viewport: vec4<f32>,
+}
+
+@group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
+
+${HDR_ENVIRONMENT_SAMPLING_WGSL}
+
+@vertex
+fn vs_hdr_world_background(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+  let positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0)
+  );
+  return vec4<f32>(positions[vertexIndex], 0.0, 1.0);
+}
+
+@fragment
+fn fs_hdr_world_background(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
+  let normalized = fragmentPosition.xy / params.viewport.xy;
+  let ndc = normalized * 2.0 - vec2<f32>(1.0);
+  let aspect = params.viewport.x / max(params.viewport.y, 1.0);
+  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
+  let cameraRay = normalize(
+    params.cameraForward.xyz
+      + params.cameraRight.xyz * ndc.x * aspect * tanHalfFov
+      - params.cameraUp.xyz * ndc.y * tanHalfFov
+  );
+  return vec4<f32>(sampleEnvironment(cameraRay), 1.0);
+}
+`;
+
+const FINAL_PRESENTATION_SHADER = /* wgsl */`
+struct RenderParams {
+  viewProjection: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
+  viewport: vec4<f32>,
+}
+
+@group(0) @binding(0) var linearSceneRadiance: texture_2d<f32>;
+@group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(2) var presentationSurfaceAccumulation: texture_2d<f32>;
+@group(0) @binding(3) var presentationSupportFrontDepth: texture_2d<f32>;
+@group(0) @binding(4) var presentationCompositeDepth: texture_depth_2d;
+
+fn toneMapAces(color: vec3<f32>) -> vec3<f32> {
+  let a = 2.51;
+  let b = 0.03;
+  let c = 2.43;
+  let d = 0.59;
+  let e = 0.14;
+  return clamp((color * (a * color + vec3<f32>(b))) / (color * (c * color + vec3<f32>(d)) + vec3<f32>(e)), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+fn viewDepthToNdc(viewDepth: f32) -> f32 {
+  let near = 0.08;
+  let far = 30.0;
+  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
+}
+
+@vertex
+fn vs_final_presentation(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+  let positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0)
+  );
+  return vec4<f32>(positions[vertexIndex], 0.0, 1.0);
+}
+
+@fragment
+fn fs_final_presentation(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
+  let source = textureLoad(linearSceneRadiance, vec2<i32>(fragmentPosition.xy), 0);
+  let opticalDebugMode = i32(round(params.cameraUp.w));
+  let linearRadiance = max(source.rgb, vec3<f32>(0.0));
+  let exposure = ${LINEAR_SCENE_EXPOSURE};
+  let displayColor = toneMapAces(linearRadiance * exposure);
+  if (opticalDebugMode == 16) { return source; }
+  let liquidSample = textureLoad(presentationSurfaceAccumulation, vec2<i32>(fragmentPosition.xy), 0);
+  let liquidResident = liquidSample.z >= 0.018 && liquidSample.x >= 0.012;
+  let supportOrderingDepth = textureLoad(presentationSupportFrontDepth, vec2<i32>(fragmentPosition.xy), 0).y;
+  let presentedDepth = textureLoad(presentationCompositeDepth, vec2<i32>(fragmentPosition.xy), 0);
+  let expectedLiquidDepth = viewDepthToNdc(supportOrderingDepth + 0.003);
+  let liquidVisible = liquidResident && abs(presentedDepth - expectedLiquidDepth) < 0.00002;
+  let diagnosticQuantity = opticalDebugMode != 0
+    && opticalDebugMode != 12
+    && opticalDebugMode != 15
+    && opticalDebugMode != 17;
+  let diagnosticColor = clamp(linearRadiance, vec3<f32>(0.0), vec3<f32>(1.0));
+  return vec4<f32>(select(displayColor, diagnosticColor, diagnosticQuantity && liquidVisible), source.a);
+}
+`;
+
 const ANALYTIC_SUPPORT_PRESENTATION_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
 }
 
 @group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
+
+${HDR_ENVIRONMENT_SAMPLING_WGSL}
 
 ${PLAYGROUND_WGSL}
 
@@ -3849,6 +4393,7 @@ struct AnalyticSupportVertexOutput {
   @location(0) worldPosition: vec3<f32>,
   @location(1) worldNormal: vec3<f32>,
   @location(2) supportKind: f32,
+  @location(3) viewDepth: f32,
 }
 
 @vertex
@@ -3932,6 +4477,7 @@ fn vs_analytic_support_presentation(@builtin(vertex_index) vertexIndex: u32) -> 
   output.worldPosition = worldPosition;
   output.worldNormal = worldNormal;
   output.supportKind = supportKind;
+  output.viewDepth = max(0.001, output.position.w);
   return output;
 }
 
@@ -3942,14 +4488,27 @@ fn worldGrid(worldPosition: vec3<f32>, cellsPerWorldUnit: f32) -> f32 {
   return 1.0 - min(min(distanceToLine.x, distanceToLine.y), 1.0);
 }
 
+struct DeferredSceneOutput {
+  @location(0) color: vec4<f32>,
+  @location(1) worldNormalRoughness: vec4<f32>,
+  @location(2) albedoMetallic: vec4<f32>,
+  @location(3) linearDepthObject: vec4<f32>,
+}
+
 @fragment
-fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> @location(0) vec4<f32> {
+fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> DeferredSceneOutput {
   let normal = normalize(input.worldNormal);
-  let lightDirection = normalize(vec3<f32>(-0.38, 0.82, 0.43));
-  let diffuse = max(dot(normal, lightDirection), 0.0);
-  let hemisphere = normal.y * 0.5 + 0.5;
-  let terrainLight = 0.34 + diffuse * 0.48 + hemisphere * 0.18;
-  let terrainBase = vec3<f32>(0.20, 0.23, 0.215) * terrainLight;
+  let viewDirection = normalize(params.cameraPosition.xyz - input.worldPosition);
+  let roughness = select(0.82, 0.36, input.supportKind > 0.5);
+  let metallic = select(0.0, 0.58, input.supportKind > 0.5);
+  let baseColor = select(vec3<f32>(0.20, 0.23, 0.215), vec3<f32>(0.48, 0.34, 0.14), input.supportKind > 0.5);
+  let diffuseEnvironment = sampleEnvironment(normal) * 0.16;
+  let reflectionDirection = reflect(-viewDirection, normal);
+  let specularEnvironment = sampleEnvironmentFiltered(reflectionDirection, roughness);
+  let ndv = clamp(dot(normal, viewDirection), 0.0, 1.0);
+  let f0 = mix(vec3<f32>(0.04), baseColor, metallic);
+  let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - ndv, 5.0);
+  let terrainBase = baseColor * (vec3<f32>(0.62) + diffuseEnvironment) + specularEnvironment * fresnel * (1.0 - roughness * 0.72);
   let minorGrid = worldGrid(input.worldPosition, 2.0);
   let majorGrid = worldGrid(input.worldPosition, 0.5);
   var terrainColor = mix(terrainBase, vec3<f32>(0.37, 0.43, 0.40), minorGrid * 0.34);
@@ -3961,24 +4520,90 @@ fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> @loca
   terrainColor = mix(terrainColor, vec3<f32>(0.65, 0.25, 0.20), xAxis * 0.68);
   terrainColor = mix(terrainColor, vec3<f32>(0.18, 0.48, 0.60), zAxis * 0.68);
 
-  let obstacleLight = 0.28 + diffuse * 0.58 + hemisphere * 0.14;
-  let obstacleColor = vec3<f32>(0.48, 0.34, 0.14) * obstacleLight;
-  let fixtureLight = 0.24 + diffuse * 0.62 + hemisphere * 0.14;
-  let roundFixtureColor = vec3<f32>(0.25, 0.39, 0.46) * fixtureLight + vec3<f32>(0.04, 0.12, 0.15);
-  let slotFixtureColor = vec3<f32>(0.53, 0.34, 0.13) * fixtureLight + vec3<f32>(0.10, 0.04, 0.01);
-  let porousGrain = 0.82 + 0.18 * sin(dot(input.worldPosition, vec3<f32>(53.0, 71.0, 89.0)));
-  let porousFixtureColor = vec3<f32>(0.34, 0.38, 0.35) * fixtureLight * porousGrain;
-  var color = terrainColor;
-  if (input.supportKind > 3.5) {
-    color = porousFixtureColor;
-  } else if (input.supportKind > 2.5) {
-    color = slotFixtureColor;
-  } else if (input.supportKind > 1.5) {
-    color = roundFixtureColor;
-  } else if (input.supportKind > 0.5) {
-    color = obstacleColor;
-  }
-  return vec4<f32>(color, 1.0);
+  let obstacleColor = terrainBase;
+  let color = select(terrainColor, obstacleColor, input.supportKind > 0.5);
+  let objectId = select(1.0, 2.0, input.supportKind > 0.5);
+  var output: DeferredSceneOutput;
+  output.color = vec4<f32>(color, 1.0);
+  output.worldNormalRoughness = vec4<f32>(normal, roughness);
+  output.albedoMetallic = vec4<f32>(color, metallic);
+  output.linearDepthObject = vec4<f32>(input.viewDepth, objectId, input.supportKind, 1.0);
+  return output;
+}
+`;
+
+const DYNAMIC_INDEXED_MESH_SHADER = /* wgsl */`
+struct RenderParams {
+  viewProjection: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
+  viewport: vec4<f32>,
+}
+
+struct SceneParams {
+  model: mat4x4<f32>,
+  normalTransform: mat4x4<f32>,
+  albedoRoughness: vec4<f32>,
+  identityMetallicPhase: vec4<f32>,
+}
+
+@group(0) @binding(0) var<uniform> scene: SceneParams;
+@group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
+
+${HDR_ENVIRONMENT_SAMPLING_WGSL}
+
+struct DynamicMeshVertexOutput {
+  @builtin(position) position: vec4<f32>,
+  @location(0) worldPosition: vec3<f32>,
+  @location(1) worldNormal: vec3<f32>,
+  @location(2) viewDepth: f32,
+}
+
+@vertex
+fn vs_dynamic_indexed_mesh(
+  @location(0) localPosition: vec4<f32>,
+  @location(1) localNormal: vec4<f32>,
+) -> DynamicMeshVertexOutput {
+  let worldPosition = scene.model * localPosition;
+  let clipPosition = params.viewProjection * worldPosition;
+  var output: DynamicMeshVertexOutput;
+  output.position = clipPosition;
+  output.worldPosition = worldPosition.xyz;
+  output.worldNormal = normalize((scene.normalTransform * localNormal).xyz);
+  output.viewDepth = max(0.001, clipPosition.w);
+  return output;
+}
+
+struct DeferredSceneOutput {
+  @location(0) color: vec4<f32>,
+  @location(1) worldNormalRoughness: vec4<f32>,
+  @location(2) albedoMetallic: vec4<f32>,
+  @location(3) linearDepthObject: vec4<f32>,
+}
+
+@fragment
+fn fs_dynamic_indexed_mesh(input: DynamicMeshVertexOutput) -> DeferredSceneOutput {
+  let normal = normalize(input.worldNormal);
+  let viewDirection = normalize(params.cameraPosition.xyz - input.worldPosition);
+  let roughness = scene.albedoRoughness.w;
+  let metallic = scene.identityMetallicPhase.y;
+  let diffuseEnvironment = sampleEnvironment(normal) * 0.17;
+  let reflectionDirection = reflect(-viewDirection, normal);
+  let specularEnvironment = sampleEnvironmentFiltered(reflectionDirection, roughness);
+  let ndv = clamp(dot(normal, viewDirection), 0.0, 1.0);
+  let f0 = mix(vec3<f32>(0.04), scene.albedoRoughness.rgb, metallic);
+  let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - ndv, 5.0);
+  let color = scene.albedoRoughness.rgb * (vec3<f32>(0.07) + diffuseEnvironment) * (1.0 - metallic)
+    + specularEnvironment * fresnel * (1.0 - roughness * 0.64);
+  var output: DeferredSceneOutput;
+  output.color = vec4<f32>(color, 1.0);
+  output.worldNormalRoughness = vec4<f32>(normal, scene.albedoRoughness.w);
+  output.albedoMetallic = vec4<f32>(scene.albedoRoughness.rgb, scene.identityMetallicPhase.y);
+  output.linearDepthObject = vec4<f32>(input.viewDepth, scene.identityMetallicPhase.x, scene.identityMetallicPhase.z, 1.0);
+  return output;
 }
 `;
 
@@ -4010,6 +4635,8 @@ struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
 }
 
@@ -4022,6 +4649,31 @@ struct RenderParams {
 @group(0) @binding(6) var refractionSceneSampler: sampler;
 @group(0) @binding(7) var opticalSlabFrontDepth: texture_2d<f32>;
 @group(0) @binding(8) var opticalSlabBackDepth: texture_2d<f32>;
+@group(0) @binding(9) var<storage, read> reflectionMeshPositions: array<vec4<f32>>;
+@group(0) @binding(10) var<storage, read> reflectionMeshIndices: array<u32>;
+
+struct SceneParams {
+  model: mat4x4<f32>,
+  normalTransform: mat4x4<f32>,
+  albedoRoughness: vec4<f32>,
+  identityMetallicPhase: vec4<f32>,
+}
+
+@group(0) @binding(11) var<uniform> reflectionScene: SceneParams;
+@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
+@group(0) @binding(13) var deferredLinearDepthObject: texture_2d<f32>;
+@group(0) @binding(14) var deferredWorldNormalRoughness: texture_2d<f32>;
+@group(0) @binding(15) var deferredAlbedoMetallic: texture_2d<f32>;
+
+const REFLECTION_HIT_ENVIRONMENT = 0u;
+const REFLECTION_HIT_ANALYTIC = 1u;
+const REFLECTION_HIT_INDEXED_MESH = 2u;
+const REFLECTION_HIT_DEFERRED_SCENE = 3u;
+const REFLECTION_HIT_NONE = 4u;
+const OPTICAL_PROVIDER_ENVIRONMENT = 0u;
+const OPTICAL_PROVIDER_WORLD = 1u;
+const OPTICAL_PROVIDER_DEFERRED = 2u;
+const OPTICAL_PROVIDER_NONE = 3u;
 
 struct AccumVertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -4078,9 +4730,10 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius);
   var output: AccumFragmentOutput;
-  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
-  output.frontDepth = vec4<f32>(max(0.001, input.viewDepth - cap * input.radius));
+  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth * depthWeight);
+  output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
   output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius);
   return output;
 }
@@ -4114,13 +4767,336 @@ fn readFrontDepth(pixel: vec2<i32>) -> f32 {
   return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
 }
 
+fn readSupportOrderingDepth(pixel: vec2<i32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(opticalSlabFrontDepth));
+  return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).y;
+}
+
 fn readBackDepth(pixel: vec2<i32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(opticalSlabBackDepth));
   return textureLoad(opticalSlabBackDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
 }
 
+struct ReflectionHit {
+  distance: f32,
+  normal: vec3<f32>,
+  kind: u32,
+  position: vec3<f32>,
+}
+
+fn reconstructWorldPosition(pixel: vec2<i32>, viewDepth: f32) -> vec3<f32> {
+  let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
+  var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
+  ndc.y = -ndc.y;
+  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
+  let aspect = dims.x / max(dims.y, 1.0);
+  return params.cameraPosition.xyz
+    + params.cameraForward.xyz * viewDepth
+    + params.cameraRight.xyz * ndc.x * viewDepth * tanHalfFov * aspect
+    + params.cameraUp.xyz * ndc.y * viewDepth * tanHalfFov;
+}
+
+fn worldSurfaceNormal(viewNormal: vec3<f32>) -> vec3<f32> {
+  let worldNormal = normalize(
+    params.cameraRight.xyz * viewNormal.x
+    + params.cameraUp.xyz * viewNormal.y
+    - params.cameraForward.xyz * viewNormal.z
+  );
+  return worldNormal;
+}
+
+fn viewDirectionToWorld(viewDirection: vec3<f32>) -> vec3<f32> {
+  return normalize(
+    params.cameraRight.xyz * viewDirection.x
+    + params.cameraUp.xyz * viewDirection.y
+    - params.cameraForward.xyz * viewDirection.z
+  );
+}
+
+struct DeferredSceneHit {
+  valid: f32,
+  distance: f32,
+  uv: vec2<f32>,
+  position: vec3<f32>,
+  normal: vec3<f32>,
+  albedo: vec3<f32>,
+  roughness: f32,
+  metallic: f32,
+  objectId: f32,
+  confidence: f32,
+}
+
+fn projectWorldToDeferred(worldPosition: vec3<f32>) -> vec4<f32> {
+  let clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  if (clip.w <= 0.001) { return vec4<f32>(-1.0); }
+  let ndc = clip.xy / clip.w;
+  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5);
+  return vec4<f32>(uv, clip.w, 1.0);
+}
+
+fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> DeferredSceneHit {
+  var hit: DeferredSceneHit;
+  hit.valid = 0.0;
+  hit.distance = 60.0;
+  hit.uv = vec2<f32>(-1.0);
+  hit.position = rayOrigin + rayDirection * hit.distance;
+  hit.normal = vec3<f32>(0.0, 1.0, 0.0);
+  hit.albedo = vec3<f32>(0.0);
+  hit.roughness = 1.0;
+  hit.metallic = 0.0;
+  hit.objectId = 0.0;
+  hit.confidence = 0.0;
+  let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
+  let dimsFloat = vec2<f32>(dims);
+  var distance = 0.055;
+  for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
+    let samplePosition = rayOrigin + rayDirection * distance;
+    let projected = projectWorldToDeferred(samplePosition);
+    if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
+      distance = distance + 0.05 + distance * 0.105;
+      continue;
+    }
+    let scenePixel = clamp(vec2<i32>(projected.xy * dimsFloat), vec2<i32>(0), dims - vec2<i32>(1));
+    let depthObject = textureLoad(deferredLinearDepthObject, scenePixel, 0);
+    let sceneDepth = depthObject.x;
+    let objectId = depthObject.y;
+    let depthDelta = projected.z - sceneDepth;
+    let crossingTolerance = 0.028 + distance * 0.012;
+    if (depthObject.w > 0.5 && sceneDepth < 29.5 && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
+      let normalRoughness = textureLoad(deferredWorldNormalRoughness, scenePixel, 0);
+      let albedoMetallic = textureLoad(deferredAlbedoMetallic, scenePixel, 0);
+      hit.valid = 1.0;
+      hit.uv = projected.xy;
+      hit.position = reconstructWorldPosition(scenePixel, sceneDepth);
+      hit.distance = length(hit.position - rayOrigin);
+      hit.normal = normalize(normalRoughness.xyz);
+      hit.albedo = albedoMetallic.rgb;
+      hit.roughness = normalRoughness.w;
+      hit.metallic = albedoMetallic.w;
+      hit.objectId = objectId;
+      hit.confidence = 1.0 - smoothstep(0.0, 0.22, abs(depthDelta));
+      return hit;
+    }
+    distance = distance + 0.05 + distance * 0.105;
+  }
+  return hit;
+}
+
+fn intersectTriangle(
+  rayOrigin: vec3<f32>,
+  rayDirection: vec3<f32>,
+  a: vec3<f32>,
+  b: vec3<f32>,
+  c: vec3<f32>,
+) -> vec4<f32> {
+  let edge1 = b - a;
+  let edge2 = c - a;
+  let p = cross(rayDirection, edge2);
+  let determinant = dot(edge1, p);
+  if (abs(determinant) < 0.00001) { return vec4<f32>(-1.0); }
+  let inverseDeterminant = 1.0 / determinant;
+  let t = rayOrigin - a;
+  let u = dot(t, p) * inverseDeterminant;
+  if (u < 0.0 || u > 1.0) { return vec4<f32>(-1.0); }
+  let q = cross(t, edge1);
+  let v = dot(rayDirection, q) * inverseDeterminant;
+  if (v < 0.0 || u + v > 1.0) { return vec4<f32>(-1.0); }
+  let distance = dot(edge2, q) * inverseDeterminant;
+  if (distance <= 0.012) { return vec4<f32>(-1.0); }
+  var normal = normalize(cross(edge1, edge2));
+  normal = select(normal, -normal, dot(normal, rayDirection) > 0.0);
+  return vec4<f32>(normal, distance);
+}
+
+fn traceIndexedMesh(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, current: ReflectionHit) -> ReflectionHit {
+  var hit = current;
+  for (var triangleIndex = 0u; triangleIndex < ${DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT}u; triangleIndex = triangleIndex + 1u) {
+    let indexOffset = triangleIndex * 3u;
+    let a = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset]]).xyz;
+    let b = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset + 1u]]).xyz;
+    let c = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset + 2u]]).xyz;
+    let candidate = intersectTriangle(rayOrigin, rayDirection, a, b, c);
+    if (candidate.w > 0.0 && candidate.w < hit.distance) {
+      hit.distance = candidate.w;
+      hit.normal = candidate.xyz;
+      hit.kind = REFLECTION_HIT_INDEXED_MESH;
+      hit.position = rayOrigin + rayDirection * candidate.w;
+    }
+  }
+  return hit;
+}
+
+fn traceAnalyticSphere(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, current: ReflectionHit) -> ReflectionHit {
+  var hit = current;
+  let center = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let offset = rayOrigin - center;
+  let halfB = dot(offset, rayDirection);
+  let discriminant = halfB * halfB - (dot(offset, offset) - ${OBSTACLE_RADIUS * OBSTACLE_RADIUS});
+  if (discriminant > 0.0) {
+    let distance = -halfB - sqrt(discriminant);
+    if (distance > 0.012 && distance < hit.distance) {
+      hit.distance = distance;
+      hit.position = rayOrigin + rayDirection * distance;
+      hit.normal = normalize(hit.position - center);
+      hit.kind = REFLECTION_HIT_ANALYTIC;
+    }
+  }
+  return hit;
+}
+
+fn traceClosestSurface(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionHit {
+  var hit: ReflectionHit;
+  hit.distance = 60.0;
+  hit.normal = vec3<f32>(0.0, 1.0, 0.0);
+  hit.kind = REFLECTION_HIT_ENVIRONMENT;
+  hit.position = rayOrigin + rayDirection * hit.distance;
+  hit = traceIndexedMesh(rayOrigin, rayDirection, hit);
+  hit = traceAnalyticSphere(rayOrigin, rayDirection, hit);
+  return hit;
+}
+
+${HDR_ENVIRONMENT_SAMPLING_WGSL}
+
+fn integrateParticipatingRadiance(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, tMax: f32) -> vec3<f32> {
+  _ = rayOrigin;
+  _ = rayDirection;
+  _ = tMax;
+  return vec3<f32>(0.0);
+}
+
+fn shadeSurfaceHit(hit: ReflectionHit, outgoingRay: vec3<f32>) -> vec3<f32> {
+  if (hit.kind == REFLECTION_HIT_ENVIRONMENT) { return sampleEnvironment(outgoingRay); }
+  let lightDirection = normalize(vec3<f32>(-0.38, 0.82, 0.43));
+  let diffuse = max(dot(hit.normal, lightDirection), 0.0);
+  let edge = pow(1.0 - max(dot(hit.normal, -outgoingRay), 0.0), 3.0);
+  if (hit.kind == REFLECTION_HIT_INDEXED_MESH) {
+    let stripe = 0.5 + 0.5 * cos((hit.position.y + hit.position.x * 0.35) * 18.0 + reflectionScene.identityMetallicPhase.z * 2.0);
+    let base = mix(reflectionScene.albedoRoughness.rgb, vec3<f32>(1.0, 0.46, 0.08), stripe * 0.48);
+    return base * (0.24 + diffuse * 0.96) + vec3<f32>(0.24, 0.66, 1.0) * edge * 0.72;
+  }
+  return vec3<f32>(0.54, 0.32, 0.08) * (0.26 + diffuse * 0.88) + vec3<f32>(0.92, 0.68, 0.28) * edge * 0.35;
+}
+
+struct ReflectionSample {
+  radiance: vec3<f32>,
+  environmentRadiance: vec3<f32>,
+}
+
+struct OpticalQuerySample {
+  radiance: vec3<f32>,
+  environmentRadiance: vec3<f32>,
+  distance: f32,
+  hitKind: u32,
+  providerKind: u32,
+  position: vec3<f32>,
+  normal: vec3<f32>,
+  albedo: vec3<f32>,
+  roughness: f32,
+  metallic: f32,
+  objectId: f32,
+  confidence: f32,
+}
+
+fn makeNoOpticalQuerySample() -> OpticalQuerySample {
+  var sample: OpticalQuerySample;
+  sample.radiance = vec3<f32>(0.0);
+  sample.environmentRadiance = vec3<f32>(0.0);
+  sample.distance = 0.0;
+  sample.hitKind = REFLECTION_HIT_NONE;
+  sample.providerKind = OPTICAL_PROVIDER_NONE;
+  sample.position = vec3<f32>(0.0);
+  sample.normal = vec3<f32>(0.0, 1.0, 0.0);
+  sample.albedo = vec3<f32>(0.0);
+  sample.roughness = 1.0;
+  sample.metallic = 0.0;
+  sample.objectId = 0.0;
+  sample.confidence = 0.0;
+  return sample;
+}
+
+struct ReflectionQuadrature {
+  radiance: vec3<f32>,
+  environmentRadiance: vec3<f32>,
+}
+
+fn sampleWorldOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
+  let hit = traceClosestSurface(rayOrigin, rayDirection);
+  let surfaceRadiance = shadeSurfaceHit(hit, rayDirection);
+  var sample: OpticalQuerySample;
+  sample.radiance = surfaceRadiance + integrateParticipatingRadiance(rayOrigin, rayDirection, hit.distance);
+  sample.environmentRadiance = select(vec3<f32>(0.0), surfaceRadiance, hit.kind == REFLECTION_HIT_ENVIRONMENT);
+  sample.distance = hit.distance;
+  sample.hitKind = hit.kind;
+  sample.providerKind = select(OPTICAL_PROVIDER_WORLD, OPTICAL_PROVIDER_ENVIRONMENT, hit.kind == REFLECTION_HIT_ENVIRONMENT);
+  sample.position = hit.position;
+  sample.normal = hit.normal;
+  sample.albedo = select(vec3<f32>(0.54, 0.32, 0.08), reflectionScene.albedoRoughness.rgb, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.roughness = select(0.42, reflectionScene.albedoRoughness.w, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.metallic = select(0.0, reflectionScene.identityMetallicPhase.y, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.objectId = select(2.0, reflectionScene.identityMetallicPhase.x, hit.kind == REFLECTION_HIT_INDEXED_MESH);
+  sample.confidence = 1.0;
+  return sample;
+}
+
+fn sampleHybridOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
+  let deferredHit = traceDeferredScene(rayOrigin, rayDirection);
+  if (deferredHit.valid > 0.5 && deferredHit.confidence >= 0.55) {
+    var sample: OpticalQuerySample;
+    sample.radiance = textureSampleLevel(refractionSceneColor, refractionSceneSampler, deferredHit.uv, 0.0).rgb
+      + integrateParticipatingRadiance(rayOrigin, rayDirection, deferredHit.distance);
+    sample.environmentRadiance = vec3<f32>(0.0);
+    sample.distance = deferredHit.distance;
+    sample.hitKind = REFLECTION_HIT_DEFERRED_SCENE;
+    sample.providerKind = OPTICAL_PROVIDER_DEFERRED;
+    sample.position = deferredHit.position;
+    sample.normal = deferredHit.normal;
+    sample.albedo = deferredHit.albedo;
+    sample.roughness = deferredHit.roughness;
+    sample.metallic = deferredHit.metallic;
+    sample.objectId = deferredHit.objectId;
+    sample.confidence = deferredHit.confidence;
+    return sample;
+  }
+  return sampleWorldOpticalQuery(rayOrigin, rayDirection);
+}
+
+fn reflectionSampleFromOpticalQuery(query: OpticalQuerySample) -> ReflectionSample {
+  var sample: ReflectionSample;
+  sample.radiance = query.radiance;
+  sample.environmentRadiance = query.environmentRadiance;
+  return sample;
+}
+
+fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
+  return reflectionSampleFromOpticalQuery(sampleWorldOpticalQuery(rayOrigin, rayDirection));
+}
+
+fn integrateWorldReflectionQuadrature(
+  worldPosition: vec3<f32>,
+  cameraRay: vec3<f32>,
+  worldNormal: vec3<f32>,
+  coneRadius: f32,
+) -> ReflectionQuadrature {
+  let centerDirection = normalize(reflect(cameraRay, worldNormal));
+  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
+  let tangent = normalize(cross(helperAxis, centerDirection));
+  let bitangent = normalize(cross(centerDirection, tangent));
+  let rayOrigin = worldPosition + worldNormal * 0.026;
+  let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
+  let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
+  let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
+  let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
+  let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius));
+  var quadrature: ReflectionQuadrature;
+  quadrature.radiance = center.radiance * 0.36
+    + (tangentPositive.radiance + tangentNegative.radiance + bitangentPositive.radiance + bitangentNegative.radiance) * 0.16;
+  quadrature.environmentRadiance = center.environmentRadiance * 0.36
+    + (tangentPositive.environmentRadiance + tangentNegative.environmentRadiance + bitangentPositive.environmentRadiance + bitangentNegative.environmentRadiance) * 0.16;
+  return quadrature;
+}
+
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
-  return sampleValue.w;
+  return sampleValue.w / max(sampleValue.z, 0.0001);
 }
 
 fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
@@ -4157,13 +5133,73 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
   return select(centerDepth, candidate, populated && abs(candidate - centerDepth) < 0.72);
 }
 
-fn reconstructEntryNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
-  let left = coherentSlabDepth(pixel + vec2<i32>(-1, 0), centerDepth, false);
-  let right = coherentSlabDepth(pixel + vec2<i32>(1, 0), centerDepth, false);
-  let down = coherentSlabDepth(pixel + vec2<i32>(0, -1), centerDepth, false);
-  let up = coherentSlabDepth(pixel + vec2<i32>(0, 1), centerDepth, false);
-  let gradient = vec2<f32>(right - left, up - down);
+fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
+  let leftPixel = pixel + vec2<i32>(-6, 0);
+  let rightPixel = pixel + vec2<i32>(6, 0);
+  let screenUpPixel = pixel + vec2<i32>(0, -6);
+  let screenDownPixel = pixel + vec2<i32>(0, 6);
+  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
+  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
+  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
+  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
+  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
+  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
+  let viewToCamera = normalize(params.cameraPosition.xyz - center);
+  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
+  return worldNormal;
+}
+
+fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
+  let leftPixel = pixel + vec2<i32>(-2, 0);
+  let rightPixel = pixel + vec2<i32>(2, 0);
+  let screenUpPixel = pixel + vec2<i32>(0, -2);
+  let screenDownPixel = pixel + vec2<i32>(0, 2);
+  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
+  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
+  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
+  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
+  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
+  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
+  let viewToCamera = normalize(params.cameraPosition.xyz - center);
+  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
+  return worldNormal;
+}
+
+fn reconstructEntryNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
+  let left = coherentSlabDepth(pixel + vec2<i32>(-radius, 0), centerDepth, false);
+  let right = coherentSlabDepth(pixel + vec2<i32>(radius, 0), centerDepth, false);
+  let down = coherentSlabDepth(pixel + vec2<i32>(0, -radius), centerDepth, false);
+  let up = coherentSlabDepth(pixel + vec2<i32>(0, radius), centerDepth, false);
+  let gradient = vec2<f32>(right - left, up - down) / f32(radius);
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0));
+}
+
+struct InterfaceNormalEstimate {
+  detailNormal: vec3<f32>,
+  filteredNormal: vec3<f32>,
+  variance: f32,
+  denseBodyConfidence: f32,
+}
+
+fn estimateInterfaceNormal(
+  pixel: vec2<i32>,
+  centerDepth: f32,
+  centerAccum: vec4<f32>,
+  coverageContinuity: f32,
+) -> InterfaceNormalEstimate {
+  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 1);
+  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 3);
+  let variance = sqrt(max(1.0 - dot(detailNormal, macroNormal), 0.0));
+  let denseBodyConfidence = smoothstep(0.68, 0.94, coverageContinuity)
+    * smoothstep(2.35, 4.60, centerAccum.x)
+    * smoothstep(1.15, 2.50, centerAccum.z);
+  let normalBlend = denseBodyConfidence * clamp(0.14 + variance * 0.9, 0.14, 0.58);
+  var estimate: InterfaceNormalEstimate;
+  estimate.detailNormal = detailNormal;
+  estimate.filteredNormal = normalize(mix(detailNormal, macroNormal, normalBlend));
+  estimate.variance = variance;
+  estimate.denseBodyConfidence = denseBodyConfidence;
+  return estimate;
 }
 
 fn reconstructExitNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
@@ -4239,7 +5275,7 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   let pixel = vec2<i32>(fragmentPosition.xy);
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
-  let supportOrderingDepth = weightedDepth(centerAccum);
+  let supportOrderingDepth = readSupportOrderingDepth(pixel);
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let normal = reconstructSurfaceNormal(pixel, shadingDepth);
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
@@ -4273,10 +5309,41 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
 
-  let supportOrderingDepth = weightedDepth(centerAccum);
+  let supportOrderingDepth = readSupportOrderingDepth(pixel);
+  let opticalDebugMode = i32(round(params.cameraUp.w));
+  if (opticalDebugMode == 16) {
+    return refractionOutput(vec4<f32>(1.0, 1.0, 1.0, 1.0), supportOrderingDepth);
+  }
+  let centerCoverage = smoothstep(0.018, 0.10, centerAccum.z)
+    * smoothstep(0.012, 0.085, centerAccum.x);
+  var coverageSupportSum = 0.0;
+  var coverageWeightSum = 0.0;
+  for (var coverageY = -2; coverageY <= 2; coverageY = coverageY + 1) {
+    for (var coverageX = -2; coverageX <= 2; coverageX = coverageX + 1) {
+      let neighborAccum = readAccum(pixel + vec2<i32>(coverageX, coverageY));
+      let neighborSupport = smoothstep(0.018, 0.075, neighborAccum.z)
+        * smoothstep(0.012, 0.065, neighborAccum.x);
+      let coverageWeight = 1.0 / (1.0 + f32(abs(coverageX) + abs(coverageY)));
+      coverageSupportSum = coverageSupportSum + neighborSupport * coverageWeight;
+      coverageWeightSum = coverageWeightSum + coverageWeight;
+    }
+  }
+  let coverageContinuity = smoothstep(0.42, 0.90, coverageSupportSum / max(coverageWeightSum, 0.001));
+  let legacyCoverage = centerCoverage * coverageContinuity;
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let slab = evaluateOpticalSlab(pixel, centerAccum);
-  let normal = reconstructEntryNormal(pixel, slab.entryDepth);
+  let interfaceNormal = estimateInterfaceNormal(pixel, slab.entryDepth, centerAccum, coverageContinuity);
+  let denseCoverageClosure = max(legacyCoverage, smoothstep(0.48, 0.84, coverageContinuity));
+  let adaptiveCoverage = mix(legacyCoverage, denseCoverageClosure, interfaceNormal.denseBodyConfidence);
+  let interfaceFidelityEnabled = opticalDebugMode != 22;
+  let geometricCoverage = select(legacyCoverage, adaptiveCoverage, interfaceFidelityEnabled);
+  let normal = select(interfaceNormal.detailNormal, interfaceNormal.filteredNormal, interfaceFidelityEnabled);
+  if (opticalDebugMode == 18) {
+    return refractionOutput(vec4<f32>(vec3<f32>(geometricCoverage), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 23) {
+    return refractionOutput(vec4<f32>(interfaceNormal.denseBodyConfidence, coverageContinuity, interfaceNormal.variance, 1.0), supportOrderingDepth);
+  }
   let thickness = centerAccum.x;
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
   let insideRay = refract(-viewDir, normal, 1.0 / 1.333);
@@ -4292,6 +5359,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitNormal = reconstructExitNormal(exitPixel, sampledExitDepth);
   let outgoingRay = refract(insideRay, -exitNormal, 1.333);
   let outgoingRayValid = length(outgoingRay) > 0.001;
+  let exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
+  let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
   let exitDirectionDelta = outgoingRay.xy / max(abs(outgoingRay.z), 0.25)
     - insideRay.xy / max(abs(insideRay.z), 0.25);
   let exitOffset = exitDirectionDelta * clamp(geometricPathLength * 7.0, 0.0, 12.0);
@@ -4300,16 +5369,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitValidity = slab.exitValidity
     * select(0.0, 1.0, exitInFrame)
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
-  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, exitValidity);
+  let queryValidity = select(0.0, 1.0, exitValidity > 0.5);
+  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, queryValidity);
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
-  let ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
-  let f0 = 0.02037;
-  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
-  let absorptionPath = mix(thickness * 0.12, geometricPathLength, exitValidity);
+  let absorptionPath = mix(thickness * 0.12, geometricPathLength, queryValidity);
   let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
-  let opticalDebugMode = i32(round(params.cameraUp.w));
-
   if (opticalDebugMode == 1) {
     let depthView = 1.0 - exp(-supportOrderingDepth * 0.22);
     return refractionOutput(vec4<f32>(vec3<f32>(depthView), 1.0), supportOrderingDepth);
@@ -4343,24 +5408,111 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     let encodedOffset = offsetPixels / 56.0 + vec2<f32>(0.5);
     return refractionOutput(vec4<f32>(encodedOffset, length(offsetPixels) / 28.0, 1.0), supportOrderingDepth);
   }
-  if (opticalDebugMode == 10) {
-    return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
-  }
   if (opticalDebugMode == 11) {
     return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
   }
 
+  var refractionQuery = makeNoOpticalQuerySample();
+  if (queryValidity > 0.5) {
+    refractionQuery = sampleHybridOpticalQuery(exitWorldPosition + outgoingWorldRay * 0.035, outgoingWorldRay);
+  }
+  if (opticalDebugMode == 19) {
+    if (queryValidity <= 0.5) {
+      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
+    }
+    let hitKindColor = select(
+      select(
+        select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), refractionQuery.hitKind == REFLECTION_HIT_ANALYTIC),
+        vec3<f32>(0.96, 0.12, 0.38),
+        refractionQuery.hitKind == REFLECTION_HIT_INDEXED_MESH,
+      ),
+      vec3<f32>(0.16, 0.92, 0.48),
+      refractionQuery.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
+    );
+    return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 20) {
+    if (queryValidity <= 0.5) {
+      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
+    }
+    let distanceView = 1.0 - exp(-refractionQuery.distance * 0.18);
+    return refractionOutput(vec4<f32>(distanceView, refractionQuery.confidence, 1.0 - distanceView, 1.0), supportOrderingDepth);
+  }
+  let refractedRadiance = mix(refractedScene.rgb, refractionQuery.radiance, queryValidity);
+  if (opticalDebugMode == 21) {
+    let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);
+    return refractionOutput(vec4<f32>(fallbackDelta, 1.0), supportOrderingDepth);
+  }
+
+  let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
+  let worldPosition = reconstructWorldPosition(pixel, reflectionEntryDepth);
+  let worldNormal = reconstructWorldReflectionNormal(pixel);
+  let viewToCamera = normalize(params.cameraPosition.xyz - worldPosition);
+  let cameraRay = -viewToCamera;
+  let ndv = clamp(dot(worldNormal, viewToCamera), 0.0, 1.0);
+  let f0 = 0.02037;
+  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+  if (opticalDebugMode == 10) {
+    return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
+  }
+  let reflectionDirection = normalize(reflect(cameraRay, worldNormal));
+  let reflectionDetailNormal = reconstructWorldReflectionDetailNormal(pixel);
+  let unresolvedNormalVariance = sqrt(max(1.0 - dot(worldNormal, reflectionDetailNormal), 0.0));
+  let reflectionRoughness = clamp(
+    0.06 + unresolvedNormalVariance * 2.1 + pow(1.0 - ndv, 2.0) * 0.34,
+    0.06,
+    1.0,
+  );
+  let reflectionConeRadius = clamp(0.018 + reflectionRoughness * 0.10, 0.018, 0.118);
+  if (opticalDebugMode == 15) {
+    return refractionOutput(vec4<f32>(sampleEnvironmentFiltered(reflectionDirection, reflectionRoughness), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 13 || opticalDebugMode == 14) {
+    let reflectionHit = sampleHybridOpticalQuery(worldPosition + worldNormal * 0.026, reflectionDirection);
+    if (opticalDebugMode == 13) {
+      let hitKindColor = select(
+        select(
+          select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.hitKind == REFLECTION_HIT_ANALYTIC),
+          vec3<f32>(0.96, 0.12, 0.38),
+          reflectionHit.hitKind == REFLECTION_HIT_INDEXED_MESH,
+        ),
+        vec3<f32>(0.16, 0.92, 0.48),
+        reflectionHit.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
+      );
+      return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
+    }
+    let distanceView = 1.0 - exp(-reflectionHit.distance * 0.18);
+    return refractionOutput(vec4<f32>(distanceView, distanceView * 0.72, 1.0 - distanceView, 1.0), supportOrderingDepth);
+  }
+
+  let reflectionQuadrature = integrateWorldReflectionQuadrature(worldPosition, cameraRay, worldNormal, reflectionConeRadius);
+  let reflectionRadiance = reflectionQuadrature.radiance;
+  if (opticalDebugMode == 12) {
+    return refractionOutput(vec4<f32>(reflectionRadiance, 1.0), supportOrderingDepth);
+  }
+  let environmentContribution = reflectionQuadrature.environmentRadiance * fresnel;
+  if (opticalDebugMode == 17) {
+    return refractionOutput(vec4<f32>(environmentContribution, 1.0), supportOrderingDepth);
+  }
+
   let absorptionLoss = vec3<f32>(1.0) - absorption;
   let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
-  let transmitted = refractedScene.rgb * absorption + waterScatter;
-  let reflectedSky = vec3<f32>(0.48, 0.78, 0.94) * (0.62 + 0.38 * max(normal.y, 0.0));
   let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
-  let broadSpecular = pow(directLight, 38.0) * 0.32;
-  let crestSpecular = pow(directLight, 128.0) * 0.46;
-  let color = mix(transmitted, reflectedSky, fresnel)
+  let directRoughness = select(
+    0.0,
+    clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48),
+    interfaceFidelityEnabled,
+  );
+  let directRoughnessWeight = smoothstep(0.025, 0.34, directRoughness);
+  let broadSpecularExponent = mix(38.0, 12.0, directRoughnessWeight);
+  let crestSpecularExponent = mix(128.0, 46.0, directRoughnessWeight);
+  let broadSpecular = pow(directLight, broadSpecularExponent) * 0.32;
+  let crestSpecular = pow(directLight, crestSpecularExponent) * 0.46 * mix(1.0, 0.82, directRoughnessWeight);
+  let reflectedTransport = mix(refractedRadiance * absorption, reflectionRadiance, fresnel);
+  let color = reflectedTransport + waterScatter * (1.0 - fresnel)
     + vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
     + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
-  return refractionOutput(vec4<f32>(color, 1.0), supportOrderingDepth);
+  return refractionOutput(vec4<f32>(color, geometricCoverage), supportOrderingDepth);
 }
 `;
 
@@ -6101,6 +7253,51 @@ function createInitialMaterialTracers(particleData, particleCount, sourceParticl
   return data;
 }
 
+function createDynamicReflectionMeshData() {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  const addFace = (normal, corners) => {
+    const base = positions.length / 4;
+    for (const corner of corners) {
+      positions.push(...corner, 1);
+      normals.push(...normal, 0);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const x = 0.42;
+  const y = 0.72;
+  const z = 0.20;
+  addFace([1, 0, 0], [[x, -y, -z], [x, y, -z], [x, y, z], [x, -y, z]]);
+  addFace([-1, 0, 0], [[-x, -y, z], [-x, y, z], [-x, y, -z], [-x, -y, -z]]);
+  addFace([0, 1, 0], [[-x, y, -z], [-x, y, z], [x, y, z], [x, y, -z]]);
+  addFace([0, -1, 0], [[-x, -y, z], [-x, -y, -z], [x, -y, -z], [x, -y, z]]);
+  addFace([0, 0, 1], [[x, -y, z], [x, y, z], [-x, y, z], [-x, -y, z]]);
+  addFace([0, 0, -1], [[-x, -y, -z], [-x, y, -z], [x, y, -z], [x, -y, -z]]);
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    indices: new Uint32Array(indices),
+  };
+}
+
+function dynamicReflectionMeshMatrices(phase) {
+  const angle = finite(phase, 0);
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const model = new Float32Array([
+    cosine, 0, -sine, 0,
+    0, 1, 0, 0,
+    sine, 0, cosine, 0,
+    0.52, -0.02, -0.68, 1,
+  ]);
+  const normal = new Float32Array(model);
+  normal[12] = 0;
+  normal[13] = 0;
+  normal[14] = 0;
+  return { model, normal };
+}
+
 function createUnavailableSolver(reason, details = {}) {
   return {
     available: false,
@@ -6147,6 +7344,13 @@ export async function createWebGPUFingerFluidSolver({
   });
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
+  let hdrEnvironment;
+  try {
+    hdrEnvironment = await loadFingerFluidHdrEnvironment();
+  } catch (error) {
+    device.destroy();
+    return createUnavailableSolver(`HDR environment initialization failed: ${error.message || String(error)}`);
+  }
 
   const safeBaseParticleCount = resolveFingerFluidParticleCount(particleCount);
   const safeAdaptiveDensity = Boolean(adaptiveDensity);
@@ -6320,6 +7524,31 @@ export async function createWebGPUFingerFluidSolver({
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
   device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
 
+  const dynamicReflectionMeshData = createDynamicReflectionMeshData();
+  const dynamicReflectionMeshPositionBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-positions',
+    size: dynamicReflectionMeshData.positions.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const dynamicReflectionMeshNormalBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-normals',
+    size: dynamicReflectionMeshData.normals.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  });
+  const dynamicReflectionMeshIndexBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-indices',
+    size: dynamicReflectionMeshData.indices.byteLength,
+    usage: GPUBufferUsage.INDEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const dynamicReflectionSceneParamsBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-dynamic-reflection-scene-params',
+    size: 160,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  device.queue.writeBuffer(dynamicReflectionMeshPositionBuffer, 0, dynamicReflectionMeshData.positions);
+  device.queue.writeBuffer(dynamicReflectionMeshNormalBuffer, 0, dynamicReflectionMeshData.normals);
+  device.queue.writeBuffer(dynamicReflectionMeshIndexBuffer, 0, dynamicReflectionMeshData.indices);
+
   const computeShader = COMPUTE_SHADER.replaceAll(
     KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
     String(safeMaxFluidSpeed),
@@ -6439,9 +7668,34 @@ export async function createWebGPUFingerFluidSolver({
   const format = navigator.gpu.getPreferredCanvasFormat();
   const canvasAlphaMode = transparentBackground ? 'premultiplied' : 'opaque';
   context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const hdrEnvironmentTexture = device.createTexture({
+    label: 'kaminos-finger-fluid-hdr-environment-rgbe',
+    size: [hdrEnvironment.width, hdrEnvironment.height],
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const hdrEnvironmentUnpaddedBytesPerRow = hdrEnvironment.width * 4;
+  const hdrEnvironmentBytesPerRow = Math.ceil(hdrEnvironmentUnpaddedBytesPerRow / 256) * 256;
+  let hdrEnvironmentUpload = hdrEnvironment.rgbe;
+  if (hdrEnvironmentBytesPerRow !== hdrEnvironmentUnpaddedBytesPerRow) {
+    hdrEnvironmentUpload = new Uint8Array(hdrEnvironmentBytesPerRow * hdrEnvironment.height);
+    for (let row = 0; row < hdrEnvironment.height; row += 1) {
+      const sourceOffset = row * hdrEnvironmentUnpaddedBytesPerRow;
+      hdrEnvironmentUpload.set(
+        hdrEnvironment.rgbe.subarray(sourceOffset, sourceOffset + hdrEnvironmentUnpaddedBytesPerRow),
+        row * hdrEnvironmentBytesPerRow,
+      );
+    }
+  }
+  device.queue.writeTexture(
+    { texture: hdrEnvironmentTexture },
+    hdrEnvironmentUpload,
+    { bytesPerRow: hdrEnvironmentBytesPerRow, rowsPerImage: hdrEnvironment.height },
+    { width: hdrEnvironment.width, height: hdrEnvironment.height, depthOrArrayLayers: 1 },
+  );
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
-    size: 112,
+    size: 144,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
@@ -6449,6 +7703,18 @@ export async function createWebGPUFingerFluidSolver({
   const analyticSupportPresentationModule = device.createShaderModule({
     label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
     code: ANALYTIC_SUPPORT_PRESENTATION_SHADER,
+  });
+  const dynamicIndexedMeshModule = device.createShaderModule({
+    label: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
+    code: DYNAMIC_INDEXED_MESH_SHADER,
+  });
+  const hdrWorldBackgroundModule = device.createShaderModule({
+    label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
+    code: HDR_WORLD_BACKGROUND_SHADER,
+  });
+  const finalPresentationModule = device.createShaderModule({
+    label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+    code: FINAL_PRESENTATION_SHADER,
   });
   const screenSpaceAccumulationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-screen-space-accumulation-layout',
@@ -6464,12 +7730,14 @@ export async function createWebGPUFingerFluidSolver({
     entries: [
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     ],
   });
   const analyticSupportPresentationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-analytic-support-presentation-layout',
     entries: [
-      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     ],
   });
   const screenSpaceRefractionCompositeLayout = device.createBindGroupLayout({
@@ -6481,17 +7749,55 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
       { binding: 8, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 9, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
+      { binding: 10, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
+      { binding: 11, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 13, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 14, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 15, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    ],
+  });
+  const dynamicIndexedMeshLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-dynamic-indexed-mesh-layout',
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    ],
+  });
+  const hdrWorldBackgroundLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-hdr-world-background-layout',
+    entries: [
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    ],
+  });
+  const finalPresentationLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-final-presentation-layout',
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     ],
   });
   const screenSpaceAccumulationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceAccumulationLayout] });
   const screenSpaceCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceCompositeLayout] });
   const analyticSupportPresentationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [analyticSupportPresentationLayout] });
   const screenSpaceRefractionCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceRefractionCompositeLayout] });
+  const dynamicIndexedMeshPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [dynamicIndexedMeshLayout] });
+  const hdrWorldBackgroundPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [hdrWorldBackgroundLayout] });
+  const finalPresentationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [finalPresentationLayout] });
   let renderPipeline;
   let screenSpaceSurfaceAccumulationPipeline;
   let screenSpaceSurfaceCompositePipeline;
   let analyticSupportPresentationPipeline;
   let screenSpaceRefractionCompositePipeline;
+  let dynamicIndexedMeshPipeline;
+  let hdrWorldBackgroundPipeline;
+  let finalPresentationPipeline;
   try {
     renderPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
@@ -6501,7 +7807,7 @@ export async function createWebGPUFingerFluidSolver({
         module: renderModule,
         entryPoint: 'fs_main',
         targets: [{
-          format,
+          format: LINEAR_SCENE_FORMAT,
           blend: {
             color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
             alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -6523,7 +7829,7 @@ export async function createWebGPUFingerFluidSolver({
             format: 'rgba16float',
             blend: {
               color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
             },
           },
           {
@@ -6552,7 +7858,7 @@ export async function createWebGPUFingerFluidSolver({
         module: screenSpaceModule,
         entryPoint: 'fs_composite',
         targets: [{
-          format,
+          format: LINEAR_SCENE_FORMAT,
           blend: {
             color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
             alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -6560,7 +7866,7 @@ export async function createWebGPUFingerFluidSolver({
         }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
     analyticSupportPresentationPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
@@ -6569,7 +7875,36 @@ export async function createWebGPUFingerFluidSolver({
       fragment: {
         module: analyticSupportPresentationModule,
         entryPoint: 'fs_analytic_support_presentation',
-        targets: [{ format }],
+        targets: [
+          { format: LINEAR_SCENE_FORMAT },
+          { format: 'rgba16float' },
+          { format: 'rgba8unorm' },
+          { format: 'rgba16float' },
+        ],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    dynamicIndexedMeshPipeline = await device.createRenderPipelineAsync({
+      label: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
+      layout: dynamicIndexedMeshPipelineLayout,
+      vertex: {
+        module: dynamicIndexedMeshModule,
+        entryPoint: 'vs_dynamic_indexed_mesh',
+        buffers: [
+          { arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] },
+          { arrayStride: 16, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x4' }] },
+        ],
+      },
+      fragment: {
+        module: dynamicIndexedMeshModule,
+        entryPoint: 'fs_dynamic_indexed_mesh',
+        targets: [
+          { format: LINEAR_SCENE_FORMAT },
+          { format: 'rgba16float' },
+          { format: 'rgba8unorm' },
+          { format: 'rgba16float' },
+        ],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
@@ -6581,10 +7916,38 @@ export async function createWebGPUFingerFluidSolver({
       fragment: {
         module: screenSpaceModule,
         entryPoint: 'fs_refraction',
+        targets: [{
+          format: LINEAR_SCENE_FORMAT,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    hdrWorldBackgroundPipeline = await device.createRenderPipelineAsync({
+      label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
+      layout: hdrWorldBackgroundPipelineLayout,
+      vertex: { module: hdrWorldBackgroundModule, entryPoint: 'vs_hdr_world_background' },
+      fragment: {
+        module: hdrWorldBackgroundModule,
+        entryPoint: 'fs_hdr_world_background',
+        targets: [{ format: LINEAR_SCENE_FORMAT }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+    });
+    finalPresentationPipeline = await device.createRenderPipelineAsync({
+      label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+      layout: finalPresentationPipelineLayout,
+      vertex: { module: finalPresentationModule, entryPoint: 'vs_final_presentation' },
+      fragment: {
+        module: finalPresentationModule,
+        entryPoint: 'fs_final_presentation',
         targets: [{ format }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
     });
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
@@ -6604,6 +7967,24 @@ export async function createWebGPUFingerFluidSolver({
     layout: analyticSupportPresentationLayout,
     entries: [
       { binding: 1, resource: { buffer: renderParamsBuffer } },
+      { binding: 12, resource: hdrEnvironmentTexture.createView() },
+    ],
+  });
+  const dynamicIndexedMeshBindGroup = device.createBindGroup({
+    label: 'kaminos-finger-fluid-dynamic-indexed-mesh-bind-group',
+    layout: dynamicIndexedMeshLayout,
+    entries: [
+      { binding: 0, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
+      { binding: 1, resource: { buffer: renderParamsBuffer } },
+      { binding: 12, resource: hdrEnvironmentTexture.createView() },
+    ],
+  });
+  const hdrWorldBackgroundBindGroup = device.createBindGroup({
+    label: 'kaminos-finger-fluid-hdr-world-background-bind-group',
+    layout: hdrWorldBackgroundLayout,
+    entries: [
+      { binding: 1, resource: { buffer: renderParamsBuffer } },
+      { binding: 12, resource: hdrEnvironmentTexture.createView() },
     ],
   });
 
@@ -6614,6 +7995,11 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceSurfaceCompositeBindGroup = null;
   let screenSpaceRefractionSceneTexture = null;
   let screenSpaceRefractionCompositeBindGroup = null;
+  let linearSceneRadianceTexture = null;
+  let finalPresentationBindGroup = null;
+  let deferredWorldNormalRoughnessTexture = null;
+  let deferredAlbedoMetallicTexture = null;
+  let deferredLinearDepthObjectTexture = null;
   const screenSpaceRefractionSceneSampler = device.createSampler({
     label: 'kaminos-finger-fluid-refraction-scene-sampler',
     magFilter: 'linear',
@@ -6649,6 +8035,25 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceRefractionRenderFrameCount = 0;
   let screenSpaceRefractionScenePassCount = 0;
   let screenSpaceRefractionCompositePassCount = 0;
+  let deferredScenePassCount = 0;
+  let dynamicIndexedMeshDrawCount = 0;
+  let worldSpaceReflectionCompositePassCount = 0;
+  let hybridOpticalQueryCompositePassCount = 0;
+  let hdrWorldBackgroundPassCount = 0;
+  let finalPresentationPassCount = 0;
+  let lastRenderFrameId = 0;
+  let lastDeferredSceneFrameId = 0;
+  let lastDynamicIndexedMeshDrawFrameId = 0;
+  let lastReflectionProviderFrameId = 0;
+  let lastOpticalQueryFrameId = 0;
+  let reflectionMeshPhase = 0.36;
+  let reflectionMeshTransformGeneration = 1;
+  let lastDeferredMeshTransformGeneration = 0;
+  let lastDeferredMeshPhase = 0;
+  let lastReflectionProviderTransformGeneration = 0;
+  let lastReflectionProviderPhase = 0;
+  let reflectionMeshWitnessOverride = false;
+  let lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastOpticalDebugMode = safeOpticalDebugMode;
@@ -6674,7 +8079,7 @@ export async function createWebGPUFingerFluidSolver({
       label: 'kaminos-finger-fluid-depth',
       size: [targetWidth, targetHeight],
       format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     screenSpaceSurfaceAccumulationTexture?.destroy();
     screenSpaceSurfaceAccumulationTexture = device.createTexture({
@@ -6697,12 +8102,40 @@ export async function createWebGPUFingerFluidSolver({
       format: 'rgba16float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
+    linearSceneRadianceTexture?.destroy();
+    linearSceneRadianceTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-linear-scene-radiance',
+      size: [targetWidth, targetHeight],
+      format: LINEAR_SCENE_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
     screenSpaceRefractionSceneTexture?.destroy();
     screenSpaceRefractionSceneTexture = device.createTexture({
       label: 'kaminos-finger-fluid-refraction-scene-color',
       size: [targetWidth, targetHeight],
-      format,
+      format: LINEAR_SCENE_FORMAT,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    deferredWorldNormalRoughnessTexture?.destroy();
+    deferredWorldNormalRoughnessTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-deferred-world-normal-roughness',
+      size: [targetWidth, targetHeight],
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    deferredAlbedoMetallicTexture?.destroy();
+    deferredAlbedoMetallicTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-deferred-albedo-metallic',
+      size: [targetWidth, targetHeight],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    deferredLinearDepthObjectTexture?.destroy();
+    deferredLinearDepthObjectTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-deferred-linear-depth-object',
+      size: [targetWidth, targetHeight],
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     screenSpaceSurfaceAccumulationBindGroup = device.createBindGroup({
       label: 'kaminos-finger-fluid-screen-space-accumulation-bind-group',
@@ -6720,6 +8153,7 @@ export async function createWebGPUFingerFluidSolver({
       entries: [
         { binding: 1, resource: { buffer: renderParamsBuffer } },
         { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+        { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
       ],
     });
     screenSpaceRefractionCompositeBindGroup = device.createBindGroup({
@@ -6732,10 +8166,56 @@ export async function createWebGPUFingerFluidSolver({
         { binding: 6, resource: screenSpaceRefractionSceneSampler },
         { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
         { binding: 8, resource: screenSpaceOpticalSlabBackDepthTexture.createView() },
+        { binding: 9, resource: { buffer: dynamicReflectionMeshPositionBuffer } },
+        { binding: 10, resource: { buffer: dynamicReflectionMeshIndexBuffer } },
+        { binding: 11, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
+        { binding: 12, resource: hdrEnvironmentTexture.createView() },
+        { binding: 13, resource: deferredLinearDepthObjectTexture.createView() },
+        { binding: 14, resource: deferredWorldNormalRoughnessTexture.createView() },
+        { binding: 15, resource: deferredAlbedoMetallicTexture.createView() },
+      ],
+    });
+    finalPresentationBindGroup = device.createBindGroup({
+      label: 'kaminos-finger-fluid-final-presentation-bind-group',
+      layout: finalPresentationLayout,
+      entries: [
+        { binding: 0, resource: linearSceneRadianceTexture.createView() },
+        { binding: 1, resource: { buffer: renderParamsBuffer } },
+        { binding: 2, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+        { binding: 3, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
+        { binding: 4, resource: depthTexture.createView() },
       ],
     });
     configuredExtent = key;
     return { width: targetWidth, height: targetHeight };
+  }
+
+  function writeDynamicReflectionSceneParams() {
+    const { model, normal } = dynamicReflectionMeshMatrices(reflectionMeshPhase);
+    const data = new Float32Array(40);
+    data.set(model, 0);
+    data.set(normal, 16);
+    data.set([0.90, 0.10, 0.045, 0.24], 32);
+    data.set([DYNAMIC_REFLECTION_MESH_OBJECT_ID, 0.68, reflectionMeshPhase, reflectionMeshTransformGeneration], 36);
+    device.queue.writeBuffer(dynamicReflectionSceneParamsBuffer, 0, data);
+  }
+
+  function setReflectionMeshPhaseForWitness(phase) {
+    const nextPhase = Number(phase);
+    if (!Number.isFinite(nextPhase) || Math.abs(nextPhase) > Math.PI * 8) {
+      throw new RangeError(`Finger Fluid reflection mesh phase must be finite and bounded, received: ${phase}`);
+    }
+    if (nextPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
+    reflectionMeshPhase = nextPhase;
+    reflectionMeshWitnessOverride = true;
+    writeDynamicReflectionSceneParams();
+    return {
+      schema: 'kaminos.dynamic-indexed-mesh-transform.v0',
+      objectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
+      phase: reflectionMeshPhase,
+      transformGeneration: reflectionMeshTransformGeneration,
+      stepCount,
+    };
   }
 
   function writeSimulationParams(dt) {
@@ -6893,10 +8373,16 @@ export async function createWebGPUFingerFluidSolver({
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+    const renderFrameId = directRenderFrameCount + 1;
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
     lastOpticalDebugMode = effectiveOpticalDebugMode;
     lastRendererFallbackReason = null;
+    if (!reflectionMeshWitnessOverride) {
+      const animatedPhase = (stepCount * 0.012) % (Math.PI * 2);
+      if (animatedPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
+      reflectionMeshPhase = animatedPhase;
+    }
     const cp = Math.cos(pitch);
     const eye = [
       target[0] + Math.sin(yaw) * cp * distance,
@@ -6909,26 +8395,59 @@ export async function createWebGPUFingerFluidSolver({
     const projection = perspectiveMatrix(Math.PI / 3.15, extent.width / extent.height, 0.08, 30);
     const view = lookAtMatrix(eye, target, [0, 1, 0]);
     const viewProjection = multiplyMatrices(projection, view);
-    const renderData = new Float32Array(28);
+    const renderData = new Float32Array(36);
     const effectiveColorMode = resolveFingerFluidColorMode(colorMode);
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
     renderData.set([...right, colorModeIndex], 16);
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
-    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 24);
+    renderData.set([...forward, 0], 24);
+    renderData.set([...eye, 1], 28);
+    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 32);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
+    writeDynamicReflectionSceneParams();
 
     const currentTexture = context.getCurrentTexture();
     const currentTextureView = currentTexture.createView();
+    const linearSceneRadianceView = linearSceneRadianceTexture.createView();
     const encoder = device.createCommandEncoder({ label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}` });
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
+    const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
+    const hdrWorldBackgroundPass = encoder.beginRenderPass({
+      label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
+      colorAttachments: [{
+        view: linearSceneRadianceView,
+        clearValue: { r: 0, g: 0, b: 0, a: transparentBackground ? 0 : 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    if (!transparentBackground && !liquidSupportDiagnostic) {
+      hdrWorldBackgroundPass.setPipeline(hdrWorldBackgroundPipeline);
+      hdrWorldBackgroundPass.setBindGroup(0, hdrWorldBackgroundBindGroup);
+      hdrWorldBackgroundPass.draw(3);
+    }
+    hdrWorldBackgroundPass.end();
+    hdrWorldBackgroundPassCount += 1;
     const analyticSupportPresentationPass = encoder.beginRenderPass({
       label: `${KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE}:shared-color-depth`,
       colorAttachments: [{
-        view: currentTextureView,
-        clearValue: transparentBackground
-          ? { r: 0, g: 0, b: 0, a: 0 }
-          : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
+        view: linearSceneRadianceView,
+        loadOp: 'load',
+        storeOp: 'store',
+      }, {
+        view: deferredWorldNormalRoughnessTexture.createView(),
+        clearValue: { r: 0, g: 1, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }, {
+        view: deferredAlbedoMetallicTexture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }, {
+        view: deferredLinearDepthObjectTexture.createView(),
+        clearValue: { r: 30, g: 0, b: 0, a: 0 },
         loadOp: 'clear',
         storeOp: 'store',
       }],
@@ -6946,9 +8465,55 @@ export async function createWebGPUFingerFluidSolver({
     analyticSupportPresentationPassCount += 1;
     analyticSupportDepthPassCount += 1;
 
+    const dynamicIndexedMeshPass = encoder.beginRenderPass({
+      label: `${KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE}:dynamic-indexed-mesh`,
+      colorAttachments: [{
+        view: linearSceneRadianceView,
+        loadOp: 'load',
+        storeOp: 'store',
+      }, {
+        view: deferredWorldNormalRoughnessTexture.createView(),
+        loadOp: 'load',
+        storeOp: 'store',
+      }, {
+        view: deferredAlbedoMetallicTexture.createView(),
+        loadOp: 'load',
+        storeOp: 'store',
+      }, {
+        view: deferredLinearDepthObjectTexture.createView(),
+        loadOp: 'load',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthLoadOp: 'load',
+        depthStoreOp: 'store',
+      },
+    });
+    const isolateWorldReflection = refractionEnabled
+      && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'].includes(effectiveOpticalDebugMode);
+    if (!isolateWorldReflection) {
+      dynamicIndexedMeshPass.setPipeline(dynamicIndexedMeshPipeline);
+      dynamicIndexedMeshPass.setBindGroup(0, dynamicIndexedMeshBindGroup);
+      dynamicIndexedMeshPass.setVertexBuffer(0, dynamicReflectionMeshPositionBuffer);
+      dynamicIndexedMeshPass.setVertexBuffer(1, dynamicReflectionMeshNormalBuffer);
+      dynamicIndexedMeshPass.setIndexBuffer(dynamicReflectionMeshIndexBuffer, 'uint32');
+      dynamicIndexedMeshPass.drawIndexed(DYNAMIC_REFLECTION_MESH_INDEX_COUNT);
+      dynamicIndexedMeshDrawCount += 1;
+      lastDynamicIndexedMeshDrawFrameId = renderFrameId;
+      lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
+    } else {
+      lastDynamicMeshPresentationMode = 'suppressed_in_reflection_debug_provider_remains_active_v0';
+    }
+    dynamicIndexedMeshPass.end();
+    deferredScenePassCount += 1;
+    lastDeferredSceneFrameId = renderFrameId;
+    lastDeferredMeshTransformGeneration = reflectionMeshTransformGeneration;
+    lastDeferredMeshPhase = reflectionMeshPhase;
+
     if (refractionEnabled) {
       encoder.copyTextureToTexture(
-        { texture: currentTexture },
+        { texture: linearSceneRadianceTexture },
         { texture: screenSpaceRefractionSceneTexture },
         { width: extent.width, height: extent.height, depthOrArrayLayers: 1 },
       );
@@ -6959,8 +8524,9 @@ export async function createWebGPUFingerFluidSolver({
       const pass = encoder.beginRenderPass({
         label: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
         colorAttachments: [{
-          view: currentTextureView,
-          loadOp: 'load',
+          view: linearSceneRadianceView,
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
@@ -6980,7 +8546,7 @@ export async function createWebGPUFingerFluidSolver({
         colorAttachments: [
           {
             view: screenSpaceSurfaceAccumulationTexture.createView(),
-            clearValue: { r: 0, g: 0, b: 0, a: 30 },
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
             loadOp: 'clear',
             storeOp: 'store',
           },
@@ -7010,11 +8576,13 @@ export async function createWebGPUFingerFluidSolver({
           ? `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:two-interface-optical-slab-composite`
           : `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:edge-preserving-surface-composite`,
         colorAttachments: [{
-          view: currentTextureView,
-          clearValue: transparentBackground
+          view: linearSceneRadianceView,
+          clearValue: liquidSupportDiagnostic
+            ? { r: 0, g: 0, b: 0, a: 1 }
+            : transparentBackground
             ? { r: 0, g: 0, b: 0, a: 0 }
             : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
-          loadOp: 'load',
+          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
@@ -7030,13 +8598,36 @@ export async function createWebGPUFingerFluidSolver({
       if (refractionEnabled) {
         screenSpaceRefractionCompositePassCount += 1;
         screenSpaceRefractionRenderFrameCount += 1;
+        if (lastOpticalDebugMode !== 'interface_fidelity') {
+          worldSpaceReflectionCompositePassCount += 1;
+          hybridOpticalQueryCompositePassCount += 1;
+          lastOpticalQueryFrameId = renderFrameId;
+          lastReflectionProviderFrameId = renderFrameId;
+          lastReflectionProviderTransformGeneration = reflectionMeshTransformGeneration;
+          lastReflectionProviderPhase = reflectionMeshPhase;
+        }
       } else {
         screenSpaceSurfaceCompositePassCount += 1;
         screenSpaceSurfaceRenderFrameCount += 1;
       }
     }
+    const finalPresentationPass = encoder.beginRenderPass({
+      label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+      colorAttachments: [{
+        view: currentTextureView,
+        clearValue: { r: 0, g: 0, b: 0, a: transparentBackground ? 0 : 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    finalPresentationPass.setPipeline(finalPresentationPipeline);
+    finalPresentationPass.setBindGroup(0, finalPresentationBindGroup);
+    finalPresentationPass.draw(3);
+    finalPresentationPass.end();
+    finalPresentationPassCount += 1;
     device.queue.submit([encoder.finish()]);
     directRenderFrameCount += 1;
+    lastRenderFrameId = renderFrameId;
   }
 
   async function requestDiagnostics() {
@@ -7379,6 +8970,7 @@ export async function createWebGPUFingerFluidSolver({
         inletCutoffReached: safeInletCutoffStep !== null && diagnosticsStepCount >= safeInletCutoffStep,
         interfaceCarrier: {
           schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+          interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
           sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
           recordFloats: INTERFACE_RECORD_FLOATS,
           recordBytes: INTERFACE_RECORD_BYTES,
@@ -7550,10 +9142,12 @@ export async function createWebGPUFingerFluidSolver({
         rendered: directRenderFrameCount > 0,
       },
       interfaceCarrierSchema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+      interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
       interfaceCapacity: safeParticleCount,
       candidateCapMode: 'uncapped_exact_particle_population_capacity',
       interfaceCarrier: diagnostics?.interfaceCarrier || {
         schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+        interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
         sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
         recordFloats: INTERFACE_RECORD_FLOATS,
         recordBytes: INTERFACE_RECORD_BYTES,
@@ -7653,13 +9247,137 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceRefractionRenderFrameCount,
       screenSpaceRefractionScenePassCount,
       screenSpaceRefractionCompositePassCount,
+      deferredScenePassCount,
+      dynamicIndexedMeshDrawCount,
+      worldSpaceReflectionCompositePassCount,
+      hybridOpticalQueryCompositePassCount,
+      hdrWorldBackgroundPassCount,
+      finalPresentationPassCount,
+      linearHdrSceneEvidence: {
+        requestedRoute: KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE,
+        effectiveRoute: KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE,
+        format: LINEAR_SCENE_FORMAT,
+        colorSpace: 'scene_linear_rec2020_agnostic_rgb_v0',
+        backgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
+        environmentFilterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
+        backgroundPassCount: hdrWorldBackgroundPassCount,
+        worldLightingConsumers: [...LINEAR_HDR_WORLD_LIGHTING_CONSUMERS],
+        fallbackReason: null,
+      },
+      finalPresentationEvidence: {
+        requestedRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+        effectiveRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+        sourceFormat: LINEAR_SCENE_FORMAT,
+        targetFormat: format,
+        toneMap: 'aces-fitted-v0',
+        exposure: LINEAR_SCENE_EXPOSURE,
+        displayTransformCountPerFrame: 1,
+        exactDiagnosticBypass: 'liquid_support',
+        diagnosticVisibilityRoute: 'post-composite-depth24plus-identity-v0',
+        passCount: finalPresentationPassCount,
+        fallbackReason: null,
+      },
+      deferredSceneEvidence: {
+        requestedRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
+        effectiveRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
+        route: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
+        fallbackReason: null,
+        passCount: deferredScenePassCount,
+        dynamicIndexedMeshDrawCount,
+        renderFrameId: lastRenderFrameId,
+        deferredSceneFrameId: lastDeferredSceneFrameId,
+        dynamicIndexedMeshLastDrawFrameId: lastDynamicIndexedMeshDrawFrameId,
+        dynamicMesh: {
+          objectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
+          vertexCount: DYNAMIC_REFLECTION_MESH_VERTEX_COUNT,
+          indexCount: DYNAMIC_REFLECTION_MESH_INDEX_COUNT,
+          triangleCount: DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
+          transformGeneration: lastDeferredMeshTransformGeneration,
+          phase: Number(lastDeferredMeshPhase.toFixed(6)),
+          presentationMode: lastDynamicMeshPresentationMode,
+          animationMode: reflectionMeshWitnessOverride ? 'witness_phase_override_v0' : 'simulation_tick_phase_v0',
+        },
+        attachments: configuredExtent ? {
+          worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
+          albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
+          linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
+        } : null,
+      },
+      ...(lastEffectiveRendererMode === 'screen_space_refraction' && lastOpticalDebugMode !== 'interface_fidelity' ? {
+        opticalQueryEvidence: {
+          schema: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA,
+          requestedRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          effectiveRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          route: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
+          worldProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          environmentRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
+          resolverOrder: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER,
+          fallbackReason: null,
+          queryFrameId: lastOpticalQueryFrameId,
+          compositePassCount: hybridOpticalQueryCompositePassCount,
+          maximumDeferredMarchSteps: 24,
+          minimumDeferredConfidence: 0.55,
+          deferredInputs: configuredExtent ? {
+            linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
+            worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
+            albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
+          } : null,
+          consumers: ['reflection_center_ray', 'two_interface_refraction_exit_ray'],
+          resultFields: ['origin', 'direction', 'cone', 'interval', 'hit_kind', 'object_id', 'distance', 'normal', 'material', 'radiance', 'transmittance', 'confidence', 'provider', 'fallback'],
+          deferredMissDisposition: 'uncapped_world_mesh_then_hdr_environment_v0',
+          invalidSlabDisposition: 'legacy_entry_interface_uv_only_no_exit_query_claim_v0',
+          participatingRadianceBoundary: 'reserved_zero_until_flame_contract_v0',
+        },
+        worldSpaceReflectionEvidence: {
+          schema: KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA,
+          requestedProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          effectiveProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          providerRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          accelerationRoute: KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
+          quadratureRoute: KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
+          hitKindDiagnosticScope: 'center_ray_only_v0',
+          fallbackReason: null,
+          compositePassCount: worldSpaceReflectionCompositePassCount,
+          reflectionProviderFrameId: lastReflectionProviderFrameId,
+          candidateCapMode: 'uncapped_exact_dynamic_mesh_triangle_population_v0',
+          exactTriangleCount: DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
+          hitKinds: ['environment', 'analytic_sphere', 'indexed_mesh'],
+          dynamicMeshObjectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
+          dynamicMeshTransformGeneration: lastReflectionProviderTransformGeneration,
+          dynamicMeshPhase: Number(lastReflectionProviderPhase.toFixed(6)),
+          dynamicMeshPresentationMode: lastDynamicMeshPresentationMode,
+          participatingRadianceBoundary: 'integrateParticipatingRadiance(ray,tMax)_reserved_not_executed_v0',
+          composition: 'fresnel_world_reflection_plus_two_interface_refraction_v0',
+        },
+        environmentMapEvidence: {
+          schema: 'kaminos.hdr-environment-map.v0',
+          requestedRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
+          effectiveRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
+          assetId: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID,
+          assetSha256: hdrEnvironment.assetSha256,
+          runtimeAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL,
+          sourceAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL,
+          sourcePageUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL,
+          license: 'CC0-1.0',
+          encodedByteLength: hdrEnvironment.encodedByteLength,
+          decodeRoute: 'cpu-radiance-rle-rgbe-v0',
+          samplingRoute: 'wgsl-manual-bilinear-rgbe-equirectangular-v0',
+          filterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
+          worldBackgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
+          width: hdrEnvironment.width,
+          height: hdrEnvironment.height,
+          gpuTextureFormat: 'rgba8unorm',
+          fallbackReason: null,
+        },
+      } : {}),
       supportPresentationEvidence: {
         route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
         depthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         colorDepthAuthority: 'same_pass_same_analytic_geometry_v0',
         geometrySource: 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
         calibrationLandmarks: 'world_anchored_half_unit_grid_major_grid_and_axes_v0',
-        refractionCaptureOrder: 'copy_after_analytic_support_presentation_v0',
+        refractionCaptureOrder: 'copy_after_deferred_scene_v0',
         passCount: analyticSupportPresentationPassCount,
         particleSupportDrawCount,
       },
@@ -7672,7 +9390,7 @@ export async function createWebGPUFingerFluidSolver({
           label: 'kaminos-finger-fluid-surface-accumulation',
           format: 'rgba16float',
           extent: configuredExtent,
-          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'nearest_particle_center_view_depth'],
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
         } : null,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceSurfaceCompositePassCount,
@@ -7684,19 +9402,34 @@ export async function createWebGPUFingerFluidSolver({
         route: KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
         opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
+        opticalQueryRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+        deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
+        interfaceFidelityRoute: KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE,
+        coverageClosure: 'dense_support_footprint_closure_sparse_identity_v0',
+        normalFiltering: 'detail_macro_chord_variance_blend_v0',
+        legacyDebugMode: 'legacy_interface',
+        opticalTransportExecution: lastOpticalDebugMode === 'interface_fidelity'
+          ? 'not_executed_early_interface_diagnostic_v0'
+          : 'executed_refraction_and_reflection_transport_v0',
         slabRoute: KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
         slabGeometryPassCount: screenSpaceOpticalSlabGeometryPassCount,
         frontDepthTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-optical-slab-front-depth',
           format: 'rgba16float',
           extent: configuredExtent,
-          channel: 'projected_particle_sphere_front_view_depth_min',
+          channels: ['projected_particle_sphere_front_view_depth_min', 'nearest_particle_center_view_depth_min'],
         } : null,
         backDepthTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-optical-slab-back-depth',
           format: 'rgba16float',
           extent: configuredExtent,
           channel: 'projected_particle_sphere_back_view_depth_max',
+        } : null,
+        accumulationTexture: configuredExtent ? {
+          label: 'kaminos-finger-fluid-surface-accumulation',
+          format: 'rgba16float',
+          extent: configuredExtent,
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
         } : null,
         slabGeometry: 'projected_particle_interval_hull_not_watertight_surface_v0',
         invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
@@ -7705,16 +9438,17 @@ export async function createWebGPUFingerFluidSolver({
         opticalDebugMode: lastOpticalDebugMode,
         sceneColorTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-refraction-scene-color',
-          format,
+          format: LINEAR_SCENE_FORMAT,
           extent: configuredExtent,
-          source: 'same-camera-analytic-support-presentation-color-v0',
+          source: 'same-camera-linear-hdr-scene-radiance-v0',
         } : null,
         scenePassCount: screenSpaceRefractionScenePassCount,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceRefractionCompositePassCount,
-        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_v0',
+        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_then_hybrid_exit_ray_query_v0',
         fresnel: 'schlick_f0_0.02037_v0',
         absorption: 'beer_lambert_from_particle_optical_thickness_v0',
+        coverage: 'geometric_accumulation_support_alpha_independent_of_fresnel_v0',
       },
       diagnosticsPending,
       diagnosticsRequestCount,
@@ -7751,6 +9485,11 @@ export async function createWebGPUFingerFluidSolver({
     restStateBuffer.destroy();
     neighborTopologyBuffer.destroy();
     materialTracerBuffer.destroy();
+    dynamicReflectionMeshPositionBuffer.destroy();
+    dynamicReflectionMeshNormalBuffer.destroy();
+    dynamicReflectionMeshIndexBuffer.destroy();
+    dynamicReflectionSceneParamsBuffer.destroy();
+    hdrEnvironmentTexture.destroy();
     interfaceCountersReadbackBuffer.destroy();
     interfaceRecordsReadbackBuffer.destroy();
     restStateReadbackBuffer.destroy();
@@ -7762,7 +9501,11 @@ export async function createWebGPUFingerFluidSolver({
     screenSpaceSurfaceAccumulationTexture?.destroy();
     screenSpaceOpticalSlabFrontDepthTexture?.destroy();
     screenSpaceOpticalSlabBackDepthTexture?.destroy();
+    linearSceneRadianceTexture?.destroy();
     screenSpaceRefractionSceneTexture?.destroy();
+    deferredWorldNormalRoughnessTexture?.destroy();
+    deferredAlbedoMetallicTexture?.destroy();
+    deferredLinearDepthObjectTexture?.destroy();
   }
 
   device.lost.then(info => {
@@ -7779,6 +9522,7 @@ export async function createWebGPUFingerFluidSolver({
     render,
     requestDiagnostics,
     getLiquidFireContactDescriptor,
+    setReflectionMeshPhaseForWitness,
     getDebugState,
     destroy,
   };
