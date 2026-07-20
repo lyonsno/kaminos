@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { validateBasinPromotionPackage } from '../volume-basin-promotion-package.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const handle = 'big-raymarch-hero-flamebowl-cotangent-covariance';
@@ -11,7 +12,7 @@ const channelPath = resolve(basinRoot, 'current.json');
 const channel = JSON.parse(readFileSync(channelPath, 'utf8'));
 const packagePath = resolve(dirname(channelPath), channel.current.packageRelativePath);
 const packageBytes = readFileSync(packagePath);
-const packageDocument = JSON.parse(packageBytes);
+const packageDocument = validateBasinPromotionPackage(JSON.parse(packageBytes));
 const controls = packageDocument.settingsPreset.artifact.preset.domControls;
 
 assert.equal(channel.history.length, 2, 'iteration channel must retain revision one and current revision two');
