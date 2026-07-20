@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.axial-crawler-registration.v0",
+  "asset": "creature.glb",
+  "source": "source.png",
+  "fitMode": "manual-bounds-and-witness-v0",
+  "localForwardAxis": [0, 0, -1],
+  "localUpAxis": [0, 1, 0],
+  "localRightAxis": [1, 0, 0],
+  "contactPlaneY": -0.2068822681903839,
+  "bounds": {
+    "min": [-0.18455950915813446, -0.2068822681903839, -0.4996844232082367],
+    "max": [0.18466870486736298, 0.2093127816915512, 0.5002209544181824]
+  },
+  "headAnchor": [0, 0, -0.47],
+  "tailAnchor": [0, 0, 0.47],
+  "spineStations": [
+    { "id": "tail", "t": 0, "localPosition": [0, 0, 0.47] },
+    { "id": "caudal", "t": 0.166667, "localPosition": [0, 0, 0.313333] },
+    { "id": "rear-trunk", "t": 0.333333, "localPosition": [0, 0, 0.156667] },
+    { "id": "mid-trunk", "t": 0.5, "localPosition": [0, 0, 0] },
+    { "id": "front-trunk", "t": 0.666667, "localPosition": [0, 0, -0.156667] },
+    { "id": "neck", "t": 0.833333, "localPosition": [0, 0, -0.313333] },
+    { "id": "head", "t": 1, "localPosition": [0, 0, -0.47] }
+  ],
+  "deformationHint": {
+    "mode": "axial-bend-with-attached-radial-detail",
+    "stationWeightAxis": "Z",
+    "preserveCrossSectionAxes": ["X", "Y"],
+    "settleOnLowRouteVelocity": true
+  },
+  "evidence": {
+    "orientation": "The yaw 1.60 side witness places the head at screen-right. The witness camera looks from +X with +Z up after glTF-to-Blender conversion, resolving the head to raw glTF -Z.",
+    "mesh": "One indexed triangle primitive, one opaque double-sided material, 148118 vertices and 188385 faces.",
+    "limitation": "This is a hand-registered single-cast axial frame, not a generalized skeleton or autorig."
+  }
+}

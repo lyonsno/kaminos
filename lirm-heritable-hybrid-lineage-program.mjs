@@ -306,3 +306,146 @@ export const HERITABLE_HYBRID_BRANCHES = Object.freeze([
     },
   ]),
 ]);
+
+const CROSS_SOURCE_LOCI = Object.freeze({
+  'cleft-crown-twins': Object.freeze([
+    'canopyCleft',
+    'canopyHornRise',
+    'pendantForkSpread',
+    'canopyLift',
+  ]),
+  'stilted-ventral-keel': Object.freeze([
+    'supportKneeBend',
+    'ventralKeelLength',
+    'ventralKeelSweep',
+    'ringRise',
+    'supportSpread',
+    'supportForeAft',
+  ]),
+  'lateral-sail-radiant': Object.freeze([
+    'lateralSailSpan',
+    'lateralSailSweep',
+    'apertureWidth',
+    'apertureHeight',
+    'canopyAsymmetry',
+    'pendantLateral',
+    'pendantDrop',
+  ]),
+});
+
+const CROSS_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    id: 'cleft-crown-x-stilted-keel',
+    parentLineageIds: Object.freeze(['cleft-crown-twins', 'stilted-ventral-keel']),
+    conflictLoci: Object.freeze(['canopySpan']),
+    pressures: Object.freeze({
+      'cleft-crown-twins': 'towering bifid-crown strider with paired suspended organs, articulated stilts, and a swept ventral keel around an open annular torso',
+      'stilted-ventral-keel': 'long-legged annular keel creature carrying a compact inherited twin crown and forked sensory anatomy',
+    }),
+  }),
+  Object.freeze({
+    id: 'cleft-crown-x-lateral-sail',
+    parentLineageIds: Object.freeze(['cleft-crown-twins', 'lateral-sail-radiant']),
+    conflictLoci: Object.freeze(['canopySpan']),
+    pressures: Object.freeze({
+      'cleft-crown-twins': 'broad twin-horned annular organism with radiant side sails and paired suspended sensory organs',
+      'lateral-sail-radiant': 'wide low portal creature with a compressed bifid crown, swept lateral sails, and forked interior anatomy',
+    }),
+  }),
+  Object.freeze({
+    id: 'stilted-keel-x-lateral-sail',
+    parentLineageIds: Object.freeze(['stilted-ventral-keel', 'lateral-sail-radiant']),
+    conflictLoci: Object.freeze(['apertureHeight', 'ringRise']),
+    pressures: Object.freeze({
+      'stilted-ventral-keel': 'high articulated portal strider with radiant lateral sails, a swept keel, and suspended interior anatomy',
+      'lateral-sail-radiant': 'wide low sail-bearing annular creature with compressed stilts and a long eccentric ventral keel',
+    }),
+  }),
+]);
+
+function terminalByLineageId(lineageId) {
+  const branch = HERITABLE_HYBRID_BRANCHES.find(item => item.id === lineageId);
+  if (!branch) throw new Error(`unknown terminal lineage: ${lineageId}`);
+  return branch.generations.at(-1);
+}
+
+function crossCandidate(definition, dominantLineageId) {
+  const parents = definition.parentLineageIds.map(terminalByLineageId);
+  const parentByLineage = new Map(parents.map(parent => [parent.lineageId, parent]));
+  const parameters = { ...HERITABLE_HYBRID_FOUNDER.parameters };
+  const locusProvenance = {};
+  for (const parent of parents) {
+    for (const locus of CROSS_SOURCE_LOCI[parent.lineageId]) {
+      parameters[locus] = parent.parameters[locus];
+      locusProvenance[locus] = parent.lineageId;
+    }
+  }
+  const dominant = parentByLineage.get(dominantLineageId);
+  for (const locus of definition.conflictLoci) {
+    parameters[locus] = dominant.parameters[locus];
+    locusProvenance[locus] = dominantLineageId;
+  }
+  const dominantHandle = dominantLineageId
+    .replace('cleft-crown-twins', 'crown')
+    .replace('stilted-ventral-keel', 'stilt')
+    .replace('lateral-sail-radiant', 'sail');
+  return Object.freeze({
+    id: `${definition.id}-f1-${dominantHandle}-dominant`,
+    lineageId: definition.id,
+    generation: 4,
+    crossGeneration: 1,
+    parentId: null,
+    parentIds: Object.freeze(parents.map(parent => parent.id)),
+    parentLineageIds: definition.parentLineageIds,
+    dominantLineageId,
+    program: HERITABLE_HYBRID_LINEAGE_PROGRAM,
+    parameters: Object.freeze(parameters),
+    locusProvenance: Object.freeze(locusProvenance),
+    inheritedCommitments: COMMITMENTS,
+    inheritedMutations: Object.freeze([...new Set(parents.flatMap(parent => parent.inheritedMutations))]),
+    lineagePressure: definition.pressures[dominantLineageId],
+  });
+}
+
+export const HERITABLE_HYBRID_CROSSES = Object.freeze(CROSS_DEFINITIONS.map(definition => {
+  const parents = definition.parentLineageIds.map(terminalByLineageId);
+  const offspring = definition.parentLineageIds.map(dominantLineageId => crossCandidate(definition, dominantLineageId));
+  return Object.freeze({
+    id: definition.id,
+    parentIds: Object.freeze(parents.map(parent => parent.id)),
+    parentLineageIds: definition.parentLineageIds,
+    conflictLoci: definition.conflictLoci,
+    offspring: Object.freeze(offspring),
+  });
+}));
+
+export function buildHeritableHybridCrossPlan({ crosses = HERITABLE_HYBRID_CROSSES } = {}) {
+  if (!Array.isArray(crosses) || crosses.length !== 3) {
+    throw new Error('heritable hybrid cross plan requires three pairwise terminal crosses');
+  }
+  const candidates = crosses.flatMap(cross => cross.offspring);
+  if (candidates.length !== 6 || new Set(candidates.map(candidate => candidate.id)).size !== 6) {
+    throw new Error('heritable hybrid cross plan requires six unique F1 offspring');
+  }
+  return {
+    schema: 'kaminos.lirm-heritable-hybrid-cross-plan.v0',
+    parents: HERITABLE_HYBRID_BRANCHES.map(branch => branch.generations.at(-1)),
+    crosses: crosses.map(cross => ({
+      id: cross.id,
+      parentIds: [...cross.parentIds],
+      parentLineageIds: [...cross.parentLineageIds],
+      conflictLoci: [...cross.conflictLoci],
+      offspringIds: cross.offspring.map(candidate => candidate.id),
+    })),
+    candidates,
+    evidencePredicate: {
+      exactPairwiseCrossCount: 3,
+      exactOffspringCount: 6,
+      discreteLocusInheritanceRequired: true,
+      oppositeDominanceRequired: true,
+      bothParentTopologiesRequired: true,
+      visibleRecombinationRequiresInspection: true,
+      generatorOrSpatialCastClaim: 'forbidden_until_separately_witnessed',
+    },
+  };
+}

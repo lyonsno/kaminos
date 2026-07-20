@@ -1,0 +1,71 @@
+{
+  "schema": "kaminos.motion-ready-cast-receipt.v0",
+  "castId": "motion-ready-719024",
+  "purpose": "Single-cast Build Week motion-composition probe",
+  "branch": "cc/molten-silhouette-basin-0717",
+  "sourceImage": {
+    "seed": 719024,
+    "model": "flux2-klein-9b",
+    "route": "mflux_flux2_edit_promptfile",
+    "steps": 8,
+    "guidance": 1,
+    "resolution": [512, 512],
+    "durationSeconds": 78.3,
+    "provenance": "artifacts/lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/output.png"
+  },
+  "effectiveRoute": {
+    "generator": "trellis2mlx",
+    "profile": "fast",
+    "seed": 42,
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "durationSeconds": 58.8,
+    "provenance": "artifacts/lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/trellis-fast/output.glb"
+  },
+  "mesh": {
+    "primitives": 1,
+    "materials": 1,
+    "vertices": 148118,
+    "postCleanupFaces": 188385,
+    "alphaMode": "OPAQUE",
+    "doubleSided": true
+  },
+  "files": {
+    "creature.glb": {
+      "bytes": 8934204,
+      "sha256": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e"
+    },
+    "registration.json": {
+      "bytes": 1668,
+      "sha256": "cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6"
+    },
+    "source.png": {
+      "bytes": 236604,
+      "sha256": "9e398f9fb2292e16c79e1e8cd7d31d4a768266f88a74c18fffb4fdcf398d7153"
+    }
+  },
+  "ownership": {
+    "molten": ["cast identity", "provenance", "body-frame registration", "packet corrections"],
+    "mushfinger": ["runtime deformation", "Hill carrier attachment", "terrain support", "route cadence", "visual witness"]
+  },
+  "acceptance": {
+    "operatorClockHours": 4,
+    "visibleSuccess": [
+      "creature follows an existing Hill route",
+      "head-to-tail bend remains continuous",
+      "limbs and plates remain attached",
+      "no tearing, corkscrew, or sideways slide",
+      "creature settles when route velocity drops"
+    ]
+  },
+  "nonGoals": [
+    "generalized autorigger",
+    "brood or lineage selection UI",
+    "locomotion taxonomy",
+    "rig editor",
+    "additional basin search before first motion witness"
+  ]
+}
