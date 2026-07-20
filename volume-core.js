@@ -5487,7 +5487,7 @@ export function createKaminosVolumePrototype({
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
-  viewport.appendChild(canvas);
+  if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -6150,6 +6150,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatFinalizePipeline = null;
   let boundarySplatArchivePipeline = null;
   let boundarySplatRenderPipeline = null;
+  let productBoundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
   let boundarySplatHybridPipeline = null;
   let hybridSmokePipeline = null;
@@ -7368,6 +7369,30 @@ export function createKaminosVolumePrototype({
       primitive: { topology: 'triangle-list' },
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    if (productFrameOwner === 'caller') {
+      productBoundarySplatRenderPipeline = device.createRenderPipeline({
+        label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`,
+        layout: boundarySplatRenderPipelineLayout,
+        vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+        fragment: {
+          module: boundarySplatShader,
+          entryPoint: 'boundarySplatFs',
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+        depthStencil: {
+          format: externalDepthFormat,
+          depthWriteEnabled: false,
+          depthCompare: 'less-equal',
+        },
+      });
+    }
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
     const hybridSplatBlend = {
       color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
@@ -7562,14 +7587,16 @@ export function createKaminosVolumePrototype({
       candidateCopyBytes: 0,
       rendererIdentity: state.boundarySplatRendererIdentity,
     }));
-    context = canvas.getContext('webgpu');
-    format = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({
-      device,
-      format,
-      alphaMode: 'opaque',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-    });
+    format = productFrameOwner === 'caller' ? externalColorFormat : navigator.gpu.getPreferredCanvasFormat();
+    if (productFrameOwner !== 'caller') {
+      context = canvas.getContext('webgpu');
+      context.configure({
+        device,
+        format,
+        alphaMode: 'opaque',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+    }
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
       emitStatus({ phase: 'gpu-error', error: state.error });
@@ -9641,6 +9668,13 @@ export function createKaminosVolumePrototype({
         loadOp: 'clear',
         storeOp: 'store',
       }],
+      ...(options.depthView ? {
+        depthStencilAttachment: {
+          view: options.depthView,
+          depthLoadOp: 'load',
+          depthStoreOp: 'store',
+        },
+      } : {}),
     });
     pass.setPipeline(targetPipeline);
     pass.setBindGroup(0, boundarySplatRenderBindGroup);
@@ -13430,6 +13464,103 @@ export function createKaminosVolumePrototype({
     } finally {
       resumeBoundarySplatHistoryHoldoverLoop(options);
     }
+  }
+
+  async function initializeCallerProductFrame() {
+    if (productFrameOwner !== 'caller') {
+      throw new Error('initialize-product-frame-requires-caller-frame-owner');
+    }
+    await ensureGpu();
+    state.active = true;
+    state.error = null;
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'initialized',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      privateSubmitApplied: false,
+      fallbackReason: null,
+    };
+    emitStatus({ phase: 'product-frame-initialized', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
+  }
+
+  function encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now = performance.now() }) {
+    if (productFrameOwner !== 'caller') throw new Error('encode-product-frame-requires-caller-frame-owner');
+    if (!device || !state.active) throw new Error('product-frame-not-initialized');
+    if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
+      throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
+    }
+    updateUniforms(now);
+    encodeSim(commandEncoder);
+    encodeSelectiveHeadLiveFields(commandEncoder);
+    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+    encodeMajorant(commandEncoder, {
+      readBindGroup: selectiveMajorant,
+      force: state.selectiveHeadLiveEffectiveRole !== 'off',
+    });
+    const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+    const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+    encodeBoundarySidecar(commandEncoder, { readBindGroup: selectiveSidecar });
+    if (selectiveSplat) {
+      encodeBoundarySplats(commandEncoder, {
+        computeBindGroup: selectiveSplat,
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+      });
+    } else {
+      encodeBoundarySplats(commandEncoder);
+    }
+
+    const composition = updateSelectiveHeadLiveCompositionState();
+    if (composition.effective !== 'smoke-raymarch-under-splats-v0') {
+      throw new Error(`product-frame-composition-mismatch:${composition.effective}`);
+    }
+    const splatApplied = encodeBoundarySplatPresentation(
+      commandEncoder,
+      colorView,
+      productBoundarySplatRenderPipeline,
+      boundarySplatPresentationRenderPipeline,
+      { loadOp: 'load', depthView },
+    );
+    if (!splatApplied) {
+      throw new Error(state.boundarySplatFallbackReason || 'product-frame-splat-fire-unavailable');
+    }
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'partial',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      requestedComposition: composition.requested,
+      effectiveComposition: composition.effective,
+      raymarchFireAuthority: composition.definition.raymarchFireAuthority,
+      smokeRaymarchEncoded: false,
+      smokeDepthViewProvided: Boolean(sceneDepthView),
+      smokeDepthFarBoundEffective: false,
+      splatFireEncoded: true,
+      splatSharedDepthEffective: true,
+      privateSubmitApplied: false,
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      fallbackReason: 'product-smoke-depth-far-bound-pending',
+    };
+    recordSelectiveHeadLivePassReceipt({
+      composition: composition.effective,
+      raymarchEncoded: false,
+      raymarchApplied: false,
+      splatEncoded: true,
+      splatApplied: true,
+      fallbackReason: state.productFrameReceipt.fallbackReason,
+    });
+    commitPreviousViewProjection();
+    state.frameCount += 1;
+    emitStatus({ phase: 'product-frame-encoded', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
   }
 
   return {
