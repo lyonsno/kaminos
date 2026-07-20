@@ -36,14 +36,20 @@ assert.throws(() => resolveFingerFluidMaxSpeed(0), /maximum speed must be finite
 assert.throws(() => resolveFingerFluidMaxSpeed(Number.NaN), /maximum speed must be finite and positive/);
 assert.throws(() => resolveFingerFluidMaxSpeed(4e-40), /normal finite f32/);
 assert.throws(() => resolveFingerFluidMaxSpeed(Number.MAX_VALUE), /normal finite f32/);
-assert.deepEqual(KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS, ['baseline', 'production', 'high']);
+assert.deepEqual(KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS, ['baseline', 'production', 'sweep3x', 'sweep4x', 'sweep6x', 'high']);
 assert.equal(resolveFingerFluidWaterfallOraclePreset('baseline'), 'baseline');
 assert.equal(resolveFingerFluidWaterfallOraclePreset('production'), 'production');
+assert.equal(resolveFingerFluidWaterfallOraclePreset('sweep3x'), 'sweep3x');
+assert.equal(resolveFingerFluidWaterfallOraclePreset('sweep4x'), 'sweep4x');
+assert.equal(resolveFingerFluidWaterfallOraclePreset('sweep6x'), 'sweep6x');
 assert.equal(resolveFingerFluidWaterfallOraclePreset('high'), 'high');
 assert.throws(() => resolveFingerFluidWaterfallOraclePreset('ultra'), /Unsupported finger fluid waterfall oracle preset/);
 
 const baseline = createFingerFluidWaterfallOracleConfig('baseline');
 const production = createFingerFluidWaterfallOracleConfig('production');
+const sweep3x = createFingerFluidWaterfallOracleConfig('sweep3x');
+const sweep4x = createFingerFluidWaterfallOracleConfig('sweep4x');
+const sweep6x = createFingerFluidWaterfallOracleConfig('sweep6x');
 const high = createFingerFluidWaterfallOracleConfig('high');
 assert.equal(baseline.contract, KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT);
 assert.equal(baseline.sourceId, 'slot-spout');
@@ -61,6 +67,21 @@ assert.equal(production.laneCount, 95);
 assert.equal(production.physicalSourceFlux, baseline.physicalSourceFlux);
 assert.ok(Math.abs(production.expectedParticleReleaseRate - baseline.expectedParticleReleaseRate * 2) < 1e-9);
 assert.deepEqual(production.camera, baseline.camera);
+for (const [config, multiplier, columns, rows] of [
+  [sweep3x, 3, 22, 6],
+  [sweep4x, 4, 24, 6],
+  [sweep6x, 6, 27, 7],
+]) {
+  assert.equal(config.refinementFactor, Math.cbrt(multiplier));
+  assert.ok(Math.abs(config.particleSpacing - baseline.particleSpacing / Math.cbrt(multiplier)) < 1e-12);
+  assert.ok(Math.abs(config.particleVolume - baseline.particleVolume / multiplier) < 1e-12);
+  assert.equal(config.defaultParticleCount, baseline.defaultParticleCount * multiplier);
+  assert.equal(config.laneColumns, columns);
+  assert.equal(config.laneRows, rows);
+  assert.ok(Math.abs(config.expectedParticleReleaseRate - baseline.expectedParticleReleaseRate * multiplier) < 1e-9);
+  assert.equal(config.physicalSourceFlux, baseline.physicalSourceFlux);
+  assert.deepEqual(config.camera, baseline.camera);
+}
 assert.equal(high.particleSpacing, baseline.particleSpacing / 2);
 assert.equal(high.kernelRadius, baseline.kernelRadius / 2);
 assert.equal(high.visibleParticleRadius, baseline.visibleParticleRadius / 2);

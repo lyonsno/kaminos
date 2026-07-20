@@ -51,6 +51,9 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
   presets: {
     baseline: { particleCount: 12288, label: 'baseline', spacingScale: 1, kernelScale: 1, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
     production: { particleCount: 24576, label: 'production', spacingScale: 1 / Math.cbrt(2), kernelScale: 1 / Math.cbrt(2), camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
+    sweep3x: { particleCount: 36864, label: 'sweep 3x', spacingScale: 1 / Math.cbrt(3), kernelScale: 1 / Math.cbrt(3), camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
+    sweep4x: { particleCount: 49152, label: 'sweep 4x', spacingScale: 1 / Math.cbrt(4), kernelScale: 1 / Math.cbrt(4), camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
+    sweep6x: { particleCount: 73728, label: 'sweep 6x', spacingScale: 1 / Math.cbrt(6), kernelScale: 1 / Math.cbrt(6), camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
     high: { particleCount: 98304, label: 'high', spacingScale: 0.5, kernelScale: 0.5, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
   },
   structuralControls: ['resolutionPreset', 'particleSpacing', 'kernelScale', 'sourceFlux', 'pressureIterations', 'viscosity', 'cohesion', 'unsupportedSheetStrength'],

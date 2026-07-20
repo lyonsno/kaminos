@@ -146,7 +146,17 @@ let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
-export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze(['baseline', 'production', 'high']);
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze([
+  'baseline', 'production', 'sweep3x', 'sweep4x', 'sweep6x', 'high',
+]);
+const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS = Object.freeze({
+  baseline: Object.freeze({ volumeMultiplier: 1, particleCount: 12_288, laneColumns: 15, laneRows: 4 }),
+  production: Object.freeze({ volumeMultiplier: 2, particleCount: 24_576, laneColumns: 19, laneRows: 5 }),
+  sweep3x: Object.freeze({ volumeMultiplier: 3, particleCount: 36_864, laneColumns: 22, laneRows: 6 }),
+  sweep4x: Object.freeze({ volumeMultiplier: 4, particleCount: 49_152, laneColumns: 24, laneRows: 6 }),
+  sweep6x: Object.freeze({ volumeMultiplier: 6, particleCount: 73_728, laneColumns: 27, laneRows: 7 }),
+  high: Object.freeze({ volumeMultiplier: 8, particleCount: 98_304, laneColumns: 30, laneRows: 8 }),
+});
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
@@ -206,13 +216,14 @@ export function resolveFingerFluidWaterfallWitnessPresetArgument({
 
 export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
   const preset = resolveFingerFluidWaterfallOraclePreset(value);
-  const refinementFactor = preset === 'high' ? 2 : preset === 'production' ? Math.cbrt(2) : 1;
+  const resolution = KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS[preset];
+  const refinementFactor = Math.cbrt(resolution.volumeMultiplier);
   const particleSpacing = LAMINAR_SOURCE_AXIAL_SPACING / refinementFactor;
   const descriptor = createFingerFluidLaminarInletDescriptors()[1];
   const physicalSourceFlux = measureFingerFluidLaminarInletFlux(descriptor);
   const particleVolume = particleSpacing ** 3;
-  const laneColumns = preset === 'high' ? descriptor.laneColumns * 2 : preset === 'production' ? 19 : descriptor.laneColumns;
-  const laneRows = preset === 'high' ? descriptor.laneRows * 2 : preset === 'production' ? 5 : descriptor.laneRows;
+  const laneColumns = resolution.laneColumns;
+  const laneRows = resolution.laneRows;
   return Object.freeze({
     contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
     preset,
@@ -223,7 +234,7 @@ export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
     particleVolume,
     kernelRadius: 0.185 / refinementFactor,
     visibleParticleRadius: 0.046 / refinementFactor,
-    defaultParticleCount: preset === 'high' ? 98_304 : preset === 'production' ? 24_576 : 12_288,
+    defaultParticleCount: resolution.particleCount,
     laneColumns,
     laneRows,
     laneCount: laneColumns * laneRows,

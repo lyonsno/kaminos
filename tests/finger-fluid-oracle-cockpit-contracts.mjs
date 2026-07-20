@@ -57,6 +57,19 @@ assert.equal(productionRequested.resolutionPreset, 'production');
 assert.equal(productionRequested.particleCount, 24_576);
 assert.equal(productionRequested.particleSpacing, 1 / Math.cbrt(2));
 assert.match(indexSource, /<option value="production">Production<\/option>/);
+for (const [preset, particleCount, multiplier] of [
+  ['sweep3x', 36_864, 3],
+  ['sweep4x', 49_152, 4],
+  ['sweep6x', 73_728, 6],
+]) {
+  const requested = cockpit.fingerFluidOracleRequestedConfigFromParams(
+    new URLSearchParams(`kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle&finger_fluid_waterfall_oracle_cockpit=1&finger_fluid_oracle_resolution=${preset}`),
+  );
+  assert.equal(requested.resolutionPreset, preset);
+  assert.equal(requested.particleCount, particleCount);
+  assert.equal(requested.particleSpacing, 1 / Math.cbrt(multiplier));
+  assert.match(indexSource, new RegExp(`<option value="${preset}">`));
+}
 
 const requestedUrl = new URL('http://127.0.0.1:8090/?kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=waterfall_resolution_oracle&finger_fluid_waterfall_oracle_cockpit=1&finger_fluid_oracle_resolution=high&finger_fluid_oracle_particle_spacing=0.62&finger_fluid_oracle_kernel_scale=1.18&finger_fluid_oracle_source_flux=1.35&finger_fluid_oracle_pressure_iterations=5&finger_fluid_oracle_viscosity=0.21&finger_fluid_oracle_cohesion=0.88&finger_fluid_oracle_fixed_camera=1&finger_fluid_oracle_pause=1&finger_fluid_oracle_replay=wet-ab');
 const routeState = cockpit.createFingerFluidOracleCockpitState({
