@@ -177,6 +177,19 @@ export function resolveFingerFluidWaterfallOraclePreset(value = 'baseline') {
   return preset;
 }
 
+export function resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent = false,
+  value,
+  fallback = 'high',
+  argumentName = '--waterfall-oracle-preset',
+} = {}) {
+  if (!argumentPresent) return resolveFingerFluidWaterfallOraclePreset(fallback);
+  if (typeof value !== 'string' || value.trim() === '' || value.startsWith('--')) {
+    throw new RangeError(`${argumentName} requires a value`);
+  }
+  return resolveFingerFluidWaterfallOraclePreset(value);
+}
+
 export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
   const preset = resolveFingerFluidWaterfallOraclePreset(value);
   const refinementFactor = preset === 'high' ? 2 : preset === 'production' ? Math.cbrt(2) : 1;
@@ -341,11 +354,37 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
     || treatmentIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA) {
     throw new Error('unsupported-sheet oracle evidence identity missing');
   }
-  if (controlIdentity.effectivePreset !== 'high' || treatmentIdentity.effectivePreset !== 'high') {
-    throw new Error('unsupported-sheet oracle requires the high-resolution preset for control and treatment');
+  if (controlIdentity.requestedPreset !== controlIdentity.effectivePreset
+    || treatmentIdentity.requestedPreset !== treatmentIdentity.effectivePreset) {
+    throw new Error('unsupported-sheet oracle preset silently fell back');
+  }
+  for (const identity of [controlIdentity, treatmentIdentity]) {
+    const canonical = createFingerFluidWaterfallOracleConfig(identity.effectivePreset);
+    const canonicalIdentity = {
+      contract: canonical.contract,
+      sourceId: canonical.sourceId,
+      refinementFactor: canonical.refinementFactor,
+      particleSpacing: canonical.particleSpacing,
+      particleVolume: canonical.particleVolume,
+      kernelRadius: canonical.kernelRadius,
+      visibleParticleRadius: canonical.visibleParticleRadius,
+      particleCount: canonical.defaultParticleCount,
+      laneColumns: canonical.laneColumns,
+      laneRows: canonical.laneRows,
+      laneCount: canonical.laneCount,
+      physicalSourceFlux: canonical.physicalSourceFlux,
+      expectedParticleReleaseRate: canonical.expectedParticleReleaseRate,
+      releaseScheduleContract: canonical.releaseScheduleContract,
+      camera: canonical.camera,
+    };
+    for (const [key, expected] of Object.entries(canonicalIdentity)) {
+      if (JSON.stringify(identity[key]) !== JSON.stringify(expected)) {
+        throw new Error(`unsupported-sheet oracle canonical ${canonical.preset} identity mismatch at ${key}`);
+      }
+    }
   }
   const exactCommonKeys = [
-    'contract', 'truthScene', 'sourceId', 'refinementFactor', 'particleSpacing', 'particleVolume',
+    'contract', 'truthScene', 'requestedPreset', 'effectivePreset', 'sourceId', 'refinementFactor', 'particleSpacing', 'particleVolume',
     'kernelRadius', 'visibleParticleRadius', 'particleCount', 'laneColumns', 'laneRows', 'laneCount',
     'physicalSourceFlux', 'expectedParticleReleaseRate', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',

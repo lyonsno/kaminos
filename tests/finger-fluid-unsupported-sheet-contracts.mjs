@@ -21,6 +21,25 @@ assert.equal(typeof core.resolveFingerFluidUnsupportedSheetStrength, 'function')
 assert.equal(typeof core.evaluateFingerFluidUnsupportedSheetNeighborhood, 'function');
 assert.equal(typeof core.evaluateFingerFluidUnsupportedSheetPair, 'function');
 assert.equal(typeof core.evaluateFingerFluidUnsupportedSheetOraclePair, 'function');
+assert.equal(typeof core.resolveFingerFluidWaterfallWitnessPresetArgument, 'function');
+assert.equal(core.resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent: false,
+  value: undefined,
+  fallback: 'high',
+  argumentName: '--unsupported-sheet-preset',
+}), 'high');
+assert.throws(() => core.resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent: true,
+  value: undefined,
+  fallback: 'high',
+  argumentName: '--unsupported-sheet-preset',
+}), /--unsupported-sheet-preset requires a value/);
+assert.throws(() => core.resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent: true,
+  value: '--unsupported-sheet-strength',
+  fallback: 'high',
+  argumentName: '--unsupported-sheet-preset',
+}), /--unsupported-sheet-preset requires a value/);
 assert.equal(core.resolveFingerFluidUnsupportedSheetStrength(0), 0);
 assert.equal(core.resolveFingerFluidUnsupportedSheetStrength(1), 1);
 assert.throws(() => core.resolveFingerFluidUnsupportedSheetStrength(-0.01), /unsupported-sheet strength/i);
@@ -158,6 +177,37 @@ const treatmentPair = core.evaluateFingerFluidUnsupportedSheetOraclePair({
 assert.equal(treatmentPair.mechanicalChecksOk, true);
 assert.equal(treatmentPair.status, 'captured_pending_operator_disposition');
 assert.equal(treatmentPair.visualContinuityAccepted, null);
+const productionConfig = core.createFingerFluidWaterfallOracleConfig('production');
+const productionCommon = {
+  ...identityCommon,
+  ...productionConfig,
+  requestedPreset: 'production',
+  effectivePreset: 'production',
+  particleCount: productionConfig.defaultParticleCount,
+  camera: productionConfig.camera,
+};
+const productionControlIdentity = core.createFingerFluidWaterfallOracleEvidenceIdentity({
+  ...productionCommon,
+  unsupportedSheetStrength: 0,
+});
+const productionTreatmentIdentity = core.createFingerFluidWaterfallOracleEvidenceIdentity({
+  ...productionCommon,
+  unsupportedSheetStrength: 2,
+});
+const productionPair = core.evaluateFingerFluidUnsupportedSheetOraclePair({
+  controlIdentity: productionControlIdentity,
+  treatmentIdentity: productionTreatmentIdentity,
+  controlArtifact: { path: '/tmp/production-control.png', sha256: 'e'.repeat(64), width: 1800, height: 1120 },
+  treatmentArtifact: { path: '/tmp/production-treatment.png', sha256: 'f'.repeat(64), width: 1800, height: 1120 },
+});
+assert.equal(productionPair.mechanicalChecksOk, true);
+assert.equal(productionPair.controlIdentity.effectivePreset, 'production');
+assert.throws(() => core.evaluateFingerFluidUnsupportedSheetOraclePair({
+  controlIdentity: { ...productionControlIdentity, particleCount: 98_304 },
+  treatmentIdentity: { ...productionTreatmentIdentity, particleCount: 98_304 },
+  controlArtifact: { path: '/tmp/forged-production-control.png', sha256: '1'.repeat(64), width: 1800, height: 1120 },
+  treatmentArtifact: { path: '/tmp/forged-production-treatment.png', sha256: '2'.repeat(64), width: 1800, height: 1120 },
+}), /unsupported-sheet oracle canonical production identity mismatch at particleCount/);
 assert.throws(() => core.evaluateFingerFluidUnsupportedSheetOraclePair({
   controlIdentity,
   treatmentIdentity: { ...treatmentIdentity, capturedStep: 481 },
@@ -177,6 +227,9 @@ assert.match(cockpitSource, /unsupportedSheetStrength/);
 assert.match(indexSource, /id="finger-fluid-oracle-sheet-support"/);
 assert.match(indexSource, /finger_fluid_unsupported_sheet_strength/);
 assert.match(witnessSource, /--unsupported-sheet-strength/);
+assert.match(witnessSource, /--unsupported-sheet-preset/);
+assert.match(witnessSource, /runPreset\(unsupportedSheetPreset, debugPort/);
+assert.match(witnessSource, /runPreset\(unsupportedSheetPreset, debugPort \+ 1/);
 assert.match(witnessSource, /runtime\.unsupportedSheetStrength !== unsupportedSheetStrength/);
 assert.match(witnessSource, /kaminosFingerFluidBenchRequestDiagnostics/);
 assert.match(witnessSource, /unsupportedSheetActiveParticleCount/);

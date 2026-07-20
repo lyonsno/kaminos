@@ -14,6 +14,7 @@ import {
   evaluateFingerFluidPulseDrainageSeries,
   evaluateFingerFluidUnsupportedSheetOraclePair,
   evaluateFingerFluidWaterfallOraclePair,
+  resolveFingerFluidWaterfallWitnessPresetArgument,
   validateFingerFluidFiniteDiagnosticPayload,
   validateFingerFluidWaterfallWitnessRenderIdentity,
 } from './finger-fluid-webgpu-core.js';
@@ -45,6 +46,12 @@ const captureSteps = String(args.get('--capture-steps') || '480,510,540,600,720,
   .map(value => Number(value.trim()));
 const comparisonAxis = args.get('--comparison-axis') || 'resolution';
 const pulsePreset = args.get('--pulse-preset') || 'high';
+const unsupportedSheetPreset = resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent: args.has('--unsupported-sheet-preset'),
+  value: args.get('--unsupported-sheet-preset'),
+  fallback: 'high',
+  argumentName: '--unsupported-sheet-preset',
+});
 if (!['resolution', 'unsupported_sheet', 'pulse_drainage'].includes(comparisonAxis)) {
   throw new RangeError(`Unsupported waterfall oracle comparison axis: ${comparisonAxis}`);
 }
@@ -93,6 +100,7 @@ function writeReport(extra = {}) {
     inletCutoffStep: comparisonAxis === 'pulse_drainage' ? inletCutoffStep : null,
     captureSteps: comparisonAxis === 'pulse_drainage' ? captureSteps : null,
     comparisonAxis,
+    unsupportedSheetPreset: comparisonAxis === 'unsupported_sheet' ? unsupportedSheetPreset : null,
     pulsePreset: comparisonAxis === 'pulse_drainage' ? pulsePreset : null,
     baselineRun,
     highRun,
@@ -601,11 +609,11 @@ try {
     phase = comparisonAxis === 'resolution' ? 'capturing_baseline' : 'capturing_unsupported_sheet_control';
     baselineRun = comparisonAxis === 'resolution'
       ? await runPreset('baseline', debugPort)
-      : await runPreset('high', debugPort, { label: 'control', sheetStrength: 0 });
+      : await runPreset(unsupportedSheetPreset, debugPort, { label: 'control', sheetStrength: 0 });
     phase = comparisonAxis === 'resolution' ? 'capturing_high' : 'capturing_unsupported_sheet_treatment';
     highRun = comparisonAxis === 'resolution'
       ? await runPreset('high', debugPort + 1)
-      : await runPreset('high', debugPort + 1, { label: 'treatment', sheetStrength: unsupportedSheetStrength });
+      : await runPreset(unsupportedSheetPreset, debugPort + 1, { label: 'treatment', sheetStrength: unsupportedSheetStrength });
     phase = 'evaluating_pair_identity';
     pair = comparisonAxis === 'resolution'
       ? evaluateFingerFluidWaterfallOraclePair({
