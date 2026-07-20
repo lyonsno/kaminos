@@ -4493,6 +4493,7 @@ export async function createWebGPUFingerFluidSolver({
     pitch = 0.34,
     distance = 4.45,
     target = [0, -0.05, 0],
+    fovRadians = Math.PI / 3.15,
     colorMode = safeColorMode,
     rendererMode = safeRendererMode,
     opticalDebugMode = safeOpticalDebugMode,
@@ -4518,7 +4519,7 @@ export async function createWebGPUFingerFluidSolver({
     const forward = normalize3(subtract3(target, eye));
     const right = normalize3(cross3(forward, [0, 1, 0]));
     const up = normalize3(cross3(right, forward));
-    const projection = perspectiveMatrix(Math.PI / 3.15, extent.width / extent.height, 0.08, 30);
+    const projection = perspectiveMatrix(fovRadians, extent.width / extent.height, 0.08, 30);
     const view = lookAtMatrix(eye, target, [0, 1, 0]);
     const viewProjection = multiplyMatrices(projection, view);
     const renderData = new Float32Array(28);

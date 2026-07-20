@@ -12,6 +12,7 @@ const root = new URL('..', import.meta.url).pathname;
 const page = readFileSync(join(root, 'hand-state-runtime.html'), 'utf8');
 const viewer = readFileSync(join(root, 'hand-state-runtime.mjs'), 'utf8');
 const solver = readFileSync(join(root, 'lerms-finger-juice-webgpu-core.js'), 'utf8');
+const fluidRenderer = readFileSync(join(root, 'finger-fluid-webgpu-core.js'), 'utf8');
 
 assert.ok(handStateAdapter.LIVE_HAND_CAMERA, 'live Hand publishes one shared display-camera contract');
 assert.ok(handStateAdapter.LIVE_FLUID_CAMERA, 'live Hand publishes one shared fluid-camera contract');
@@ -21,6 +22,9 @@ assert.equal(handStateAdapter.LIVE_FLUID_CAMERA.yaw, 0, 'wide framing preserves 
 assert.equal(handStateAdapter.LIVE_FLUID_CAMERA.pitch, 0, 'wide framing preserves the accepted zero-pitch alignment route');
 assert.match(viewer, /LIVE_HAND_CAMERA/, 'viewer configures the MANO camera from the shared projection contract');
 assert.match(viewer, /LIVE_FLUID_CAMERA/, 'viewer configures the fluid camera from the shared projection contract');
+assert.match(viewer, /fovRadians:\s*LIVE_FLUID_CAMERA\.fovRadians/, 'viewer passes the shared fluid FOV into the production renderer');
+assert.match(fluidRenderer, /fovRadians\s*=\s*Math\.PI\s*\/\s*3\.15/, 'fluid renderer accepts an explicit FOV with the historical default');
+assert.match(fluidRenderer, /perspectiveMatrix\(fovRadians,/, 'fluid renderer builds its projection from the effective FOV parameter');
 
 const surface = normalizeManoSurface([
   [-1, -2, 0.5],

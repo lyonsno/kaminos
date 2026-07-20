@@ -205,6 +205,7 @@ async function probeFingerJuice(emitterPacket, steps = 24) {
       pitch: LIVE_FLUID_CAMERA.pitch,
       distance: LIVE_FLUID_CAMERA.distance,
       target: LIVE_FLUID_CAMERA.target,
+      fovRadians: LIVE_FLUID_CAMERA.fovRadians,
       rendererMode: 'screen_space_refraction',
     });
   }
@@ -506,6 +507,7 @@ function animate(now) {
         pitch: LIVE_FLUID_CAMERA.pitch,
         distance: LIVE_FLUID_CAMERA.distance,
         target: LIVE_FLUID_CAMERA.target,
+        fovRadians: LIVE_FLUID_CAMERA.fovRadians,
         rendererMode: 'screen_space_refraction',
       });
     } catch (error) {
