@@ -14,6 +14,8 @@ import {
   evaluateFingerFluidPulseDrainageSeries,
   evaluateFingerFluidUnsupportedSheetOraclePair,
   evaluateFingerFluidWaterfallOraclePair,
+  validateFingerFluidFiniteDiagnosticPayload,
+  validateFingerFluidWaterfallWitnessRenderIdentity,
 } from './finger-fluid-webgpu-core.js';
 
 const args = new Map();
@@ -272,6 +274,11 @@ function validateEffectiveIdentity({
     witnessTargetStep: targetCaptureStep,
     paused: true,
   });
+  const renderIdentity = validateFingerFluidWaterfallWitnessRenderIdentity(route, {
+    rendererMode,
+    colorMode,
+    opticalDebugMode,
+  });
   if (debug?.schema !== 'kaminos.finger-fluid-bench.state.v0'
     || debug.status !== 'running'
     || runtime?.available !== true
@@ -283,8 +290,6 @@ function validateEffectiveIdentity({
     || route?.effectiveWaterfallOraclePreset !== preset
     || route?.requestedParticleCount !== config.defaultParticleCount
     || route?.effectiveParticleCount !== config.defaultParticleCount
-    || route?.requestedRendererMode !== rendererMode
-    || route?.effectiveRendererMode !== rendererMode
     || effective?.contract !== config.contract
     || effective.requestedPreset !== preset
     || effective.effectivePreset !== preset
@@ -334,12 +339,7 @@ function validateEffectiveIdentity({
     effectiveParticleCount: route.effectiveParticleCount,
     solverBackend: runtime.solver_backend,
     renderBackend: runtime.render_backend,
-    requestedRendererMode: route.requestedRendererMode,
-    effectiveRendererMode: route.effectiveRendererMode,
-    requestedColorMode: route.requestedColorMode,
-    effectiveColorMode: route.effectiveColorMode,
-    requestedOpticalDebugMode: route.requestedOpticalDebugMode,
-    effectiveOpticalDebugMode: route.effectiveOpticalDebugMode,
+    ...renderIdentity,
     capturedStep,
     camera: cameraIdentity,
     unsupportedSheetStrength,
@@ -483,6 +483,7 @@ async function runPreset(preset, port, {
     }
     if (sheetStrength > 0) {
       const releaseDiagnostics = sheetDiagnostics?.unsupportedSheetReleaseDiagnostics;
+      validateFingerFluidFiniteDiagnosticPayload(releaseDiagnostics, 'sheet release diagnostics');
       const reasonRowParticleCount = Array.isArray(releaseDiagnostics?.reasonRows)
         ? releaseDiagnostics.reasonRows.reduce((sum, row) => sum + Number(row?.particleCount || 0), 0)
         : -1;

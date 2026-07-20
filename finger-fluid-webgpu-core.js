@@ -4283,19 +4283,33 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
   let densityRatioSum = 0;
   let topologyRetentionSum = 0;
 
+  const requireFiniteReadback = (value, field, index) => {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`Non-finite sheet diagnostic readback for particle ${index}: ${field}=${value}`);
+    }
+    return value;
+  };
+
   for (let index = 0; index < particleCount; index += 1) {
     const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS;
     const diagnosticOffset = topologyOffset + 20;
     const channels = Array.from(topologyValues.slice(diagnosticOffset, diagnosticOffset + 12));
-    if (channels.length !== 12 || channels.some(value => !Number.isFinite(value))) {
+    if (channels.length !== 12) {
       throw new TypeError(`Finger fluid sheet diagnostics contain malformed channels for particle ${index}`);
     }
+    channels.forEach((value, channelIndex) => requireFiniteReadback(value, `diagnosticChannel[${channelIndex}]`, index));
     const reasonCode = channels[0];
     if (!Number.isInteger(reasonCode) || !Object.hasOwn(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE, reasonCode)) {
       throw new RangeError(`Unknown sheet release reason code ${reasonCode} for particle ${index}`);
     }
     const reason = KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE[reasonCode];
-    const active = particleValues[index * PARTICLE_FLOATS + 11] >= 0;
+    const particleOffset = index * PARTICLE_FLOATS;
+    const activeDiscriminator = requireFiniteReadback(
+      particleValues[particleOffset + 11],
+      'particle.activeDiscriminator',
+      index,
+    );
+    const active = activeDiscriminator >= 0;
     if (!active) {
       dormantParticleCount += 1;
       if (reason !== 'dormant') {
@@ -4306,16 +4320,19 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
     if (reason === 'dormant') {
       throw new Error(`Active particle ${index} carries dormant sheet release reason`);
     }
-    const activity = topologyValues[topologyOffset + 11];
+    const activity = requireFiniteReadback(topologyValues[topologyOffset + 11], 'topology.sheetActivity', index);
     if ((reason === 'active' && activity <= 0) || (reason !== 'active' && activity > 0.0001)) {
       throw new Error(`Particle ${index} sheet activity ${activity} contradicts release reason ${reason}`);
     }
     activeParticleCount += 1;
     reasonCounts[reason] += 1;
     const accumulator = reasonAccumulators[reason];
-    const particleOffset = index * PARTICLE_FLOATS;
     for (let axis = 0; axis < 3; axis += 1) {
-      const position = particleValues[particleOffset + axis];
+      const position = requireFiniteReadback(
+        particleValues[particleOffset + axis],
+        `particle.position[${axis}]`,
+        index,
+      );
       accumulator.positionMin[axis] = Math.min(accumulator.positionMin[axis], position);
       accumulator.positionMax[axis] = Math.max(accumulator.positionMax[axis], position);
       accumulator.positionSum[axis] += position;
@@ -4331,8 +4348,16 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
       neighborCount: channels[8],
       velocityCoherence: channels[9],
       transverseAnisotropy: channels[10],
-      topologyRetention: topologyValues[topologyOffset + 4],
-      topologyRetentionAge: topologyValues[topologyOffset + 5],
+      topologyRetention: requireFiniteReadback(
+        topologyValues[topologyOffset + 4],
+        'topology.retention',
+        index,
+      ),
+      topologyRetentionAge: requireFiniteReadback(
+        topologyValues[topologyOffset + 5],
+        'topology.retentionAge',
+        index,
+      ),
     };
     for (const name of measurementNames) accumulator.measurementSums[name] += measurements[name];
     accumulator.maximumLinkStretch = Math.max(accumulator.maximumLinkStretch, channels[11]);
@@ -4341,7 +4366,7 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
     else releasedSheetParticleCount += 1;
     neighborCountSum += channels[8];
     densityRatioSum += channels[6];
-    topologyRetentionSum += topologyValues[topologyOffset + 4];
+    topologyRetentionSum += measurements.topologyRetention;
     maximumLinkStretch = Math.max(maximumLinkStretch, channels[11]);
     maximumLinkKernelRatio = Math.max(maximumLinkKernelRatio, channels[3]);
   }
@@ -4387,6 +4412,53 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
     maximumLinkStretch: Number(maximumLinkStretch.toFixed(6)),
     maximumLinkKernelRatio: Number(maximumLinkKernelRatio.toFixed(6)),
   };
+}
+
+export function validateFingerFluidWaterfallWitnessRenderIdentity(route, {
+  rendererMode,
+  colorMode,
+  opticalDebugMode,
+} = {}) {
+  const identity = {
+    requestedRendererMode: route?.requestedRendererMode,
+    effectiveRendererMode: route?.effectiveRendererMode,
+    requestedColorMode: route?.requestedColorMode,
+    effectiveColorMode: route?.effectiveColorMode,
+    requestedOpticalDebugMode: route?.requestedOpticalDebugMode,
+    effectiveOpticalDebugMode: route?.effectiveOpticalDebugMode,
+  };
+  if (identity.requestedRendererMode !== rendererMode
+    || identity.effectiveRendererMode !== rendererMode
+    || identity.requestedColorMode !== colorMode
+    || identity.effectiveColorMode !== colorMode
+    || identity.requestedOpticalDebugMode !== opticalDebugMode
+    || identity.effectiveOpticalDebugMode !== opticalDebugMode) {
+    throw new Error(`Requested/effective waterfall witness render identity mismatch: ${JSON.stringify({
+      expected: { rendererMode, colorMode, opticalDebugMode },
+      identity,
+    })}`);
+  }
+  return identity;
+}
+
+export function validateFingerFluidFiniteDiagnosticPayload(payload, label = 'finger fluid diagnostics') {
+  const visit = (value, path) => {
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        throw new TypeError(`Non-finite diagnostic payload at ${path}: ${value}`);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => visit(entry, `${path}[${index}]`));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const [key, entry] of Object.entries(value)) visit(entry, `${path}.${key}`);
+    }
+  };
+  visit(payload, label);
+  return payload;
 }
 
 export function evaluateFingerFluidUnsupportedSheetPair({

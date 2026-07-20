@@ -146,6 +146,73 @@ assert.throws(
   /unknown sheet release reason code/i,
 );
 
+const assertRejectsNonFiniteReadback = (label, mutate) => {
+  const candidateTopology = topology.slice();
+  const candidateParticles = particles.slice();
+  mutate(candidateTopology, candidateParticles);
+  assert.throws(
+    () => core.summarizeFingerFluidSheetReleaseDiagnostics(candidateTopology, candidateParticles, particleCount),
+    /non-finite sheet diagnostic readback/i,
+    label,
+  );
+};
+assertRejectsNonFiniteReadback('particle position cannot serialize NaN as a null bound', (_candidateTopology, candidateParticles) => {
+  candidateParticles[0] = Number.NaN;
+});
+assertRejectsNonFiniteReadback('active discriminator must be finite even when its reason says dormant', (candidateTopology, candidateParticles) => {
+  candidateParticles[2 * 16 + 11] = Number.NaN;
+  candidateTopology[2 * core.KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS + 20]
+    = core.KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant;
+});
+assertRejectsNonFiniteReadback('sheet activity cannot serialize NaN as a null mean', (candidateTopology) => {
+  candidateTopology[11] = Number.NaN;
+});
+assertRejectsNonFiniteReadback('topology retention cannot serialize Infinity', (candidateTopology) => {
+  candidateTopology[4] = Number.POSITIVE_INFINITY;
+});
+assertRejectsNonFiniteReadback('topology retention age cannot serialize NaN', (candidateTopology) => {
+  candidateTopology[5] = Number.NaN;
+});
+
+const validRenderRoute = {
+  requestedRendererMode: 'sphere_debug',
+  effectiveRendererMode: 'sphere_debug',
+  requestedColorMode: 'sheet_release',
+  effectiveColorMode: 'sheet_release',
+  requestedOpticalDebugMode: 'shaded',
+  effectiveOpticalDebugMode: 'shaded',
+};
+assert.deepEqual(
+  core.validateFingerFluidWaterfallWitnessRenderIdentity(validRenderRoute, {
+    rendererMode: 'sphere_debug',
+    colorMode: 'sheet_release',
+    opticalDebugMode: 'shaded',
+  }),
+  validRenderRoute,
+);
+for (const [field, wrongValue] of [
+  ['requestedColorMode', 'phase'],
+  ['effectiveColorMode', 'phase'],
+  ['requestedOpticalDebugMode', 'normal'],
+  ['effectiveOpticalDebugMode', 'normal'],
+]) {
+  assert.throws(
+    () => core.validateFingerFluidWaterfallWitnessRenderIdentity(
+      { ...validRenderRoute, [field]: wrongValue },
+      { rendererMode: 'sphere_debug', colorMode: 'sheet_release', opticalDebugMode: 'shaded' },
+    ),
+    /requested\/effective waterfall witness render identity mismatch/i,
+    `${field} mismatch must fail loud`,
+  );
+}
+assert.equal(core.validateFingerFluidFiniteDiagnosticPayload(summary), summary);
+const nonFiniteNestedSummary = structuredClone(summary);
+nonFiniteNestedSummary.reasonRows.find(row => row.reason === 'active').measurements.averageCurrentActivity = Number.NaN;
+assert.throws(
+  () => core.validateFingerFluidFiniteDiagnosticPayload(nonFiniteNestedSummary),
+  /non-finite diagnostic payload/i,
+);
+
 assert.match(coreSource, /sheetDiagnosticClassification: vec4<f32>/);
 assert.match(coreSource, /sheetDiagnosticKinematics: vec4<f32>/);
 assert.match(coreSource, /sheetDiagnosticNeighborhood: vec4<f32>/);
@@ -157,5 +224,7 @@ assert.match(coreSource, /colorMode == 7u[\s\S]*sheetDiagnosticClassification\.x
 assert.match(witnessSource, /sheet release diagnostics missing or partial at capture/i);
 assert.match(witnessSource, /diagnosedActiveParticleCount\s*!==\s*releaseDiagnostics\.activeParticleCount/);
 assert.match(witnessSource, /reasonRows\.reduce/);
+assert.match(witnessSource, /validateFingerFluidWaterfallWitnessRenderIdentity\(route/);
+assert.match(witnessSource, /validateFingerFluidFiniteDiagnosticPayload\(releaseDiagnostics/);
 
 console.log('finger fluid sheet release diagnostics contracts passed');
