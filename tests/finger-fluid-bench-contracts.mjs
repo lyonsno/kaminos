@@ -400,6 +400,9 @@ assert.match(benchWitnessSource, /record\.contact >= 0\.5 && record\.supportAlig
 assert.match(benchWitnessSource, /interfaceCarrier\.capacity\s*!==\s*lastDebugState\.runtime\.particleCount/, 'bench witness rejects hidden interface capacity caps');
 assert.match(benchWitnessSource, /interfaceCarrier\.overflowCount\s*!==\s*0/, 'bench witness rejects interface compaction overflow');
 assert.match(benchWitnessSource, /interfaceCarrier\.sampleRecords/, 'bench witness checks concrete compact-interface record evidence');
+assert.match(benchWitnessSource, /record\.confidence < 0 \|\| record\.confidence > 1\.001/, 'bench witness bounds interface geometry confidence without rejecting explicitly unresolved curvature');
+assert.match(benchWitnessSource, /record\.confidence === 0 && Math\.abs\(record\.curvature\) > 0\.0001/, 'bench witness rejects unresolved interface records that still claim resolved curvature');
+assert.doesNotMatch(benchWitnessSource, /record\.confidence < 0\.3/, 'bench witness does not misclassify sparse spray with unresolved curvature as malformed geometry');
 assert.match(benchWitnessSource, /validatedRecordCount !== interfaceCarrier\.activeCount/, 'bench witness requires complete active-carrier validation');
 assert.match(benchWitnessSource, /malformedRecordCount !== 0/, 'bench witness rejects any malformed active interface record');
 assert.match(benchWitnessSource, /contactRecordCount < 64/, 'bench witness requires material contact coverage rather than conditional validation');

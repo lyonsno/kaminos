@@ -1581,8 +1581,11 @@ async function main() {
         throw new Error(`interface record contains non-finite fields: ${JSON.stringify(record)}`);
       }
       const normalLength = Math.hypot(...record.normal);
-      if (normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0.3 || record.confidence > 1.001 || record.thickness <= 0) {
+      if (normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0 || record.confidence > 1.001 || record.thickness <= 0) {
         throw new Error(`interface geometry record is not physically legible: ${JSON.stringify(record)}`);
+      }
+      if (record.confidence === 0 && Math.abs(record.curvature) > 0.0001) {
+        throw new Error(`unresolved interface geometry claims resolved curvature: ${JSON.stringify(record)}`);
       }
       if (record.contact >= 0.5 && record.supportAlignment < -0.001) throw new Error(`contact interface sample normal points into support geometry: ${JSON.stringify(record)}`);
     }
