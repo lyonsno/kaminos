@@ -5,9 +5,13 @@ import { fileURLToPath } from 'node:url';
 
 import {
   KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+  createFingerFluidLaminarInletDescriptors,
   createFingerFluidWaterfallSoakEvidenceIdentity,
   evaluateFingerFluidAdaptivePairTransition,
+  measureFingerFluidLaminarInletDiagnostics,
+  sampleFingerFluidLaminarInletParticle,
   summarizeFingerFluidAdaptiveDensityLedger,
+  validateFingerFluidAdaptiveDensityLedger,
 } from '../finger-fluid-webgpu-core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +75,72 @@ assert.deepEqual(ledger, {
   chemistryMass: 0.6,
 });
 
+const adaptiveBaseParticleCount = 100;
+const adaptiveSimulationCapacity = adaptiveBaseParticleCount * 2;
+const inletDescriptors = createFingerFluidLaminarInletDescriptors();
+const adaptiveSourceParticles = new Float32Array(adaptiveSimulationCapacity * 16);
+for (let index = 0; index < adaptiveBaseParticleCount; index += 1) {
+  const sample = sampleFingerFluidLaminarInletParticle(index, inletDescriptors, {
+    particleCount: adaptiveBaseParticleCount,
+  });
+  const offset = index * 16;
+  adaptiveSourceParticles.set(sample.position, offset);
+  adaptiveSourceParticles.set(sample.velocity, offset + 8);
+  adaptiveSourceParticles[offset + 11] = sample.activeAtFrameZero ? sample.phase : -sample.phase;
+}
+for (let index = adaptiveBaseParticleCount; index < adaptiveSimulationCapacity; index += 1) {
+  adaptiveSourceParticles[index * 16 + 11] = -2;
+}
+const adaptiveSourceDiagnostics = measureFingerFluidLaminarInletDiagnostics(
+  adaptiveSourceParticles,
+  adaptiveSimulationCapacity,
+  inletDescriptors,
+  { sourceParticleCount: adaptiveBaseParticleCount },
+);
+assert.equal(adaptiveSourceDiagnostics.particleCount, adaptiveBaseParticleCount);
+assert.equal(adaptiveSourceDiagnostics.simulationCapacity, adaptiveSimulationCapacity);
+assert.equal(adaptiveSourceDiagnostics.reservedParticleCount, adaptiveBaseParticleCount);
+assert.equal(adaptiveSourceDiagnostics.accountedParticleCount, adaptiveBaseParticleCount);
+assert.deepEqual(adaptiveSourceDiagnostics.inlets.map(inlet => inlet.taggedParticleCount), [40, 30, 30]);
+
+const zeroTrafficLedger = {
+  contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+  enabled: true,
+  baseParticleCount: adaptiveBaseParticleCount,
+  simulationCapacity: adaptiveSimulationCapacity,
+  activeParticleCount: adaptiveBaseParticleCount,
+  unrefinedBaseParticleCount: adaptiveBaseParticleCount,
+  refinedParentCount: 0,
+  activeChildCount: 0,
+  reservedChildCount: adaptiveBaseParticleCount,
+  representedVolume: adaptiveBaseParticleCount,
+  splitCount: 0,
+  mergeCount: 0,
+  accountingValid: true,
+};
+assert.throws(
+  () => validateFingerFluidAdaptiveDensityLedger(zeroTrafficLedger, {
+    baseParticleCount: adaptiveBaseParticleCount,
+    simulationCapacity: adaptiveSimulationCapacity,
+    requireActiveRefinement: true,
+  }),
+  /adaptive transition traffic missing/,
+);
+assert.doesNotThrow(() => validateFingerFluidAdaptiveDensityLedger({
+  ...zeroTrafficLedger,
+  activeParticleCount: adaptiveBaseParticleCount + 12,
+  unrefinedBaseParticleCount: adaptiveBaseParticleCount - 12,
+  refinedParentCount: 12,
+  activeChildCount: 12,
+  reservedChildCount: adaptiveBaseParticleCount - 12,
+  splitCount: 18,
+  mergeCount: 6,
+}, {
+  baseParticleCount: adaptiveBaseParticleCount,
+  simulationCapacity: adaptiveSimulationCapacity,
+  requireActiveRefinement: true,
+}));
+
 const adaptiveEvidenceIdentity = createFingerFluidWaterfallSoakEvidenceIdentity({
   requestedParticleCount: 24_576,
   effectiveParticleCount: 49_152,
@@ -129,6 +199,11 @@ assert.match(
   'a merged child cannot retain a stale active sheet-release diagnostic after becoming dormant',
 );
 assert.match(coreSource, /adaptiveDensityLedger/, 'diagnostics expose active refinement and conservation accounting');
+assert.doesNotMatch(
+  coreSource,
+  /safeAdaptiveDensity\s*\?\s*Math\.max\(2,\s*safeUnsupportedSheetStrength\)/,
+  'adaptive classification cannot silently rewrite the requested unsupported-sheet support strength',
+);
 assert.match(indexSource, /finger_fluid_adaptive_density/, 'the operator route requests adaptive density explicitly');
 assert.match(indexSource, /requestedAdaptiveDensity/, 'route identity preserves the requested adaptive-density state');
 assert.match(indexSource, /effectiveAdaptiveDensity/, 'runtime identity preserves the effective adaptive-density state');

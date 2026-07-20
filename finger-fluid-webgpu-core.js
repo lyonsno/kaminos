@@ -259,6 +259,77 @@ export function summarizeFingerFluidAdaptiveDensityLedger(states) {
   };
 }
 
+export function validateFingerFluidAdaptiveDensityLedger(
+  ledger,
+  {
+    baseParticleCount = ledger?.baseParticleCount,
+    simulationCapacity = ledger?.simulationCapacity,
+    requireActiveRefinement = false,
+  } = {},
+) {
+  if (!ledger || typeof ledger !== 'object') {
+    throw new TypeError('Finger fluid adaptive density ledger must be an object');
+  }
+  if (ledger.contract !== KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT || ledger.enabled !== true) {
+    throw new Error(`Finger fluid adaptive density ledger route identity mismatch: ${JSON.stringify({ contract: ledger.contract, enabled: ledger.enabled })}`);
+  }
+  const expectedBaseParticleCount = Number(baseParticleCount);
+  const expectedSimulationCapacity = Number(simulationCapacity);
+  if (
+    !Number.isSafeInteger(expectedBaseParticleCount)
+    || expectedBaseParticleCount <= 0
+    || !Number.isSafeInteger(expectedSimulationCapacity)
+    || expectedSimulationCapacity <= 0
+  ) {
+    throw new Error(`Finger fluid adaptive density expected populations are malformed: ${JSON.stringify({ baseParticleCount, simulationCapacity })}`);
+  }
+  const integerFields = [
+    'baseParticleCount',
+    'simulationCapacity',
+    'activeParticleCount',
+    'unrefinedBaseParticleCount',
+    'refinedParentCount',
+    'activeChildCount',
+    'reservedChildCount',
+    'splitCount',
+    'mergeCount',
+  ];
+  for (const field of integerFields) {
+    if (!Number.isSafeInteger(ledger[field]) || ledger[field] < 0) {
+      throw new Error(`Finger fluid adaptive density ledger has malformed ${field}: ${ledger[field]}`);
+    }
+  }
+  if (
+    ledger.baseParticleCount !== expectedBaseParticleCount
+    || ledger.simulationCapacity !== expectedSimulationCapacity
+    || expectedSimulationCapacity !== expectedBaseParticleCount * 2
+  ) {
+    throw new Error(`Finger fluid adaptive density population identity mismatch: ${JSON.stringify({ expectedBaseParticleCount, expectedSimulationCapacity, ledgerBaseParticleCount: ledger.baseParticleCount, ledgerSimulationCapacity: ledger.simulationCapacity })}`);
+  }
+  if (
+    ledger.refinedParentCount !== ledger.activeChildCount
+    || ledger.activeChildCount + ledger.reservedChildCount !== expectedBaseParticleCount
+    || ledger.activeParticleCount !== ledger.unrefinedBaseParticleCount + ledger.refinedParentCount + ledger.activeChildCount
+  ) {
+    throw new Error(`Finger fluid adaptive density pair accounting mismatch: ${JSON.stringify(ledger)}`);
+  }
+  const representedVolumeTolerance = Math.max(0.001, expectedBaseParticleCount * 0.000001);
+  if (
+    !Number.isFinite(ledger.representedVolume)
+    || Math.abs(ledger.representedVolume - expectedBaseParticleCount) > representedVolumeTolerance
+    || ledger.accountingValid !== true
+  ) {
+    throw new Error(`Finger fluid adaptive density represented-volume accounting invalid: ${JSON.stringify(ledger)}`);
+  }
+  if (
+    requireActiveRefinement
+    && (ledger.splitCount <= 0 || ledger.refinedParentCount <= 0 || ledger.activeChildCount <= 0)
+  ) {
+    throw new Error(`Finger fluid adaptive transition traffic missing: ${JSON.stringify(ledger)}`);
+  }
+  return ledger;
+}
+
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze([
@@ -910,10 +981,15 @@ export function measureFingerFluidLaminarInletDiagnostics(
   particleData,
   particleCount,
   descriptors = createFingerFluidLaminarInletDescriptors(),
+  { sourceParticleCount = particleCount } = {},
 ) {
-  const count = Math.max(0, Math.min(
+  const simulationCapacity = Math.max(0, Math.min(
     Math.floor(finite(particleCount, 0)),
     Math.floor((particleData?.length || 0) / PARTICLE_FLOATS),
+  ));
+  const count = Math.max(0, Math.min(
+    Math.floor(finite(sourceParticleCount, 0)),
+    simulationCapacity,
   ));
   if (descriptors.length !== KAMINOS_FINGER_FLUID_INLET_PROFILES.length) {
     throw new RangeError(`Finger fluid laminar diagnostics require exactly three inlet descriptors: ${descriptors.length}`);
@@ -1036,6 +1112,8 @@ export function measureFingerFluidLaminarInletDiagnostics(
     schema: 'kaminos.finger-fluid.laminar-inlet-diagnostics.v0',
     contract: KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT,
     particleCount: count,
+    simulationCapacity,
+    reservedParticleCount: simulationCapacity - count,
     accountedParticleCount: inlets.reduce((sum, inlet) => sum + inlet.taggedParticleCount, 0),
     inlets,
   };
@@ -2721,8 +2799,13 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
     linkDiagnostics = measure_sheet_link_diagnostics(index, position);
   }
   let kinematics = vec4<f32>(speed, supportContact, densityRatio, surfaceFactor);
+  let classificationStrength = select(
+    params.sheet.x,
+    max(2.0, params.sheet.x),
+    params.refinementControl.y != 0u,
+  );
   neighborTopology[index].sheet = vec4<f32>(0.0);
-  if (params.sheet.x <= 0.0 || params.particleShift.z <= 1.5) {
+  if (classificationStrength <= 0.0 || params.particleShift.z <= 1.5) {
     write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
@@ -2836,7 +2919,7 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sheetNormal = normalize(cross(flowTangent, widthTangent));
   let inletCoreWeight = apply_laminar_inlet_boundary(position, particle.velocity.w, velocity).w;
   let activity = clamp(
-    params.sheet.x
+    classificationStrength
       * (1.0 - smoothstep(0.04, 0.20, supportContact))
       * smoothstep(0.10, 0.32, densityRatio)
       * (1.0 - smoothstep(0.90, 1.05, densityRatio))
@@ -6684,7 +6767,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(116, safeCapillaryStrength, true);
     view.setFloat32(120, safeThinSheetVorticityAttenuation, true);
     view.setFloat32(124, safeFreeFlightViscosityBoost, true);
-    view.setFloat32(128, safeAdaptiveDensity ? Math.max(2, safeUnsupportedSheetStrength) : safeUnsupportedSheetStrength, true);
+    view.setFloat32(128, safeUnsupportedSheetStrength, true);
     view.setFloat32(132, 0.62, true);
     view.setFloat32(136, 0.66, true);
     view.setFloat32(140, 0.78, true);
@@ -7271,7 +7354,9 @@ export async function createWebGPUFingerFluidSolver({
         fluidTruthSnapshot,
         playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, restStateValues, topologyValues, safeParticleCount),
         laminarInletDiagnostics: safeTruthScene === 'laminar_inlets'
-          ? measureFingerFluidLaminarInletDiagnostics(values, safeParticleCount)
+          ? measureFingerFluidLaminarInletDiagnostics(values, safeParticleCount, undefined, {
+            sourceParticleCount: safeBaseParticleCount,
+          })
           : null,
         waterfallContinuityDiagnostics,
         sourceRecirculationCount: interfaceCounters[2],

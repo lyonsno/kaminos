@@ -10,6 +10,7 @@ import {
   evaluateFingerFluidWaterfallContinuityAcceptance,
   measureFingerFluidWaterfallImageContinuity,
   resolveFingerFluidParticleCount,
+  validateFingerFluidAdaptiveDensityLedger,
 } from './finger-fluid-webgpu-core.js';
 
 const args = new Map();
@@ -1276,6 +1277,11 @@ async function main() {
       if (adaptiveLedger?.accountingValid !== true) {
         throw new Error(`adaptive accounting invalid: ${JSON.stringify(adaptiveLedger)}`);
       }
+      validateFingerFluidAdaptiveDensityLedger(adaptiveLedger, {
+        baseParticleCount: requestedParticleCount,
+        simulationCapacity: effectiveParticleCount,
+        requireActiveRefinement: effectiveTruthScene === 'waterfall_resolution_oracle' && targetStep >= 480,
+      });
     } else if (requestedParticleCount !== effectiveParticleCount || effectiveParticleCount !== lastDebugState.runtime?.particleCount) {
       throw new Error(`particle-count disagreement rejected: ${JSON.stringify({ requestedParticleCount, effectiveParticleCount, runtimeParticleCount: lastDebugState.runtime?.particleCount })}`);
     }
@@ -1451,6 +1457,10 @@ async function main() {
       const laminarInlets = lastDebugState.runtime?.laminarInlets;
       const inletDiagnostics = lastDebugState.runtime?.laminarInletDiagnostics;
       const waterfallDiagnostics = lastDebugState.runtime?.waterfallContinuityDiagnostics;
+      const sourceParticleCount = requestedAdaptiveDensity
+        ? lastDebugState.runtime?.baseParticleCount
+        : lastDebugState.runtime?.particleCount;
+      const sourceReserveCount = lastDebugState.runtime?.particleCount - sourceParticleCount;
       if (lastDebugState.runtime?.waterfallContinuityContract !== 'wgsl-support-aware-symmetric-capillary-sheet-v0'
         || waterfallDiagnostics?.schema !== 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0'
         || waterfallDiagnostics.contract !== 'wgsl-support-aware-symmetric-capillary-sheet-v0'
@@ -1464,15 +1474,17 @@ async function main() {
       }
       if (inletDiagnostics?.schema !== 'kaminos.finger-fluid.laminar-inlet-diagnostics.v0'
         || inletDiagnostics.contract !== 'wgsl-descriptor-laminar-inlet-recycling-v0'
-        || inletDiagnostics.particleCount !== lastDebugState.runtime.particleCount
-        || inletDiagnostics.accountedParticleCount !== lastDebugState.runtime.particleCount
+        || inletDiagnostics.particleCount !== sourceParticleCount
+        || inletDiagnostics.simulationCapacity !== lastDebugState.runtime.particleCount
+        || inletDiagnostics.reservedParticleCount !== sourceReserveCount
+        || inletDiagnostics.accountedParticleCount !== sourceParticleCount
         || inletDiagnostics.inlets?.length !== 3) {
         throw new Error(`laminar inlet diagnostics missing or partial: ${JSON.stringify(inletDiagnostics)}`);
       }
       const sourcePopulation = laminarInlets?.sourcePopulation;
       const malformedSourcePopulation = laminarInlets?.sourcePopulationContract !== 'wgsl-distinct-flux-cadenced-inlet-population-v0'
         || sourcePopulation?.contract !== 'wgsl-distinct-flux-cadenced-inlet-population-v0'
-        || sourcePopulation?.particleCount !== lastDebugState.runtime.particleCount
+        || sourcePopulation?.particleCount !== sourceParticleCount
         || sourcePopulation?.sources?.length !== 3
         || sourcePopulation.sources.some(source => (
           source.initialActiveCount <= 0
