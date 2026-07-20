@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -419,6 +419,18 @@ try {
     assert.equal(promotionReceipt?.promotion?.handle, promotionHandle, 'cockpit export substituted the stable handle');
     assert.ok(promotionReceipt?.promotion?.packagePath, 'cockpit export omitted the caller-addressed package path');
     assert.ok(promotionReceipt?.promotion?.channelPath, 'cockpit export omitted the current channel path');
+    const promotedPackage = JSON.parse(readFileSync(promotionReceipt.promotion.packagePath, 'utf8'));
+    assert.equal(promotedPackage.settingsPreset.presetId, commandResult.effective.presetId, 'cockpit export package substituted the loaded preset');
+    assert.equal(promotedPackage.effectiveState.source.settingsPresetId, commandResult.effective.presetId, 'cockpit export omitted the effective source preset');
+    assert.equal(promotedPackage.effectiveState.initialization.settingsPresetId, commandResult.effective.presetId, 'cockpit export omitted the initialization preset');
+    assert.equal(promotedPackage.effectiveState.renderer.fallbackReason, null, 'cockpit export inherited a stale renderer fallback');
+    assert.equal(promotedPackage.effectiveState.composition.fallbackReason, null, 'cockpit export reported a composition fallback');
+    lastTrustworthyEvidence.promotedPackage = {
+      path: promotionReceipt.promotion.packagePath,
+      revision: promotedPackage.revision,
+      sourceCommit: promotedPackage.sourceCommit,
+      presetId: promotedPackage.settingsPreset.presetId,
+    };
     lastTrustworthyEvidence.promotionReceipt = promotionReceipt;
   }
   const nonVolumeTabs = await evaluate(initialSocket, operatorContext(`[
@@ -643,7 +655,7 @@ async function connect(target) {
 }
 
 async function evaluate(socket, expression) {
-  const result = await socket.call('Runtime.evaluate', { expression, returnByValue: true });
+  const result = await socket.call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'runtime evaluation failed');
   return result.result.value;
 }

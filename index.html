@@ -12294,35 +12294,50 @@ function buildVolumeBasinPromotionEffectiveState() {
   const rendererState = currentVolumeSettingsPresetRendererState();
   const settingsPreset = buildVolumeSettingsPreset();
   const route = new URL(settingsPreset.route, window.location.href);
+  const wrapperRunning = rendererState?.status === 'running';
+  const settingsPresetId = activeVolumeSettingsPresetReceipt?.presetId
+    || rendererState?.sourceSettingsPresetId
+    || debug.sourceSettingsPresetId
+    || null;
+  const settingsPresetAuthority = activeVolumeSettingsPresetReceipt?.sourcePresetAuthority
+    || rendererState?.sourceSettingsPresetAuthority
+    || debug.sourceSettingsPresetAuthority
+    || 'live-cockpit-effective-state-v0';
+  const rendererFallbackReason = wrapperRunning
+    ? (rendererState.fallbackReason
+      || rendererState.compositionFallbackReason
+      || rendererState.boundarySplatFallbackReason
+      || null)
+    : (debug.error || debug.selectiveHeadLiveFallbackReason || null);
   return {
     schema: 'kaminos.volume.effective-basin-state.v0',
     capturedAt: new Date().toISOString(),
     simulator: {
-      identity: debug.volumeSceneAuthority?.effective || debug.volumeScene || 'unknown',
-      grid: debug.simGrid || null,
-      simStepCount: debug.simStepCount ?? debug.frameCount ?? null,
-      frameCount: debug.frameCount ?? null,
-      routeIdentity: debug.routeIdentity || 'native-3d-compute-fluid-raymarch-v0',
+      identity: debug.volumeSceneAuthority?.effective || debug.volumeScene || rendererState?.routeIdentity || 'unknown',
+      grid: rendererState?.simGrid || debug.simGrid || null,
+      simStepCount: rendererState?.simStepCount ?? debug.simStepCount ?? debug.frameCount ?? null,
+      frameCount: rendererState?.frameCount ?? debug.frameCount ?? null,
+      routeIdentity: rendererState?.routeIdentity || debug.routeIdentity || 'native-3d-compute-fluid-raymarch-v0',
     },
     renderer: {
-      identity: debug.routeIdentity || rendererState?.effectiveComposition || 'native-3d-compute-fluid-raymarch-v0',
-      backend: debug.backend || 'unknown',
-      active: debug.active === true,
-      fallbackReason: debug.error || debug.selectiveHeadLiveFallbackReason || null,
+      identity: rendererState?.routeIdentity || debug.routeIdentity || rendererState?.effectiveComposition || 'native-3d-compute-fluid-raymarch-v0',
+      backend: rendererState?.backend || debug.backend || 'unknown',
+      active: wrapperRunning || debug.active === true,
+      fallbackReason: rendererFallbackReason,
     },
     presentation: {
-      volumePresentation: debug.volumePresentationReceipt?.effectiveMode || debug.volumePresentationModeEffective || 'beauty',
-      raymarchSmoke: debug.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationModeEffective || 'on',
-      appearanceDecomposition: debug.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionModeEffective || 'off',
+      volumePresentation: rendererState?.volumePresentationReceipt?.effectiveMode || debug.volumePresentationReceipt?.effectiveMode || debug.volumePresentationModeEffective || 'beauty',
+      raymarchSmoke: rendererState?.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationModeEffective || 'on',
+      appearanceDecomposition: rendererState?.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionModeEffective || 'off',
     },
     source: {
-      requestedSource: debug.fullSupportSourceRequested || debug.requestedSource || null,
-      effectiveSource: debug.fullSupportSourceEffective || debug.effectiveSource || null,
-      settingsPresetId: activeVolumeSettingsPresetReceipt?.presetId || null,
+      requestedSource: rendererState?.sourceSettingsPresetRequestedId || debug.fullSupportSourceRequested || debug.requestedSource || null,
+      effectiveSource: rendererState?.sourceSettingsPresetId || debug.fullSupportSourceEffective || debug.effectiveSource || null,
+      settingsPresetId,
     },
     initialization: {
-      authority: activeVolumeSettingsPresetReceipt?.sourcePresetAuthority || 'live-cockpit-effective-state-v0',
-      settingsPresetId: activeVolumeSettingsPresetReceipt?.presetId || null,
+      authority: settingsPresetAuthority,
+      settingsPresetId,
       routeActivation: route.searchParams.get('kaminos_volume_smoke') || null,
     },
     route: {
@@ -12333,7 +12348,7 @@ function buildVolumeBasinPromotionEffectiveState() {
     },
     backend: {
       requested: 'WebGPU',
-      effective: debug.backend || 'unknown',
+      effective: rendererState?.backend || debug.backend || 'unknown',
     },
     composition: {
       requested: rendererState?.requestedComposition || debug.selectiveHeadLiveCompositionRequested || 'ordinary-live-prototype',
