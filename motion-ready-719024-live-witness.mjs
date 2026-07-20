@@ -26,6 +26,8 @@ function boundedNumber(value, fallback, minimum, maximum, name) {
 const contactCoupling = boundedNumber(args.get('--contact-coupling'), 1, 0, 1, '--contact-coupling');
 const contactDeformationMode = args.get('--contact-deformation') || 'carrier';
 if (!['carrier', 'weighted'].includes(contactDeformationMode)) throw new Error('--contact-deformation must be carrier or weighted');
+const cameraMode = args.get('--camera-mode') || 'overview';
+if (!['overview', 'contact-profile'].includes(cameraMode)) throw new Error('--camera-mode must be overview or contact-profile');
 
 const EXPECTED = Object.freeze({
   castId: args.get('--expected-cast-id') || 'motion-ready-719024',
@@ -34,6 +36,7 @@ const EXPECTED = Object.freeze({
   contactAtlasHash: args.get('--expected-contact-atlas-hash') || 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
   contactCarriersHash: args.get('--expected-contact-carriers-hash') || '06d2402a3ae546a65adeff0e6e6f929c701e39f9cff6a494afaa74d7baa6bd3a',
   contactDeformationMode,
+  cameraMode,
   contactCoupling,
   hillSource: args.get('--expected-hill-source') || 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
   routePlanId: 'motion-ready-719024-strict-hill-route',
@@ -42,6 +45,7 @@ const EXPECTED = Object.freeze({
 const requestedUrl = new URL(args.get('--url') || 'http://127.0.0.1:18124/motion-ready-719024-witness.html');
 requestedUrl.searchParams.set('contact_coupling', String(contactCoupling));
 requestedUrl.searchParams.set('contact_deformation', contactDeformationMode);
+requestedUrl.searchParams.set('camera_mode', cameraMode);
 const url = requestedUrl.href;
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-motion-ready-719024-witness-${timestamp}`);

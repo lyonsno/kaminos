@@ -31,11 +31,22 @@ export function requestCdp(ws, method, params = {}) {
   });
 }
 
-export async function closeCdpBrowser(ws, chromeProcess, delay) {
+export async function closeCdpBrowser(ws, chromeProcess, delay, closeTimeoutMs = 500) {
+  let closeTimer = null;
   try {
-    await requestCdp(ws, 'Browser.close');
+    await Promise.race([
+      requestCdp(ws, 'Browser.close'),
+      new Promise((_, rejectTimeout) => {
+        closeTimer = setTimeout(
+          () => rejectTimeout(new Error(`Browser.close did not settle within ${closeTimeoutMs} ms`)),
+          closeTimeoutMs,
+        );
+      }),
+    ]);
   } catch {
     // Browser.close commonly closes the transport before sending its response.
+  } finally {
+    if (closeTimer) clearTimeout(closeTimer);
   }
   try { ws.close(); } catch {}
   await delay(250);

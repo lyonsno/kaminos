@@ -131,6 +131,10 @@ const requestedContactDeformation = routeParameters.get('contact_deformation') |
 if (!['carrier', 'weighted'].includes(requestedContactDeformation)) {
   throw new Error('contact_deformation must be carrier or weighted');
 }
+const requestedCameraMode = routeParameters.get('camera_mode') || 'overview';
+if (!['overview', 'contact-profile'].includes(requestedCameraMode)) {
+  throw new Error('camera_mode must be overview or contact-profile');
+}
 contactCouplingInput.value = String(requestedContactCoupling);
 contactCouplingValue.value = requestedContactCoupling.toFixed(2);
 
@@ -193,6 +197,7 @@ const state = {
   contactAtlas: null,
   contactCarriers: null,
   contactDeformationMode: requestedContactDeformation,
+  cameraMode: requestedCameraMode,
   contactDeformationEvidence: null,
   contactKinematics: null,
   contactSamples: null,
@@ -520,7 +525,15 @@ function updateActor(nowSeconds) {
   );
   updateContactMarkers();
 
-  if (trackInput.checked) {
+  if (state.cameraMode === 'contact-profile') {
+    const profileRight = new THREE.Vector3(...sample.locomotionFrame.right).normalize();
+    const profileUp = new THREE.Vector3(...sample.locomotionFrame.up).normalize();
+    const target = state.creatureRoot.position.clone().addScaledVector(profileUp, 0.2);
+    controls.target.copy(target);
+    camera.position.copy(target)
+      .addScaledVector(profileRight, 1.45)
+      .addScaledVector(profileUp, 0.32);
+  } else if (trackInput.checked) {
     const target = state.creatureRoot.position.clone().add(new THREE.Vector3(0, 0.24, 0));
     const delta = target.clone().sub(controls.target);
     controls.target.lerp(target, 0.12);
@@ -589,6 +602,7 @@ async function initialize() {
     castId: MOTION_READY_719024_CAST_ID,
     castHash: EXPECTED.castHash,
     registrationHash: EXPECTED.registrationHash,
+    atlasHash: EXPECTED.contactAtlasHash,
     vertexCount: receipt.mesh.vertices,
   });
   state.contactCarriers = validateCrawlerContactCarriers(contactCarriersAsset.value, {
@@ -702,6 +716,7 @@ window.kaminosMotionReady719024DebugState = () => ({
     contactAtlasPath: PATHS.contactAtlas,
     contactCarriersPath: PATHS.contactCarriers,
     contactDeformationMode: requestedContactDeformation,
+    cameraMode: requestedCameraMode,
     contactCoupling: requestedContactCoupling,
     hillPacketPath: PATHS.hillPacket,
     hillDataPath: PATHS.hillData,
@@ -718,6 +733,7 @@ window.kaminosMotionReady719024DebugState = () => ({
     contactCarriersSchema: state.contactCarriers?.schema || null,
     contactCarriersAuthority: state.contactCarriers?.authority || null,
     contactDeformationMode: state.contactDeformationMode,
+    cameraMode: state.cameraMode,
     assetEvidence: state.assetEvidence,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     hillSourceRef: state.source?.sourceRef || null,

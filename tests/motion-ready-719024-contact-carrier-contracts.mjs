@@ -6,6 +6,7 @@ import * as creatureCore from '../motion-ready-719024-core.js';
 const root = new URL('../', import.meta.url);
 const CAST_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
 const REGISTRATION_HASH = 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6';
+const ATLAS_HASH = 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78';
 
 for (const exportName of [
   'deriveCrawlerContactCarriers',
@@ -87,7 +88,7 @@ const sourceIdentity = {
 const atlas = creatureCore.validateCrawlerContactAtlas(JSON.parse(await readFile(
   new URL('artifacts/motion-ready-719024/contact-atlas.json', root),
   'utf8',
-)), { ...sourceIdentity, vertexCount: positions.length / 3 });
+)), { ...sourceIdentity, atlasHash: ATLAS_HASH, vertexCount: positions.length / 3 });
 const derived = creatureCore.deriveCrawlerContactCarriers(positions, triangleIndices, atlas, sourceIdentity);
 assert.equal(derived.schema, 'kaminos.creature-contact-carriers.v0');
 assert.equal(derived.authority, 'exact-cast-consumer-derived-topology-v0');
@@ -96,12 +97,13 @@ assert.ok(derived.patches.every(patch => patch.carrierVertexIndices.length >= pa
 assert.ok(derived.patches.every(patch => patch.collarVertexIndices.length === patch.collarWeights.length));
 assert.ok(derived.patches.every(patch => patch.carrierComponentCount > 0));
 
-const persisted = creatureCore.validateCrawlerContactCarriers(JSON.parse(await readFile(
+const persistedSource = JSON.parse(await readFile(
   new URL('artifacts/motion-ready-719024/contact-carriers.json', root),
   'utf8',
-)), {
+));
+const persisted = creatureCore.validateCrawlerContactCarriers(persistedSource, {
   ...sourceIdentity,
-  atlasHash: 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
+  atlasHash: ATLAS_HASH,
   vertexCount: positions.length / 3,
 });
 assert.deepEqual(
@@ -118,6 +120,30 @@ const kinematics = creatureCore.createCrawlerContactKinematics(atlas, Math.PI * 
   coupling: 1,
   scale: 1.14,
 });
+const mismatchedAtlas = structuredClone(atlas);
+mismatchedAtlas.patches[0].vertexIndices = mismatchedAtlas.patches[0].vertexIndices.map(index => index + 1);
+assert.throws(
+  () => creatureCore.applyCrawlerContactCarrierDeformation(
+    mismatchedAtlas,
+    persistedSource,
+    kinematics,
+    new Float32Array(positions),
+  ),
+  /front-left carrier contact vertices do not match the atlas patch/,
+  'carrier deformation must reject a same-cast atlas with different patch topology',
+);
+const mismatchedCarrier = structuredClone(persistedSource);
+mismatchedCarrier.patches[0].vertexIndices = [mismatchedCarrier.patches[0].carrierVertexIndices[0]];
+assert.throws(
+  () => creatureCore.applyCrawlerContactCarrierDeformation(
+    atlas,
+    mismatchedCarrier,
+    kinematics,
+    new Float32Array(positions),
+  ),
+  /front-left carrier contact vertices do not match the atlas patch/,
+  'carrier deformation must reject a self-consistent carrier whose contact topology differs from the atlas',
+);
 const baseline = new Float32Array(positions);
 creatureCore.applyCrawlerContactPatchDeformation(atlas, kinematics, baseline);
 const carrierDeformed = new Float32Array(positions);

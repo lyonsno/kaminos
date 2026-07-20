@@ -1181,6 +1181,9 @@ export function validateCrawlerContactAtlas(atlas, expected = {}) {
   if (expected.registrationHash && atlas.registrationHash !== expected.registrationHash) {
     throw new Error('contact atlas registration hash mismatch');
   }
+  if (expected.atlasHash && atlas.atlasHash && atlas.atlasHash !== expected.atlasHash) {
+    throw new Error('contact atlas byte hash mismatch');
+  }
   const vertexCount = Math.round(Number(expected.vertexCount ?? atlas.vertexCount));
   if (!Number.isInteger(vertexCount) || vertexCount <= 0 || atlas.vertexCount !== vertexCount) {
     throw new Error('contact atlas vertex count mismatch');
@@ -1248,7 +1251,11 @@ export function validateCrawlerContactAtlas(atlas, expected = {}) {
     Object.freeze(patch);
   }
   Object.freeze(patches);
-  const validated = { ...atlas, patches };
+  const validated = {
+    ...atlas,
+    atlasHash: String(expected.atlasHash || atlas.atlasHash || ''),
+    patches,
+  };
   Object.defineProperty(validated, VALIDATED_CRAWLER_CONTACT_ATLAS, { value: true });
   return Object.freeze(validated);
 }
@@ -1536,10 +1543,12 @@ export function applyCrawlerContactPatchDeformation(atlasInput, kinematics, outp
 
 export function applyCrawlerContactCarrierDeformation(atlasInput, carriersInput, kinematics, outputPositions) {
   const atlas = validateCrawlerContactAtlas(atlasInput);
+  if (!atlas.atlasHash) throw new Error('contact atlas byte hash is required for carrier deformation');
   const carriers = validateCrawlerContactCarriers(carriersInput, {
     castId: atlas.castId,
     castHash: atlas.castHash,
     registrationHash: atlas.registrationHash,
+    atlasHash: atlas.atlasHash,
     vertexCount: atlas.vertexCount,
   });
   if (kinematics?.schema !== 'kaminos.crawler-contact-kinematics.v0') {
@@ -1550,7 +1559,15 @@ export function applyCrawlerContactCarrierDeformation(atlasInput, carriersInput,
   }
   let carrierVertexCount = 0;
   let collarVertexCount = 0;
-  for (const patch of carriers.patches) {
+  for (let patchIndex = 0; patchIndex < carriers.patches.length; patchIndex++) {
+    const patch = carriers.patches[patchIndex];
+    const atlasPatch = atlas.patches[patchIndex];
+    if (
+      patch.vertexIndices.length !== atlasPatch.vertexIndices.length
+      || patch.vertexIndices.some((vertex, index) => vertex !== atlasPatch.vertexIndices[index])
+    ) {
+      throw new Error(`${patch.id} carrier contact vertices do not match the atlas patch`);
+    }
     const motion = kinematics.patches.find(candidate => candidate.id === patch.id);
     if (!motion) throw new Error(`contact kinematics missing patch ${patch.id}`);
     const offset = requireVector3(motion.localOffset, `${patch.id} contact local offset`);

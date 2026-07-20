@@ -43,6 +43,9 @@ assert.match(browserWitness, /applyCrawlerContactCarrierDeformation\(/, 'browser
 assert.match(browserWitness, /sampleCrawlerContactPatches\(/, 'browser witness samples exact-cast patches against terrain');
 assert.match(browserWitness, /contactLocomotion/, 'browser debug state reports contact locomotion evidence');
 assert.match(witness, /--contact-coupling/, 'live witness can request and record an explicit contact coupling');
+assert.match(witness, /--camera-mode/, 'live witness can request a close profile camera without manual archaeology');
+assert.match(browserWitness, /camera_mode/, 'browser witness records the requested camera framing mode');
+assert.match(browserWitness, /contact-profile/, 'browser witness exposes deterministic contact-profile tracking');
 assert.match(witness, /meanStanceSlip/, 'live filmstrip records stance-slip evidence');
 assert.match(witness, /maximumSupportExtension/, 'live filmstrip records terrain-conditioned support reach');
 assert.match(witness, /never planted in the live Hill route/, 'live witness rejects a synthetic-only four-patch gait');
@@ -56,6 +59,7 @@ const expected = {
   contactAtlasHash: 'contact-atlas-hash',
   contactCarriersHash: 'contact-carriers-hash',
   contactDeformationMode: 'carrier',
+  cameraMode: 'overview',
   contactCoupling: 1,
   hillSource: 'hill-source',
   routePlanId: 'strict-route',
@@ -74,6 +78,7 @@ const validDebug = {
     contactCarriersSchema: 'kaminos.creature-contact-carriers.v0',
     contactCarriersAuthority: 'exact-cast-consumer-derived-topology-v0',
     contactDeformationMode: expected.contactDeformationMode,
+    cameraMode: expected.cameraMode,
     deformationMode: 'axial-parallel-transport-wave-v1',
     hillSourceRef: expected.hillSource,
     hillAuthority: 'live_simulation',

@@ -16,6 +16,7 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
     contactCarriersSchema: effective.contactCarriersSchema,
     contactCarriersAuthority: effective.contactCarriersAuthority,
     contactDeformationMode: effective.contactDeformationMode,
+    cameraMode: effective.cameraMode,
     deformationMode: effective.deformationMode,
     hillSource: effective.hillSourceRef,
     hillAuthority: effective.hillAuthority,
@@ -44,6 +45,7 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
   assert.equal(effectiveIdentity.contactCarriersSchema, 'kaminos.creature-contact-carriers.v0', 'effective contact carriers schema is stale or missing');
   assert.equal(effectiveIdentity.contactCarriersAuthority, 'exact-cast-consumer-derived-topology-v0', 'effective contact carriers lack exact-cast topology authority');
   assert.equal(effectiveIdentity.contactDeformationMode, expected.contactDeformationMode, 'effective contact deformation mode does not match the requested A/B lane');
+  assert.equal(effectiveIdentity.cameraMode, expected.cameraMode, 'effective camera mode does not match the requested visual witness framing');
   assert.equal(debug?.motion?.contactCoupling, expected.contactCoupling, 'effective contact coupling does not match the requested A/B lane');
   assert.equal(effectiveIdentity.hillSource, expected.hillSource, 'effective Hill source does not match requested Hill source');
   assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');

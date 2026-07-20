@@ -115,7 +115,7 @@ try {
     '--witness-timeout-ms', '700',
   ]);
   assert.equal(blankReport.phase, 'loading-witness');
-  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1&contact_deformation=carrier`);
+  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1&contact_deformation=carrier&camera_mode=overview`);
   assert.equal(blankReport.lastTrustworthyEvidence?.status, 'blank fixture');
 
   const tamperedReport = await runFailure('tampered-registration', [
