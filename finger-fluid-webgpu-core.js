@@ -26,6 +26,7 @@ export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger
 export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT = 'isolated-slot-waterfall-uniform-resolution-oracle-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA = 'kaminos.finger-fluid.waterfall-resolution-oracle-evidence.v0';
+export const KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT = 'fixed-step-source-cutoff-drainage-v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webgpu-device-limit-derived-particle-allocation-preflight-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
@@ -233,6 +234,7 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     freeFlightViscosityBoost: Number(values.freeFlightViscosityBoost),
     thinSheetVorticityAttenuation: Number(values.thinSheetVorticityAttenuation),
     unsupportedSheetStrength: Number(values.unsupportedSheetStrength),
+    inletCutoffStep: resolveFingerFluidInletCutoffStep(values.inletCutoffStep ?? null),
     camera: values.camera ? JSON.parse(JSON.stringify(values.camera)) : null,
   };
   const numericKeys = [
@@ -267,6 +269,7 @@ export function evaluateFingerFluidWaterfallOraclePair({
     'contract', 'truthScene', 'sourceId', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
     'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'unsupportedSheetStrength',
+    'inletCutoffStep',
   ];
   for (const key of exactCommonKeys) {
     if (JSON.stringify(baselineIdentity[key]) !== JSON.stringify(highIdentity[key])) {
@@ -322,6 +325,7 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
     'physicalSourceFlux', 'expectedParticleReleaseRate', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',
     'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'camera',
+    'inletCutoffStep',
   ];
   for (const key of exactCommonKeys) {
     if (JSON.stringify(controlIdentity[key]) !== JSON.stringify(treatmentIdentity[key])) {
@@ -344,6 +348,83 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
     treatmentIdentity,
     controlArtifact: requireFingerFluidOracleArtifact(controlArtifact, 'unsupported-sheet control'),
     treatmentArtifact: requireFingerFluidOracleArtifact(treatmentArtifact, 'unsupported-sheet treatment'),
+  };
+}
+
+export function evaluateFingerFluidPulseDrainageSeries({
+  slices,
+  expectedCaptureSteps,
+} = {}) {
+  if (!Array.isArray(expectedCaptureSteps)
+    || expectedCaptureSteps.length < 2
+    || expectedCaptureSteps.some(step => !Number.isSafeInteger(step) || step < 1)) {
+    throw new TypeError('Pulse drainage requires an ordered list of positive capture steps');
+  }
+  if (!Array.isArray(slices) || slices.length !== expectedCaptureSteps.length) {
+    throw new Error('Pulse drainage series is missing one or more exact time slices');
+  }
+  let sourceActivationCount = null;
+  let initialActiveParticleCount = null;
+  let previousActiveParticleCount = Infinity;
+  let commonIdentity = null;
+  const acceptedSlices = slices.map((slice, index) => {
+    const identity = slice?.identity;
+    const diagnostics = slice?.diagnostics;
+    const expectedStep = expectedCaptureSteps[index];
+    if (identity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+      || identity.truthScene !== 'waterfall_resolution_oracle'
+      || identity.requestedPreset !== 'high'
+      || identity.effectivePreset !== 'high'
+      || identity.unsupportedSheetStrength !== 2
+      || identity.inletCutoffStep !== expectedCaptureSteps[0]
+      || identity.capturedStep !== expectedStep) {
+      throw new Error(`Pulse drainage identity mismatch at capture step ${expectedStep}`);
+    }
+    const comparableIdentity = { ...identity, capturedStep: null };
+    if (commonIdentity === null) commonIdentity = comparableIdentity;
+    else if (JSON.stringify(comparableIdentity) !== JSON.stringify(commonIdentity)) {
+      throw new Error(`Pulse drainage common identity mismatch at capture step ${expectedStep}`);
+    }
+    if (diagnostics?.stepCount !== expectedStep
+      || diagnostics.inletCutoffStep !== expectedCaptureSteps[0]
+      || diagnostics.inletCutoffReached !== true
+      || !Number.isSafeInteger(diagnostics.sourceRecirculationCount)
+      || !Number.isSafeInteger(diagnostics.activeParticleCount)
+      || !Number.isSafeInteger(diagnostics.dormantParticleCount)) {
+      throw new Error(`Pulse drainage diagnostics missing or stale at capture step ${expectedStep}`);
+    }
+    if (sourceActivationCount === null) sourceActivationCount = diagnostics.sourceRecirculationCount;
+    else if (diagnostics.sourceRecirculationCount !== sourceActivationCount) {
+      throw new Error(`Source activation continued after cutoff at capture step ${expectedStep}`);
+    }
+    if (diagnostics.activeParticleCount > previousActiveParticleCount) {
+      throw new Error(`Active particle count increased after cutoff at capture step ${expectedStep}`);
+    }
+    if (initialActiveParticleCount === null) initialActiveParticleCount = diagnostics.activeParticleCount;
+    previousActiveParticleCount = diagnostics.activeParticleCount;
+    return {
+      identity,
+      diagnostics: { ...diagnostics },
+      artifact: requireFingerFluidOracleArtifact(slice.artifact, `pulse drainage step ${expectedStep}`),
+    };
+  });
+  if (previousActiveParticleCount >= initialActiveParticleCount) {
+    throw new Error('No particle drainage observed after cutoff');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.pulse-drainage-series.v0',
+    contract: KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT,
+    mechanicalChecksOk: true,
+    sourceActivationCountStableAfterCutoff: true,
+    sourceActivationCount,
+    particleDrainageObserved: true,
+    drainedParticleCount: initialActiveParticleCount - previousActiveParticleCount,
+    drainedParticleRatio: (initialActiveParticleCount - previousActiveParticleCount) / initialActiveParticleCount,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualDrainageAccepted: null,
+    expectedCaptureSteps: [...expectedCaptureSteps],
+    slices: acceptedSlices,
   };
 }
 
@@ -1292,6 +1373,7 @@ struct Params {
   chemistry: vec4<f32>,
   sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
+  sourceControl: vec4<u32>,
 }
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
@@ -1718,6 +1800,12 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   let waterfallOracleScene = params.particleShift.z > 1.5;
   _ = waterfallOracleScene;
   if (laminarInletScene && particle.velocity.w < 0.0) {
+    if (params.sourceControl.y != 0u && params.frameIndex >= params.sourceControl.x) {
+      particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
+      particle.delta = vec4<f32>(0.0);
+      particles[index] = particle;
+      return;
+    }
     let inletSample = laminar_inlet_sample(index);
     let releaseFrame = inletSample.releaseSchedule.x;
     let cycleFrames = inletSample.releaseSchedule.y;
@@ -3816,6 +3904,15 @@ export function resolveFingerFluidUnsupportedSheetStrength(
   return strength;
 }
 
+export function resolveFingerFluidInletCutoffStep(value = null) {
+  if (value === null || value === undefined || value === '') return null;
+  const step = Number(value);
+  if (!Number.isSafeInteger(step) || step < 1) {
+    throw new RangeError(`Finger fluid inlet cutoff step must be a positive safe integer: ${value}`);
+  }
+  return step;
+}
+
 export function evaluateFingerFluidUnsupportedSheetNeighborhood({
   velocity = [0, 0, 0],
   densityRatio = 1,
@@ -5059,6 +5156,7 @@ export async function createWebGPUFingerFluidSolver({
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
   unsupportedSheetStrength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  inletCutoffStep = null,
   waterfallOraclePreset = 'baseline',
   transparentBackground = false,
 } = {}) {
@@ -5110,6 +5208,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
   const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
   const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
+  const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
@@ -5138,7 +5237,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 160,
+    size: 176,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -5647,7 +5746,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(160);
+    const buffer = new ArrayBuffer(176);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -5683,6 +5782,10 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(148, liquidFireContactEpoch, true);
     view.setUint32(152, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
     view.setUint32(156, 1, true);
+    view.setUint32(160, safeInletCutoffStep ?? 0xffffffff, true);
+    view.setUint32(164, safeInletCutoffStep === null ? 0 : 1, true);
+    view.setUint32(168, 0, true);
+    view.setUint32(172, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -6213,6 +6316,8 @@ export async function createWebGPUFingerFluidSolver({
           : null,
         waterfallContinuityDiagnostics,
         sourceRecirculationCount: interfaceCounters[2],
+        inletCutoffStep: safeInletCutoffStep,
+        inletCutoffReached: safeInletCutoffStep !== null && diagnosticsStepCount >= safeInletCutoffStep,
         interfaceCarrier: {
           schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
           sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
@@ -6342,6 +6447,9 @@ export async function createWebGPUFingerFluidSolver({
       thinSheetVorticityAttenuation: safeThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: safeFreeFlightViscosityBoost,
       unsupportedSheetStrength: safeUnsupportedSheetStrength,
+      pulseDrainageContract: KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT,
+      inletCutoffStep: safeInletCutoffStep,
+      inletCutoffReached: safeInletCutoffStep !== null && frameIndex >= safeInletCutoffStep,
       sheetSupportPassCount,
       energyLedgerAttribution: safeUnsupportedSheetStrength > 0
         ? 'cohesion_stage_includes_unsupported_sheet_support_then_surface_cohesion'

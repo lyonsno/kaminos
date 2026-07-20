@@ -8,6 +8,7 @@ import {
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
   createFingerFluidWaterfallOracleConfig,
   createFingerFluidWaterfallOracleEvidenceIdentity,
+  evaluateFingerFluidPulseDrainageSeries,
   evaluateFingerFluidUnsupportedSheetOraclePair,
   evaluateFingerFluidWaterfallOraclePair,
 } from './finger-fluid-webgpu-core.js';
@@ -33,18 +34,34 @@ const supportFriction = Number(args.get('--support-friction') || 1.6);
 const freeFlightViscosityBoost = Number(args.get('--free-flight-viscosity-boost') || 0.17);
 const thinSheetVorticityAttenuation = Number(args.get('--thin-sheet-vorticity-attenuation') || 0.88);
 const unsupportedSheetStrength = Number(args.get('--unsupported-sheet-strength') || 0);
+const inletCutoffStep = Number(args.get('--cutoff-step') || 480);
+const captureSteps = String(args.get('--capture-steps') || '480,510,540,600,720,960')
+  .split(',')
+  .map(value => Number(value.trim()));
 const comparisonAxis = args.get('--comparison-axis') || 'resolution';
-if (!['resolution', 'unsupported_sheet'].includes(comparisonAxis)) {
+if (!['resolution', 'unsupported_sheet', 'pulse_drainage'].includes(comparisonAxis)) {
   throw new RangeError(`Unsupported waterfall oracle comparison axis: ${comparisonAxis}`);
 }
 if (comparisonAxis === 'unsupported_sheet' && !(unsupportedSheetStrength > 0)) {
   throw new RangeError('Unsupported-sheet comparison requires --unsupported-sheet-strength greater than zero');
+}
+if (comparisonAxis === 'pulse_drainage' && (
+  !Number.isSafeInteger(inletCutoffStep)
+  || inletCutoffStep < 1
+  || captureSteps.length < 2
+  || captureSteps[0] !== inletCutoffStep
+  || captureSteps.some((step, index) => !Number.isSafeInteger(step) || step < 1 || (index > 0 && step <= captureSteps[index - 1]))
+  || unsupportedSheetStrength !== 2
+)) {
+  throw new RangeError('Pulse drainage requires --unsupported-sheet-strength 2 and increasing --capture-steps beginning at --cutoff-step');
 }
 
 let phase = 'initializing';
 let baselineRun = null;
 let highRun = null;
 let pair = null;
+let pulseSeries = null;
+let timeSliceRuns = [];
 let lastTrustworthyEvidence = null;
 
 function delay(ms) {
@@ -54,8 +71,10 @@ function delay(ms) {
 function writeReport(extra = {}) {
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, JSON.stringify({
-    schema: 'kaminos.finger-fluid.waterfall-resolution-oracle-witness.v0',
-    status: pair?.status || 'failed_before_pair_capture',
+    schema: comparisonAxis === 'pulse_drainage'
+      ? 'kaminos.finger-fluid.pulse-drainage-witness.v0'
+      : 'kaminos.finger-fluid.waterfall-resolution-oracle-witness.v0',
+    status: pulseSeries?.status || pair?.status || 'failed_before_primary_capture',
     failurePhase: phase,
     requestedBaseUrl: baseUrl.href,
     targetStep,
@@ -65,17 +84,27 @@ function writeReport(extra = {}) {
     opticalDebugMode,
     densityIterations,
     unsupportedSheetStrength,
+    inletCutoffStep: comparisonAxis === 'pulse_drainage' ? inletCutoffStep : null,
+    captureSteps: comparisonAxis === 'pulse_drainage' ? captureSteps : null,
     comparisonAxis,
     baselineRun,
     highRun,
     pair,
+    pulseSeries,
+    sourceRecirculationCountStableAfterCutoff: pulseSeries?.sourceActivationCountStableAfterCutoff ?? null,
+    timeSliceRuns,
     lastTrustworthyEvidence,
     visualContinuityAccepted: null,
     ...extra,
   }, null, 2));
 }
 
-function buildUrl(preset, sheetStrength = unsupportedSheetStrength) {
+function buildUrl(
+  preset,
+  sheetStrength = unsupportedSheetStrength,
+  captureStep = targetStep,
+  cutoffStep = null,
+) {
   const config = createFingerFluidWaterfallOracleConfig(preset);
   const url = new URL(baseUrl.href);
   url.searchParams.set('kaminos_finger_fluid_bench', '1');
@@ -92,7 +121,8 @@ function buildUrl(preset, sheetStrength = unsupportedSheetStrength) {
   url.searchParams.set('finger_fluid_thin_sheet_vorticity_attenuation', String(thinSheetVorticityAttenuation));
   url.searchParams.set('finger_fluid_unsupported_sheet_strength', String(sheetStrength));
   url.searchParams.set('finger_fluid_oracle_fixed_camera', '1');
-  url.searchParams.set('finger_fluid_witness_target_step', String(targetStep));
+  url.searchParams.set('finger_fluid_witness_target_step', String(captureStep));
+  if (cutoffStep !== null) url.searchParams.set('finger_fluid_inlet_cutoff_step', String(cutoffStep));
   return url;
 }
 
@@ -211,7 +241,15 @@ function oracleDebugExpression() {
   })()`;
 }
 
-function validateEffectiveIdentity({ preset, config, pageState, capturedStep, unsupportedSheetStrength }) {
+function validateEffectiveIdentity({
+  preset,
+  config,
+  pageState,
+  capturedStep,
+  targetCaptureStep,
+  unsupportedSheetStrength,
+  cutoffStep,
+}) {
   const debug = pageState?.debug;
   const route = debug?.config;
   const runtime = debug?.runtime;
@@ -247,8 +285,11 @@ function validateEffectiveIdentity({ preset, config, pageState, capturedStep, un
     || route?.requestedUnsupportedSheetStrength !== unsupportedSheetStrength
     || route?.effectiveUnsupportedSheetStrength !== unsupportedSheetStrength
     || runtime.unsupportedSheetStrength !== unsupportedSheetStrength
-    || capturedStep < targetStep
-    || capturedStep > targetStep + 8
+    || route?.requestedInletCutoffStep !== cutoffStep
+    || route?.effectiveInletCutoffStep !== cutoffStep
+    || runtime.inletCutoffStep !== cutoffStep
+    || capturedStep < targetCaptureStep
+    || capturedStep > targetCaptureStep + 8
     || JSON.stringify(cameraIdentity) !== JSON.stringify(config.camera)) {
     throw new Error(`${preset} requested/effective oracle identity mismatch: ${JSON.stringify({
       debugSchema: debug?.schema,
@@ -270,7 +311,7 @@ function validateEffectiveIdentity({ preset, config, pageState, capturedStep, un
     })}`);
   }
   return {
-    requestedUrl: buildUrl(preset, unsupportedSheetStrength).href,
+    requestedUrl: buildUrl(preset, unsupportedSheetStrength, targetCaptureStep, cutoffStep).href,
     effectiveUrl: pageState.href,
     truthScene: runtime.truthScene,
     requestedPreset: route.requestedWaterfallOraclePreset,
@@ -288,14 +329,20 @@ function validateEffectiveIdentity({ preset, config, pageState, capturedStep, un
     capturedStep,
     camera: cameraIdentity,
     unsupportedSheetStrength,
+    inletCutoffStep: runtime.inletCutoffStep,
   };
 }
 
-async function runPreset(preset, port, { label = preset, sheetStrength = unsupportedSheetStrength } = {}) {
+async function runPreset(preset, port, {
+  label = preset,
+  sheetStrength = unsupportedSheetStrength,
+  captureStep = targetStep,
+  cutoffStep = null,
+} = {}) {
   const config = createFingerFluidWaterfallOracleConfig(preset);
   const output = resolve(`${outDir}/${label}.png`);
   const runReportPath = resolve(`${outDir}/${label}.json`);
-  const requestedUrl = buildUrl(preset, sheetStrength);
+  const requestedUrl = buildUrl(preset, sheetStrength, captureStep, cutoffStep);
   const userDataDir = `/tmp/kaminos-finger-fluid-waterfall-oracle-${label}-${port}-${process.pid}`;
   const consoleEvents = [];
   let runPhase = 'launch_chrome';
@@ -329,7 +376,7 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
       requestedUrl: requestedUrl.href,
       effectiveRouteIdentity,
       phase: runPhase,
-      targetStep,
+      targetStep: captureStep,
       capturedStep,
       browserVersion,
       consoleEvents,
@@ -390,7 +437,7 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
         lastProgressStep = stepCount;
         lastProgressAt = Date.now();
       }
-      if (Number.isSafeInteger(stepCount) && stepCount >= targetStep) {
+      if (Number.isSafeInteger(stepCount) && stepCount >= captureStep) {
         const pauseReceipt = await evaluate(ws, `(() => {
           const pause = window.kaminosFingerFluidBenchSetSimulationPausedForWitness;
           if (typeof pause !== 'function') throw new Error('missing exact-step finger fluid pause hook');
@@ -420,6 +467,15 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
       || !Number.isFinite(sheetDiagnostics?.maximumUnsupportedSheetActivity)) {
       throw new Error(`unsupported-sheet diagnostics missing or stale at capture: ${JSON.stringify({ capturedStep, diagnosticsReceipt, sheetDiagnostics })}`);
     }
+    if (cutoffStep !== null && (
+      sheetDiagnostics?.inletCutoffStep !== cutoffStep
+      || sheetDiagnostics?.inletCutoffReached !== true
+      || !Number.isSafeInteger(sheetDiagnostics?.sourceRecirculationCount)
+      || !Number.isSafeInteger(sheetDiagnostics?.activeParticleCount)
+      || !Number.isSafeInteger(sheetDiagnostics?.dormantParticleCount)
+    )) {
+      throw new Error(`pulse drainage diagnostics missing or stale at capture: ${JSON.stringify({ capturedStep, cutoffStep, sheetDiagnostics })}`);
+    }
 
     runPhase = 'validate_effective_route';
     pageState = await evaluate(ws, oracleDebugExpression());
@@ -428,7 +484,9 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
       config,
       pageState,
       capturedStep,
+      targetCaptureStep: captureStep,
       unsupportedSheetStrength: sheetStrength,
+      cutoffStep,
     });
     lastTrustworthyEvidence = { preset, runPhase, effectiveRouteIdentity, pageState };
 
@@ -457,6 +515,7 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
       freeFlightViscosityBoost: runtime.freeFlightViscosityBoost,
       thinSheetVorticityAttenuation: runtime.thinSheetVorticityAttenuation,
       unsupportedSheetStrength: runtime.unsupportedSheetStrength,
+      inletCutoffStep: runtime.inletCutoffStep,
       camera: config.camera,
     });
     runPhase = 'captured';
@@ -470,6 +529,7 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
       output,
       artifact,
       identity,
+      diagnostics: sheetDiagnostics,
       consoleEvents,
     };
     writeRunReport({ ok: true, artifact, identity });
@@ -484,36 +544,62 @@ async function runPreset(preset, port, { label = preset, sheetStrength = unsuppo
 }
 
 try {
-  phase = comparisonAxis === 'resolution' ? 'capturing_baseline' : 'capturing_unsupported_sheet_control';
-  baselineRun = comparisonAxis === 'resolution'
-    ? await runPreset('baseline', debugPort)
-    : await runPreset('high', debugPort, { label: 'control', sheetStrength: 0 });
-  phase = comparisonAxis === 'resolution' ? 'capturing_high' : 'capturing_unsupported_sheet_treatment';
-  highRun = comparisonAxis === 'resolution'
-    ? await runPreset('high', debugPort + 1)
-    : await runPreset('high', debugPort + 1, { label: 'treatment', sheetStrength: unsupportedSheetStrength });
-  phase = 'evaluating_pair_identity';
-  pair = comparisonAxis === 'resolution'
-    ? evaluateFingerFluidWaterfallOraclePair({
-        baselineIdentity: baselineRun.identity,
-        highIdentity: highRun.identity,
-        baselineArtifact: baselineRun.artifact,
-        highArtifact: highRun.artifact,
-      })
-    : evaluateFingerFluidUnsupportedSheetOraclePair({
-        controlIdentity: baselineRun.identity,
-        treatmentIdentity: highRun.identity,
-        controlArtifact: baselineRun.artifact,
-        treatmentArtifact: highRun.artifact,
+  if (comparisonAxis === 'pulse_drainage') {
+    for (let index = 0; index < captureSteps.length; index += 1) {
+      const captureStep = captureSteps[index];
+      phase = `capturing_pulse_step_${captureStep}`;
+      const run = await runPreset('high', debugPort + index, {
+        label: `pulse-step-${captureStep}`,
+        sheetStrength: unsupportedSheetStrength,
+        captureStep,
+        cutoffStep: inletCutoffStep,
       });
+      timeSliceRuns.push(run);
+      lastTrustworthyEvidence = { phase, completedCaptureSteps: timeSliceRuns.map(slice => slice.identity.capturedStep) };
+      writeReport();
+    }
+    phase = 'evaluating_pulse_drainage_series';
+    pulseSeries = evaluateFingerFluidPulseDrainageSeries({
+      slices: timeSliceRuns.map(run => ({
+        identity: run.identity,
+        diagnostics: run.diagnostics,
+        artifact: run.artifact,
+      })),
+      expectedCaptureSteps: captureSteps,
+    });
+  } else {
+    phase = comparisonAxis === 'resolution' ? 'capturing_baseline' : 'capturing_unsupported_sheet_control';
+    baselineRun = comparisonAxis === 'resolution'
+      ? await runPreset('baseline', debugPort)
+      : await runPreset('high', debugPort, { label: 'control', sheetStrength: 0 });
+    phase = comparisonAxis === 'resolution' ? 'capturing_high' : 'capturing_unsupported_sheet_treatment';
+    highRun = comparisonAxis === 'resolution'
+      ? await runPreset('high', debugPort + 1)
+      : await runPreset('high', debugPort + 1, { label: 'treatment', sheetStrength: unsupportedSheetStrength });
+    phase = 'evaluating_pair_identity';
+    pair = comparisonAxis === 'resolution'
+      ? evaluateFingerFluidWaterfallOraclePair({
+          baselineIdentity: baselineRun.identity,
+          highIdentity: highRun.identity,
+          baselineArtifact: baselineRun.artifact,
+          highArtifact: highRun.artifact,
+        })
+      : evaluateFingerFluidUnsupportedSheetOraclePair({
+          controlIdentity: baselineRun.identity,
+          treatmentIdentity: highRun.identity,
+          controlArtifact: baselineRun.artifact,
+          treatmentArtifact: highRun.artifact,
+        });
+  }
   phase = 'captured_pending_operator_disposition';
   writeReport({ mechanicalChecksOk: true });
   console.log(JSON.stringify({
     report: reportPath,
-    status: pair.status,
+    status: pulseSeries?.status || pair?.status,
     comparisonAxis,
-    control: baselineRun.output,
-    treatment: highRun.output,
+    control: baselineRun?.output || null,
+    treatment: highRun?.output || null,
+    timeSlices: timeSliceRuns.map(run => run.output),
   }, null, 2));
 } catch (error) {
   writeReport({ mechanicalChecksOk: false, error: error?.stack || String(error) });

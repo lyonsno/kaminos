@@ -2797,6 +2797,7 @@ import {
   resolveFingerFluidThinSheetVorticityAttenuation,
   resolveFingerFluidFreeFlightViscosityBoost,
   resolveFingerFluidUnsupportedSheetStrength,
+  resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
   resolveFingerFluidWaterfallOraclePreset,
 } from './finger-fluid-webgpu-core.js';
@@ -2975,6 +2976,10 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     && (!Number.isSafeInteger(requestedWitnessTargetStep) || requestedWitnessTargetStep < 1)) {
     throw new RangeError(`Finger Fluid witness target step must be a positive safe integer: ${requestedWitnessTargetStepValue}`);
   }
+  const requestedInletCutoffStepValue = params.get('finger_fluid_inlet_cutoff_step');
+  const requestedInletCutoffStep = requestedInletCutoffStepValue === null
+    ? null
+    : Number(requestedInletCutoffStepValue);
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
     oracleCockpitRequested,
@@ -3011,6 +3016,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedWitnessTargetStep,
     effectiveWitnessTargetStep: requestedWitnessTargetStep,
+    requestedInletCutoffStep,
+    effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
     timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
     fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
   };
@@ -10626,6 +10633,7 @@ async function startFingerFluidBench() {
       thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
       unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
+      inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
       waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });
