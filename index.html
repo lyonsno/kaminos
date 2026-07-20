@@ -2974,6 +2974,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     ?? KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
   const requestedMaxFluidSpeed = Number(params.get('finger_fluid_max_speed')
     ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
+  const requestedAdaptiveDensityValue = params.get('finger_fluid_adaptive_density');
+  if (requestedAdaptiveDensityValue !== null && !['0', '1'].includes(requestedAdaptiveDensityValue)) {
+    throw new RangeError(`Finger Fluid adaptive density must be 0 or 1: ${requestedAdaptiveDensityValue}`);
+  }
+  const requestedAdaptiveDensity = requestedAdaptiveDensityValue === '1';
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
@@ -3023,6 +3028,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveUnsupportedSheetStrength: resolveFingerFluidUnsupportedSheetStrength(requestedUnsupportedSheetStrength),
     requestedMaxFluidSpeed,
     effectiveMaxFluidSpeed: resolveFingerFluidMaxSpeed(requestedMaxFluidSpeed),
+    requestedAdaptiveDensity,
+    effectiveAdaptiveDensity: requestedAdaptiveDensity,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedPressureIterations,
@@ -10511,6 +10518,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveUnsupportedSheetStrength = fingerFluidBenchConfig.effectiveUnsupportedSheetStrength;
   gpuState.requestedMaxFluidSpeed = fingerFluidBenchConfig.requestedMaxFluidSpeed;
   gpuState.effectiveMaxFluidSpeed = gpuState.maxFluidSpeed;
+  gpuState.requestedAdaptiveDensity = fingerFluidBenchConfig.requestedAdaptiveDensity;
+  gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
@@ -10662,6 +10671,7 @@ async function startFingerFluidBench() {
       freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
       unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
       maxFluidSpeed: fingerFluidBenchConfig.effectiveMaxFluidSpeed,
+      adaptiveDensity: fingerFluidBenchConfig.effectiveAdaptiveDensity,
       inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
       waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
       transparentBackground: fingerFluidPyroCompositionRequested(),

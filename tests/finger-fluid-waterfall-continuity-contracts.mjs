@@ -286,6 +286,8 @@ const acceptedEvidenceIdentity = Object.freeze({
   adapterVendor: 'apple',
   adapterArchitecture: 'metal-3',
   opticalDebugMode: 'shaded',
+  adaptiveDensity: false,
+  baseParticleCount: 49_152,
   particleCount: 49_152,
   timeIntegrationContract: core.KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
   fixedTimeStepSeconds: core.KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
@@ -381,17 +383,17 @@ const capacity = core.measureFingerFluidParticleAllocationCapacity({
   maxStorageBufferBindingSize: 4 * 1024 * 1024,
 });
 assert.equal(capacity.contract, 'webgpu-device-limit-derived-particle-allocation-preflight-v0');
-assert.equal(capacity.limitingBuffer, 'liquid-fire-contact-records');
-assert.equal(capacity.maximumSupportedParticleCount, Math.floor((4 * 1024 * 1024) / (32 * 4)));
+assert.equal(capacity.limitingBuffer, 'neighbor-topology');
+assert.equal(capacity.maximumSupportedParticleCount, Math.floor((4 * 1024 * 1024) / (36 * 4)));
 assert.equal(
-  core.evaluateFingerFluidParticleAllocationRequest(32_768, capacity).ok,
+  core.evaluateFingerFluidParticleAllocationRequest(capacity.maximumSupportedParticleCount, capacity).ok,
   true,
   'the exact device-derived boundary remains usable',
 );
-const oversizedAllocation = core.evaluateFingerFluidParticleAllocationRequest(32_769, capacity);
+const oversizedAllocation = core.evaluateFingerFluidParticleAllocationRequest(capacity.maximumSupportedParticleCount + 1, capacity);
 assert.equal(oversizedAllocation.ok, false);
-assert.equal(oversizedAllocation.requestedParticleCount, 32_769);
-assert.equal(oversizedAllocation.maximumSupportedParticleCount, 32_768);
+assert.equal(oversizedAllocation.requestedParticleCount, capacity.maximumSupportedParticleCount + 1);
+assert.equal(oversizedAllocation.maximumSupportedParticleCount, capacity.maximumSupportedParticleCount);
 assert.match(oversizedAllocation.reason, /exceeds device-derived maximum/);
 
 assert.doesNotMatch(
@@ -448,7 +450,7 @@ assert.match(
 );
 assert.doesNotMatch(witnessSource, /targetDeadline/, 'exact-step capture cannot castrate a slow valid GPU route with a local deadline');
 const preflightIndex = coreSource.indexOf('evaluateFingerFluidParticleAllocationRequest(safeParticleCount');
-const truthSceneAllocationIndex = coreSource.indexOf('createFingerFluidTruthSceneParticles(safeParticleCount');
+const truthSceneAllocationIndex = coreSource.indexOf('createFingerFluidTruthSceneParticles(safeBaseParticleCount');
 assert.ok(preflightIndex >= 0, 'solver must execute the device-derived particle allocation preflight');
 assert.ok(
   preflightIndex < truthSceneAllocationIndex,

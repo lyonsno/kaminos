@@ -72,6 +72,7 @@ export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE = 'wgsl-analytic-
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE = 'wgsl-analytic-heightfield-obstacle-presentation-v0';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
+export const KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT = 'deterministic-binary-volume-weighted-sheet-refinement-v0';
 
 const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
@@ -134,7 +135,7 @@ const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
 const REST_STATE_FLOATS = 4;
 const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
-export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 32;
+export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 36;
 const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
@@ -143,6 +144,120 @@ const ENERGY_RECORD_FLOATS = 4;
 const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
+
+function adaptiveVector3(value, label) {
+  if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(component))) {
+    throw new TypeError(`Finger fluid adaptive density ${label} must be a finite vec3`);
+  }
+  return value.map(Number);
+}
+
+function adaptiveScalar(value, label) {
+  if (!Number.isFinite(value)) throw new TypeError(`Finger fluid adaptive density ${label} must be finite`);
+  return Number(value);
+}
+
+function adaptiveParticleState(value, label) {
+  if (!value || typeof value !== 'object') throw new TypeError(`Finger fluid adaptive density ${label} state is required`);
+  return {
+    active: Boolean(value.active),
+    volumeScale: adaptiveScalar(value.volumeScale, `${label} volumeScale`),
+    position: adaptiveVector3(value.position, `${label} position`),
+    velocity: adaptiveVector3(value.velocity, `${label} velocity`),
+    chemistry: adaptiveScalar(value.chemistry, `${label} chemistry`),
+  };
+}
+
+function adaptiveConservation(parent, child) {
+  const states = [parent, child].filter(state => state.active && state.volumeScale > 0);
+  const volume = states.reduce((sum, state) => sum + state.volumeScale, 0);
+  const momentum = [0, 1, 2].map(axis => states.reduce(
+    (sum, state) => sum + state.velocity[axis] * state.volumeScale,
+    0,
+  ));
+  const chemistryMass = states.reduce((sum, state) => sum + state.chemistry * state.volumeScale, 0);
+  return { volume, momentum, chemistryMass };
+}
+
+function adaptiveCenterOfMass(parent, child) {
+  const conservation = adaptiveConservation(parent, child);
+  if (conservation.volume <= 0) return [0, 0, 0];
+  return [0, 1, 2].map(axis => (
+    (parent.active ? parent.position[axis] * parent.volumeScale : 0)
+      + (child.active ? child.position[axis] * child.volumeScale : 0)
+  ) / conservation.volume);
+}
+
+export function evaluateFingerFluidAdaptivePairTransition({
+  action,
+  parent: parentInput,
+  child: childInput,
+  splitDirection = [1, 0, 0],
+  splitDistance = 0,
+} = {}) {
+  const parent = adaptiveParticleState(parentInput, 'parent');
+  const child = adaptiveParticleState(childInput, 'child');
+  const before = adaptiveConservation(parent, child);
+  const centerOfMassBefore = adaptiveCenterOfMass(parent, child);
+  let nextParent;
+  let nextChild;
+  if (action === 'split') {
+    if (!parent.active || parent.volumeScale !== 1 || child.active || child.volumeScale !== 0) {
+      throw new Error('Finger fluid adaptive split requires one active unit-volume parent and one dormant zero-volume child');
+    }
+    const direction = adaptiveVector3(splitDirection, 'splitDirection');
+    const length = Math.hypot(...direction);
+    if (length <= 0) throw new RangeError('Finger fluid adaptive splitDirection must be nonzero');
+    const distance = adaptiveScalar(splitDistance, 'splitDistance');
+    const offset = direction.map(component => component / length * distance * 0.5);
+    nextParent = { ...parent, volumeScale: 0.5, position: parent.position.map((value, axis) => value - offset[axis]) };
+    nextChild = { ...parent, active: true, volumeScale: 0.5, position: parent.position.map((value, axis) => value + offset[axis]) };
+  } else if (action === 'merge') {
+    if (!parent.active || !child.active || parent.volumeScale <= 0 || child.volumeScale <= 0) {
+      throw new Error('Finger fluid adaptive merge requires an active represented-volume pair');
+    }
+    const volumeScale = parent.volumeScale + child.volumeScale;
+    const weighted = key => [0, 1, 2].map(axis => (
+      parent[key][axis] * parent.volumeScale + child[key][axis] * child.volumeScale
+    ) / volumeScale);
+    nextParent = {
+      ...parent,
+      volumeScale,
+      position: weighted('position'),
+      velocity: weighted('velocity'),
+      chemistry: (parent.chemistry * parent.volumeScale + child.chemistry * child.volumeScale) / volumeScale,
+    };
+    nextChild = { ...child, active: false, volumeScale: 0, velocity: [0, 0, 0], chemistry: 0 };
+  } else {
+    throw new RangeError(`Unsupported finger fluid adaptive transition: ${action}`);
+  }
+  return {
+    parent: nextParent,
+    child: nextChild,
+    conservation: { before, after: adaptiveConservation(nextParent, nextChild) },
+    centerOfMassBefore,
+    centerOfMassAfter: adaptiveCenterOfMass(nextParent, nextChild),
+  };
+}
+
+export function summarizeFingerFluidAdaptiveDensityLedger(states) {
+  if (!Array.isArray(states)) throw new TypeError('Finger fluid adaptive density ledger requires particle states');
+  const active = states.filter(state => state.active && state.volumeScale > 0);
+  const round = value => Number(value.toFixed(9));
+  return {
+    activeParticleCount: active.length,
+    baseParticleCount: active.filter(state => state.role === 'base').length,
+    refinedParentCount: active.filter(state => state.role === 'parent').length,
+    activeChildCount: active.filter(state => state.role === 'child').length,
+    reservedChildCount: states.filter(state => state.role === 'child' && !state.active).length,
+    representedVolume: round(active.reduce((sum, state) => sum + state.volumeScale, 0)),
+    momentum: [0, 1, 2].map(axis => round(active.reduce(
+      (sum, state) => sum + state.velocity[axis] * state.volumeScale,
+      0,
+    ))),
+    chemistryMass: round(active.reduce((sum, state) => sum + state.chemistry * state.volumeScale, 0)),
+  };
+}
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
@@ -1451,6 +1566,7 @@ struct NeighborTopologyState {
   sheetDiagnosticClassification: vec4<f32>,
   sheetDiagnosticKinematics: vec4<f32>,
   sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -1520,6 +1636,7 @@ struct Params {
   sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
   sourceControl: vec4<u32>,
+  refinementControl: vec4<u32>,
 }
 
 const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
@@ -1590,9 +1707,10 @@ fn laminar_inlet_source_local_ordinal(index: u32) -> u32 {
 }
 
 fn laminar_inlet_source_particle_count(sourceIndex: u32) -> u32 {
-  if (params.particleShift.z > 1.5) { return select(0u, params.particleCount, sourceIndex == 1u); }
-  let completeBlocks = params.particleCount / 10u;
-  let remainder = params.particleCount % 10u;
+  let baseParticleCount = params.refinementControl.x;
+  if (params.particleShift.z > 1.5) { return select(0u, baseParticleCount, sourceIndex == 1u); }
+  let completeBlocks = baseParticleCount / 10u;
+  let remainder = baseParticleCount % 10u;
   if (sourceIndex == 0u) { return completeBlocks * 4u + min(remainder, 4u); }
   if (sourceIndex == 1u) { return completeBlocks * 3u + min(u32(max(i32(remainder) - 4, 0)), 3u); }
   return completeBlocks * 3u + min(u32(max(i32(remainder) - 7, 0)), 3u);
@@ -1883,6 +2001,37 @@ fn kernelWeight(distance: f32) -> f32 {
   return x * x * x;
 }
 
+fn adaptive_volume_scale(index: u32) -> f32 {
+  return max(0.0, neighborTopology[index].refinement.x);
+}
+
+fn adaptive_radius_scale(index: u32) -> f32 {
+  return pow(max(adaptive_volume_scale(index), 0.000001), 1.0 / 3.0);
+}
+
+fn adaptive_pair_kernel_weight(index: u32, neighborIndex: u32, distance: f32) -> f32 {
+  let pairRadiusScale = max(adaptive_radius_scale(index), adaptive_radius_scale(neighborIndex));
+  let supportRadius = params.fluid.x * pairRadiusScale;
+  let q = distance / max(supportRadius, 0.00001);
+  if (q >= 1.0) { return 0.0; }
+  let x = 1.0 - q * q;
+  let kernelNormalization = 1.0 / max(pairRadiusScale * pairRadiusScale * pairRadiusScale, 0.000001);
+  let neighborVolumeScale = adaptive_volume_scale(neighborIndex);
+  return neighborVolumeScale * kernelNormalization * x * x * x;
+}
+
+fn adaptive_pair_kernel_gradient(index: u32, neighborIndex: u32, offset: vec3<f32>) -> vec3<f32> {
+  let distance = length(offset);
+  let pairRadiusScale = max(adaptive_radius_scale(index), adaptive_radius_scale(neighborIndex));
+  let supportRadius = params.fluid.x * pairRadiusScale;
+  if (distance <= 0.00001 || distance >= supportRadius) { return vec3<f32>(0.0); }
+  let q = distance / supportRadius;
+  let kernelNormalization = 1.0 / max(pairRadiusScale * pairRadiusScale * pairRadiusScale, 0.000001);
+  let neighborVolumeScale = adaptive_volume_scale(neighborIndex);
+  let magnitude = -6.0 * (1.0 - q) * (1.0 - q) / (supportRadius * params.fluid.y);
+  return offset / distance * magnitude * neighborVolumeScale * kernelNormalization;
+}
+
 fn kernelGradient(offset: vec3<f32>) -> vec3<f32> {
   let distance = length(offset);
   if (distance <= 0.00001 || distance >= params.fluid.x) { return vec3<f32>(0.0); }
@@ -2003,6 +2152,12 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
   var particle = particles[index];
+  if (params.refinementControl.y != 0u && index >= params.refinementControl.x && particle.velocity.w < 0.0) {
+    particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
+    particle.delta = vec4<f32>(0.0);
+    particles[index] = particle;
+    return;
+  }
   let laminarInletScene = params.particleShift.z > 0.5;
   let waterfallOracleScene = params.particleShift.z > 1.5;
   _ = waterfallOracleScene;
@@ -2188,7 +2343,7 @@ fn compute_material_tracer_diffusion(@builtin(global_invocation_id) gid: vec3<u3
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
             let distance = length(position - particles[neighborIndex].predicted.xyz);
-            let chemistryWeight = kernelWeight(distance);
+            let chemistryWeight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (chemistryWeight > 0.0) {
               let neighborConcentration = materialTracers[neighborIndex].concentrationDeltaRecipeSource.x;
               let neighborDelta = chemistryWeight * (neighborConcentration - concentration);
@@ -2223,9 +2378,15 @@ fn interface_density_constraint(densityRatio: f32, priorSurfaceFactor: f32) -> f
 fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
+  if (particles[index].velocity.w < 0.0 || adaptive_volume_scale(index) <= 0.0) {
+    particles[index].predicted.w = 0.0;
+    particles[index].delta.w = 0.0;
+    return;
+  }
   let position = particles[index].predicted.xyz;
   let baseCell = gridCoord(position);
-  var density = 1.0;
+  let selfRadiusScale = adaptive_radius_scale(index);
+  var density = adaptive_volume_scale(index) / max(selfRadiusScale * selfRadiusScale * selfRadiusScale, 0.000001);
   var gradientSelf = vec3<f32>(0.0);
   var gradientSquared = 0.0;
 
@@ -2240,9 +2401,9 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             density = density + weight;
-            let gradient = kernelGradient(offset);
+            let gradient = adaptive_pair_kernel_gradient(index, neighborIndex, offset);
             gradientSelf = gradientSelf + gradient;
             gradientSquared = gradientSquared + dot(gradient, gradient);
           }
@@ -2266,10 +2427,14 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
+  if (particles[index].velocity.w < 0.0 || adaptive_volume_scale(index) <= 0.0) { return; }
   let position = particles[index].predicted.xyz;
   let baseCell = gridCoord(position);
   let lambda = particles[index].predicted.w;
-  let referenceWeight = max(kernelWeight(params.fluid.x * 0.34), 0.0001);
+  let referenceWeight = max(
+    adaptive_pair_kernel_weight(index, index, params.fluid.x * adaptive_radius_scale(index) * 0.34),
+    0.0001,
+  );
   var correction = vec3<f32>(0.0);
 
   for (var z = -1; z <= 1; z = z + 1) {
@@ -2282,9 +2447,9 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
-            let weight = kernelWeight(length(offset));
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, length(offset));
             let tensile = -0.0012 * pow(weight / referenceWeight, 4.0);
-            correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * kernelGradient(offset);
+            correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * adaptive_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = particleNext[neighborIndex];
         }
@@ -2336,7 +2501,7 @@ fn classify_free_surface(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               supportWeight = supportWeight + weight;
               directionalSupport = directionalSupport + (offset / distance) * weight;
@@ -2388,7 +2553,11 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
         while (current >= 0) {
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
-            let weight = kernelWeight(length(position - particles[neighborIndex].predicted.xyz));
+            let weight = adaptive_pair_kernel_weight(
+              index,
+              neighborIndex,
+              length(position - particles[neighborIndex].predicted.xyz),
+            );
             neighborVelocity = neighborVelocity + particles[neighborIndex].velocity.xyz * weight;
             neighborWeight = neighborWeight + weight;
           }
@@ -2466,7 +2635,7 @@ fn compute_vorticity(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let velocityDifference = particles[neighborIndex].delta.xyz - velocity;
-            omega = omega + cross(velocityDifference, kernelGradient(offset));
+            omega = omega + cross(velocityDifference, adaptive_pair_kernel_gradient(index, neighborIndex, offset));
           }
           current = particleNext[neighborIndex];
         }
@@ -2503,7 +2672,8 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let neighborMagnitude = length(particles[neighborIndex].velocity.xyz);
-            magnitudeGradient = magnitudeGradient + (neighborMagnitude - omegaMagnitude) * kernelGradient(offset);
+            magnitudeGradient = magnitudeGradient
+              + (neighborMagnitude - omegaMagnitude) * adaptive_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = particleNext[neighborIndex];
         }
@@ -2787,6 +2957,7 @@ fn commit_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32
 }
 
 fn capillary_pair_weight(
+  neighborIndex: u32,
   distance: f32,
   surfaceFactor: f32,
   neighborSurface: f32,
@@ -2798,7 +2969,10 @@ fn capillary_pair_weight(
   let cohesionBand = smoothstep(0.28, 0.58, q) * (1.0 - smoothstep(0.82, 1.0, q));
   let pairSurface = clamp((surfaceFactor + neighborSurface) * 0.5, 0.0, 1.0);
   let pairSupportConfidence = smoothstep(0.48, 0.90, min(densityRatio, neighborDensityRatio));
-  return cohesionBand * (0.15 + 0.85 * pairSurface) * pairSupportConfidence;
+  return adaptive_volume_scale(neighborIndex)
+    * cohesionBand
+    * (0.15 + 0.85 * pairSurface)
+    * pairSupportConfidence;
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -2827,6 +3001,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
               let neighborSurface = particles[neighborIndex].predicted.w;
               let neighborDensityRatio = particles[neighborIndex].delta.w / max(params.fluid.y, 0.0001);
               let weight = capillary_pair_weight(
+                neighborIndex,
                 distance,
                 surfaceFactor,
                 neighborSurface,
@@ -2882,6 +3057,116 @@ fn apply_velocity_position(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
+fn adaptive_refine_or_merge(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (params.refinementControl.y == 0u || index >= params.refinementControl.x) { return; }
+  let childIndex = index + params.refinementControl.x;
+  if (childIndex >= params.particleCount) { return; }
+  var parent = particles[index];
+  var child = particles[childIndex];
+  var parentRefinement = neighborTopology[index].refinement;
+  let childActive = child.velocity.w >= 0.0 && neighborTopology[childIndex].refinement.x > 0.0;
+
+  if (parent.velocity.w < 0.0) {
+    parentRefinement = vec4<f32>(1.0, 0.0, 0.0, 0.0);
+    neighborTopology[index].refinement = parentRefinement;
+    if (childActive) {
+      child.velocity = vec4<f32>(vec3<f32>(0.0), -abs(child.velocity.w));
+      child.delta = vec4<f32>(0.0);
+      particles[childIndex] = child;
+      neighborTopology[childIndex].refinement = vec4<f32>(0.0, 2.0, 0.0, -1.0);
+      atomicAdd(&interfaceCounters[4], 1u);
+    }
+    return;
+  }
+
+  if (parentRefinement.y < 0.5) {
+    let sheetState = neighborTopology[index].sheet;
+    let reasonCode = neighborTopology[index].sheetDiagnosticClassification.x;
+    let supportContact = supportContactFrame(parent.position.xyz).w;
+    let speed = length(parent.velocity.xyz);
+    let splitCandidate = sheetState.w >= 0.08
+      && reasonCode == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}.0
+      && supportContact < 0.18
+      && speed >= 0.18
+      && !childActive;
+    if (!splitCandidate) { return; }
+    let flowTangent = normalize(parent.velocity.xyz + vec3<f32>(0.00001, 0.00002, 0.00003));
+    var splitDirection = cross(sheetState.xyz, flowTangent);
+    if (length(splitDirection) < 0.0001) {
+      splitDirection = cross(sheetState.xyz, vec3<f32>(1.0, 0.0, 0.0));
+    }
+    splitDirection = normalize(splitDirection + vec3<f32>(0.00001, 0.00002, 0.00003));
+    let splitOffset = splitDirection * params.fluid.x * 0.16;
+    parent.position = vec4<f32>(collideDomain(parent.position.xyz - splitOffset), parent.position.w);
+    parent.predicted = vec4<f32>(parent.position.xyz, parent.predicted.w);
+    child = parent;
+    child.position = vec4<f32>(collideDomain(parent.position.xyz + splitOffset * 2.0), parent.position.w);
+    child.predicted = vec4<f32>(child.position.xyz, parent.predicted.w);
+    particles[index] = parent;
+    particles[childIndex] = child;
+    restStates[childIndex] = restStates[index];
+    materialTracers[childIndex] = materialTracers[index];
+    neighborTopology[childIndex] = neighborTopology[index];
+    neighborTopology[index].refinement = vec4<f32>(0.5, 1.0, 0.0, 1.0);
+    neighborTopology[childIndex].refinement = vec4<f32>(0.5, 2.0, 0.0, 1.0);
+    atomicAdd(&interfaceCounters[3], 1u);
+    return;
+  }
+
+  if (!childActive) {
+    neighborTopology[index].refinement = vec4<f32>(1.0, 0.0, 0.0, -1.0);
+    return;
+  }
+  let parentSupport = supportContactFrame(parent.position.xyz).w;
+  let childSupport = supportContactFrame(child.position.xyz).w;
+  let pairDistance = length(parent.position.xyz - child.position.xyz);
+  let parentDensityRatio = parent.delta.w / max(params.fluid.y, 0.0001);
+  let childDensityRatio = child.delta.w / max(params.fluid.y, 0.0001);
+  let stableContact = max(parentSupport, childSupport) >= 0.62;
+  let stableBulk = min(parentDensityRatio, childDensityRatio) >= 0.94
+    && max(length(parent.velocity.xyz), length(child.velocity.xyz)) < 0.34;
+  let mergeCandidate = pairDistance < params.fluid.x * 0.72
+    && max(neighborTopology[index].sheet.w, neighborTopology[childIndex].sheet.w) < 0.02
+    && (stableContact || stableBulk);
+  let mergeAge = select(0.0, parentRefinement.z + params.dt, mergeCandidate);
+  neighborTopology[index].refinement.z = mergeAge;
+  neighborTopology[childIndex].refinement.z = mergeAge;
+  if (mergeAge < 0.32) { return; }
+
+  let parentVolume = max(parentRefinement.x, 0.0);
+  let childVolume = max(neighborTopology[childIndex].refinement.x, 0.0);
+  let totalVolume = max(parentVolume + childVolume, 0.000001);
+  let mergedPosition = (parent.position.xyz * parentVolume + child.position.xyz * childVolume) / totalVolume;
+  let mergedVelocity = (parent.velocity.xyz * parentVolume + child.velocity.xyz * childVolume) / totalVolume;
+  let parentTracer = materialTracers[index].concentrationDeltaRecipeSource;
+  let childTracer = materialTracers[childIndex].concentrationDeltaRecipeSource;
+  let mergedTracer = (parentTracer * parentVolume + childTracer * childVolume) / totalVolume;
+  parent.position = vec4<f32>(mergedPosition, parent.position.w);
+  parent.predicted = vec4<f32>(mergedPosition, max(parent.predicted.w, child.predicted.w));
+  parent.velocity = vec4<f32>(mergedVelocity, parent.velocity.w);
+  parent.delta = vec4<f32>(mergedVelocity, max(parent.delta.w, child.delta.w));
+  child.velocity = vec4<f32>(vec3<f32>(0.0), -abs(child.velocity.w));
+  child.predicted = vec4<f32>(child.position.xyz, 0.0);
+  child.delta = vec4<f32>(0.0);
+  particles[index] = parent;
+  particles[childIndex] = child;
+  materialTracers[index].concentrationDeltaRecipeSource = mergedTracer;
+  materialTracers[childIndex].concentrationDeltaRecipeSource = vec4<f32>(0.0);
+  restStates[index] = (restStates[index] * parentVolume + restStates[childIndex] * childVolume) / totalVolume;
+  restStates[childIndex] = vec4<f32>(0.0);
+  neighborTopology[index].refinement = vec4<f32>(1.0, 0.0, 0.0, -1.0);
+  neighborTopology[childIndex].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
+  neighborTopology[childIndex].metrics = vec4<f32>(0.0);
+  clear_unsupported_sheet_state(childIndex);
+  neighborTopology[childIndex].sheetDiagnosticClassification = vec4<f32>(${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, 0.0, 0.0, 0.0);
+  neighborTopology[childIndex].sheetDiagnosticKinematics = vec4<f32>(0.0);
+  neighborTopology[childIndex].sheetDiagnosticNeighborhood = vec4<f32>(0.0);
+  neighborTopology[childIndex].refinement = vec4<f32>(0.0, 2.0, 0.0, -1.0);
+  atomicAdd(&interfaceCounters[4], 1u);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
 fn compute_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
@@ -2907,7 +3192,7 @@ fn compute_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>)
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].position.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               crowdingDirection = crowdingDirection + offset / distance * weight;
               crowdingWeight = crowdingWeight + weight;
@@ -2944,6 +3229,55 @@ fn apply_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index] = particle;
 }
 
+fn estimate_interface_curvature(index: u32, position: vec3<f32>, interfaceNormal: vec3<f32>) -> vec2<f32> {
+  let baseCell = gridCoord(position);
+  var weightedNormalOffset = 0.0;
+  var weightedTangentSpan = 0.0;
+  var interfaceWeight = 0.0;
+  var interfaceNeighborCount = 0u;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          let offset = position - particles[neighborIndex].position.xyz;
+          let distance = length(offset);
+          let neighborConfidence = restStates[neighborIndex].x;
+          let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance) * neighborConfidence;
+          if (distance > 0.00001 && weight > 0.0 && neighborConfidence >= ${INTERFACE_THRESHOLD}) {
+            let normalOffset = dot(offset, interfaceNormal);
+            let tangentOffset = offset - interfaceNormal * dot(offset, interfaceNormal);
+            weightedNormalOffset = weightedNormalOffset + normalOffset * weight;
+            weightedTangentSpan = weightedTangentSpan + dot(tangentOffset, tangentOffset) * weight;
+            interfaceWeight = interfaceWeight + weight;
+            interfaceNeighborCount = interfaceNeighborCount + 1u;
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  if (interfaceNeighborCount < 4u || weightedTangentSpan <= 0.000001 || interfaceWeight <= 0.000001) {
+    return vec2<f32>(0.0);
+  }
+  let meanTangentSpanSquared = weightedTangentSpan / interfaceWeight;
+  let countConfidence = smoothstep(3.0, 8.0, f32(interfaceNeighborCount));
+  let minimumSpan = params.fluid.x * 0.08;
+  let resolvedSpan = params.fluid.x * 0.2;
+  let spanConfidence = smoothstep(minimumSpan * minimumSpan, resolvedSpan * resolvedSpan, meanTangentSpanSquared);
+  let resolutionConfidence = countConfidence * spanConfidence;
+  let rawCurvature = 2.0 * weightedNormalOffset / weightedTangentSpan;
+  let maximumResolvableCurvature = 2.0 / params.fluid.x;
+  if (resolutionConfidence < 0.2 || abs(rawCurvature) > maximumResolvableCurvature) {
+    return vec2<f32>(0.0);
+  }
+  return vec2<f32>(rawCurvature, resolutionConfidence);
+}
+
 @compute @workgroup_size(1)
 fn clear_interface_counters(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x == 0u) {
@@ -2975,7 +3309,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].position.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               supportWeight = supportWeight + weight;
               directionalSupport = directionalSupport + offset / distance * weight;
@@ -2992,7 +3326,6 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
   let sphereContact = select(0.0, 1.0, abs(length(position - sphereCenter) - (${OBSTACLE_RADIUS} + radius)) < 0.045);
   let contact = max(floorContact, sphereContact);
-  let anisotropy = length(directionalSupport) / max(supportWeight, 0.0001);
   let fallbackNormal = select(vec3<f32>(0.0, 1.0, 0.0), floorNormal(position), floorContact > 0.5);
   let sphereSupportNormal = normalize(position - sphereCenter + vec3<f32>(0.00001, 0.00002, 0.00003));
   let contactSupportNormal = select(sphereSupportNormal, floorNormal(position), floorContact > 0.5);
@@ -3003,6 +3336,9 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportAlignment = select(1.0, dot(interfaceNormal, contactSupportNormal), contact > 0.5);
   let interfaceAge = restStates[index].y;
   if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
+  let curvatureGeometry = estimate_interface_curvature(index, position, interfaceNormal);
+  let interfaceCurvature = curvatureGeometry.x;
+  let geometryConfidence = surfaceFactor * curvatureGeometry.y;
 
   let slot = atomicAdd(&interfaceCounters[0], 1u);
   if (slot >= params.particleCount) {
@@ -3012,8 +3348,8 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let speed = length(particle.velocity.xyz);
   let thickness = params.fluid.x * clamp(supportWeight / max(params.fluid.y, 0.0001), 0.18, 2.5);
   interfaceRecords[slot].positionId = vec4<f32>(position, f32(index));
-  interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, surfaceFactor);
-  interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, anisotropy);
+  interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, geometryConfidence);
+  interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, interfaceCurvature);
   interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
   interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
 }
@@ -3199,6 +3535,7 @@ struct NeighborTopologyState {
   sheetDiagnosticClassification: vec4<f32>,
   sheetDiagnosticKinematics: vec4<f32>,
   sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3274,7 +3611,8 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     let colorMode = u32(params.cameraRight.w + 0.5);
     center = particle.position.xyz;
     speed = length(particle.velocity.xyz);
-    radius = params.viewport.z * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
+    let volumeRadiusScale = pow(max(neighborTopology[instanceIndex].refinement.x, 0.000001), 1.0 / 3.0);
+    radius = params.viewport.z * volumeRadiusScale * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
     phase = abs(particle.velocity.w);
     base = mix(cold, warm, smoothstep(0.0, 0.62, phase));
     if (colorMode == 1u) {
@@ -3578,6 +3916,7 @@ struct NeighborTopologyState {
   sheetDiagnosticClassification: vec4<f32>,
   sheetDiagnosticKinematics: vec4<f32>,
   sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3621,7 +3960,8 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   let corner = quad[vertexIndex];
   let surface = max(particle.predicted.w, 0.16);
   let densityRadius = clamp(particle.delta.w / 24.3, 0.62, 1.55);
-  let radius = params.viewport.z * mix(1.22, 1.78, surface) * densityRadius;
+  let volumeRadiusScale = pow(max(neighborTopology[instanceIndex].refinement.x, 0.000001), 1.0 / 3.0);
+  let radius = params.viewport.z * volumeRadiusScale * mix(1.22, 1.78, surface) * densityRadius;
   let worldPosition = particle.position.xyz + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
   var clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
   if (particle.velocity.w < 0.0) {
@@ -4883,14 +5223,34 @@ export function createFingerFluidWaterfallSoakEvidenceIdentity(runtime) {
   if (!runtime || typeof runtime !== 'object') {
     throw new TypeError('Waterfall soak evidence identity requires runtime route/config truth');
   }
-  const particleCount = matchingWaterfallEvidenceIdentityValue(
+  const adaptiveDensity = matchingWaterfallEvidenceIdentityValue(
     runtime,
-    'requestedParticleCount',
-    'effectiveParticleCount',
-    'particle count',
+    'requestedAdaptiveDensity',
+    'effectiveAdaptiveDensity',
+    'adaptive density',
   );
-  if (particleCount !== runtime.particleCount) {
-    throw new TypeError(`Waterfall soak evidence particle-count runtime disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount })}`);
+  let particleCount;
+  let baseParticleCount;
+  if (adaptiveDensity) {
+    baseParticleCount = runtime.requestedParticleCount;
+    particleCount = runtime.effectiveParticleCount;
+    if (baseParticleCount !== runtime.baseParticleCount) {
+      throw new TypeError(`Waterfall soak evidence adaptive base-population disagreement: ${JSON.stringify({ requestedParticleCount: baseParticleCount, runtimeBaseParticleCount: runtime.baseParticleCount })}`);
+    }
+    if (particleCount !== runtime.particleCount || particleCount !== runtime.simulationCapacity) {
+      throw new TypeError(`Waterfall soak evidence adaptive capacity disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount, simulationCapacity: runtime.simulationCapacity })}`);
+    }
+  } else {
+    particleCount = matchingWaterfallEvidenceIdentityValue(
+      runtime,
+      'requestedParticleCount',
+      'effectiveParticleCount',
+      'particle count',
+    );
+    baseParticleCount = particleCount;
+    if (particleCount !== runtime.particleCount) {
+      throw new TypeError(`Waterfall soak evidence particle-count runtime disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount })}`);
+    }
   }
   return normalizeFingerFluidWaterfallSoakEvidenceIdentity({
     schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
@@ -4903,6 +5263,8 @@ export function createFingerFluidWaterfallSoakEvidenceIdentity(runtime) {
     adapterVendor: runtime.adapterInfo?.vendor,
     adapterArchitecture: runtime.adapterInfo?.architecture,
     opticalDebugMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedOpticalDebugMode', 'effectiveOpticalDebugMode', 'optical debug mode'),
+    adaptiveDensity,
+    baseParticleCount,
     particleCount,
     timeIntegrationContract: runtime.timeIntegrationContract,
     fixedTimeStepSeconds: runtime.fixedTimeStepSeconds,
@@ -4958,6 +5320,14 @@ function normalizeFingerFluidWaterfallSoakEvidenceIdentity(identity) {
   if (!Number.isSafeInteger(identity.particleCount) || identity.particleCount < 1024) {
     throw new TypeError(`Waterfall soak evidence identity requires a valid particleCount: ${identity.particleCount}`);
   }
+  const adaptiveDensity = identity.adaptiveDensity === true;
+  const baseParticleCount = identity.baseParticleCount ?? identity.particleCount;
+  if (!Number.isSafeInteger(baseParticleCount) || baseParticleCount < 1024 || baseParticleCount > identity.particleCount) {
+    throw new TypeError(`Waterfall soak evidence identity requires a valid baseParticleCount: ${baseParticleCount}`);
+  }
+  if (!adaptiveDensity && baseParticleCount !== identity.particleCount) {
+    throw new TypeError(`Non-adaptive waterfall evidence cannot carry distinct base/capacity populations: ${JSON.stringify({ baseParticleCount, particleCount: identity.particleCount })}`);
+  }
   for (const field of numericFields) {
     if (!Number.isFinite(identity[field])) {
       throw new TypeError(`Waterfall soak evidence identity requires finite ${field}: ${identity[field]}`);
@@ -4966,6 +5336,8 @@ function normalizeFingerFluidWaterfallSoakEvidenceIdentity(identity) {
   return {
     schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
     ...Object.fromEntries(stringFields.map(field => [field, identity[field]])),
+    adaptiveDensity,
+    baseParticleCount,
     particleCount: identity.particleCount,
     ...Object.fromEntries(numericFields.map(field => [field, identity[field]])),
   };
@@ -5633,10 +6005,10 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
   return receipt;
 }
 
-function createInitialMaterialTracers(particleData, particleCount) {
+function createInitialMaterialTracers(particleData, particleCount, sourceParticleCount = particleCount) {
   const data = new Float32Array(particleCount * MATERIAL_TRACER_FLOATS);
   for (let index = 0; index < particleCount; index += 1) {
-    const phase = Math.abs(particleData[index * PARTICLE_FLOATS + 11]);
+    const phase = index < sourceParticleCount ? Math.abs(particleData[index * PARTICLE_FLOATS + 11]) : 0;
     const offset = index * MATERIAL_TRACER_FLOATS;
     data[offset] = phase;
     data[offset + 1] = 0;
@@ -5673,6 +6045,7 @@ export async function createWebGPUFingerFluidSolver({
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
   unsupportedSheetStrength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  adaptiveDensity = false,
   maxFluidSpeed = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   inletCutoffStep = null,
   waterfallOraclePreset = 'baseline',
@@ -5692,12 +6065,15 @@ export async function createWebGPUFingerFluidSolver({
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
 
-  const safeParticleCount = resolveFingerFluidParticleCount(particleCount);
+  const safeBaseParticleCount = resolveFingerFluidParticleCount(particleCount);
+  const safeAdaptiveDensity = Boolean(adaptiveDensity);
+  const safeParticleCount = safeAdaptiveDensity ? safeBaseParticleCount * 2 : safeBaseParticleCount;
   const particleAllocationCapacity = measureFingerFluidParticleAllocationCapacity(device.limits);
   const particleAllocationPreflight = evaluateFingerFluidParticleAllocationRequest(safeParticleCount, particleAllocationCapacity);
   if (!particleAllocationPreflight.ok) {
     return createUnavailableSolver(particleAllocationPreflight.reason, {
-      requestedParticleCount: safeParticleCount,
+      requestedParticleCount: safeBaseParticleCount,
+      requestedSimulationCapacity: safeParticleCount,
       effectiveParticleCount: null,
       particleAllocationCapacity,
       particleAllocationPreflight,
@@ -5731,13 +6107,18 @@ export async function createWebGPUFingerFluidSolver({
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const particleData = createFingerFluidTruthSceneParticles(safeParticleCount, safeTruthScene, {
+  const baseParticleData = createFingerFluidTruthSceneParticles(safeBaseParticleCount, safeTruthScene, {
     waterfallOraclePreset: safeWaterfallOraclePreset,
   });
+  const particleData = new Float32Array(safeParticleCount * PARTICLE_FLOATS);
+  particleData.set(baseParticleData);
+  for (let index = safeBaseParticleCount; index < safeParticleCount; index += 1) {
+    particleData[index * PARTICLE_FLOATS + 11] = -2;
+  }
   const laminarSourcePopulation = safeTruthScene === 'laminar_inlets'
-    ? createFingerFluidLaminarSourcePopulation(safeParticleCount)
+    ? createFingerFluidLaminarSourcePopulation(safeBaseParticleCount)
     : null;
-  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount);
+  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount, safeBaseParticleCount);
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
   const particleBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particles',
@@ -5756,7 +6137,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 176,
+    size: 192,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -5781,7 +6162,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters',
-    size: 12,
+    size: 20,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
   const liquidFireContactRecordsBuffer = device.createBuffer({
@@ -5811,7 +6192,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersReadbackBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters-readback',
-    size: 12,
+    size: 20,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const interfaceRecordsReadbackBuffer = device.createBuffer({
@@ -5841,13 +6222,17 @@ export async function createWebGPUFingerFluidSolver({
   });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(energyDiagnosticsBuffer, 0, new Float32Array(safeParticleCount * ENERGY_RECORD_FLOATS));
-  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
+  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(5));
   device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
   const initialTopology = new Uint32Array(safeParticleCount * NEIGHBOR_TOPOLOGY_WORDS);
+  const initialTopologyFloats = new Float32Array(initialTopology.buffer);
   for (let index = 0; index < safeParticleCount; index += 1) {
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS, index * NEIGHBOR_TOPOLOGY_WORDS + 4);
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS + 12, index * NEIGHBOR_TOPOLOGY_WORDS + 16);
+    const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
+    initialTopologyFloats[refinementOffset] = index < safeBaseParticleCount ? 1 : 0;
+    initialTopologyFloats[refinementOffset + 1] = index < safeBaseParticleCount ? 0 : 2;
   }
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
   device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
@@ -5897,6 +6282,7 @@ export async function createWebGPUFingerFluidSolver({
       commitUnsupportedSheet: await pipelineFor('commit_unsupported_sheet_support'),
       cohesion: await pipelineFor('apply_surface_cohesion'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
+      adaptiveDensity: await pipelineFor('adaptive_refine_or_merge'),
       clearInterface: await pipelineFor('clear_interface_counters'),
       compactInterface: await pipelineFor('compact_interface_records'),
       measureTopology: await pipelineFor('measure_neighbor_topology'),
@@ -6162,6 +6548,7 @@ export async function createWebGPUFingerFluidSolver({
   let freeSurfaceClassificationPassCount = 0;
   let surfaceCohesionPassCount = 0;
   let sheetSupportPassCount = 0;
+  let adaptiveDensityPassCount = 0;
   let interfaceCompactionPassCount = 0;
   let topologyMeasurementPassCount = 0;
   let particleShiftPassCount = 0;
@@ -6269,7 +6656,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(176);
+    const buffer = new ArrayBuffer(192);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -6297,7 +6684,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(116, safeCapillaryStrength, true);
     view.setFloat32(120, safeThinSheetVorticityAttenuation, true);
     view.setFloat32(124, safeFreeFlightViscosityBoost, true);
-    view.setFloat32(128, safeUnsupportedSheetStrength, true);
+    view.setFloat32(128, safeAdaptiveDensity ? Math.max(2, safeUnsupportedSheetStrength) : safeUnsupportedSheetStrength, true);
     view.setFloat32(132, 0.62, true);
     view.setFloat32(136, 0.66, true);
     view.setFloat32(140, 0.78, true);
@@ -6309,6 +6696,10 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(164, safeInletCutoffStep === null ? 0 : 1, true);
     view.setUint32(168, waterfallOracleConfig?.laneColumns ?? 0, true);
     view.setUint32(172, waterfallOracleConfig?.laneRows ?? 0, true);
+    view.setUint32(176, safeBaseParticleCount, true);
+    view.setUint32(180, safeAdaptiveDensity ? 1 : 0, true);
+    view.setUint32(184, safeParticleCount, true);
+    view.setUint32(188, 1, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -6366,8 +6757,10 @@ export async function createWebGPUFingerFluidSolver({
         vorticityPassCount += 2;
       }
       dispatchEnergy(pass, energyPipelines.vorticity);
-      if (safeUnsupportedSheetStrength > 0) {
+      if (safeUnsupportedSheetStrength > 0 || safeAdaptiveDensity) {
         dispatch(pass, pipelines.classifyUnsupportedSheet, safeParticleCount);
+      }
+      if (safeUnsupportedSheetStrength > 0) {
         dispatch(pass, pipelines.applyUnsupportedSheet, safeParticleCount);
         dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
         sheetSupportPassCount += 3;
@@ -6387,6 +6780,10 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);
         particleShiftPassCount += 2;
+      }
+      if (safeAdaptiveDensity) {
+        dispatch(pass, pipelines.adaptiveDensity, safeBaseParticleCount);
+        adaptiveDensityPassCount += 1;
       }
       pass.end();
       device.queue.submit([encoder.finish()]);
@@ -6571,7 +6968,7 @@ export async function createWebGPUFingerFluidSolver({
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
       encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
-      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 12);
+      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 20);
       encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
       encoder.copyBufferToBuffer(neighborTopologyBuffer, 0, neighborTopologyReadbackBuffer, 0, safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES);
@@ -6623,26 +7020,43 @@ export async function createWebGPUFingerFluidSolver({
       let chemistryRecipeDeviationSum = 0;
       let activeParticleCount = 0;
       let dormantParticleCount = 0;
+      let representedVolume = 0;
+      const adaptiveMomentum = [0, 0, 0];
+      let unrefinedBaseParticleCount = 0;
+      let refinedParentCount = 0;
+      let activeChildCount = 0;
+      let reservedChildCount = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         const restOffset = index * REST_STATE_FLOATS;
         const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 4;
         const sheetOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 8;
         const chemistryOffset = index * MATERIAL_TRACER_FLOATS;
+        const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
+        const volumeScale = Math.max(0, topologyValues[refinementOffset]);
+        const refinementRole = Math.round(topologyValues[refinementOffset + 1]);
         const concentration = materialTracerValues[chemistryOffset];
         const recipe = materialTracerValues[chemistryOffset + 2];
-        chemistryMass += concentration;
-        sourceResetMassAdjustment += materialTracerValues[chemistryOffset + 3];
+        chemistryMass += concentration * volumeScale;
+        sourceResetMassAdjustment += materialTracerValues[chemistryOffset + 3] * volumeScale;
         chemistryMin = Math.min(chemistryMin, concentration);
         chemistryMax = Math.max(chemistryMax, concentration);
         chemistryRecipeDeviationSum += Math.abs(concentration - recipe);
         chemistryHistogram[Math.min(7, Math.max(0, Math.floor(concentration * 8)))] += 1;
-        const active = !isFingerFluidLaminarSourceScene(safeTruthScene) || values[offset + 11] >= 0;
+        representedVolume += volumeScale;
+        const active = values[offset + 11] >= 0 && volumeScale > 0;
         if (!active) {
           dormantParticleCount += 1;
+          if (index >= safeBaseParticleCount) reservedChildCount += 1;
           continue;
         }
         activeParticleCount += 1;
+        if (refinementRole === 0) unrefinedBaseParticleCount += 1;
+        if (refinementRole === 1) refinedParentCount += 1;
+        if (refinementRole === 2) activeChildCount += 1;
+        for (let axis = 0; axis < 3; axis += 1) {
+          adaptiveMomentum[axis] += values[offset + 8 + axis] * volumeScale;
+        }
         for (let axis = 0; axis < 3; axis += 1) {
           min[axis] = Math.min(min[axis], values[offset + axis]);
           max[axis] = Math.max(max[axis], values[offset + axis]);
@@ -6686,6 +7100,23 @@ export async function createWebGPUFingerFluidSolver({
         neighborRetentionHistogram[Math.min(3, Math.max(0, Math.floor(neighborRetention * 4)))] += 1;
       }
       const physicalParticleCount = Math.max(1, activeParticleCount);
+      const adaptiveDensityLedger = {
+        contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+        enabled: safeAdaptiveDensity,
+        baseParticleCount: safeBaseParticleCount,
+        simulationCapacity: safeParticleCount,
+        activeParticleCount,
+        unrefinedBaseParticleCount,
+        refinedParentCount,
+        activeChildCount,
+        reservedChildCount,
+        representedVolume: Number(representedVolume.toFixed(6)),
+        momentum: adaptiveMomentum.map(value => Number(value.toFixed(6))),
+        chemistryMass: Number(chemistryMass.toFixed(6)),
+        splitCount: interfaceCounters[3],
+        mergeCount: interfaceCounters[4],
+        accountingValid: Math.abs(representedVolume - safeBaseParticleCount) <= Math.max(0.001, safeBaseParticleCount * 0.000001),
+      };
       const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
       const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
       const activeInterfaceCount = Math.min(interfaceCounters[0], safeParticleCount);
@@ -6768,7 +7199,7 @@ export async function createWebGPUFingerFluidSolver({
       const waterfallContinuityDiagnostics = safeTruthScene === 'laminar_inlets'
         ? measureFingerFluidWaterfallContinuity(values, restStateValues, safeParticleCount)
         : null;
-      const unsupportedSheetReleaseDiagnostics = safeUnsupportedSheetStrength > 0
+      const unsupportedSheetReleaseDiagnostics = safeUnsupportedSheetStrength > 0 || safeAdaptiveDensity
         ? summarizeFingerFluidSheetReleaseDiagnostics(topologyValues, values, safeParticleCount)
         : null;
       diagnostics = {
@@ -6782,6 +7213,7 @@ export async function createWebGPUFingerFluidSolver({
         },
         activeParticleCount,
         dormantParticleCount,
+        adaptiveDensityLedger,
         averageSpeed: Number((speedSum / physicalParticleCount).toFixed(4)),
         maxSpeed: Number(maxSpeed.toFixed(4)),
         averageDensity: Number((densitySum / physicalParticleCount).toFixed(4)),
@@ -6975,6 +7407,18 @@ export async function createWebGPUFingerFluidSolver({
       thinSheetVorticityAttenuation: safeThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: safeFreeFlightViscosityBoost,
       unsupportedSheetStrength: safeUnsupportedSheetStrength,
+      adaptiveDensityContract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+      adaptiveDensity: safeAdaptiveDensity,
+      adaptiveDensityPassCount,
+      adaptiveDensityLedger: diagnostics?.adaptiveDensityLedger || {
+        contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+        enabled: safeAdaptiveDensity,
+        baseParticleCount: safeBaseParticleCount,
+        simulationCapacity: safeParticleCount,
+        splitCount: 0,
+        mergeCount: 0,
+        accountingValid: null,
+      },
       pulseDrainageContract: KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT,
       inletCutoffStep: safeInletCutoffStep,
       inletCutoffReached: safeInletCutoffStep !== null && frameIndex >= safeInletCutoffStep,
@@ -7072,6 +7516,8 @@ export async function createWebGPUFingerFluidSolver({
       analyticSupportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
       analyticSupportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
       particleCount: safeParticleCount,
+      baseParticleCount: safeBaseParticleCount,
+      simulationCapacity: safeParticleCount,
       particleAllocationCapacity,
       particleAllocationPreflight,
       gridDimensions: [...GRID_DIMS],

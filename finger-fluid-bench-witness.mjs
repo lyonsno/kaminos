@@ -1196,6 +1196,11 @@ async function main() {
     const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
     const requestedThinSheetVorticityAttenuation = Number(requestedRoute.searchParams.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? 0.88);
     const requestedFreeFlightViscosityBoost = Number(requestedRoute.searchParams.get('finger_fluid_free_flight_viscosity_boost') ?? 0.17);
+    const requestedAdaptiveDensityRaw = requestedRoute.searchParams.get('finger_fluid_adaptive_density');
+    if (requestedAdaptiveDensityRaw !== null && requestedAdaptiveDensityRaw !== '0' && requestedAdaptiveDensityRaw !== '1') {
+      throw new Error(`invalid adaptive-density request rejected: ${requestedAdaptiveDensityRaw}`);
+    }
+    const requestedAdaptiveDensity = requestedAdaptiveDensityRaw === '1';
     const requestedParticleCount = resolveFingerFluidParticleCount(
       requestedRoute.searchParams.get('finger_fluid_particle_count') ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
     );
@@ -1208,6 +1213,7 @@ async function main() {
     const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
     const effectiveThinSheetVorticityAttenuation = lastDebugState.runtime?.effectiveThinSheetVorticityAttenuation;
     const effectiveFreeFlightViscosityBoost = lastDebugState.runtime?.effectiveFreeFlightViscosityBoost;
+    const effectiveAdaptiveDensity = lastDebugState.runtime?.effectiveAdaptiveDensity;
     const effectiveParticleCount = lastDebugState.runtime?.effectiveParticleCount;
     if (requestedTruthScene !== effectiveTruthScene) throw new Error(`silent truth-scene fallback rejected: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
@@ -1252,7 +1258,25 @@ async function main() {
     if (requestedCapillaryStrength !== effectiveCapillaryStrength) throw new Error(`silent capillary-strength fallback rejected: ${JSON.stringify({ requestedCapillaryStrength, effectiveCapillaryStrength })}`);
     if (requestedThinSheetVorticityAttenuation !== effectiveThinSheetVorticityAttenuation) throw new Error(`silent thin-sheet-vorticity fallback rejected: ${JSON.stringify({ requestedThinSheetVorticityAttenuation, effectiveThinSheetVorticityAttenuation })}`);
     if (requestedFreeFlightViscosityBoost !== effectiveFreeFlightViscosityBoost) throw new Error(`silent free-flight-viscosity fallback rejected: ${JSON.stringify({ requestedFreeFlightViscosityBoost, effectiveFreeFlightViscosityBoost })}`);
-    if (requestedParticleCount !== effectiveParticleCount || effectiveParticleCount !== lastDebugState.runtime?.particleCount) {
+    if (requestedAdaptiveDensity !== effectiveAdaptiveDensity) {
+      throw new Error(`silent adaptive-density fallback rejected: ${JSON.stringify({ requestedAdaptiveDensity, effectiveAdaptiveDensity })}`);
+    }
+    if (requestedAdaptiveDensity) {
+      const adaptiveLedger = lastDebugState.runtime?.adaptiveDensityLedger;
+      if (requestedParticleCount !== lastDebugState.runtime?.baseParticleCount || requestedParticleCount !== adaptiveLedger?.baseParticleCount) {
+        throw new Error(`adaptive base-population disagreement rejected: ${JSON.stringify({ requestedParticleCount, runtimeBaseParticleCount: lastDebugState.runtime?.baseParticleCount, ledgerBaseParticleCount: adaptiveLedger?.baseParticleCount })}`);
+      }
+      if (
+        effectiveParticleCount !== lastDebugState.runtime?.particleCount
+        || effectiveParticleCount !== lastDebugState.runtime?.simulationCapacity
+        || effectiveParticleCount !== adaptiveLedger?.simulationCapacity
+      ) {
+        throw new Error(`adaptive simulation-capacity disagreement rejected: ${JSON.stringify({ effectiveParticleCount, runtimeParticleCount: lastDebugState.runtime?.particleCount, simulationCapacity: lastDebugState.runtime?.simulationCapacity, ledgerSimulationCapacity: adaptiveLedger?.simulationCapacity })}`);
+      }
+      if (adaptiveLedger?.accountingValid !== true) {
+        throw new Error(`adaptive accounting invalid: ${JSON.stringify(adaptiveLedger)}`);
+      }
+    } else if (requestedParticleCount !== effectiveParticleCount || effectiveParticleCount !== lastDebugState.runtime?.particleCount) {
       throw new Error(`particle-count disagreement rejected: ${JSON.stringify({ requestedParticleCount, effectiveParticleCount, runtimeParticleCount: lastDebugState.runtime?.particleCount })}`);
     }
     if (
