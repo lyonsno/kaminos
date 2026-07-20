@@ -6100,6 +6100,7 @@ struct BoundarySplatCamera {
   depositionControls: vec4<f32>,
   instanceInfo: vec4<f32>,
   cameraPosition: vec4<f32>,
+  productTransform: vec4<f32>,
 };
 
 struct BoundarySplatInstanceDescriptor {
@@ -6803,6 +6804,8 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
     instanceScale = descriptor.transform.w;
     transformedPosition = splat.positionSupport.xyz * instanceScale + descriptor.transform.xyz;
   }
+  transformedPosition = transformedPosition * boundarySplatCamera.productTransform.w
+    + boundarySplatCamera.productTransform.xyz;
   let normal = normalize(splat.worldNormalAreaOpacity.xyz);
   let tangentReference = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.y) > 0.92);
   let tangent = normalize(cross(tangentReference, normal));
@@ -7284,6 +7287,7 @@ export function createKaminosVolumePrototype({
   externalAdapterInfo = null,
   externalColorFormat = null,
   externalDepthFormat = 'depth24plus',
+  externalProductTransform = { translate: [0, 0, 0], scale: 1 },
 }) {
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
@@ -7296,6 +7300,12 @@ export function createKaminosVolumePrototype({
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
   if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
+  const productTransform = {
+    translate: Array.isArray(externalProductTransform?.translate)
+      ? externalProductTransform.translate.slice(0, 3).map(value => Number(value) || 0)
+      : [0, 0, 0],
+    scale: Math.max(0.001, Number(externalProductTransform?.scale) || 1),
+  };
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -9079,7 +9089,7 @@ export function createKaminosVolumePrototype({
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 208,
+      size: 224,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatInstanceDescriptorBuffer = device.createBuffer({
@@ -11056,7 +11066,7 @@ export function createKaminosVolumePrototype({
     const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(52);
+      const splatCamera = new Float32Array(56);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       const covarianceMode = boundarySplatMode === 'kernel_moment_covariance' || boundarySplatMode === 'kernel_moment_full_flame_union'
@@ -11118,6 +11128,7 @@ export function createKaminosVolumePrototype({
         persistentCohortRequested ? 1 : 0,
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
+      splatCamera.set([...productTransform.translate, productTransform.scale], 52);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -20446,6 +20457,10 @@ export function createKaminosVolumePrototype({
       smokeDepthFarBoundEffective: false,
       splatFireEncoded: true,
       splatSharedDepthEffective: true,
+      productTransform: {
+        translate: [...productTransform.translate],
+        scale: productTransform.scale,
+      },
       privateSubmitApplied: false,
       colorFormat: format,
       depthFormat: externalDepthFormat,
