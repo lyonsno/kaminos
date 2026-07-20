@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import {
+  closeCdpBrowser,
+  requestCdp,
+} from './motion-ready-719024-cdp.js';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -117,21 +121,6 @@ async function waitForCdp() {
   }
 }
 
-function wsRequest(ws, method, params = {}) {
-  const id = ws._nextId = (ws._nextId || 0) + 1;
-  ws.send(JSON.stringify({ id, method, params }));
-  return new Promise((resolveRequest, rejectRequest) => {
-    const onMessage = event => {
-      const message = JSON.parse(String(event.data));
-      if (message.id !== id) return;
-      ws.removeEventListener('message', onMessage);
-      if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
-      else resolveRequest(message.result);
-    };
-    ws.addEventListener('message', onMessage);
-  });
-}
-
 function waitForWebSocketOpen(ws) {
   return new Promise((resolveOpen, rejectOpen) => {
     ws.addEventListener('open', resolveOpen, { once: true });
@@ -140,7 +129,7 @@ function waitForWebSocketOpen(ws) {
 }
 
 async function evaluate(ws, expression) {
-  const response = await wsRequest(ws, 'Runtime.evaluate', {
+  const response = await requestCdp(ws, 'Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
@@ -152,13 +141,7 @@ async function evaluate(ws, expression) {
 }
 
 async function closeBrowser(ws) {
-  try {
-    await wsRequest(ws, 'Browser.close');
-  } catch {
-    try { ws.close(); } catch {}
-  }
-  await delay(250);
-  if (chromeProcess?.exitCode == null && chromeProcess?.signalCode == null) chromeProcess.kill('SIGTERM');
+  await closeCdpBrowser(ws, chromeProcess, delay);
 }
 
 function assertPng(buffer, label) {
@@ -240,7 +223,7 @@ async function waitForElapsed(ws, target) {
 
 async function captureFrame(ws, sample, index) {
   const debug = await waitForElapsed(ws, sample.at);
-  const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+  const screenshot = await requestCdp(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
   const png = Buffer.from(screenshot.data, 'base64');
   assertPng(png, `frame ${index}`);
   const path = `${outDir}/frame-${String(index).padStart(2, '0')}-${sample.label}.png`;
@@ -353,9 +336,9 @@ try {
   if (!page?.webSocketDebuggerUrl) throw new Error('No debuggable Chrome page found');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
-  await wsRequest(ws, 'Page.enable');
-  await wsRequest(ws, 'Runtime.enable');
-  await wsRequest(ws, 'Page.bringToFront').catch(() => null);
+  await requestCdp(ws, 'Page.enable');
+  await requestCdp(ws, 'Runtime.enable');
+  await requestCdp(ws, 'Page.bringToFront').catch(() => null);
 
   phase = 'loading-witness';
   const loaded = await waitForWitness(ws);
