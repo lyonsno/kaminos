@@ -100,6 +100,26 @@ function assertEffectiveStatePresetBinding(state, presetId) {
   }
 }
 
+function assertSettingsPresetSummary(summary, receipt) {
+  assertObject(summary, 'basin promotion settings preset summary');
+  const expected = {
+    presetId: receipt.presetId,
+    requestedPresetRef: receipt.requestedPresetRef,
+    alias: receipt.alias,
+    label: receipt.label,
+    contentHash: receipt.contentHash,
+    schemaIdentity: receipt.schemaIdentity,
+    controlCount: receipt.preset.controlCount,
+    rendererControlCount: receipt.rendererControlCount,
+    sourcePresetAuthority: receipt.sourcePresetAuthority,
+  };
+  for (const [field, value] of Object.entries(expected)) {
+    if (canonicalJson(summary[field]) !== canonicalJson(value)) {
+      throw new Error(`basin promotion settings preset summary ${field} mismatch`);
+    }
+  }
+}
+
 function resolveSourceCommit(inputCommit = null) {
   const requested = String(inputCommit || '').trim();
   if (requested) {
@@ -282,6 +302,7 @@ export function validateBasinPromotionPackage(packageDocument) {
     document.settingsPreset?.presetId,
     document.settingsPreset?.schema,
   );
+  assertSettingsPresetSummary(document.settingsPreset, settingsReceipt);
   const effectiveState = normalizeEffectiveState(document.effectiveState);
   assertEffectiveStatePresetBinding(effectiveState, settingsReceipt.presetId);
   const expectedRoutes = buildRouteTemplates(settingsReceipt);

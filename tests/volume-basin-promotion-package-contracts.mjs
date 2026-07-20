@@ -249,6 +249,30 @@ const staleMount = spawnSync(process.execPath, [
 assert.notEqual(staleMount.status, 0, 'consumer mount must reject stale or wrong revision claims');
 assert.match(staleMount.stderr, /revision/i);
 
+const driftRoot = join(fixtureRoot, 'product-repo-summary-drift', 'basin-promotions');
+cpSync(relocatedRoot, driftRoot, { recursive: true });
+const driftPackagePath = join(driftRoot, 'cheap-firebowl', 'revisions', exportReceipt.revision, 'package.json');
+const driftChannelPath = join(driftRoot, 'cheap-firebowl', 'current.json');
+const driftPackage = JSON.parse(readFileSync(driftPackagePath, 'utf8'));
+driftPackage.settingsPreset.presetId = null;
+writeFileSync(driftPackagePath, `${JSON.stringify(driftPackage, null, 2)}\n`);
+const driftChannel = JSON.parse(readFileSync(driftChannelPath, 'utf8'));
+driftChannel.current.packageSha256 = createHash('sha256').update(readFileSync(driftPackagePath)).digest('hex');
+writeFileSync(driftChannelPath, `${JSON.stringify(driftChannel, null, 2)}\n`);
+const driftSettingsStore = join(fixtureRoot, 'product-repo-summary-drift', 'settings-store');
+const driftMount = spawnSync(process.execPath, [
+  cli,
+  'mount',
+  '--channel', driftChannelPath,
+  '--handle', 'cheap-firebowl',
+  '--revision', exportReceipt.revision,
+  '--settings-store', driftSettingsStore,
+  '--origin', 'https://product.example/kaminos/',
+], { encoding: 'utf8', timeout: 30_000 });
+assert.notEqual(driftMount.status, 0, 'consumer mount must reject top-level preset authority drift');
+assert.match(driftMount.stderr, /preset.*(summary|identity|mismatch)/i);
+assert.equal(existsSync(join(driftSettingsStore, 'presets', 'null.json')), false, 'rejected authority drift must not write a consumer preset');
+
 const escapedChannelPath = join(relocatedRoot, 'cheap-firebowl', 'escaped-current.json');
 const escapedChannel = structuredClone(channel);
 escapedChannel.current.packageRelativePath = `revisions/${exportReceipt.revision}/../../../outside-package.json`;
