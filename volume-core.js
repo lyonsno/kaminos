@@ -1700,6 +1700,7 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
+@group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
@@ -4568,6 +4569,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct RaymarchResult {
   color: vec4<f32>,
+  transmittance: f32,
   residualFeature: vec4<f32>,
   sharedRidgeContribution: vec4<f32>,
   sharedNonRidgeContribution: vec4<f32>,
@@ -4587,6 +4589,7 @@ struct OpticalTransportContributionOutput {
 
 fn makeRaymarchResult(
   color: vec4<f32>,
+  transmittance: f32,
   residualFeature: vec4<f32>,
   sharedRidgeContribution: vec4<f32>,
   sharedNonRidgeContribution: vec4<f32>,
@@ -4594,6 +4597,7 @@ fn makeRaymarchResult(
 ) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
+  result.transmittance = transmittance;
   result.residualFeature = residualFeature;
   result.sharedRidgeContribution = sharedRidgeContribution;
   result.sharedNonRidgeContribution = sharedNonRidgeContribution;
@@ -4601,7 +4605,20 @@ fn makeRaymarchResult(
   return result;
 }
 
-fn raymarchVolume(in: VSOut) -> RaymarchResult {
+fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let dimensions = vec2<i32>(textureDimensions(productSceneDepth));
+  let pixel = clamp(vec2<i32>(in.pos.xy), vec2<i32>(0), dimensions - vec2<i32>(1));
+  let sceneDepth = textureLoad(productSceneDepth, pixel, 0);
+  if (sceneDepth >= 0.999999) {
+    return 1.0e6;
+  }
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
+  let depthWorldRaw = u.invViewProj * vec4<f32>(ndc, sceneDepth, 1.0);
+  let depthWorld = depthWorldRaw.xyz / max(abs(depthWorldRaw.w), 1.0e-6);
+  return max(0.0, dot(depthWorld - ro, rd));
+}
+
+fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let fullGridCapture = nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
@@ -4616,6 +4633,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
     return makeRaymarchResult(
       vec4<f32>(0.004, 0.005, 0.006, 1.0),
+      1.0,
       vec4<f32>(0.0),
       vec4<f32>(0.0),
       vec4<f32>(0.0),
@@ -4748,7 +4766,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
-  let endT = select(hit.y, 2.0, fullGridCapture);
+  let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
   let jitter = temporalJitterOffset(in.uv, dtBase);
   let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
@@ -5897,6 +5915,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   );
   return makeRaymarchResult(
     vec4<f32>(resolvedColor, 1.0),
+    trans,
     residualFeature,
     vec4<f32>(sharedRidgeContribution, 0.0),
     vec4<f32>(sharedNonRidgeContribution, 0.0),
@@ -5906,13 +5925,26 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1.0e6);
   return result.color;
 }
 
 @fragment
+fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
+  let nearWorldRaw = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
+  let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  let ro = u.cameraPos_time.xyz;
+  let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
+  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd));
+  let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
+  let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
+  return vec4<f32>(premultipliedRadiance, alpha);
+}
+
+@fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1.0e6);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
@@ -5921,7 +5953,7 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 
 @fragment
 fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1.0e6);
   var out: OpticalTransportContributionOutput;
   out.sharedRidge = result.sharedRidgeContribution;
   out.sharedNonRidge = result.sharedNonRidgeContribution;
@@ -7309,6 +7341,9 @@ export function createKaminosVolumePrototype({
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
+  const productModelMatrix = new THREE.Matrix4();
+  const productViewProj = new THREE.Matrix4();
+  const productLocalCameraPosition = new THREE.Vector3();
   const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(348);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
@@ -7902,6 +7937,7 @@ export function createKaminosVolumePrototype({
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let productRaymarchPipeline = null;
   let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
   let browserResidualSourcePipeline = null;
@@ -7984,6 +8020,8 @@ export function createKaminosVolumePrototype({
   let pressureReadBindGroupLayout = null;
   let emptyBindGroupLayout = null;
   let pipelineLayout = null;
+  let productRaymarchDepthBindGroupLayout = null;
+  let productRaymarchPipelineLayout = null;
   let majorantPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
@@ -8610,7 +8648,7 @@ export function createKaminosVolumePrototype({
   }
 
   function commitPreviousViewProjection() {
-    previousViewProj.copy(viewProj);
+    previousViewProj.copy(productFrameOwner === 'caller' ? productViewProj : viewProj);
     previousViewProjReady = true;
   }
 
@@ -9471,6 +9509,26 @@ export function createKaminosVolumePrototype({
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    if (productFrameOwner === 'caller') {
+      productRaymarchPipeline = device.createRenderPipeline({
+        label: `kaminos product caller-depth broad-smoke raymarch ${gridSize}^3`,
+        layout: productRaymarchPipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsProduct',
+          constants: renderPipelineConstants,
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+    }
     opticalTransportContributionPipeline = device.createRenderPipeline({
       label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridSize}^3`,
       layout: pipelineLayout,
@@ -10166,6 +10224,14 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
+    productRaymarchDepthBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos product smoke scene-depth bind group layout',
+      entries: [{
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'depth' },
+      }],
+    });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} fluid-front read bind group layout`,
       entries: [
@@ -10317,6 +10383,10 @@ export function createKaminosVolumePrototype({
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
+    });
+    productRaymarchPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos product smoke raymarch pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, productRaymarchDepthBindGroupLayout],
     });
     browserResidualPipelineLayout = device.createPipelineLayout({
       label: 'kaminos browser direct residual pipeline layout',
@@ -11058,9 +11128,21 @@ export function createKaminosVolumePrototype({
       state.lookFreezeTimeSeconds = null;
     }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    invViewProj.copy(viewProj).invert();
+    if (productFrameOwner === 'caller') {
+      productModelMatrix.makeScale(productTransform.scale, productTransform.scale, productTransform.scale);
+      productModelMatrix.setPosition(...productTransform.translate);
+      productViewProj.multiplyMatrices(viewProj, productModelMatrix);
+      invViewProj.copy(productViewProj).invert();
+      productLocalCameraPosition.copy(camera.position);
+      productLocalCameraPosition.x = (productLocalCameraPosition.x - productTransform.translate[0]) / productTransform.scale;
+      productLocalCameraPosition.y = (productLocalCameraPosition.y - productTransform.translate[1]) / productTransform.scale;
+      productLocalCameraPosition.z = (productLocalCameraPosition.z - productTransform.translate[2]) / productTransform.scale;
+    } else {
+      invViewProj.copy(viewProj).invert();
+      productLocalCameraPosition.copy(camera.position);
+    }
     if (!previousViewProjReady) {
-      previousViewProj.copy(viewProj);
+      previousViewProj.copy(productFrameOwner === 'caller' ? productViewProj : viewProj);
       previousViewProjReady = true;
     }
     const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
@@ -11149,9 +11231,9 @@ export function createKaminosVolumePrototype({
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
-    uniforms[16] = camera.position.x;
-    uniforms[17] = camera.position.y;
-    uniforms[18] = camera.position.z;
+    uniforms[16] = productLocalCameraPosition.x;
+    uniforms[17] = productLocalCameraPosition.y;
+    uniforms[18] = productLocalCameraPosition.z;
     uniforms[19] = renderPhaseTimeMs * 0.001;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
@@ -14440,6 +14522,31 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
+  }
+
+  function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
+    if (!productRaymarchPipeline || !productRaymarchDepthBindGroupLayout) {
+      throw new Error('product-smoke-raymarch-pipeline-unavailable');
+    }
+    const depthBindGroup = device.createBindGroup({
+      label: 'kaminos product smoke caller-depth bind group',
+      layout: productRaymarchDepthBindGroupLayout,
+      entries: [{ binding: 1, resource: sceneDepthView }],
+    });
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos product caller-depth broad-smoke raymarch pass',
+      colorAttachments: [{
+        view: colorView,
+        loadOp: 'load',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(productRaymarchPipeline);
+    pass.setBindGroup(0, bindGroup || bindGroups[currentFluid]);
+    pass.setBindGroup(1, depthBindGroup);
+    pass.draw(3);
+    pass.end();
+    return true;
   }
 
   function encodeBrowserResidualSourcePass(encoder, colorView, featureView) {
@@ -20433,6 +20540,13 @@ export function createKaminosVolumePrototype({
     if (composition.effective !== 'smoke-raymarch-under-splats-v0') {
       throw new Error(`product-frame-composition-mismatch:${composition.effective}`);
     }
+    const selectiveRender = selectiveHeadLiveRoleGroups('render');
+    const smokeApplied = encodeProductSmokeRaymarch(
+      commandEncoder,
+      colorView,
+      sceneDepthView,
+      selectiveRender,
+    );
     const splatApplied = encodeBoundarySplatPresentation(
       commandEncoder,
       colorView,
@@ -20445,16 +20559,16 @@ export function createKaminosVolumePrototype({
     }
     state.productFrameReceipt = {
       identity: 'product-frame-smoke-raymarch-under-splats-v0',
-      status: 'partial',
+      status: 'effective',
       frameOwner: 'caller',
       deviceOwner: 'caller',
       encoderOwner: 'caller',
       requestedComposition: composition.requested,
       effectiveComposition: composition.effective,
       raymarchFireAuthority: composition.definition.raymarchFireAuthority,
-      smokeRaymarchEncoded: false,
+      smokeRaymarchEncoded: smokeApplied,
       smokeDepthViewProvided: Boolean(sceneDepthView),
-      smokeDepthFarBoundEffective: false,
+      smokeDepthFarBoundEffective: smokeApplied,
       splatFireEncoded: true,
       splatSharedDepthEffective: true,
       productTransform: {
@@ -20466,12 +20580,12 @@ export function createKaminosVolumePrototype({
       depthFormat: externalDepthFormat,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
-      fallbackReason: 'product-smoke-depth-far-bound-pending',
+      fallbackReason: null,
     };
     recordSelectiveHeadLivePassReceipt({
       composition: composition.effective,
-      raymarchEncoded: false,
-      raymarchApplied: false,
+      raymarchEncoded: smokeApplied,
+      raymarchApplied: smokeApplied,
       splatEncoded: true,
       splatApplied: true,
       fallbackReason: state.productFrameReceipt.fallbackReason,
