@@ -88,7 +88,7 @@ export function validateAxialCrawlerRegistration(registration) {
 export function createAxialSquirmState(options = {}) {
   const terrainSupportProfile = Array.isArray(options.terrainSupportProfile)
     ? options.terrainSupportProfile.map(sample => ({
-      t: clamp(Number(sample.t) || 0, 0, 1),
+      t: Number.isFinite(Number(sample.t)) ? Number(sample.t) : 0,
       localOffset: Number(sample.localOffset) || 0,
     }))
     : [];
@@ -135,12 +135,14 @@ export function stepAxialSquirmController(previous, options = {}) {
     ? distanceDelta * phaseRadiansPerUnit / deltaSeconds
     : 0;
   const targetPhaseVelocity = hasRouteDistance ? distancePhaseVelocity : 6.2 * motionWeight;
-  const phaseRate = targetPhaseVelocity > prior.phaseVelocity ? 7.5 : 3.4;
+  const holdsDistancePhase = !hasRouteDistance && prior.phaseSource === 'route-distance-v0';
+  const effectiveTargetPhaseVelocity = holdsDistancePhase ? 0 : targetPhaseVelocity;
+  const phaseRate = effectiveTargetPhaseVelocity > prior.phaseVelocity ? 7.5 : 3.4;
   const phaseBlend = 1 - Math.exp(-phaseRate * deltaSeconds);
-  const phaseVelocity = mix(prior.phaseVelocity, targetPhaseVelocity, phaseBlend);
+  const phaseVelocity = mix(prior.phaseVelocity, effectiveTargetPhaseVelocity, phaseBlend);
   const phase = hasRouteDistance
     ? prior.phaseOffset + routeDistance * phaseRadiansPerUnit
-    : prior.phase + phaseVelocity * deltaSeconds;
+    : holdsDistancePhase ? prior.phase : prior.phase + phaseVelocity * deltaSeconds;
   const support = options.terrainSupport;
   return createAxialSquirmState({
     amplitude,
@@ -261,13 +263,19 @@ export function solveAxialTerrainSupportEnvelope(source, registrationInput, opti
     (terrain.zMax - terrain.zMin) / (terrain.rows - 1),
   );
   const supportSampleSpacing = Math.max(EPSILON, terrainCellWidth * 0.75);
+  const boundsMinZ = Number(bounds?.min?.[2]);
+  const boundsMaxZ = Number(bounds?.max?.[2]);
+  const exactTailZ = Number.isFinite(boundsMaxZ) ? Math.max(registration.tailZ, boundsMaxZ) : registration.tailZ;
+  const exactHeadZ = Number.isFinite(boundsMinZ) ? Math.min(registration.headZ, boundsMinZ) : registration.headZ;
+  const exactAxialSpan = exactTailZ - exactHeadZ;
   const longitudinalIntervals = Math.max(
     1,
-    Math.ceil(registration.axialSpan * scale / supportSampleSpacing),
+    Math.ceil(exactAxialSpan * scale / supportSampleSpacing),
   );
   const tValues = new Map();
   for (let index = 0; index <= longitudinalIntervals; index++) {
-    const t = index / longitudinalIntervals;
+    const localZ = mix(exactTailZ, exactHeadZ, index / longitudinalIntervals);
+    const t = (registration.tailZ - localZ) / registration.axialSpan;
     tValues.set(t.toFixed(9), t);
   }
   for (const station of registration.spineStations) tValues.set(station.t.toFixed(9), station.t);
@@ -280,7 +288,7 @@ export function solveAxialTerrainSupportEnvelope(source, registrationInput, opti
     : [0];
   const stations = supportTs.map((t, supportIndex) => {
     const authoredStation = registration.spineStations.find(station => Math.abs(station.t - t) < 1e-7);
-    const localZ = mix(registration.tailZ, registration.headZ, t);
+    const localZ = registration.tailZ - t * registration.axialSpan;
     const longitudinal = -localZ * scale;
     const centerX = rootSurface[0] + forward[0] * longitudinal;
     const centerZ = rootSurface[2] + forward[2] * longitudinal;

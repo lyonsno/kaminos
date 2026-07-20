@@ -66,6 +66,23 @@ assert.ok(
 assert.equal(cadenceRuns[0].phaseSource, 'route-distance-v0');
 assert.equal(cadenceRuns[0].routeDistance, 0.82);
 
+const distanceDriven = stepAxialSquirmController(createAxialSquirmState(), {
+  deltaSeconds: 1 / 60,
+  routeSpeed: 0.8,
+  routeDistance: 1,
+});
+const missingDistance = stepAxialSquirmController(distanceDriven, {
+  deltaSeconds: 0.1,
+  routeSpeed: 0.8,
+});
+assert.equal(
+  missingDistance.phase,
+  distanceDriven.phase,
+  'an absent route-distance sample must hold the last distance-derived phase instead of resuming frame integration',
+);
+assert.equal(missingDistance.routeDistance, 1);
+assert.equal(missingDistance.phaseSource, 'route-distance-v0');
+
 function syntheticTerrain(heightAt, resolution = 5) {
   const columns = resolution;
   const rows = resolution;
@@ -146,6 +163,28 @@ assert.ok(
   narrowFeatureSupport.samples.some(sample => sample.terrainHeight > 0.2),
   'a narrow terrain feature between authored stations must enter the support envelope',
 );
+
+const exactHeadLongitudinal = -normalized.bounds.min[2];
+const capObstacleSupport = solveAxialTerrainSupportEnvelope(
+  syntheticTerrain(x => x > 0.472 && x < 0.505 ? 0.4 : 0, 401),
+  normalized,
+  {
+    rootSurface: [0, 0, 0],
+    forward: [1, 0, 0],
+    scale: 1,
+    clearance: 0.02,
+    maxSuspensionLift: 0.08,
+  },
+);
+assert.ok(
+  Math.max(...capObstacleSupport.samples.map(sample => sample.longitudinal)) >= exactHeadLongitudinal - 1e-9,
+  'support sampling must reach the exact residual-bearing head cap instead of stopping at the authored head station',
+);
+assert.ok(
+  capObstacleSupport.samples.some(sample => sample.longitudinal > 0.47 && sample.terrainHeight > 0.3),
+  'terrain confined beneath the exact head cap must enter the support envelope',
+);
+assert.equal(capObstacleSupport.plannerDisposition, 'reroute-required');
 
 let controller = stepAxialSquirmController(null, {
   deltaSeconds: 1 / 60,

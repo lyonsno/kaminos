@@ -76,9 +76,10 @@ import {
   validateAxialCrawlerRegistration,
 } from './motion-ready-719024-core.js';
 
+const routeParameters = new URLSearchParams(location.search);
 const PATHS = Object.freeze({
-  creature: './artifacts/motion-ready-719024/creature.glb',
-  registration: './artifacts/motion-ready-719024/registration.json',
+  creature: routeParameters.get('creature_url') || './artifacts/motion-ready-719024/creature.glb',
+  registration: routeParameters.get('registration_url') || './artifacts/motion-ready-719024/registration.json',
   receipt: './artifacts/motion-ready-719024/receipt.json',
   hillPacket: './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   hillData: './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
@@ -158,6 +159,7 @@ const state = {
   terrainSupport: null,
   registration: null,
   receipt: null,
+  assetEvidence: null,
   creatureRoot: null,
   deformableMeshes: [],
   frameCount: 0,
@@ -435,23 +437,47 @@ async function loadJson(path) {
   return response.json();
 }
 
-async function loadGltf(path) {
-  return new Promise((resolve, reject) => new GLTFLoader().load(path, resolve, undefined, reject));
+async function loadBytes(path) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const sha256 = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+  return { path, bytes, byteLength: bytes.byteLength, sha256 };
+}
+
+async function loadJsonWithEvidence(path) {
+  const evidence = await loadBytes(path);
+  const value = JSON.parse(new TextDecoder().decode(evidence.bytes));
+  return { ...evidence, value };
+}
+
+async function loadGltfWithEvidence(path) {
+  const evidence = await loadBytes(path);
+  const resourcePath = new URL('.', new URL(path, location.href)).href;
+  const value = await new Promise((resolve, reject) => new GLTFLoader().parse(evidence.bytes, resourcePath, resolve, reject));
+  return { ...evidence, value };
 }
 
 async function initialize() {
-  const [registrationRaw, receipt, packet, data, gltf] = await Promise.all([
-    loadJson(PATHS.registration),
+  const [registrationAsset, receipt, packet, data, creatureAsset] = await Promise.all([
+    loadJsonWithEvidence(PATHS.registration),
     loadJson(PATHS.receipt),
     loadJson(PATHS.hillPacket),
     loadJson(PATHS.hillData),
-    loadGltf(PATHS.creature),
+    loadGltfWithEvidence(PATHS.creature),
   ]);
   if (receipt.castId !== MOTION_READY_719024_CAST_ID) throw new Error(`unexpected cast ${receipt.castId}`);
   if (receipt.files?.['creature.glb']?.sha256 !== EXPECTED.castHash) throw new Error('creature receipt hash mismatch');
   if (receipt.files?.['registration.json']?.sha256 !== EXPECTED.registrationHash) throw new Error('registration receipt hash mismatch');
-  state.registration = validateAxialCrawlerRegistration(registrationRaw);
+  if (creatureAsset.sha256 !== EXPECTED.castHash) throw new Error(`creature effective-byte identity mismatch: ${creatureAsset.sha256}`);
+  if (registrationAsset.sha256 !== EXPECTED.registrationHash) throw new Error(`registration effective-byte identity mismatch: ${registrationAsset.sha256}`);
+  state.registration = validateAxialCrawlerRegistration(registrationAsset.value);
   state.receipt = receipt;
+  state.assetEvidence = {
+    creature: { path: creatureAsset.path, byteLength: creatureAsset.byteLength, sha256: creatureAsset.sha256 },
+    registration: { path: registrationAsset.path, byteLength: registrationAsset.byteLength, sha256: registrationAsset.sha256 },
+  };
   state.source = decodeHillMotionAffordancePacket({ packet, data });
   if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
 
@@ -475,7 +501,7 @@ async function initialize() {
   state.routePoints = smoothRoutePoints(state.routePlan, state.source);
   createTerrain(state.source);
   createRouteLine(state.routePoints);
-  prepareCreature(gltf, state.registration);
+  prepareCreature(creatureAsset.value, state.registration);
 
   const startSample = samplePolylineRoute(state.routePoints, 0);
   const startPosition = new THREE.Vector3(...startSample.position);
@@ -517,8 +543,9 @@ window.kaminosMotionReady719024DebugState = () => ({
   },
   effective: {
     castId: state.receipt?.castId || null,
-    castHash: state.receipt?.files?.['creature.glb']?.sha256 || null,
-    registrationHash: state.receipt?.files?.['registration.json']?.sha256 || null,
+    castHash: state.assetEvidence?.creature?.sha256 || null,
+    registrationHash: state.assetEvidence?.registration?.sha256 || null,
+    assetEvidence: state.assetEvidence,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     hillSourceRef: state.source?.sourceRef || null,
     hillAuthority: state.source?.authority || null,

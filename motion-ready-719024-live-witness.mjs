@@ -12,6 +12,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const EXPECTED = Object.freeze({
   castId: args.get('--expected-cast-id') || 'motion-ready-719024',
   castHash: args.get('--expected-cast-hash') || '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
+  registrationHash: args.get('--expected-registration-hash') || 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   hillSource: args.get('--expected-hill-source') || 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
 });
 const url = args.get('--url') || 'http://127.0.0.1:18124/motion-ready-719024-witness.html';
@@ -24,6 +25,8 @@ const columns = positiveInt(args.get('--columns'), 4, '--columns');
 const windowWidth = positiveInt(args.get('--window-width'), 1440, '--window-width');
 const windowHeight = positiveInt(args.get('--window-height'), 900, '--window-height');
 const port = positiveInt(args.get('--debug-port'), 9684, '--debug-port');
+const cdpTimeoutMs = positiveInt(args.get('--cdp-timeout-ms'), 15_000, '--cdp-timeout-ms');
+const witnessTimeoutMs = positiveInt(args.get('--witness-timeout-ms'), 30_000, '--witness-timeout-ms');
 const chrome = process.env.KAMINOS_CHROME || args.get('--chrome') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-motion-ready-719024-profile-${port}-${process.pid}`;
 const samples = Object.freeze([
@@ -43,6 +46,7 @@ let effectiveUrl = null;
 let browserVersion = null;
 let effectiveIdentity = null;
 let chromeProcess = null;
+let lastTrustworthyEvidence = { phase: 'initializing' };
 
 function positiveInt(value, fallback, name) {
   if (value == null || value === '') return fallback;
@@ -69,12 +73,14 @@ function writeReport(report) {
     windowSize: { width: windowWidth, height: windowHeight },
     browserVersion,
     debugPort: port,
+    readinessTimeouts: { cdpTimeoutMs, witnessTimeoutMs },
     chrome,
     userDataDir,
     outDir,
     reportPath,
     filmstripPath,
     phase,
+    lastTrustworthyEvidence,
     stderrTail: stderr.slice(-4000),
     ...report,
   }, null, 2));
@@ -87,11 +93,25 @@ async function cdpFetch(path) {
 }
 
 async function waitForCdp() {
+  const deadline = Date.now() + cdpTimeoutMs;
+  let attempts = 0;
   for (;;) {
     if (chromeProcess?.exitCode != null) throw new Error(`Chrome exited before CDP opened (${chromeProcess.exitCode})`);
+    attempts++;
     try {
-      return await cdpFetch('/json/version');
-    } catch {
+      const version = await cdpFetch('/json/version');
+      lastTrustworthyEvidence = { phase: 'connecting-cdp', attempts, debugPort: port, cdpOpened: true };
+      return version;
+    } catch (error) {
+      lastTrustworthyEvidence = {
+        phase: 'connecting-cdp',
+        attempts,
+        debugPort: port,
+        cdpOpened: false,
+        browserExitCode: chromeProcess?.exitCode ?? null,
+        lastError: error?.message || String(error),
+      };
+      if (Date.now() >= deadline) throw new Error(`Timed out connecting to CDP after ${cdpTimeoutMs} ms`);
       await delay(150);
     }
   }
@@ -147,6 +167,7 @@ function assertPng(buffer, label) {
 }
 
 async function waitForWitness(ws) {
+  const deadline = Date.now() + witnessTimeoutMs;
   for (;;) {
     const result = await evaluate(ws, `(() => {
       const debug = window.kaminosMotionReady719024DebugState?.();
@@ -157,10 +178,20 @@ async function waitForWitness(ws) {
         debug,
       };
     })()`);
+    effectiveUrl = result.href || effectiveUrl;
+    lastTrustworthyEvidence = {
+      phase: 'loading-witness',
+      href: result.href || null,
+      status: result.status || null,
+      hasDebugState: result.hasDebugState,
+      loaded: Boolean(result.debug?.loaded),
+      consoleFailures: result.debug?.consoleFailures || [],
+    };
     if (result.debug?.consoleFailures?.length) {
       throw new Error(`witness reported console failures: ${JSON.stringify(result.debug.consoleFailures)}`);
     }
     if (result.debug?.loaded) return result;
+    if (Date.now() >= deadline) throw new Error(`Timed out loading witness state after ${witnessTimeoutMs} ms`);
     await delay(150);
   }
 }
@@ -180,6 +211,7 @@ function assertIdentity(debug) {
   };
   assert.equal(effectiveIdentity.castId, EXPECTED.castId, 'effective cast ID does not match requested cast ID');
   assert.equal(effectiveIdentity.castHash, EXPECTED.castHash, 'effective cast hash does not match requested cast hash');
+  assert.equal(effectiveIdentity.registrationHash, EXPECTED.registrationHash, 'effective registration hash does not match requested registration hash');
   assert.equal(effectiveIdentity.hillSource, EXPECTED.hillSource, 'effective Hill source does not match requested Hill source');
   assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');
   assert.equal(effectiveIdentity.hillAuthority, 'live_simulation', 'Hill packet is not source-owned live-simulation evidence');

@@ -14,6 +14,9 @@ const page = await readFile(new URL('motion-ready-719024-witness.html', root), '
 assert.match(page, /routeDistance:\s*sample\.distance/, 'live cadence is driven from traveled route distance');
 assert.match(page, /solveAxialTerrainSupportEnvelope/, 'live cast consumes the axial terrain support envelope');
 assert.match(page, /horizontalForward/, 'root orientation excludes vertical route tangent so axial support owns pitch');
+assert.match(page, /crypto\.subtle\.digest\('SHA-256'/, 'browser witness hashes the bytes it actually fetched');
+assert.match(page, /state\.assetEvidence/, 'browser effective identity comes from loaded-byte evidence');
+assert.match(page, /registration_url/, 'browser witness exposes a registration-byte false-closure probe');
 
 const source = decodeHillMotionAffordancePacket({ packet, data });
 assert.equal(source.sourceRef, 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348');
