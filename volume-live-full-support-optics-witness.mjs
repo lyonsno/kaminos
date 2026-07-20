@@ -209,6 +209,79 @@ try {
   assert.equal(cameraMotionProbe.changed, true, 'camera drag did not change the live camera');
   assert.ok(cameraMotionProbe.simStepDelta >= 0, 'camera interaction rewound simulation state');
 
+  failurePhase = 'same-state-optical-depth-order-diagnostic';
+  const diagnosticPause = await evaluate(socket, `(() => {
+    const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+    if (!prototype?.sampleBoundarySplatOpticalDepthOrderDiagnostic) {
+      throw new Error('optical-depth-order-diagnostic-api-missing');
+    }
+    return prototype.setSelectiveHeadLiveCapturePaused(true);
+  })()`);
+  assert.equal(diagnosticPause.paused, true, 'depth-order diagnostic did not pause the live simulator');
+  const orientationA = await evaluate(socket, `(async () => {
+    const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+    return prototype.sampleBoundarySplatOpticalDepthOrderDiagnostic({ sameStateCaptureId: 'live-optics-depth-order-a' });
+  })()`);
+  await socket.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: viewportPoint.x, y: viewportPoint.y, button: 'left', buttons: 1, clickCount: 1 });
+  await socket.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: viewportPoint.x - 120, y: viewportPoint.y + 35, button: 'left', buttons: 1 });
+  await socket.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: viewportPoint.x - 120, y: viewportPoint.y + 35, button: 'left', buttons: 0, clickCount: 1 });
+  await delay(250);
+  const orientationB = await evaluate(socket, `(async () => {
+    const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+    return prototype.sampleBoundarySplatOpticalDepthOrderDiagnostic({ sameStateCaptureId: 'live-optics-depth-order-b' });
+  })()`);
+  const diagnosticResume = await evaluate(socket, `(() => {
+    const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+    return prototype.setSelectiveHeadLiveCapturePaused(false);
+  })()`);
+  assert.equal(diagnosticResume.paused, false, 'depth-order diagnostic did not resume the live simulator');
+  const diagnosticPathA = screenshotPath.replace(/(\.[^./]+)?$/, '-depth-order-a.ppm');
+  const diagnosticPathB = screenshotPath.replace(/(\.[^./]+)?$/, '-depth-order-b.ppm');
+  writeDepthDiagnosticPreview(diagnosticPathA, orientationA.preview);
+  writeDepthDiagnosticPreview(diagnosticPathB, orientationB.preview);
+  const depthOrderDiagnostic = {
+    status: 'completed',
+    simStepCount: orientationA.simStepCount,
+    sameState: orientationA.simStepCount === orientationB.simStepCount,
+    cameraChanged: orientationA.cameraSignature !== orientationB.cameraSignature,
+    requestedDiagnostic: orientationA.requestedDiagnostic,
+    effectiveDiagnostic: orientationA.effectiveDiagnostic,
+    depthIntervalIdentity: orientationA.depthIntervalIdentity,
+    orderingIdentity: orientationA.orderingIdentity,
+    orientationA: {
+      cameraSignature: orientationA.cameraSignature,
+      colorMetrics: summarizeDepthDiagnostic(orientationA.preview),
+      artifactPath: diagnosticPathA,
+    },
+    orientationB: {
+      cameraSignature: orientationB.cameraSignature,
+      colorMetrics: summarizeDepthDiagnostic(orientationB.preview),
+      artifactPath: diagnosticPathB,
+    },
+    fallbackReason: orientationA.fallbackReason || orientationB.fallbackReason || null,
+  };
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, depthOrderDiagnostic };
+  assert.equal(orientationA.status, 'completed');
+  assert.equal(orientationB.status, 'completed');
+  assert.equal(depthOrderDiagnostic.sameState, true, 'depth-order orientations drifted simulation state');
+  assert.equal(depthOrderDiagnostic.cameraChanged, true, 'depth-order diagnostic did not change camera orientation');
+  assert.equal(depthOrderDiagnostic.fallbackReason, null, 'depth-order diagnostic used fallback');
+  assert.ok(depthOrderDiagnostic.orientationA.colorMetrics.coloredPixels > 0, 'first depth diagnostic was blank');
+  assert.ok(depthOrderDiagnostic.orientationB.colorMetrics.coloredPixels > 0, 'second depth diagnostic was blank');
+  for (const [label, orientation] of [
+    ['first', depthOrderDiagnostic.orientationA],
+    ['second', depthOrderDiagnostic.orientationB],
+  ]) {
+    assert.ok(
+      orientation.colorMetrics.nearGreenFraction > 0.01,
+      `${label} depth diagnostic collapsed out the near layers`,
+    );
+    assert.ok(
+      orientation.colorMetrics.farMagentaFraction > 0.01,
+      `${label} depth diagnostic collapsed out the far layers`,
+    );
+  }
+
   failurePhase = 'operator-frame-capture';
   const screenshot = await socket.call('Page.captureScreenshot', { format: 'png', fromSurface: true });
   const screenshotBytes = Buffer.from(screenshot.data, 'base64');
@@ -231,6 +304,7 @@ try {
     coefficientStats,
     liveMotionProbe,
     cameraMotionProbe,
+    depthOrderDiagnostic,
     pixelProbe: sampleMetrics(second),
     screenshotPath,
     elapsedMs: performance.now() - startedAtMs,
@@ -243,6 +317,7 @@ try {
     screenshotPath,
     liveMotionProbe,
     cameraMotionProbe,
+    depthOrderDiagnostic,
     pixelProbe: sampleMetrics(second),
   }, null, 2));
 } catch (error) {
@@ -328,6 +403,55 @@ function compareLiveSamples(first, second) {
 function sampleMetrics(sample) {
   const { rgba: _rgba, ...metrics } = sample;
   return metrics;
+}
+
+function writeDepthDiagnosticPreview(path, preview) {
+  assert.ok(Number.isInteger(preview?.width) && preview.width > 0, 'depth diagnostic width is invalid');
+  assert.ok(Number.isInteger(preview?.height) && preview.height > 0, 'depth diagnostic height is invalid');
+  assert.equal(preview.rgba?.length, preview.width * preview.height * 4, 'depth diagnostic payload is partial');
+  const rgb = Buffer.alloc(preview.width * preview.height * 3);
+  for (let source = 0, target = 0; source < preview.rgba.length; source += 4, target += 3) {
+    rgb[target] = preview.rgba[source];
+    rgb[target + 1] = preview.rgba[source + 1];
+    rgb[target + 2] = preview.rgba[source + 2];
+  }
+  writeFileSync(path, Buffer.concat([
+    Buffer.from(`P6\n${preview.width} ${preview.height}\n255\n`, 'ascii'),
+    rgb,
+  ]));
+}
+
+function summarizeDepthDiagnostic(preview) {
+  let coloredPixels = 0;
+  let nearGreenPixels = 0;
+  let farMagentaPixels = 0;
+  let redSum = 0;
+  let greenSum = 0;
+  let blueSum = 0;
+  for (let index = 0; index < preview.rgba.length; index += 4) {
+    const red = preview.rgba[index];
+    const green = preview.rgba[index + 1];
+    const blue = preview.rgba[index + 2];
+    if (Math.max(red, green, blue) <= 8) continue;
+    coloredPixels += 1;
+    redSum += red;
+    greenSum += green;
+    blueSum += blue;
+    if (green > red * 1.12 && green > blue * 1.12) nearGreenPixels += 1;
+    if (red > green * 1.12 && blue > green * 1.12) farMagentaPixels += 1;
+  }
+  return {
+    coloredPixels,
+    nearGreenPixels,
+    farMagentaPixels,
+    nearGreenFraction: nearGreenPixels / Math.max(1, coloredPixels),
+    farMagentaFraction: farMagentaPixels / Math.max(1, coloredPixels),
+    meanColor: {
+      red: redSum / Math.max(1, coloredPixels),
+      green: greenSum / Math.max(1, coloredPixels),
+      blue: blueSum / Math.max(1, coloredPixels),
+    },
+  };
 }
 
 async function runtimeState(cdp) {

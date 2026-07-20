@@ -12,7 +12,7 @@ assert.match(core, /fn boundarySplatOpticalFs[\s\S]*return\s+vec4<f32>\(in\.colo
 assert.match(core, /fn boundarySplatOpticalPresentationFs[\s\S]*for\s*\(var binIndex[\s\S]*1\.0\s*-\s*exp\(-opticalDepth\)[\s\S]*binColor\s*\*\s*binAlpha\s*\+\s*color\s*\*\s*\(1\.0\s*-\s*binAlpha\)/, 'optical resolve must apply exponential far-to-near self-transmittance');
 assert.match(core, /depth-binned-emission-optical-depth-v0/, 'live receipt must identify depth-binned accumulation');
 assert.match(core, /depth-binned-exponential-self-transmittance-v0/, 'live receipt must identify the optical recurrence');
-assert.match(core, /projected-ndc-zero-to-one-depth-interval-v0/, 'live receipt must identify the effective depth interval');
+assert.match(core, /camera-linear-volume-aabb-near-zero-far-one-v0/, 'live receipt must identify the effective camera-linear depth interval');
 assert.match(core, /encodeBoundarySplatOpticalRecurrence/, 'live route must encode the optical treatment separately');
 assert.match(core, /boundarySplatBilinearHdrPipeline/, 'bilinear deposition must expose an rgba16float HDR counterpart');
 assert.match(core, /boundarySplatBilinearOpticalPipelines/, 'bilinear deposition must expose per-bin rgba16float optical counterparts');

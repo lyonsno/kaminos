@@ -95,9 +95,11 @@ const BOUNDARY_SPLAT_OPTICAL_MODE = 'matched-optical-recurrence-v0';
 const BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS = 16;
 const BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY = 'depth-binned-emission-optical-depth-v0';
 const BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self-transmittance-v0';
-const BOUNDARY_SPLAT_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'projected-ndc-zero-to-one-depth-interval-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'camera-linear-volume-aabb-near-zero-far-one-v0';
 const BOUNDARY_SPLAT_OPTICAL_ORDERING_IDENTITY = 'far-to-near-alpha-over-v0';
 const BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY = 'one-minus-exp-negative-summed-optical-depth-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY = 'camera-linear-volume-aabb-near-zero-far-one-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_ORDERING = 'far-to-near-alpha-over-near-authoritative-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 96;
 const BOUNDARY_SPLAT_DRAW_STATE_BYTES = 80;
@@ -6097,6 +6099,7 @@ struct BoundarySplatCamera {
   unionControls: vec4<f32>,
   depositionControls: vec4<f32>,
   instanceInfo: vec4<f32>,
+  cameraPosition: vec4<f32>,
 };
 
 struct BoundarySplatInstanceDescriptor {
@@ -6743,6 +6746,22 @@ fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
   return vec2<f32>(1.0, 1.0);
 }
 
+fn boundarySplatCameraLinearDepthBin(worldPosition: vec3<f32>) -> u32 {
+  let cameraBackward = normalize(cross(boundarySplatCamera.cameraRight.xyz, boundarySplatCamera.cameraUp.xyz));
+  let cameraForward = -cameraBackward;
+  let cameraPosition = boundarySplatCamera.cameraPosition.xyz;
+  let centerDepth = dot(-cameraPosition, cameraForward);
+  let projectedHalfExtent = max(dot(abs(cameraForward), vec3<f32>(1.0)), 1e-6);
+  let nearDepth = centerDepth - projectedHalfExtent;
+  let linearDepth = dot(worldPosition - cameraPosition, cameraForward);
+  let normalizedDepth = clamp(
+    (linearDepth - nearDepth) / (2.0 * projectedHalfExtent),
+    0.0,
+    0.999999,
+  );
+  return u32(floor(normalizedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
+}
+
 @vertex
 fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
   let corner = boundarySplatQuadCorner(vertexIndex);
@@ -6826,8 +6845,7 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   out.nonRidgeOptical = nonRidgeOptical;
   out.unionEnabled = boundarySplatCamera.unionControls.x;
   out.depositionWeight = 1.0;
-  let projectedDepth = clamp(centerClip.z / max(centerClip.w, 1e-6), 0.0, 0.999999);
-  out.depthBin = u32(floor(projectedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
+  out.depthBin = boundarySplatCameraLinearDepthBin(transformedPosition);
   return out;
 }
 
@@ -6987,8 +7005,7 @@ fn boundarySplatBilinearVs(
   out.unionEnabled = select(boundarySplatCamera.unionControls.x, 1.0, persistentCohort);
   out.depositionWeight = boundarySplatBilinearTapWeight(tapIndex) * bilinearWeight
     * select(1.0, projectedFootprintJacobian, boundarySplatCamera.unionControls.z > 1.5);
-  let projectedDepth = clamp(centerClip.z / max(centerClip.w, 1e-6), 0.0, 0.999999);
-  out.depthBin = u32(floor(projectedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
+  out.depthBin = boundarySplatCameraLinearDepthBin(splat.positionSupport.xyz);
   return out;
 }
 
@@ -7137,6 +7154,23 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
   let grade = exposed * (0.80 + 0.18 * vignette);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
   return vec4<f32>(current, 1.0);
+}
+
+@fragment
+fn boundarySplatOpticalDepthOrderDiagnosticFs(in: BoundarySplatOpticalPresentationVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(boundarySplatOpticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  // near-bin-zero is green; far-bin-fifteen is magenta.
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let accumulated = max(textureLoad(boundarySplatOpticalBins, pixel, binIndex, 0), vec4<f32>(0.0));
+    let binAlpha = 1.0 - exp(-accumulated.a);
+    let depthFraction = f32(binIndex) / f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1});
+    let depthColor = mix(vec3<f32>(0.08, 1.0, 0.18), vec3<f32>(1.0, 0.05, 1.0), depthFraction);
+    color = depthColor * binAlpha + color * (1.0 - binAlpha);
+  }
+  return vec4<f32>(color, 1.0);
 }
 `;
 
@@ -7876,6 +7910,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatPresentationReadbackPipeline = null;
   let boundarySplatOpticalPresentationRenderPipeline = null;
   let boundarySplatOpticalPresentationReadbackPipeline = null;
+  let boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = null;
   let fourArmHeldStateLinearResolvePipeline = null;
   let fourArmHeldStateResidualBindGroupLayout = null;
   let fourArmHeldStateResidualPipelineLayout = null;
@@ -9019,7 +9054,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 192,
+      size: 208,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatInstanceDescriptorBuffer = device.createBuffer({
@@ -9586,19 +9621,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatPresentationRenderPipeline = makeBoundarySplatPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} canvas resolve`);
     boundarySplatPresentationReadbackPipeline = makeBoundarySplatPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} witness resolve`);
-    const makeBoundarySplatOpticalPresentationPipeline = (targetFormat, label) => device.createRenderPipeline({
+    const makeBoundarySplatOpticalPresentationPipeline = (
+      targetFormat,
+      label,
+      entryPoint = 'boundarySplatOpticalPresentationFs',
+    ) => device.createRenderPipeline({
       label,
       layout: 'auto',
       vertex: { module: boundarySplatOpticalPresentationShader, entryPoint: 'boundarySplatOpticalPresentationVs' },
       fragment: {
         module: boundarySplatOpticalPresentationShader,
-        entryPoint: 'boundarySplatOpticalPresentationFs',
+        entryPoint,
         targets: [{ format: targetFormat }],
       },
       primitive: { topology: 'triangle-list' },
     });
     boundarySplatOpticalPresentationRenderPipeline = makeBoundarySplatOpticalPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} canvas resolve`);
     boundarySplatOpticalPresentationReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} witness resolve`);
+    boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline(
+      'rgba8unorm',
+      `kaminos ${BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY} witness resolve`,
+      'boundarySplatOpticalDepthOrderDiagnosticFs',
+    );
     fourArmHeldStateLinearResolvePipeline = device.createRenderPipeline({
       label: 'kaminos four-arm held-state linear HDR resolve',
       layout: 'auto',
@@ -10940,7 +10984,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(48);
+      const splatCamera = new Float32Array(52);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       const covarianceMode = boundarySplatMode === 'kernel_moment_covariance' || boundarySplatMode === 'kernel_moment_full_flame_union'
@@ -11001,6 +11045,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatCapacity,
         persistentCohortRequested ? 1 : 0,
       ], 44);
+      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -12956,9 +13001,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeBoundarySplatPresentation(encoder, targetView, additivePipeline, resolvePipeline, options = {}) {
     if (boundarySplatPresentationModeEffective === BOUNDARY_SPLAT_OPTICAL_MODE) {
-      const opticalResolvePipeline = resolvePipeline === boundarySplatPresentationReadbackPipeline
-        ? boundarySplatOpticalPresentationReadbackPipeline
-        : boundarySplatOpticalPresentationRenderPipeline;
+      const opticalResolvePipeline = options.opticalDepthOrderDiagnostic === true
+        ? boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline
+        : (resolvePipeline === boundarySplatPresentationReadbackPipeline
+          ? boundarySplatOpticalPresentationReadbackPipeline
+          : boundarySplatOpticalPresentationRenderPipeline);
       return encodeBoundarySplatOpticalRecurrence(encoder, targetView, opticalResolvePipeline, options);
     }
     if (boundarySplatPresentationModeEffective === 'matched-presentation-v0') {
@@ -18411,6 +18458,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  async function sampleBoundarySplatOpticalDepthOrderDiagnostic(options = {}) {
+    if (!selectiveHeadLiveCapturePaused) {
+      throw new Error('optical-depth-order-diagnostic-requires-paused-simulator');
+    }
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`optical-depth-order-diagnostic-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const sameStateCaptureId = String(options.sameStateCaptureId || `optical-depth-order-f${baseFrameCount}-s${baseSimStepCount}`);
+    const sample = await sampleFrame({
+      advanceSim: false,
+      includeRgba: false,
+      opticalDepthOrderDiagnostic: true,
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      now: Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now(),
+    });
+    if (!sample?.ok) throw new Error(`optical-depth-order-diagnostic-sample-failed:${sample?.reason || 'unknown'}`);
+    if (!sample.preview?.rgba?.length) throw new Error('optical-depth-order-diagnostic-preview-missing');
+    if (sample.simStepCount !== baseSimStepCount) {
+      throw new Error(`optical-depth-order-diagnostic-state-drift:${baseSimStepCount}:${sample.simStepCount}`);
+    }
+    if (sample.boundarySplatOverflowCount !== 0) throw new Error('optical-depth-order-diagnostic-overflow');
+    const fallbackReason = sample.boundarySplatFallbackReason
+      || sample.boundarySplatPresentationModeFallbackReason
+      || sample.selectiveHeadLiveCompositionFallbackReason
+      || null;
+    if (fallbackReason) throw new Error(`optical-depth-order-diagnostic-fallback:${fallbackReason}`);
+    if (sample.selectiveHeadLivePassReceipt?.splatEncoded !== true
+      || sample.selectiveHeadLivePassReceipt?.splatApplied !== true) {
+      throw new Error('optical-depth-order-diagnostic-pass-not-applied');
+    }
+    return {
+      schema: 'kaminos.pyro.optical-depth-order-diagnostic.v0',
+      status: 'completed',
+      evidenceAuthority: 'operator-exploration-only',
+      decisionBearing: false,
+      sameStateCaptureId,
+      frameCount: sample.frameCount,
+      simStepCount: sample.simStepCount,
+      camera: sample.volumePresentationApplication?.camera || null,
+      cameraSignature: temporalCameraSignature(),
+      requestedDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      effectiveDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      depthIntervalIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      orderingIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_ORDERING,
+      nearColor: 'green',
+      farColor: 'magenta',
+      depthBins: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      candidateCount: sample.boundarySplatCandidateCount,
+      overflowCount: sample.boundarySplatOverflowCount,
+      rendererEncoded: sample.selectiveHeadLivePassReceipt.splatEncoded,
+      rendererApplied: sample.selectiveHeadLivePassReceipt.splatApplied,
+      fallbackReason,
+      preview: sample.preview,
+    };
+  }
+
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
@@ -18490,7 +18597,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           frameTexture.createView(),
           boundarySplatReadbackPipeline,
           boundarySplatPresentationReadbackPipeline,
-          { loadOp: raymarchApplied ? 'load' : 'clear' },
+          {
+            loadOp: raymarchApplied ? 'load' : 'clear',
+            opticalDepthOrderDiagnostic: options.opticalDepthOrderDiagnostic === true,
+          },
         );
         splatApplied = splatEncoded;
       }
@@ -20595,6 +20705,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleFrame,
     sampleFourArmHeldStateLedger,
     sampleBoundarySplatOpticalAdjudication,
+    sampleBoundarySplatOpticalDepthOrderDiagnostic,
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
