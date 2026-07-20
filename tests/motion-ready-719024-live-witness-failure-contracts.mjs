@@ -12,6 +12,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const scratch = await mkdtemp(join(tmpdir(), 'kaminos-motion-ready-719024-failure-'));
 const originalRegistration = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/registration.json'));
 const originalContactAtlas = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/contact-atlas.json'));
+const originalContactCarriers = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/contact-carriers.json'));
 
 function contentType(path) {
   return ({
@@ -39,6 +40,11 @@ const server = createServer(async (request, response) => {
     if (requestUrl.pathname === '/tampered-contact-atlas.json') {
       response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
       response.end(Buffer.concat([originalContactAtlas, Buffer.from(' ')]));
+      return;
+    }
+    if (requestUrl.pathname === '/tampered-contact-carriers.json') {
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(Buffer.concat([originalContactCarriers, Buffer.from(' ')]));
       return;
     }
     const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '') || 'motion-ready-719024-witness.html';
@@ -109,7 +115,7 @@ try {
     '--witness-timeout-ms', '700',
   ]);
   assert.equal(blankReport.phase, 'loading-witness');
-  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1`);
+  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1&contact_deformation=carrier`);
   assert.equal(blankReport.lastTrustworthyEvidence?.status, 'blank fixture');
 
   const tamperedReport = await runFailure('tampered-registration', [
@@ -131,6 +137,16 @@ try {
   ], 12_000);
   assert.equal(tamperedContactAtlasReport.phase, 'loading-witness');
   assert.match(tamperedContactAtlasReport.error, /contact atlas effective-byte identity mismatch/);
+
+  const tamperedContactCarriersReport = await runFailure('tampered-contact-carriers', [
+    '--chrome', chrome,
+    '--url', `http://127.0.0.1:${serverPort}/motion-ready-719024-witness.html?contact_carriers_url=/tampered-contact-carriers.json`,
+    '--debug-port', String(20_600 + (process.pid % 300)),
+    '--cdp-timeout-ms', '5000',
+    '--witness-timeout-ms', '7000',
+  ], 12_000);
+  assert.equal(tamperedContactCarriersReport.phase, 'loading-witness');
+  assert.match(tamperedContactCarriersReport.error, /contact carriers effective-byte identity mismatch/);
 } finally {
   await new Promise(resolveClose => server.close(resolveClose));
   await rm(scratch, { recursive: true, force: true });

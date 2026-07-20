@@ -12,6 +12,7 @@ assert.match(witness, /writeReport\(\{\s*ok: false/s, 'witness writes a durable 
 assert.match(witness, /--expected-cast-id/, 'witness exposes expected cast identity for false-closure probes');
 assert.match(witness, /--expected-cast-hash/, 'witness exposes expected cast hash for false-closure probes');
 assert.match(witness, /--expected-registration-hash/, 'witness exposes expected registration hash for false-closure probes');
+assert.match(witness, /--expected-contact-carriers-hash/, 'witness exposes expected contact carrier hash for false-closure probes');
 assert.match(witness, /--expected-hill-source/, 'witness exposes expected Hill source identity for false-closure probes');
 assert.match(witness, /requestedIdentity/, 'witness records requested identity');
 assert.match(witness, /effectiveIdentity/, 'witness records effective identity');
@@ -34,9 +35,11 @@ assert.match(identityContract, /transitionAdmission/, 'live evidence binds calle
 assert.match(identityContract, /minimumSupportMargin/, 'live evidence binds nonnegative compiled support margin');
 assert.match(browserWitness, /contact-atlas\.json/, 'browser witness loads the persisted exact-cast contact atlas');
 assert.match(browserWitness, /contactAtlasHash/, 'browser witness reports the effective contact-atlas byte identity');
+assert.match(browserWitness, /contact-carriers\.json/, 'browser witness loads the persisted exact-cast contact carriers');
+assert.match(browserWitness, /contactCarriersHash/, 'browser witness reports the effective contact-carrier byte identity');
 assert.match(browserWitness, /id="contact-coupling"/, 'browser witness exposes the contact coupling A\/B control');
 assert.match(browserWitness, /stepCrawlerContactLocomotion\(/, 'browser witness governs rail progress through contact state');
-assert.match(browserWitness, /applyCrawlerContactPatchDeformation\(/, 'browser witness gives contact phase visible geometric consequence');
+assert.match(browserWitness, /applyCrawlerContactCarrierDeformation\(/, 'browser witness gives contact phase a shape-preserving geometric consequence');
 assert.match(browserWitness, /sampleCrawlerContactPatches\(/, 'browser witness samples exact-cast patches against terrain');
 assert.match(browserWitness, /contactLocomotion/, 'browser debug state reports contact locomotion evidence');
 assert.match(witness, /--contact-coupling/, 'live witness can request and record an explicit contact coupling');
@@ -51,6 +54,8 @@ const expected = {
   castHash: 'cast-hash',
   registrationHash: 'registration-hash',
   contactAtlasHash: 'contact-atlas-hash',
+  contactCarriersHash: 'contact-carriers-hash',
+  contactDeformationMode: 'carrier',
   contactCoupling: 1,
   hillSource: 'hill-source',
   routePlanId: 'strict-route',
@@ -65,6 +70,10 @@ const validDebug = {
     contactAtlasSchema: 'kaminos.creature-contact-atlas.v0',
     contactAtlasAuthority: 'exact-cast-consumer-derived-contact-v0',
     contactPatchIds: ['front-left', 'front-right', 'rear-left', 'rear-right'],
+    contactCarriersHash: expected.contactCarriersHash,
+    contactCarriersSchema: 'kaminos.creature-contact-carriers.v0',
+    contactCarriersAuthority: 'exact-cast-consumer-derived-topology-v0',
+    contactDeformationMode: expected.contactDeformationMode,
     deformationMode: 'axial-parallel-transport-wave-v1',
     hillSourceRef: expected.hillSource,
     hillAuthority: 'live_simulation',

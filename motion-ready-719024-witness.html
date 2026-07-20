@@ -75,6 +75,7 @@ import {
   MOTION_READY_719024_CAST_ID,
   MOTION_READY_719024_DEFORMATION_MODE,
   compileCreatureScaleLocomotionRail,
+  applyCrawlerContactCarrierDeformation,
   applyCrawlerContactPatchDeformation,
   createAxialGeometryBinding,
   createAxialSquirmState,
@@ -90,6 +91,7 @@ import {
   stepCrawlerContactLocomotion,
   validateAxialCrawlerRegistration,
   validateCrawlerContactAtlas,
+  validateCrawlerContactCarriers,
 } from './motion-ready-719024-core.js';
 
 const routeParameters = new URLSearchParams(location.search);
@@ -97,6 +99,7 @@ const PATHS = Object.freeze({
   creature: routeParameters.get('creature_url') || './artifacts/motion-ready-719024/creature.glb',
   registration: routeParameters.get('registration_url') || './artifacts/motion-ready-719024/registration.json',
   contactAtlas: routeParameters.get('contact_atlas_url') || './artifacts/motion-ready-719024/contact-atlas.json',
+  contactCarriers: routeParameters.get('contact_carriers_url') || './artifacts/motion-ready-719024/contact-carriers.json',
   receipt: './artifacts/motion-ready-719024/receipt.json',
   hillPacket: './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   hillData: './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
@@ -105,6 +108,7 @@ const EXPECTED = Object.freeze({
   castHash: '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
   registrationHash: 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   contactAtlasHash: 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
+  contactCarriersHash: '06d2402a3ae546a65adeff0e6e6f929c701e39f9cff6a494afaa74d7baa6bd3a',
   hillSourceRef: 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
 });
 const TIMING = Object.freeze({ leadIn: 1.15, travel: 10.4, settle: 3.2 });
@@ -123,6 +127,10 @@ const trackInput = document.getElementById('track');
 const contactCouplingInput = document.getElementById('contact-coupling');
 const contactCouplingValue = document.getElementById('contact-coupling-value');
 const requestedContactCoupling = THREE.MathUtils.clamp(Number(routeParameters.get('contact_coupling') ?? 1), 0, 1);
+const requestedContactDeformation = routeParameters.get('contact_deformation') || 'carrier';
+if (!['carrier', 'weighted'].includes(requestedContactDeformation)) {
+  throw new Error('contact_deformation must be carrier or weighted');
+}
 contactCouplingInput.value = String(requestedContactCoupling);
 contactCouplingValue.value = requestedContactCoupling.toFixed(2);
 
@@ -183,6 +191,9 @@ const state = {
   terrainSupport: null,
   registration: null,
   contactAtlas: null,
+  contactCarriers: null,
+  contactDeformationMode: requestedContactDeformation,
+  contactDeformationEvidence: null,
   contactKinematics: null,
   contactSamples: null,
   contactLocomotion: null,
@@ -360,11 +371,18 @@ function applyCreatureDeformation() {
       position.array,
       normal.array,
     );
-    applyCrawlerContactPatchDeformation(
-      state.contactAtlas,
-      state.contactKinematics,
-      position.array,
-    );
+    state.contactDeformationEvidence = state.contactDeformationMode === 'carrier'
+      ? applyCrawlerContactCarrierDeformation(
+        state.contactAtlas,
+        state.contactCarriers,
+        state.contactKinematics,
+        position.array,
+      )
+      : applyCrawlerContactPatchDeformation(
+        state.contactAtlas,
+        state.contactKinematics,
+        position.array,
+      );
     position.needsUpdate = true;
     normal.needsUpdate = true;
   }
@@ -550,9 +568,10 @@ async function loadGltfWithEvidence(path) {
 }
 
 async function initialize() {
-  const [registrationAsset, contactAtlasAsset, receipt, packet, data, creatureAsset] = await Promise.all([
+  const [registrationAsset, contactAtlasAsset, contactCarriersAsset, receipt, packet, data, creatureAsset] = await Promise.all([
     loadJsonWithEvidence(PATHS.registration),
     loadJsonWithEvidence(PATHS.contactAtlas),
+    loadJsonWithEvidence(PATHS.contactCarriers),
     loadJson(PATHS.receipt),
     loadJson(PATHS.hillPacket),
     loadJson(PATHS.hillData),
@@ -564,6 +583,7 @@ async function initialize() {
   if (creatureAsset.sha256 !== EXPECTED.castHash) throw new Error(`creature effective-byte identity mismatch: ${creatureAsset.sha256}`);
   if (registrationAsset.sha256 !== EXPECTED.registrationHash) throw new Error(`registration effective-byte identity mismatch: ${registrationAsset.sha256}`);
   if (contactAtlasAsset.sha256 !== EXPECTED.contactAtlasHash) throw new Error(`contact atlas effective-byte identity mismatch: ${contactAtlasAsset.sha256}`);
+  if (contactCarriersAsset.sha256 !== EXPECTED.contactCarriersHash) throw new Error(`contact carriers effective-byte identity mismatch: ${contactCarriersAsset.sha256}`);
   state.registration = validateAxialCrawlerRegistration(registrationAsset.value);
   state.contactAtlas = validateCrawlerContactAtlas(contactAtlasAsset.value, {
     castId: MOTION_READY_719024_CAST_ID,
@@ -571,11 +591,19 @@ async function initialize() {
     registrationHash: EXPECTED.registrationHash,
     vertexCount: receipt.mesh.vertices,
   });
+  state.contactCarriers = validateCrawlerContactCarriers(contactCarriersAsset.value, {
+    castId: MOTION_READY_719024_CAST_ID,
+    castHash: EXPECTED.castHash,
+    registrationHash: EXPECTED.registrationHash,
+    atlasHash: EXPECTED.contactAtlasHash,
+    vertexCount: receipt.mesh.vertices,
+  });
   state.receipt = receipt;
   state.assetEvidence = {
     creature: { path: creatureAsset.path, byteLength: creatureAsset.byteLength, sha256: creatureAsset.sha256 },
     registration: { path: registrationAsset.path, byteLength: registrationAsset.byteLength, sha256: registrationAsset.sha256 },
     contactAtlas: { path: contactAtlasAsset.path, byteLength: contactAtlasAsset.byteLength, sha256: contactAtlasAsset.sha256 },
+    contactCarriers: { path: contactCarriersAsset.path, byteLength: contactCarriersAsset.byteLength, sha256: contactCarriersAsset.sha256 },
   };
   state.source = decodeHillMotionAffordancePacket({ packet, data });
   if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
@@ -672,6 +700,8 @@ window.kaminosMotionReady719024DebugState = () => ({
     castPath: PATHS.creature,
     registrationPath: PATHS.registration,
     contactAtlasPath: PATHS.contactAtlas,
+    contactCarriersPath: PATHS.contactCarriers,
+    contactDeformationMode: requestedContactDeformation,
     contactCoupling: requestedContactCoupling,
     hillPacketPath: PATHS.hillPacket,
     hillDataPath: PATHS.hillData,
@@ -684,6 +714,10 @@ window.kaminosMotionReady719024DebugState = () => ({
     contactAtlasSchema: state.contactAtlas?.schema || null,
     contactAtlasAuthority: state.contactAtlas?.authority || null,
     contactPatchIds: state.contactAtlas?.patches?.map(patch => patch.id) || [],
+    contactCarriersHash: state.assetEvidence?.contactCarriers?.sha256 || null,
+    contactCarriersSchema: state.contactCarriers?.schema || null,
+    contactCarriersAuthority: state.contactCarriers?.authority || null,
+    contactDeformationMode: state.contactDeformationMode,
     assetEvidence: state.assetEvidence,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     hillSourceRef: state.source?.sourceRef || null,
@@ -717,6 +751,7 @@ window.kaminosMotionReady719024DebugState = () => ({
     contactKinematics: state.contactKinematics,
     contactSamples: state.contactSamples,
     contactLocomotion: state.contactLocomotion,
+    contactDeformation: state.contactDeformationEvidence,
     root: state.creatureRoot ? state.creatureRoot.position.toArray() : null,
   },
   performance: { ...state.performance },

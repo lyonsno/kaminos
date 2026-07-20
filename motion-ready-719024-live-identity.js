@@ -12,6 +12,10 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
     contactAtlasSchema: effective.contactAtlasSchema,
     contactAtlasAuthority: effective.contactAtlasAuthority,
     contactPatchIds: effective.contactPatchIds,
+    contactCarriersHash: effective.contactCarriersHash,
+    contactCarriersSchema: effective.contactCarriersSchema,
+    contactCarriersAuthority: effective.contactCarriersAuthority,
+    contactDeformationMode: effective.contactDeformationMode,
     deformationMode: effective.deformationMode,
     hillSource: effective.hillSourceRef,
     hillAuthority: effective.hillAuthority,
@@ -36,6 +40,10 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
   assert.equal(effectiveIdentity.contactAtlasSchema, 'kaminos.creature-contact-atlas.v0', 'effective contact atlas schema is stale or missing');
   assert.equal(effectiveIdentity.contactAtlasAuthority, 'exact-cast-consumer-derived-contact-v0', 'effective contact atlas lacks exact-cast consumer authority');
   assert.deepEqual(effectiveIdentity.contactPatchIds, ['front-left', 'front-right', 'rear-left', 'rear-right'], 'effective contact patch identity/order drifted');
+  assert.equal(effectiveIdentity.contactCarriersHash, expected.contactCarriersHash, 'effective contact carriers hash does not match requested contact carriers hash');
+  assert.equal(effectiveIdentity.contactCarriersSchema, 'kaminos.creature-contact-carriers.v0', 'effective contact carriers schema is stale or missing');
+  assert.equal(effectiveIdentity.contactCarriersAuthority, 'exact-cast-consumer-derived-topology-v0', 'effective contact carriers lack exact-cast topology authority');
+  assert.equal(effectiveIdentity.contactDeformationMode, expected.contactDeformationMode, 'effective contact deformation mode does not match the requested A/B lane');
   assert.equal(debug?.motion?.contactCoupling, expected.contactCoupling, 'effective contact coupling does not match the requested A/B lane');
   assert.equal(effectiveIdentity.hillSource, expected.hillSource, 'effective Hill source does not match requested Hill source');
   assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');

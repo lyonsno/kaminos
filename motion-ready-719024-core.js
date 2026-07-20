@@ -1065,6 +1065,7 @@ const CRAWLER_CONTACT_PATCH_SPECS = Object.freeze([
   Object.freeze({ id: 'rear-right', axialRegion: 'rear', side: 'right', axialCenterT: 0.25, sideSign: -1, phaseOffset: 0 }),
 ]);
 const VALIDATED_CRAWLER_CONTACT_ATLAS = Symbol('validated-crawler-contact-atlas');
+const VALIDATED_CRAWLER_CONTACT_CARRIERS = Symbol('validated-crawler-contact-carriers');
 
 function quantile(values, fraction) {
   if (!values.length) throw new Error('contact atlas candidate set is empty');
@@ -1252,6 +1253,199 @@ export function validateCrawlerContactAtlas(atlas, expected = {}) {
   return Object.freeze(validated);
 }
 
+function buildMeshComponents(vertexCount, triangleIndices) {
+  if (!ArrayBuffer.isView(triangleIndices) || triangleIndices.length % 3 !== 0) {
+    throw new Error('contact carrier derivation requires packed triangle indices');
+  }
+  const parents = new Int32Array(vertexCount);
+  const ranks = new Uint8Array(vertexCount);
+  for (let vertex = 0; vertex < vertexCount; vertex++) parents[vertex] = vertex;
+  const find = vertex => {
+    let root = vertex;
+    while (parents[root] !== root) root = parents[root];
+    while (parents[vertex] !== vertex) {
+      const parent = parents[vertex];
+      parents[vertex] = root;
+      vertex = parent;
+    }
+    return root;
+  };
+  const unite = (left, right) => {
+    let leftRoot = find(left);
+    let rightRoot = find(right);
+    if (leftRoot === rightRoot) return;
+    if (ranks[leftRoot] < ranks[rightRoot]) [leftRoot, rightRoot] = [rightRoot, leftRoot];
+    parents[rightRoot] = leftRoot;
+    if (ranks[leftRoot] === ranks[rightRoot]) ranks[leftRoot]++;
+  };
+  for (let index = 0; index < triangleIndices.length; index += 3) {
+    const a = Number(triangleIndices[index]);
+    const b = Number(triangleIndices[index + 1]);
+    const c = Number(triangleIndices[index + 2]);
+    if (![a, b, c].every(vertex => Number.isInteger(vertex) && vertex >= 0 && vertex < vertexCount)) {
+      throw new Error('contact carrier triangle index is out of bounds');
+    }
+    unite(a, b);
+    unite(b, c);
+  }
+  const components = new Map();
+  const roots = new Int32Array(vertexCount);
+  for (let vertex = 0; vertex < vertexCount; vertex++) {
+    const root = find(vertex);
+    roots[vertex] = root;
+    const vertices = components.get(root) || [];
+    vertices.push(vertex);
+    components.set(root, vertices);
+  }
+  return { components, roots };
+}
+
+export function deriveCrawlerContactCarriers(originalPositions, triangleIndices, atlasInput, sourceIdentity = {}, options = {}) {
+  if (!ArrayBuffer.isView(originalPositions) || originalPositions.length % 3 !== 0) {
+    throw new Error('contact carrier derivation requires a packed position buffer');
+  }
+  const vertexCount = originalPositions.length / 3;
+  const atlas = validateCrawlerContactAtlas(atlasInput, { vertexCount });
+  const { components, roots } = buildMeshComponents(vertexCount, triangleIndices);
+  const collarThreshold = clamp(Number(options.collarThreshold) || 0.02, 0.001, 0.2);
+  const componentOwner = new Map();
+  const carrierRootsByPatch = new Map();
+  for (const patch of atlas.patches) {
+    const carrierRoots = new Set(patch.vertexIndices.map(vertex => roots[vertex]));
+    carrierRootsByPatch.set(patch.id, carrierRoots);
+    for (const root of carrierRoots) {
+      const owner = componentOwner.get(root);
+      if (owner && owner !== patch.id) throw new Error(`contact carrier component is shared by ${owner} and ${patch.id}`);
+      componentOwner.set(root, patch.id);
+    }
+  }
+  const collarCandidates = [];
+  for (const patch of atlas.patches) {
+    const sums = new Map();
+    for (let index = 0; index < patch.influenceVertexIndices.length; index++) {
+      const vertex = patch.influenceVertexIndices[index];
+      const root = roots[vertex];
+      if (componentOwner.has(root)) continue;
+      sums.set(root, (sums.get(root) || 0) + patch.influenceWeights[index]);
+    }
+    for (const [root, sum] of sums) {
+      const weight = sum / components.get(root).length;
+      if (weight >= collarThreshold) collarCandidates.push({ patchId: patch.id, root, weight });
+    }
+  }
+  collarCandidates.sort((left, right) => right.weight - left.weight || left.patchId.localeCompare(right.patchId));
+  const collarByPatch = new Map(atlas.patches.map(patch => [patch.id, []]));
+  for (const candidate of collarCandidates) {
+    if (componentOwner.has(candidate.root)) continue;
+    componentOwner.set(candidate.root, candidate.patchId);
+    collarByPatch.get(candidate.patchId).push(candidate);
+  }
+  const patches = atlas.patches.map(patch => {
+    const carrierRoots = [...carrierRootsByPatch.get(patch.id)].sort((a, b) => a - b);
+    const carrierVertexIndices = carrierRoots.flatMap(root => components.get(root));
+    const collars = collarByPatch.get(patch.id).sort((left, right) => left.root - right.root);
+    const collarVertexIndices = [];
+    const collarWeights = [];
+    for (const collar of collars) {
+      for (const vertex of components.get(collar.root)) {
+        collarVertexIndices.push(vertex);
+        collarWeights.push(collar.weight);
+      }
+    }
+    return {
+      id: patch.id,
+      axialRegion: patch.axialRegion,
+      side: patch.side,
+      vertexIndices: [...patch.vertexIndices],
+      carrierVertexIndices,
+      carrierComponentCount: carrierRoots.length,
+      collarVertexIndices,
+      collarWeights,
+      collarComponentCount: collars.length,
+    };
+  });
+  return {
+    schema: 'kaminos.creature-contact-carriers.v0',
+    version: 0,
+    castId: String(sourceIdentity.castId || atlas.castId),
+    castHash: String(sourceIdentity.castHash || atlas.castHash),
+    registrationHash: String(sourceIdentity.registrationHash || atlas.registrationHash),
+    atlasHash: String(sourceIdentity.atlasHash || ''),
+    authority: 'exact-cast-consumer-derived-topology-v0',
+    vertexCount,
+    triangleCount: triangleIndices.length / 3,
+    componentCount: components.size,
+    collarThreshold,
+    patches,
+  };
+}
+
+export function validateCrawlerContactCarriers(carriers, expected = {}) {
+  if (carriers?.schema !== 'kaminos.creature-contact-carriers.v0') {
+    throw new Error('contact carriers schema must be kaminos.creature-contact-carriers.v0');
+  }
+  if (expected.castId && carriers.castId !== expected.castId) throw new Error('contact carriers cast id mismatch');
+  if (expected.castHash && carriers.castHash !== expected.castHash) throw new Error('contact carriers cast hash mismatch');
+  if (expected.registrationHash && carriers.registrationHash !== expected.registrationHash) {
+    throw new Error('contact carriers registration hash mismatch');
+  }
+  if (expected.atlasHash && carriers.atlasHash !== expected.atlasHash) throw new Error('contact carriers atlas hash mismatch');
+  const vertexCount = Math.round(Number(expected.vertexCount ?? carriers.vertexCount));
+  if (!Number.isInteger(vertexCount) || vertexCount <= 0 || carriers.vertexCount !== vertexCount) {
+    throw new Error('contact carriers vertex count mismatch');
+  }
+  if (carriers[VALIDATED_CRAWLER_CONTACT_CARRIERS]) return carriers;
+  if (!Array.isArray(carriers.patches) || carriers.patches.length !== CRAWLER_CONTACT_PATCH_SPECS.length) {
+    throw new Error('contact carriers require exactly four crawler patches');
+  }
+  const claimedVertices = new Set();
+  const patches = carriers.patches.map((patch, patchIndex) => {
+    const spec = CRAWLER_CONTACT_PATCH_SPECS[patchIndex];
+    if (patch.id !== spec.id || patch.axialRegion !== spec.axialRegion || patch.side !== spec.side) {
+      throw new Error(`contact carriers patch ${patchIndex} identity/order mismatch`);
+    }
+    const vertexIndices = Array.from(patch.vertexIndices || [], Number);
+    const carrierVertexIndices = Array.from(patch.carrierVertexIndices || [], Number);
+    const collarVertexIndices = Array.from(patch.collarVertexIndices || [], Number);
+    const collarWeights = Array.from(patch.collarWeights || [], Number);
+    if (!vertexIndices.length || carrierVertexIndices.length < vertexIndices.length) {
+      throw new Error(`${patch.id} carrier must contain its contact vertices`);
+    }
+    if (collarVertexIndices.length !== collarWeights.length) throw new Error(`${patch.id} collar vertices and weights must align`);
+    const allIndices = [...carrierVertexIndices, ...collarVertexIndices];
+    if (allIndices.some(index => !Number.isInteger(index) || index < 0 || index >= vertexCount)) {
+      throw new Error(`${patch.id} carrier vertex index is out of bounds`);
+    }
+    if (!vertexIndices.every(index => carrierVertexIndices.includes(index))) {
+      throw new Error(`${patch.id} carrier omits a contact vertex`);
+    }
+    if (collarWeights.some(weight => !Number.isFinite(weight) || weight <= 0 || weight > 1)) {
+      throw new Error(`${patch.id} collar weights must remain in (0, 1]`);
+    }
+    for (const vertex of allIndices) {
+      if (claimedVertices.has(vertex)) throw new Error(`contact carrier vertex ${vertex} has multiple owners`);
+      claimedVertices.add(vertex);
+    }
+    const validatedPatch = {
+      ...patch,
+      vertexIndices,
+      carrierVertexIndices,
+      carrierComponentCount: Math.max(1, Math.round(Number(patch.carrierComponentCount) || 0)),
+      collarVertexIndices,
+      collarWeights,
+      collarComponentCount: Math.max(0, Math.round(Number(patch.collarComponentCount) || 0)),
+    };
+    for (const key of ['vertexIndices', 'carrierVertexIndices', 'collarVertexIndices', 'collarWeights']) {
+      Object.freeze(validatedPatch[key]);
+    }
+    return Object.freeze(validatedPatch);
+  });
+  Object.freeze(patches);
+  const validated = { ...carriers, patches };
+  Object.defineProperty(validated, VALIDATED_CRAWLER_CONTACT_CARRIERS, { value: true });
+  return Object.freeze(validated);
+}
+
 function positiveModulo(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
 }
@@ -1336,6 +1530,53 @@ export function applyCrawlerContactPatchDeformation(atlasInput, kinematics, outp
     schema: 'kaminos.crawler-contact-patch-deformation.v0',
     atlasCastId: atlas.castId,
     patchCount: atlas.patches.length,
+    coupling: kinematics.coupling,
+  };
+}
+
+export function applyCrawlerContactCarrierDeformation(atlasInput, carriersInput, kinematics, outputPositions) {
+  const atlas = validateCrawlerContactAtlas(atlasInput);
+  const carriers = validateCrawlerContactCarriers(carriersInput, {
+    castId: atlas.castId,
+    castHash: atlas.castHash,
+    registrationHash: atlas.registrationHash,
+    vertexCount: atlas.vertexCount,
+  });
+  if (kinematics?.schema !== 'kaminos.crawler-contact-kinematics.v0') {
+    throw new Error('crawler contact kinematics are required');
+  }
+  if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== atlas.vertexCount * 3) {
+    throw new Error('contact carrier deformation output must match atlas vertex count');
+  }
+  let carrierVertexCount = 0;
+  let collarVertexCount = 0;
+  for (const patch of carriers.patches) {
+    const motion = kinematics.patches.find(candidate => candidate.id === patch.id);
+    if (!motion) throw new Error(`contact kinematics missing patch ${patch.id}`);
+    const offset = requireVector3(motion.localOffset, `${patch.id} contact local offset`);
+    for (const vertex of patch.carrierVertexIndices) {
+      const vectorOffset = vertex * 3;
+      outputPositions[vectorOffset] += offset[0];
+      outputPositions[vectorOffset + 1] += offset[1];
+      outputPositions[vectorOffset + 2] += offset[2];
+    }
+    for (let index = 0; index < patch.collarVertexIndices.length; index++) {
+      const vectorOffset = patch.collarVertexIndices[index] * 3;
+      const weight = patch.collarWeights[index];
+      outputPositions[vectorOffset] += offset[0] * weight;
+      outputPositions[vectorOffset + 1] += offset[1] * weight;
+      outputPositions[vectorOffset + 2] += offset[2] * weight;
+    }
+    carrierVertexCount += patch.carrierVertexIndices.length;
+    collarVertexCount += patch.collarVertexIndices.length;
+  }
+  return {
+    schema: 'kaminos.crawler-contact-carrier-deformation.v0',
+    atlasCastId: atlas.castId,
+    carrierAuthority: carriers.authority,
+    patchCount: carriers.patches.length,
+    carrierVertexCount,
+    collarVertexCount,
     coupling: kinematics.coupling,
   };
 }
