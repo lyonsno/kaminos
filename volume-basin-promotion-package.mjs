@@ -20,9 +20,13 @@ const REVISION = /^basinrev-[a-f0-9]{64}$/;
 const ROUTE_ORIGIN = 'http://kaminos.invalid';
 
 function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map(entry => entry === undefined ? 'null' : canonicalJson(entry)).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    return `{${Object.keys(value)
+      .filter(key => value[key] !== undefined)
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
   }
   return JSON.stringify(value);
 }

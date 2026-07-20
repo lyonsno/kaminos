@@ -91,7 +91,6 @@ const presetContentHash = createHash('sha256')
 const presetArtifact = {
   identity: 'kaminos-volume-settings-preset-artifact-v2',
   presetId: `vsp-${presetContentHash}`,
-  requestedPresetRef: 'cheap-firebowl',
   alias: 'cheap-firebowl',
   label: 'Cheap Firebowl',
   contentHash: `sha256:${presetContentHash}`,
