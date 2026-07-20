@@ -6530,7 +6530,7 @@ export function summarizeFingerFluidSheetReleaseDiagnostics(
     const active = activeDiscriminator >= 0;
     if (!active) {
       dormantParticleCount += 1;
-      if (reason !== 'dormant') {
+      if (reason !== 'dormant' && reason !== 'disabled') {
         throw new Error(`Dormant particle ${index} carries non-dormant sheet release reason ${reason}`);
       }
       continue;

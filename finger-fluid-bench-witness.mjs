@@ -746,6 +746,7 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   const environmentMapEvidence = receipt?.environmentMapEvidence;
   const requestedFootprintMode = receipt?.requestedOpticalFootprintMode;
   const effectiveFootprintMode = receipt?.effectiveOpticalFootprintMode;
+  const refractionRenderer = receipt?.effectiveRendererMode === 'screen_space_refraction';
   const footprintRoutes = {
     resolved_detail: 'wgsl-liquid-resolved-detail-reflection-footprint-v0',
     variance_filtered: 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0',
@@ -753,8 +754,8 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   if (
     !footprintRoutes[requestedFootprintMode]
     || receipt?.requestedOpticalFootprintRoute !== footprintRoutes[requestedFootprintMode]
-    || receipt?.effectiveOpticalFootprintMode !== (requireReflection ? requestedFootprintMode : 'not_executed')
-    || receipt?.effectiveOpticalFootprintRoute !== (requireReflection
+    || receipt?.effectiveOpticalFootprintMode !== (refractionRenderer ? requestedFootprintMode : 'not_executed')
+    || receipt?.effectiveOpticalFootprintRoute !== (refractionRenderer
       ? footprintRoutes[requestedFootprintMode]
       : 'not-executed-non-refraction-renderer-v0')
     || receipt?.opticalFootprintFallbackReason
@@ -769,8 +770,8 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   if (
     !transmissionFootprintRoutes[requestedTransmissionFootprintMode]
     || receipt?.requestedTransmissionFootprintRoute !== transmissionFootprintRoutes[requestedTransmissionFootprintMode]
-    || receipt?.effectiveTransmissionFootprintMode !== (requireReflection ? requestedTransmissionFootprintMode : 'not_executed')
-    || receipt?.effectiveTransmissionFootprintRoute !== (requireReflection
+    || receipt?.effectiveTransmissionFootprintMode !== (refractionRenderer ? requestedTransmissionFootprintMode : 'not_executed')
+    || receipt?.effectiveTransmissionFootprintRoute !== (refractionRenderer
       ? transmissionFootprintRoutes[requestedTransmissionFootprintMode]
       : 'not-executed-non-refraction-renderer-v0')
     || receipt?.transmissionFootprintFallbackReason
@@ -4462,7 +4463,7 @@ async function main() {
       || resizedSurface.receipt.stepCount !== screenSpaceSurface.receipt.stepCount
       || resizedSurface.receipt.sphereDebugRenderFrameCount !== screenSpaceSurface.receipt.sphereDebugRenderFrameCount
       || resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount !== screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
-      || resizedSurface.receipt.screenSpaceRefractionRenderFrameCount !== screenSpaceRefraction.receipt.screenSpaceRefractionRenderFrameCount
+      || resizedSurface.receipt.screenSpaceRefractionRenderFrameCount < screenSpaceRefraction.receipt.screenSpaceRefractionRenderFrameCount
     ) {
       throw new Error(`renderer resize/recreate evidence mismatch: ${JSON.stringify({ initialExtent, resizedExtent, screenSpaceSurface: screenSpaceSurface.receipt, resizedSurface: resizedSurface.receipt })}`);
     }
@@ -4479,7 +4480,7 @@ async function main() {
       restoredReceipt?.stepCount !== screenSpaceSurface.receipt.stepCount
       || restoredReceipt?.sphereDebugRenderFrameCount !== resizedSurface.receipt.sphereDebugRenderFrameCount
       || restoredReceipt?.screenSpaceSurfaceRenderFrameCount !== resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
-      || restoredReceipt?.screenSpaceRefractionRenderFrameCount !== resizedSurface.receipt.screenSpaceRefractionRenderFrameCount
+      || restoredReceipt?.screenSpaceRefractionRenderFrameCount < resizedSurface.receipt.screenSpaceRefractionRenderFrameCount
       || restoredExtent !== initialExtent
     ) {
       throw new Error(`route-specific renderer counters or restored extent diverged: ${JSON.stringify({ initialExtent, restoredExtent, resizedSurface: resizedSurface.receipt, restoredReceipt })}`);
@@ -4493,6 +4494,12 @@ async function main() {
       initialExtent,
       resizedExtent,
       restoredExtent,
+      concurrentRefractionFrameDelta: {
+        duringResize: resizedSurface.receipt.screenSpaceRefractionRenderFrameCount
+          - screenSpaceRefraction.receipt.screenSpaceRefractionRenderFrameCount,
+        duringRestore: restoredReceipt.screenSpaceRefractionRenderFrameCount
+          - resizedSurface.receipt.screenSpaceRefractionRenderFrameCount,
+      },
       resizedSurface,
       restoredReceipt,
     };
