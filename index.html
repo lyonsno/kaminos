@@ -1066,10 +1066,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="volume-actions">
         <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
-        <input id="basin-promotion-package-path" class="search-input" type="text" placeholder="Package path" aria-label="Basin promotion package path">
-      </div>
-      <div class="volume-actions">
-        <input id="basin-promotion-channel-path" class="search-input" type="text" placeholder="Channel path" aria-label="Basin promotion channel path">
+        <input id="basin-promotion-root" class="search-input" type="text" value="artifacts/basin-promotions" aria-label="Basin promotion root">
         <button class="btn" id="basin-promotion-export">Export</button>
       </div>
     </div>
@@ -12354,16 +12351,14 @@ function buildVolumeBasinPromotionEffectiveState() {
 async function exportBasinPromotionPackage() {
   const labelInput = document.getElementById('settings-preset-label');
   const handleInput = document.getElementById('basin-promotion-handle');
-  const packageInput = document.getElementById('basin-promotion-package-path');
-  const channelInput = document.getElementById('basin-promotion-channel-path');
+  const promotionRootInput = document.getElementById('basin-promotion-root');
   const label = String(labelInput?.value || handleInput?.value || '').trim()
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const handle = String(handleInput?.value || label).trim();
-  const packagePath = String(packageInput?.value || '').trim();
-  const channelPath = String(channelInput?.value || '').trim();
+  const promotionRoot = String(promotionRootInput?.value || '').trim();
   volumeBasinPromotionStatus(`exporting ${handle}...`);
   try {
-    if (!packagePath) throw new Error('package path is required');
+    if (!promotionRoot) throw new Error('promotion root is required');
     await volumeCockpitLayoutReady;
     const preset = buildVolumeSettingsPreset();
     const effectiveState = buildVolumeBasinPromotionEffectiveState();
@@ -12373,8 +12368,7 @@ async function exportBasinPromotionPackage() {
       body: JSON.stringify({
         label,
         handle,
-        packagePath,
-        channelPath: channelPath || null,
+        promotionRoot,
         preset,
         effectiveState,
       }),

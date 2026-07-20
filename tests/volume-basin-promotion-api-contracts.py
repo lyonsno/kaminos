@@ -83,8 +83,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="kaminos-basin-promotion-api-") as temporary:
         root = Path(temporary)
         store = root / "settings-store"
-        package_path = root / "packages" / "api-basin.json"
-        channel_path = root / "channels" / "api-current.json"
+        promotion_root = root / "repo" / "artifacts" / "basin-promotions"
         old_schema_path = serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH
         old_store = serve.VOLUME_SETTINGS_STORE
         try:
@@ -95,8 +94,7 @@ def main():
             receipt = serve.write_volume_basin_promotion_package({
                 "label": "API Basin",
                 "handle": "API Basin",
-                "packagePath": str(package_path),
-                "channelPath": str(channel_path),
+                "promotionRoot": str(promotion_root),
                 "preset": preset_payload(),
                 "effectiveState": effective_state(),
                 "sourceCommit": "91374fa8297119d6513a927b00892bdbda7c9a45",
@@ -108,7 +106,7 @@ def main():
                 serve.write_volume_basin_promotion_package({
                     "label": "Bad Basin",
                     "handle": "Bad Basin",
-                    "packagePath": str(root / "bad.json"),
+                    "promotionRoot": str(root / "bad-promotions"),
                     "preset": bad,
                     "effectiveState": effective_state(),
                     "sourceCommit": "91374fa8297119d6513a927b00892bdbda7c9a45",
@@ -121,16 +119,20 @@ def main():
             serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = old_schema_path
             serve.VOLUME_SETTINGS_STORE = old_store
 
-        assert receipt["identity"] == "kaminos.volume.basin-promotion-write-receipt.v0"
+        assert receipt["identity"] == "kaminos.volume.basin-promotion-write-receipt.v1"
         assert receipt["promotion"]["status"] == "written"
-        assert receipt["promotion"]["packagePath"] == str(package_path)
-        assert receipt["promotion"]["channelPath"] == str(channel_path)
+        package_path = Path(receipt["promotion"]["packagePath"])
+        channel_path = Path(receipt["promotion"]["channelPath"])
+        assert package_path.parent.parent.parent == promotion_root / "api-basin"
+        assert channel_path == promotion_root / "api-basin" / "current.json"
         package = json.loads(package_path.read_text())
         channel = json.loads(channel_path.read_text())
-        assert package["schema"] == "kaminos.volume.basin-promotion-package.v0"
+        assert package["schema"] == "kaminos.volume.basin-promotion-package.v1"
         assert package["handle"] == "api-basin"
         assert package["revision"] == channel["current"]["revision"]
         assert package["settingsPreset"]["presetId"] == receipt["settingsPreset"]["presetId"]
+        assert package["settingsPreset"]["artifact"]["presetId"] == receipt["settingsPreset"]["presetId"]
+        assert channel["current"]["packageRelativePath"] == f"revisions/{package['revision']}/package.json"
         assert package["sourceCommit"] == "91374fa8297119d6513a927b00892bdbda7c9a45"
 
     print("volume basin promotion API contracts passed")

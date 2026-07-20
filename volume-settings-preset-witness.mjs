@@ -60,6 +60,8 @@ const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const label = String(args.get('--label') || 'Automated settings witness').trim();
 const cockpitAnchor = String(args.get('--cockpit-anchor') || '').trim();
+const promotionRoot = String(args.get('--promotion-root') || '').trim();
+const promotionHandle = String(args.get('--promotion-handle') || '').trim();
 const liveDebugExpression = `(() => {
   return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
 })()`;
@@ -151,6 +153,9 @@ class CdpSocket {
 try {
   if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
   if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
+  if (Boolean(promotionRoot) !== Boolean(promotionHandle)) {
+    throw new Error('settings preset witness promotion requires both --promotion-root and --promotion-handle');
+  }
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(cockpitOut), { recursive: true });
   mkdirSync(dirname(cockpitCollapsedOut), { recursive: true });
@@ -245,6 +250,7 @@ try {
     const anchorId = ${JSON.stringify(cockpitAnchor)};
     const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
     if (anchor) anchor.scrollIntoView({ block: 'center' });
+    const anchorRect = anchor?.getBoundingClientRect();
     const panel = operatorDocument.getElementById('volume-authored-mix-panel');
     const body = operatorDocument.getElementById('volume-authored-mix-body');
     const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
@@ -270,6 +276,20 @@ try {
       surviving,
       anchorId,
       anchorFound: !anchorId || !!anchor,
+      anchorGeometry: anchorRect ? {
+        left: anchorRect.left,
+        top: anchorRect.top,
+        right: anchorRect.right,
+        bottom: anchorRect.bottom,
+        width: anchorRect.width,
+        height: anchorRect.height,
+        visible: anchorRect.width > 0
+          && anchorRect.height > 0
+          && anchorRect.right > 0
+          && anchorRect.bottom > 0
+          && anchorRect.left < operatorWindow.innerWidth
+          && anchorRect.top < operatorWindow.innerHeight,
+      } : null,
       layoutReceipt,
       assayViewportGeometry: {
         activeTab: operatorWindow.__kaminosActiveTab?.() || null,
@@ -335,6 +355,9 @@ try {
     assert.ok(entry.width > 0 && entry.height > 0, `surviving cockpit control ${entry.id} has no rendered box`);
   }
   assert.equal(cockpitVisibility.anchorFound, true, `cockpit screenshot anchor is missing: ${cockpitAnchor}`);
+  if (cockpitVisibility.anchorId) {
+    assert.equal(cockpitVisibility.anchorGeometry?.visible, true, `cockpit screenshot anchor is outside the visible viewport: ${cockpitAnchor}`);
+  }
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
   assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 189, 'cockpit layout omitted basin or renderer controls');
   assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 186, 'canonical basin control count changed');
@@ -375,6 +398,29 @@ try {
   assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
   assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
   assert.equal(cockpitVisibility.panelGeometry?.hitInsidePanel, true, 'authored-mix panel is painted behind another surface');
+  const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
+  lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
+  let promotionReceipt = null;
+  if (promotionRoot) {
+    failurePhase = 'basin-promotion-export';
+    promotionReceipt = await evaluate(initialSocket, operatorContext(`(async () => {
+      const handleInput = operatorDocument.getElementById('basin-promotion-handle');
+      const rootInput = operatorDocument.getElementById('basin-promotion-root');
+      if (!handleInput || !rootInput || typeof operatorWindow.__kaminosExportBasinPromotionPackage !== 'function') {
+        throw new Error('cockpit basin promotion action is unavailable');
+      }
+      handleInput.value = ${JSON.stringify(promotionHandle)};
+      rootInput.value = ${JSON.stringify(promotionRoot)};
+      return operatorWindow.__kaminosExportBasinPromotionPackage();
+    })()`));
+    assert.equal(promotionReceipt?.identity, 'kaminos.volume.basin-promotion-write-receipt.v1', 'cockpit export returned a stale receipt schema');
+    assert.equal(promotionReceipt?.promotion?.status, 'written', 'cockpit export did not write a promotion package');
+    assert.equal(promotionReceipt?.promotion?.handle, promotionHandle, 'cockpit export substituted the stable handle');
+    assert.ok(promotionReceipt?.promotion?.packagePath, 'cockpit export omitted the caller-addressed package path');
+    assert.ok(promotionReceipt?.promotion?.channelPath, 'cockpit export omitted the current channel path');
+    lastTrustworthyEvidence.promotionReceipt = promotionReceipt;
+  }
   const nonVolumeTabs = await evaluate(initialSocket, operatorContext(`[
     ...operatorDocument.querySelectorAll('.tab[data-tab]'),
   ].map(tab => tab.dataset.tab).filter(tabName => tabName !== 'volume')`));
@@ -440,9 +486,6 @@ try {
   lastTrustworthyEvidence.responsiveIsolation = responsiveIsolation;
   lastTrustworthyEvidence.restoredPlacement = restoredPlacement;
   await delay(200);
-  const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
-  lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
 
   const collapsed = await evaluate(initialSocket, operatorContext(`(() => {
     const panel = operatorDocument.getElementById('volume-authored-mix-panel');
@@ -565,6 +608,7 @@ try {
     continuousSimStepDelta,
     cockpitAnchor: cockpitVisibility.anchorId || null,
     cockpitVisibility,
+    promotionReceipt,
     nonVolumeIsolation,
     responsiveIsolation,
     restoredPlacement,
