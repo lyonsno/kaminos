@@ -4,12 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
+  KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
   KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
   KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS,
   createFingerFluidTruthSceneParticles,
   createFingerFluidWaterfallOracleConfig,
   createFingerFluidWaterfallOracleEvidenceIdentity,
   evaluateFingerFluidWaterfallOraclePair,
+  resolveFingerFluidMaxSpeed,
   resolveFingerFluidWaterfallOraclePreset,
   sampleFingerFluidWaterfallOracleParticle,
 } from '../finger-fluid-webgpu-core.js';
@@ -24,6 +27,15 @@ assert.equal(
   KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
   'isolated-slot-waterfall-uniform-resolution-oracle-v0',
 );
+assert.equal(KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED, Math.fround(3.2));
+assert.equal(KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE, 3.2);
+assert.equal(resolveFingerFluidMaxSpeed(undefined), KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
+assert.equal(resolveFingerFluidMaxSpeed(8), 8);
+assert.equal(resolveFingerFluidMaxSpeed(8.123456789), Math.fround(8.123456789));
+assert.throws(() => resolveFingerFluidMaxSpeed(0), /maximum speed must be finite and positive/);
+assert.throws(() => resolveFingerFluidMaxSpeed(Number.NaN), /maximum speed must be finite and positive/);
+assert.throws(() => resolveFingerFluidMaxSpeed(4e-40), /normal finite f32/);
+assert.throws(() => resolveFingerFluidMaxSpeed(Number.MAX_VALUE), /normal finite f32/);
 assert.deepEqual(KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS, ['baseline', 'production', 'high']);
 assert.equal(resolveFingerFluidWaterfallOraclePreset('baseline'), 'baseline');
 assert.equal(resolveFingerFluidWaterfallOraclePreset('production'), 'production');
@@ -119,6 +131,7 @@ const common = {
   freeFlightViscosityBoost: 0.17,
   thinSheetVorticityAttenuation: 0.88,
   unsupportedSheetStrength: 0,
+  maxFluidSpeed: KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   densityIterations: 3,
   camera: baseline.camera,
 };
@@ -172,6 +185,8 @@ assert.match(coreSource, /waterfallOracleScene = params\.particleShift\.z > 1\.5
 assert.match(coreSource, /params\.particleShift\.w/);
 assert.match(coreSource, /safeKernelRadius/);
 assert.match(coreSource, /safeVisibleParticleRadius/);
+assert.match(coreSource, /KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/);
+assert.match(coreSource, /COMPUTE_SHADER\.replaceAll\(\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/);
 assert.match(witnessSource, /captured_pending_operator_disposition/);
 assert.match(witnessSource, /requestedPreset/);
 assert.match(witnessSource, /effectivePreset/);
@@ -187,6 +202,7 @@ assert.doesNotMatch(witnessSource, /finger-fluid-bench-witness\.mjs/);
 assert.match(indexSource, /requestedWitnessTargetStep/);
 assert.match(indexSource, /effectiveWitnessTargetStep/);
 assert.match(indexSource, /finger_fluid_witness_target_step/);
+assert.match(indexSource, /finger_fluid_max_speed/);
 assert.match(indexSource, /submittedState\.stepCount >= fingerFluidBenchConfig\.effectiveWitnessTargetStep/);
 assert.match(indexSource, /witnessTargetAutoPaused/);
 

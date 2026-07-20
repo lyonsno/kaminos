@@ -121,7 +121,8 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_STABILITY_CONTRACT\s*=\s*'b
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT\s*=\s*'kaminos-fluid-truth-gauntlet-v0'/, 'fluid-truth gauntlet has an explicit contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_SCENES/, 'canonical truth-scene registry is explicit');
 assert.match(webgpuCoreSource, /measureFingerFluidTruthSnapshot/, 'authoritative diagnostics expose one reusable fluid-truth snapshot');
-assert.match(webgpuCoreSource, /MAX_FLUID_SPEED\s*=\s*3\.2/, 'fluid speed ceiling is explicit and source-owned');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED\s*=\s*Math\.fround\(3\.2\)/, 'default fluid speed ceiling is explicit, f32-exact, and source-owned');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE\s*=\s*3\.2/, 'fixed diagnostic and interface speed scale is named independently from the solver ceiling');
 assert.match(webgpuCoreSource, /restDensity:\s*24\.3/, 'calibrated packed-state rest density is exposed');
 assert.match(webgpuCoreSource, /GRID_DIMS\s*=\s*\[32, 20, 32\]/, 'linked-cell domain has 3D neighborhood resolution');
 assert.match(webgpuCoreSource, /BOUNDS_MIN\s*=\s*\[-3\.4, -1\.2, -3\.4\]/, 'fluid domain leaves room around the finite liquid body');

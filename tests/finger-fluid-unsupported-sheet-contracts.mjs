@@ -214,6 +214,12 @@ assert.throws(() => core.evaluateFingerFluidUnsupportedSheetOraclePair({
   controlArtifact: { path: '/tmp/control.png', sha256: 'c'.repeat(64), width: 1800, height: 1120 },
   treatmentArtifact: { path: '/tmp/treatment.png', sha256: 'd'.repeat(64), width: 1800, height: 1120 },
 }), /common identity mismatch at capturedStep/);
+assert.throws(() => core.evaluateFingerFluidUnsupportedSheetOraclePair({
+  controlIdentity,
+  treatmentIdentity: { ...treatmentIdentity, maxFluidSpeed: 8 },
+  controlArtifact: { path: '/tmp/control.png', sha256: 'c'.repeat(64), width: 1800, height: 1120 },
+  treatmentArtifact: { path: '/tmp/treatment.png', sha256: 'd'.repeat(64), width: 1800, height: 1120 },
+}), /common identity mismatch at maxFluidSpeed/);
 
 assert.match(coreSource, /fn apply_unsupported_sheet_support/);
 assert.match(coreSource, /fn commit_unsupported_sheet_support/);

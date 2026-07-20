@@ -91,7 +91,9 @@ const DEFAULT_PARTICLE_COUNT = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT;
 const LAMINAR_SOURCE_REFERENCE_FPS = 60;
 const LAMINAR_SOURCE_AXIAL_SPACING = 0.055;
 const LAMINAR_SOURCE_PARTICLE_VOLUME = LAMINAR_SOURCE_AXIAL_SPACING ** 3;
-const MAX_FLUID_SPEED = 3.2;
+export const KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED = Math.fround(3.2);
+export const KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE = 3.2;
+const MIN_NORMAL_F32 = 2 ** -126;
 const GRID_DIMS = [32, 20, 32];
 const GRID_CELL_COUNT = GRID_DIMS[0] * GRID_DIMS[1] * GRID_DIMS[2];
 const BOUNDS_MIN = [-3.4, -1.2, -3.4];
@@ -163,6 +165,18 @@ export function resolveFingerFluidTruthScene(value = 'multi_regime_playground') 
     throw new RangeError(`Unsupported finger fluid truth scene: ${scene}`);
   }
   return scene;
+}
+
+export function resolveFingerFluidMaxSpeed(value = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED) {
+  const speed = Number(value ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new RangeError(`Finger fluid maximum speed must be finite and positive: ${value}`);
+  }
+  const f32Speed = Math.fround(speed);
+  if (!Number.isFinite(f32Speed) || f32Speed < MIN_NORMAL_F32) {
+    throw new RangeError(`Finger fluid maximum speed must be representable as a normal finite f32: ${value}`);
+  }
+  return f32Speed;
 }
 
 function isFingerFluidLaminarSourceScene(scene) {
@@ -272,6 +286,8 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     freeFlightViscosityBoost: Number(values.freeFlightViscosityBoost),
     thinSheetVorticityAttenuation: Number(values.thinSheetVorticityAttenuation),
     unsupportedSheetStrength: Number(values.unsupportedSheetStrength),
+    maxFluidSpeed: resolveFingerFluidMaxSpeed(values.maxFluidSpeed),
+    speedReferenceScale: KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
     inletCutoffStep: resolveFingerFluidInletCutoffStep(values.inletCutoffStep ?? null),
     camera: values.camera ? JSON.parse(JSON.stringify(values.camera)) : null,
   };
@@ -280,7 +296,7 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     'particleCount', 'laneColumns', 'laneRows', 'laneCount', 'physicalSourceFlux',
     'expectedParticleReleaseRate', 'fixedTimeStepSeconds', 'capturedStep', 'densityIterations',
     'capillaryStrength', 'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
-    'unsupportedSheetStrength',
+    'unsupportedSheetStrength', 'maxFluidSpeed', 'speedReferenceScale',
   ];
   if (identity.truthScene !== 'waterfall_resolution_oracle'
     || identity.sourceId !== config.sourceId
@@ -307,7 +323,7 @@ export function evaluateFingerFluidWaterfallOraclePair({
     'contract', 'truthScene', 'sourceId', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
     'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'unsupportedSheetStrength',
-    'inletCutoffStep',
+    'maxFluidSpeed', 'speedReferenceScale', 'inletCutoffStep',
   ];
   for (const key of exactCommonKeys) {
     if (JSON.stringify(baselineIdentity[key]) !== JSON.stringify(highIdentity[key])) {
@@ -388,7 +404,7 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
     'kernelRadius', 'visibleParticleRadius', 'particleCount', 'laneColumns', 'laneRows', 'laneCount',
     'physicalSourceFlux', 'expectedParticleReleaseRate', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',
-    'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'camera',
+    'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'maxFluidSpeed', 'speedReferenceScale', 'camera',
     'inletCutoffStep',
   ];
   for (const key of exactCommonKeys) {
@@ -1406,6 +1422,7 @@ fn toyFloorNormal(p: vec3<f32>) -> vec3<f32> {
 }
 `;
 
+const KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN = '__KAMINOS_FINGER_FLUID_MAX_SPEED__';
 const COMPUTE_SHADER = /* wgsl */`
 struct Particle {
   position: vec4<f32>,
@@ -1493,6 +1510,8 @@ struct Params {
   contactIdentity: vec4<u32>,
   sourceControl: vec4<u32>,
 }
+
+const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<storage, read_write> cellHeads: array<atomic<i32>>;
@@ -2411,7 +2430,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (position.z <= params.boundsMin.z + radius + 0.006 && velocity.z < 0.0) { velocity.z = 0.0; }
   if (position.z >= params.boundsMax.z - radius - 0.006 && velocity.z > 0.0) { velocity.z = 0.0; }
   let relaxedSpeed = length(velocity);
-  if (relaxedSpeed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / relaxedSpeed); }
+  if (relaxedSpeed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / relaxedSpeed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
 }
 
@@ -2498,7 +2517,7 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (confinementLength > 1.25) { confinement = confinement * (1.25 / confinementLength); }
   var velocity = particle.delta.xyz + confinement * params.dt;
   let speed = length(velocity);
-  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
   particles[index].position.w = min(omegaMagnitude, 4096.0);
 }
@@ -2749,7 +2768,7 @@ fn commit_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32
     let normalSpeed = dot(velocity, sheetState.xyz);
     velocity = velocity - sheetState.xyz * normalSpeed * min(0.18, sheetState.w * params.sheet.x * 0.12);
     let speed = length(velocity);
-    if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+    if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
     particle.predicted = vec4<f32>(particle.predicted.xyz + correction, particle.predicted.w);
     particle.delta = vec4<f32>(velocity, particle.delta.w);
     particles[index] = particle;
@@ -2839,7 +2858,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
     velocity = apply_laminar_inlet_boundary(position, particle.velocity.w, velocity).xyz;
   }
   let speed = length(velocity);
-  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
 }
 
@@ -2985,7 +3004,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, surfaceFactor);
   interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, anisotropy);
   interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
-  interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
+  interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
 }
 
 @compute @workgroup_size(1)
@@ -3252,7 +3271,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
       base = 0.42 + 0.48 * cos(vec3<f32>(0.0, 2.094, 4.188) + hash * 6.28318);
       phase = 0.0;
     } else if (colorMode == 2u) {
-      let value = clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0);
+      let value = clamp(speed / ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, 0.0, 1.0);
       base = mix(vec3<f32>(0.02, 0.10, 0.34), vec3<f32>(1.0, 0.25, 0.04), value);
       phase = 0.0;
     } else if (colorMode == 3u) {
@@ -3622,7 +3641,7 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let edge = smoothstep(1.0, 0.46, r2);
   let surfaceWeight = mix(0.55, 1.0, input.surface);
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
-  let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
+  let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
   var output: AccumFragmentOutput;
@@ -5643,6 +5662,7 @@ export async function createWebGPUFingerFluidSolver({
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
   unsupportedSheetStrength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  maxFluidSpeed = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   inletCutoffStep = null,
   waterfallOraclePreset = 'baseline',
   transparentBackground = false,
@@ -5695,6 +5715,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
   const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
   const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
+  const safeMaxFluidSpeed = resolveFingerFluidMaxSpeed(maxFluidSpeed);
   const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
@@ -5820,7 +5841,11 @@ export async function createWebGPUFingerFluidSolver({
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
   device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
 
-  const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: COMPUTE_SHADER });
+  const computeShader = COMPUTE_SHADER.replaceAll(
+    KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
+    String(safeMaxFluidSpeed),
+  );
+  const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const computeLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-compute-layout',
     entries: [
@@ -7044,7 +7069,8 @@ export async function createWebGPUFingerFluidSolver({
       restDensity: 24.3,
       kernelRadius: safeKernelRadius,
       visibleParticleRadius: safeVisibleParticleRadius,
-      maxFluidSpeed: MAX_FLUID_SPEED,
+      maxFluidSpeed: safeMaxFluidSpeed,
+      speedReferenceScale: KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
       substeps: safeSubsteps,
       stepCount,
       linkedCellGridBuildCount,

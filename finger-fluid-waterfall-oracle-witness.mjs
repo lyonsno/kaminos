@@ -5,7 +5,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import {
+  KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
   KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT,
   KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA,
   createFingerFluidPulseControlReadout,
@@ -15,6 +17,7 @@ import {
   evaluateFingerFluidUnsupportedSheetOraclePair,
   evaluateFingerFluidWaterfallOraclePair,
   resolveFingerFluidWaterfallWitnessPresetArgument,
+  resolveFingerFluidMaxSpeed,
   validateFingerFluidFiniteDiagnosticPayload,
   validateFingerFluidWaterfallWitnessRenderIdentity,
 } from './finger-fluid-webgpu-core.js';
@@ -40,6 +43,9 @@ const supportFriction = Number(args.get('--support-friction') || 1.6);
 const freeFlightViscosityBoost = Number(args.get('--free-flight-viscosity-boost') || 0.17);
 const thinSheetVorticityAttenuation = Number(args.get('--thin-sheet-vorticity-attenuation') || 0.88);
 const unsupportedSheetStrength = Number(args.get('--unsupported-sheet-strength') || 0);
+const maxFluidSpeed = resolveFingerFluidMaxSpeed(
+  baseUrl.searchParams.get('finger_fluid_max_speed') ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
+);
 const inletCutoffStep = Number(args.get('--cutoff-step') || 480);
 const captureSteps = String(args.get('--capture-steps') || '480,510,540,600,720,960')
   .split(',')
@@ -97,6 +103,8 @@ function writeReport(extra = {}) {
     opticalDebugMode,
     densityIterations,
     unsupportedSheetStrength,
+    maxFluidSpeed,
+    speedReferenceScale: KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
     inletCutoffStep: comparisonAxis === 'pulse_drainage' ? inletCutoffStep : null,
     captureSteps: comparisonAxis === 'pulse_drainage' ? captureSteps : null,
     comparisonAxis,
@@ -135,6 +143,7 @@ function buildUrl(
   url.searchParams.set('finger_fluid_free_flight_viscosity_boost', String(freeFlightViscosityBoost));
   url.searchParams.set('finger_fluid_thin_sheet_vorticity_attenuation', String(thinSheetVorticityAttenuation));
   url.searchParams.set('finger_fluid_unsupported_sheet_strength', String(sheetStrength));
+  url.searchParams.set('finger_fluid_max_speed', String(maxFluidSpeed));
   url.searchParams.set('finger_fluid_oracle_fixed_camera', '1');
   url.searchParams.set('finger_fluid_witness_target_step', String(captureStep));
   if (cutoffStep !== null) url.searchParams.set('finger_fluid_inlet_cutoff_step', String(cutoffStep));
@@ -309,6 +318,10 @@ function validateEffectiveIdentity({
     || route?.requestedUnsupportedSheetStrength !== unsupportedSheetStrength
     || route?.effectiveUnsupportedSheetStrength !== unsupportedSheetStrength
     || runtime.unsupportedSheetStrength !== unsupportedSheetStrength
+    || route?.requestedMaxFluidSpeed !== maxFluidSpeed
+    || route?.effectiveMaxFluidSpeed !== maxFluidSpeed
+    || runtime.maxFluidSpeed !== maxFluidSpeed
+    || runtime.speedReferenceScale !== KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE
     || route?.requestedInletCutoffStep !== cutoffStep
     || route?.effectiveInletCutoffStep !== cutoffStep
     || runtime.inletCutoffStep !== cutoffStep
@@ -328,6 +341,8 @@ function validateEffectiveIdentity({
         kernelRadius: runtime.kernelRadius,
         visibleParticleRadius: runtime.visibleParticleRadius,
         unsupportedSheetStrength: runtime.unsupportedSheetStrength,
+        maxFluidSpeed: runtime.maxFluidSpeed,
+        speedReferenceScale: runtime.speedReferenceScale,
         waterfallResolutionOracle: effective,
         pulseControlReadout: runtime.pulseControlReadout,
         expectedPulseControlReadout,
@@ -351,6 +366,8 @@ function validateEffectiveIdentity({
     capturedStep,
     camera: cameraIdentity,
     unsupportedSheetStrength,
+    maxFluidSpeed: runtime.maxFluidSpeed,
+    speedReferenceScale: runtime.speedReferenceScale,
     inletCutoffStep: runtime.inletCutoffStep,
   };
 }
@@ -552,6 +569,8 @@ async function runPreset(preset, port, {
       freeFlightViscosityBoost: runtime.freeFlightViscosityBoost,
       thinSheetVorticityAttenuation: runtime.thinSheetVorticityAttenuation,
       unsupportedSheetStrength: runtime.unsupportedSheetStrength,
+      maxFluidSpeed: runtime.maxFluidSpeed,
+      speedReferenceScale: runtime.speedReferenceScale,
       inletCutoffStep: runtime.inletCutoffStep,
       camera: config.camera,
     });

@@ -2781,6 +2781,7 @@ import {
 import {
   KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
   KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
@@ -2800,6 +2801,7 @@ import {
   resolveFingerFluidCapillaryStrength,
   resolveFingerFluidThinSheetVorticityAttenuation,
   resolveFingerFluidFreeFlightViscosityBoost,
+  resolveFingerFluidMaxSpeed,
   resolveFingerFluidUnsupportedSheetStrength,
   resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
@@ -2967,6 +2969,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedUnsupportedSheetStrength = Number(params.get('finger_fluid_unsupported_sheet_strength')
     ?? oracleCockpitRequested?.unsupportedSheetStrength
     ?? KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
+  const requestedMaxFluidSpeed = Number(params.get('finger_fluid_max_speed')
+    ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
@@ -3014,6 +3018,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveFreeFlightViscosityBoost: resolveFingerFluidFreeFlightViscosityBoost(requestedFreeFlightViscosityBoost),
     requestedUnsupportedSheetStrength,
     effectiveUnsupportedSheetStrength: resolveFingerFluidUnsupportedSheetStrength(requestedUnsupportedSheetStrength),
+    requestedMaxFluidSpeed,
+    effectiveMaxFluidSpeed: resolveFingerFluidMaxSpeed(requestedMaxFluidSpeed),
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedPressureIterations,
@@ -10500,6 +10506,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectivePressureIterations = fingerFluidBenchConfig.effectivePressureIterations;
   gpuState.requestedUnsupportedSheetStrength = fingerFluidBenchConfig.requestedUnsupportedSheetStrength;
   gpuState.effectiveUnsupportedSheetStrength = fingerFluidBenchConfig.effectiveUnsupportedSheetStrength;
+  gpuState.requestedMaxFluidSpeed = fingerFluidBenchConfig.requestedMaxFluidSpeed;
+  gpuState.effectiveMaxFluidSpeed = gpuState.maxFluidSpeed;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
@@ -10650,6 +10658,7 @@ async function startFingerFluidBench() {
       thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
       unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
+      maxFluidSpeed: fingerFluidBenchConfig.effectiveMaxFluidSpeed,
       inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
       waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
       transparentBackground: fingerFluidPyroCompositionRequested(),
