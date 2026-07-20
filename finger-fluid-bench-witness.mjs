@@ -22,6 +22,10 @@ const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.
 const waterfallLiquidSupportOut = resolve(args.get('--waterfall-liquid-support-out') || out.replace(/\.png$/i, '.waterfall-liquid-support.png'));
 const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.replace(/\.png$/i, '.screen-space-resized.png'));
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
+const invalidOpticalLightingOut = resolve(args.get('--invalid-optical-lighting-out') || out.replace(/\.png$/i, '.invalid-optical-lighting.png'));
+const transportOnlyOut = resolve(args.get('--transport-only-out') || out.replace(/\.png$/i, '.optical-lighting-transport-only.png'));
+const boundedGgxOut = resolve(args.get('--bounded-ggx-out') || out.replace(/\.png$/i, '.optical-lighting-bounded-ggx.png'));
+const legacyShadingOut = resolve(args.get('--legacy-shading-out') || out.replace(/\.png$/i, '.optical-lighting-legacy-shading.png'));
 const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.replace(/\.png$/i, '.reflection-phase-a.png'));
 const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
 const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') || out.replace(/\.png$/i, '.liquid-support-phase-a.png'));
@@ -46,6 +50,7 @@ const settleMs = Number(args.get('--settle-ms') || 10000);
 const preContactSettleMs = Number(args.get('--pre-contact-settle-ms') || 400);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 4200);
+const opticalLightingOnly = args.get('--optical-lighting-only') === '1';
 const CAMERA_DELTA_EPSILON = 1e-4;
 const FINAL_DIAGNOSTICS_MAX_LAG_STEPS = 16;
 
@@ -62,6 +67,8 @@ let refractionEvidence = null;
 let sameStateRendererComparison = null;
 let surfaceRegistrationViews = null;
 let sameStateOpticalComparison = null;
+let sameStateOpticalLightingComparison = null;
+let nonRefractionLightingApplicability = null;
 let frozenStateWorldReflectionWitness = null;
 let reflectionHitKindField = null;
 let refractionHitKindField = null;
@@ -75,6 +82,7 @@ let environmentContributionAliasProbe = null;
 let environmentContributionDistinctness = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
+let invalidOpticalLightingWitness = null;
 let opticalDebugViews = null;
 let slabValidityField = null;
 let primaryFrameBinding = null;
@@ -118,6 +126,7 @@ function writeReport(report = {}) {
     preContactSettleMs,
     hookWaitMs,
     cadenceWindowMs: cadenceMs,
+    evidenceScope: opticalLightingOnly ? 'renderer_only_no_solver_continuity_claim' : 'full_bench_acceptance',
     requestedTargetStep: targetStep,
     capturedTargetStep,
     failure_phase: phase,
@@ -158,6 +167,8 @@ function writeReport(report = {}) {
     sameStateRendererComparison,
     surfaceRegistrationViews,
     sameStateOpticalComparison,
+    sameStateOpticalLightingComparison,
+    nonRefractionLightingApplicability,
     frozenStateWorldReflectionWitness,
     reflectionHitKindField,
     refractionHitKindField,
@@ -171,6 +182,7 @@ function writeReport(report = {}) {
     environmentContributionDistinctness,
     rendererResizeWitness,
     invalidRendererWitness,
+    invalidOpticalLightingWitness,
     opticalDebugViews,
     slabValidityField,
     opticalDebugOutputs,
@@ -178,6 +190,10 @@ function writeReport(report = {}) {
     primaryRouteCanvasOut,
     resizedSurfaceOut,
     invalidRendererOut,
+    invalidOpticalLightingOut,
+    transportOnlyOut,
+    boundedGgxOut,
+    legacyShadingOut,
     reflectionPhaseAOut,
     reflectionPhaseBOut,
     liquidSupportPhaseAOut,
@@ -2015,6 +2031,7 @@ async function main() {
     const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
     const requestedRendererMode = requestedRoute.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
     const requestedOpticalDebugMode = requestedRoute.searchParams.get('finger_fluid_optical_debug') || 'shaded';
+    const requestedOpticalLightingMode = requestedRoute.searchParams.get('finger_fluid_optical_lighting') || 'transport_only';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const requestedCapillaryStrength = Number(requestedRoute.searchParams.get('finger_fluid_capillary_strength') ?? 0.72);
@@ -2024,6 +2041,7 @@ async function main() {
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
     const effectiveOpticalDebugMode = lastDebugState.runtime?.effectiveOpticalDebugMode;
+    const effectiveOpticalLightingMode = lastDebugState.runtime?.effectiveOpticalLightingMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     const effectiveCapillaryStrength = lastDebugState.runtime?.effectiveCapillaryStrength;
@@ -2033,6 +2051,41 @@ async function main() {
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
     if (requestedOpticalDebugMode !== effectiveOpticalDebugMode) throw new Error(`optical renderer disagreement rejected: ${JSON.stringify({ requestedOpticalDebugMode, effectiveOpticalDebugMode })}`);
+    const opticalLightingExecuted = effectiveRendererMode === 'screen_space_refraction';
+    const expectedEffectiveOpticalLightingMode = opticalLightingExecuted ? requestedOpticalLightingMode : 'not_executed';
+    if (
+      effectiveOpticalLightingMode !== expectedEffectiveOpticalLightingMode
+      || lastDebugState.runtime?.requestedOpticalLightingMode !== requestedOpticalLightingMode
+      || lastDebugState.runtime?.opticalLightingFallbackReason
+    ) {
+      throw new Error(`optical lighting disagreement rejected: ${JSON.stringify({
+        requestedOpticalLightingMode,
+        runtimeRequestedOpticalLightingMode: lastDebugState.runtime?.requestedOpticalLightingMode,
+        effectiveOpticalLightingMode,
+        expectedEffectiveOpticalLightingMode,
+        fallbackReason: lastDebugState.runtime?.opticalLightingFallbackReason,
+      })}`);
+    }
+    const expectedOpticalLightingRoute = {
+      transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+      bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+      legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+    }[requestedOpticalLightingMode];
+    if (
+      !expectedOpticalLightingRoute
+      || lastDebugState.runtime?.requestedOpticalLightingRoute !== expectedOpticalLightingRoute
+      || lastDebugState.runtime?.effectiveOpticalLightingRoute !== (opticalLightingExecuted
+        ? expectedOpticalLightingRoute
+        : 'not-executed-non-refraction-renderer-v0')
+    ) {
+      throw new Error(`optical lighting route disagreement rejected: ${JSON.stringify({
+        requestedOpticalLightingMode,
+        expectedOpticalLightingRoute,
+        requestedRoute: lastDebugState.runtime?.requestedOpticalLightingRoute,
+        effectiveRoute: lastDebugState.runtime?.effectiveOpticalLightingRoute,
+        opticalLightingExecuted,
+      })}`);
+    }
     const expectedRendererRoute = {
       screen_space_surface: 'webgpu-screen-space-liquid-surface-v0',
       screen_space_refraction: 'webgpu-screen-space-liquid-refraction-v0',
@@ -2083,6 +2136,236 @@ async function main() {
         || refractionEvidence?.accumulationPassCount < 1
         || refractionEvidence?.compositePassCount < 1
       ) throw new Error(`refraction route evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
+    }
+    if (opticalLightingOnly) {
+      if (effectiveRendererMode !== 'screen_space_refraction') {
+        throw new Error(`renderer-only optical lighting scope requires screen_space_refraction: ${effectiveRendererMode}`);
+      }
+      phase = 'renderer_only_optical_lighting_freeze';
+      const pauseReceipt = await evaluate(ws, `(() => window.kaminosFingerFluidBenchSetSimulationPausedForWitness?.(true))()`);
+      if (pauseReceipt?.paused !== true) throw new Error(`renderer-only optical witness could not freeze simulation: ${JSON.stringify(pauseReceipt)}`);
+      const opticalCanvasRect = await evaluate(ws, `(() => {
+        const overlay = document.getElementById('finger-fluid-bench-overlay');
+        const fpsCounter = document.getElementById('fps-counter');
+        if (overlay) overlay.style.visibility = 'hidden';
+        if (fpsCounter) fpsCounter.style.visibility = 'hidden';
+        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        if (!canvas || !canvas.width || !canvas.height) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!opticalCanvasRect || opticalCanvasRect.width < 100 || opticalCanvasRect.height < 100) {
+        throw new Error(`renderer-only optical canvas unavailable: ${JSON.stringify(opticalCanvasRect)}`);
+      }
+      phase = 'non_refraction_lighting_applicability';
+      const captureNonRefractionApplicability = async rendererMode => {
+        const receipt = await evaluate(ws, `(() => {
+          const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
+          if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
+          return render(${JSON.stringify(rendererMode)}, 'shaded', 'bounded_ggx');
+        })()`);
+        if (
+          receipt?.requestedRendererMode !== rendererMode
+          || receipt?.effectiveRendererMode !== rendererMode
+          || receipt?.requestedOpticalLightingMode !== 'bounded_ggx'
+          || receipt?.effectiveOpticalLightingMode !== 'not_executed'
+          || receipt?.requestedOpticalLightingRoute !== 'wgsl-liquid-bounded-ggx-lighting-v0'
+          || receipt?.effectiveOpticalLightingRoute !== 'not-executed-non-refraction-renderer-v0'
+          || receipt?.fallbackReason
+          || receipt?.opticalLightingFallbackReason
+        ) {
+          throw new Error(`non-refraction renderer claimed optical lighting execution: ${JSON.stringify({ rendererMode, receipt })}`);
+        }
+        if (receipt.stepCount !== pauseReceipt.stepCount) {
+          throw new Error(`non-refraction lighting applicability advanced simulation: ${JSON.stringify({ rendererMode, receipt, pauseReceipt })}`);
+        }
+        return receipt;
+      };
+      nonRefractionLightingApplicability = {
+        schema: 'kaminos.finger-fluid.non-refraction-lighting-applicability.v0',
+        screen_space_surface: await captureNonRefractionApplicability('screen_space_surface'),
+        sphere_debug: await captureNonRefractionApplicability('sphere_debug'),
+        effectiveOpticalLightingMode: 'not_executed',
+        effectiveOpticalLightingRoute: 'not-executed-non-refraction-renderer-v0',
+      };
+      const lightingRoutes = {
+        transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+        bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+        legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+      };
+      const captureFrozenOptical = async (lightingMode, debugMode, path, label) => {
+        const receipt = await evaluate(ws, `(() => {
+          const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
+          if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
+          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)});
+        })()`);
+        if (
+          receipt?.requestedRendererMode !== 'screen_space_refraction'
+          || receipt?.effectiveRendererMode !== 'screen_space_refraction'
+          || receipt?.requestedOpticalDebugMode !== debugMode
+          || receipt?.effectiveOpticalDebugMode !== debugMode
+          || receipt?.requestedOpticalLightingMode !== lightingMode
+          || receipt?.effectiveOpticalLightingMode !== lightingMode
+          || receipt?.requestedOpticalLightingRoute !== lightingRoutes[lightingMode]
+          || receipt?.effectiveOpticalLightingRoute !== lightingRoutes[lightingMode]
+          || receipt?.fallbackReason
+          || receipt?.opticalLightingFallbackReason
+        ) {
+          throw new Error(`renderer-only optical lighting disagreement: ${JSON.stringify({ lightingMode, debugMode, receipt })}`);
+        }
+        requireSharedSupportPresentation(receipt, `renderer-only:${lightingMode}:${debugMode}`);
+        requireLinearHdrWorldClosure(receipt, `renderer-only:${lightingMode}:${debugMode}`);
+        requireDeferredWorldReflectionEvidence(receipt, `renderer-only:${lightingMode}:${debugMode}`, debugMode !== 'interface_fidelity');
+        const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          captureBeyondViewport: false,
+          clip: { ...opticalCanvasRect, scale: 1 },
+        });
+        const bytes = Buffer.from(shot.data, 'base64');
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, bytes);
+        const activity = measureCapturedPng(path, label);
+        if (debugMode === 'shaded' && activity.activeRatio < 0.01) {
+          throw new Error(`blank renderer-only optical output rejected: ${JSON.stringify(activity)}`);
+        }
+        return { receipt, activity };
+      };
+
+      phase = 'same_state_optical_lighting_comparison';
+      const transportOnly = await captureFrozenOptical('transport_only', 'shaded', transportOnlyOut, 'transport_only');
+      const boundedGgx = await captureFrozenOptical('bounded_ggx', 'shaded', boundedGgxOut, 'bounded_ggx');
+      const legacyShading = await captureFrozenOptical('legacy_shading', 'shaded', legacyShadingOut, 'legacy_shading');
+      const lightingStepCount = transportOnly.receipt.stepCount;
+      if (
+        boundedGgx.receipt.stepCount !== lightingStepCount
+        || legacyShading.receipt.stepCount !== lightingStepCount
+        || lightingStepCount !== pauseReceipt.stepCount
+      ) {
+        throw new Error(`renderer-only optical lighting comparison advanced simulation: ${JSON.stringify({
+          frozen: pauseReceipt.stepCount,
+          transportOnly: transportOnly.receipt.stepCount,
+          boundedGgx: boundedGgx.receipt.stepCount,
+          legacyShading: legacyShading.receipt.stepCount,
+        })}`);
+      }
+      const transportToBoundedGgxDelta = measureCapturedPngDelta(transportOnlyOut, boundedGgxOut, 'transport_only_to_bounded_ggx');
+      const transportToLegacyDelta = measureCapturedPngDelta(transportOnlyOut, legacyShadingOut, 'transport_only_to_legacy_shading');
+      if (transportToLegacyDelta.changedRatio < 0.005 || transportToLegacyDelta.meanAbsoluteChannelDelta < 0.2) {
+        throw new Error(`renderer-only transport route is visually indistinguishable from legacy additive lighting: ${JSON.stringify(transportToLegacyDelta)}`);
+      }
+      if (transportToBoundedGgxDelta.changedRatio < 0.0002 || transportToBoundedGgxDelta.meanAbsoluteChannelDelta < 0.01) {
+        throw new Error(`renderer-only bounded GGX contribution is not measurable: ${JSON.stringify(transportToBoundedGgxDelta)}`);
+      }
+      if (boundedGgx.activity.highlightRatio > legacyShading.activity.highlightRatio + 0.002) {
+        throw new Error(`renderer-only bounded GGX exceeded legacy highlight population: ${JSON.stringify({ boundedGgx: boundedGgx.activity, legacyShading: legacyShading.activity })}`);
+      }
+      sameStateOpticalLightingComparison = {
+        schema: 'kaminos.finger-fluid.same-state-optical-lighting-comparison.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        transportOnly,
+        boundedGgx,
+        legacyShading,
+        transportToBoundedGgxDelta,
+        transportToLegacyDelta,
+        highlightRatioDelta: {
+          boundedGgxMinusTransportOnly: Number((boundedGgx.activity.highlightRatio - transportOnly.activity.highlightRatio).toFixed(5)),
+          legacyShadingMinusTransportOnly: Number((legacyShading.activity.highlightRatio - transportOnly.activity.highlightRatio).toFixed(5)),
+        },
+      };
+      const primaryTransportOnly = await captureFrozenOptical('transport_only', 'shaded', out, 'transport_only_primary');
+      if (primaryTransportOnly.receipt.stepCount !== lightingStepCount) {
+        throw new Error(`renderer-only primary transport capture advanced simulation: ${JSON.stringify(primaryTransportOnly.receipt)}`);
+      }
+      primaryOutputWritten = true;
+
+      phase = 'renderer_only_optical_diagnostics';
+      opticalDebugViews = {};
+      for (const debugMode of ['thickness', 'path_length', 'exit_validity', 'fresnel', 'absorption', 'reflection', 'environment_contribution', 'refraction_offset']) {
+        opticalDebugViews[debugMode] = await captureFrozenOptical(
+          'transport_only',
+          debugMode,
+          opticalDebugOutputs[debugMode],
+          `renderer_only_${debugMode}`,
+        );
+        if (opticalDebugViews[debugMode].receipt.stepCount !== lightingStepCount) {
+          throw new Error(`renderer-only optical diagnostic advanced simulation: ${JSON.stringify(opticalDebugViews[debugMode].receipt)}`);
+        }
+      }
+
+      phase = 'invalid_optical_lighting_route';
+      const invalidOpticalLightingUrl = new URL(url);
+      invalidOpticalLightingUrl.searchParams.set('finger_fluid_optical_lighting', 'silent_legacy_fallback');
+      await wsRequest(ws, 'Page.navigate', { url: invalidOpticalLightingUrl.href });
+      const invalidDeadline = Date.now() + hookWaitMs;
+      let invalidState = null;
+      while (Date.now() < invalidDeadline) {
+        try {
+          invalidState = await evaluate(ws, `(() => {
+            const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+            return typeof read === 'function' ? read() : null;
+          })()`);
+        } catch {
+          invalidState = null;
+        }
+        if (invalidState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidState.status !== 'loading') break;
+        await delay(100);
+      }
+      if (
+        invalidState?.status !== 'error'
+        || invalidState?.solver?.backend !== 'config_rejected'
+        || invalidState?.renderer?.backend !== 'config_rejected'
+        || invalidState?.renderer?.requestedOpticalLightingMode !== 'silent_legacy_fallback'
+        || invalidState?.renderer?.effectiveOpticalLightingMode !== 'config_rejected'
+        || invalidState?.renderer?.requestedOpticalLightingRoute !== 'unsupported-optical-lighting-mode:silent_legacy_fallback'
+        || invalidState?.renderer?.effectiveOpticalLightingRoute !== 'not-executed-config-rejected-v0'
+        || !String(invalidState?.renderer?.opticalLightingFallbackReason || '').includes('Unsupported finger fluid optical lighting mode: silent_legacy_fallback')
+        || !String(invalidState?.runtime?.configError || '').includes('Unsupported finger fluid optical lighting mode: silent_legacy_fallback')
+      ) {
+        throw new Error(`renderer-only invalid optical lighting route did not fail closed: ${JSON.stringify(invalidState)}`);
+      }
+      const invalidCanvasRect = await evaluate(ws, `(() => {
+        document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!invalidCanvasRect || invalidCanvasRect.width < 100 || invalidCanvasRect.height < 100) {
+        throw new Error(`renderer-only invalid optical lighting canvas unavailable: ${JSON.stringify(invalidCanvasRect)}`);
+      }
+      const invalidShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+        clip: { ...invalidCanvasRect, scale: 1 },
+      });
+      mkdirSync(dirname(invalidOpticalLightingOut), { recursive: true });
+      writeFileSync(invalidOpticalLightingOut, Buffer.from(invalidShot.data, 'base64'));
+      const invalidActivity = measureCapturedPng(invalidOpticalLightingOut, 'invalid_optical_lighting');
+      if (invalidActivity.activeRatio > 0.002) {
+        throw new Error(`renderer-only invalid optical lighting retained stale painted output: ${JSON.stringify(invalidActivity)}`);
+      }
+      invalidOpticalLightingWitness = {
+        schema: 'kaminos.finger-fluid.invalid-optical-lighting-witness.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        requestedUrl: invalidOpticalLightingUrl.href,
+        status: invalidState.status,
+        solverBackend: invalidState.solver.backend,
+        rendererBackend: invalidState.renderer.backend,
+        requestedOpticalLightingMode: invalidState.renderer.requestedOpticalLightingMode,
+        effectiveOpticalLightingMode: invalidState.renderer.effectiveOpticalLightingMode,
+        requestedOpticalLightingRoute: invalidState.renderer.requestedOpticalLightingRoute,
+        effectiveOpticalLightingRoute: invalidState.renderer.effectiveOpticalLightingRoute,
+        opticalLightingFallbackReason: invalidState.renderer.opticalLightingFallbackReason,
+        configError: invalidState.runtime.configError,
+        canvasActivity: invalidActivity,
+        outputPath: invalidOpticalLightingOut,
+      };
+      phase = null;
+      writeReport({ ok: true, failure_phase: null, output: out });
+      ws.close();
+      return;
     }
     if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
     if (requestedChemistryDiffusion !== effectiveChemistryDiffusion) throw new Error(`silent chemistry-diffusion fallback rejected: ${JSON.stringify({ requestedChemistryDiffusion, effectiveChemistryDiffusion })}`);
@@ -2446,7 +2729,7 @@ async function main() {
     const rendererFreezeReceipt = await evaluate(ws, `(() => {
       const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
       if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-      return render(${JSON.stringify(requestedRendererMode)}, ${JSON.stringify(requestedOpticalDebugMode)});
+      return render(${JSON.stringify(requestedRendererMode)}, ${JSON.stringify(requestedOpticalDebugMode)}, ${JSON.stringify(requestedOpticalLightingMode)});
     })()`);
     const rendererCountersBefore = rendererFreezeReceipt ? {
       stepCount: rendererFreezeReceipt.stepCount,
@@ -2461,17 +2744,34 @@ async function main() {
       captureRect = canvasRect,
       opticalDebugMode = 'shaded',
       minimumActiveRatio = 0.05,
+      opticalLightingMode = requestedOpticalLightingMode,
     ) => {
       const receipt = await evaluate(ws, `(() => {
         const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
         if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-        return render(${JSON.stringify(mode)}, ${JSON.stringify(opticalDebugMode)});
+        return render(${JSON.stringify(mode)}, ${JSON.stringify(opticalDebugMode)}, ${JSON.stringify(opticalLightingMode)});
       })()`);
       if (receipt.requestedRendererMode !== mode || receipt.effectiveRendererMode !== mode || receipt.fallbackReason) {
         throw new Error(`renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
       if (receipt.requestedOpticalDebugMode !== opticalDebugMode || receipt.effectiveOpticalDebugMode !== opticalDebugMode) {
         throw new Error(`optical renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
+      }
+      const expectedLightingRoute = {
+        transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+        bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+        legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+      }[opticalLightingMode];
+      if (
+        receipt.requestedOpticalLightingMode !== opticalLightingMode
+        || receipt.effectiveOpticalLightingMode !== (mode === 'screen_space_refraction' ? opticalLightingMode : 'not_executed')
+        || receipt.requestedOpticalLightingRoute !== expectedLightingRoute
+        || receipt.effectiveOpticalLightingRoute !== (mode === 'screen_space_refraction'
+          ? expectedLightingRoute
+          : 'not-executed-non-refraction-renderer-v0')
+        || receipt.opticalLightingFallbackReason
+      ) {
+        throw new Error(`optical lighting disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
       requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
       requireLinearHdrWorldClosure(receipt, `${mode}:${opticalDebugMode}`);
@@ -2605,6 +2905,78 @@ async function main() {
       },
     };
     if (!sameStateOpticalComparison.sameSimulationState) throw new Error(`same-state optical comparison stepped the simulation: ${JSON.stringify(sameStateOpticalComparison)}`);
+
+    phase = 'same_state_optical_lighting_comparison';
+    const transportOnly = await renderSameState(
+      'screen_space_refraction',
+      transportOnlyOut,
+      canvasRect,
+      'shaded',
+      0.05,
+      'transport_only',
+    );
+    const boundedGgx = await renderSameState(
+      'screen_space_refraction',
+      boundedGgxOut,
+      canvasRect,
+      'shaded',
+      0.05,
+      'bounded_ggx',
+    );
+    const legacyShading = await renderSameState(
+      'screen_space_refraction',
+      legacyShadingOut,
+      canvasRect,
+      'shaded',
+      0.05,
+      'legacy_shading',
+    );
+    const transportToBoundedGgxDelta = measureCapturedPngDelta(
+      transportOnlyOut,
+      boundedGgxOut,
+      'transport_only_to_bounded_ggx',
+    );
+    const transportToLegacyDelta = measureCapturedPngDelta(
+      transportOnlyOut,
+      legacyShadingOut,
+      'transport_only_to_legacy_shading',
+    );
+    const lightingStepCount = transportOnly.receipt.stepCount;
+    if (
+      boundedGgx.receipt.stepCount !== lightingStepCount
+      || legacyShading.receipt.stepCount !== lightingStepCount
+      || lightingStepCount !== screenSpaceRefraction.receipt.stepCount
+    ) {
+      throw new Error(`optical lighting comparison advanced the frozen simulation: ${JSON.stringify({
+        baseline: screenSpaceRefraction.receipt.stepCount,
+        transportOnly: transportOnly.receipt.stepCount,
+        boundedGgx: boundedGgx.receipt.stepCount,
+        legacyShading: legacyShading.receipt.stepCount,
+      })}`);
+    }
+    if (transportToLegacyDelta.changedRatio < 0.005 || transportToLegacyDelta.meanAbsoluteChannelDelta < 0.2) {
+      throw new Error(`transport-only output is visually indistinguishable from legacy additive lighting: ${JSON.stringify(transportToLegacyDelta)}`);
+    }
+    if (transportToBoundedGgxDelta.changedRatio < 0.0002 || transportToBoundedGgxDelta.meanAbsoluteChannelDelta < 0.01) {
+      throw new Error(`bounded GGX did not produce a measurable view-dependent contribution: ${JSON.stringify(transportToBoundedGgxDelta)}`);
+    }
+    if (boundedGgx.activity.highlightRatio > legacyShading.activity.highlightRatio + 0.002) {
+      throw new Error(`bounded GGX exceeded the legacy shading highlight population: ${JSON.stringify({ boundedGgx: boundedGgx.activity, legacyShading: legacyShading.activity })}`);
+    }
+    sameStateOpticalLightingComparison = {
+      schema: 'kaminos.finger-fluid.same-state-optical-lighting-comparison.v0',
+      stepCount: lightingStepCount,
+      sameSimulationState: true,
+      transportOnly,
+      boundedGgx,
+      legacyShading,
+      transportToBoundedGgxDelta,
+      transportToLegacyDelta,
+      highlightRatioDelta: {
+        boundedGgxMinusTransportOnly: Number((boundedGgx.activity.highlightRatio - transportOnly.activity.highlightRatio).toFixed(5)),
+        legacyShadingMinusTransportOnly: Number((legacyShading.activity.highlightRatio - transportOnly.activity.highlightRatio).toFixed(5)),
+      },
+    };
 
     phase = 'renderer_resize_recreate';
     const resizedViewport = {
@@ -3180,6 +3552,74 @@ async function main() {
       configError: invalidState.runtime.configError,
       canvasActivity: invalidActivity,
       outputPath: invalidRendererOut,
+    };
+
+    phase = 'invalid_optical_lighting_route';
+    const invalidOpticalLightingUrl = new URL(url);
+    invalidOpticalLightingUrl.searchParams.set('finger_fluid_optical_lighting', 'silent_legacy_fallback');
+    await wsRequest(ws, 'Page.navigate', { url: invalidOpticalLightingUrl.href });
+    const invalidOpticalLightingDeadline = Date.now() + hookWaitMs;
+    let invalidOpticalLightingState = null;
+    while (Date.now() < invalidOpticalLightingDeadline) {
+      try {
+        invalidOpticalLightingState = await evaluate(ws, `(() => {
+          const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+          return typeof read === 'function' ? read() : null;
+        })()`);
+      } catch {
+        invalidOpticalLightingState = null;
+      }
+      if (invalidOpticalLightingState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidOpticalLightingState.status !== 'loading') break;
+      await delay(100);
+    }
+    if (
+      invalidOpticalLightingState?.status !== 'error'
+      || invalidOpticalLightingState?.solver?.backend !== 'config_rejected'
+      || invalidOpticalLightingState?.renderer?.backend !== 'config_rejected'
+      || invalidOpticalLightingState?.renderer?.requestedOpticalLightingMode !== 'silent_legacy_fallback'
+      || invalidOpticalLightingState?.renderer?.effectiveOpticalLightingMode !== 'config_rejected'
+      || invalidOpticalLightingState?.renderer?.requestedOpticalLightingRoute !== 'unsupported-optical-lighting-mode:silent_legacy_fallback'
+      || invalidOpticalLightingState?.renderer?.effectiveOpticalLightingRoute !== 'not-executed-config-rejected-v0'
+      || !String(invalidOpticalLightingState?.renderer?.opticalLightingFallbackReason || '').includes('Unsupported finger fluid optical lighting mode: silent_legacy_fallback')
+      || !String(invalidOpticalLightingState?.runtime?.configError || '').includes('Unsupported finger fluid optical lighting mode: silent_legacy_fallback')
+    ) {
+      throw new Error(`invalid optical lighting route did not fail closed: ${JSON.stringify(invalidOpticalLightingState)}`);
+    }
+    const invalidOpticalLightingCanvasRect = await evaluate(ws, `(() => {
+      document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })()`);
+    if (!invalidOpticalLightingCanvasRect || invalidOpticalLightingCanvasRect.width < 100 || invalidOpticalLightingCanvasRect.height < 100) {
+      throw new Error(`invalid optical lighting canvas unavailable: ${JSON.stringify(invalidOpticalLightingCanvasRect)}`);
+    }
+    const invalidOpticalLightingShot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      clip: { ...invalidOpticalLightingCanvasRect, scale: 1 },
+    });
+    mkdirSync(dirname(invalidOpticalLightingOut), { recursive: true });
+    writeFileSync(invalidOpticalLightingOut, Buffer.from(invalidOpticalLightingShot.data, 'base64'));
+    const invalidOpticalLightingActivity = measureCapturedPng(invalidOpticalLightingOut, 'invalid_optical_lighting');
+    if (invalidOpticalLightingActivity.activeRatio > 0.002) {
+      throw new Error(`invalid optical lighting route retained stale painted fallback evidence: ${JSON.stringify(invalidOpticalLightingActivity)}`);
+    }
+    invalidOpticalLightingWitness = {
+      schema: 'kaminos.finger-fluid.invalid-optical-lighting-witness.v0',
+      requestedUrl: invalidOpticalLightingUrl.href,
+      status: invalidOpticalLightingState.status,
+      solverBackend: invalidOpticalLightingState.solver.backend,
+      rendererBackend: invalidOpticalLightingState.renderer.backend,
+      requestedOpticalLightingMode: invalidOpticalLightingState.renderer.requestedOpticalLightingMode,
+      effectiveOpticalLightingMode: invalidOpticalLightingState.renderer.effectiveOpticalLightingMode,
+      requestedOpticalLightingRoute: invalidOpticalLightingState.renderer.requestedOpticalLightingRoute,
+      effectiveOpticalLightingRoute: invalidOpticalLightingState.renderer.effectiveOpticalLightingRoute,
+      opticalLightingFallbackReason: invalidOpticalLightingState.renderer.opticalLightingFallbackReason,
+      configError: invalidOpticalLightingState.runtime.configError,
+      canvasActivity: invalidOpticalLightingActivity,
+      outputPath: invalidOpticalLightingOut,
     };
 
     phase = null;

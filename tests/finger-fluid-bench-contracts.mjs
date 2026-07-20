@@ -62,10 +62,14 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE\s*=\s*'w
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-debug-renderer-v0'/, 'particle sphere renderer survives as an explicit debug route');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'screen_space_refraction', 'sphere_debug'\]\)/, 'surface, refraction, and sphere-debug renderer modes are explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES\s*=\s*Object\.freeze\(\['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity'\]\)/, 'entry, exit, reflection, refraction-query, fallback, interface-fidelity A/B, environment, support, coverage, path, validity, and shading diagnostics are explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES\s*=\s*Object\.freeze\(\['transport_only', 'bounded_ggx', 'legacy_shading'\]\)/, 'transport-only, bounded-GGX, and legacy diagnostic lighting identities are explicit');
 assert.match(webgpuCoreSource, /opticalDebugMode == 16u[\s\S]*return vec4<f32>\(1\.0\)/, 'sphere-debug exposes exact binary particle occupancy through the shared liquid-support diagnostic');
 assert.match(webgpuCoreSource, /resolveFingerFluidRendererMode/, 'renderer mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /resolveFingerFluidOpticalDebugMode/, 'optical debug mode resolution is testable and fails loud');
+assert.match(webgpuCoreSource, /resolveFingerFluidOpticalLightingMode/, 'optical lighting mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /requestedRendererMode[\s\S]*effectiveRendererMode[\s\S]*fallbackReason/, 'runtime state distinguishes requested/effective renderer identity and fallback');
+assert.match(webgpuCoreSource, /requestedOpticalLightingMode[\s\S]*effectiveOpticalLightingMode[\s\S]*opticalLightingFallbackReason/, 'runtime state distinguishes requested/effective optical lighting identity and fallback');
+assert.match(webgpuCoreSource, /effectiveRendererMode === 'screen_space_refraction'[\s\S]*resolvedOpticalLightingMode[\s\S]*'not_executed'/, 'only the refraction renderer may claim an effective optical lighting mode');
 assert.match(webgpuCoreSource, /SCREEN_SPACE_SURFACE_SHADER/, 'screen-space renderer owns a separate shading pass');
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-surface-accumulation/, 'screen-space renderer allocates particle depth plus optical thickness accumulation');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceAccumulationPipeline/, 'renderer has a particle depth/thickness accumulation pipeline');
@@ -144,6 +148,8 @@ assert.doesNotMatch(webgpuCoreSource, /fn sampleEnvironment\([\s\S]{0,500}let sk
 assert.match(webgpuCoreSource, /fn integrateParticipatingRadiance\([\s\S]*return vec3<f32>\(0\.0\)/, 'future Flame radiance owns an explicit zero-contribution boundary rather than a fake surface hit');
 assert.match(webgpuCoreSource, /REFLECTION_HIT_ENVIRONMENT[\s\S]*REFLECTION_HIT_ANALYTIC[\s\S]*REFLECTION_HIT_INDEXED_MESH/, 'environment, analytic, and arbitrary-mesh reflection hits remain distinct');
 assert.match(webgpuCoreSource, /mix\(refractedRadiance \* absorption, reflectionRadiance, fresnel\)/, 'Fresnel composes reflection with absorbed hybrid two-interface exit-ray radiance');
+assert.match(webgpuCoreSource, /let calibratedAbsorptionCoefficient = vec3<f32>\(1\.10, 0\.42, 0\.18\);[\s\S]*let legacyAbsorptionCoefficient = vec3<f32>\(0\.46, 0\.15, 0\.055\);[\s\S]*select\(calibratedAbsorptionCoefficient, legacyAbsorptionCoefficient, opticalLightingMode == 2\)[\s\S]*let absorption = exp\(-absorptionCoefficient \* absorptionPath\);/, 'scene-scale Beer-Lambert absorption materially separates thick water from bright transmitted HDR radiance while preserving an exact legacy baseline');
+assert.match(webgpuCoreSource, /absorptionCoefficients:\s*lastEffectiveOpticalLightingMode === 'not_executed'[\s\S]*\? null[\s\S]*fingerFluidAbsorptionCoefficientsForLightingMode\(lastEffectiveOpticalLightingMode\)/, 'runtime evidence records coefficients only when the exact effective optical lighting mode executed');
 assert.match(webgpuCoreSource, /fn reconstructWorldReflectionNormal\([\s\S]*edgePreservingDepth\([\s\S]*reconstructWorldPosition\([\s\S]*cross\(/, 'reflection reconstructs a perspective-correct world normal from the edge-preserved continuous depth field');
 assert.match(webgpuCoreSource, /fn reconstructWorldReflectionNormal\([\s\S]*pixel \+ vec2<i32>\(-6, 0\)[\s\S]*pixel \+ vec2<i32>\(6, 0\)[\s\S]*pixel \+ vec2<i32>\(0, -6\)[\s\S]*pixel \+ vec2<i32>\(0, 6\)/, 'world reflection uses a wider macronormal chord than the fine refraction and specular normal');
 assert.match(webgpuCoreSource, /fn integrateWorldReflectionQuadrature\([\s\S]*centerDirection[\s\S]*tangent \* coneRadius[\s\S]*tangent \* -coneRadius[\s\S]*bitangent \* coneRadius[\s\S]*bitangent \* -coneRadius/, 'world reflection integrates a deterministic center-plus-four-lobe cone quadrature');
@@ -158,7 +164,9 @@ assert.match(webgpuCoreSource, /fn reconstructEntryNormalAtRadius\([\s\S]*radius
 assert.match(webgpuCoreSource, /let legacyCoverage =[\s\S]*let denseCoverageClosure =[\s\S]*let adaptiveCoverage = mix\(legacyCoverage, denseCoverageClosure, interfaceNormal\.denseBodyConfidence\)/, 'coverage closure is confined to the analytically classified dense-body regime');
 assert.match(webgpuCoreSource, /let interfaceFidelityEnabled = opticalDebugMode != 22[ui]*;[\s\S]*let geometricCoverage = select\(legacyCoverage, adaptiveCoverage, interfaceFidelityEnabled\);/, 'legacy-interface debug mode preserves an exact same-state pre-fidelity coverage path');
 assert.match(webgpuCoreSource, /if \(opticalDebugMode == 23\)[\s\S]*interfaceNormal\.denseBodyConfidence[\s\S]*coverageContinuity[\s\S]*interfaceNormal\.variance/, 'interface-fidelity diagnostic independently encodes body regime, local continuity, and unresolved normal variance');
-assert.match(webgpuCoreSource, /let directRoughness =[\s\S]*let broadSpecularExponent =[\s\S]*let crestSpecularExponent =/, 'direct highlights broaden from measured interface variance instead of fixed particle-scale exponents');
+assert.match(webgpuCoreSource, /fn evaluateBoundedGgxDirectSpecular\([\s\S]*distributionGgx[\s\S]*geometrySmith[\s\S]*fresnelSchlick[\s\S]*min\(specular, vec3<f32>\(0\.22\)\)/, 'bounded direct lighting uses view-dependent GGX and an explicit energy ceiling');
+assert.match(webgpuCoreSource, /let transportOnlyColor = reflectedTransport \+ waterScatter \* \(1\.0 - fresnel\);[\s\S]*var color = transportOnlyColor;[\s\S]*opticalLightingMode == 1[\s\S]*evaluateBoundedGgxDirectSpecular[\s\S]*opticalLightingMode == 2[\s\S]*broadSpecular/, 'transport-only is the zero-additive base while bounded GGX and legacy additive lighting remain explicit branches');
+assert.doesNotMatch(webgpuCoreSource, /let color = reflectedTransport \+ waterScatter \* \(1\.0 - fresnel\)\s*\+/, 'the production transport base cannot unconditionally add direct-light energy after Fresnel composition');
 assert.match(webgpuCoreSource, /deferredHit\.valid > 0\.5 && deferredHit\.confidence >= 0\.55/, 'hybrid optical queries reject marginal deferred crossings before they can punch dark scene-color holes');
 assert.match(webgpuCoreSource, /screenSpaceRefractionCompositePipeline = await device\.createRenderPipelineAsync\([\s\S]*format: LINEAR_SCENE_FORMAT,[\s\S]*srcFactor: 'src-alpha'/, 'refraction composites geometric coverage into the linear scene with alpha blending');
 assert.match(webgpuCoreSource, /return refractionOutput\(vec4<f32>\(color, geometricCoverage\)/, 'shaded liquid exports geometric coverage independently from optical color');
@@ -403,6 +411,8 @@ assert.match(indexSource, /finger_fluid_renderer/, 'native route accepts an expl
 assert.match(indexSource, /requestedRendererMode/, 'native debug state preserves requested renderer identity');
 assert.match(indexSource, /effectiveRendererMode/, 'native debug state preserves effective renderer identity');
 assert.match(indexSource, /requestedRendererModeLabel[\s\S]*effectiveRendererModeLabel[\s\S]*finger-fluid-bench-renderer/, 'human-visible renderer readout names exact requested and effective modes');
+assert.match(indexSource, /requestedOpticalLightingModeLabel[\s\S]*effectiveOpticalLightingModeLabel[\s\S]*finger-fluid-bench-lighting-requested[\s\S]*finger-fluid-bench-lighting-effective/, 'human-visible optical readout names exact requested and effective lighting modes');
+assert.match(indexSource, /rejectedOpticalLightingMode[\s\S]*requestedOpticalLightingMode:\s*rejectedOpticalLightingMode[\s\S]*effectiveOpticalLightingMode:\s*'config_rejected'/, 'config rejection preserves the exact unsupported request and reports no executed lighting mode');
 assert.match(indexSource, /finger-fluid-bench-renderer-route[\s\S]*grid-column:\s*1\s*\/\s*-1/, 'requested/effective renderer identities remain fully visible in the two-column bench readout');
 assert.match(indexSource, /finger_fluid_renderer=sphere_debug/, 'native route preserves the current sphere renderer as explicit debug mode');
 assert.match(indexSource, /schema:\s*'kaminos\.finger-fluid\.same-state-renderer-witness\.v0'[\s\S]*supportPresentationEvidence:\s*runtime\.supportPresentationEvidence/, 'same-state renderer receipts preserve the effective analytic support presentation evidence');
@@ -412,6 +422,8 @@ assert.match(indexSource, /deferredSceneEvidence:\s*runtime\.deferredSceneEviden
 assert.match(webgpuCoreSource, /\.\.\.\(lastEffectiveRendererMode === 'screen_space_refraction' && lastOpticalDebugMode !== 'interface_fidelity' \? \{[\s\S]*worldSpaceReflectionEvidence:\s*\{[\s\S]*\} : \{\}\)/, 'runtime omits stale reflection provider evidence from non-refraction frames and the early-return interface diagnostic');
 assert.match(indexSource, /finger_fluid_renderer=screen_space_refraction/, 'native route exposes refraction as an explicit requested renderer mode');
 assert.match(indexSource, /finger_fluid_optical_debug/, 'native route accepts an explicit optical sidecar debug view');
+assert.match(indexSource, /finger_fluid_optical_lighting/, 'native route accepts an explicit optical lighting identity');
+assert.match(indexSource, /requestedOpticalLightingMode[\s\S]*effectiveOpticalLightingMode/, 'native route and runtime state preserve requested/effective optical lighting identity');
 assert.match(indexSource, /requestedOpticalDebugMode/, 'native debug state preserves requested optical debug identity');
 assert.match(indexSource, /effectiveOpticalDebugMode/, 'native debug state preserves effective optical debug identity');
 assert.match(indexSource, /finger_fluid_particle_shift/, 'native route accepts an explicit particle-shift strength');
@@ -583,7 +595,7 @@ assert.match(benchWitnessSource, /adaptiveTotalVariation >= legacyTotalVariation
 assert.match(benchWitnessSource, /denseHighlightTileCoverage < 0\.08[\s\S]*sparseIdentityResponseTileCoverage < 0\.25/, 'witness rejects a tiny concentrated highlight remnant and requires distributed dense-body and sparse-identity optical response');
 assert.match(benchWitnessSource, /sparseBoundaryContrast[\s\S]*!isBinaryLiquidPixel[\s\S]*adaptiveSparseLegibilityResponsePixels/, 'sparse optical legibility accepts local silhouette/rim contrast against exact binary support instead of requiring a bright HDR response');
 assert.match(benchWitnessSource, /adaptiveDenseHighlightPixels < 500[\s\S]*adaptiveSparseLegibilityResponsePixels < 100[\s\S]*adaptiveLuminanceP99 < legacyLuminanceP99 \* 0\.65/, 'witness retains material regime-specific response and upper-tail energy without canonizing legacy blown-out combs');
-assert.match(webgpuCoreSource, /opticalTransportExecution:\s*lastOpticalDebugMode === 'interface_fidelity'[\s\S]*not_executed_early_interface_diagnostic_v0/, 'runtime receipt marks the early-return interface diagnostic as transport-inactive');
+assert.match(webgpuCoreSource, /opticalTransportExecution:\s*lastEffectiveRendererMode !== 'screen_space_refraction'[\s\S]*not_executed_non_refraction_renderer_v0[\s\S]*lastOpticalDebugMode === 'interface_fidelity'[\s\S]*not_executed_early_interface_diagnostic_v0/, 'runtime receipt marks non-refraction frames and the early-return interface diagnostic as transport-inactive');
 assert.match(webgpuCoreSource, /lastEffectiveRendererMode === 'screen_space_refraction'[\s\S]*lastOpticalDebugMode !== 'interface_fidelity'[\s\S]*opticalQueryEvidence:/, 'runtime omits query/provider execution evidence from the early-return interface diagnostic');
 assert.match(benchWitnessSource, /opticalDebugMode !== 'interface_fidelity'\)/, 'browser witness rejects query/provider evidence on the interface diagnostic while retaining exact interface route evidence');
 assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.quadratureRoute !== 'deterministic-five-ray-cone-quadrature-v0'/, 'bench witness rejects missing or substituted finite-footprint reflection quadrature');
@@ -633,6 +645,12 @@ assert.match(benchWitnessSource, /optical renderer disagreement/, 'bench witness
 assert.match(benchWitnessSource, /blank refraction output/, 'bench witness rejects blank refraction captures');
 assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
 assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
+assert.match(benchWitnessSource, /optical lighting disagreement rejected/, 'bench witness rejects requested/effective optical lighting disagreement');
+assert.match(benchWitnessSource, /same_state_optical_lighting_comparison[\s\S]*transport_only[\s\S]*bounded_ggx[\s\S]*legacy_shading/, 'bench witness compares all lighting identities against one frozen simulation state');
+assert.match(benchWitnessSource, /nonRefractionLightingApplicability[\s\S]*screen_space_surface[\s\S]*sphere_debug[\s\S]*not_executed[\s\S]*not-executed-non-refraction-renderer-v0/, 'focused browser evidence proves non-refraction renderers cannot claim execution of a requested optical lighting route');
+assert.match(benchWitnessSource, /renderer_only_no_solver_continuity_claim[\s\S]*opticalLightingOnly/, 'focused optical evidence names its narrow renderer-only scope instead of claiming solver continuity');
+assert.match(benchWitnessSource, /invalid_optical_lighting_route[\s\S]*silent_legacy_fallback[\s\S]*activeRatio > 0\.002/, 'focused optical evidence rejects unsupported lighting and stale painted output');
+assert.match(benchWitnessSource, /invalidOpticalLightingWitness = \{[\s\S]{0,900}requestedOpticalLightingMode:[\s\S]{0,500}effectiveOpticalLightingRoute:/, 'invalid-lighting report preserves the exact rejected request and non-executed effective route it verified');
 assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
 assert.match(benchWitnessSource, /rendererResizeWitness/, 'bench witness records a live accumulation resize/recreate receipt');
 assert.match(benchWitnessSource, /route-specific renderer counters/, 'bench witness rejects cross-mode pass-counter drift');
@@ -704,6 +722,10 @@ assert.equal(state.solver.topologyContract, 'wgsl-four-neighbor-topology-retenti
 assert.equal(state.solver.particleShiftContract, 'wgsl-opt-in-support-tangential-particle-shift-v0');
 assert.equal(state.renderer.identity, 'webgpu-screen-space-liquid-surface-v0');
 assert.equal(state.renderer.effectiveMode, 'screen_space_surface');
+assert.equal(state.renderer.requestedOpticalLightingMode, 'transport_only');
+assert.equal(state.renderer.effectiveOpticalLightingMode, 'not_executed');
+assert.equal(state.renderer.requestedOpticalLightingRoute, 'wgsl-liquid-transport-only-lighting-v0');
+assert.equal(state.renderer.effectiveOpticalLightingRoute, 'not-executed-non-refraction-renderer-v0');
 assert.equal(state.renderer.obstacleContract, 'shared-solver-render-obstacle-v0');
 assert.equal(state.solver.playgroundContract, 'wgsl-shared-multi-regime-toy-playground-v0');
 assert.equal(state.solver.interfaceCarrierSchema, 'kaminos.liquid-interface-carrier.v0');
@@ -716,6 +738,21 @@ assert.ok(state.visual.basinFillRatio >= 0.46);
 assert.equal(state.acceptance.acceptanceSurface, 'native_kaminos_route');
 assert.equal(state.acceptance.iframeAcceptance, false);
 assert.equal(state.acceptance.openDirectAcceptance, false);
+
+const rejectedLightingState = mod.createFingerFluidBenchState({
+  status: 'error',
+  solverBackend: 'config_rejected',
+  renderBackend: 'config_rejected',
+  requestedOpticalLightingMode: 'silent_legacy_fallback',
+  effectiveOpticalLightingMode: 'config_rejected',
+  requestedOpticalLightingRoute: 'unsupported-optical-lighting-mode:silent_legacy_fallback',
+  effectiveOpticalLightingRoute: 'not-executed-config-rejected-v0',
+  opticalLightingFallbackReason: 'config_rejected:Unsupported finger fluid optical lighting mode: silent_legacy_fallback',
+});
+assert.equal(rejectedLightingState.renderer.requestedOpticalLightingMode, 'silent_legacy_fallback');
+assert.equal(rejectedLightingState.renderer.effectiveOpticalLightingMode, 'config_rejected');
+assert.equal(rejectedLightingState.renderer.requestedOpticalLightingRoute, 'unsupported-optical-lighting-mode:silent_legacy_fallback');
+assert.equal(rejectedLightingState.renderer.effectiveOpticalLightingRoute, 'not-executed-config-rejected-v0');
 
 const webgpuMod = await import(webgpuCorePath);
 assert.equal(typeof webgpuMod.decodeRadianceHdrRgbe, 'function');
@@ -1461,6 +1498,13 @@ assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_spac
   },
 }), /screen-space renderer evidence/);
 assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES, ['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES, ['transport_only', 'bounded_ggx', 'legacy_shading']);
+assert.equal(webgpuMod.resolveFingerFluidOpticalLightingMode('transport_only'), 'transport_only');
+assert.equal(webgpuMod.resolveFingerFluidOpticalLightingMode('bounded_ggx'), 'bounded_ggx');
+assert.throws(() => webgpuMod.resolveFingerFluidOpticalLightingMode('silent_legacy_fallback'), /Unsupported finger fluid optical lighting mode/);
+assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('transport_only'), [1.10, 0.42, 0.18]);
+assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('bounded_ggx'), [1.10, 0.42, 0.18]);
+assert.deepEqual(webgpuMod.fingerFluidAbsorptionCoefficientsForLightingMode('legacy_shading'), [0.46, 0.15, 0.055]);
 assert.equal(webgpuMod.resolveFingerFluidOpticalDebugMode('refraction_offset'), 'refraction_offset');
 assert.equal(webgpuMod.resolveFingerFluidOpticalDebugMode('environment'), 'environment');
 assert.equal(webgpuMod.resolveFingerFluidOpticalDebugMode('liquid_support'), 'liquid_support');

@@ -2255,6 +2255,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Solver</span><span class="field-val" id="finger-fluid-bench-solver">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Requested</span><span class="field-val" id="finger-fluid-bench-renderer-requested">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Effective</span><span class="field-val" id="finger-fluid-bench-renderer">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Lighting requested</span><span class="field-val" id="finger-fluid-bench-lighting-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Lighting effective</span><span class="field-val" id="finger-fluid-bench-lighting-effective">pending</span></div>
       <div class="field"><span class="field-key">Active</span><span class="field-val" id="finger-fluid-bench-active">0.00</span></div>
       <div class="field"><span class="field-key">Basin</span><span class="field-val" id="finger-fluid-bench-basin">0.00</span></div>
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="finger-fluid-bench-frame-ms">0 ms</span></div>
@@ -2704,6 +2706,7 @@ import {
   resolveFingerFluidTruthScene,
   resolveFingerFluidRendererMode,
   resolveFingerFluidOpticalDebugMode,
+  resolveFingerFluidOpticalLightingMode,
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidSupportFriction,
   resolveFingerFluidChemistryDiffusion,
@@ -2851,6 +2854,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
   const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
   const requestedOpticalDebugMode = params.get('finger_fluid_optical_debug') || 'shaded';
+  const requestedOpticalLightingMode = params.get('finger_fluid_optical_lighting') || 'transport_only';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
@@ -2869,6 +2873,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     refractionRoute: 'finger_fluid_renderer=screen_space_refraction',
     requestedOpticalDebugMode,
     effectiveOpticalDebugMode: resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode),
+    requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode),
     requestedParticleShiftStrength,
     effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
     requestedSupportFriction,
@@ -9851,6 +9857,10 @@ function updateFingerFluidBenchReadout() {
   const effectiveRendererModeLabel = state.renderer?.effectiveMode || state.renderer?.backend || 'pending';
   document.getElementById('finger-fluid-bench-renderer-requested').textContent = requestedRendererModeLabel;
   document.getElementById('finger-fluid-bench-renderer').textContent = effectiveRendererModeLabel;
+  const requestedOpticalLightingModeLabel = state.renderer?.requestedOpticalLightingMode || state.config?.requestedOpticalLightingMode || 'pending';
+  const effectiveOpticalLightingModeLabel = state.renderer?.effectiveOpticalLightingMode || state.config?.effectiveOpticalLightingMode || 'pending';
+  document.getElementById('finger-fluid-bench-lighting-requested').textContent = requestedOpticalLightingModeLabel;
+  document.getElementById('finger-fluid-bench-lighting-effective').textContent = effectiveOpticalLightingModeLabel;
   document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
@@ -10109,10 +10119,16 @@ async function requestFingerFluidBenchDiagnostics() {
   };
 }
 
-function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode) {
+function renderFingerFluidBenchCurrentStateForWitness(
+  rendererMode,
+  opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode,
+  opticalLightingMode = fingerFluidBenchConfig.effectiveOpticalLightingMode,
+) {
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
   const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+  const requestedOpticalLightingMode = String(opticalLightingMode || fingerFluidBenchConfig.effectiveOpticalLightingMode);
+  const effectiveOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
@@ -10124,6 +10140,7 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     rendererMode: effectiveRendererMode,
     opticalDebugMode: effectiveOpticalDebugMode,
+    opticalLightingMode: requestedOpticalLightingMode,
     ...fingerFluidBenchCamera,
   });
   const runtime = fingerFluidBenchSolver.getDebugState();
@@ -10139,6 +10156,11 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     fingerFluidBenchState.renderer.screenSpaceRefractionRenderFrameCount = runtime.screenSpaceRefractionRenderFrameCount;
     fingerFluidBenchState.renderer.requestedOpticalDebugMode = effectiveOpticalDebugMode;
     fingerFluidBenchState.renderer.effectiveOpticalDebugMode = runtime.opticalDebugMode;
+    fingerFluidBenchState.renderer.requestedOpticalLightingMode = requestedOpticalLightingMode;
+    fingerFluidBenchState.renderer.effectiveOpticalLightingMode = runtime.effectiveOpticalLightingMode;
+    fingerFluidBenchState.renderer.requestedOpticalLightingRoute = runtime.requestedOpticalLightingRoute;
+    fingerFluidBenchState.renderer.effectiveOpticalLightingRoute = runtime.effectiveOpticalLightingRoute;
+    fingerFluidBenchState.renderer.opticalLightingFallbackReason = runtime.opticalLightingFallbackReason;
   }
   fingerFluidBenchState.runtime = runtime;
   updateFingerFluidBenchReadout();
@@ -10156,6 +10178,11 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     screenSpaceRefractionRenderFrameCount: runtime.screenSpaceRefractionRenderFrameCount,
     requestedOpticalDebugMode: effectiveOpticalDebugMode,
     effectiveOpticalDebugMode: runtime.opticalDebugMode,
+    requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: runtime.effectiveOpticalLightingMode,
+    requestedOpticalLightingRoute: runtime.requestedOpticalLightingRoute,
+    effectiveOpticalLightingRoute: runtime.effectiveOpticalLightingRoute,
+    opticalLightingFallbackReason: runtime.opticalLightingFallbackReason,
     supportPresentationEvidence: runtime.supportPresentationEvidence,
     linearHdrSceneEvidence: runtime.linearHdrSceneEvidence,
     finalPresentationEvidence: runtime.finalPresentationEvidence,
@@ -10211,6 +10238,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
     opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+    opticalLightingMode: fingerFluidBenchConfig.requestedOpticalLightingMode,
     ...fingerFluidBenchCamera,
   });
   const gpuState = fingerFluidBenchSolver.getDebugState();
@@ -10222,6 +10250,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
   gpuState.requestedOpticalDebugMode = fingerFluidBenchConfig.requestedOpticalDebugMode;
   gpuState.effectiveOpticalDebugMode = gpuState.opticalDebugMode;
+  gpuState.requestedOpticalLightingMode = fingerFluidBenchConfig.requestedOpticalLightingMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedSupportFriction = fingerFluidBenchConfig.requestedSupportFriction;
@@ -10250,6 +10279,11 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     requestedRenderer: gpuState.requestedRenderer,
     effectiveRenderer: gpuState.effectiveRenderer,
     rendererFallbackReason: gpuState.fallbackReason,
+    requestedOpticalLightingMode: gpuState.requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: gpuState.effectiveOpticalLightingMode,
+    requestedOpticalLightingRoute: gpuState.requestedOpticalLightingRoute,
+    effectiveOpticalLightingRoute: gpuState.effectiveOpticalLightingRoute,
+    opticalLightingFallbackReason: gpuState.opticalLightingFallbackReason,
     rendererSurface: gpuState.effectiveRendererMode === 'sphere_debug'
       ? 'direct_webgpu_particle_sphere_billboards_debug_in_kaminos_viewport'
       : gpuState.effectiveRendererMode === 'screen_space_refraction'
@@ -10323,10 +10357,21 @@ async function startFingerFluidBench() {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
       }
     } catch (error) {
+      const rejectedOpticalLightingMode = new URLSearchParams(window.location.search).get('finger_fluid_optical_lighting') || 'transport_only';
+      const rejectedOpticalLightingRoute = {
+        transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+        bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+        legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+      }[rejectedOpticalLightingMode] || `unsupported-optical-lighting-mode:${rejectedOpticalLightingMode}`;
       fingerFluidBenchState = createFingerFluidBenchState({
         status: 'error',
         solverBackend: 'config_rejected',
         renderBackend: 'config_rejected',
+        requestedOpticalLightingMode: rejectedOpticalLightingMode,
+        effectiveOpticalLightingMode: 'config_rejected',
+        requestedOpticalLightingRoute: rejectedOpticalLightingRoute,
+        effectiveOpticalLightingRoute: 'not-executed-config-rejected-v0',
+        opticalLightingFallbackReason: `config_rejected:${error.message || String(error)}`,
         downgrades: [`finger_fluid_route_config_rejected:${error.message || String(error)}`],
       });
       fingerFluidBenchState.runtime = { available: false, configError: error.message || String(error) };
@@ -10344,6 +10389,7 @@ async function startFingerFluidBench() {
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
       rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
       opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+      opticalLightingMode: fingerFluidBenchConfig.effectiveOpticalLightingMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,

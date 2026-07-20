@@ -31,6 +31,10 @@ export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-r
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE = 'webgpu-screen-space-liquid-surface-v0';
 export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE = 'webgpu-screen-space-liquid-refraction-v0';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE = 'snell-two-interface-screen-space-slab-v0';
+export const KAMINOS_FINGER_FLUID_TRANSPORT_ONLY_LIGHTING_ROUTE = 'wgsl-liquid-transport-only-lighting-v0';
+export const KAMINOS_FINGER_FLUID_BOUNDED_GGX_LIGHTING_ROUTE = 'wgsl-liquid-bounded-ggx-lighting-v0';
+export const KAMINOS_FINGER_FLUID_LEGACY_SHADING_ROUTE = 'wgsl-liquid-legacy-shading-v0';
+export const KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
 export const KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE = 'wgsl-particle-projected-front-back-slab-v0';
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
@@ -262,6 +266,7 @@ export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_pl
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES = Object.freeze(['transport_only', 'bounded_ggx', 'legacy_shading']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -1177,6 +1182,25 @@ export function resolveFingerFluidOpticalDebugMode(value = 'shaded') {
     throw new RangeError(`Unsupported finger fluid optical debug mode: ${mode}`);
   }
   return mode;
+}
+
+export function resolveFingerFluidOpticalLightingMode(value = 'transport_only') {
+  const mode = String(value || 'transport_only');
+  if (!KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.includes(mode)) {
+    throw new RangeError(`Unsupported finger fluid optical lighting mode: ${mode}`);
+  }
+  return mode;
+}
+
+export function fingerFluidAbsorptionCoefficientsForLightingMode(value = 'transport_only') {
+  const mode = resolveFingerFluidOpticalLightingMode(value);
+  return mode === 'legacy_shading' ? [0.46, 0.15, 0.055] : [1.10, 0.42, 0.18];
+}
+
+function opticalLightingRouteForMode(mode) {
+  if (mode === 'bounded_ggx') return KAMINOS_FINGER_FLUID_BOUNDED_GGX_LIGHTING_ROUTE;
+  if (mode === 'legacy_shading') return KAMINOS_FINGER_FLUID_LEGACY_SHADING_ROUTE;
+  return KAMINOS_FINGER_FLUID_TRANSPORT_ONLY_LIGHTING_ROUTE;
 }
 
 function rendererRouteForMode(mode) {
@@ -4031,11 +4055,51 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   return output;
 }
 
+fn distributionGgx(noh: f32, roughness: f32) -> f32 {
+  let alpha = roughness * roughness;
+  let alphaSquared = alpha * alpha;
+  let denominator = noh * noh * (alphaSquared - 1.0) + 1.0;
+  return alphaSquared / max(3.14159265 * denominator * denominator, 0.0001);
+}
+
+fn geometrySchlickGgx(nod: f32, roughness: f32) -> f32 {
+  let k = (roughness + 1.0) * (roughness + 1.0) * 0.125;
+  return nod / max(nod * (1.0 - k) + k, 0.0001);
+}
+
+fn geometrySmith(nov: f32, nol: f32, roughness: f32) -> f32 {
+  return geometrySchlickGgx(nov, roughness) * geometrySchlickGgx(nol, roughness);
+}
+
+fn fresnelSchlick(voh: f32, f0: vec3<f32>) -> vec3<f32> {
+  return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - voh, 5.0);
+}
+
+fn evaluateBoundedGgxDirectSpecular(
+  normal: vec3<f32>,
+  viewDirection: vec3<f32>,
+  lightDirection: vec3<f32>,
+  roughness: f32,
+) -> vec3<f32> {
+  let halfVector = normalize(viewDirection + lightDirection);
+  let nov = clamp(dot(normal, viewDirection), 0.0, 1.0);
+  let nol = clamp(dot(normal, lightDirection), 0.0, 1.0);
+  let noh = clamp(dot(normal, halfVector), 0.0, 1.0);
+  let voh = clamp(dot(viewDirection, halfVector), 0.0, 1.0);
+  let distribution = distributionGgx(noh, roughness);
+  let geometry = geometrySmith(nov, nol, roughness);
+  let fresnel = fresnelSchlick(voh, vec3<f32>(0.02037));
+  let specular = vec3<f32>(0.72, 0.92, 1.0) * 6.0 * distribution * geometry * fresnel * nol
+    / max(4.0 * nov * nol, 0.0001);
+  return min(specular, vec3<f32>(0.22));
+}
+
 @fragment
 fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
   let dimsFloat = vec2<f32>(dims);
   let pixel = vec2<i32>(fragmentPosition.xy);
+  let opticalLightingMode = i32(round(params.cameraForward.w));
   let sceneUv = clamp((vec2<f32>(pixel) + vec2<f32>(0.5)) / dimsFloat, vec2<f32>(0.0), vec2<f32>(1.0));
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
@@ -4105,7 +4169,10 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
   let absorptionPath = mix(thickness * 0.12, geometricPathLength, queryValidity);
-  let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
+  let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
+  let legacyAbsorptionCoefficient = vec3<f32>(0.46, 0.15, 0.055);
+  let absorptionCoefficient = select(calibratedAbsorptionCoefficient, legacyAbsorptionCoefficient, opticalLightingMode == 2);
+  let absorption = exp(-absorptionCoefficient * absorptionPath);
   if (opticalDebugMode == 1) {
     let depthView = 1.0 - exp(-supportOrderingDepth * 0.22);
     return refractionOutput(vec4<f32>(vec3<f32>(depthView), 1.0), supportOrderingDepth);
@@ -4228,7 +4295,6 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
   let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
-  let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
   let directRoughness = select(
     0.0,
     clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48),
@@ -4237,12 +4303,24 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let directRoughnessWeight = smoothstep(0.025, 0.34, directRoughness);
   let broadSpecularExponent = mix(38.0, 12.0, directRoughnessWeight);
   let crestSpecularExponent = mix(128.0, 46.0, directRoughnessWeight);
+  let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
   let broadSpecular = pow(directLight, broadSpecularExponent) * 0.32;
   let crestSpecular = pow(directLight, crestSpecularExponent) * 0.46 * mix(1.0, 0.82, directRoughnessWeight);
   let reflectedTransport = mix(refractedRadiance * absorption, reflectionRadiance, fresnel);
-  let color = reflectedTransport + waterScatter * (1.0 - fresnel)
-    + vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
-    + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
+  let transportOnlyColor = reflectedTransport + waterScatter * (1.0 - fresnel);
+  var color = transportOnlyColor;
+  if (opticalLightingMode == 1) {
+    let ggxRoughness = clamp(0.12 + directRoughness * 1.8, 0.12, 0.68);
+    color += evaluateBoundedGgxDirectSpecular(
+      worldNormal,
+      viewToCamera,
+      normalize(vec3<f32>(-0.28, 0.64, 1.72)),
+      ggxRoughness,
+    );
+  } else if (opticalLightingMode == 2) {
+    color += vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
+      + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
+  }
   return refractionOutput(vec4<f32>(color, geometricCoverage), supportOrderingDepth);
 }
 `;
@@ -5410,6 +5488,7 @@ export async function createWebGPUFingerFluidSolver({
   colorMode = 'phase',
   rendererMode = 'screen_space_surface',
   opticalDebugMode = 'shaded',
+  opticalLightingMode = 'transport_only',
   particleShiftStrength = 0,
   supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
@@ -5448,6 +5527,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+  const safeOpticalLightingMode = resolveFingerFluidOpticalLightingMode(opticalLightingMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
@@ -6098,6 +6178,11 @@ export async function createWebGPUFingerFluidSolver({
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastOpticalDebugMode = safeOpticalDebugMode;
+  let lastRequestedOpticalLightingMode = safeOpticalLightingMode;
+  let lastEffectiveOpticalLightingMode = safeRendererMode === 'screen_space_refraction'
+    ? safeOpticalLightingMode
+    : 'not_executed';
+  let lastOpticalLightingFallbackReason = null;
   let lastRendererFallbackReason = null;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -6383,16 +6468,25 @@ export async function createWebGPUFingerFluidSolver({
     colorMode = safeColorMode,
     rendererMode = safeRendererMode,
     opticalDebugMode = safeOpticalDebugMode,
+    opticalLightingMode = safeOpticalLightingMode,
   } = {}) {
     if (destroyed) return;
     const extent = ensureExtent(width, height, pixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+    const requestedOpticalLightingMode = String(opticalLightingMode || safeOpticalLightingMode);
+    const resolvedOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
+    const effectiveOpticalLightingMode = effectiveRendererMode === 'screen_space_refraction'
+      ? resolvedOpticalLightingMode
+      : 'not_executed';
     const renderFrameId = directRenderFrameCount + 1;
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
     lastOpticalDebugMode = effectiveOpticalDebugMode;
+    lastRequestedOpticalLightingMode = requestedOpticalLightingMode;
+    lastEffectiveOpticalLightingMode = effectiveOpticalLightingMode;
+    lastOpticalLightingFallbackReason = null;
     lastRendererFallbackReason = null;
     if (!reflectionMeshWitnessOverride) {
       const animatedPhase = (stepCount * 0.012) % (Math.PI * 2);
@@ -6417,7 +6511,7 @@ export async function createWebGPUFingerFluidSolver({
     renderData.set(viewProjection, 0);
     renderData.set([...right, colorModeIndex], 16);
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
-    renderData.set([...forward, 0], 24);
+    renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 24);
     renderData.set([...eye, 1], 28);
     renderData.set([extent.width, extent.height, 0.046, safeParticleCount], 32);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
@@ -7117,6 +7211,13 @@ export async function createWebGPUFingerFluidSolver({
       fallbackReason: lastRendererFallbackReason,
       renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
       opticalDebugMode: lastOpticalDebugMode,
+      requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
+      effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
+      requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
+      effectiveOpticalLightingRoute: lastEffectiveOpticalLightingMode === 'not_executed'
+        ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
+        : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
+      opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
       opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
       sphereDebugRendererRoute: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
       screenSpaceSurfaceRendererRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
@@ -7317,9 +7418,11 @@ export async function createWebGPUFingerFluidSolver({
         coverageClosure: 'dense_support_footprint_closure_sparse_identity_v0',
         normalFiltering: 'detail_macro_chord_variance_blend_v0',
         legacyDebugMode: 'legacy_interface',
-        opticalTransportExecution: lastOpticalDebugMode === 'interface_fidelity'
-          ? 'not_executed_early_interface_diagnostic_v0'
-          : 'executed_refraction_and_reflection_transport_v0',
+        opticalTransportExecution: lastEffectiveRendererMode !== 'screen_space_refraction'
+          ? 'not_executed_non_refraction_renderer_v0'
+          : lastOpticalDebugMode === 'interface_fidelity'
+            ? 'not_executed_early_interface_diagnostic_v0'
+            : 'executed_refraction_and_reflection_transport_v0',
         slabRoute: KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
         slabGeometryPassCount: screenSpaceOpticalSlabGeometryPassCount,
         frontDepthTexture: configuredExtent ? {
@@ -7345,6 +7448,20 @@ export async function createWebGPUFingerFluidSolver({
         supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         analyticSupportDepthPassCount,
         opticalDebugMode: lastOpticalDebugMode,
+        requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
+        effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
+        requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
+        effectiveOpticalLightingRoute: lastEffectiveOpticalLightingMode === 'not_executed'
+          ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
+          : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
+        opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
+        lightingComposition: lastEffectiveOpticalLightingMode === 'not_executed'
+          ? 'not_executed_non_refraction_renderer_v0'
+          : lastEffectiveOpticalLightingMode === 'transport_only'
+            ? 'fresnel_reflection_refraction_absorption_scatter_no_direct_addition_v0'
+            : lastEffectiveOpticalLightingMode === 'bounded_ggx'
+              ? 'transport_plus_energy_bounded_view_dependent_ggx_v0'
+              : 'diagnostic_legacy_absorption_and_post_fresnel_additive_lobes_v0',
         sceneColorTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-refraction-scene-color',
           format: LINEAR_SCENE_FORMAT,
@@ -7357,6 +7474,9 @@ export async function createWebGPUFingerFluidSolver({
         refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_then_hybrid_exit_ray_query_v0',
         fresnel: 'schlick_f0_0.02037_v0',
         absorption: 'beer_lambert_from_particle_optical_thickness_v0',
+        absorptionCoefficients: lastEffectiveOpticalLightingMode === 'not_executed'
+          ? null
+          : fingerFluidAbsorptionCoefficientsForLightingMode(lastEffectiveOpticalLightingMode),
         coverage: 'geometric_accumulation_support_alpha_independent_of_fresnel_v0',
       },
       diagnosticsPending,
@@ -7427,6 +7547,7 @@ export async function createWebGPUFingerFluidSolver({
     solver_backend: 'webgpu_compute',
     render_backend: 'webgpu_direct_render',
     renderer_mode: safeRendererMode,
+    optical_lighting_mode: safeOpticalLightingMode,
     step,
     render,
     requestDiagnostics,

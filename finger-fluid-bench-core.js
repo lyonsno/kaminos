@@ -50,6 +50,20 @@ export function createFingerFluidBenchState(options = {}) {
   for (const downgrade of Array.isArray(options.downgrades) ? options.downgrades : []) {
     if (downgrade && !downgrades.includes(String(downgrade))) downgrades.push(String(downgrade));
   }
+  const requestedRendererMode = options.requestedRendererMode || 'screen_space_surface';
+  const effectiveRendererMode = options.effectiveRendererMode || requestedRendererMode;
+  const requestedOpticalLightingMode = options.requestedOpticalLightingMode || 'transport_only';
+  const requestedOpticalLightingRoute = options.requestedOpticalLightingRoute || {
+    transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+    bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+    legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+  }[requestedOpticalLightingMode] || `unsupported-optical-lighting-mode:${requestedOpticalLightingMode}`;
+  const effectiveOpticalLightingMode = options.effectiveOpticalLightingMode
+    || (effectiveRendererMode === 'screen_space_refraction' ? requestedOpticalLightingMode : 'not_executed');
+  const effectiveOpticalLightingRoute = options.effectiveOpticalLightingRoute
+    || (effectiveOpticalLightingMode === 'not_executed'
+      ? 'not-executed-non-refraction-renderer-v0'
+      : requestedOpticalLightingRoute);
 
   return {
     schema: KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
@@ -103,8 +117,8 @@ export function createFingerFluidBenchState(options = {}) {
     renderer: {
       identity: options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       backend: options.renderBackend || 'loading',
-      requestedMode: options.requestedRendererMode || 'screen_space_surface',
-      effectiveMode: options.effectiveRendererMode || options.requestedRendererMode || 'screen_space_surface',
+      requestedMode: requestedRendererMode,
+      effectiveMode: effectiveRendererMode,
       requestedRenderer: options.requestedRenderer || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       effectiveRenderer: options.effectiveRenderer || options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       fallbackReason: options.rendererFallbackReason || null,
@@ -118,6 +132,11 @@ export function createFingerFluidBenchState(options = {}) {
       screenSpaceRefractionRenderFrameCount: nonNegativeInteger(options.screenSpaceRefractionRenderFrameCount, 0),
       requestedOpticalDebugMode: options.requestedOpticalDebugMode || 'shaded',
       effectiveOpticalDebugMode: options.effectiveOpticalDebugMode || options.requestedOpticalDebugMode || 'shaded',
+      requestedOpticalLightingMode,
+      effectiveOpticalLightingMode,
+      requestedOpticalLightingRoute,
+      effectiveOpticalLightingRoute,
+      opticalLightingFallbackReason: options.opticalLightingFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
