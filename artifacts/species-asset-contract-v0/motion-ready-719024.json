@@ -1,0 +1,113 @@
+{
+  "schema": "kaminos.species-asset.v0",
+  "speciesId": "lirm-crawler-719024",
+  "role": "creature",
+  "packageRef": "kaminos:cc/molten-silhouette-basin-0717@a1a32d8e:artifacts/motion-ready-719024/",
+  "asset": {
+    "path": "artifacts/motion-ready-719024/creature.glb",
+    "format": "glTF-2.0-GLB",
+    "sha256": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "vertices": 148118,
+    "faces": 188385,
+    "primitives": 1
+  },
+  "registration": {
+    "path": "artifacts/motion-ready-719024/registration.json",
+    "schema": "kaminos.axial-crawler-registration.v0",
+    "sha256": "cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6"
+  },
+  "coordinates": {
+    "handedness": "right",
+    "up": [0, 1, 0],
+    "forward": [0, 0, -1],
+    "right": [1, 0, 0],
+    "unit": "meter"
+  },
+  "bounds": {
+    "min": [-0.18455950915813446, -0.2068822681903839, -0.4996844232082367],
+    "max": [0.18466870486736298, 0.2093127816915512, 0.5002209544181824],
+    "width": 0.36922821402549744,
+    "authoredHeight": 0.4161950498819351,
+    "bodyLength": 0.9999053776264191
+  },
+  "root": {
+    "kind": "terrain-contact-root",
+    "localPoint": [0.00005459785461425781, -0.2068822681903839, 0.00026826560497283936],
+    "localToRootTranslation": [-0.00005459785461425781, 0.2068822681903839, -0.00026826560497283936],
+    "applicationOrder": "deform asset-local vertices, apply localToRootTranslation, then apply instance world transform"
+  },
+  "material": {
+    "workflow": "glTF-metallic-roughness",
+    "alphaMode": "OPAQUE",
+    "doubleSided": true,
+    "baseColor": {
+      "textureIndex": 0,
+      "embedded": true,
+      "resolution": [1024, 1024],
+      "colorSpace": "sRGB"
+    },
+    "metallicRoughness": {
+      "textureIndex": 1,
+      "embedded": true,
+      "resolution": [1024, 1024],
+      "colorSpace": "linear",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "red": "unused"
+      },
+      "roughnessFactor": 1,
+      "metallicFactor": 1
+    },
+    "normalTexture": null,
+    "occlusionTexture": null,
+    "emissiveTexture": null
+  },
+  "deformation": {
+    "mode": "axial-parallel-transport-wave-v0",
+    "space": "asset-local-before-root-transform",
+    "registrationStations": 7,
+    "referenceImplementation": "kaminos:cc/mushfinger-motion-ready-719024-0720@faff2e1a:motion-ready-719024-core.js",
+    "stateSchema": "kaminos.motion-ready-719024.axial-squirm-state.v0",
+    "stateFields": ["amplitude", "verticalAmplitude", "phase", "phaseVelocity"],
+    "runtimeEvidence": {
+      "finalFrameMilliseconds": 4.7,
+      "observedMaximumMilliseconds": 9,
+      "compactWitnessCadenceFps": 117
+    }
+  },
+  "fieldResponse": {
+    "bendStiffness": 0.35,
+    "wetnessResponse": 0.55,
+    "baseColorFallbackLinear": [0.56, 0.72, 0.15],
+    "burnBehavior": {
+      "mode": "not-frozen",
+      "supported": false
+    }
+  },
+  "lods": [
+    {
+      "tier": 0,
+      "assetPath": "artifacts/motion-ready-719024/creature.glb",
+      "faces": 188385,
+      "role": "single-creature-composition-witness"
+    }
+  ],
+  "runtimeGate": {
+    "consumer": "green-thumbsucker",
+    "scene": "Living World shared-depth runtime",
+    "maxCreatureInstances": 1,
+    "required": [
+      "shared color and depth attachments",
+      "terrain-root placement from this manifest",
+      "axial deformation before root and world transforms",
+      "one inspected grounded moving frame"
+    ],
+    "unclaimed": [
+      "generalized autorig",
+      "multi-LOD production population",
+      "burn response",
+      "second-species compatibility"
+    ]
+  }
+}
