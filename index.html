@@ -510,6 +510,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-fluid-bench-overlay { position: absolute; right: 16px; bottom: 16px; width: min(620px, calc(100% - 32px)); background: rgba(3,7,10,0.76); border: 1px solid #2d5065; border-radius: 8px; padding: 10px 12px; color: #c7e7ef; box-shadow: 0 10px 30px rgba(0,0,0,0.36); }
 #finger-fluid-bench-overlay-title { font: 11px 'SF Mono', monospace; color: #7fd7e0; text-transform: uppercase; letter-spacing: 0.8px; }
 #finger-fluid-bench-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #efe5c0; overflow-wrap: anywhere; }
+#finger-fluid-bench-pulse-control { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127,215,224,0.32); white-space: pre-line; font: 11px/1.45 'SF Mono', monospace; letter-spacing: 0; color: #9ff6dc; }
 #finger-fluid-oracle-cockpit-panel { margin-top: 9px; border-top: 1px solid rgba(127,215,224,0.28); padding-top: 9px; }
 #finger-fluid-oracle-cockpit-panel[hidden] { display: none; }
 .finger-fluid-oracle-cockpit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -2552,13 +2553,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div id="finger-fluid-bench-overlay">
       <div id="finger-fluid-bench-overlay-title">Finger Fluid Bench</div>
       <div id="finger-fluid-bench-overlay-body">kaminos/finger-fluid-bench · synthetic Kaminos fluid source</div>
+      <div id="finger-fluid-bench-pulse-control" hidden></div>
       <div id="finger-fluid-oracle-cockpit-panel" hidden>
         <div class="finger-fluid-oracle-cockpit-grid">
           <div class="finger-fluid-oracle-cockpit-field">
             <label for="finger-fluid-oracle-resolution">Res</label>
             <select id="finger-fluid-oracle-resolution">
-              <option value="baseline">Baseline</option>
-              <option value="high">High</option>
+                <option value="baseline">Baseline</option>
+                <option value="production">Production</option>
+                <option value="high">High</option>
             </select>
           </div>
           <div class="finger-fluid-oracle-cockpit-field">
@@ -2784,6 +2787,7 @@ import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  createFingerFluidPulseControlReadout,
   createFingerFluidWaterfallOracleConfig,
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
@@ -10012,6 +10016,10 @@ function updateFingerFluidBenchReadout() {
     `${state.interfaceCarrier?.activeCount || 0} interface records`,
     state.downgrades?.[0] || 'no downgrade recorded',
   ].join(' · ');
+  const pulseControlElement = document.getElementById('finger-fluid-bench-pulse-control');
+  const pulseControlReadout = state.runtime?.pulseControlReadout || null;
+  pulseControlElement.hidden = !pulseControlReadout;
+  pulseControlElement.textContent = pulseControlReadout?.text || '';
   updateFingerFluidOracleCockpitState(state.runtime || {});
 }
 
@@ -10497,6 +10505,15 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
     && fingerFluidBenchSimulationPaused
     && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  gpuState.pulseControlReadout = fingerFluidBenchConfig.effectiveInletCutoffStep !== null
+    || fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    ? createFingerFluidPulseControlReadout({
+        stepCount: gpuState.stepCount,
+        inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+        witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+        paused: fingerFluidBenchSimulationPaused,
+      })
+    : null;
   gpuState.oracleCockpitAdapterSchema = fingerFluidBenchConfig.oracleCockpitRequested ? FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.schema : null;
   if (fingerFluidBenchConfig.oracleCockpitRequested) {
     gpuState.requestedOracleCockpitConfig = fingerFluidBenchConfig.oracleCockpitRequested;
@@ -10687,9 +10704,22 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
   window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
     fingerFluidBenchSimulationPaused = paused === true;
+    const runtime = fingerFluidBenchSolver?.getDebugState?.() || null;
+    if (runtime && fingerFluidBenchState?.runtime) {
+      fingerFluidBenchState.runtime.pulseControlReadout = fingerFluidBenchConfig.effectiveInletCutoffStep !== null
+        || fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+        ? createFingerFluidPulseControlReadout({
+            stepCount: runtime.stepCount,
+            inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+            witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+            paused: fingerFluidBenchSimulationPaused,
+          })
+        : null;
+      updateFingerFluidBenchReadout();
+    }
     return {
       paused: fingerFluidBenchSimulationPaused,
-      stepCount: fingerFluidBenchSolver?.getDebugState?.().stepCount ?? null,
+      stepCount: runtime?.stepCount ?? null,
     };
   };
   window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;

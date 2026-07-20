@@ -20,7 +20,42 @@ assert.equal(core.resolveFingerFluidInletCutoffStep(480), 480);
 assert.throws(() => core.resolveFingerFluidInletCutoffStep(0), /cutoff step/i);
 assert.throws(() => core.resolveFingerFluidInletCutoffStep(1.5), /cutoff step/i);
 
+assert.deepEqual(core.createFingerFluidPulseControlReadout({
+  stepCount: 400,
+  inletCutoffStep: 480,
+  witnessTargetStep: 960,
+  paused: false,
+}), {
+  stepLabel: 'STEP 400 / 960',
+  sourceLabel: 'SOURCE OPEN · CUT @ 480',
+  runLabel: 'RUNNING',
+  text: 'STEP 400 / 960\nSOURCE OPEN · CUT @ 480\nRUNNING',
+});
+assert.deepEqual(core.createFingerFluidPulseControlReadout({
+  stepCount: 591,
+  inletCutoffStep: 480,
+  witnessTargetStep: 960,
+  paused: false,
+}), {
+  stepLabel: 'STEP 591 / 960',
+  sourceLabel: 'SOURCE CUT @ 480 · DRAINING ACTIVE RESERVOIR',
+  runLabel: 'RUNNING',
+  text: 'STEP 591 / 960\nSOURCE CUT @ 480 · DRAINING ACTIVE RESERVOIR\nRUNNING',
+});
+assert.deepEqual(core.createFingerFluidPulseControlReadout({
+  stepCount: 960,
+  inletCutoffStep: 480,
+  witnessTargetStep: 960,
+  paused: true,
+}), {
+  stepLabel: 'STEP 960 / 960',
+  sourceLabel: 'SOURCE CUT @ 480 · DRAINING ACTIVE RESERVOIR',
+  runLabel: 'PAUSED',
+  text: 'STEP 960 / 960\nSOURCE CUT @ 480 · DRAINING ACTIVE RESERVOIR\nPAUSED',
+});
+
 const captureSteps = [480, 510, 540, 600, 720, 960];
+const highConfig = core.createFingerFluidWaterfallOracleConfig('high');
 const slices = captureSteps.map((capturedStep, index) => ({
   identity: {
     schema: core.KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA,
@@ -29,17 +64,18 @@ const slices = captureSteps.map((capturedStep, index) => ({
     requestedPreset: 'high',
     effectivePreset: 'high',
     sourceId: 'slot-spout',
-    refinementFactor: 2,
-    particleSpacing: 0.5,
-    particleVolume: 0.125,
-    kernelRadius: 0.0925,
-    visibleParticleRadius: 0.023,
-    particleCount: 98304,
-    laneColumns: 48,
-    laneRows: 32,
-    laneCount: 1536,
-    physicalSourceFlux: 1,
-    expectedParticleReleaseRate: 8,
+    refinementFactor: highConfig.refinementFactor,
+    particleSpacing: highConfig.particleSpacing,
+    particleVolume: highConfig.particleVolume,
+    kernelRadius: highConfig.kernelRadius,
+    visibleParticleRadius: highConfig.visibleParticleRadius,
+    particleCount: highConfig.defaultParticleCount,
+    laneColumns: highConfig.laneColumns,
+    laneRows: highConfig.laneRows,
+    laneCount: highConfig.laneCount,
+    releaseScheduleContract: highConfig.releaseScheduleContract,
+    physicalSourceFlux: highConfig.physicalSourceFlux,
+    expectedParticleReleaseRate: highConfig.expectedParticleReleaseRate,
     rendererMode: 'sphere_debug',
     colorMode: 'phase',
     opticalDebugMode: 'shaded',
@@ -79,12 +115,54 @@ assert.equal(series.status, 'captured_pending_operator_disposition');
 assert.equal(series.sourceActivationCountStableAfterCutoff, true);
 assert.equal(series.visualDrainageAccepted, null);
 
+const productionConfig = core.createFingerFluidWaterfallOracleConfig('production');
+const productionSlices = structuredClone(slices).map((slice, index) => ({
+  ...slice,
+  identity: {
+    ...slice.identity,
+    requestedPreset: 'production',
+    effectivePreset: 'production',
+    refinementFactor: productionConfig.refinementFactor,
+    particleSpacing: productionConfig.particleSpacing,
+    particleVolume: productionConfig.particleVolume,
+    kernelRadius: productionConfig.kernelRadius,
+    visibleParticleRadius: productionConfig.visibleParticleRadius,
+    particleCount: productionConfig.defaultParticleCount,
+    laneColumns: productionConfig.laneColumns,
+    laneRows: productionConfig.laneRows,
+    laneCount: productionConfig.laneCount,
+    releaseScheduleContract: productionConfig.releaseScheduleContract,
+    physicalSourceFlux: productionConfig.physicalSourceFlux,
+    expectedParticleReleaseRate: productionConfig.expectedParticleReleaseRate,
+  },
+  diagnostics: {
+    ...slice.diagnostics,
+    activeParticleCount: 22_000 - index * 1_000,
+    dormantParticleCount: productionConfig.defaultParticleCount - (22_000 - index * 1_000),
+  },
+}));
+const productionSeries = core.evaluateFingerFluidPulseDrainageSeries({
+  slices: productionSlices,
+  expectedCaptureSteps: captureSteps,
+  expectedPreset: 'production',
+});
+assert.equal(productionSeries.mechanicalChecksOk, true);
+assert.equal(productionSeries.effectivePreset, 'production');
+assert.equal(productionSeries.particleCount, 24_576);
+
 const leakingSlices = structuredClone(slices);
 leakingSlices[2].diagnostics.sourceRecirculationCount += 1;
 assert.throws(() => core.evaluateFingerFluidPulseDrainageSeries({
   slices: leakingSlices,
   expectedCaptureSteps: captureSteps,
 }), /source activation continued after cutoff/i);
+
+const neverActivatedSlices = structuredClone(slices);
+for (const slice of neverActivatedSlices) slice.diagnostics.sourceRecirculationCount = 0;
+assert.throws(() => core.evaluateFingerFluidPulseDrainageSeries({
+  slices: neverActivatedSlices,
+  expectedCaptureSteps: captureSteps,
+}), /source never activated before cutoff/i);
 
 const staticSlices = structuredClone(slices);
 for (const slice of staticSlices) {
@@ -102,8 +180,11 @@ assert.match(coreSource, /inletCutoffStep/);
 assert.match(indexSource, /finger_fluid_inlet_cutoff_step/);
 assert.match(witnessSource, /pulse_drainage/);
 assert.match(witnessSource, /--capture-steps/);
+assert.match(witnessSource, /--pulse-preset/);
 assert.match(witnessSource, /sourceRecirculationCountStableAfterCutoff/);
 assert.match(witnessSource, /unsupportedSheetStrength !== 2/);
 assert.match(witnessSource, /kaminos\.finger-fluid\.pulse-drainage-witness\.v0/);
+assert.match(indexSource, /pulseControlReadout/);
+assert.match(indexSource, /finger-fluid-bench-pulse-control/);
 
 console.log('finger fluid pulse drainage contracts passed');

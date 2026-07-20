@@ -11,6 +11,7 @@ import {
   createFingerFluidWaterfallOracleEvidenceIdentity,
   evaluateFingerFluidWaterfallOraclePair,
   resolveFingerFluidWaterfallOraclePreset,
+  sampleFingerFluidWaterfallOracleParticle,
 } from '../finger-fluid-webgpu-core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -23,17 +24,31 @@ assert.equal(
   KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
   'isolated-slot-waterfall-uniform-resolution-oracle-v0',
 );
-assert.deepEqual(KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS, ['baseline', 'high']);
+assert.deepEqual(KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS, ['baseline', 'production', 'high']);
 assert.equal(resolveFingerFluidWaterfallOraclePreset('baseline'), 'baseline');
+assert.equal(resolveFingerFluidWaterfallOraclePreset('production'), 'production');
 assert.equal(resolveFingerFluidWaterfallOraclePreset('high'), 'high');
 assert.throws(() => resolveFingerFluidWaterfallOraclePreset('ultra'), /Unsupported finger fluid waterfall oracle preset/);
 
 const baseline = createFingerFluidWaterfallOracleConfig('baseline');
+const production = createFingerFluidWaterfallOracleConfig('production');
 const high = createFingerFluidWaterfallOracleConfig('high');
 assert.equal(baseline.contract, KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT);
 assert.equal(baseline.sourceId, 'slot-spout');
 assert.equal(baseline.refinementFactor, 1);
+assert.equal(production.refinementFactor, Math.cbrt(2));
 assert.equal(high.refinementFactor, 2);
+assert.ok(Math.abs(production.particleSpacing - baseline.particleSpacing / Math.cbrt(2)) < 1e-12);
+assert.ok(Math.abs(production.kernelRadius - baseline.kernelRadius / Math.cbrt(2)) < 1e-12);
+assert.ok(Math.abs(production.visibleParticleRadius - baseline.visibleParticleRadius / Math.cbrt(2)) < 1e-12);
+assert.ok(Math.abs(production.particleVolume - baseline.particleVolume / 2) < 1e-12);
+assert.equal(production.defaultParticleCount, 24_576);
+assert.equal(production.laneColumns, 19);
+assert.equal(production.laneRows, 5);
+assert.equal(production.laneCount, 95);
+assert.equal(production.physicalSourceFlux, baseline.physicalSourceFlux);
+assert.ok(Math.abs(production.expectedParticleReleaseRate - baseline.expectedParticleReleaseRate * 2) < 1e-9);
+assert.deepEqual(production.camera, baseline.camera);
 assert.equal(high.particleSpacing, baseline.particleSpacing / 2);
 assert.equal(high.kernelRadius, baseline.kernelRadius / 2);
 assert.equal(high.visibleParticleRadius, baseline.visibleParticleRadius / 2);
@@ -46,10 +61,32 @@ assert.equal(high.physicalSourceFlux, baseline.physicalSourceFlux);
 assert.equal(high.expectedParticleReleaseRate, baseline.expectedParticleReleaseRate * 8);
 assert.deepEqual(high.camera, baseline.camera);
 
+function realizedOracleSourceFlux(config) {
+  let particleRate = 0;
+  for (let lane = 0; lane < config.laneCount; lane += 1) {
+    particleRate += 60 / sampleFingerFluidWaterfallOracleParticle(lane, config.preset).releasePeriodFrames;
+  }
+  return particleRate * config.particleVolume;
+}
+
+for (const config of [baseline, production, high]) {
+  assert.ok(
+    Math.abs(realizedOracleSourceFlux(config) - baseline.physicalSourceFlux) < 1e-9,
+    `${config.preset} realized source flux must match the common physical source flux`,
+  );
+}
+assert.match(coreSource, /fractional-lane-error-diffusion-v0/);
+assert.match(coreSource, /laminar_inlet_release_due/);
+
 const baselineParticles = createFingerFluidTruthSceneParticles(
   baseline.defaultParticleCount,
   'waterfall_resolution_oracle',
   { waterfallOraclePreset: 'baseline' },
+);
+const productionParticles = createFingerFluidTruthSceneParticles(
+  production.defaultParticleCount,
+  'waterfall_resolution_oracle',
+  { waterfallOraclePreset: 'production' },
 );
 const highParticles = createFingerFluidTruthSceneParticles(
   high.defaultParticleCount,
@@ -57,9 +94,13 @@ const highParticles = createFingerFluidTruthSceneParticles(
   { waterfallOraclePreset: 'high' },
 );
 assert.equal(baselineParticles.length, baseline.defaultParticleCount * 16);
+assert.equal(productionParticles.length, production.defaultParticleCount * 16);
 assert.equal(highParticles.length, high.defaultParticleCount * 16);
 for (let index = 0; index < baseline.defaultParticleCount; index += 1) {
   assert.ok(Math.abs(Math.abs(baselineParticles[index * 16 + 11]) - 0.48) < 1e-6, 'the isolated oracle contains only the slot source');
+}
+for (let index = 0; index < production.defaultParticleCount; index += 1) {
+  assert.ok(Math.abs(Math.abs(productionParticles[index * 16 + 11]) - 0.48) < 1e-6, 'the production oracle contains only the slot source');
 }
 for (let index = 0; index < high.defaultParticleCount; index += 1) {
   assert.ok(Math.abs(Math.abs(highParticles[index * 16 + 11]) - 0.48) < 1e-6, 'the high oracle contains only the slot source');

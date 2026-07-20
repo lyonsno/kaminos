@@ -36,6 +36,7 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
     unsupportedSheetStrength: 'finger_fluid_unsupported_sheet_strength',
   },
   effectiveDebugFields: {
+    resolutionPreset: ['effectiveWaterfallOraclePreset'],
     particleCount: ['effectiveParticleCount', 'particleCount'],
     pressureIterations: ['densityIterationsPerStep', 'densityIterationCount'],
     viscosity: ['freeFlightViscosityBoost', 'effectiveFreeFlightViscosityBoost'],
@@ -49,6 +50,7 @@ export const FINGER_FLUID_ORACLE_COCKPIT_ADAPTER = deepFreeze({
   },
   presets: {
     baseline: { particleCount: 12288, label: 'baseline', spacingScale: 1, kernelScale: 1, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
+    production: { particleCount: 24576, label: 'production', spacingScale: 1 / Math.cbrt(2), kernelScale: 1 / Math.cbrt(2), camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
     high: { particleCount: 98304, label: 'high', spacingScale: 0.5, kernelScale: 0.5, camera: { yaw: -0.46, pitch: 0.30, distance: 3.05, target: [0, -0.35, -0.92] } },
   },
   structuralControls: ['resolutionPreset', 'particleSpacing', 'kernelScale', 'sourceFlux', 'pressureIterations', 'viscosity', 'cohesion', 'unsupportedSheetStrength'],
@@ -137,6 +139,7 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
   const requested = fingerFluidOracleRequestedConfigFromParams(sourceUrl.searchParams);
   const routeReady = isFingerFluidOracleCockpitRoute(sourceUrl.searchParams);
   const fields = FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.effectiveDebugFields;
+  const effectiveResolutionPreset = readEffectiveField(effective, fields.resolutionPreset);
   const effectiveParticleCount = readEffectiveField(effective, fields.particleCount);
   const effectivePressureIterations = readEffectiveField(effective, fields.pressureIterations);
   const effectiveViscosity = readEffectiveField(effective, fields.viscosity);
@@ -169,11 +172,7 @@ export function createFingerFluidOracleCockpitState({ url, effective = {}, now =
     observedAt: now,
     requested,
     effective: {
-      resolutionPreset: effectiveParticleCount === FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.high.particleCount
-        ? 'high'
-        : effectiveParticleCount === FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets.baseline.particleCount
-          ? 'baseline'
-          : requested.resolutionPreset,
+      resolutionPreset: normalizeResolutionPreset(effectiveResolutionPreset ?? requested.resolutionPreset),
       particleCount: Number.isFinite(Number(effectiveParticleCount)) ? Number(effectiveParticleCount) : requested.particleCount,
       pressureIterations: Number.isFinite(Number(effectivePressureIterations)) ? Number(effectivePressureIterations) : requested.pressureIterations,
       viscosity: Number.isFinite(Number(effectiveViscosity)) ? Number(effectiveViscosity) : requested.viscosity,

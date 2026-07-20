@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 
 import {
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  createFingerFluidPulseControlReadout,
   createFingerFluidWaterfallOracleConfig,
   createFingerFluidWaterfallOracleEvidenceIdentity,
   evaluateFingerFluidPulseDrainageSeries,
@@ -39,6 +40,7 @@ const captureSteps = String(args.get('--capture-steps') || '480,510,540,600,720,
   .split(',')
   .map(value => Number(value.trim()));
 const comparisonAxis = args.get('--comparison-axis') || 'resolution';
+const pulsePreset = args.get('--pulse-preset') || 'high';
 if (!['resolution', 'unsupported_sheet', 'pulse_drainage'].includes(comparisonAxis)) {
   throw new RangeError(`Unsupported waterfall oracle comparison axis: ${comparisonAxis}`);
 }
@@ -87,6 +89,7 @@ function writeReport(extra = {}) {
     inletCutoffStep: comparisonAxis === 'pulse_drainage' ? inletCutoffStep : null,
     captureSteps: comparisonAxis === 'pulse_drainage' ? captureSteps : null,
     comparisonAxis,
+    pulsePreset: comparisonAxis === 'pulse_drainage' ? pulsePreset : null,
     baselineRun,
     highRun,
     pair,
@@ -261,6 +264,12 @@ function validateEffectiveIdentity({
     distance: camera.distance,
     target: camera.target,
   } : null;
+  const expectedPulseControlReadout = cutoffStep === null ? null : createFingerFluidPulseControlReadout({
+    stepCount: capturedStep,
+    inletCutoffStep: cutoffStep,
+    witnessTargetStep: targetCaptureStep,
+    paused: true,
+  });
   if (debug?.schema !== 'kaminos.finger-fluid-bench.state.v0'
     || debug.status !== 'running'
     || runtime?.available !== true
@@ -288,6 +297,7 @@ function validateEffectiveIdentity({
     || route?.requestedInletCutoffStep !== cutoffStep
     || route?.effectiveInletCutoffStep !== cutoffStep
     || runtime.inletCutoffStep !== cutoffStep
+    || JSON.stringify(runtime.pulseControlReadout ?? null) !== JSON.stringify(expectedPulseControlReadout)
     || capturedStep < targetCaptureStep
     || capturedStep > targetCaptureStep + 8
     || JSON.stringify(cameraIdentity) !== JSON.stringify(config.camera)) {
@@ -304,6 +314,8 @@ function validateEffectiveIdentity({
         visibleParticleRadius: runtime.visibleParticleRadius,
         unsupportedSheetStrength: runtime.unsupportedSheetStrength,
         waterfallResolutionOracle: effective,
+        pulseControlReadout: runtime.pulseControlReadout,
+        expectedPulseControlReadout,
       } : null,
       capturedStep,
       cameraIdentity,
@@ -548,7 +560,7 @@ try {
     for (let index = 0; index < captureSteps.length; index += 1) {
       const captureStep = captureSteps[index];
       phase = `capturing_pulse_step_${captureStep}`;
-      const run = await runPreset('high', debugPort + index, {
+      const run = await runPreset(pulsePreset, debugPort + index, {
         label: `pulse-step-${captureStep}`,
         sheetStrength: unsupportedSheetStrength,
         captureStep,
@@ -566,6 +578,7 @@ try {
         artifact: run.artifact,
       })),
       expectedCaptureSteps: captureSteps,
+      expectedPreset: pulsePreset,
     });
   } else {
     phase = comparisonAxis === 'resolution' ? 'capturing_baseline' : 'capturing_unsupported_sheet_control';

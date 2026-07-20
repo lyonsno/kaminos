@@ -27,6 +27,7 @@ export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kam
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT = 'isolated-slot-waterfall-uniform-resolution-oracle-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA = 'kaminos.finger-fluid.waterfall-resolution-oracle-evidence.v0';
 export const KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT = 'fixed-step-source-cutoff-drainage-v0';
+export const KAMINOS_FINGER_FLUID_SOURCE_RELEASE_SCHEDULE_CONTRACT = 'fractional-lane-error-diffusion-v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webgpu-device-limit-derived-particle-allocation-preflight-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
@@ -121,7 +122,7 @@ let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
-export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze(['baseline', 'high']);
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze(['baseline', 'production', 'high']);
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
@@ -156,13 +157,13 @@ export function resolveFingerFluidWaterfallOraclePreset(value = 'baseline') {
 
 export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
   const preset = resolveFingerFluidWaterfallOraclePreset(value);
-  const refinementFactor = preset === 'high' ? 2 : 1;
+  const refinementFactor = preset === 'high' ? 2 : preset === 'production' ? Math.cbrt(2) : 1;
   const particleSpacing = LAMINAR_SOURCE_AXIAL_SPACING / refinementFactor;
   const descriptor = createFingerFluidLaminarInletDescriptors()[1];
   const physicalSourceFlux = measureFingerFluidLaminarInletFlux(descriptor);
   const particleVolume = particleSpacing ** 3;
-  const laneColumns = descriptor.laneColumns * refinementFactor;
-  const laneRows = descriptor.laneRows * refinementFactor;
+  const laneColumns = preset === 'high' ? descriptor.laneColumns * 2 : preset === 'production' ? 19 : descriptor.laneColumns;
+  const laneRows = preset === 'high' ? descriptor.laneRows * 2 : preset === 'production' ? 5 : descriptor.laneRows;
   return Object.freeze({
     contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
     preset,
@@ -173,10 +174,11 @@ export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
     particleVolume,
     kernelRadius: 0.185 / refinementFactor,
     visibleParticleRadius: 0.046 / refinementFactor,
-    defaultParticleCount: 12_288 * refinementFactor ** 3,
+    defaultParticleCount: preset === 'high' ? 98_304 : preset === 'production' ? 24_576 : 12_288,
     laneColumns,
     laneRows,
     laneCount: laneColumns * laneRows,
+    releaseScheduleContract: KAMINOS_FINGER_FLUID_SOURCE_RELEASE_SCHEDULE_CONTRACT,
     physicalSourceFlux,
     expectedParticleReleaseRate: physicalSourceFlux / particleVolume,
     camera: Object.freeze({
@@ -221,6 +223,7 @@ export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
     laneColumns: Number(values.laneColumns),
     laneRows: Number(values.laneRows),
     laneCount: Number(values.laneCount),
+    releaseScheduleContract: config.releaseScheduleContract,
     physicalSourceFlux: Number(values.physicalSourceFlux),
     expectedParticleReleaseRate: Number(values.expectedParticleReleaseRate),
     rendererMode: values.rendererMode,
@@ -266,7 +269,7 @@ export function evaluateFingerFluidWaterfallOraclePair({
     throw new Error('waterfall oracle pair does not contain baseline and high presets');
   }
   const exactCommonKeys = [
-    'contract', 'truthScene', 'sourceId', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'contract', 'truthScene', 'sourceId', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
     'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'unsupportedSheetStrength',
     'inletCutoffStep',
@@ -322,7 +325,7 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
   const exactCommonKeys = [
     'contract', 'truthScene', 'sourceId', 'refinementFactor', 'particleSpacing', 'particleVolume',
     'kernelRadius', 'visibleParticleRadius', 'particleCount', 'laneColumns', 'laneRows', 'laneCount',
-    'physicalSourceFlux', 'expectedParticleReleaseRate', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'physicalSourceFlux', 'expectedParticleReleaseRate', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
     'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',
     'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'camera',
     'inletCutoffStep',
@@ -354,7 +357,10 @@ export function evaluateFingerFluidUnsupportedSheetOraclePair({
 export function evaluateFingerFluidPulseDrainageSeries({
   slices,
   expectedCaptureSteps,
+  expectedPreset = 'high',
 } = {}) {
+  const resolvedExpectedPreset = resolveFingerFluidWaterfallOraclePreset(expectedPreset);
+  const expectedConfig = createFingerFluidWaterfallOracleConfig(resolvedExpectedPreset);
   if (!Array.isArray(expectedCaptureSteps)
     || expectedCaptureSteps.length < 2
     || expectedCaptureSteps.some(step => !Number.isSafeInteger(step) || step < 1)) {
@@ -373,8 +379,20 @@ export function evaluateFingerFluidPulseDrainageSeries({
     const expectedStep = expectedCaptureSteps[index];
     if (identity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
       || identity.truthScene !== 'waterfall_resolution_oracle'
-      || identity.requestedPreset !== 'high'
-      || identity.effectivePreset !== 'high'
+      || identity.requestedPreset !== resolvedExpectedPreset
+      || identity.effectivePreset !== resolvedExpectedPreset
+      || identity.particleCount !== expectedConfig.defaultParticleCount
+      || identity.refinementFactor !== expectedConfig.refinementFactor
+      || identity.particleSpacing !== expectedConfig.particleSpacing
+      || identity.particleVolume !== expectedConfig.particleVolume
+      || identity.kernelRadius !== expectedConfig.kernelRadius
+      || identity.visibleParticleRadius !== expectedConfig.visibleParticleRadius
+      || identity.laneColumns !== expectedConfig.laneColumns
+      || identity.laneRows !== expectedConfig.laneRows
+      || identity.laneCount !== expectedConfig.laneCount
+      || identity.releaseScheduleContract !== expectedConfig.releaseScheduleContract
+      || identity.physicalSourceFlux !== expectedConfig.physicalSourceFlux
+      || identity.expectedParticleReleaseRate !== expectedConfig.expectedParticleReleaseRate
       || identity.unsupportedSheetStrength !== 2
       || identity.inletCutoffStep !== expectedCaptureSteps[0]
       || identity.capturedStep !== expectedStep) {
@@ -408,6 +426,9 @@ export function evaluateFingerFluidPulseDrainageSeries({
       artifact: requireFingerFluidOracleArtifact(slice.artifact, `pulse drainage step ${expectedStep}`),
     };
   });
+  if (sourceActivationCount <= 0) {
+    throw new Error('Source never activated before cutoff');
+  }
   if (previousActiveParticleCount >= initialActiveParticleCount) {
     throw new Error('No particle drainage observed after cutoff');
   }
@@ -423,8 +444,41 @@ export function evaluateFingerFluidPulseDrainageSeries({
     status: 'captured_pending_operator_disposition',
     operatorDispositionRequired: true,
     visualDrainageAccepted: null,
+    effectivePreset: resolvedExpectedPreset,
+    particleCount: expectedConfig.defaultParticleCount,
     expectedCaptureSteps: [...expectedCaptureSteps],
     slices: acceptedSlices,
+  };
+}
+
+export function createFingerFluidPulseControlReadout({
+  stepCount,
+  inletCutoffStep = null,
+  witnessTargetStep = null,
+  paused = false,
+} = {}) {
+  if (!Number.isSafeInteger(stepCount) || stepCount < 0) {
+    throw new TypeError(`Finger fluid pulse readout step must be a nonnegative integer: ${stepCount}`);
+  }
+  const cutoff = resolveFingerFluidInletCutoffStep(inletCutoffStep);
+  const target = witnessTargetStep === null || witnessTargetStep === undefined
+    ? null
+    : Number(witnessTargetStep);
+  if (target !== null && (!Number.isSafeInteger(target) || target < 1)) {
+    throw new TypeError(`Finger fluid pulse readout target must be a positive integer: ${witnessTargetStep}`);
+  }
+  const stepLabel = target === null ? `STEP ${stepCount}` : `STEP ${stepCount} / ${target}`;
+  const sourceLabel = cutoff === null
+    ? 'SOURCE OPEN · NO CUT SCHEDULED'
+    : stepCount < cutoff
+      ? `SOURCE OPEN · CUT @ ${cutoff}`
+      : `SOURCE CUT @ ${cutoff} · DRAINING ACTIVE RESERVOIR`;
+  const runLabel = paused ? 'PAUSED' : 'RUNNING';
+  return {
+    stepLabel,
+    sourceLabel,
+    runLabel,
+    text: [stepLabel, sourceLabel, runLabel].join('\n'),
   };
 }
 
@@ -841,9 +895,9 @@ function createFingerFluidLaminarInletReleaseSchedule(index, descriptors, partic
   }
   const expectedReleaseRate = measureFingerFluidLaminarInletFlux(descriptor) / LAMINAR_SOURCE_PARTICLE_VOLUME;
   const laneReleaseRate = expectedReleaseRate * profile.axialSpeed / Math.max(laneSpeedSum, 1e-9);
-  const releasePeriodFrames = Math.max(1, Math.round(LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9)));
+  const releasePeriodFrames = Math.max(1, LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9));
   const cycleFrames = Math.max(1, laneParticleCount * releasePeriodFrames);
-  const lanePhaseOffset = Math.floor((laneIndex + 0.5) * releasePeriodFrames / descriptor.laneCount);
+  const lanePhaseOffset = ((laneIndex + 0.5) / descriptor.laneCount) * releasePeriodFrames;
   const releaseFrame = laneOrdinal * releasePeriodFrames + lanePhaseOffset;
   const ageFramesAtStart = releaseFrame === 0 ? 0 : cycleFrames - releaseFrame;
   const ageSecondsAtStart = ageFramesAtStart / LAMINAR_SOURCE_REFERENCE_FPS;
@@ -946,9 +1000,9 @@ export function sampleFingerFluidWaterfallOracleParticle(index, preset = 'baseli
   }
   const laneParticleCount = Math.floor((particleCount - 1 - laneIndex) / config.laneCount) + 1;
   const laneReleaseRate = config.expectedParticleReleaseRate * profile.axialSpeed / Math.max(laneSpeedSum, 1e-9);
-  const releasePeriodFrames = Math.max(1, Math.round(LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9)));
+  const releasePeriodFrames = Math.max(1, LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9));
   const cycleFrames = Math.max(1, laneParticleCount * releasePeriodFrames);
-  const lanePhaseOffset = Math.floor((laneIndex + 0.5) * releasePeriodFrames / config.laneCount);
+  const lanePhaseOffset = ((laneIndex + 0.5) / config.laneCount) * releasePeriodFrames;
   const releaseFrame = laneOrdinal * releasePeriodFrames + lanePhaseOffset;
   const ageFramesAtStart = releaseFrame === 0 ? 0 : cycleFrames - releaseFrame;
   const initialAxialPosition = -descriptor.reservoirLength
@@ -1314,7 +1368,7 @@ struct MaterialTracerState {
 struct LaminarInletSample {
   positionPhase: vec4<f32>,
   velocityCore: vec4<f32>,
-  releaseSchedule: vec4<u32>,
+  releaseSchedule: vec4<f32>,
 }
 
 struct InterfaceRecord {
@@ -1460,8 +1514,10 @@ fn laminar_inlet_source_from_phase(phase: f32) -> u32 {
 fn laminar_inlet_lane_count(sourceIndex: u32) -> u32 {
   if (sourceIndex == 0u) { return 72u; }
   if (sourceIndex == 1u) {
-    let refinementFactor = u32(params.particleShift.w + 0.5);
-    return 60u * refinementFactor * refinementFactor;
+    if (params.particleShift.z > 1.5) {
+      return max(1u, params.sourceControl.z * params.sourceControl.w);
+    }
+    return 60u;
   }
   return 176u;
 }
@@ -1477,9 +1533,8 @@ fn laminar_inlet_lane_coordinates(sourceIndex: u32, laneIndex: u32) -> vec2<f32>
   var halfWidth = 0.48;
   var halfHeight = 0.13;
   if (sourceIndex == 1u && params.particleShift.z > 1.5) {
-    let refinementFactor = u32(params.particleShift.w + 0.5);
-    columns *= refinementFactor;
-    rows *= refinementFactor;
+    columns = max(1u, params.sourceControl.z);
+    rows = max(1u, params.sourceControl.w);
   }
   if (sourceIndex == 2u) {
     columns = 16u;
@@ -1507,7 +1562,19 @@ fn laminar_inlet_profile_speed(sourceIndex: u32, localCoordinates: vec2<f32>) ->
   return 0.22;
 }
 
-fn laminar_inlet_release_phase(index: u32) -> vec2<u32> {
+fn slot_lane_speed_sum(columns: u32, rows: u32) -> f32 {
+  var speedSum = 0.0;
+  var row = 0u;
+  loop {
+    if (row >= rows) { break; }
+    let localV = (((f32(row) + 0.5) / f32(rows)) * 2.0 - 1.0) * 0.13 * 0.88;
+    speedSum += f32(columns) * laminar_inlet_profile_speed(1u, vec2<f32>(0.0, localV));
+    row += 1u;
+  }
+  return speedSum;
+}
+
+fn laminar_inlet_release_phase(index: u32) -> vec4<f32> {
   let sourceIndex = laminar_inlet_source_index(index);
   let localOrdinal = laminar_inlet_source_local_ordinal(index);
   let laneCount = laminar_inlet_lane_count(sourceIndex);
@@ -1521,17 +1588,28 @@ fn laminar_inlet_release_phase(index: u32) -> vec2<u32> {
   var expectedReleaseRate = 781.7396595559;
   if (sourceIndex == 1u) {
     let refinementFactor = max(1.0, params.particleShift.w);
-    laneSpeedSum = select(32.7456, 128.89152, refinementFactor > 1.5);
+    let columns = select(15u, max(1u, params.sourceControl.z), params.particleShift.z > 1.5);
+    let rows = select(4u, max(1u, params.sourceControl.w), params.particleShift.z > 1.5);
+    laneSpeedSum = slot_lane_speed_sum(columns, rows);
     expectedReleaseRate = 720.1081893313 * refinementFactor * refinementFactor * refinementFactor;
   } else if (sourceIndex == 2u) {
     laneSpeedSum = 38.72;
     expectedReleaseRate = 827.2396694215;
   }
   let laneReleaseRate = expectedReleaseRate * speed / max(laneSpeedSum, 0.000001);
-  let releasePeriodFrames = u32(max(1.0, floor(60.0 / max(laneReleaseRate, 0.000001) + 0.5)));
-  let cycleFrames = max(1u, laneParticleCount * releasePeriodFrames);
-  let lanePhaseOffset = ((laneIndex * 2u + 1u) * releasePeriodFrames) / (laneCount * 2u);
-  return vec2<u32>(laneOrdinal * releasePeriodFrames + lanePhaseOffset, cycleFrames);
+  let lanePhaseEvents = (f32(laneIndex) + 0.5) / f32(laneCount);
+  return vec4<f32>(f32(laneOrdinal), f32(laneParticleCount), laneReleaseRate, lanePhaseEvents);
+}
+
+fn laminar_inlet_release_due(frameIndex: u32, schedule: vec4<f32>) -> bool {
+  let laneOrdinal = u32(schedule.x);
+  let laneParticleCount = max(1u, u32(schedule.y));
+  let laneReleaseRate = schedule.z;
+  let lanePhaseEvents = schedule.w;
+  let previousEventCount = u32(floor(f32(frameIndex) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  let nextEventCount = u32(floor(f32(frameIndex + 1u) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  return nextEventCount > previousEventCount
+    && (nextEventCount - 1u) % laneParticleCount == laneOrdinal;
 }
 
 fn laminar_inlet_sample(index: u32) -> LaminarInletSample {
@@ -1569,7 +1647,7 @@ fn laminar_inlet_sample(index: u32) -> LaminarInletSample {
   var sample: LaminarInletSample;
   sample.positionPhase = vec4<f32>(origin + tangent * localU + bitangent * localV + axis * axialPosition, phase);
   sample.velocityCore = vec4<f32>(axis * axialSpeed, 1.0);
-  sample.releaseSchedule = vec4<u32>(releasePhase, sourceIndex, laneIndex);
+  sample.releaseSchedule = releasePhase;
   return sample;
 }
 
@@ -1807,9 +1885,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
       return;
     }
     let inletSample = laminar_inlet_sample(index);
-    let releaseFrame = inletSample.releaseSchedule.x;
-    let cycleFrames = inletSample.releaseSchedule.y;
-    if (params.frameIndex % cycleFrames != releaseFrame) {
+    if (!laminar_inlet_release_due(params.frameIndex, inletSample.releaseSchedule)) {
       particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
       particle.delta = vec4<f32>(0.0);
       particles[index] = particle;
@@ -5784,8 +5860,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(156, 1, true);
     view.setUint32(160, safeInletCutoffStep ?? 0xffffffff, true);
     view.setUint32(164, safeInletCutoffStep === null ? 0 : 1, true);
-    view.setUint32(168, 0, true);
-    view.setUint32(172, 0, true);
+    view.setUint32(168, waterfallOracleConfig?.laneColumns ?? 0, true);
+    view.setUint32(172, waterfallOracleConfig?.laneRows ?? 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -6402,6 +6478,7 @@ export async function createWebGPUFingerFluidSolver({
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
       unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
       waterfallOracleContract: waterfallOracleConfig?.contract || null,
+      oracleReleaseScheduleContract: waterfallOracleConfig?.releaseScheduleContract || null,
       requestedWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? waterfallOraclePreset : null,
       effectiveWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? safeWaterfallOraclePreset : null,
       oracleParticleSpacing: waterfallOracleConfig?.particleSpacing ?? null,
