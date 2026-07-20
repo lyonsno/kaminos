@@ -2263,6 +2263,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Transmission footprint effective</span><span class="field-val" id="finger-fluid-bench-transmission-footprint-effective">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Body transport requested</span><span class="field-val" id="finger-fluid-bench-body-transport-requested">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Body transport effective</span><span class="field-val" id="finger-fluid-bench-body-transport-effective">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Interface frequency requested</span><span class="field-val" id="finger-fluid-bench-interface-frequency-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Interface frequency effective</span><span class="field-val" id="finger-fluid-bench-interface-frequency-effective">pending</span></div>
       <div class="field"><span class="field-key">Active</span><span class="field-val" id="finger-fluid-bench-active">0.00</span></div>
       <div class="field"><span class="field-key">Basin</span><span class="field-val" id="finger-fluid-bench-basin">0.00</span></div>
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="finger-fluid-bench-frame-ms">0 ms</span></div>
@@ -2716,6 +2718,7 @@ import {
   resolveFingerFluidOpticalFootprintMode,
   resolveFingerFluidTransmissionFootprintMode,
   resolveFingerFluidBodyTransportMode,
+  resolveFingerFluidInterfaceFrequencyMode,
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidSupportFriction,
   resolveFingerFluidChemistryDiffusion,
@@ -2867,6 +2870,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedOpticalFootprintMode = params.get('finger_fluid_optical_footprint') || 'resolved_detail';
   const requestedTransmissionFootprintMode = params.get('finger_fluid_transmission_footprint') || 'resolved_exit';
   const requestedBodyTransportMode = params.get('finger_fluid_body_transport') || 'geometric_slab';
+  const requestedInterfaceFrequencyMode = params.get('finger_fluid_interface_frequency') || 'coupled_detail';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
@@ -2893,6 +2897,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveTransmissionFootprintMode: resolveFingerFluidTransmissionFootprintMode(requestedTransmissionFootprintMode),
     requestedBodyTransportMode,
     effectiveBodyTransportMode: resolveFingerFluidBodyTransportMode(requestedBodyTransportMode),
+    requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode),
     requestedParticleShiftStrength,
     effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
     requestedSupportFriction,
@@ -9891,6 +9897,10 @@ function updateFingerFluidBenchReadout() {
   const effectiveBodyTransportModeLabel = state.renderer?.effectiveBodyTransportMode || state.config?.effectiveBodyTransportMode || 'pending';
   document.getElementById('finger-fluid-bench-body-transport-requested').textContent = requestedBodyTransportModeLabel;
   document.getElementById('finger-fluid-bench-body-transport-effective').textContent = effectiveBodyTransportModeLabel;
+  const requestedInterfaceFrequencyModeLabel = state.renderer?.requestedInterfaceFrequencyMode || state.config?.requestedInterfaceFrequencyMode || 'pending';
+  const effectiveInterfaceFrequencyModeLabel = state.renderer?.effectiveInterfaceFrequencyMode || state.config?.effectiveInterfaceFrequencyMode || 'pending';
+  document.getElementById('finger-fluid-bench-interface-frequency-requested').textContent = requestedInterfaceFrequencyModeLabel;
+  document.getElementById('finger-fluid-bench-interface-frequency-effective').textContent = effectiveInterfaceFrequencyModeLabel;
   document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
@@ -10156,6 +10166,7 @@ function renderFingerFluidBenchCurrentStateForWitness(
   opticalFootprintMode = fingerFluidBenchConfig.effectiveOpticalFootprintMode,
   transmissionFootprintMode = fingerFluidBenchConfig.effectiveTransmissionFootprintMode,
   bodyTransportMode = fingerFluidBenchConfig.effectiveBodyTransportMode,
+  interfaceFrequencyMode = fingerFluidBenchConfig.effectiveInterfaceFrequencyMode,
 ) {
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
   const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
@@ -10168,6 +10179,8 @@ function renderFingerFluidBenchCurrentStateForWitness(
   const effectiveTransmissionFootprintMode = resolveFingerFluidTransmissionFootprintMode(requestedTransmissionFootprintMode);
   const requestedBodyTransportMode = String(bodyTransportMode || fingerFluidBenchConfig.effectiveBodyTransportMode);
   const effectiveBodyTransportMode = resolveFingerFluidBodyTransportMode(requestedBodyTransportMode);
+  const requestedInterfaceFrequencyMode = String(interfaceFrequencyMode || fingerFluidBenchConfig.effectiveInterfaceFrequencyMode);
+  const effectiveInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode);
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
@@ -10183,6 +10196,7 @@ function renderFingerFluidBenchCurrentStateForWitness(
     opticalFootprintMode: requestedOpticalFootprintMode,
     transmissionFootprintMode: requestedTransmissionFootprintMode,
     bodyTransportMode: requestedBodyTransportMode,
+    interfaceFrequencyMode: requestedInterfaceFrequencyMode,
     ...fingerFluidBenchCamera,
   });
   const runtime = fingerFluidBenchSolver.getDebugState();
@@ -10218,6 +10232,11 @@ function renderFingerFluidBenchCurrentStateForWitness(
     fingerFluidBenchState.renderer.requestedBodyTransportRoute = runtime.requestedBodyTransportRoute;
     fingerFluidBenchState.renderer.effectiveBodyTransportRoute = runtime.effectiveBodyTransportRoute;
     fingerFluidBenchState.renderer.bodyTransportFallbackReason = runtime.bodyTransportFallbackReason;
+    fingerFluidBenchState.renderer.requestedInterfaceFrequencyMode = requestedInterfaceFrequencyMode;
+    fingerFluidBenchState.renderer.effectiveInterfaceFrequencyMode = runtime.effectiveInterfaceFrequencyMode;
+    fingerFluidBenchState.renderer.requestedInterfaceFrequencyRoute = runtime.requestedInterfaceFrequencyRoute;
+    fingerFluidBenchState.renderer.effectiveInterfaceFrequencyRoute = runtime.effectiveInterfaceFrequencyRoute;
+    fingerFluidBenchState.renderer.interfaceFrequencyFallbackReason = runtime.interfaceFrequencyFallbackReason;
   }
   fingerFluidBenchState.runtime = runtime;
   updateFingerFluidBenchReadout();
@@ -10255,6 +10274,11 @@ function renderFingerFluidBenchCurrentStateForWitness(
     requestedBodyTransportRoute: runtime.requestedBodyTransportRoute,
     effectiveBodyTransportRoute: runtime.effectiveBodyTransportRoute,
     bodyTransportFallbackReason: runtime.bodyTransportFallbackReason,
+    requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: runtime.effectiveInterfaceFrequencyMode,
+    requestedInterfaceFrequencyRoute: runtime.requestedInterfaceFrequencyRoute,
+    effectiveInterfaceFrequencyRoute: runtime.effectiveInterfaceFrequencyRoute,
+    interfaceFrequencyFallbackReason: runtime.interfaceFrequencyFallbackReason,
     supportPresentationEvidence: runtime.supportPresentationEvidence,
     linearHdrSceneEvidence: runtime.linearHdrSceneEvidence,
     finalPresentationEvidence: runtime.finalPresentationEvidence,
@@ -10314,6 +10338,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     opticalFootprintMode: fingerFluidBenchConfig.requestedOpticalFootprintMode,
     transmissionFootprintMode: fingerFluidBenchConfig.requestedTransmissionFootprintMode,
     bodyTransportMode: fingerFluidBenchConfig.requestedBodyTransportMode,
+    interfaceFrequencyMode: fingerFluidBenchConfig.requestedInterfaceFrequencyMode,
     ...fingerFluidBenchCamera,
   });
   const gpuState = fingerFluidBenchSolver.getDebugState();
@@ -10329,6 +10354,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedOpticalFootprintMode = fingerFluidBenchConfig.requestedOpticalFootprintMode;
   gpuState.requestedTransmissionFootprintMode = fingerFluidBenchConfig.requestedTransmissionFootprintMode;
   gpuState.requestedBodyTransportMode = fingerFluidBenchConfig.requestedBodyTransportMode;
+  gpuState.requestedInterfaceFrequencyMode = fingerFluidBenchConfig.requestedInterfaceFrequencyMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedSupportFriction = fingerFluidBenchConfig.requestedSupportFriction;
@@ -10377,6 +10403,11 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     requestedBodyTransportRoute: gpuState.requestedBodyTransportRoute,
     effectiveBodyTransportRoute: gpuState.effectiveBodyTransportRoute,
     bodyTransportFallbackReason: gpuState.bodyTransportFallbackReason,
+    requestedInterfaceFrequencyMode: gpuState.requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: gpuState.effectiveInterfaceFrequencyMode,
+    requestedInterfaceFrequencyRoute: gpuState.requestedInterfaceFrequencyRoute,
+    effectiveInterfaceFrequencyRoute: gpuState.effectiveInterfaceFrequencyRoute,
+    interfaceFrequencyFallbackReason: gpuState.interfaceFrequencyFallbackReason,
     rendererSurface: gpuState.effectiveRendererMode === 'sphere_debug'
       ? 'direct_webgpu_particle_sphere_billboards_debug_in_kaminos_viewport'
       : gpuState.effectiveRendererMode === 'screen_space_refraction'
@@ -10455,6 +10486,7 @@ async function startFingerFluidBench() {
       const rejectedOpticalFootprintMode = rejectedParams.get('finger_fluid_optical_footprint') || 'resolved_detail';
       const rejectedTransmissionFootprintMode = rejectedParams.get('finger_fluid_transmission_footprint') || 'resolved_exit';
       const rejectedBodyTransportMode = rejectedParams.get('finger_fluid_body_transport') || 'geometric_slab';
+      const rejectedInterfaceFrequencyMode = rejectedParams.get('finger_fluid_interface_frequency') || 'coupled_detail';
       const rejectedOpticalLightingRoute = {
         transport_only: 'wgsl-liquid-transport-only-lighting-v0',
         bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
@@ -10472,6 +10504,10 @@ async function startFingerFluidBench() {
         geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
         robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
       }[rejectedBodyTransportMode] || `unsupported-body-transport-mode:${rejectedBodyTransportMode}`;
+      const rejectedInterfaceFrequencyRoute = {
+        coupled_detail: 'wgsl-liquid-coupled-detail-interface-frequency-v0',
+        macro_micro_separated: 'wgsl-liquid-macro-micro-interface-frequency-v1',
+      }[rejectedInterfaceFrequencyMode] || `unsupported-interface-frequency-mode:${rejectedInterfaceFrequencyMode}`;
       fingerFluidBenchState = createFingerFluidBenchState({
         status: 'error',
         solverBackend: 'config_rejected',
@@ -10496,6 +10532,11 @@ async function startFingerFluidBench() {
         requestedBodyTransportRoute: rejectedBodyTransportRoute,
         effectiveBodyTransportRoute: 'not-executed-config-rejected-v0',
         bodyTransportFallbackReason: `config_rejected:${error.message || String(error)}`,
+        requestedInterfaceFrequencyMode: rejectedInterfaceFrequencyMode,
+        effectiveInterfaceFrequencyMode: 'config_rejected',
+        requestedInterfaceFrequencyRoute: rejectedInterfaceFrequencyRoute,
+        effectiveInterfaceFrequencyRoute: 'not-executed-config-rejected-v0',
+        interfaceFrequencyFallbackReason: `config_rejected:${error.message || String(error)}`,
         downgrades: [`finger_fluid_route_config_rejected:${error.message || String(error)}`],
       });
       fingerFluidBenchState.runtime = { available: false, configError: error.message || String(error) };
@@ -10517,6 +10558,7 @@ async function startFingerFluidBench() {
       opticalFootprintMode: fingerFluidBenchConfig.effectiveOpticalFootprintMode,
       transmissionFootprintMode: fingerFluidBenchConfig.effectiveTransmissionFootprintMode,
       bodyTransportMode: fingerFluidBenchConfig.effectiveBodyTransportMode,
+      interfaceFrequencyMode: fingerFluidBenchConfig.effectiveInterfaceFrequencyMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,

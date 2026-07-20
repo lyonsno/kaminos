@@ -97,6 +97,17 @@ export function createFingerFluidBenchState(options = {}) {
     || (effectiveBodyTransportMode === 'not_executed'
       ? 'not-executed-non-refraction-renderer-v0'
       : requestedBodyTransportRoute);
+  const requestedInterfaceFrequencyMode = options.requestedInterfaceFrequencyMode || 'coupled_detail';
+  const requestedInterfaceFrequencyRoute = options.requestedInterfaceFrequencyRoute || {
+    coupled_detail: 'wgsl-liquid-coupled-detail-interface-frequency-v0',
+    macro_micro_separated: 'wgsl-liquid-macro-micro-interface-frequency-v1',
+  }[requestedInterfaceFrequencyMode] || `unsupported-interface-frequency-mode:${requestedInterfaceFrequencyMode}`;
+  const effectiveInterfaceFrequencyMode = options.effectiveInterfaceFrequencyMode
+    || (effectiveRendererMode === 'screen_space_refraction' ? requestedInterfaceFrequencyMode : 'not_executed');
+  const effectiveInterfaceFrequencyRoute = options.effectiveInterfaceFrequencyRoute
+    || (effectiveInterfaceFrequencyMode === 'not_executed'
+      ? 'not-executed-non-refraction-renderer-v0'
+      : requestedInterfaceFrequencyRoute);
 
   return {
     schema: KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
@@ -185,6 +196,11 @@ export function createFingerFluidBenchState(options = {}) {
       requestedBodyTransportRoute,
       effectiveBodyTransportRoute,
       bodyTransportFallbackReason: options.bodyTransportFallbackReason || null,
+      requestedInterfaceFrequencyMode,
+      effectiveInterfaceFrequencyMode,
+      requestedInterfaceFrequencyRoute,
+      effectiveInterfaceFrequencyRoute,
+      interfaceFrequencyFallbackReason: options.interfaceFrequencyFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',

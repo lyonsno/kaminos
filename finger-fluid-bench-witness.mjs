@@ -26,6 +26,7 @@ const invalidOpticalLightingOut = resolve(args.get('--invalid-optical-lighting-o
 const invalidOpticalFootprintOut = resolve(args.get('--invalid-optical-footprint-out') || out.replace(/\.png$/i, '.invalid-optical-footprint.png'));
 const invalidTransmissionFootprintOut = resolve(args.get('--invalid-transmission-footprint-out') || out.replace(/\.png$/i, '.invalid-transmission-footprint.png'));
 const invalidBodyTransportOut = resolve(args.get('--invalid-body-transport-out') || out.replace(/\.png$/i, '.invalid-body-transport.png'));
+const invalidInterfaceFrequencyOut = resolve(args.get('--invalid-interface-frequency-out') || out.replace(/\.png$/i, '.invalid-interface-frequency.png'));
 const transportOnlyOut = resolve(args.get('--transport-only-out') || out.replace(/\.png$/i, '.optical-lighting-transport-only.png'));
 const boundedGgxOut = resolve(args.get('--bounded-ggx-out') || out.replace(/\.png$/i, '.optical-lighting-bounded-ggx.png'));
 const legacyShadingOut = resolve(args.get('--legacy-shading-out') || out.replace(/\.png$/i, '.optical-lighting-legacy-shading.png'));
@@ -42,7 +43,10 @@ const filteredTransmissionTransportOut = resolve(args.get('--filtered-transmissi
 const geometricSlabBodyOut = resolve(args.get('--geometric-slab-body-out') || out.replace(/\.png$/i, '.body-transport-geometric-slab.png'));
 const robustDenseBodyOut = resolve(args.get('--robust-dense-body-out') || out.replace(/\.png$/i, '.body-transport-robust-dense-body.png'));
 const bodyTransportViewDir = resolve(args.get('--body-transport-view-dir') || out.replace(/\.png$/i, '.body-transport-views'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual'];
+const coupledDetailInterfaceOut = resolve(args.get('--coupled-detail-interface-out') || out.replace(/\.png$/i, '.interface-frequency-coupled-detail.png'));
+const macroMicroSeparatedInterfaceOut = resolve(args.get('--macro-micro-separated-interface-out') || out.replace(/\.png$/i, '.interface-frequency-macro-micro-separated.png'));
+const interfaceFrequencyViewDir = resolve(args.get('--interface-frequency-view-dir') || out.replace(/\.png$/i, '.interface-frequency-views'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual', 'macro_interface_normal', 'micro_normal_residual', 'interface_roughness', 'transmission_detail_weight'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -84,6 +88,8 @@ let sameStateOpticalFootprintComparison = null;
 let sameStateTransmissionFootprintComparison = null;
 let sameStateBodyTransportComparison = null;
 let sameStateBodyTransportViewComparisons = null;
+let sameStateInterfaceFrequencyComparison = null;
+let sameStateInterfaceFrequencyViewComparisons = null;
 let transportComponentAttribution = null;
 let nonRefractionLightingApplicability = null;
 let frozenStateWorldReflectionWitness = null;
@@ -103,6 +109,7 @@ let invalidOpticalLightingWitness = null;
 let invalidOpticalFootprintWitness = null;
 let invalidTransmissionFootprintWitness = null;
 let invalidBodyTransportWitness = null;
+let invalidInterfaceFrequencyWitness = null;
 let opticalDebugViews = null;
 let slabValidityField = null;
 let primaryFrameBinding = null;
@@ -192,6 +199,8 @@ function writeReport(report = {}) {
     sameStateTransmissionFootprintComparison,
     sameStateBodyTransportComparison,
     sameStateBodyTransportViewComparisons,
+    sameStateInterfaceFrequencyComparison,
+    sameStateInterfaceFrequencyViewComparisons,
     transportComponentAttribution,
     nonRefractionLightingApplicability,
     frozenStateWorldReflectionWitness,
@@ -211,6 +220,7 @@ function writeReport(report = {}) {
     invalidOpticalFootprintWitness,
     invalidTransmissionFootprintWitness,
     invalidBodyTransportWitness,
+    invalidInterfaceFrequencyWitness,
     opticalDebugViews,
     slabValidityField,
     opticalDebugOutputs,
@@ -222,6 +232,7 @@ function writeReport(report = {}) {
     invalidOpticalFootprintOut,
     invalidTransmissionFootprintOut,
     invalidBodyTransportOut,
+    invalidInterfaceFrequencyOut,
     resolvedDetailFootprintOut,
     varianceFilteredFootprintOut,
     resolvedExitTransmissionOut,
@@ -231,6 +242,9 @@ function writeReport(report = {}) {
     geometricSlabBodyOut,
     robustDenseBodyOut,
     bodyTransportViewDir,
+    coupledDetailInterfaceOut,
+    macroMicroSeparatedInterfaceOut,
+    interfaceFrequencyViewDir,
     transportOnlyOut,
     boundedGgxOut,
     legacyShadingOut,
@@ -2714,6 +2728,10 @@ async function main() {
         geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
         robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
       };
+      const interfaceFrequencyRoutes = {
+        coupled_detail: 'wgsl-liquid-coupled-detail-interface-frequency-v0',
+        macro_micro_separated: 'wgsl-liquid-macro-micro-interface-frequency-v1',
+      };
       const captureFrozenOptical = async (
         lightingMode,
         debugMode,
@@ -2722,11 +2740,12 @@ async function main() {
         footprintMode = 'resolved_detail',
         transmissionFootprintMode = 'resolved_exit',
         bodyTransportMode = 'geometric_slab',
+        interfaceFrequencyMode = 'coupled_detail',
       ) => {
         const receipt = await evaluate(ws, `(() => {
           const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
           if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)}, ${JSON.stringify(transmissionFootprintMode)}, ${JSON.stringify(bodyTransportMode)});
+          return render('screen_space_refraction', ${JSON.stringify(debugMode)}, ${JSON.stringify(lightingMode)}, ${JSON.stringify(footprintMode)}, ${JSON.stringify(transmissionFootprintMode)}, ${JSON.stringify(bodyTransportMode)}, ${JSON.stringify(interfaceFrequencyMode)});
         })()`);
         if (
           receipt?.requestedRendererMode !== 'screen_space_refraction'
@@ -2749,11 +2768,16 @@ async function main() {
           || receipt?.effectiveBodyTransportMode !== bodyTransportMode
           || receipt?.requestedBodyTransportRoute !== bodyTransportRoutes[bodyTransportMode]
           || receipt?.effectiveBodyTransportRoute !== bodyTransportRoutes[bodyTransportMode]
+          || receipt?.requestedInterfaceFrequencyMode !== interfaceFrequencyMode
+          || receipt?.effectiveInterfaceFrequencyMode !== interfaceFrequencyMode
+          || receipt?.requestedInterfaceFrequencyRoute !== interfaceFrequencyRoutes[interfaceFrequencyMode]
+          || receipt?.effectiveInterfaceFrequencyRoute !== interfaceFrequencyRoutes[interfaceFrequencyMode]
           || receipt?.fallbackReason
           || receipt?.opticalLightingFallbackReason
           || receipt?.opticalFootprintFallbackReason
           || receipt?.transmissionFootprintFallbackReason
           || receipt?.bodyTransportFallbackReason
+          || receipt?.interfaceFrequencyFallbackReason
         ) {
           throw new Error(`renderer-only optical lighting disagreement: ${JSON.stringify({ lightingMode, debugMode, receipt })}`);
         }
@@ -3244,6 +3268,127 @@ async function main() {
         cameraCount: bodyTransportViews.length,
         views: bodyTransportViews,
       };
+      phase = 'same_state_interface_frequency_comparison';
+      const coupledDetailInterface = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        coupledDetailInterfaceOut,
+        'coupled_detail_interface_frequency',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'robust_dense_body',
+        'coupled_detail',
+      );
+      const macroMicroSeparatedInterface = await captureFrozenOptical(
+        'transport_only',
+        'shaded',
+        macroMicroSeparatedInterfaceOut,
+        'macro_micro_separated_interface_frequency',
+        'variance_filtered',
+        'dense_exit_filtered',
+        'robust_dense_body',
+        'macro_micro_separated',
+      );
+      const interfaceDiagnostics = {};
+      for (const debugMode of ['macro_interface_normal', 'micro_normal_residual', 'interface_roughness', 'transmission_detail_weight']) {
+        interfaceDiagnostics[debugMode] = await captureFrozenOptical(
+          'transport_only',
+          debugMode,
+          opticalDebugOutputs[debugMode],
+          debugMode,
+          'variance_filtered',
+          'dense_exit_filtered',
+          'robust_dense_body',
+          'macro_micro_separated',
+        );
+      }
+      const interfaceFrequencyStepCounts = [
+        coupledDetailInterface.receipt.stepCount,
+        macroMicroSeparatedInterface.receipt.stepCount,
+        ...Object.values(interfaceDiagnostics).map(view => view.receipt.stepCount),
+      ];
+      if (interfaceFrequencyStepCounts.some(stepCount => stepCount !== lightingStepCount)) {
+        throw new Error(`renderer-only interface-frequency comparison advanced simulation: ${JSON.stringify({ lightingStepCount, interfaceFrequencyStepCounts })}`);
+      }
+      const interfaceFrequencyDelta = measureBinarySupportMaskedRgb24Delta(
+        coupledDetailInterfaceOut,
+        macroMicroSeparatedInterfaceOut,
+        opticalDebugOutputs.liquid_support,
+        'same_state_interface_frequency',
+      );
+      if (interfaceFrequencyDelta.changedRatio < 0.0002 || interfaceFrequencyDelta.meanAbsoluteChannelDelta < 0.01) {
+        throw new Error(`macro/micro interface separation made no measurable same-state visual change: ${JSON.stringify(interfaceFrequencyDelta)}`);
+      }
+      sameStateInterfaceFrequencyComparison = {
+        schema: 'kaminos.finger-fluid.same-state-interface-frequency-comparison.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        sameCamera: true,
+        identityComplete: true,
+        coupledDetail: coupledDetailInterface,
+        macroMicroSeparated: macroMicroSeparatedInterface,
+        diagnostics: interfaceDiagnostics,
+        delta: interfaceFrequencyDelta,
+      };
+
+      phase = 'same_state_interface_frequency_multi_view_comparison';
+      const originalInterfaceFrequencyCamera = await evaluate(ws, `window.kaminosFingerFluidCompositionCameraState?.()`);
+      if (!originalInterfaceFrequencyCamera) throw new Error('missing original camera state for multi-view interface-frequency comparison');
+      mkdirSync(interfaceFrequencyViewDir, { recursive: true });
+      const interfaceFrequencyViews = [];
+      for (const camera of bodyTransportCameras) {
+        const effectiveCamera = await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(camera)})`);
+        if (!effectiveCamera) throw new Error(`camera setter unavailable for interface-frequency view ${camera.id}`);
+        const coupledPath = resolve(interfaceFrequencyViewDir, `${camera.id}.interface-frequency-coupled-detail.png`);
+        const separatedPath = resolve(interfaceFrequencyViewDir, `${camera.id}.interface-frequency-macro-micro-separated.png`);
+        const supportPath = resolve(interfaceFrequencyViewDir, `${camera.id}.liquid-support.png`);
+        const coupledDetail = await captureFrozenOptical('transport_only', 'shaded', coupledPath, `${camera.id}:coupled_detail`, 'variance_filtered', 'dense_exit_filtered', 'robust_dense_body', 'coupled_detail');
+        const macroMicroSeparated = await captureFrozenOptical('transport_only', 'shaded', separatedPath, `${camera.id}:macro_micro_separated`, 'variance_filtered', 'dense_exit_filtered', 'robust_dense_body', 'macro_micro_separated');
+        const liquidSupport = await captureFrozenOptical('transport_only', 'liquid_support', supportPath, `${camera.id}:interface_frequency_support`, 'variance_filtered', 'dense_exit_filtered', 'robust_dense_body', 'macro_micro_separated');
+        if ([coupledDetail, macroMicroSeparated, liquidSupport].some(view => view.receipt.stepCount !== lightingStepCount)) {
+          throw new Error(`interface-frequency view ${camera.id} advanced the frozen simulation`);
+        }
+        const delta = measureBinarySupportMaskedRgb24Delta(coupledPath, separatedPath, supportPath, `${camera.id}:interface_frequency`);
+        interfaceFrequencyViews.push({
+          id: camera.id,
+          camera: effectiveCamera,
+          stepCount: lightingStepCount,
+          sameSimulationState: true,
+          sameCamera: true,
+          coupledDetail,
+          macroMicroSeparated,
+          liquidSupport,
+          delta,
+        });
+      }
+      const interfaceFrequencyIdentityComplete = interfaceFrequencyViews.every(view => (
+        view.id
+        && view.sameSimulationState === true
+        && view.sameCamera === true
+        && view.stepCount === lightingStepCount
+        && view.coupledDetail.receipt.requestedInterfaceFrequencyMode === 'coupled_detail'
+        && view.coupledDetail.receipt.effectiveInterfaceFrequencyMode === 'coupled_detail'
+        && view.coupledDetail.receipt.requestedInterfaceFrequencyRoute === interfaceFrequencyRoutes.coupled_detail
+        && view.coupledDetail.receipt.effectiveInterfaceFrequencyRoute === interfaceFrequencyRoutes.coupled_detail
+        && view.macroMicroSeparated.receipt.requestedInterfaceFrequencyMode === 'macro_micro_separated'
+        && view.macroMicroSeparated.receipt.effectiveInterfaceFrequencyMode === 'macro_micro_separated'
+        && view.macroMicroSeparated.receipt.requestedInterfaceFrequencyRoute === interfaceFrequencyRoutes.macro_micro_separated
+        && view.macroMicroSeparated.receipt.effectiveInterfaceFrequencyRoute === interfaceFrequencyRoutes.macro_micro_separated
+      ));
+      if (!interfaceFrequencyIdentityComplete || interfaceFrequencyViews.length !== bodyTransportCameras.length) {
+        throw new Error(`multi-view interface-frequency evidence is missing, partial, stale, or route-incoherent: ${JSON.stringify(interfaceFrequencyViews)}`);
+      }
+      await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(originalInterfaceFrequencyCamera)})`);
+      sameStateInterfaceFrequencyViewComparisons = {
+        schema: 'kaminos.finger-fluid.same-state-interface-frequency-multi-view-comparison.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        stepCount: lightingStepCount,
+        sameSimulationState: true,
+        identityComplete: interfaceFrequencyIdentityComplete,
+        cameraCount: interfaceFrequencyViews.length,
+        views: interfaceFrequencyViews,
+      };
       const primaryTransportOnly = await captureFrozenOptical(
         'transport_only',
         'shaded',
@@ -3252,6 +3397,7 @@ async function main() {
         'variance_filtered',
         'dense_exit_filtered',
         'robust_dense_body',
+        'macro_micro_separated',
       );
       if (primaryTransportOnly.receipt.stepCount !== lightingStepCount) {
         throw new Error(`renderer-only primary transport capture advanced simulation: ${JSON.stringify(primaryTransportOnly.receipt)}`);
@@ -3551,6 +3697,75 @@ async function main() {
         configError: invalidBodyTransportState.runtime.configError,
         canvasActivity: invalidBodyTransportActivity,
         outputPath: invalidBodyTransportOut,
+      };
+      phase = 'invalid_interface_frequency_route';
+      const invalidInterfaceFrequencyUrl = new URL(url);
+      invalidInterfaceFrequencyUrl.searchParams.set('finger_fluid_optical_lighting', 'transport_only');
+      invalidInterfaceFrequencyUrl.searchParams.set('finger_fluid_interface_frequency', 'silent_interface_frequency_fallback');
+      await wsRequest(ws, 'Page.navigate', { url: invalidInterfaceFrequencyUrl.href });
+      const invalidInterfaceFrequencyDeadline = Date.now() + hookWaitMs;
+      let invalidInterfaceFrequencyState = null;
+      while (Date.now() < invalidInterfaceFrequencyDeadline) {
+        try {
+          invalidInterfaceFrequencyState = await evaluate(ws, `(() => {
+            const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+            return typeof read === 'function' ? read() : null;
+          })()`);
+        } catch {
+          invalidInterfaceFrequencyState = null;
+        }
+        if (invalidInterfaceFrequencyState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidInterfaceFrequencyState.status !== 'loading') break;
+        await delay(100);
+      }
+      if (
+        invalidInterfaceFrequencyState?.status !== 'error'
+        || invalidInterfaceFrequencyState?.solver?.backend !== 'config_rejected'
+        || invalidInterfaceFrequencyState?.renderer?.backend !== 'config_rejected'
+        || invalidInterfaceFrequencyState?.renderer?.requestedInterfaceFrequencyMode !== 'silent_interface_frequency_fallback'
+        || invalidInterfaceFrequencyState?.renderer?.effectiveInterfaceFrequencyMode !== 'config_rejected'
+        || invalidInterfaceFrequencyState?.renderer?.requestedInterfaceFrequencyRoute !== 'unsupported-interface-frequency-mode:silent_interface_frequency_fallback'
+        || invalidInterfaceFrequencyState?.renderer?.effectiveInterfaceFrequencyRoute !== 'not-executed-config-rejected-v0'
+        || !String(invalidInterfaceFrequencyState?.renderer?.interfaceFrequencyFallbackReason || '').includes('Unsupported finger fluid interface frequency mode: silent_interface_frequency_fallback')
+        || !String(invalidInterfaceFrequencyState?.runtime?.configError || '').includes('Unsupported finger fluid interface frequency mode: silent_interface_frequency_fallback')
+      ) {
+        throw new Error(`renderer-only invalid interface frequency route did not fail closed: ${JSON.stringify(invalidInterfaceFrequencyState)}`);
+      }
+      const invalidInterfaceFrequencyCanvasRect = await evaluate(ws, `(() => {
+        document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!invalidInterfaceFrequencyCanvasRect || invalidInterfaceFrequencyCanvasRect.width < 100 || invalidInterfaceFrequencyCanvasRect.height < 100) {
+        throw new Error(`renderer-only invalid interface frequency canvas unavailable: ${JSON.stringify(invalidInterfaceFrequencyCanvasRect)}`);
+      }
+      const invalidInterfaceFrequencyShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+        clip: { ...invalidInterfaceFrequencyCanvasRect, scale: 1 },
+      });
+      mkdirSync(dirname(invalidInterfaceFrequencyOut), { recursive: true });
+      writeFileSync(invalidInterfaceFrequencyOut, Buffer.from(invalidInterfaceFrequencyShot.data, 'base64'));
+      const invalidInterfaceFrequencyActivity = measureCapturedPng(invalidInterfaceFrequencyOut, 'invalid_interface_frequency');
+      if (invalidInterfaceFrequencyActivity.activeRatio > 0.002) {
+        throw new Error(`renderer-only invalid interface frequency retained stale painted output: ${JSON.stringify(invalidInterfaceFrequencyActivity)}`);
+      }
+      invalidInterfaceFrequencyWitness = {
+        schema: 'kaminos.finger-fluid.invalid-interface-frequency-witness.v0',
+        evidenceScope: 'renderer_only_no_solver_continuity_claim',
+        requestedUrl: invalidInterfaceFrequencyUrl.href,
+        status: invalidInterfaceFrequencyState.status,
+        solverBackend: invalidInterfaceFrequencyState.solver.backend,
+        rendererBackend: invalidInterfaceFrequencyState.renderer.backend,
+        requestedInterfaceFrequencyMode: invalidInterfaceFrequencyState.renderer.requestedInterfaceFrequencyMode,
+        effectiveInterfaceFrequencyMode: invalidInterfaceFrequencyState.renderer.effectiveInterfaceFrequencyMode,
+        requestedInterfaceFrequencyRoute: invalidInterfaceFrequencyState.renderer.requestedInterfaceFrequencyRoute,
+        effectiveInterfaceFrequencyRoute: invalidInterfaceFrequencyState.renderer.effectiveInterfaceFrequencyRoute,
+        interfaceFrequencyFallbackReason: invalidInterfaceFrequencyState.renderer.interfaceFrequencyFallbackReason,
+        configError: invalidInterfaceFrequencyState.runtime.configError,
+        canvasActivity: invalidInterfaceFrequencyActivity,
+        outputPath: invalidInterfaceFrequencyOut,
       };
       phase = null;
       writeReport({ ok: true, failure_phase: null, output: out });
