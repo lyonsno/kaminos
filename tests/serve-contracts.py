@@ -117,6 +117,7 @@ def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_e
     assert friendly_scheduler["gaussianPhaseYieldMs"] == 4
     assert friendly_scheduler["vitBlockChunkSize"] == 1
     assert friendly_scheduler["vitMicroduty"] is True
+    assert friendly_scheduler["vitMicrodutyMode"] == "dispatch-major"
     assert friendly_scheduler["cpuChunkItems"] == 16384
     assert friendly_scheduler["routeTailYieldMs"] == 3
     assert friendly_scheduler["spnFusionChunkItems"] == 524288
@@ -140,6 +141,7 @@ def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
     assert fixed_scheduler["spnPatchChunkSize"] == 1
     assert fixed_scheduler["vitBlockChunkSize"] == 1
     assert fixed_scheduler["vitMicroduty"] is True
+    assert fixed_scheduler["vitMicrodutyMode"] == "dispatch-major"
     assert fixed_scheduler["waitForSubmittedWorkDone"] is True
     assert fixed_scheduler["cpuChunkItems"] == 16384
     assert fixed_scheduler["spnFusionChunkItems"] == 524288
@@ -180,6 +182,7 @@ def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile(
     assert scheduler["gaussianPhaseYieldMs"] == 4
     assert scheduler["vitBlockChunkSize"] == 1
     assert scheduler["vitMicroduty"] is True
+    assert scheduler["vitMicrodutyMode"] == "dispatch-major"
     assert scheduler["spnFusionChunkItems"] == 524288
 
 

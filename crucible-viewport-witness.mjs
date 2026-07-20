@@ -137,6 +137,7 @@ function expectedSchedulerForProfile(profileId) {
     waitForSubmittedWorkDone: true,
     vitBlockChunkSize: 1,
     vitMicroduty: true,
+    vitMicrodutyMode: 'dispatch-major',
     cpuChunkItems: 16384,
     spnFusionChunkItems: 524288,
   };

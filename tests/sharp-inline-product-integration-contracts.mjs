@@ -19,6 +19,7 @@ assert.deepEqual(
     gaussianPhaseYieldMs: 4,
     vitBlockChunkSize: 1,
     vitMicroduty: true,
+    vitMicrodutyMode: 'dispatch-major',
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
