@@ -9905,7 +9905,9 @@ export function createKaminosVolumePrototype({
       }
       : await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedGridSize = Math.max(...SUPPORTED_GRID_SIZES);
+    const maxRequestedGridSize = productFrameOwner === 'caller'
+      ? gridSize
+      : Math.max(...SUPPORTED_GRID_SIZES);
     const maxRequestedCellCapacity = gridCellCount(maxRequestedGridSize);
     const maxRequestedFluidBufferBytes = fluidBufferBytes(maxRequestedGridSize);
     const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
