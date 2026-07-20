@@ -79,6 +79,13 @@ def effective_state():
     }
 
 
+def stale_preset_effective_state():
+    state = effective_state()
+    state["source"]["settingsPresetId"] = "vsp-" + ("0" * 64)
+    state["initialization"]["settingsPresetId"] = "vsp-" + ("0" * 64)
+    return state
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="kaminos-basin-promotion-api-") as temporary:
         root = Path(temporary)
@@ -96,7 +103,7 @@ def main():
                 "handle": "API Basin",
                 "promotionRoot": str(promotion_root),
                 "preset": preset_payload(),
-                "effectiveState": effective_state(),
+                "effectiveState": stale_preset_effective_state(),
                 "sourceCommit": "91374fa8297119d6513a927b00892bdbda7c9a45",
             })
 
@@ -132,6 +139,8 @@ def main():
         assert package["revision"] == channel["current"]["revision"]
         assert package["settingsPreset"]["presetId"] == receipt["settingsPreset"]["presetId"]
         assert package["settingsPreset"]["artifact"]["presetId"] == receipt["settingsPreset"]["presetId"]
+        assert package["effectiveState"]["source"]["settingsPresetId"] == receipt["settingsPreset"]["presetId"]
+        assert package["effectiveState"]["initialization"]["settingsPresetId"] == receipt["settingsPreset"]["presetId"]
         assert channel["current"]["packageRelativePath"] == f"revisions/{package['revision']}/package.json"
         assert package["sourceCommit"] == "91374fa8297119d6513a927b00892bdbda7c9a45"
 

@@ -86,6 +86,20 @@ function normalizeEffectiveState(value = {}) {
   return state;
 }
 
+function bindEffectiveStateToPreset(value, presetId) {
+  const state = normalizeEffectiveState(value);
+  state.source.settingsPresetId = presetId;
+  state.initialization.settingsPresetId = presetId;
+  return state;
+}
+
+function assertEffectiveStatePresetBinding(state, presetId) {
+  if (state.source.settingsPresetId !== presetId
+    || state.initialization.settingsPresetId !== presetId) {
+    throw new Error('effective basin state settings preset identity mismatch');
+  }
+}
+
 function resolveSourceCommit(inputCommit = null) {
   const requested = String(inputCommit || '').trim();
   if (requested) {
@@ -183,8 +197,9 @@ function preparePackage(options = {}) {
     settingsArtifact.requestedPresetRef || settingsArtifact.presetId,
     settingsSchema,
   );
-  const effectiveState = normalizeEffectiveState(
+  const effectiveState = bindEffectiveStateToPreset(
     options.effectiveState || readJson(options.effectiveStatePath, 'effective basin state'),
+    settingsReceipt.presetId,
   );
   const routes = buildRouteTemplates(settingsReceipt);
   const basis = revisionBasisFor({
@@ -268,6 +283,7 @@ export function validateBasinPromotionPackage(packageDocument) {
     document.settingsPreset?.schema,
   );
   const effectiveState = normalizeEffectiveState(document.effectiveState);
+  assertEffectiveStatePresetBinding(effectiveState, settingsReceipt.presetId);
   const expectedRoutes = buildRouteTemplates(settingsReceipt);
   if (canonicalJson(document.routes) !== canonicalJson(expectedRoutes)) {
     throw new Error('basin promotion package route templates do not match embedded preset');
@@ -396,9 +412,9 @@ function validateChannel(channel) {
   if (slugifyHandle(channel.handle) !== channel.handle) throw new Error('basin promotion channel handle is not stable');
   if (!REVISION.test(String(channel.current?.revision || ''))) throw new Error('basin promotion channel current revision is invalid');
   const packageRelativePath = String(channel.current?.packageRelativePath || '');
-  if (!packageRelativePath || isAbsolute(packageRelativePath)
-    || packageRelativePath === '..' || packageRelativePath.startsWith('../')) {
-    throw new Error('basin promotion channel package path is not portable');
+  const canonicalRelativePath = `revisions/${channel.current.revision}/package.json`;
+  if (packageRelativePath !== canonicalRelativePath) {
+    throw new Error('basin promotion channel package path is not canonical');
   }
   return channel;
 }
