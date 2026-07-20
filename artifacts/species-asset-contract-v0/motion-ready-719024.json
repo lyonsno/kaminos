@@ -34,7 +34,14 @@
     "kind": "terrain-contact-root",
     "localPoint": [0.00005459785461425781, -0.2068822681903839, 0.00026826560497283936],
     "localToRootTranslation": [-0.00005459785461425781, 0.2068822681903839, -0.00026826560497283936],
-    "applicationOrder": "deform asset-local vertices, apply localToRootTranslation, then apply instance world transform"
+    "applicationOrder": "deform asset-local vertices, apply localToRootTranslation, apply instance scale, then apply instance rotation and world translation"
+  },
+  "instance": {
+    "scale": [1.14, 1.14, 1.14],
+    "worldWidth": 0.42092016398906706,
+    "worldAuthoredHeight": 0.474462356865406,
+    "worldBodyLength": 1.1398921304941176,
+    "terrainContactOffsetWorld": 0.23584578573703763
   },
   "material": {
     "workflow": "glTF-metallic-roughness",
@@ -64,10 +71,27 @@
     "emissiveTexture": null
   },
   "deformation": {
-    "mode": "axial-parallel-transport-wave-v0",
+    "mode": "axial-parallel-transport-wave-v1",
     "space": "asset-local-before-root-transform",
     "registrationStations": 7,
-    "referenceImplementation": "kaminos:cc/mushfinger-motion-ready-719024-0720@faff2e1a:motion-ready-719024-core.js",
+    "zeroState": "identity-within-floating-point-error",
+    "frame": {
+      "upReference": [0, 1, 0],
+      "rightRule": "normalize(cross(tangentHeadward, upReference))",
+      "upRule": "normalize(cross(right, tangentHeadward))"
+    },
+    "endpointResidual": {
+      "mode": "preserve-signed-axial-residual",
+      "stationT": "clamp((tailZ - point.z) / axialSpan, 0, 1)",
+      "restCenterZ": "mix(tailZ, headZ, stationT)",
+      "signedResidual": "restCenterZ - point.z",
+      "outputRule": "deformedCenter + right * point.x + up * point.y + tangentHeadward * signedResidual",
+      "verticesOutsideStationSpan": 1984,
+      "vertexFraction": 0.0134
+    },
+    "witnessImplementation": "kaminos:cc/mushfinger-motion-ready-719024-0720@faff2e1a:motion-ready-719024-core.js",
+    "witnessMode": "axial-parallel-transport-wave-v0",
+    "witnessConformance": "superseded-by-v1-signed-basis-and-endpoint-residual-contract",
     "stateSchema": "kaminos.motion-ready-719024.axial-squirm-state.v0",
     "stateFields": ["amplitude", "verticalAmplitude", "phase", "phaseVelocity"],
     "runtimeEvidence": {

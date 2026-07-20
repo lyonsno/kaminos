@@ -21,8 +21,18 @@ assert.equal(manifest.material.metallicRoughness.colorSpace, 'linear');
 assert.equal(manifest.material.metallicRoughness.channels.roughness, 'G');
 assert.equal(manifest.material.metallicRoughness.channels.metallic, 'B');
 
-assert.equal(manifest.deformation.mode, 'axial-parallel-transport-wave-v0');
+assert.equal(manifest.deformation.mode, 'axial-parallel-transport-wave-v1');
 assert.equal(manifest.deformation.space, 'asset-local-before-root-transform');
+assert.equal(manifest.deformation.zeroState, 'identity-within-floating-point-error');
+assert.equal(manifest.deformation.frame.rightRule, 'normalize(cross(tangentHeadward, upReference))');
+assert.equal(manifest.deformation.frame.upRule, 'normalize(cross(right, tangentHeadward))');
+assert.deepEqual(manifest.deformation.frame.upReference, [0, 1, 0]);
+assert.equal(manifest.deformation.endpointResidual.mode, 'preserve-signed-axial-residual');
+assert.equal(manifest.deformation.endpointResidual.verticesOutsideStationSpan, 1984);
+assert.equal(manifest.deformation.endpointResidual.vertexFraction, 0.0134);
+assert.deepEqual(manifest.instance.scale, [1.14, 1.14, 1.14]);
+assert.equal(manifest.instance.terrainContactOffsetWorld, 0.23584578573703763);
+assert.match(manifest.root.applicationOrder, /instance scale/);
 assert.equal(manifest.runtimeGate.maxCreatureInstances, 1);
 assert.equal(manifest.lods.length, 1);
 
