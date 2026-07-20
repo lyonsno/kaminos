@@ -94,11 +94,16 @@
     "stateFields": ["amplitude", "verticalAmplitude", "phase", "phaseVelocity"],
     "reuseProbe": {
       "referenceCommit": "5fd08592",
+      "state": {
+        "amplitude": 0.07,
+        "verticalAmplitude": 0.015,
+        "phase": 1.2
+      },
       "vertices": 153090,
       "verticesOutsideStationSpan": 2346,
       "maxZeroStateError": 2.3283064365386963e-10,
       "activeStateFinite": true,
-      "maxActiveComponentDelta": 0.12979372963309288
+      "maxActiveComponentDelta": 0.11468802765011787
     }
   },
   "fieldResponse": {
