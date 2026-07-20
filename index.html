@@ -110,6 +110,18 @@ canvas { display: block; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
+#volume-primitive-product-panel[hidden] { display: none; }
+.volume-primitive-product-grid { display: grid; grid-template-columns: 54px minmax(0, 1fr) 42px; align-items: center; gap: 7px; margin: 7px 0; }
+.volume-primitive-product-grid label { color: #879398; font-size: 10px; }
+.volume-primitive-product-grid input[type="range"] { min-width: 0; width: 100%; }
+.volume-primitive-product-value { color: #b8c3c6; font: 9px 'SF Mono', monospace; text-align: right; }
+.volume-dynamic-source-mode { display: grid; grid-template-columns: 54px minmax(0, 1fr); align-items: center; gap: 7px; margin: 8px 0; }
+.volume-dynamic-source-mode label { color: #879398; font-size: 10px; }
+.volume-dynamic-source-mode select { min-width: 0; width: 100%; padding: 6px 7px; background: #15191a; border: 1px solid #354045; border-radius: 4px; color: #d5dfe1; font-size: 10px; }
+.volume-dynamic-source-motion { display: flex; align-items: center; gap: 7px; margin: 9px 0 3px; color: #aab5b8; font-size: 10px; }
+.volume-dynamic-source-motion input { accent-color: #3185a0; }
+#volume-primitive-product-receipt { margin-top: 9px; padding: 7px; border-left: 2px solid #4aa36a; background: #121617; color: #bde6c9; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+#volume-primitive-product-receipt[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
 @media (max-width: 1100px) {
   #sidebar { width: 330px; }
   #volume-authored-mix-panel { flex-basis: 320px; width: 320px; min-width: 320px; }
@@ -2639,7 +2651,25 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
   <div id="volume-authored-mix-body">
     <div class="volume-authored-mix-kicker">Volume</div>
     <h2 class="volume-authored-mix-title">Authored Mix</h2>
-    <section class="volume-full-support-stage" aria-label="Full support coefficient authoring">
+    <section id="volume-primitive-product-panel" class="volume-full-support-stage" aria-label="Dynamic fire source" hidden>
+      <div class="volume-full-support-heading"><strong>Dynamic Fire Source</strong><span>Scene object</span></div>
+      <div class="volume-full-support-fixed">Object-bound source in the normalized volume; transform updates preserve the evolving fluid.</div>
+      <div class="volume-dynamic-source-mode"><label for="volume-primitive-product-shape">Shape</label><select id="volume-primitive-product-shape"><option value="sphere">Sphere</option><option value="capsule">Capsule</option></select></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-x">X</label><input id="volume-primitive-product-x" type="range" min="-0.8" max="0.8" step="0.01" value="0"><output id="volume-primitive-product-x-value" class="volume-primitive-product-value">0.00</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-y">Y</label><input id="volume-primitive-product-y" type="range" min="-0.9" max="0.5" step="0.01" value="-0.58"><output id="volume-primitive-product-y-value" class="volume-primitive-product-value">-0.58</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-z">Z</label><input id="volume-primitive-product-z" type="range" min="-0.8" max="0.8" step="0.01" value="0"><output id="volume-primitive-product-z-value" class="volume-primitive-product-value">0.00</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-length">Length</label><input id="volume-primitive-product-length" type="range" min="0" max="0.7" step="0.01" value="0.36"><output id="volume-primitive-product-length-value" class="volume-primitive-product-value">0.36</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-radius">Radius</label><input id="volume-primitive-product-radius" type="range" min="0.02" max="0.18" step="0.01" value="0.09"><output id="volume-primitive-product-radius-value" class="volume-primitive-product-value">0.09</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-smoke">Smoke</label><input id="volume-primitive-product-smoke" type="range" min="0" max="3" step="0.05" value="0.45"><output id="volume-primitive-product-smoke-value" class="volume-primitive-product-value">0.45</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-heat">Heat</label><input id="volume-primitive-product-heat" type="range" min="0" max="4" step="0.05" value="2.2"><output id="volume-primitive-product-heat-value" class="volume-primitive-product-value">2.20</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-fuel">Fuel</label><input id="volume-primitive-product-fuel" type="range" min="0" max="3" step="0.05" value="1.1"><output id="volume-primitive-product-fuel-value" class="volume-primitive-product-value">1.10</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-flame">Flame</label><input id="volume-primitive-product-flame" type="range" min="0" max="4" step="0.05" value="2.4"><output id="volume-primitive-product-flame-value" class="volume-primitive-product-value">2.40</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-detail">Detail</label><input id="volume-primitive-product-detail" type="range" min="0" max="3" step="0.05" value="1.2"><output id="volume-primitive-product-detail-value" class="volume-primitive-product-value">1.20</output></div>
+      <div class="volume-primitive-product-grid"><label for="volume-primitive-product-impulse">Impulse</label><input id="volume-primitive-product-impulse" type="range" min="-1" max="3" step="0.05" value="1.1"><output id="volume-primitive-product-impulse-value" class="volume-primitive-product-value">1.10</output></div>
+      <label class="volume-dynamic-source-motion"><input id="volume-primitive-product-motion" type="checkbox" checked> Follow live object motion</label>
+      <div id="volume-primitive-product-receipt" data-status="idle">Awaiting dynamic source admission.</div>
+    </section>
+    <section id="volume-full-support-optics-panel" class="volume-full-support-stage" aria-label="Full support coefficient authoring">
       <div class="volume-full-support-heading"><strong>Full Support</strong><span>Stage A</span></div>
       <div class="volume-full-support-row">
         <label for="volume-full-support-source">Coefficients</label>
@@ -2689,7 +2719,11 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=full-support-stage-a-0717';
+import { createKaminosVolumePrototype } from './volume-core.js?v=dynamic-volume-sources-0720';
+import {
+  DYNAMIC_VOLUME_SOURCE_COORDINATE_SPACE,
+  DYNAMIC_VOLUME_SOURCE_SCHEMA,
+} from './volume-dynamic-source-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
@@ -2899,6 +2933,11 @@ let fingerJuiceHostState = {
 };
 let fingerJuiceHostRouteInitialized = false;
 let volumePrimitives = [];
+let volumeDynamicSourceHostObject = null;
+let volumeDynamicSourceBasePosition = [0, -0.58, 0];
+let volumeDynamicSourceFrameId = 0;
+let volumeDynamicSourceProductEnabled = false;
+let volumeDynamicSourceHostAuthority = 'cockpit';
 let sceneObjects = [];
 let sceneImportStatus = null;
 let sceneGroups = [];
@@ -3903,12 +3942,179 @@ function getVolumePrimitiveState() {
   };
 }
 
-function setVolumePrimitivesState(state) {
+function setVolumePrimitivesState(state, options = {}) {
   const primitiveList = Array.isArray(state) ? state : state?.primitives;
   volumePrimitives = Array.isArray(primitiveList) ? primitiveList.map(normalizeVolumePrimitive) : [];
-  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  const receipt = volumePrototype?.setVolumePrimitives?.(volumePrimitives, options) || null;
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  window.__kaminosVolumePrimitiveUpdateReceipt = receipt;
   window._kaminosDirty?.();
+  return receipt;
+}
+
+function renderVolumePrimitiveProductReceipt(receipt, error = null) {
+  const output = document.getElementById('volume-primitive-product-receipt');
+  if (!output) return;
+  if (error) {
+    output.dataset.status = 'failed';
+    output.textContent = `failed | ${error.message || error}`;
+    return;
+  }
+  output.dataset.status = 'effective';
+  const source = receipt.effectiveSources?.[0];
+  output.textContent = [
+    receipt.identity,
+    `${receipt.effectiveSourceCount} source${receipt.effectiveSourceCount === 1 ? '' : 's'}`,
+    `${source?.shape || 'none'} @ ${receipt.effectiveCoordinateSpace}`,
+    source ? `object ${source.ownerObjectId}` : 'object none',
+    source ? `segment ${source.segment.start.map(value => value.toFixed(2)).join(',')} -> ${source.segment.end.map(value => value.toFixed(2)).join(',')}` : null,
+    `frame ${receipt.frameId ?? 'unversioned'}`,
+    `age ${receipt.sourceAgeMs.toFixed(1)} ms`,
+    `fluid reset ${receipt.fluidStateResetApplied ? 'yes' : 'no'}`,
+    `${receipt.updateCostMs.toFixed(3)} ms`,
+  ].filter(Boolean).join(' | ');
+}
+
+function ensureVolumeDynamicSourceHostObject() {
+  if (volumeDynamicSourceHostObject) return volumeDynamicSourceHostObject;
+  const object = new THREE.Object3D();
+  object.name = 'volume-dynamic-fire-source';
+  object.userData.kaminosDynamicVolumeSourceId = 'hero-fire-source-0';
+  object.userData.kaminosDynamicVolumeSourceOwnerId = 'scene-object-hero-fire-source-0';
+  object.position.fromArray(volumeDynamicSourceBasePosition);
+  scene.add(object);
+  volumeDynamicSourceHostObject = object;
+  return object;
+}
+
+function volumeDynamicSourceControlValue(name) {
+  return Number(document.getElementById(`volume-primitive-product-${name}`).value);
+}
+
+function volumeDynamicSourceFrame(timestampMs = performance.now()) {
+  const object = ensureVolumeDynamicSourceHostObject();
+  const shape = document.getElementById('volume-primitive-product-shape').value;
+  const length = volumeDynamicSourceControlValue('length');
+  return {
+    schema: DYNAMIC_VOLUME_SOURCE_SCHEMA,
+    coordinateSpace: DYNAMIC_VOLUME_SOURCE_COORDINATE_SPACE,
+    producerIdentity: 'volume-authored-mix-cockpit-v0',
+    frameId: ++volumeDynamicSourceFrameId,
+    timestampMs,
+    sources: [{
+      id: object.userData.kaminosDynamicVolumeSourceId,
+      ownerObjectId: object.userData.kaminosDynamicVolumeSourceOwnerId,
+      shape,
+      transform: {
+        position: object.position.toArray(),
+        rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+        scale: object.scale.toArray(),
+      },
+      geometry: shape === 'sphere'
+        ? { radius: volumeDynamicSourceControlValue('radius') }
+        : {
+          start: [-length * 0.5, 0, 0],
+          end: [length * 0.5, 0, 0],
+          radius: volumeDynamicSourceControlValue('radius'),
+        },
+      channels: {
+        strength: 1,
+        smoke: volumeDynamicSourceControlValue('smoke'),
+        heat: volumeDynamicSourceControlValue('heat'),
+        fuel: volumeDynamicSourceControlValue('fuel'),
+        flame: volumeDynamicSourceControlValue('flame'),
+        detail: volumeDynamicSourceControlValue('detail'),
+        velocity: [0, volumeDynamicSourceControlValue('impulse'), 0],
+        lifetime: 0.5,
+      },
+    }],
+  };
+}
+
+function submitVolumeDynamicSourceFrame(timestampMs = performance.now()) {
+  if (!volumePrototype) throw new Error('dynamic-volume-source-runtime-inactive');
+  try {
+    const receipt = volumePrototype.setDynamicVolumeSources(volumeDynamicSourceFrame(timestampMs));
+    window.__kaminosDynamicVolumeSourceReceipt = receipt;
+    renderVolumePrimitiveProductReceipt(receipt);
+    return receipt;
+  } catch (error) {
+    renderVolumePrimitiveProductReceipt(null, error);
+    throw error;
+  }
+}
+
+window.kaminosSetVolumeDynamicSources = payload => {
+  if (!volumePrototype) throw new Error('dynamic-volume-source-runtime-inactive');
+  volumeDynamicSourceHostAuthority = 'external-host';
+  document.getElementById('volume-primitive-product-motion').checked = false;
+  const receipt = volumePrototype.setDynamicVolumeSources(payload);
+  window.__kaminosDynamicVolumeSourceReceipt = receipt;
+  renderVolumePrimitiveProductReceipt(receipt);
+  return receipt;
+};
+
+window.kaminosSetVolumeDynamicSourceTransform = transform => {
+  volumeDynamicSourceHostAuthority = 'cockpit';
+  const object = ensureVolumeDynamicSourceHostObject();
+  if (transform?.position) object.position.fromArray(transform.position);
+  if (transform?.rotation) object.rotation.fromArray(transform.rotation);
+  if (transform?.scale) object.scale.fromArray(transform.scale);
+  volumeDynamicSourceBasePosition = object.position.toArray();
+  for (const [index, axis] of ['x', 'y', 'z'].entries()) {
+    const input = document.getElementById(`volume-primitive-product-${axis}`);
+    const output = document.getElementById(`volume-primitive-product-${axis}-value`);
+    input.value = String(volumeDynamicSourceBasePosition[index]);
+    output.value = volumeDynamicSourceBasePosition[index].toFixed(2);
+  }
+  return submitVolumeDynamicSourceFrame();
+};
+
+function initializeVolumePrimitiveProductSurface(params) {
+  const panel = document.getElementById('volume-primitive-product-panel');
+  const fullSupportPanel = document.getElementById('volume-full-support-optics-panel');
+  volumeDynamicSourceProductEnabled = params.get('volume_dynamic_sources') === '1'
+    || params.get('volume_primitive_product') === '1';
+  panel.hidden = !volumeDynamicSourceProductEnabled;
+  fullSupportPanel.hidden = volumeDynamicSourceProductEnabled;
+  if (!volumeDynamicSourceProductEnabled) return;
+  ensureVolumeDynamicSourceHostObject();
+  const controlIds = ['x', 'y', 'z', 'length', 'radius', 'smoke', 'heat', 'fuel', 'flame', 'detail', 'impulse'];
+  controlIds.forEach(name => {
+    const input = document.getElementById(`volume-primitive-product-${name}`);
+    const output = document.getElementById(`volume-primitive-product-${name}-value`);
+    output.value = Number(input.value).toFixed(2);
+    input.addEventListener('input', () => {
+      volumeDynamicSourceHostAuthority = 'cockpit';
+      output.value = Number(input.value).toFixed(2);
+      if (['x', 'y', 'z'].includes(name)) {
+        volumeDynamicSourceBasePosition = ['x', 'y', 'z'].map(axis => volumeDynamicSourceControlValue(axis));
+        volumeDynamicSourceHostObject.position.fromArray(volumeDynamicSourceBasePosition);
+      }
+      submitVolumeDynamicSourceFrame();
+    });
+  });
+  document.getElementById('volume-primitive-product-shape').addEventListener('change', event => {
+    volumeDynamicSourceHostAuthority = 'cockpit';
+    document.getElementById('volume-primitive-product-length').disabled = event.target.value === 'sphere';
+    submitVolumeDynamicSourceFrame();
+  });
+  submitVolumeDynamicSourceFrame();
+}
+
+function updateVolumeDynamicSourceProductFrame(timestampMs) {
+  if (!volumeDynamicSourceProductEnabled || !volumeDynamicSourceHostObject) return false;
+  if (volumeDynamicSourceHostAuthority !== 'cockpit') return false;
+  if (!document.getElementById('volume-primitive-product-motion').checked) return false;
+  const phase = timestampMs * 0.001;
+  volumeDynamicSourceHostObject.position.set(
+    volumeDynamicSourceBasePosition[0] + Math.sin(phase * 0.82) * 0.32,
+    volumeDynamicSourceBasePosition[1] + Math.sin(phase * 1.13) * 0.08,
+    volumeDynamicSourceBasePosition[2] + Math.cos(phase * 0.67) * 0.16,
+  );
+  volumeDynamicSourceHostObject.rotation.z = Math.sin(phase * 0.54) * 0.7;
+  submitVolumeDynamicSourceFrame(timestampMs);
+  return true;
 }
 
 function seedVolumePrimitiveFixture(name) {
@@ -8847,16 +9053,18 @@ async function initScene() {
 
   function animate() {
     requestAnimationFrame(animate);
+    const frameNowMs = performance.now();
     controls.update();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute();
     updateHybridSplatOverlayFrame();
-    const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
-    const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
-    const motionPhraseControlActive = updateMotionPhraseControlFrame(performance.now() / 1000);
-    const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
-    const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
-    const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
-    const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
+    updateVolumeDynamicSourceProductFrame(frameNowMs);
+    const motionAgencyActive = updateMotionAgencyFrame(frameNowMs / 1000);
+    const motionDecisionActive = updateMotionDecisionFrame(frameNowMs / 1000);
+    const motionPhraseControlActive = updateMotionPhraseControlFrame(frameNowMs / 1000);
+    const motionTrackActive = updateMotionTrackFrame(frameNowMs / 1000);
+    const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(frameNowMs / 1000);
+    const motionTemporalActive = updateGeneratedPoseTemporalFrame(frameNowMs / 1000);
+    const forgeHostActive = updateForgeHostStationFrame(frameNowMs / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
@@ -17738,6 +17946,7 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_primitive_fixture')) {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
   }
+  initializeVolumePrimitiveProductSurface(params);
 
   volumePrototype.setControls(readVolumeControls());
 

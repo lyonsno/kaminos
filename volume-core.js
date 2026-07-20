@@ -45,10 +45,30 @@ import {
   PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY,
   packPersistentSparseCohortGpuRows,
 } from './volume-persistent-sparse-cohort-gpu-consumer.mjs';
+import {
+  DYNAMIC_VOLUME_SOURCE_CONTRACT_IDENTITY,
+  legacyExternalEmittersToDynamicSourceFrame,
+  normalizeDynamicVolumeSourceFrame,
+} from './volume-dynamic-source-contract.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY = 'kaminos-volume-primitive-uniform-diagnostic-v0';
+const VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_COORDINATE_SPACE = 'volume-local-normalized-cube-v0';
+const VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_APPLIED_CHANNELS = Object.freeze([
+  'source-position',
+  'source-radius',
+  'source-flow-rate',
+]);
+const VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IGNORED_FIELDS = Object.freeze([
+  'channels.*',
+  'transform.rotation',
+  'transform.scale[1..2]',
+  'simulation.vorticity',
+  'render.*',
+  'coupling.*',
+]);
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
@@ -7481,6 +7501,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    dynamicVolumeSourceUpdateSequence: 0,
+    dynamicVolumeSourceReceipt: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -7496,6 +7518,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalHistoryValid: false,
     fluidStateResetCount: 0,
     fluidStateResetReason: 'initial',
+    volumePrimitiveUniformDiagnosticUpdateCount: 0,
+    volumePrimitiveUpdateReceipt: null,
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
@@ -8272,6 +8296,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(externalEmitterBuffer, 0, externalEmitterState.data);
   }
 
+  function applyDynamicVolumeSources(payload = {}, { compatibilityIdentity = null } = {}) {
+    const updateStartedAt = externalEmitterNowMs();
+    const resetCountBefore = state.fluidStateResetCount;
+    const simStepCountBefore = state.simStepCount;
+    const normalized = normalizeDynamicVolumeSourceFrame(payload, { nowMs: updateStartedAt });
+    externalEmitterState = normalizeExternalEmitters(normalized.externalEmitterPayload, updateStartedAt);
+    updateExternalEmitterDebug(updateStartedAt);
+    writeExternalEmitterBuffer();
+    state.dynamicVolumeSourceUpdateSequence += 1;
+    const updateCompletedAt = externalEmitterNowMs();
+    state.dynamicVolumeSourceReceipt = {
+      ...normalized.receipt,
+      compatibilityIdentity,
+      updateSequence: state.dynamicVolumeSourceUpdateSequence,
+      simStepCountBefore,
+      simStepCountAfter: state.simStepCount,
+      resetCountBefore,
+      resetCountAfter: state.fluidStateResetCount,
+      fluidStateResetApplied: state.fluidStateResetCount !== resetCountBefore,
+      gpuApplication: device && externalEmitterBuffer ? 'immediate-storage-buffer-write' : 'deferred-until-gpu-active',
+      submittedAtMs: updateCompletedAt,
+      updateCostMs: updateCompletedAt - updateStartedAt,
+    };
+    emitStatus({ phase: 'dynamic-volume-sources' });
+    return structuredClone(state.dynamicVolumeSourceReceipt);
+  }
+
   function ensureOracleActivityCueBuffer() {
     if (oracleActivityCueBuffer) return;
     oracleActivityCueBuffer = device.createBuffer({
@@ -8378,6 +8429,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       radius: Math.max(0.04, primitive.simulation.sourceRadius),
       flowRate: Math.max(0, primitive.simulation.flowRate),
     };
+  }
+
+  function assertVolumePrimitiveUniformDiagnosticUpdate(primitives, coordinateSpace) {
+    if (coordinateSpace !== VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_COORDINATE_SPACE) {
+      throw new Error(
+        `${VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY}:unsupported-coordinate-space:${coordinateSpace}`,
+      );
+    }
+    if (primitives.length !== 1) {
+      throw new Error(
+        `${VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY}:unsupported-primitive-count:${primitives.length}:supported=1`,
+      );
+    }
+    if (primitives[0].shape !== 'sphere') {
+      throw new Error(
+        `${VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY}:unsupported-shape:${primitives[0].shape}:supported=sphere`,
+      );
+    }
   }
 
   function makeInitialFluid(nextGridSize) {
@@ -18743,6 +18812,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         externalEmitterCount: state.externalEmitterCount,
         externalEmitterAgeMs: state.externalEmitterAgeMs,
         externalEmitterFrameId: state.externalEmitterFrameId,
+        dynamicVolumeSourceReceipt: state.dynamicVolumeSourceReceipt ? structuredClone(state.dynamicVolumeSourceReceipt) : null,
         volumePrimitiveCount: state.volumePrimitiveCount,
         volumePrimitiveIds: state.volumePrimitiveIds,
         volumePrimitives: state.volumePrimitives,
@@ -19142,6 +19212,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       externalEmitterCount: state.externalEmitterCount,
       externalEmitterAgeMs: state.externalEmitterAgeMs,
       externalEmitterFrameId: state.externalEmitterFrameId,
+      dynamicVolumeSourceReceipt: state.dynamicVolumeSourceReceipt ? structuredClone(state.dynamicVolumeSourceReceipt) : null,
       volumePrimitiveCount: state.volumePrimitiveCount,
       volumePrimitiveIds: state.volumePrimitiveIds,
       volumePrimitives: state.volumePrimitives,
@@ -20444,17 +20515,69 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger();
       pumpLookLabFrozenFrame();
     },
-    setVolumePrimitives(next) {
+    setVolumePrimitives(next, {
+      updateBehavior = 'reseed-fluid-state',
+      coordinateSpace = VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_COORDINATE_SPACE,
+    } = {}) {
+      const updateStartedAt = performance.now();
       const incoming = Array.isArray(next) ? next : [];
-      volumePrimitives = incoming.map(normalizePrimitiveRecord);
+      const normalized = incoming.map(normalizePrimitiveRecord);
+      const resetCountBefore = state.fluidStateResetCount;
+      const simStepCountBefore = state.simStepCount;
+      if (!['reseed-fluid-state', 'preserve-fluid-state'].includes(updateBehavior)) {
+        throw new Error(`${VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY}:unsupported-update-behavior:${updateBehavior}`);
+      }
+      if (updateBehavior === 'preserve-fluid-state') {
+        assertVolumePrimitiveUniformDiagnosticUpdate(normalized, coordinateSpace);
+      }
+      volumePrimitives = normalized;
       publishVolumePrimitiveState();
-      if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      if (device && updateBehavior === 'reseed-fluid-state') {
+        rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      }
+      const source = getPrimitiveSource();
+      const resetCountAfter = state.fluidStateResetCount;
+      state.volumePrimitiveUniformDiagnosticUpdateCount += updateBehavior === 'preserve-fluid-state' ? 1 : 0;
+      state.volumePrimitiveUpdateReceipt = {
+        identity: VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IDENTITY,
+        requestedUpdateBehavior: updateBehavior,
+        effectiveUpdateBehavior: updateBehavior,
+        requestedCoordinateSpace: coordinateSpace,
+        effectiveCoordinateSpace: coordinateSpace,
+        requestedPrimitiveCount: incoming.length,
+        effectivePrimitiveCount: Math.min(normalized.length, 1),
+        effectivePrimitiveId: normalized[0]?.id || null,
+        effectiveShape: normalized[0]?.shape || null,
+        effectiveTransform: normalized[0] ? {
+          position: [...source.position],
+          radius: source.radius,
+        } : null,
+        effectiveFlowRate: normalized[0] ? source.flowRate : null,
+        appliedChannels: [...VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_APPLIED_CHANNELS],
+        ignoredPersistedFields: [...VOLUME_PRIMITIVE_UNIFORM_DIAGNOSTIC_IGNORED_FIELDS],
+        rendererCompatibility: [
+          'raymarch-shared-live-fluid-state-v0',
+          'boundary-splat-shared-live-fluid-state-v0',
+          'hybrid-shared-live-fluid-state-v0',
+        ],
+        resetCountBefore,
+        resetCountAfter,
+        fluidStateResetApplied: resetCountAfter !== resetCountBefore,
+        simStepCountBefore,
+        simStepCountAfter: state.simStepCount,
+        updateSequence: state.volumePrimitiveUniformDiagnosticUpdateCount,
+        gpuApplication: device ? 'next-frame-shared-uniform-write' : 'deferred-until-gpu-active',
+        updateCostMs: performance.now() - updateStartedAt,
+      };
+      emitStatus({ phase: updateBehavior === 'preserve-fluid-state' ? 'volume-primitive-uniform-diagnostic-update' : 'volume-primitive-reseed' });
+      return { ...state.volumePrimitiveUpdateReceipt };
+    },
+    setDynamicVolumeSources(payload = {}) {
+      return applyDynamicVolumeSources(payload);
     },
     setExternalEmitters(payload = {}) {
-      externalEmitterState = normalizeExternalEmitters(payload);
-      updateExternalEmitterDebug();
-      writeExternalEmitterBuffer();
-      emitStatus({ phase: 'external-emitters' });
+      const dynamicFrame = legacyExternalEmittersToDynamicSourceFrame(payload, { nowMs: externalEmitterNowMs() });
+      applyDynamicVolumeSources(dynamicFrame, { compatibilityIdentity: 'legacy-external-emitter-adapter-v0' });
       return {
         mode: state.externalEmitterMode,
         coordinateSpace: state.externalEmitterCoordinateSpace,
