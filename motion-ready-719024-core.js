@@ -224,10 +224,24 @@ export function sampleHillTerrainSurface(source, worldXInput, worldZInput) {
   const at = (column, row) => Number(terrain.heights[row * terrain.columns + column]) || 0;
   const near = mix(at(column0, row0), at(column1, row0), tx);
   const far = mix(at(column0, row1), at(column1, row1), tx);
+  const cellWidth = (terrain.xMax - terrain.xMin) / (terrain.columns - 1);
+  const cellDepth = (terrain.zMax - terrain.zMin) / (terrain.rows - 1);
+  const dhdx = mix(
+    at(column1, row0) - at(column0, row0),
+    at(column1, row1) - at(column0, row1),
+    tz,
+  ) / Math.max(EPSILON, cellWidth);
+  const dhdz = mix(
+    at(column0, row1) - at(column0, row0),
+    at(column1, row1) - at(column1, row0),
+    tx,
+  ) / Math.max(EPSILON, cellDepth);
+  const normal = normalize3([-dhdx, 1, -dhdz], [0, 1, 0]);
   return {
     schema: 'kaminos.hill-terrain-surface-sample.v0',
     world: [worldX, mix(near, far, tz), worldZ],
     height: mix(near, far, tz),
+    normal,
     grid: [clampedX, clampedZ],
     inBounds: gridX >= 0 && gridX <= terrain.columns - 1 && gridZ >= 0 && gridZ <= terrain.rows - 1,
   };
@@ -1041,6 +1055,576 @@ export function deformAxialGeometryBinding(binding, stateInput, outputPositions,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     vertexCount,
     segments: binding.segments,
+  };
+}
+
+const CRAWLER_CONTACT_PATCH_SPECS = Object.freeze([
+  Object.freeze({ id: 'front-left', axialRegion: 'front', side: 'left', axialCenterT: 0.75, sideSign: 1, phaseOffset: 0 }),
+  Object.freeze({ id: 'front-right', axialRegion: 'front', side: 'right', axialCenterT: 0.75, sideSign: -1, phaseOffset: 0.5 }),
+  Object.freeze({ id: 'rear-left', axialRegion: 'rear', side: 'left', axialCenterT: 0.25, sideSign: 1, phaseOffset: 0.5 }),
+  Object.freeze({ id: 'rear-right', axialRegion: 'rear', side: 'right', axialCenterT: 0.25, sideSign: -1, phaseOffset: 0 }),
+]);
+const VALIDATED_CRAWLER_CONTACT_ATLAS = Symbol('validated-crawler-contact-atlas');
+
+function quantile(values, fraction) {
+  if (!values.length) throw new Error('contact atlas candidate set is empty');
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor((sorted.length - 1) * clamp(fraction, 0, 1))];
+}
+
+function weightedPosition(positions, indices, weights) {
+  const result = [0, 0, 0];
+  for (let index = 0; index < indices.length; index++) {
+    const offset = indices[index] * 3;
+    const weight = weights[index];
+    result[0] += positions[offset] * weight;
+    result[1] += positions[offset + 1] * weight;
+    result[2] += positions[offset + 2] * weight;
+  }
+  return result;
+}
+
+export function deriveCrawlerContactAtlas(originalPositions, registrationInput, sourceIdentity = {}, options = {}) {
+  if (!ArrayBuffer.isView(originalPositions) || originalPositions.length % 3 !== 0) {
+    throw new Error('contact atlas derivation requires a packed position buffer');
+  }
+  const registration = registrationInput?.axialSpan
+    ? registrationInput
+    : validateAxialCrawlerRegistration(registrationInput);
+  const vertexCount = originalPositions.length / 3;
+  const halfWidth = Math.max(
+    Math.abs(Number(registration.bounds?.min?.[0]) || 0),
+    Math.abs(Number(registration.bounds?.max?.[0]) || 0),
+  );
+  const axialWindow = Math.max(0.08, Number(options.axialWindow) || registration.axialSpan * 0.16);
+  const innerSide = Math.max(0.01, Number(options.innerSide) || halfWidth * 0.19);
+  const lowQuantile = clamp(Number(options.lowQuantile) || 0.015, 0.002, 0.08);
+  const influenceRadii = [
+    Math.max(0.02, Number(options.influenceRadiusX) || halfWidth * 0.47),
+    Math.max(0.03, Number(options.influenceRadiusY) || 0.11),
+    Math.max(0.03, Number(options.influenceRadiusZ) || registration.axialSpan * 0.12),
+  ];
+  const patches = CRAWLER_CONTACT_PATCH_SPECS.map(spec => {
+    const centerZ = mix(registration.tailZ, registration.headZ, spec.axialCenterT);
+    const candidates = [];
+    for (let vertex = 0; vertex < vertexCount; vertex++) {
+      const offset = vertex * 3;
+      const x = originalPositions[offset];
+      const z = originalPositions[offset + 2];
+      if (spec.sideSign * x < innerSide || Math.abs(z - centerZ) > axialWindow) continue;
+      candidates.push(vertex);
+    }
+    const thresholdY = quantile(
+      candidates.map(vertex => originalPositions[vertex * 3 + 1]),
+      lowQuantile,
+    );
+    const vertexIndices = candidates.filter(vertex => originalPositions[vertex * 3 + 1] <= thresholdY);
+    if (vertexIndices.length < 32) throw new Error(`${spec.id} contact patch has insufficient geometry`);
+    const weights = new Array(vertexIndices.length).fill(1 / vertexIndices.length);
+    const restCentroid = weightedPosition(originalPositions, vertexIndices, weights);
+    const influenceVertexIndices = [];
+    const influenceWeights = [];
+    for (let vertex = 0; vertex < vertexCount; vertex++) {
+      const offset = vertex * 3;
+      const dx = (originalPositions[offset] - restCentroid[0]) / influenceRadii[0];
+      const dy = (originalPositions[offset + 1] - restCentroid[1]) / influenceRadii[1];
+      const dz = (originalPositions[offset + 2] - restCentroid[2]) / influenceRadii[2];
+      const radiusSquared = dx * dx + dy * dy + dz * dz;
+      if (radiusSquared >= 1) continue;
+      influenceVertexIndices.push(vertex);
+      influenceWeights.push((1 - radiusSquared) ** 2);
+    }
+    if (influenceVertexIndices.length < vertexIndices.length) {
+      throw new Error(`${spec.id} contact influence failed to contain its contact patch`);
+    }
+    return {
+      id: spec.id,
+      axialRegion: spec.axialRegion,
+      side: spec.side,
+      phaseOffset: spec.phaseOffset,
+      restCentroid,
+      vertexIndices,
+      weights,
+      influenceVertexIndices,
+      influenceWeights,
+      derivation: {
+        axialCenterT: spec.axialCenterT,
+        axialWindow,
+        innerSide,
+        lowQuantile,
+        thresholdY,
+        influenceRadii,
+      },
+    };
+  });
+  return {
+    schema: 'kaminos.creature-contact-atlas.v0',
+    version: 0,
+    castId: String(sourceIdentity.castId || MOTION_READY_719024_CAST_ID),
+    castHash: String(sourceIdentity.castHash || ''),
+    registrationHash: String(sourceIdentity.registrationHash || ''),
+    motionClass: 'elongated-crawler',
+    authority: 'exact-cast-consumer-derived-contact-v0',
+    vertexCount,
+    patches,
+  };
+}
+
+export function validateCrawlerContactAtlas(atlas, expected = {}) {
+  if (atlas?.schema !== 'kaminos.creature-contact-atlas.v0') {
+    throw new Error('contact atlas schema must be kaminos.creature-contact-atlas.v0');
+  }
+  if (atlas.motionClass !== 'elongated-crawler') throw new Error('contact atlas motion class must be elongated-crawler');
+  if (expected.castId && atlas.castId !== expected.castId) throw new Error('contact atlas cast id mismatch');
+  if (expected.castHash && atlas.castHash !== expected.castHash) throw new Error('contact atlas cast hash mismatch');
+  if (expected.registrationHash && atlas.registrationHash !== expected.registrationHash) {
+    throw new Error('contact atlas registration hash mismatch');
+  }
+  const vertexCount = Math.round(Number(expected.vertexCount ?? atlas.vertexCount));
+  if (!Number.isInteger(vertexCount) || vertexCount <= 0 || atlas.vertexCount !== vertexCount) {
+    throw new Error('contact atlas vertex count mismatch');
+  }
+  if (atlas[VALIDATED_CRAWLER_CONTACT_ATLAS]) return atlas;
+  if (!Array.isArray(atlas.patches) || atlas.patches.length !== CRAWLER_CONTACT_PATCH_SPECS.length) {
+    throw new Error('contact atlas requires exactly four crawler patches');
+  }
+  const patches = atlas.patches.map((patch, patchIndex) => {
+    const spec = CRAWLER_CONTACT_PATCH_SPECS[patchIndex];
+    if (patch.id !== spec.id || patch.axialRegion !== spec.axialRegion || patch.side !== spec.side) {
+      throw new Error(`contact atlas patch ${patchIndex} identity/order mismatch`);
+    }
+    const restCentroid = requireVector3(patch.restCentroid, `${patch.id} rest centroid`);
+    const vertexIndices = Array.from(patch.vertexIndices || [], Number);
+    const weights = Array.from(patch.weights || [], Number);
+    if (vertexIndices.length < 32 || vertexIndices.length !== weights.length) {
+      throw new Error(`${patch.id} contact vertices and weights must align`);
+    }
+    if (vertexIndices.some(index => !Number.isInteger(index) || index < 0 || index >= vertexCount)) {
+      throw new Error(`${patch.id} contact vertex index is out of bounds`);
+    }
+    if (weights.some(weight => !Number.isFinite(weight) || weight < 0)) {
+      throw new Error(`${patch.id} contact weights must be finite and nonnegative`);
+    }
+    const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+    if (Math.abs(weightSum - 1) > 1e-5) throw new Error(`${patch.id} contact weights must sum to one`);
+    const influenceVertexIndices = Array.from(patch.influenceVertexIndices || [], Number);
+    const influenceWeights = Array.from(patch.influenceWeights || [], Number);
+    if (influenceVertexIndices.length < vertexIndices.length || influenceVertexIndices.length !== influenceWeights.length) {
+      throw new Error(`${patch.id} contact influence vertices and weights must align`);
+    }
+    if (influenceVertexIndices.some(index => !Number.isInteger(index) || index < 0 || index >= vertexCount)) {
+      throw new Error(`${patch.id} contact influence vertex index is out of bounds`);
+    }
+    if (influenceWeights.some(weight => !Number.isFinite(weight) || weight < 0 || weight > 1 + EPSILON)) {
+      throw new Error(`${patch.id} contact influence weights must remain in [0, 1]`);
+    }
+    return {
+      ...patch,
+      phaseOffset: Number.isFinite(Number(patch.phaseOffset)) ? Number(patch.phaseOffset) : spec.phaseOffset,
+      restCentroid,
+      vertexIndices,
+      weights,
+      influenceVertexIndices,
+      influenceWeights,
+      derivation: patch.derivation && typeof patch.derivation === 'object'
+        ? {
+          ...patch.derivation,
+          influenceRadii: Array.from(patch.derivation.influenceRadii || [], Number),
+        }
+        : undefined,
+    };
+  });
+  for (const patch of patches) {
+    Object.freeze(patch.restCentroid);
+    Object.freeze(patch.vertexIndices);
+    Object.freeze(patch.weights);
+    Object.freeze(patch.influenceVertexIndices);
+    Object.freeze(patch.influenceWeights);
+    if (patch.derivation) {
+      Object.freeze(patch.derivation.influenceRadii);
+      Object.freeze(patch.derivation);
+    }
+    Object.freeze(patch);
+  }
+  Object.freeze(patches);
+  const validated = { ...atlas, patches };
+  Object.defineProperty(validated, VALIDATED_CRAWLER_CONTACT_ATLAS, { value: true });
+  return Object.freeze(validated);
+}
+
+function positiveModulo(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
+function computeCrawlerContactKinematics(patchDefinitions, atlasCastId, locomotorPhaseInput = 0, options = {}) {
+  const locomotorPhase = Number(locomotorPhaseInput) || 0;
+  const coupling = clamp(Number(options.coupling) || 0, 0, 1);
+  const scale = Math.max(EPSILON, Number(options.scale) || 1);
+  const stanceFraction = clamp(Number(options.stanceFraction) || 0.58, 0.4, 0.72);
+  const releaseFraction = clamp(Number(options.releaseFraction) || 0.08, 0.03, stanceFraction * 0.35);
+  const stride = Math.max(0, Number(options.stride) || 0.13 / scale) * coupling;
+  const swingHeight = Math.max(0, Number(options.swingHeight) || 0.045 / scale) * coupling;
+  const supportOffsets = options.supportOffsets instanceof Map
+    ? options.supportOffsets
+    : new Map(Object.entries(options.supportOffsets || {}));
+  const cycleTurns = locomotorPhase / (Math.PI * 2);
+  const patches = patchDefinitions.map(patch => {
+    const cycle = positiveModulo(cycleTurns + patch.phaseOffset, 1);
+    let state = 'swing';
+    let localZ = 0;
+    let localY = 0;
+    if (cycle < stanceFraction - releaseFraction) {
+      state = 'stance';
+      const stanceT = cycle / Math.max(EPSILON, stanceFraction - releaseFraction);
+      localZ = mix(-stride * 0.5, stride * 0.5, stanceT);
+    } else if (cycle < stanceFraction) {
+      state = 'release';
+      const releaseT = (cycle - (stanceFraction - releaseFraction)) / releaseFraction;
+      localZ = stride * 0.5;
+      localY = swingHeight * 0.3 * smoothstep(0, 1, releaseT);
+    } else {
+      const swingT = (cycle - stanceFraction) / Math.max(EPSILON, 1 - stanceFraction);
+      localZ = mix(stride * 0.5, -stride * 0.5, smoothstep(0, 1, swingT));
+      localY = swingHeight * Math.sin(Math.PI * swingT);
+    }
+    return {
+      id: patch.id,
+      state,
+      cycle,
+      localOffset: [0, localY + (Number(supportOffsets.get(patch.id)) || 0), localZ],
+    };
+  });
+  return {
+    schema: 'kaminos.crawler-contact-kinematics.v0',
+    atlasCastId,
+    locomotorPhase,
+    coupling,
+    stanceFraction,
+    releaseFraction,
+    stride,
+    swingHeight,
+    patches,
+  };
+}
+
+export function createCrawlerContactKinematics(atlasInput, locomotorPhaseInput = 0, options = {}) {
+  const atlas = validateCrawlerContactAtlas(atlasInput);
+  return computeCrawlerContactKinematics(atlas.patches, atlas.castId, locomotorPhaseInput, options);
+}
+
+export function applyCrawlerContactPatchDeformation(atlasInput, kinematics, outputPositions) {
+  const atlas = validateCrawlerContactAtlas(atlasInput);
+  if (kinematics?.schema !== 'kaminos.crawler-contact-kinematics.v0') {
+    throw new Error('crawler contact kinematics are required');
+  }
+  if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== atlas.vertexCount * 3) {
+    throw new Error('contact patch deformation output must match atlas vertex count');
+  }
+  for (const patch of atlas.patches) {
+    const motion = kinematics.patches.find(candidate => candidate.id === patch.id);
+    if (!motion) throw new Error(`contact kinematics missing patch ${patch.id}`);
+    const offset = requireVector3(motion.localOffset, `${patch.id} contact local offset`);
+    for (let index = 0; index < patch.influenceVertexIndices.length; index++) {
+      const vectorOffset = patch.influenceVertexIndices[index] * 3;
+      const weight = patch.influenceWeights[index];
+      outputPositions[vectorOffset] += offset[0] * weight;
+      outputPositions[vectorOffset + 1] += offset[1] * weight;
+      outputPositions[vectorOffset + 2] += offset[2] * weight;
+    }
+  }
+  return {
+    schema: 'kaminos.crawler-contact-patch-deformation.v0',
+    atlasCastId: atlas.castId,
+    patchCount: atlas.patches.length,
+    coupling: kinematics.coupling,
+  };
+}
+
+export function sampleCrawlerContactPatches(atlasInput, deformedPositions, terrainSource, options = {}) {
+  const atlas = validateCrawlerContactAtlas(atlasInput);
+  if (!ArrayBuffer.isView(deformedPositions) || deformedPositions.length !== atlas.vertexCount * 3) {
+    throw new Error('deformed contact sample positions must match atlas vertex count');
+  }
+  const rootPosition = requireVector3(options.rootPosition, 'contact sample root position');
+  const scale = Math.max(EPSILON, Number(options.scale) || 1);
+  const frame = options.locomotionFrame;
+  const forward = normalize3(requireVector3(frame?.forward, 'contact locomotion forward'));
+  const right = normalize3(requireVector3(frame?.right, 'contact locomotion right'), [1, 0, 0]);
+  const up = normalize3(requireVector3(frame?.up, 'contact locomotion up'), [0, 1, 0]);
+  const patches = atlas.patches.map(patch => {
+    const localPosition = weightedPosition(deformedPositions, patch.vertexIndices, patch.weights);
+    const worldPosition = [
+      rootPosition[0] + scale * (right[0] * localPosition[0] + up[0] * localPosition[1] - forward[0] * localPosition[2]),
+      rootPosition[1] + scale * (right[1] * localPosition[0] + up[1] * localPosition[1] - forward[1] * localPosition[2]),
+      rootPosition[2] + scale * (right[2] * localPosition[0] + up[2] * localPosition[1] - forward[2] * localPosition[2]),
+    ];
+    const terrain = sampleHillTerrainSurface(terrainSource, worldPosition[0], worldPosition[2]);
+    const terrainPosition = [worldPosition[0], terrain.height, worldPosition[2]];
+    const terrainDistance = (
+      (worldPosition[0] - terrainPosition[0]) * terrain.normal[0]
+      + (worldPosition[1] - terrainPosition[1]) * terrain.normal[1]
+      + (worldPosition[2] - terrainPosition[2]) * terrain.normal[2]
+    );
+    return {
+      id: patch.id,
+      axialRegion: patch.axialRegion,
+      side: patch.side,
+      localPosition,
+      worldPosition,
+      terrainPosition,
+      terrainNormal: terrain.normal,
+      terrainDistance,
+      inBounds: terrain.inBounds,
+    };
+  });
+  return {
+    schema: 'kaminos.crawler-contact-samples.v0',
+    atlasCastId: atlas.castId,
+    patches,
+  };
+}
+
+export function createCrawlerContactLocomotionState(atlasInput, options = {}) {
+  const atlas = validateCrawlerContactAtlas(atlasInput);
+  const maximumSpeed = Math.max(0.05, Number(options.maximumSpeed) || 1.6);
+  const maximumAcceleration = Math.max(0.05, Number(options.maximumAcceleration) || 4.2);
+  const maximumJerk = Math.max(0.1, Number(options.maximumJerk) || 72);
+  return {
+    schema: 'kaminos.crawler-contact-locomotion-state.v0',
+    atlasCastId: atlas.castId,
+    routeDistance: 0,
+    desiredDistance: 0,
+    routeSpeed: 0,
+    acceleration: 0,
+    jerk: 0,
+    rootCorrectionDistance: 0,
+    traction: 0,
+    coupling: 0,
+    limits: { maximumSpeed, maximumAcceleration, maximumJerk },
+    patches: atlas.patches.map(patch => ({
+      id: patch.id,
+      phaseOffset: patch.phaseOffset,
+      state: 'swing',
+      anchor: null,
+      anchorRouteOffset: 0,
+      previousWorldPosition: null,
+      slip: 0,
+      rawSlip: 0,
+      clearance: 0,
+      cycle: 0,
+      supportOffset: 0,
+      supportTarget: 0,
+      metrics: {
+        plantCount: 0,
+        releaseCount: 0,
+        maximumExtension: 0,
+      },
+    })),
+    metrics: {
+      plantCount: 0,
+      releaseCount: 0,
+      stanceSlipSum: 0,
+      stanceSlipSamples: 0,
+      meanStanceSlip: 0,
+      maximumStanceSlip: 0,
+      maximumSwingClearance: 0,
+    },
+  };
+}
+
+export function stepCrawlerContactLocomotion(previous, options = {}) {
+  if (previous?.schema !== 'kaminos.crawler-contact-locomotion-state.v0') {
+    throw new Error('crawler contact locomotion state is required');
+  }
+  if (options.contactSamples?.schema !== 'kaminos.crawler-contact-samples.v0') {
+    throw new Error('crawler contact locomotion requires contact samples');
+  }
+  const deltaSeconds = clamp(Number(options.deltaSeconds) || 0, 0, 0.1);
+  const desiredDistance = Math.max(previous.desiredDistance, Number(options.desiredDistance) || 0);
+  const desiredSpeed = Math.max(0, Number(options.desiredSpeed) || 0);
+  const railLength = Math.max(EPSILON, Number(options.railLength) || desiredDistance || 1);
+  const coupling = clamp(Number(options.coupling) || 0, 0, 1);
+  const frameForward = normalize3(requireVector3(options.locomotionFrame?.forward, 'contact governor locomotion forward'));
+  const frameUp = normalize3(requireVector3(options.locomotionFrame?.up, 'contact governor locomotion up'), [0, 1, 0]);
+  const scale = Math.max(EPSILON, Number(options.scale) || 1);
+  const targetClearance = clamp(Number(options.targetClearance) || 0.018, 0.002, 0.03);
+  const maximumSupportExtension = Math.max(0.01, Number(options.maximumSupportExtension) || 0.07) / scale;
+  const maximumSupportSpeed = Math.max(0.02, Number(options.maximumSupportSpeed) || 0.55) / scale;
+  const kinematics = computeCrawlerContactKinematics(
+    previous.patches,
+    previous.atlasCastId,
+    Number(options.locomotorPhase) || 0,
+    { coupling },
+  );
+  const provisionalOffset = previous.routeDistance - previous.desiredDistance;
+  const patches = previous.patches.map(priorPatch => {
+    const sample = options.contactSamples.patches.find(candidate => candidate.id === priorPatch.id);
+    const motion = kinematics.patches.find(candidate => candidate.id === priorPatch.id);
+    if (!sample || !motion) throw new Error(`contact governor missing patch ${priorPatch.id}`);
+    const terrainNormal = normalize3(requireVector3(sample.terrainNormal, `${priorPatch.id} terrain normal`), [0, 1, 0]);
+    const supportProjection = Math.max(
+      0.2,
+      frameUp[0] * terrainNormal[0] + frameUp[1] * terrainNormal[1] + frameUp[2] * terrainNormal[2],
+    ) * scale;
+    const supportTarget = motion.state === 'stance' && sample.inBounds !== false
+      ? clamp(
+        priorPatch.supportOffset + (targetClearance - sample.terrainDistance) / supportProjection,
+        -maximumSupportExtension,
+        0,
+      ) * coupling
+      : 0;
+    const maximumSupportDelta = maximumSupportSpeed * deltaSeconds;
+    const supportOffset = coupling <= EPSILON
+      ? 0
+      : priorPatch.supportOffset + clamp(
+        supportTarget - priorPatch.supportOffset,
+        -maximumSupportDelta,
+        maximumSupportDelta,
+      );
+    const appliedSupportDelta = supportOffset - priorPatch.supportOffset;
+    const supportedTerrainDistance = sample.terrainDistance + appliedSupportDelta * supportProjection;
+    const supportedWorldPosition = [
+      sample.worldPosition[0] + frameUp[0] * appliedSupportDelta * scale,
+      sample.worldPosition[1] + frameUp[1] * appliedSupportDelta * scale,
+      sample.worldPosition[2] + frameUp[2] * appliedSupportDelta * scale,
+    ];
+    const canPlant = motion.state === 'stance'
+      && sample.inBounds !== false
+      && supportedTerrainDistance <= 0.035;
+    let state = motion.state;
+    let anchor = priorPatch.anchor ? [...priorPatch.anchor] : null;
+    let anchorRouteOffset = priorPatch.anchorRouteOffset;
+    let planted = false;
+    let released = false;
+    if (canPlant && priorPatch.state !== 'stance') {
+      state = 'stance';
+      anchor = supportedWorldPosition;
+      anchorRouteOffset = provisionalOffset;
+      planted = true;
+    } else if (priorPatch.state === 'stance' && motion.state !== 'stance') {
+      state = motion.state;
+      anchor = null;
+      released = true;
+    } else if (priorPatch.state === 'stance' && canPlant) {
+      state = 'stance';
+    } else if (!canPlant) {
+      state = motion.state === 'stance' ? 'swing' : motion.state;
+      anchor = null;
+    }
+    const rawSlip = anchor
+      ? (
+        (supportedWorldPosition[0] - anchor[0]) * frameForward[0]
+        + (supportedWorldPosition[1] - anchor[1]) * frameForward[1]
+        + (supportedWorldPosition[2] - anchor[2]) * frameForward[2]
+      )
+      : 0;
+    return {
+      id: priorPatch.id,
+      phaseOffset: priorPatch.phaseOffset,
+      state,
+      anchor,
+      anchorRouteOffset,
+      previousWorldPosition: supportedWorldPosition,
+      rawSlip,
+      slip: rawSlip,
+      clearance: supportedTerrainDistance,
+      cycle: motion.cycle,
+      supportOffset,
+      supportTarget,
+      metrics: {
+        plantCount: priorPatch.metrics.plantCount + (planted ? 1 : 0),
+        releaseCount: priorPatch.metrics.releaseCount + (released ? 1 : 0),
+        maximumExtension: Math.max(priorPatch.metrics.maximumExtension, Math.abs(supportOffset)),
+      },
+      planted,
+      released,
+    };
+  });
+  const plantedPatches = patches.filter(patch => patch.state === 'stance' && patch.anchor);
+  const meanRawSlip = plantedPatches.length
+    ? plantedPatches.reduce((sum, patch) => sum + patch.rawSlip, 0) / plantedPatches.length
+    : 0;
+  const correctionLimit = Math.max(0.002, Number(options.maximumCorrectionDistance) || 0.075);
+  const driveEngagement = smoothstep(0, 0.12, desiredSpeed);
+  const rootCorrectionDistance = clamp(
+    -meanRawSlip * coupling * driveEngagement * 0.82,
+    -correctionLimit,
+    correctionLimit,
+  );
+  const targetDistance = clamp(desiredDistance + rootCorrectionDistance, previous.routeDistance, railLength);
+  const targetSpeed = deltaSeconds > EPSILON
+    ? clamp((targetDistance - previous.routeDistance) / deltaSeconds, 0, previous.limits.maximumSpeed)
+    : 0;
+  const commandedSpeed = coupling > 0
+    ? mix(desiredSpeed, targetSpeed, coupling)
+    : desiredSpeed;
+  const targetAcceleration = deltaSeconds > EPSILON
+    ? clamp(
+      (commandedSpeed - previous.routeSpeed) / deltaSeconds,
+      -previous.limits.maximumAcceleration,
+      previous.limits.maximumAcceleration,
+    )
+    : 0;
+  const accelerationDelta = clamp(
+    targetAcceleration - previous.acceleration,
+    -previous.limits.maximumJerk * deltaSeconds,
+    previous.limits.maximumJerk * deltaSeconds,
+  );
+  let acceleration = clamp(
+    previous.acceleration + accelerationDelta,
+    -previous.limits.maximumAcceleration,
+    previous.limits.maximumAcceleration,
+  );
+  let jerk = deltaSeconds > EPSILON ? accelerationDelta / deltaSeconds : 0;
+  let routeSpeed = clamp(previous.routeSpeed + acceleration * deltaSeconds, 0, previous.limits.maximumSpeed);
+  let routeDistance = clamp(
+    Math.min(targetDistance, previous.routeDistance + routeSpeed * deltaSeconds),
+    previous.routeDistance,
+    railLength,
+  );
+  if (coupling <= EPSILON) {
+    routeDistance = clamp(desiredDistance, previous.routeDistance, railLength);
+    routeSpeed = desiredSpeed;
+    const baselineAcceleration = deltaSeconds > EPSILON ? (routeSpeed - previous.routeSpeed) / deltaSeconds : 0;
+    jerk = deltaSeconds > EPSILON ? (baselineAcceleration - previous.acceleration) / deltaSeconds : 0;
+    acceleration = baselineAcceleration;
+  }
+  const routeOffset = routeDistance - desiredDistance;
+  for (const patch of patches) {
+    if (patch.state === 'stance' && patch.anchor) {
+      patch.slip = patch.rawSlip + routeOffset - patch.anchorRouteOffset;
+    }
+  }
+  const stanceSlips = patches.filter(patch => patch.state === 'stance' && patch.anchor).map(patch => Math.abs(patch.slip));
+  const stanceSlipSum = previous.metrics.stanceSlipSum + stanceSlips.reduce((sum, slip) => sum + slip, 0);
+  const stanceSlipSamples = previous.metrics.stanceSlipSamples + stanceSlips.length;
+  const traction = plantedPatches.length
+    ? clamp(1 - (stanceSlips.reduce((sum, slip) => sum + slip, 0) / plantedPatches.length) / 0.12, 0, 1)
+    : 0;
+  return {
+    ...previous,
+    routeDistance,
+    desiredDistance,
+    routeSpeed,
+    acceleration,
+    jerk,
+    rootCorrectionDistance,
+    traction,
+    coupling,
+    patches: patches.map(({ planted, released, ...patch }) => patch),
+    metrics: {
+      plantCount: previous.metrics.plantCount + patches.filter(patch => patch.planted).length,
+      releaseCount: previous.metrics.releaseCount + patches.filter(patch => patch.released).length,
+      stanceSlipSum,
+      stanceSlipSamples,
+      meanStanceSlip: stanceSlipSamples ? stanceSlipSum / stanceSlipSamples : 0,
+      maximumStanceSlip: Math.max(previous.metrics.maximumStanceSlip, ...stanceSlips, 0),
+      maximumSwingClearance: Math.max(
+        previous.metrics.maximumSwingClearance,
+        ...patches.filter(patch => patch.state === 'swing').map(patch => patch.clearance),
+        0,
+      ),
+    },
   };
 }
 

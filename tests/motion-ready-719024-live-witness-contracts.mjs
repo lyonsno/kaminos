@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { assertMotionReady719024EffectiveIdentity } from '../motion-ready-719024-live-identity.js';
 
 const witness = readFileSync(new URL('../motion-ready-719024-live-witness.mjs', import.meta.url), 'utf8');
+const browserWitness = readFileSync(new URL('../motion-ready-719024-witness.html', import.meta.url), 'utf8');
 const identityContract = readFileSync(new URL('../motion-ready-719024-live-identity.js', import.meta.url), 'utf8');
 
 assert.match(witness, /kaminos\.motion-ready-719024-live-witness\.v0/, 'witness writes a stable report schema');
@@ -31,11 +32,26 @@ assert.match(witness, /assertMotionReady719024EffectiveIdentity/, 'live evidence
 assert.match(identityContract, /locomotionRailSchema/, 'live evidence binds the effective rail schema');
 assert.match(identityContract, /transitionAdmission/, 'live evidence binds caller-evaluated transition admission');
 assert.match(identityContract, /minimumSupportMargin/, 'live evidence binds nonnegative compiled support margin');
+assert.match(browserWitness, /contact-atlas\.json/, 'browser witness loads the persisted exact-cast contact atlas');
+assert.match(browserWitness, /contactAtlasHash/, 'browser witness reports the effective contact-atlas byte identity');
+assert.match(browserWitness, /id="contact-coupling"/, 'browser witness exposes the contact coupling A\/B control');
+assert.match(browserWitness, /stepCrawlerContactLocomotion\(/, 'browser witness governs rail progress through contact state');
+assert.match(browserWitness, /applyCrawlerContactPatchDeformation\(/, 'browser witness gives contact phase visible geometric consequence');
+assert.match(browserWitness, /sampleCrawlerContactPatches\(/, 'browser witness samples exact-cast patches against terrain');
+assert.match(browserWitness, /contactLocomotion/, 'browser debug state reports contact locomotion evidence');
+assert.match(witness, /--contact-coupling/, 'live witness can request and record an explicit contact coupling');
+assert.match(witness, /meanStanceSlip/, 'live filmstrip records stance-slip evidence');
+assert.match(witness, /maximumSupportExtension/, 'live filmstrip records terrain-conditioned support reach');
+assert.match(witness, /never planted in the live Hill route/, 'live witness rejects a synthetic-only four-patch gait');
+assert.match(browserWitness, /kaminosMotionReady719024AdvanceToElapsed/, 'browser witness exposes deterministic fixed-step visual capture');
+assert.match(witness, /AdvanceToElapsed/, 'live recorder advances to requested source time instead of drifting with screenshot latency');
 
 const expected = {
   castId: 'motion-ready-719024',
   castHash: 'cast-hash',
   registrationHash: 'registration-hash',
+  contactAtlasHash: 'contact-atlas-hash',
+  contactCoupling: 1,
   hillSource: 'hill-source',
   routePlanId: 'strict-route',
   locomotionRailId: 'strict-rail',
@@ -45,6 +61,10 @@ const validDebug = {
     castId: expected.castId,
     castHash: expected.castHash,
     registrationHash: expected.registrationHash,
+    contactAtlasHash: expected.contactAtlasHash,
+    contactAtlasSchema: 'kaminos.creature-contact-atlas.v0',
+    contactAtlasAuthority: 'exact-cast-consumer-derived-contact-v0',
+    contactPatchIds: ['front-left', 'front-right', 'rear-left', 'rear-right'],
     deformationMode: 'axial-parallel-transport-wave-v1',
     hillSourceRef: expected.hillSource,
     hillAuthority: 'live_simulation',
@@ -70,11 +90,13 @@ const validDebug = {
       maximumSupportCorrectionDelta: 0.01,
     },
   },
+  motion: { contactCoupling: expected.contactCoupling },
 };
 assert.doesNotThrow(() => assertMotionReady719024EffectiveIdentity(validDebug, expected));
 assert.throws(
   () => assertMotionReady719024EffectiveIdentity({
     effective: { ...validDebug.effective, locomotionRailSchema: 'stale.pre-rail.v0' },
+    motion: validDebug.motion,
   }, expected),
   /rail schema is stale or missing/,
   'a stale pre-rail witness must fail the effective identity gate',

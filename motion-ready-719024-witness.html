@@ -18,6 +18,9 @@
   .key { color: #58645e; }
   .value { color: #aeb9b1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #controls { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+  #contact-control { display: grid; grid-template-columns: 72px minmax(0, 1fr) 30px; align-items: center; gap: 7px; margin-top: 8px; color: #8d9990; font-size: 10px; }
+  #contact-coupling { width: 100%; accent-color: #e0c876; }
+  #contact-coupling-value { color: #e8d79e; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
   button { height: 28px; padding: 0 10px; border: 1px solid #3d493f; border-radius: 5px; background: #202722; color: #d5ddd6; font-size: 10px; cursor: pointer; }
   button:hover { background: #2a342d; border-color: #5b6d5f; }
   label { display: inline-flex; align-items: center; gap: 5px; color: #8d9990; font-size: 10px; }
@@ -52,6 +55,11 @@
     <button id="pause" type="button">Pause</button>
     <label><input id="track" type="checkbox" checked> Track</label>
   </div>
+  <div id="contact-control">
+    <span>Contact</span>
+    <input id="contact-coupling" type="range" min="0" max="1" step="0.05" value="1" aria-label="Contact coupling">
+    <output id="contact-coupling-value" for="contact-coupling">1.00</output>
+  </div>
 </section>
 <div id="progress"><div></div></div>
 
@@ -67,21 +75,28 @@ import {
   MOTION_READY_719024_CAST_ID,
   MOTION_READY_719024_DEFORMATION_MODE,
   compileCreatureScaleLocomotionRail,
+  applyCrawlerContactPatchDeformation,
   createAxialGeometryBinding,
   createAxialSquirmState,
   createAxialTerrainRouteTransitionEvaluator,
+  createCrawlerContactKinematics,
+  createCrawlerContactLocomotionState,
   deformAxialGeometryBinding,
+  sampleCrawlerContactPatches,
   sampleHillTerrainSurface,
   sampleCreatureScaleLocomotionRail,
   solveAxialTerrainSupportEnvelope,
   stepAxialSquirmController,
+  stepCrawlerContactLocomotion,
   validateAxialCrawlerRegistration,
+  validateCrawlerContactAtlas,
 } from './motion-ready-719024-core.js';
 
 const routeParameters = new URLSearchParams(location.search);
 const PATHS = Object.freeze({
   creature: routeParameters.get('creature_url') || './artifacts/motion-ready-719024/creature.glb',
   registration: routeParameters.get('registration_url') || './artifacts/motion-ready-719024/registration.json',
+  contactAtlas: routeParameters.get('contact_atlas_url') || './artifacts/motion-ready-719024/contact-atlas.json',
   receipt: './artifacts/motion-ready-719024/receipt.json',
   hillPacket: './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   hillData: './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
@@ -89,6 +104,7 @@ const PATHS = Object.freeze({
 const EXPECTED = Object.freeze({
   castHash: '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
   registrationHash: 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
+  contactAtlasHash: 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
   hillSourceRef: 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
 });
 const TIMING = Object.freeze({ leadIn: 1.15, travel: 10.4, settle: 3.2 });
@@ -104,6 +120,11 @@ const motionStateElement = document.getElementById('motion-state');
 const progressElement = document.querySelector('#progress > div');
 const pauseButton = document.getElementById('pause');
 const trackInput = document.getElementById('track');
+const contactCouplingInput = document.getElementById('contact-coupling');
+const contactCouplingValue = document.getElementById('contact-coupling-value');
+const requestedContactCoupling = THREE.MathUtils.clamp(Number(routeParameters.get('contact_coupling') ?? 1), 0, 1);
+contactCouplingInput.value = String(requestedContactCoupling);
+contactCouplingValue.value = requestedContactCoupling.toFixed(2);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x090b0d);
@@ -150,8 +171,9 @@ const state = {
   startSeconds: performance.now() / 1000,
   elapsedSeconds: 0,
   routeProgress: 0,
+  desiredRouteProgress: 0,
   routeSpeed: 0,
-  previousRoutePosition: null,
+  previousDesiredDistance: 0,
   previousFrameSeconds: null,
   controller: createAxialSquirmState(),
   source: null,
@@ -160,6 +182,13 @@ const state = {
   routeSample: null,
   terrainSupport: null,
   registration: null,
+  contactAtlas: null,
+  contactKinematics: null,
+  contactSamples: null,
+  contactLocomotion: null,
+  contactPhase: 0,
+  contactCoupling: requestedContactCoupling,
+  contactMarkers: new Map(),
   receipt: null,
   assetEvidence: null,
   creatureRoot: null,
@@ -292,6 +321,9 @@ function prepareCreature(gltf, registration) {
       registration,
       { segments: 128 },
     );
+    if (child.userData.axialBinding.vertexCount !== state.contactAtlas.vertexCount) {
+      throw new Error('contact atlas vertex count does not match effective creature geometry');
+    }
     child.geometry.computeBoundingSphere();
     child.geometry.boundingSphere.radius *= 1.35;
     child.castShadow = true;
@@ -328,6 +360,11 @@ function applyCreatureDeformation() {
       position.array,
       normal.array,
     );
+    applyCrawlerContactPatchDeformation(
+      state.contactAtlas,
+      state.contactKinematics,
+      position.array,
+    );
     position.needsUpdate = true;
     normal.needsUpdate = true;
   }
@@ -336,6 +373,27 @@ function applyCreatureDeformation() {
     state.performance.maxDeformationMs,
     state.performance.lastDeformationMs,
   );
+}
+
+function createContactMarkers() {
+  const geometry = new THREE.SphereGeometry(0.027, 12, 8);
+  for (const patch of state.contactAtlas.patches) {
+    const marker = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x71b9e6 }));
+    marker.name = `motion-ready-719024-contact-${patch.id}`;
+    marker.renderOrder = 3;
+    scene.add(marker);
+    state.contactMarkers.set(patch.id, marker);
+  }
+}
+
+function updateContactMarkers() {
+  for (const patch of state.contactLocomotion?.patches || []) {
+    const marker = state.contactMarkers.get(patch.id);
+    const sample = state.contactSamples?.patches.find(candidate => candidate.id === patch.id);
+    if (!marker || !sample) continue;
+    marker.position.fromArray(sample.worldPosition);
+    marker.material.color.setHex(patch.state === 'stance' ? 0x73d28d : patch.state === 'release' ? 0xf0bd62 : 0x6db7e7);
+  }
 }
 
 function smoothProgress(linear) {
@@ -347,10 +405,18 @@ function resetPlayback() {
   state.startSeconds = performance.now() / 1000;
   state.elapsedSeconds = 0;
   state.routeProgress = 0;
+  state.desiredRouteProgress = 0;
   state.routeSpeed = 0;
-  state.previousRoutePosition = null;
+  state.previousDesiredDistance = 0;
   state.previousFrameSeconds = null;
   state.controller = createAxialSquirmState();
+  state.contactKinematics = createCrawlerContactKinematics(state.contactAtlas, 0, {
+    coupling: state.contactCoupling,
+    scale: state.creatureRoot?.scale.y || 1.14,
+  });
+  state.contactSamples = null;
+  state.contactLocomotion = createCrawlerContactLocomotionState(state.contactAtlas);
+  state.contactPhase = 0;
   state.completed = false;
   state.paused = false;
   pauseButton.textContent = 'Pause';
@@ -365,18 +431,36 @@ function updateActor(nowSeconds) {
   const deltaSeconds = THREE.MathUtils.clamp(nowSeconds - previousFrame, 0, 0.05);
   state.previousFrameSeconds = nowSeconds;
   const travelLinear = (elapsed - TIMING.leadIn) / TIMING.travel;
-  const progress = smoothProgress(travelLinear);
+  const desiredProgress = smoothProgress(travelLinear);
+  const desiredDistance = state.locomotionRail.length * desiredProgress;
+  const desiredSpeed = deltaSeconds > 1e-5
+    ? Math.max(0, (desiredDistance - state.previousDesiredDistance) / deltaSeconds)
+    : 0;
+  state.previousDesiredDistance = desiredDistance;
+  const priorDistance = state.contactLocomotion.routeDistance;
+  if (state.contactSamples && deltaSeconds > 0) {
+    state.contactLocomotion = stepCrawlerContactLocomotion(state.contactLocomotion, {
+      deltaSeconds,
+      desiredDistance,
+      desiredSpeed,
+      railLength: state.locomotionRail.length,
+      locomotorPhase: state.contactPhase,
+      locomotionFrame: state.routeSample?.locomotionFrame || { forward: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] },
+      contactSamples: state.contactSamples,
+      scale: state.creatureRoot.scale.y,
+      coupling: state.contactCoupling,
+    });
+  }
   const sample = sampleCreatureScaleLocomotionRail(
     state.locomotionRail,
-    state.locomotionRail.length * progress,
+    state.contactLocomotion.routeDistance,
   );
   const routePosition = new THREE.Vector3(...sample.position);
-  const previousPosition = state.previousRoutePosition;
-  const routeSpeed = previousPosition && deltaSeconds > 1e-5
-    ? routePosition.distanceTo(previousPosition) / deltaSeconds
+  const routeSpeed = deltaSeconds > 1e-5
+    ? Math.max(0, (state.contactLocomotion.routeDistance - priorDistance) / deltaSeconds)
     : 0;
-  state.previousRoutePosition = routePosition.clone();
-  state.routeProgress = progress;
+  state.routeProgress = sample.progress;
+  state.desiredRouteProgress = desiredProgress;
   state.routeSpeed = routeSpeed;
   state.routeSample = sample;
   const horizontalForward = new THREE.Vector3(sample.tangent[0], 0, sample.tangent[2]).normalize();
@@ -390,7 +474,6 @@ function updateActor(nowSeconds) {
     elapsedSeconds: elapsed,
   });
 
-  applyCreatureDeformation();
   state.creatureRoot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), horizontalForward);
   state.creatureRoot.position.set(
     routePosition.x,
@@ -399,6 +482,25 @@ function updateActor(nowSeconds) {
       - state.registration.contactPlaneY * state.creatureRoot.scale.y,
     routePosition.z,
   );
+  state.contactPhase = desiredDistance / 0.42 * Math.PI * 2;
+  state.contactKinematics = createCrawlerContactKinematics(state.contactAtlas, state.contactPhase, {
+    coupling: state.contactCoupling,
+    scale: state.creatureRoot.scale.y,
+    supportOffsets: new Map(state.contactLocomotion.patches.map(patch => [patch.id, patch.supportOffset])),
+  });
+  applyCreatureDeformation();
+  const deformablePosition = state.deformableMeshes[0].geometry.attributes.position.array;
+  state.contactSamples = sampleCrawlerContactPatches(
+    state.contactAtlas,
+    deformablePosition,
+    state.source,
+    {
+      rootPosition: state.creatureRoot.position.toArray(),
+      scale: state.creatureRoot.scale.y,
+      locomotionFrame: sample.locomotionFrame,
+    },
+  );
+  updateContactMarkers();
 
   if (trackInput.checked) {
     const target = state.creatureRoot.position.clone().add(new THREE.Vector3(0, 0.24, 0));
@@ -406,11 +508,12 @@ function updateActor(nowSeconds) {
     controls.target.lerp(target, 0.12);
     camera.position.addScaledVector(delta, 0.12);
   }
-  progressElement.style.transform = `scaleX(${progress})`;
+  progressElement.style.transform = `scaleX(${state.routeProgress})`;
   const supportStatus = state.terrainSupport.plannerDisposition === 'local-support'
     ? `support ${state.controller.terrainSupportRootLift.toFixed(3)}`
     : `reroute ${state.terrainSupport.compliance.maxEnvelopeLift.toFixed(3)}`;
-  motionStateElement.textContent = `${progress.toFixed(3)} / ${routeSpeed.toFixed(2)} u·s⁻¹ / wave ${state.controller.amplitude.toFixed(3)} / ${supportStatus}`;
+  const contactStatus = `${state.contactLocomotion.patches.filter(patch => patch.state === 'stance').length} planted / traction ${state.contactLocomotion.traction.toFixed(2)}`;
+  motionStateElement.textContent = `${state.routeProgress.toFixed(3)} / ${routeSpeed.toFixed(2)} u·s⁻¹ / ${contactStatus} / ${supportStatus}`;
 
   if (elapsed >= TIMING.leadIn + TIMING.travel + TIMING.settle && !state.completed) {
     state.completed = true;
@@ -447,8 +550,9 @@ async function loadGltfWithEvidence(path) {
 }
 
 async function initialize() {
-  const [registrationAsset, receipt, packet, data, creatureAsset] = await Promise.all([
+  const [registrationAsset, contactAtlasAsset, receipt, packet, data, creatureAsset] = await Promise.all([
     loadJsonWithEvidence(PATHS.registration),
+    loadJsonWithEvidence(PATHS.contactAtlas),
     loadJson(PATHS.receipt),
     loadJson(PATHS.hillPacket),
     loadJson(PATHS.hillData),
@@ -459,11 +563,19 @@ async function initialize() {
   if (receipt.files?.['registration.json']?.sha256 !== EXPECTED.registrationHash) throw new Error('registration receipt hash mismatch');
   if (creatureAsset.sha256 !== EXPECTED.castHash) throw new Error(`creature effective-byte identity mismatch: ${creatureAsset.sha256}`);
   if (registrationAsset.sha256 !== EXPECTED.registrationHash) throw new Error(`registration effective-byte identity mismatch: ${registrationAsset.sha256}`);
+  if (contactAtlasAsset.sha256 !== EXPECTED.contactAtlasHash) throw new Error(`contact atlas effective-byte identity mismatch: ${contactAtlasAsset.sha256}`);
   state.registration = validateAxialCrawlerRegistration(registrationAsset.value);
+  state.contactAtlas = validateCrawlerContactAtlas(contactAtlasAsset.value, {
+    castId: MOTION_READY_719024_CAST_ID,
+    castHash: EXPECTED.castHash,
+    registrationHash: EXPECTED.registrationHash,
+    vertexCount: receipt.mesh.vertices,
+  });
   state.receipt = receipt;
   state.assetEvidence = {
     creature: { path: creatureAsset.path, byteLength: creatureAsset.byteLength, sha256: creatureAsset.sha256 },
     registration: { path: registrationAsset.path, byteLength: registrationAsset.byteLength, sha256: registrationAsset.sha256 },
+    contactAtlas: { path: contactAtlasAsset.path, byteLength: contactAtlasAsset.byteLength, sha256: contactAtlasAsset.sha256 },
   };
   state.source = decodeHillMotionAffordancePacket({ packet, data });
   if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
@@ -517,6 +629,7 @@ async function initialize() {
   createTerrain(state.source);
   createRouteLine(state.locomotionRail.samples.map(sample => sample.position));
   prepareCreature(creatureAsset.value, state.registration);
+  createContactMarkers();
 
   const startSample = sampleCreatureScaleLocomotionRail(state.locomotionRail, 0);
   const startPosition = new THREE.Vector3(...startSample.position);
@@ -541,6 +654,11 @@ pauseButton.addEventListener('click', () => {
     state.previousFrameSeconds = null;
   }
 });
+contactCouplingInput.addEventListener('input', () => {
+  state.contactCoupling = THREE.MathUtils.clamp(Number(contactCouplingInput.value), 0, 1);
+  contactCouplingValue.value = state.contactCoupling.toFixed(2);
+  if (state.loaded) resetPlayback();
+});
 
 window.kaminosMotionReady719024DebugState = () => ({
   schema: 'kaminos.motion-ready-719024.debug-state.v0',
@@ -553,6 +671,8 @@ window.kaminosMotionReady719024DebugState = () => ({
     castId: MOTION_READY_719024_CAST_ID,
     castPath: PATHS.creature,
     registrationPath: PATHS.registration,
+    contactAtlasPath: PATHS.contactAtlas,
+    contactCoupling: requestedContactCoupling,
     hillPacketPath: PATHS.hillPacket,
     hillDataPath: PATHS.hillData,
   },
@@ -560,6 +680,10 @@ window.kaminosMotionReady719024DebugState = () => ({
     castId: state.receipt?.castId || null,
     castHash: state.assetEvidence?.creature?.sha256 || null,
     registrationHash: state.assetEvidence?.registration?.sha256 || null,
+    contactAtlasHash: state.assetEvidence?.contactAtlas?.sha256 || null,
+    contactAtlasSchema: state.contactAtlas?.schema || null,
+    contactAtlasAuthority: state.contactAtlas?.authority || null,
+    contactPatchIds: state.contactAtlas?.patches?.map(patch => patch.id) || [],
     assetEvidence: state.assetEvidence,
     deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
     hillSourceRef: state.source?.sourceRef || null,
@@ -583,15 +707,44 @@ window.kaminosMotionReady719024DebugState = () => ({
   motion: {
     elapsedSeconds: state.elapsedSeconds,
     routeProgress: state.routeProgress,
+    desiredRouteProgress: state.desiredRouteProgress,
     routeSpeed: state.routeSpeed,
     routeSample: state.routeSample,
     controller: { ...state.controller },
     terrainSupport: state.terrainSupport,
+    contactCoupling: state.contactCoupling,
+    contactPhase: state.contactPhase,
+    contactKinematics: state.contactKinematics,
+    contactSamples: state.contactSamples,
+    contactLocomotion: state.contactLocomotion,
     root: state.creatureRoot ? state.creatureRoot.position.toArray() : null,
   },
   performance: { ...state.performance },
   consoleFailures: [...consoleFailures],
 });
+
+window.kaminosMotionReady719024PrepareDeterministicCapture = () => {
+  resetPlayback();
+  state.paused = true;
+  pauseButton.textContent = 'Resume';
+  return window.kaminosMotionReady719024DebugState();
+};
+
+window.kaminosMotionReady719024AdvanceToElapsed = targetSecondsInput => {
+  const targetSeconds = Math.max(0, Number(targetSecondsInput) || 0);
+  if (targetSeconds + 1e-6 < state.elapsedSeconds) {
+    window.kaminosMotionReady719024PrepareDeterministicCapture();
+  }
+  const stepSeconds = 1 / 60;
+  while (state.elapsedSeconds + 1e-6 < targetSeconds) {
+    const nextElapsed = Math.min(targetSeconds, state.elapsedSeconds + stepSeconds);
+    state.paused = false;
+    updateActor(state.startSeconds + nextElapsed);
+  }
+  state.paused = true;
+  pauseButton.textContent = 'Resume';
+  return window.kaminosMotionReady719024DebugState();
+};
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;

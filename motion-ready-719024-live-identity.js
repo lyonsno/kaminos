@@ -8,6 +8,10 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
     castId: effective.castId,
     castHash: effective.castHash,
     registrationHash: effective.registrationHash,
+    contactAtlasHash: effective.contactAtlasHash,
+    contactAtlasSchema: effective.contactAtlasSchema,
+    contactAtlasAuthority: effective.contactAtlasAuthority,
+    contactPatchIds: effective.contactPatchIds,
     deformationMode: effective.deformationMode,
     hillSource: effective.hillSourceRef,
     hillAuthority: effective.hillAuthority,
@@ -28,6 +32,11 @@ export function assertMotionReady719024EffectiveIdentity(debug, expected) {
   assert.equal(effectiveIdentity.castId, expected.castId, 'effective cast ID does not match requested cast ID');
   assert.equal(effectiveIdentity.castHash, expected.castHash, 'effective cast hash does not match requested cast hash');
   assert.equal(effectiveIdentity.registrationHash, expected.registrationHash, 'effective registration hash does not match requested registration hash');
+  assert.equal(effectiveIdentity.contactAtlasHash, expected.contactAtlasHash, 'effective contact atlas hash does not match requested contact atlas hash');
+  assert.equal(effectiveIdentity.contactAtlasSchema, 'kaminos.creature-contact-atlas.v0', 'effective contact atlas schema is stale or missing');
+  assert.equal(effectiveIdentity.contactAtlasAuthority, 'exact-cast-consumer-derived-contact-v0', 'effective contact atlas lacks exact-cast consumer authority');
+  assert.deepEqual(effectiveIdentity.contactPatchIds, ['front-left', 'front-right', 'rear-left', 'rear-right'], 'effective contact patch identity/order drifted');
+  assert.equal(debug?.motion?.contactCoupling, expected.contactCoupling, 'effective contact coupling does not match the requested A/B lane');
   assert.equal(effectiveIdentity.hillSource, expected.hillSource, 'effective Hill source does not match requested Hill source');
   assert.equal(effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1', 'unexpected deformation mode');
   assert.equal(effectiveIdentity.hillAuthority, 'live_simulation', 'Hill packet is not source-owned live-simulation evidence');
