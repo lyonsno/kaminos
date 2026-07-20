@@ -5,7 +5,6 @@ import { spawn, spawnSync } from 'node:child_process';
 import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   evaluateFingerFluidTruthTrajectory,
-  validateFingerFluidTruthRendererAdvance,
   validateFingerFluidTruthRendererState,
 } from './finger-fluid-webgpu-core.js';
 
@@ -16,7 +15,6 @@ const requestedUrl = args.get('--url') || 'http://127.0.0.1:8100/index.html?kami
 const requestedUrlObject = new URL(requestedUrl);
 const requestedTruthScene = requestedUrlObject.searchParams.get('finger_fluid_truth_scene') || 'multi_regime_playground';
 const requestedRendererMode = requestedUrlObject.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
-const requestedOpticalDebugMode = requestedUrlObject.searchParams.get('finger_fluid_optical_debug') || 'shaded';
 const requestedSupportFriction = Number(requestedUrlObject.searchParams.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
 const checkpointOffsetsMs = String(args.get('--checkpoints-ms') || '500,2500,7000')
   .split(',')
@@ -67,7 +65,6 @@ function writeReport(extra = {}) {
     effectiveTruthScene,
     requestedRendererMode,
     effectiveRendererMode,
-    requestedOpticalDebugMode,
     requestedSupportFriction,
     initialRendererAuthority,
     checkpointOffsetsMs,
@@ -262,14 +259,24 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs, targetStep)
   if (effectiveSupportFriction !== requestedSupportFriction) {
     throw new Error(`support friction changed during trajectory: ${JSON.stringify({ requestedSupportFriction, effectiveSupportFriction })}`);
   }
-  const rendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, state.runtime, { requestedOpticalDebugMode });
+  const rendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, state.runtime);
   if (rendererAuthority.effectiveRendererMode !== effectiveRendererMode) {
     throw new Error(`truth renderer changed during trajectory: ${JSON.stringify({
       expected: effectiveRendererMode,
       effectiveRendererMode: rendererAuthority.effectiveRendererMode,
     })}`);
   }
-  lastRendererAuthority = validateFingerFluidTruthRendererAdvance(lastRendererAuthority, rendererAuthority);
+  if (rendererAuthority.screenSpaceSurfaceEvidence && lastRendererAuthority?.screenSpaceSurfaceEvidence) {
+    const previousEvidence = lastRendererAuthority.screenSpaceSurfaceEvidence;
+    const currentEvidence = rendererAuthority.screenSpaceSurfaceEvidence;
+    if (
+      currentEvidence.accumulationPassCount <= previousEvidence.accumulationPassCount
+      || currentEvidence.compositePassCount <= previousEvidence.compositePassCount
+    ) {
+      throw new Error(`truth screen-space renderer passes did not advance: ${JSON.stringify({ previousEvidence, currentEvidence })}`);
+    }
+  }
+  lastRendererAuthority = rendererAuthority;
   const fluidTruthSnapshot = state.runtime?.fluidTruthSnapshot;
   if (fluidTruthSnapshot?.schema !== 'kaminos.finger-fluid-truth-snapshot.v0') {
     throw new Error(`fluid truth snapshot is missing: ${JSON.stringify(fluidTruthSnapshot)}`);
@@ -478,7 +485,7 @@ async function main() {
     if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0' || lastDebugState.runtime?.solver_backend !== 'webgpu_compute') {
       throw new Error(`truth witness reached a fallback solver: ${JSON.stringify(lastDebugState.runtime)}`);
     }
-    initialRendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, lastDebugState.runtime, { requestedOpticalDebugMode });
+    initialRendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, lastDebugState.runtime);
     effectiveRendererMode = initialRendererAuthority.effectiveRendererMode;
     lastRendererAuthority = initialRendererAuthority;
     if (lastDebugState.runtime?.truthGauntletContract !== 'kaminos-fluid-truth-gauntlet-v0') {

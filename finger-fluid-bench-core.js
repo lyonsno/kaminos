@@ -8,7 +8,6 @@ export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_IDENTITY = 'webgpu-screen-
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_IDENTITY = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
-export const KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY = 'wgsl-solver-owned-interface-normal-curvature-confidence-v1';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_IDENTITY = 'wgsl-analytic-contact-partial-slip-v0';
@@ -50,64 +49,6 @@ export function createFingerFluidBenchState(options = {}) {
   for (const downgrade of Array.isArray(options.downgrades) ? options.downgrades : []) {
     if (downgrade && !downgrades.includes(String(downgrade))) downgrades.push(String(downgrade));
   }
-  const requestedRendererMode = options.requestedRendererMode || 'screen_space_surface';
-  const effectiveRendererMode = options.effectiveRendererMode || requestedRendererMode;
-  const requestedOpticalLightingMode = options.requestedOpticalLightingMode || 'transport_only';
-  const requestedOpticalLightingRoute = options.requestedOpticalLightingRoute || {
-    transport_only: 'wgsl-liquid-transport-only-lighting-v0',
-    bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
-    legacy_shading: 'wgsl-liquid-legacy-shading-v0',
-  }[requestedOpticalLightingMode] || `unsupported-optical-lighting-mode:${requestedOpticalLightingMode}`;
-  const effectiveOpticalLightingMode = options.effectiveOpticalLightingMode
-    || (effectiveRendererMode === 'screen_space_refraction' ? requestedOpticalLightingMode : 'not_executed');
-  const effectiveOpticalLightingRoute = options.effectiveOpticalLightingRoute
-    || (effectiveOpticalLightingMode === 'not_executed'
-      ? 'not-executed-non-refraction-renderer-v0'
-      : requestedOpticalLightingRoute);
-  const requestedOpticalFootprintMode = options.requestedOpticalFootprintMode || 'resolved_detail';
-  const requestedOpticalFootprintRoute = options.requestedOpticalFootprintRoute || {
-    resolved_detail: 'wgsl-liquid-resolved-detail-reflection-footprint-v0',
-    variance_filtered: 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0',
-  }[requestedOpticalFootprintMode] || `unsupported-optical-footprint-mode:${requestedOpticalFootprintMode}`;
-  const effectiveOpticalFootprintMode = options.effectiveOpticalFootprintMode
-    || (effectiveRendererMode === 'screen_space_refraction' ? requestedOpticalFootprintMode : 'not_executed');
-  const effectiveOpticalFootprintRoute = options.effectiveOpticalFootprintRoute
-    || (effectiveOpticalFootprintMode === 'not_executed'
-      ? 'not-executed-non-refraction-renderer-v0'
-      : requestedOpticalFootprintRoute);
-  const requestedTransmissionFootprintMode = options.requestedTransmissionFootprintMode || 'resolved_exit';
-  const requestedTransmissionFootprintRoute = options.requestedTransmissionFootprintRoute || {
-    resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
-    dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
-  }[requestedTransmissionFootprintMode] || `unsupported-transmission-footprint-mode:${requestedTransmissionFootprintMode}`;
-  const effectiveTransmissionFootprintMode = options.effectiveTransmissionFootprintMode
-    || (effectiveRendererMode === 'screen_space_refraction' ? requestedTransmissionFootprintMode : 'not_executed');
-  const effectiveTransmissionFootprintRoute = options.effectiveTransmissionFootprintRoute
-    || (effectiveTransmissionFootprintMode === 'not_executed'
-      ? 'not-executed-non-refraction-renderer-v0'
-      : requestedTransmissionFootprintRoute);
-  const requestedBodyTransportMode = options.requestedBodyTransportMode || 'geometric_slab';
-  const requestedBodyTransportRoute = options.requestedBodyTransportRoute || {
-    geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
-    robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
-  }[requestedBodyTransportMode] || `unsupported-body-transport-mode:${requestedBodyTransportMode}`;
-  const effectiveBodyTransportMode = options.effectiveBodyTransportMode
-    || (effectiveRendererMode === 'screen_space_refraction' ? requestedBodyTransportMode : 'not_executed');
-  const effectiveBodyTransportRoute = options.effectiveBodyTransportRoute
-    || (effectiveBodyTransportMode === 'not_executed'
-      ? 'not-executed-non-refraction-renderer-v0'
-      : requestedBodyTransportRoute);
-  const requestedInterfaceFrequencyMode = options.requestedInterfaceFrequencyMode || 'coupled_detail';
-  const requestedInterfaceFrequencyRoute = options.requestedInterfaceFrequencyRoute || {
-    coupled_detail: 'wgsl-liquid-coupled-detail-interface-frequency-v0',
-    macro_micro_separated: 'wgsl-liquid-macro-micro-interface-frequency-v1',
-  }[requestedInterfaceFrequencyMode] || `unsupported-interface-frequency-mode:${requestedInterfaceFrequencyMode}`;
-  const effectiveInterfaceFrequencyMode = options.effectiveInterfaceFrequencyMode
-    || (effectiveRendererMode === 'screen_space_refraction' ? requestedInterfaceFrequencyMode : 'not_executed');
-  const effectiveInterfaceFrequencyRoute = options.effectiveInterfaceFrequencyRoute
-    || (effectiveInterfaceFrequencyMode === 'not_executed'
-      ? 'not-executed-non-refraction-renderer-v0'
-      : requestedInterfaceFrequencyRoute);
 
   return {
     schema: KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
@@ -147,7 +88,6 @@ export function createFingerFluidBenchState(options = {}) {
       chemistryDiffusionPassCount: nonNegativeInteger(options.chemistryDiffusionPassCount, 0),
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
-      interfaceGeometryContract: options.interfaceGeometryContract || KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),
       linkedCellGridBuildCount: nonNegativeInteger(options.linkedCellGridBuildCount, 0),
       densityIterationCount: nonNegativeInteger(options.densityIterationCount, 0),
@@ -161,8 +101,8 @@ export function createFingerFluidBenchState(options = {}) {
     renderer: {
       identity: options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       backend: options.renderBackend || 'loading',
-      requestedMode: requestedRendererMode,
-      effectiveMode: effectiveRendererMode,
+      requestedMode: options.requestedRendererMode || 'screen_space_surface',
+      effectiveMode: options.effectiveRendererMode || options.requestedRendererMode || 'screen_space_surface',
       requestedRenderer: options.requestedRenderer || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       effectiveRenderer: options.effectiveRenderer || options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       fallbackReason: options.rendererFallbackReason || null,
@@ -176,31 +116,6 @@ export function createFingerFluidBenchState(options = {}) {
       screenSpaceRefractionRenderFrameCount: nonNegativeInteger(options.screenSpaceRefractionRenderFrameCount, 0),
       requestedOpticalDebugMode: options.requestedOpticalDebugMode || 'shaded',
       effectiveOpticalDebugMode: options.effectiveOpticalDebugMode || options.requestedOpticalDebugMode || 'shaded',
-      requestedOpticalLightingMode,
-      effectiveOpticalLightingMode,
-      requestedOpticalLightingRoute,
-      effectiveOpticalLightingRoute,
-      opticalLightingFallbackReason: options.opticalLightingFallbackReason || null,
-      requestedOpticalFootprintMode,
-      effectiveOpticalFootprintMode,
-      requestedOpticalFootprintRoute,
-      effectiveOpticalFootprintRoute,
-      opticalFootprintFallbackReason: options.opticalFootprintFallbackReason || null,
-      requestedTransmissionFootprintMode,
-      effectiveTransmissionFootprintMode,
-      requestedTransmissionFootprintRoute,
-      effectiveTransmissionFootprintRoute,
-      transmissionFootprintFallbackReason: options.transmissionFootprintFallbackReason || null,
-      requestedBodyTransportMode,
-      effectiveBodyTransportMode,
-      requestedBodyTransportRoute,
-      effectiveBodyTransportRoute,
-      bodyTransportFallbackReason: options.bodyTransportFallbackReason || null,
-      requestedInterfaceFrequencyMode,
-      effectiveInterfaceFrequencyMode,
-      requestedInterfaceFrequencyRoute,
-      effectiveInterfaceFrequencyRoute,
-      interfaceFrequencyFallbackReason: options.interfaceFrequencyFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',

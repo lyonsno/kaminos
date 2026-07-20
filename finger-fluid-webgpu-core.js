@@ -20,21 +20,49 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT = 'wgsl-descriptor-lami
 export const KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT = 'wgsl-analytic-laminar-inlet-fixture-presentation-v0';
 export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-distinct-flux-cadenced-inlet-population-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
+export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
+export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
+export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.sheet-release-diagnostics.v0';
+export const KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES = Object.freeze({
+  active: 0,
+  disabled: 1,
+  dormant: 2,
+  low_transport_speed: 3,
+  support_contact: 4,
+  density_loss: 5,
+  bulk_density: 6,
+  not_interface: 7,
+  topology_loss: 8,
+  neighbor_loss: 9,
+  velocity_incoherent: 10,
+  not_planar: 11,
+  inlet_core: 12,
+  activity_floor: 13,
+});
+const KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE = Object.freeze(Object.fromEntries(
+  Object.entries(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES).map(([reason, code]) => [code, reason]),
+));
 export const KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT = 'wgsl-unilateral-free-surface-pressure-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT = 'isolated-slot-waterfall-uniform-resolution-oracle-v0';
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA = 'kaminos.finger-fluid.waterfall-resolution-oracle-evidence.v0';
+export const KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT = 'fixed-step-source-cutoff-drainage-v0';
+export const KAMINOS_FINGER_FLUID_SOURCE_RELEASE_SCHEDULE_CONTRACT = 'fractional-lane-error-diffusion-v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT = 'webgpu-device-limit-derived-particle-allocation-preflight-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH = 0.72;
 export const KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION = 0.88;
 export const KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST = 0.17;
+export const KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH = 0;
+export const KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT = 49_152;
+export const KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS = 1 / 60;
+export const KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT = 'fixed-step-60hz-one-simulation-step-per-render-frame-v0';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA = 'kaminos.liquid-fire-contact-descriptor.v1';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING = 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE = 'webgpu-screen-space-liquid-surface-v0';
 export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE = 'webgpu-screen-space-liquid-refraction-v0';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE = 'snell-two-interface-screen-space-slab-v0';
-export const KAMINOS_FINGER_FLUID_TRANSPORT_ONLY_LIGHTING_ROUTE = 'wgsl-liquid-transport-only-lighting-v0';
-export const KAMINOS_FINGER_FLUID_BOUNDED_GGX_LIGHTING_ROUTE = 'wgsl-liquid-bounded-ggx-lighting-v0';
-export const KAMINOS_FINGER_FLUID_LEGACY_SHADING_ROUTE = 'wgsl-liquid-legacy-shading-v0';
-export const KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
 export const KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE = 'wgsl-particle-projected-front-back-slab-v0';
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
@@ -42,159 +70,9 @@ export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sph
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE = 'wgsl-fluid-screen-space-surface-v0';
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE = 'wgsl-analytic-heightfield-obstacle-depth-v0';
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE = 'wgsl-analytic-heightfield-obstacle-presentation-v0';
-export const KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE = 'webgpu-deferred-indexed-mesh-scene-v0';
-export const KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE = 'wgsl-indexed-mesh-world-space-reflection-v0';
-export const KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA = 'kaminos.reflection-query-provider.v0';
-export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA = 'kaminos.optical-query-provider.v0';
-export const KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE = 'wgsl-hybrid-deferred-world-optical-query-v0';
-export const KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE = 'wgsl-deferred-linear-depth-ray-traversal-v0';
-export const KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE = 'wgsl-regime-aware-interface-footprint-v0';
-export const KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER = 'deferred_depth_then_uncapped_world_mesh_then_hdr_environment-v0';
-export const KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE = 'uncapped-exact-triangle-scan-v0';
-export const KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE = 'deterministic-five-ray-cone-quadrature-v0';
-export const KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE = 'deterministic-nine-ray-trimmed-variance-footprint-quadrature-v0';
-export const KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE = 'wgsl-liquid-resolved-detail-reflection-footprint-v0';
-export const KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_FOOTPRINT_ROUTE = 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0';
-export const KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
-export const KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE = 'wgsl-liquid-resolved-exit-transmission-footprint-v0';
-export const KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_FOOTPRINT_ROUTE = 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0';
-export const KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
-export const KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_ROUTE = 'deterministic-one-ray-exit-transport-v0';
-export const KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_QUADRATURE_ROUTE = 'deterministic-five-ray-trimmed-exit-footprint-quadrature-v0';
-export const KAMINOS_FINGER_FLUID_GEOMETRIC_SLAB_BODY_TRANSPORT_ROUTE = 'wgsl-liquid-geometric-slab-body-transport-v0';
-export const KAMINOS_FINGER_FLUID_ROBUST_DENSE_BODY_TRANSPORT_ROUTE = 'wgsl-liquid-robust-dense-body-transport-v1';
-export const KAMINOS_FINGER_FLUID_BODY_TRANSPORT_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
-export const KAMINOS_FINGER_FLUID_COUPLED_DETAIL_INTERFACE_FREQUENCY_ROUTE = 'wgsl-liquid-coupled-detail-interface-frequency-v0';
-export const KAMINOS_FINGER_FLUID_MACRO_MICRO_INTERFACE_FREQUENCY_ROUTE = 'wgsl-liquid-macro-micro-interface-frequency-v1';
-export const KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_NOT_EXECUTED_ROUTE = 'not-executed-non-refraction-renderer-v0';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE = 'radiance-rgbe-equirectangular-environment-v0';
-export const KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE = 'webgpu-linear-hdr-scene-radiance-v0';
-export const KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE = 'wgsl-shared-hdr-world-background-v0';
-export const KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE = 'deterministic-five-tap-roughness-cone-v0';
-export const KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE = 'wgsl-linear-exposure-aces-presentation-v0';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID = 'polyhaven-studio-small-09-1k';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256 = 'e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL = './assets/hdr/studio_small_09_1k.hdr';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr';
-export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL = 'https://polyhaven.com/a/studio_small_09';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
-
-function radianceFailure(message) {
-  throw new Error(`Radiance HDR ${message}`);
-}
-
-export function decodeRadianceHdrRgbe(source) {
-  const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
-  let cursor = 0;
-  const readLine = () => {
-    const start = cursor;
-    while (cursor < bytes.length && bytes[cursor] !== 0x0a) cursor += 1;
-    if (cursor >= bytes.length) radianceFailure('header is truncated');
-    let end = cursor;
-    cursor += 1;
-    if (end > start && bytes[end - 1] === 0x0d) end -= 1;
-    return new TextDecoder('ascii').decode(bytes.subarray(start, end));
-  };
-
-  const signature = readLine();
-  if (signature !== '#?RADIANCE' && signature !== '#?RGBE') {
-    radianceFailure(`signature is unsupported: ${signature || 'missing'}`);
-  }
-  let format = null;
-  while (true) {
-    const line = readLine();
-    if (!line) break;
-    if (line.startsWith('FORMAT=')) format = line.slice('FORMAT='.length);
-  }
-  if (format !== '32-bit_rle_rgbe') radianceFailure(`format is unsupported: ${format || 'missing'}`);
-
-  const resolution = readLine();
-  const resolutionMatch = /^-Y\s+(\d+)\s+\+X\s+(\d+)$/.exec(resolution);
-  if (!resolutionMatch) radianceFailure(`orientation is unsupported: ${resolution || 'missing'}`);
-  const height = Number(resolutionMatch[1]);
-  const width = Number(resolutionMatch[2]);
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 8 || width > 0x7fff || height < 1) {
-    radianceFailure(`dimensions are unsupported: ${width}x${height}`);
-  }
-
-  const rgbe = new Uint8Array(width * height * 4);
-  const channels = new Uint8Array(width * 4);
-  for (let y = 0; y < height; y += 1) {
-    if (cursor + 4 > bytes.length) radianceFailure(`scanline ${y} header is truncated`);
-    if (bytes[cursor] !== 2 || bytes[cursor + 1] !== 2 || (bytes[cursor + 2] & 0x80) !== 0) {
-      radianceFailure(`scanline ${y} does not use supported RLE`);
-    }
-    const scanlineWidth = (bytes[cursor + 2] << 8) | bytes[cursor + 3];
-    cursor += 4;
-    if (scanlineWidth !== width) radianceFailure(`scanline ${y} width ${scanlineWidth} disagrees with ${width}`);
-
-    for (let channel = 0; channel < 4; channel += 1) {
-      let x = 0;
-      while (x < width) {
-        if (cursor >= bytes.length) radianceFailure(`scanline ${y} channel ${channel} run is truncated`);
-        const code = bytes[cursor];
-        cursor += 1;
-        if (code > 128) {
-          const runLength = code - 128;
-          if (runLength === 0 || x + runLength > width || cursor >= bytes.length) {
-            radianceFailure(`scanline ${y} channel ${channel} repeat run is invalid`);
-          }
-          channels.fill(bytes[cursor], channel * width + x, channel * width + x + runLength);
-          cursor += 1;
-          x += runLength;
-        } else {
-          const runLength = code;
-          if (runLength === 0 || x + runLength > width || cursor + runLength > bytes.length) {
-            radianceFailure(`scanline ${y} channel ${channel} literal run is invalid or truncated`);
-          }
-          channels.set(bytes.subarray(cursor, cursor + runLength), channel * width + x);
-          cursor += runLength;
-          x += runLength;
-        }
-      }
-    }
-
-    const rowOffset = y * width * 4;
-    for (let x = 0; x < width; x += 1) {
-      const texelOffset = rowOffset + x * 4;
-      rgbe[texelOffset] = channels[x];
-      rgbe[texelOffset + 1] = channels[width + x];
-      rgbe[texelOffset + 2] = channels[width * 2 + x];
-      rgbe[texelOffset + 3] = channels[width * 3 + x];
-    }
-  }
-
-  return {
-    width,
-    height,
-    format,
-    orientation: '-Y +X',
-    rgbe,
-    encodedByteLength: bytes.byteLength,
-  };
-}
-
-async function sha256Hex(bytes) {
-  if (!globalThis.crypto?.subtle) throw new Error('Web Crypto SHA-256 is unavailable');
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function loadFingerFluidHdrEnvironment() {
-  const response = await fetch(KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`HDR environment request failed with HTTP ${response.status}`);
-  const encoded = await response.arrayBuffer();
-  const assetSha256 = await sha256Hex(encoded);
-  if (assetSha256 !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256) {
-    throw new Error(`HDR environment SHA-256 mismatch: expected ${KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256}, received ${assetSha256}`);
-  }
-  const decoded = decodeRadianceHdrRgbe(encoded);
-  if (decoded.width !== 1024 || decoded.height !== 512) {
-    throw new Error(`HDR environment dimensions mismatch: expected 1024x512, received ${decoded.width}x${decoded.height}`);
-  }
-  return { ...decoded, assetSha256 };
-}
+export const KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT = 'deterministic-binary-volume-weighted-sheet-refinement-v0';
 
 const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
@@ -210,11 +88,13 @@ const LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID = 'kaminos/finger-fluid-bench:gpu-simu
 const LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH = 0x6c2673d1;
 const INTERFACE_SAMPLE_COUNT = 16;
 const WORKGROUP_SIZE = 64;
-const DEFAULT_PARTICLE_COUNT = 24_576;
+const DEFAULT_PARTICLE_COUNT = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT;
 const LAMINAR_SOURCE_REFERENCE_FPS = 60;
 const LAMINAR_SOURCE_AXIAL_SPACING = 0.055;
 const LAMINAR_SOURCE_PARTICLE_VOLUME = LAMINAR_SOURCE_AXIAL_SPACING ** 3;
-const MAX_FLUID_SPEED = 3.2;
+export const KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED = Math.fround(3.2);
+export const KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE = 3.2;
+const MIN_NORMAL_F32 = 2 ** -126;
 const GRID_DIMS = [32, 20, 32];
 const GRID_CELL_COUNT = GRID_DIMS[0] * GRID_DIMS[1] * GRID_DIMS[2];
 const BOUNDS_MIN = [-3.4, -1.2, -3.4];
@@ -250,24 +130,13 @@ const ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT = 6 * 6;
 const ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT = ANALYTIC_SUPPORT_ROUND_INLET_VERTEX_COUNT
   + ANALYTIC_SUPPORT_SLOT_INLET_VERTEX_COUNT
   + ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT;
-const DYNAMIC_REFLECTION_MESH_OBJECT_ID = 101;
-const DYNAMIC_REFLECTION_MESH_VERTEX_COUNT = 24;
-const DYNAMIC_REFLECTION_MESH_INDEX_COUNT = 36;
-const DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT = DYNAMIC_REFLECTION_MESH_INDEX_COUNT / 3;
-const LINEAR_SCENE_FORMAT = 'rgba16float';
-const LINEAR_SCENE_EXPOSURE = 0.58;
-const LINEAR_HDR_WORLD_LIGHTING_CONSUMERS = Object.freeze([
-  'visible_world_background',
-  'analytic_support',
-  'dynamic_indexed_mesh',
-  'liquid_world_reflection',
-]);
 const INTERFACE_THRESHOLD = 0.32;
 const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
 const REST_STATE_FLOATS = 4;
 const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
-const NEIGHBOR_TOPOLOGY_WORDS = 8;
+export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 36;
+const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
@@ -276,16 +145,207 @@ const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
 
-export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
-export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets']);
+function adaptiveVector3(value, label) {
+  if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(component))) {
+    throw new TypeError(`Finger fluid adaptive density ${label} must be a finite vec3`);
+  }
+  return value.map(Number);
+}
+
+function adaptiveScalar(value, label) {
+  if (!Number.isFinite(value)) throw new TypeError(`Finger fluid adaptive density ${label} must be finite`);
+  return Number(value);
+}
+
+function adaptiveParticleState(value, label) {
+  if (!value || typeof value !== 'object') throw new TypeError(`Finger fluid adaptive density ${label} state is required`);
+  return {
+    active: Boolean(value.active),
+    volumeScale: adaptiveScalar(value.volumeScale, `${label} volumeScale`),
+    position: adaptiveVector3(value.position, `${label} position`),
+    velocity: adaptiveVector3(value.velocity, `${label} velocity`),
+    chemistry: adaptiveScalar(value.chemistry, `${label} chemistry`),
+  };
+}
+
+function adaptiveConservation(parent, child) {
+  const states = [parent, child].filter(state => state.active && state.volumeScale > 0);
+  const volume = states.reduce((sum, state) => sum + state.volumeScale, 0);
+  const momentum = [0, 1, 2].map(axis => states.reduce(
+    (sum, state) => sum + state.velocity[axis] * state.volumeScale,
+    0,
+  ));
+  const chemistryMass = states.reduce((sum, state) => sum + state.chemistry * state.volumeScale, 0);
+  return { volume, momentum, chemistryMass };
+}
+
+function adaptiveCenterOfMass(parent, child) {
+  const conservation = adaptiveConservation(parent, child);
+  if (conservation.volume <= 0) return [0, 0, 0];
+  return [0, 1, 2].map(axis => (
+    (parent.active ? parent.position[axis] * parent.volumeScale : 0)
+      + (child.active ? child.position[axis] * child.volumeScale : 0)
+  ) / conservation.volume);
+}
+
+export function evaluateFingerFluidAdaptivePairTransition({
+  action,
+  parent: parentInput,
+  child: childInput,
+  splitDirection = [1, 0, 0],
+  splitDistance = 0,
+} = {}) {
+  const parent = adaptiveParticleState(parentInput, 'parent');
+  const child = adaptiveParticleState(childInput, 'child');
+  const before = adaptiveConservation(parent, child);
+  const centerOfMassBefore = adaptiveCenterOfMass(parent, child);
+  let nextParent;
+  let nextChild;
+  if (action === 'split') {
+    if (!parent.active || parent.volumeScale !== 1 || child.active || child.volumeScale !== 0) {
+      throw new Error('Finger fluid adaptive split requires one active unit-volume parent and one dormant zero-volume child');
+    }
+    const direction = adaptiveVector3(splitDirection, 'splitDirection');
+    const length = Math.hypot(...direction);
+    if (length <= 0) throw new RangeError('Finger fluid adaptive splitDirection must be nonzero');
+    const distance = adaptiveScalar(splitDistance, 'splitDistance');
+    const offset = direction.map(component => component / length * distance * 0.5);
+    nextParent = { ...parent, volumeScale: 0.5, position: parent.position.map((value, axis) => value - offset[axis]) };
+    nextChild = { ...parent, active: true, volumeScale: 0.5, position: parent.position.map((value, axis) => value + offset[axis]) };
+  } else if (action === 'merge') {
+    if (!parent.active || !child.active || parent.volumeScale <= 0 || child.volumeScale <= 0) {
+      throw new Error('Finger fluid adaptive merge requires an active represented-volume pair');
+    }
+    const volumeScale = parent.volumeScale + child.volumeScale;
+    const weighted = key => [0, 1, 2].map(axis => (
+      parent[key][axis] * parent.volumeScale + child[key][axis] * child.volumeScale
+    ) / volumeScale);
+    nextParent = {
+      ...parent,
+      volumeScale,
+      position: weighted('position'),
+      velocity: weighted('velocity'),
+      chemistry: (parent.chemistry * parent.volumeScale + child.chemistry * child.volumeScale) / volumeScale,
+    };
+    nextChild = { ...child, active: false, volumeScale: 0, velocity: [0, 0, 0], chemistry: 0 };
+  } else {
+    throw new RangeError(`Unsupported finger fluid adaptive transition: ${action}`);
+  }
+  return {
+    parent: nextParent,
+    child: nextChild,
+    conservation: { before, after: adaptiveConservation(nextParent, nextChild) },
+    centerOfMassBefore,
+    centerOfMassAfter: adaptiveCenterOfMass(nextParent, nextChild),
+  };
+}
+
+export function summarizeFingerFluidAdaptiveDensityLedger(states) {
+  if (!Array.isArray(states)) throw new TypeError('Finger fluid adaptive density ledger requires particle states');
+  const active = states.filter(state => state.active && state.volumeScale > 0);
+  const round = value => Number(value.toFixed(9));
+  return {
+    activeParticleCount: active.length,
+    baseParticleCount: active.filter(state => state.role === 'base').length,
+    refinedParentCount: active.filter(state => state.role === 'parent').length,
+    activeChildCount: active.filter(state => state.role === 'child').length,
+    reservedChildCount: states.filter(state => state.role === 'child' && !state.active).length,
+    representedVolume: round(active.reduce((sum, state) => sum + state.volumeScale, 0)),
+    momentum: [0, 1, 2].map(axis => round(active.reduce(
+      (sum, state) => sum + state.velocity[axis] * state.volumeScale,
+      0,
+    ))),
+    chemistryMass: round(active.reduce((sum, state) => sum + state.chemistry * state.volumeScale, 0)),
+  };
+}
+
+export function validateFingerFluidAdaptiveDensityLedger(
+  ledger,
+  {
+    baseParticleCount = ledger?.baseParticleCount,
+    simulationCapacity = ledger?.simulationCapacity,
+    requireActiveRefinement = false,
+  } = {},
+) {
+  if (!ledger || typeof ledger !== 'object') {
+    throw new TypeError('Finger fluid adaptive density ledger must be an object');
+  }
+  if (ledger.contract !== KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT || ledger.enabled !== true) {
+    throw new Error(`Finger fluid adaptive density ledger route identity mismatch: ${JSON.stringify({ contract: ledger.contract, enabled: ledger.enabled })}`);
+  }
+  const expectedBaseParticleCount = Number(baseParticleCount);
+  const expectedSimulationCapacity = Number(simulationCapacity);
+  if (
+    !Number.isSafeInteger(expectedBaseParticleCount)
+    || expectedBaseParticleCount <= 0
+    || !Number.isSafeInteger(expectedSimulationCapacity)
+    || expectedSimulationCapacity <= 0
+  ) {
+    throw new Error(`Finger fluid adaptive density expected populations are malformed: ${JSON.stringify({ baseParticleCount, simulationCapacity })}`);
+  }
+  const integerFields = [
+    'baseParticleCount',
+    'simulationCapacity',
+    'activeParticleCount',
+    'unrefinedBaseParticleCount',
+    'refinedParentCount',
+    'activeChildCount',
+    'reservedChildCount',
+    'splitCount',
+    'mergeCount',
+  ];
+  for (const field of integerFields) {
+    if (!Number.isSafeInteger(ledger[field]) || ledger[field] < 0) {
+      throw new Error(`Finger fluid adaptive density ledger has malformed ${field}: ${ledger[field]}`);
+    }
+  }
+  if (
+    ledger.baseParticleCount !== expectedBaseParticleCount
+    || ledger.simulationCapacity !== expectedSimulationCapacity
+    || expectedSimulationCapacity !== expectedBaseParticleCount * 2
+  ) {
+    throw new Error(`Finger fluid adaptive density population identity mismatch: ${JSON.stringify({ expectedBaseParticleCount, expectedSimulationCapacity, ledgerBaseParticleCount: ledger.baseParticleCount, ledgerSimulationCapacity: ledger.simulationCapacity })}`);
+  }
+  if (
+    ledger.refinedParentCount !== ledger.activeChildCount
+    || ledger.activeChildCount + ledger.reservedChildCount !== expectedBaseParticleCount
+    || ledger.activeParticleCount !== ledger.unrefinedBaseParticleCount + ledger.refinedParentCount + ledger.activeChildCount
+  ) {
+    throw new Error(`Finger fluid adaptive density pair accounting mismatch: ${JSON.stringify(ledger)}`);
+  }
+  const representedVolumeTolerance = Math.max(0.001, expectedBaseParticleCount * 0.000001);
+  if (
+    !Number.isFinite(ledger.representedVolume)
+    || Math.abs(ledger.representedVolume - expectedBaseParticleCount) > representedVolumeTolerance
+    || ledger.accountingValid !== true
+  ) {
+    throw new Error(`Finger fluid adaptive density represented-volume accounting invalid: ${JSON.stringify(ledger)}`);
+  }
+  if (
+    requireActiveRefinement
+    && (ledger.splitCount <= 0 || ledger.refinedParentCount <= 0 || ledger.activeChildCount <= 0)
+  ) {
+    throw new Error(`Finger fluid adaptive transition traffic missing: ${JSON.stringify(ledger)}`);
+  }
+  return ledger;
+}
+
+export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
+export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
+export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze([
+  'baseline', 'production', 'sweep3x', 'sweep4x', 'sweep6x', 'high',
+]);
+const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS = Object.freeze({
+  baseline: Object.freeze({ volumeMultiplier: 1, particleCount: 12_288, laneColumns: 15, laneRows: 4 }),
+  production: Object.freeze({ volumeMultiplier: 2, particleCount: 24_576, laneColumns: 19, laneRows: 5 }),
+  sweep3x: Object.freeze({ volumeMultiplier: 3, particleCount: 36_864, laneColumns: 22, laneRows: 6 }),
+  sweep4x: Object.freeze({ volumeMultiplier: 4, particleCount: 49_152, laneColumns: 24, laneRows: 6 }),
+  sweep6x: Object.freeze({ volumeMultiplier: 6, particleCount: 73_728, laneColumns: 27, laneRows: 7 }),
+  high: Object.freeze({ volumeMultiplier: 8, particleCount: 98_304, laneColumns: 30, laneRows: 8 }),
+});
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual', 'macro_interface_normal', 'micro_normal_residual', 'interface_roughness', 'transmission_detail_weight']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES = Object.freeze(['transport_only', 'bounded_ggx', 'legacy_shading']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES = Object.freeze(['resolved_detail', 'variance_filtered']);
-export const KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES = Object.freeze(['resolved_exit', 'dense_exit_filtered']);
-export const KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES = Object.freeze(['geometric_slab', 'robust_dense_body']);
-export const KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_MODES = Object.freeze(['coupled_detail', 'macro_micro_separated']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -301,6 +361,484 @@ export function resolveFingerFluidTruthScene(value = 'multi_regime_playground') 
     throw new RangeError(`Unsupported finger fluid truth scene: ${scene}`);
   }
   return scene;
+}
+
+export function resolveFingerFluidMaxSpeed(value = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED) {
+  const speed = Number(value ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new RangeError(`Finger fluid maximum speed must be finite and positive: ${value}`);
+  }
+  const f32Speed = Math.fround(speed);
+  if (!Number.isFinite(f32Speed) || f32Speed < MIN_NORMAL_F32) {
+    throw new RangeError(`Finger fluid maximum speed must be representable as a normal finite f32: ${value}`);
+  }
+  return f32Speed;
+}
+
+function isFingerFluidLaminarSourceScene(scene) {
+  return scene === 'laminar_inlets' || scene === 'waterfall_resolution_oracle';
+}
+
+export function resolveFingerFluidWaterfallOraclePreset(value = 'baseline') {
+  const preset = String(value || 'baseline');
+  if (!KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS.includes(preset)) {
+    throw new RangeError(`Unsupported finger fluid waterfall oracle preset: ${preset}`);
+  }
+  return preset;
+}
+
+export function resolveFingerFluidWaterfallWitnessPresetArgument({
+  argumentPresent = false,
+  value,
+  fallback = 'high',
+  argumentName = '--waterfall-oracle-preset',
+} = {}) {
+  if (!argumentPresent) return resolveFingerFluidWaterfallOraclePreset(fallback);
+  if (typeof value !== 'string' || value.trim() === '' || value.startsWith('--')) {
+    throw new RangeError(`${argumentName} requires a value`);
+  }
+  return resolveFingerFluidWaterfallOraclePreset(value);
+}
+
+export function createFingerFluidWaterfallOracleConfig(value = 'baseline') {
+  const preset = resolveFingerFluidWaterfallOraclePreset(value);
+  const resolution = KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS[preset];
+  const refinementFactor = Math.cbrt(resolution.volumeMultiplier);
+  const particleSpacing = LAMINAR_SOURCE_AXIAL_SPACING / refinementFactor;
+  const descriptor = createFingerFluidLaminarInletDescriptors()[1];
+  const physicalSourceFlux = measureFingerFluidLaminarInletFlux(descriptor);
+  const particleVolume = particleSpacing ** 3;
+  const laneColumns = resolution.laneColumns;
+  const laneRows = resolution.laneRows;
+  return Object.freeze({
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    preset,
+    sourceId: descriptor.id,
+    sourceIndex: 1,
+    refinementFactor,
+    particleSpacing,
+    particleVolume,
+    kernelRadius: 0.185 / refinementFactor,
+    visibleParticleRadius: 0.046 / refinementFactor,
+    defaultParticleCount: resolution.particleCount,
+    laneColumns,
+    laneRows,
+    laneCount: laneColumns * laneRows,
+    releaseScheduleContract: KAMINOS_FINGER_FLUID_SOURCE_RELEASE_SCHEDULE_CONTRACT,
+    physicalSourceFlux,
+    expectedParticleReleaseRate: physicalSourceFlux / particleVolume,
+    camera: Object.freeze({
+      yaw: -0.46,
+      pitch: 0.30,
+      distance: 3.05,
+      target: Object.freeze([0, -0.35, -0.92]),
+    }),
+  });
+}
+
+function requireFingerFluidOracleArtifact(artifact, label) {
+  if (!artifact
+    || typeof artifact.path !== 'string'
+    || !/^[a-f0-9]{64}$/.test(String(artifact.sha256 || ''))
+    || !Number.isSafeInteger(artifact.width)
+    || artifact.width <= 0
+    || !Number.isSafeInteger(artifact.height)
+    || artifact.height <= 0) {
+    throw new Error(`${label} artifact missing or partial`);
+  }
+  return { ...artifact };
+}
+
+export function createFingerFluidWaterfallOracleEvidenceIdentity(values = {}) {
+  const requestedPreset = resolveFingerFluidWaterfallOraclePreset(values.requestedPreset);
+  const effectivePreset = resolveFingerFluidWaterfallOraclePreset(values.effectivePreset);
+  const config = createFingerFluidWaterfallOracleConfig(effectivePreset);
+  const identity = {
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA,
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    truthScene: values.truthScene,
+    requestedPreset,
+    effectivePreset,
+    sourceId: values.sourceId,
+    refinementFactor: Number(values.refinementFactor),
+    particleSpacing: Number(values.particleSpacing),
+    particleVolume: Number(values.particleVolume),
+    kernelRadius: Number(values.kernelRadius),
+    visibleParticleRadius: Number(values.visibleParticleRadius),
+    particleCount: Number(values.particleCount),
+    laneColumns: Number(values.laneColumns),
+    laneRows: Number(values.laneRows),
+    laneCount: Number(values.laneCount),
+    releaseScheduleContract: config.releaseScheduleContract,
+    physicalSourceFlux: Number(values.physicalSourceFlux),
+    expectedParticleReleaseRate: Number(values.expectedParticleReleaseRate),
+    rendererMode: values.rendererMode,
+    colorMode: values.colorMode,
+    opticalDebugMode: values.opticalDebugMode,
+    fixedTimeStepSeconds: Number(values.fixedTimeStepSeconds),
+    capturedStep: Number(values.capturedStep),
+    densityIterations: Number(values.densityIterations),
+    capillaryStrength: Number(values.capillaryStrength),
+    supportFriction: Number(values.supportFriction),
+    freeFlightViscosityBoost: Number(values.freeFlightViscosityBoost),
+    thinSheetVorticityAttenuation: Number(values.thinSheetVorticityAttenuation),
+    unsupportedSheetStrength: Number(values.unsupportedSheetStrength),
+    maxFluidSpeed: resolveFingerFluidMaxSpeed(values.maxFluidSpeed),
+    speedReferenceScale: KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
+    inletCutoffStep: resolveFingerFluidInletCutoffStep(values.inletCutoffStep ?? null),
+    camera: values.camera ? JSON.parse(JSON.stringify(values.camera)) : null,
+  };
+  const numericKeys = [
+    'refinementFactor', 'particleSpacing', 'particleVolume', 'kernelRadius', 'visibleParticleRadius',
+    'particleCount', 'laneColumns', 'laneRows', 'laneCount', 'physicalSourceFlux',
+    'expectedParticleReleaseRate', 'fixedTimeStepSeconds', 'capturedStep', 'densityIterations',
+    'capillaryStrength', 'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation',
+    'unsupportedSheetStrength', 'maxFluidSpeed', 'speedReferenceScale',
+  ];
+  if (identity.truthScene !== 'waterfall_resolution_oracle'
+    || identity.sourceId !== config.sourceId
+    || numericKeys.some(key => !Number.isFinite(identity[key]))) {
+    throw new Error(`Waterfall oracle evidence identity missing or incoherent: ${JSON.stringify(identity)}`);
+  }
+  return identity;
+}
+
+export function evaluateFingerFluidWaterfallOraclePair({
+  baselineIdentity,
+  highIdentity,
+  baselineArtifact,
+  highArtifact,
+} = {}) {
+  if (baselineIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+    || highIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA) {
+    throw new Error('waterfall oracle evidence identity missing');
+  }
+  if (baselineIdentity.effectivePreset !== 'baseline' || highIdentity.effectivePreset !== 'high') {
+    throw new Error('waterfall oracle pair does not contain baseline and high presets');
+  }
+  const exactCommonKeys = [
+    'contract', 'truthScene', 'sourceId', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength',
+    'supportFriction', 'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'unsupportedSheetStrength',
+    'maxFluidSpeed', 'speedReferenceScale', 'inletCutoffStep',
+  ];
+  for (const key of exactCommonKeys) {
+    if (JSON.stringify(baselineIdentity[key]) !== JSON.stringify(highIdentity[key])) {
+      throw new Error(`waterfall oracle common identity mismatch at ${key}`);
+    }
+  }
+  if (JSON.stringify(baselineIdentity.camera) !== JSON.stringify(highIdentity.camera)) {
+    throw new Error('waterfall oracle camera mismatch');
+  }
+  if (Math.abs(baselineIdentity.physicalSourceFlux - highIdentity.physicalSourceFlux) > 1e-9) {
+    throw new Error('waterfall oracle physical source flux mismatch');
+  }
+  if (highIdentity.particleSpacing !== baselineIdentity.particleSpacing / 2) {
+    throw new Error('waterfall oracle high-resolution spacing is not exactly half baseline');
+  }
+  if (highIdentity.kernelRadius !== baselineIdentity.kernelRadius / 2
+    || highIdentity.visibleParticleRadius !== baselineIdentity.visibleParticleRadius / 2
+    || highIdentity.particleVolume !== baselineIdentity.particleVolume / 8
+    || highIdentity.particleCount !== baselineIdentity.particleCount * 8
+    || highIdentity.laneCount !== baselineIdentity.laneCount * 4) {
+    throw new Error('waterfall oracle high-resolution scale law mismatch');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.waterfall-resolution-oracle-pair.v0',
+    contract: KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_CONTRACT,
+    mechanicalChecksOk: true,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualContinuityAccepted: null,
+    baselineIdentity,
+    highIdentity,
+    baselineArtifact: requireFingerFluidOracleArtifact(baselineArtifact, 'baseline'),
+    highArtifact: requireFingerFluidOracleArtifact(highArtifact, 'high'),
+  };
+}
+
+export function evaluateFingerFluidUnsupportedSheetOraclePair({
+  controlIdentity,
+  treatmentIdentity,
+  controlArtifact,
+  treatmentArtifact,
+} = {}) {
+  if (controlIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+    || treatmentIdentity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA) {
+    throw new Error('unsupported-sheet oracle evidence identity missing');
+  }
+  if (controlIdentity.requestedPreset !== controlIdentity.effectivePreset
+    || treatmentIdentity.requestedPreset !== treatmentIdentity.effectivePreset) {
+    throw new Error('unsupported-sheet oracle preset silently fell back');
+  }
+  for (const identity of [controlIdentity, treatmentIdentity]) {
+    const canonical = createFingerFluidWaterfallOracleConfig(identity.effectivePreset);
+    const canonicalIdentity = {
+      contract: canonical.contract,
+      sourceId: canonical.sourceId,
+      refinementFactor: canonical.refinementFactor,
+      particleSpacing: canonical.particleSpacing,
+      particleVolume: canonical.particleVolume,
+      kernelRadius: canonical.kernelRadius,
+      visibleParticleRadius: canonical.visibleParticleRadius,
+      particleCount: canonical.defaultParticleCount,
+      laneColumns: canonical.laneColumns,
+      laneRows: canonical.laneRows,
+      laneCount: canonical.laneCount,
+      physicalSourceFlux: canonical.physicalSourceFlux,
+      expectedParticleReleaseRate: canonical.expectedParticleReleaseRate,
+      releaseScheduleContract: canonical.releaseScheduleContract,
+      camera: canonical.camera,
+    };
+    for (const [key, expected] of Object.entries(canonicalIdentity)) {
+      if (JSON.stringify(identity[key]) !== JSON.stringify(expected)) {
+        throw new Error(`unsupported-sheet oracle canonical ${canonical.preset} identity mismatch at ${key}`);
+      }
+    }
+  }
+  const exactCommonKeys = [
+    'contract', 'truthScene', 'requestedPreset', 'effectivePreset', 'sourceId', 'refinementFactor', 'particleSpacing', 'particleVolume',
+    'kernelRadius', 'visibleParticleRadius', 'particleCount', 'laneColumns', 'laneRows', 'laneCount',
+    'physicalSourceFlux', 'expectedParticleReleaseRate', 'releaseScheduleContract', 'rendererMode', 'colorMode', 'opticalDebugMode',
+    'fixedTimeStepSeconds', 'capturedStep', 'densityIterations', 'capillaryStrength', 'supportFriction',
+    'freeFlightViscosityBoost', 'thinSheetVorticityAttenuation', 'maxFluidSpeed', 'speedReferenceScale', 'camera',
+    'inletCutoffStep',
+  ];
+  for (const key of exactCommonKeys) {
+    if (JSON.stringify(controlIdentity[key]) !== JSON.stringify(treatmentIdentity[key])) {
+      throw new Error(`unsupported-sheet oracle common identity mismatch at ${key}`);
+    }
+  }
+  if (controlIdentity.unsupportedSheetStrength !== 0
+    || !Number.isFinite(treatmentIdentity.unsupportedSheetStrength)
+    || treatmentIdentity.unsupportedSheetStrength <= 0) {
+    throw new Error('unsupported-sheet oracle requires zero-strength control and positive-strength treatment');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.unsupported-sheet-oracle-pair.v0',
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    mechanicalChecksOk: true,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualContinuityAccepted: null,
+    controlIdentity,
+    treatmentIdentity,
+    controlArtifact: requireFingerFluidOracleArtifact(controlArtifact, 'unsupported-sheet control'),
+    treatmentArtifact: requireFingerFluidOracleArtifact(treatmentArtifact, 'unsupported-sheet treatment'),
+  };
+}
+
+export function evaluateFingerFluidPulseDrainageSeries({
+  slices,
+  expectedCaptureSteps,
+  expectedPreset = 'high',
+} = {}) {
+  const resolvedExpectedPreset = resolveFingerFluidWaterfallOraclePreset(expectedPreset);
+  const expectedConfig = createFingerFluidWaterfallOracleConfig(resolvedExpectedPreset);
+  if (!Array.isArray(expectedCaptureSteps)
+    || expectedCaptureSteps.length < 2
+    || expectedCaptureSteps.some(step => !Number.isSafeInteger(step) || step < 1)) {
+    throw new TypeError('Pulse drainage requires an ordered list of positive capture steps');
+  }
+  if (!Array.isArray(slices) || slices.length !== expectedCaptureSteps.length) {
+    throw new Error('Pulse drainage series is missing one or more exact time slices');
+  }
+  let sourceActivationCount = null;
+  let initialActiveParticleCount = null;
+  let previousActiveParticleCount = Infinity;
+  let commonIdentity = null;
+  const acceptedSlices = slices.map((slice, index) => {
+    const identity = slice?.identity;
+    const diagnostics = slice?.diagnostics;
+    const expectedStep = expectedCaptureSteps[index];
+    if (identity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_EVIDENCE_SCHEMA
+      || identity.truthScene !== 'waterfall_resolution_oracle'
+      || identity.requestedPreset !== resolvedExpectedPreset
+      || identity.effectivePreset !== resolvedExpectedPreset
+      || identity.particleCount !== expectedConfig.defaultParticleCount
+      || identity.refinementFactor !== expectedConfig.refinementFactor
+      || identity.particleSpacing !== expectedConfig.particleSpacing
+      || identity.particleVolume !== expectedConfig.particleVolume
+      || identity.kernelRadius !== expectedConfig.kernelRadius
+      || identity.visibleParticleRadius !== expectedConfig.visibleParticleRadius
+      || identity.laneColumns !== expectedConfig.laneColumns
+      || identity.laneRows !== expectedConfig.laneRows
+      || identity.laneCount !== expectedConfig.laneCount
+      || identity.releaseScheduleContract !== expectedConfig.releaseScheduleContract
+      || identity.physicalSourceFlux !== expectedConfig.physicalSourceFlux
+      || identity.expectedParticleReleaseRate !== expectedConfig.expectedParticleReleaseRate
+      || identity.unsupportedSheetStrength !== 2
+      || identity.inletCutoffStep !== expectedCaptureSteps[0]
+      || identity.capturedStep !== expectedStep) {
+      throw new Error(`Pulse drainage identity mismatch at capture step ${expectedStep}`);
+    }
+    const comparableIdentity = { ...identity, capturedStep: null };
+    if (commonIdentity === null) commonIdentity = comparableIdentity;
+    else if (JSON.stringify(comparableIdentity) !== JSON.stringify(commonIdentity)) {
+      throw new Error(`Pulse drainage common identity mismatch at capture step ${expectedStep}`);
+    }
+    if (diagnostics?.stepCount !== expectedStep
+      || diagnostics.inletCutoffStep !== expectedCaptureSteps[0]
+      || diagnostics.inletCutoffReached !== true
+      || !Number.isSafeInteger(diagnostics.sourceRecirculationCount)
+      || !Number.isSafeInteger(diagnostics.activeParticleCount)
+      || !Number.isSafeInteger(diagnostics.dormantParticleCount)) {
+      throw new Error(`Pulse drainage diagnostics missing or stale at capture step ${expectedStep}`);
+    }
+    if (sourceActivationCount === null) sourceActivationCount = diagnostics.sourceRecirculationCount;
+    else if (diagnostics.sourceRecirculationCount !== sourceActivationCount) {
+      throw new Error(`Source activation continued after cutoff at capture step ${expectedStep}`);
+    }
+    if (diagnostics.activeParticleCount > previousActiveParticleCount) {
+      throw new Error(`Active particle count increased after cutoff at capture step ${expectedStep}`);
+    }
+    if (initialActiveParticleCount === null) initialActiveParticleCount = diagnostics.activeParticleCount;
+    previousActiveParticleCount = diagnostics.activeParticleCount;
+    return {
+      identity,
+      diagnostics: { ...diagnostics },
+      artifact: requireFingerFluidOracleArtifact(slice.artifact, `pulse drainage step ${expectedStep}`),
+    };
+  });
+  if (sourceActivationCount <= 0) {
+    throw new Error('Source never activated before cutoff');
+  }
+  if (previousActiveParticleCount >= initialActiveParticleCount) {
+    throw new Error('No particle drainage observed after cutoff');
+  }
+  return {
+    schema: 'kaminos.finger-fluid.pulse-drainage-series.v0',
+    contract: KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT,
+    mechanicalChecksOk: true,
+    sourceActivationCountStableAfterCutoff: true,
+    sourceActivationCount,
+    particleDrainageObserved: true,
+    drainedParticleCount: initialActiveParticleCount - previousActiveParticleCount,
+    drainedParticleRatio: (initialActiveParticleCount - previousActiveParticleCount) / initialActiveParticleCount,
+    status: 'captured_pending_operator_disposition',
+    operatorDispositionRequired: true,
+    visualDrainageAccepted: null,
+    effectivePreset: resolvedExpectedPreset,
+    particleCount: expectedConfig.defaultParticleCount,
+    expectedCaptureSteps: [...expectedCaptureSteps],
+    slices: acceptedSlices,
+  };
+}
+
+export function createFingerFluidPulseControlReadout({
+  stepCount,
+  inletCutoffStep = null,
+  witnessTargetStep = null,
+  paused = false,
+} = {}) {
+  if (!Number.isSafeInteger(stepCount) || stepCount < 0) {
+    throw new TypeError(`Finger fluid pulse readout step must be a nonnegative integer: ${stepCount}`);
+  }
+  const cutoff = resolveFingerFluidInletCutoffStep(inletCutoffStep);
+  const target = witnessTargetStep === null || witnessTargetStep === undefined
+    ? null
+    : Number(witnessTargetStep);
+  if (target !== null && (!Number.isSafeInteger(target) || target < 1)) {
+    throw new TypeError(`Finger fluid pulse readout target must be a positive integer: ${witnessTargetStep}`);
+  }
+  const stepLabel = target === null ? `STEP ${stepCount}` : `STEP ${stepCount} / ${target}`;
+  const sourceLabel = cutoff === null
+    ? 'SOURCE OPEN · NO CUT SCHEDULED'
+    : stepCount < cutoff
+      ? `SOURCE OPEN · CUT @ ${cutoff}`
+      : `SOURCE CUT @ ${cutoff} · DRAINING ACTIVE RESERVOIR`;
+  const runLabel = paused ? 'PAUSED' : 'RUNNING';
+  return {
+    stepLabel,
+    sourceLabel,
+    runLabel,
+    text: [stepLabel, sourceLabel, runLabel].join('\n'),
+  };
+}
+
+export function resolveFingerFluidParticleCount(value = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT) {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count)) {
+    throw new TypeError(`Finger fluid particle count must be a safe integer: ${value}`);
+  }
+  if (count < 1024) {
+    throw new RangeError(`Finger fluid particle count must be at least 1024: ${count}`);
+  }
+  return count;
+}
+
+const PARTICLE_ALLOCATION_BUFFER_DESCRIPTORS = Object.freeze([
+  { label: 'liquid-fire-contact-records', bytesPerParticle: LIQUID_FIRE_CONTACT_RECORD_BYTES, storage: true },
+  { label: 'interface-records', bytesPerParticle: INTERFACE_RECORD_BYTES, storage: true },
+  { label: 'particles', bytesPerParticle: PARTICLE_BYTES, storage: true },
+  { label: 'neighbor-topology', bytesPerParticle: NEIGHBOR_TOPOLOGY_BYTES, storage: true },
+  { label: 'energy-diagnostics', bytesPerParticle: ENERGY_RECORD_BYTES, storage: true },
+  { label: 'rest-state', bytesPerParticle: REST_STATE_BYTES, storage: true },
+  { label: 'material-tracers', bytesPerParticle: MATERIAL_TRACER_BYTES, storage: true },
+  { label: 'particle-next', bytesPerParticle: 4, storage: true },
+  { label: 'diagnostics-readback', bytesPerParticle: PARTICLE_BYTES, storage: false },
+  { label: 'interface-records-readback', bytesPerParticle: INTERFACE_RECORD_BYTES, storage: false },
+  { label: 'neighbor-topology-readback', bytesPerParticle: NEIGHBOR_TOPOLOGY_BYTES, storage: false },
+  { label: 'energy-diagnostics-readback', bytesPerParticle: ENERGY_RECORD_BYTES, storage: false },
+  { label: 'rest-state-readback', bytesPerParticle: REST_STATE_BYTES, storage: false },
+  { label: 'material-tracers-readback', bytesPerParticle: MATERIAL_TRACER_BYTES, storage: false },
+]);
+
+export function measureFingerFluidParticleAllocationCapacity(limits = {}) {
+  const maxBufferSize = Number(limits.maxBufferSize);
+  const maxStorageBufferBindingSize = Number(limits.maxStorageBufferBindingSize);
+  if (!Number.isSafeInteger(maxBufferSize) || maxBufferSize <= 0) {
+    throw new TypeError(`Finger fluid allocation preflight requires a positive safe maxBufferSize: ${limits.maxBufferSize}`);
+  }
+  if (!Number.isSafeInteger(maxStorageBufferBindingSize) || maxStorageBufferBindingSize <= 0) {
+    throw new TypeError(`Finger fluid allocation preflight requires a positive safe maxStorageBufferBindingSize: ${limits.maxStorageBufferBindingSize}`);
+  }
+  const buffers = PARTICLE_ALLOCATION_BUFFER_DESCRIPTORS.map(descriptor => {
+    const bindingLimitBytes = descriptor.storage
+      ? Math.min(maxBufferSize, maxStorageBufferBindingSize)
+      : maxBufferSize;
+    return {
+      ...descriptor,
+      bindingLimitBytes,
+      maximumParticleCount: Math.floor(bindingLimitBytes / descriptor.bytesPerParticle),
+    };
+  });
+  const limiting = buffers.reduce((minimum, buffer) => (
+    buffer.maximumParticleCount < minimum.maximumParticleCount ? buffer : minimum
+  ));
+  return {
+    contract: KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT,
+    maxBufferSize,
+    maxStorageBufferBindingSize,
+    maximumSupportedParticleCount: limiting.maximumParticleCount,
+    limitingBuffer: limiting.label,
+    limitingBytesPerParticle: limiting.bytesPerParticle,
+    buffers,
+  };
+}
+
+export function evaluateFingerFluidParticleAllocationRequest(particleCount, capacity) {
+  const requestedParticleCount = resolveFingerFluidParticleCount(particleCount);
+  if (capacity?.contract !== KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT
+    || !Number.isSafeInteger(capacity?.maximumSupportedParticleCount)
+    || capacity.maximumSupportedParticleCount <= 0) {
+    throw new TypeError(`Finger fluid allocation request requires measured device capacity: ${JSON.stringify(capacity)}`);
+  }
+  const ok = requestedParticleCount <= capacity.maximumSupportedParticleCount;
+  return {
+    contract: KAMINOS_FINGER_FLUID_PARTICLE_ALLOCATION_PREFLIGHT_CONTRACT,
+    requestedParticleCount,
+    effectiveParticleCount: ok ? requestedParticleCount : null,
+    maximumSupportedParticleCount: capacity.maximumSupportedParticleCount,
+    limitingBuffer: capacity.limitingBuffer,
+    limitingBytesPerParticle: capacity.limitingBytesPerParticle,
+    maxBufferSize: capacity.maxBufferSize,
+    maxStorageBufferBindingSize: capacity.maxStorageBufferBindingSize,
+    ok,
+    reason: ok
+      ? null
+      : `Finger fluid particle count ${requestedParticleCount} exceeds device-derived maximum ${capacity.maximumSupportedParticleCount} (${capacity.limitingBuffer}, ${capacity.limitingBytesPerParticle} bytes per particle)`,
+  };
 }
 
 function normalizeFingerFluidInletVector(vector, label) {
@@ -443,10 +981,15 @@ export function measureFingerFluidLaminarInletDiagnostics(
   particleData,
   particleCount,
   descriptors = createFingerFluidLaminarInletDescriptors(),
+  { sourceParticleCount = particleCount } = {},
 ) {
-  const count = Math.max(0, Math.min(
+  const simulationCapacity = Math.max(0, Math.min(
     Math.floor(finite(particleCount, 0)),
     Math.floor((particleData?.length || 0) / PARTICLE_FLOATS),
+  ));
+  const count = Math.max(0, Math.min(
+    Math.floor(finite(sourceParticleCount, 0)),
+    simulationCapacity,
   ));
   if (descriptors.length !== KAMINOS_FINGER_FLUID_INLET_PROFILES.length) {
     throw new RangeError(`Finger fluid laminar diagnostics require exactly three inlet descriptors: ${descriptors.length}`);
@@ -569,6 +1112,8 @@ export function measureFingerFluidLaminarInletDiagnostics(
     schema: 'kaminos.finger-fluid.laminar-inlet-diagnostics.v0',
     contract: KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT,
     particleCount: count,
+    simulationCapacity,
+    reservedParticleCount: simulationCapacity - count,
     accountedParticleCount: inlets.reduce((sum, inlet) => sum + inlet.taggedParticleCount, 0),
     inlets,
   };
@@ -631,9 +1176,9 @@ function createFingerFluidLaminarInletReleaseSchedule(index, descriptors, partic
   }
   const expectedReleaseRate = measureFingerFluidLaminarInletFlux(descriptor) / LAMINAR_SOURCE_PARTICLE_VOLUME;
   const laneReleaseRate = expectedReleaseRate * profile.axialSpeed / Math.max(laneSpeedSum, 1e-9);
-  const releasePeriodFrames = Math.max(1, Math.round(LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9)));
+  const releasePeriodFrames = Math.max(1, LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9));
   const cycleFrames = Math.max(1, laneParticleCount * releasePeriodFrames);
-  const lanePhaseOffset = Math.floor((laneIndex + 0.5) * releasePeriodFrames / descriptor.laneCount);
+  const lanePhaseOffset = ((laneIndex + 0.5) / descriptor.laneCount) * releasePeriodFrames;
   const releaseFrame = laneOrdinal * releasePeriodFrames + lanePhaseOffset;
   const ageFramesAtStart = releaseFrame === 0 ? 0 : cycleFrames - releaseFrame;
   const ageSecondsAtStart = ageFramesAtStart / LAMINAR_SOURCE_REFERENCE_FPS;
@@ -706,6 +1251,70 @@ export function sampleFingerFluidLaminarInletParticle(index, descriptors = creat
     releaseFrame,
     position,
     velocity,
+    localCoordinates: [u, v],
+    profileWeight: profile.profileWeight,
+  };
+}
+
+export function sampleFingerFluidWaterfallOracleParticle(index, preset = 'baseline', {
+  particleCount = createFingerFluidWaterfallOracleConfig(preset).defaultParticleCount,
+} = {}) {
+  if (!Number.isSafeInteger(index) || index < 0) {
+    throw new RangeError(`Finger fluid waterfall oracle particle index must be a nonnegative integer: ${index}`);
+  }
+  const config = createFingerFluidWaterfallOracleConfig(preset);
+  const descriptor = createFingerFluidLaminarInletDescriptors()[1];
+  const laneIndex = index % config.laneCount;
+  const laneOrdinal = Math.floor(index / config.laneCount);
+  const column = laneIndex % config.laneColumns;
+  const row = Math.floor(laneIndex / config.laneColumns);
+  const u = (((column + 0.5) / config.laneColumns) * 2 - 1) * descriptor.halfWidth * 0.92;
+  const v = (((row + 0.5) / config.laneRows) * 2 - 1) * descriptor.halfHeight * 0.88;
+  const profile = evaluateFingerFluidLaminarInletProfile(descriptor, [u, v]);
+  let laneSpeedSum = 0;
+  for (let lane = 0; lane < config.laneCount; lane += 1) {
+    const laneColumn = lane % config.laneColumns;
+    const laneRow = Math.floor(lane / config.laneColumns);
+    const laneU = (((laneColumn + 0.5) / config.laneColumns) * 2 - 1) * descriptor.halfWidth * 0.92;
+    const laneV = (((laneRow + 0.5) / config.laneRows) * 2 - 1) * descriptor.halfHeight * 0.88;
+    laneSpeedSum += evaluateFingerFluidLaminarInletProfile(descriptor, [laneU, laneV]).axialSpeed;
+  }
+  const laneParticleCount = Math.floor((particleCount - 1 - laneIndex) / config.laneCount) + 1;
+  const laneReleaseRate = config.expectedParticleReleaseRate * profile.axialSpeed / Math.max(laneSpeedSum, 1e-9);
+  const releasePeriodFrames = Math.max(1, LAMINAR_SOURCE_REFERENCE_FPS / Math.max(laneReleaseRate, 1e-9));
+  const cycleFrames = Math.max(1, laneParticleCount * releasePeriodFrames);
+  const lanePhaseOffset = ((laneIndex + 0.5) / config.laneCount) * releasePeriodFrames;
+  const releaseFrame = laneOrdinal * releasePeriodFrames + lanePhaseOffset;
+  const ageFramesAtStart = releaseFrame === 0 ? 0 : cycleFrames - releaseFrame;
+  const initialAxialPosition = -descriptor.reservoirLength
+    + config.particleSpacing * 0.5
+    + profile.axialSpeed * (ageFramesAtStart / LAMINAR_SOURCE_REFERENCE_FPS);
+  const activeAtFrameZero = initialAxialPosition <= 0;
+  const axialPosition = activeAtFrameZero
+    ? initialAxialPosition
+    : -descriptor.reservoirLength + config.particleSpacing * 0.5;
+  const axis = descriptor.axis;
+  const tangent = descriptor.tangent;
+  const bitangent = normalizeFingerFluidInletVector([
+    axis[1] * tangent[2] - axis[2] * tangent[1],
+    axis[2] * tangent[0] - axis[0] * tangent[2],
+    axis[0] * tangent[1] - axis[1] * tangent[0],
+  ], `${descriptor.id} waterfall oracle bitangent`);
+  return {
+    sourceIndex: 1,
+    localOrdinal: index,
+    laneIndex,
+    laneOrdinal,
+    profile: descriptor.profile,
+    phase: descriptor.phase,
+    activeAtFrameZero,
+    releasePeriodFrames,
+    cycleFrames,
+    releaseFrame,
+    position: descriptor.origin.map((value, component) => (
+      value + tangent[component] * u + bitangent[component] * v + axis[component] * axialPosition
+    )),
+    velocity: axis.map(value => value * profile.axialSpeed),
     localCoordinates: [u, v],
     profileWeight: profile.profileWeight,
   };
@@ -789,90 +1398,7 @@ export function resolveFingerFluidRendererMode(value = 'screen_space_surface') {
   return mode;
 }
 
-export function estimateFingerFluidInterfaceGeometry(position, neighbors, {
-  kernelRadius = 0.185,
-  fallbackNormal = [0, 1, 0],
-} = {}) {
-  if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) {
-    throw new TypeError('Finger fluid interface geometry requires a finite 3D source position');
-  }
-  if (!Array.isArray(neighbors)) {
-    throw new TypeError('Finger fluid interface geometry requires a neighbor array');
-  }
-  if (!Number.isFinite(kernelRadius) || kernelRadius <= 0) {
-    throw new RangeError(`Finger fluid interface geometry requires a positive kernel radius, received: ${kernelRadius}`);
-  }
-  if (!Array.isArray(fallbackNormal) || fallbackNormal.length !== 3 || !fallbackNormal.every(Number.isFinite)) {
-    throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
-  }
-  const fallbackLength = Math.hypot(...fallbackNormal);
-  if (fallbackLength <= 1e-9) throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
-
-  const directionalSupport = [0, 0, 0];
-  const accepted = [];
-  let supportWeight = 0;
-  for (const neighbor of neighbors) {
-    const neighborPosition = neighbor?.position;
-    const confidence = Number(neighbor?.confidence ?? 1);
-    if (!Array.isArray(neighborPosition) || neighborPosition.length !== 3 || !neighborPosition.every(Number.isFinite) || !Number.isFinite(confidence)) {
-      throw new TypeError('Finger fluid interface geometry received a malformed neighbor');
-    }
-    if (confidence < 0.32) continue;
-    const offset = position.map((value, axis) => value - neighborPosition[axis]);
-    const distance = Math.hypot(...offset);
-    if (distance <= 1e-9 || distance >= kernelRadius) continue;
-    const normalizedDistance = distance / kernelRadius;
-    const weight = ((1 - normalizedDistance) ** 3) * confidence;
-    supportWeight += weight;
-    for (let axis = 0; axis < 3; axis += 1) directionalSupport[axis] += offset[axis] / distance * weight;
-    accepted.push({ offset, weight });
-  }
-
-  const supportLength = Math.hypot(...directionalSupport);
-  const normal = supportLength > 1e-9
-    ? directionalSupport.map(value => value / supportLength)
-    : fallbackNormal.map(value => value / fallbackLength);
-  let weightedNormalOffset = 0;
-  let weightedTangentSpan = 0;
-  for (const { offset, weight } of accepted) {
-    const normalOffset = offset.reduce((sum, value, axis) => sum + value * normal[axis], 0);
-    const tangentOffset = offset.map((value, axis) => value - normal[axis] * normalOffset);
-    weightedNormalOffset += normalOffset * weight;
-    weightedTangentSpan += tangentOffset.reduce((sum, value) => sum + value * value, 0) * weight;
-  }
-  const smoothstep = (edge0, edge1, value) => {
-    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
-    return t * t * (3 - 2 * t);
-  };
-  const meanTangentSpanSquared = weightedTangentSpan / Math.max(1e-9, supportWeight);
-  const countConfidence = smoothstep(3, 8, accepted.length);
-  const spanConfidence = smoothstep((kernelRadius * 0.08) ** 2, (kernelRadius * 0.2) ** 2, meanTangentSpanSquared);
-  const resolutionConfidence = countConfidence * spanConfidence;
-  const rawCurvature = weightedTangentSpan > 1e-9
-    ? 2 * weightedNormalOffset / weightedTangentSpan
-    : 0;
-  const maximumResolvableCurvature = 2 / kernelRadius;
-  const resolved = resolutionConfidence >= 0.2 && Math.abs(rawCurvature) <= maximumResolvableCurvature;
-  const curvature = resolved ? rawCurvature : 0;
-  const supportConfidence = Math.min(1, supportWeight / Math.max(1e-9, accepted.length * 0.08));
-  return {
-    contract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
-    normal,
-    curvature,
-    confidence: resolved ? supportConfidence * resolutionConfidence : 0,
-    resolved,
-    maximumResolvableCurvature,
-    neighborCount: accepted.length,
-  };
-}
-
-export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
-  requestedOpticalDebugMode = 'shaded',
-  requestedOpticalFootprintMode = null,
-  requestedTransmissionFootprintMode = null,
-  requestedBodyTransportMode = null,
-  requestedInterfaceFrequencyMode = null,
-} = {}) {
+export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   const expectedMode = resolveFingerFluidRendererMode(requestedMode);
   if (!runtime || typeof runtime !== 'object') {
     throw new Error('Finger fluid truth renderer state is missing');
@@ -896,85 +1422,17 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
     throw new Error(`Finger fluid truth renderer fallback is not accepted: ${runtime.fallbackReason}`);
   }
 
-  const deferredSceneEvidence = runtime.deferredSceneEvidence;
-  const renderFrameId = deferredSceneEvidence?.renderFrameId;
-  const reflectionDiagnostic = expectedMode === 'screen_space_refraction'
-    && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(runtime.opticalDebugMode);
-  const dynamicMeshPresentationIsCurrent = reflectionDiagnostic
-    ? deferredSceneEvidence?.dynamicMesh?.presentationMode === 'suppressed_in_reflection_debug_provider_remains_active_v0'
-      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId !== renderFrameId
-    : deferredSceneEvidence?.dynamicMesh?.presentationMode === 'deferred_scene_visible_v0'
-      && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId === renderFrameId;
-  if (
-    deferredSceneEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
-    || deferredSceneEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
-    || deferredSceneEvidence?.route !== KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE
-    || deferredSceneEvidence?.fallbackReason
-    || !Number.isInteger(deferredSceneEvidence?.passCount)
-    || deferredSceneEvidence.passCount <= 0
-    || !Number.isInteger(deferredSceneEvidence?.dynamicIndexedMeshDrawCount)
-    || deferredSceneEvidence.dynamicIndexedMeshDrawCount < 0
-    || !Number.isInteger(renderFrameId)
-    || renderFrameId <= 0
-    || deferredSceneEvidence?.deferredSceneFrameId !== renderFrameId
-    || !dynamicMeshPresentationIsCurrent
-    || deferredSceneEvidence?.dynamicMesh?.objectId !== DYNAMIC_REFLECTION_MESH_OBJECT_ID
-    || deferredSceneEvidence?.dynamicMesh?.indexCount !== DYNAMIC_REFLECTION_MESH_INDEX_COUNT
-    || deferredSceneEvidence?.attachments?.worldNormalRoughness?.format !== 'rgba16float'
-    || deferredSceneEvidence?.attachments?.albedoMetallic?.format !== 'rgba8unorm'
-    || deferredSceneEvidence?.attachments?.linearDepthObject?.format !== 'rgba16float'
-  ) {
-    throw new Error(`Finger fluid truth deferred scene evidence is missing or partial: ${JSON.stringify(deferredSceneEvidence)}`);
-  }
-
   const supportPresentationEvidence = runtime.supportPresentationEvidence;
   if (
     supportPresentationEvidence?.route !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE
     || supportPresentationEvidence?.depthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
     || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
-    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_deferred_scene_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
     || !Number.isInteger(supportPresentationEvidence?.passCount)
     || supportPresentationEvidence.passCount <= 0
     || supportPresentationEvidence?.particleSupportDrawCount !== 0
   ) {
     throw new Error(`Finger fluid truth support presentation evidence is missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
-  }
-
-  const linearHdrSceneEvidence = runtime.linearHdrSceneEvidence;
-  const worldLightingConsumers = linearHdrSceneEvidence?.worldLightingConsumers;
-  const hasExactWorldLightingConsumers = Array.isArray(worldLightingConsumers)
-    && worldLightingConsumers.length === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
-    && new Set(worldLightingConsumers).size === LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.length
-    && LINEAR_HDR_WORLD_LIGHTING_CONSUMERS.every((consumer) => worldLightingConsumers.includes(consumer));
-  if (
-    linearHdrSceneEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
-    || linearHdrSceneEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE
-    || linearHdrSceneEvidence?.format !== LINEAR_SCENE_FORMAT
-    || linearHdrSceneEvidence?.colorSpace !== 'scene_linear_rec2020_agnostic_rgb_v0'
-    || linearHdrSceneEvidence?.backgroundRoute !== KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE
-    || linearHdrSceneEvidence?.environmentFilterRoute !== KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE
-    || !Number.isInteger(linearHdrSceneEvidence?.backgroundPassCount)
-    || linearHdrSceneEvidence.backgroundPassCount <= 0
-    || !hasExactWorldLightingConsumers
-    || linearHdrSceneEvidence?.fallbackReason
-  ) {
-    throw new Error(`Finger fluid truth linear HDR scene evidence is missing or partial: ${JSON.stringify(linearHdrSceneEvidence)}`);
-  }
-  const finalPresentationEvidence = runtime.finalPresentationEvidence;
-  if (
-    finalPresentationEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
-    || finalPresentationEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE
-    || finalPresentationEvidence?.sourceFormat !== LINEAR_SCENE_FORMAT
-    || finalPresentationEvidence?.toneMap !== 'aces-fitted-v0'
-    || finalPresentationEvidence?.exposure !== LINEAR_SCENE_EXPOSURE
-    || finalPresentationEvidence?.displayTransformCountPerFrame !== 1
-    || finalPresentationEvidence?.exactDiagnosticBypass !== 'liquid_support'
-    || finalPresentationEvidence?.diagnosticVisibilityRoute !== 'post-composite-depth24plus-identity-v0'
-    || !Number.isInteger(finalPresentationEvidence?.passCount)
-    || finalPresentationEvidence.passCount <= 0
-    || finalPresentationEvidence?.fallbackReason
-  ) {
-    throw new Error(`Finger fluid truth final presentation evidence is missing or partial: ${JSON.stringify(finalPresentationEvidence)}`);
   }
 
   let screenSpaceSurfaceEvidence = null;
@@ -984,8 +1442,6 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
       evidence?.route !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
-      || evidence?.accumulationTexture?.format !== 'rgba16float'
-      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
       || evidence.analyticSupportDepthPassCount <= 0
       || !Number.isInteger(evidence?.accumulationPassCount)
@@ -1001,122 +1457,12 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
   }
 
   let refractionEvidence = null;
-  let worldSpaceReflectionEvidence = null;
-  let opticalQueryEvidence = null;
-  let environmentMapEvidence = null;
-  let expectedOpticalDebugMode = null;
   if (expectedMode === 'screen_space_refraction') {
-    expectedOpticalDebugMode = resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode);
-    const expectedOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(
-      requestedOpticalFootprintMode || runtime.requestedOpticalFootprintMode,
-    );
-    const expectedOpticalFootprintRoute = opticalFootprintRouteForMode(expectedOpticalFootprintMode);
-    if (
-      runtime.requestedOpticalFootprintMode !== expectedOpticalFootprintMode
-      || runtime.effectiveOpticalFootprintMode !== expectedOpticalFootprintMode
-      || runtime.requestedOpticalFootprintRoute !== expectedOpticalFootprintRoute
-      || runtime.effectiveOpticalFootprintRoute !== expectedOpticalFootprintRoute
-      || runtime.opticalFootprintFallbackReason
-    ) {
-      throw new Error(`Finger fluid truth optical footprint disagreement: ${JSON.stringify({
-        expectedOpticalFootprintMode,
-        expectedOpticalFootprintRoute,
-        requestedOpticalFootprintMode: runtime.requestedOpticalFootprintMode,
-        effectiveOpticalFootprintMode: runtime.effectiveOpticalFootprintMode,
-        requestedOpticalFootprintRoute: runtime.requestedOpticalFootprintRoute,
-        effectiveOpticalFootprintRoute: runtime.effectiveOpticalFootprintRoute,
-        opticalFootprintFallbackReason: runtime.opticalFootprintFallbackReason,
-      })}`);
-    }
-    const expectedTransmissionFootprintMode = resolveFingerFluidTransmissionFootprintMode(
-      requestedTransmissionFootprintMode || runtime.requestedTransmissionFootprintMode,
-    );
-    const expectedTransmissionFootprintRoute = transmissionFootprintRouteForMode(expectedTransmissionFootprintMode);
-    if (
-      runtime.requestedTransmissionFootprintMode !== expectedTransmissionFootprintMode
-      || runtime.effectiveTransmissionFootprintMode !== expectedTransmissionFootprintMode
-      || runtime.requestedTransmissionFootprintRoute !== expectedTransmissionFootprintRoute
-      || runtime.effectiveTransmissionFootprintRoute !== expectedTransmissionFootprintRoute
-      || runtime.transmissionFootprintFallbackReason
-    ) {
-      throw new Error(`Finger fluid truth transmission footprint disagreement: ${JSON.stringify({
-        expectedTransmissionFootprintMode,
-        expectedTransmissionFootprintRoute,
-        requestedTransmissionFootprintMode: runtime.requestedTransmissionFootprintMode,
-        effectiveTransmissionFootprintMode: runtime.effectiveTransmissionFootprintMode,
-        requestedTransmissionFootprintRoute: runtime.requestedTransmissionFootprintRoute,
-        effectiveTransmissionFootprintRoute: runtime.effectiveTransmissionFootprintRoute,
-        transmissionFootprintFallbackReason: runtime.transmissionFootprintFallbackReason,
-      })}`);
-    }
-    const expectedBodyTransportMode = resolveFingerFluidBodyTransportMode(
-      requestedBodyTransportMode || runtime.requestedBodyTransportMode,
-    );
-    const expectedBodyTransportRoute = bodyTransportRouteForMode(expectedBodyTransportMode);
-    if (
-      runtime.requestedBodyTransportMode !== expectedBodyTransportMode
-      || runtime.effectiveBodyTransportMode !== expectedBodyTransportMode
-      || runtime.requestedBodyTransportRoute !== expectedBodyTransportRoute
-      || runtime.effectiveBodyTransportRoute !== expectedBodyTransportRoute
-      || runtime.bodyTransportFallbackReason
-    ) {
-      throw new Error(`Finger fluid truth body transport disagreement: ${JSON.stringify({
-        expectedBodyTransportMode,
-        expectedBodyTransportRoute,
-        requestedBodyTransportMode: runtime.requestedBodyTransportMode,
-        effectiveBodyTransportMode: runtime.effectiveBodyTransportMode,
-        requestedBodyTransportRoute: runtime.requestedBodyTransportRoute,
-        effectiveBodyTransportRoute: runtime.effectiveBodyTransportRoute,
-        bodyTransportFallbackReason: runtime.bodyTransportFallbackReason,
-      })}`);
-    }
-    const expectedInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(
-      requestedInterfaceFrequencyMode || runtime.requestedInterfaceFrequencyMode,
-    );
-    const expectedInterfaceFrequencyRoute = interfaceFrequencyRouteForMode(expectedInterfaceFrequencyMode);
-    if (
-      runtime.requestedInterfaceFrequencyMode !== expectedInterfaceFrequencyMode
-      || runtime.effectiveInterfaceFrequencyMode !== expectedInterfaceFrequencyMode
-      || runtime.requestedInterfaceFrequencyRoute !== expectedInterfaceFrequencyRoute
-      || runtime.effectiveInterfaceFrequencyRoute !== expectedInterfaceFrequencyRoute
-      || runtime.interfaceFrequencyFallbackReason
-    ) {
-      throw new Error(`Finger fluid truth interface frequency disagreement: ${JSON.stringify({
-        expectedInterfaceFrequencyMode,
-        expectedInterfaceFrequencyRoute,
-        requestedInterfaceFrequencyMode: runtime.requestedInterfaceFrequencyMode,
-        effectiveInterfaceFrequencyMode: runtime.effectiveInterfaceFrequencyMode,
-        requestedInterfaceFrequencyRoute: runtime.requestedInterfaceFrequencyRoute,
-        effectiveInterfaceFrequencyRoute: runtime.effectiveInterfaceFrequencyRoute,
-        interfaceFrequencyFallbackReason: runtime.interfaceFrequencyFallbackReason,
-      })}`);
-    }
-    if (
-      runtime.requestedOpticalDebugMode !== expectedOpticalDebugMode
-      || runtime.effectiveOpticalDebugMode !== expectedOpticalDebugMode
-    ) {
-      throw new Error(`Finger fluid truth optical debug mode disagreement: ${JSON.stringify({
-        expectedOpticalDebugMode,
-        requestedOpticalDebugMode: runtime.requestedOpticalDebugMode,
-        effectiveOpticalDebugMode: runtime.effectiveOpticalDebugMode,
-      })}`);
-    }
     const evidence = runtime.refractionEvidence;
-    const interfaceFidelityDiagnostic = expectedOpticalDebugMode === 'interface_fidelity';
-    const expectedOpticalTransportExecution = interfaceFidelityDiagnostic
-      ? 'not_executed_early_interface_diagnostic_v0'
-      : 'executed_refraction_and_reflection_transport_v0';
     if (
       evidence?.route !== KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.opticalTransportRoute !== KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE
-      || evidence?.opticalQueryRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
-      || evidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
-      || evidence?.interfaceFidelityRoute !== KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE
-      || evidence?.coverageClosure !== 'dense_support_footprint_closure_sparse_identity_v0'
-      || evidence?.normalFiltering !== 'detail_macro_chord_variance_blend_v0'
-      || evidence?.legacyDebugMode !== 'legacy_interface'
-      || evidence?.opticalTransportExecution !== expectedOpticalTransportExecution
       || evidence?.slabRoute !== KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
@@ -1126,50 +1472,8 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
       || !Number.isInteger(evidence?.slabGeometryPassCount)
       || evidence.slabGeometryPassCount <= 0
       || evidence?.frontDepthTexture?.format !== 'rgba16float'
-      || evidence?.frontDepthTexture?.channels?.join('|') !== 'projected_particle_sphere_front_view_depth_min|nearest_particle_center_view_depth_min'
       || evidence?.backDepthTexture?.format !== 'rgba16float'
-      || evidence?.backDepthTexture?.channel !== 'projected_particle_sphere_back_view_depth_max'
-      || evidence?.accumulationTexture?.format !== 'rgba16float'
-      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || evidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
-      || evidence?.opticalDebugMode !== expectedOpticalDebugMode
-      || evidence?.requestedOpticalFootprintMode !== expectedOpticalFootprintMode
-      || evidence?.effectiveOpticalFootprintMode !== expectedOpticalFootprintMode
-      || evidence?.requestedOpticalFootprintRoute !== expectedOpticalFootprintRoute
-      || evidence?.effectiveOpticalFootprintRoute !== expectedOpticalFootprintRoute
-      || evidence?.opticalFootprintFallbackReason
-      || evidence?.reflectionFootprintComposition !== (expectedOpticalFootprintMode === 'variance_filtered'
-        ? 'dense_unresolved_variance_widens_normalized_nine_ray_reflection_lobe_v0'
-        : 'resolved_detail_normalized_five_ray_reflection_lobe_v0')
-      || evidence?.requestedTransmissionFootprintMode !== expectedTransmissionFootprintMode
-      || evidence?.effectiveTransmissionFootprintMode !== expectedTransmissionFootprintMode
-      || evidence?.requestedTransmissionFootprintRoute !== expectedTransmissionFootprintRoute
-      || evidence?.effectiveTransmissionFootprintRoute !== expectedTransmissionFootprintRoute
-      || evidence?.transmissionFootprintFallbackReason
-      || evidence?.transmissionFootprintComposition !== (expectedTransmissionFootprintMode === 'dense_exit_filtered'
-        ? 'dense_exit_variance_trimmed_three_of_five_hybrid_query_radiance_v0'
-        : 'resolved_exit_single_hybrid_query_radiance_v0')
-      || evidence?.transmissionQuadratureRoute !== (expectedTransmissionFootprintMode === 'dense_exit_filtered'
-        ? KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_QUADRATURE_ROUTE
-        : KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_ROUTE)
-      || evidence?.transmissionApplicability !== 'dense_body_and_unresolved_entry_or_exit_normal_only_sparse_sheet_resolved_v0'
-      || evidence?.requestedBodyTransportMode !== expectedBodyTransportMode
-      || evidence?.effectiveBodyTransportMode !== expectedBodyTransportMode
-      || evidence?.requestedBodyTransportRoute !== expectedBodyTransportRoute
-      || evidence?.effectiveBodyTransportRoute !== expectedBodyTransportRoute
-      || evidence?.bodyTransportFallbackReason
-      || evidence?.bodyTransportComposition !== (expectedBodyTransportMode === 'robust_dense_body'
-        ? 'dense_valid_geometric_thickness_path_closure_with_filtered_radiance_residual_v1'
-        : 'geometric_valid_exit_path_with_entry_thickness_fallback_v0')
-      || evidence?.requestedInterfaceFrequencyMode !== expectedInterfaceFrequencyMode
-      || evidence?.effectiveInterfaceFrequencyMode !== expectedInterfaceFrequencyMode
-      || evidence?.requestedInterfaceFrequencyRoute !== expectedInterfaceFrequencyRoute
-      || evidence?.effectiveInterfaceFrequencyRoute !== expectedInterfaceFrequencyRoute
-      || evidence?.interfaceFrequencyFallbackReason
-      || evidence?.interfaceFrequencyComposition !== (expectedInterfaceFrequencyMode === 'macro_micro_separated'
-        ? 'macro_snell_fresnel_bounded_micro_reflection_path_conditioned_transmission_v1'
-        : 'coupled_detail_interface_transport_baseline_v0')
-      || evidence?.sceneColorTexture?.source !== 'same-camera-linear-hdr-scene-radiance-v0'
       || !Number.isInteger(evidence?.accumulationPassCount)
       || evidence.accumulationPassCount <= 0
       || !Number.isInteger(evidence?.compositePassCount)
@@ -1180,104 +1484,6 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
     refractionEvidence = {
       ...evidence,
     };
-    const queryEvidence = runtime.opticalQueryEvidence;
-    const reflectionEvidence = runtime.worldSpaceReflectionEvidence;
-    const environmentEvidence = runtime.environmentMapEvidence;
-    if (interfaceFidelityDiagnostic && (
-      queryEvidence !== undefined
-      || reflectionEvidence !== undefined
-      || environmentEvidence !== undefined
-    )) {
-      throw new Error(`Finger fluid truth interface diagnostic published inactive optical provider evidence: ${JSON.stringify({ queryEvidence, reflectionEvidence, environmentEvidence })}`);
-    }
-    if (!interfaceFidelityDiagnostic) {
-    const expectedQuadratureRoute = expectedOpticalFootprintMode === 'variance_filtered'
-      ? KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE
-      : KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE;
-    const expectedMaximumQuadratureSampleCount = expectedOpticalFootprintMode === 'variance_filtered' ? 9 : 5;
-    const expectedQuadratureSampleCountMode = expectedOpticalFootprintMode === 'variance_filtered'
-      ? 'adaptive_5_sparse_9_dense_v0'
-      : 'fixed_5_v0';
-    const expectedQuadratureEstimator = expectedOpticalFootprintMode === 'variance_filtered'
-      ? 'trimmed_min_max_7_of_9_equal_weight_v0'
-      : 'weighted_five_ray_mean_v0';
-    if (
-      queryEvidence?.schema !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA
-      || queryEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
-      || queryEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
-      || queryEvidence?.route !== KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE
-      || queryEvidence?.deferredTraversalRoute !== KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE
-      || queryEvidence?.worldProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
-      || queryEvidence?.environmentRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
-      || queryEvidence?.resolverOrder !== KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER
-      || queryEvidence?.fallbackReason
-      || queryEvidence?.queryFrameId !== renderFrameId
-      || !Number.isInteger(queryEvidence?.compositePassCount)
-      || queryEvidence.compositePassCount <= 0
-      || queryEvidence?.maximumDeferredMarchSteps !== 24
-      || queryEvidence?.minimumDeferredConfidence !== 0.55
-      || queryEvidence?.deferredInputs?.linearDepthObject?.format !== 'rgba16float'
-      || queryEvidence?.deferredInputs?.worldNormalRoughness?.format !== 'rgba16float'
-      || queryEvidence?.deferredInputs?.albedoMetallic?.format !== 'rgba8unorm'
-      || queryEvidence?.consumers?.join('|') !== 'reflection_center_ray|two_interface_refraction_exit_ray'
-      || queryEvidence?.resultFields?.join('|') !== 'origin|direction|cone|interval|hit_kind|object_id|distance|normal|material|radiance|transmittance|confidence|provider|fallback'
-    ) {
-      throw new Error(`Finger fluid truth hybrid optical query evidence is missing or partial: ${JSON.stringify(queryEvidence)}`);
-    }
-    opticalQueryEvidence = { ...queryEvidence };
-    if (
-      reflectionEvidence?.schema !== KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA
-      || reflectionEvidence?.requestedProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
-      || reflectionEvidence?.effectiveProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
-      || reflectionEvidence?.providerRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
-      || reflectionEvidence?.accelerationRoute !== KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE
-      || reflectionEvidence?.quadratureRoute !== expectedQuadratureRoute
-      || reflectionEvidence?.requestedFootprintMode !== expectedOpticalFootprintMode
-      || reflectionEvidence?.effectiveFootprintMode !== expectedOpticalFootprintMode
-      || reflectionEvidence?.requestedFootprintRoute !== expectedOpticalFootprintRoute
-      || reflectionEvidence?.effectiveFootprintRoute !== expectedOpticalFootprintRoute
-      || reflectionEvidence?.footprintFallbackReason
-      || reflectionEvidence?.minimumQuadratureSampleCount !== 5
-      || reflectionEvidence?.maximumQuadratureSampleCount !== expectedMaximumQuadratureSampleCount
-      || reflectionEvidence?.quadratureSampleCountMode !== expectedQuadratureSampleCountMode
-      || reflectionEvidence?.quadratureEstimator !== expectedQuadratureEstimator
-      || reflectionEvidence?.quadratureWeightSum !== 1
-      || reflectionEvidence?.hitKindDiagnosticScope !== 'center_ray_only_v0'
-      || reflectionEvidence?.fallbackReason
-      || reflectionEvidence?.candidateCapMode !== 'uncapped_exact_dynamic_mesh_triangle_population_v0'
-      || reflectionEvidence?.exactTriangleCount !== DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT
-      || !Number.isInteger(reflectionEvidence?.compositePassCount)
-      || reflectionEvidence.compositePassCount <= 0
-      || reflectionEvidence?.reflectionProviderFrameId !== renderFrameId
-      || reflectionEvidence?.dynamicMeshTransformGeneration !== deferredSceneEvidence?.dynamicMesh?.transformGeneration
-      || !reflectionEvidence?.hitKinds?.includes('environment')
-      || !reflectionEvidence?.hitKinds?.includes('analytic_sphere')
-      || !reflectionEvidence?.hitKinds?.includes('indexed_mesh')
-    ) {
-      throw new Error(`Finger fluid truth world-space reflection evidence is missing or partial: ${JSON.stringify(reflectionEvidence)}`);
-    }
-    worldSpaceReflectionEvidence = { ...reflectionEvidence };
-    if (
-      environmentEvidence?.schema !== 'kaminos.hdr-environment-map.v0'
-      || environmentEvidence?.requestedRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
-      || environmentEvidence?.effectiveRoute !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE
-      || environmentEvidence?.assetId !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID
-      || environmentEvidence?.assetSha256 !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SHA256
-      || environmentEvidence?.runtimeAssetUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL
-      || environmentEvidence?.sourceAssetUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL
-      || environmentEvidence?.sourcePageUrl !== KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL
-      || environmentEvidence?.license !== 'CC0-1.0'
-      || environmentEvidence?.decodeRoute !== 'cpu-radiance-rle-rgbe-v0'
-      || environmentEvidence?.samplingRoute !== 'wgsl-manual-bilinear-rgbe-equirectangular-v0'
-      || environmentEvidence?.width !== 1024
-      || environmentEvidence?.height !== 512
-      || environmentEvidence?.gpuTextureFormat !== 'rgba8unorm'
-      || environmentEvidence?.fallbackReason
-    ) {
-      throw new Error(`Finger fluid truth HDR environment evidence is missing or partial: ${JSON.stringify(environmentEvidence)}`);
-    }
-    environmentMapEvidence = { ...environmentEvidence };
-    }
   }
 
   return {
@@ -1286,77 +1492,12 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
     requestedRenderer: runtime.requestedRenderer,
     effectiveRenderer: runtime.effectiveRenderer,
     fallbackReason: runtime.fallbackReason || null,
-    deferredSceneEvidence: { ...deferredSceneEvidence },
-    ...(expectedMode === 'screen_space_refraction' ? {
-      requestedOpticalDebugMode: runtime.requestedOpticalDebugMode,
-      effectiveOpticalDebugMode: runtime.effectiveOpticalDebugMode,
-      requestedOpticalFootprintMode: runtime.requestedOpticalFootprintMode,
-      effectiveOpticalFootprintMode: runtime.effectiveOpticalFootprintMode,
-      requestedOpticalFootprintRoute: runtime.requestedOpticalFootprintRoute,
-      effectiveOpticalFootprintRoute: runtime.effectiveOpticalFootprintRoute,
-      opticalFootprintFallbackReason: runtime.opticalFootprintFallbackReason || null,
-      requestedTransmissionFootprintMode: runtime.requestedTransmissionFootprintMode,
-      effectiveTransmissionFootprintMode: runtime.effectiveTransmissionFootprintMode,
-      requestedTransmissionFootprintRoute: runtime.requestedTransmissionFootprintRoute,
-      effectiveTransmissionFootprintRoute: runtime.effectiveTransmissionFootprintRoute,
-      transmissionFootprintFallbackReason: runtime.transmissionFootprintFallbackReason || null,
-      requestedBodyTransportMode: runtime.requestedBodyTransportMode,
-      effectiveBodyTransportMode: runtime.effectiveBodyTransportMode,
-      requestedBodyTransportRoute: runtime.requestedBodyTransportRoute,
-      effectiveBodyTransportRoute: runtime.effectiveBodyTransportRoute,
-      bodyTransportFallbackReason: runtime.bodyTransportFallbackReason || null,
-      requestedInterfaceFrequencyMode: runtime.requestedInterfaceFrequencyMode,
-      effectiveInterfaceFrequencyMode: runtime.effectiveInterfaceFrequencyMode,
-      requestedInterfaceFrequencyRoute: runtime.requestedInterfaceFrequencyRoute,
-      effectiveInterfaceFrequencyRoute: runtime.effectiveInterfaceFrequencyRoute,
-      interfaceFrequencyFallbackReason: runtime.interfaceFrequencyFallbackReason || null,
-    } : {}),
     supportPresentationEvidence: {
       ...supportPresentationEvidence,
     },
-    linearHdrSceneEvidence: { ...linearHdrSceneEvidence },
-    finalPresentationEvidence: { ...finalPresentationEvidence },
     screenSpaceSurfaceEvidence,
-    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence, opticalQueryEvidence, worldSpaceReflectionEvidence, environmentMapEvidence } : {}),
+    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence } : {}),
   };
-}
-
-export function validateFingerFluidTruthRendererAdvance(previousAuthority, currentAuthority) {
-  if (!previousAuthority || !currentAuthority) {
-    throw new Error('Finger fluid truth renderer advancement requires previous and current authority');
-  }
-  if (previousAuthority.effectiveRendererMode !== currentAuthority.effectiveRendererMode) {
-    throw new Error(`Finger fluid truth renderer changed between checkpoints: ${JSON.stringify({
-      previous: previousAuthority.effectiveRendererMode,
-      current: currentAuthority.effectiveRendererMode,
-    })}`);
-  }
-  const mode = currentAuthority.effectiveRendererMode;
-  if (mode === 'screen_space_surface') {
-    const previous = previousAuthority.screenSpaceSurfaceEvidence;
-    const current = currentAuthority.screenSpaceSurfaceEvidence;
-    if (
-      current?.analyticSupportDepthPassCount <= previous?.analyticSupportDepthPassCount
-      || current?.accumulationPassCount <= previous?.accumulationPassCount
-      || current?.compositePassCount <= previous?.compositePassCount
-    ) {
-      throw new Error(`Finger fluid truth screen-space renderer passes did not advance: ${JSON.stringify({ previous, current })}`);
-    }
-  }
-  if (mode === 'screen_space_refraction') {
-    const previous = previousAuthority.refractionEvidence;
-    const current = currentAuthority.refractionEvidence;
-    if (
-      current?.analyticSupportDepthPassCount <= previous?.analyticSupportDepthPassCount
-      || current?.scenePassCount <= previous?.scenePassCount
-      || current?.slabGeometryPassCount <= previous?.slabGeometryPassCount
-      || current?.accumulationPassCount <= previous?.accumulationPassCount
-      || current?.compositePassCount <= previous?.compositePassCount
-    ) {
-      throw new Error(`Finger fluid truth refraction renderer passes did not advance: ${JSON.stringify({ previous, current })}`);
-    }
-  }
-  return currentAuthority;
 }
 
 export function resolveFingerFluidOpticalDebugMode(value = 'shaded') {
@@ -1365,77 +1506,6 @@ export function resolveFingerFluidOpticalDebugMode(value = 'shaded') {
     throw new RangeError(`Unsupported finger fluid optical debug mode: ${mode}`);
   }
   return mode;
-}
-
-export function resolveFingerFluidOpticalLightingMode(value = 'transport_only') {
-  const mode = String(value || 'transport_only');
-  if (!KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.includes(mode)) {
-    throw new RangeError(`Unsupported finger fluid optical lighting mode: ${mode}`);
-  }
-  return mode;
-}
-
-export function resolveFingerFluidOpticalFootprintMode(value = 'resolved_detail') {
-  const mode = String(value || 'resolved_detail');
-  if (!KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.includes(mode)) {
-    throw new RangeError(`Unsupported finger fluid optical footprint mode: ${mode}`);
-  }
-  return mode;
-}
-
-export function resolveFingerFluidTransmissionFootprintMode(value = 'resolved_exit') {
-  const mode = String(value || 'resolved_exit');
-  if (!KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES.includes(mode)) {
-    throw new RangeError(`Unsupported finger fluid transmission footprint mode: ${mode}`);
-  }
-  return mode;
-}
-
-export function resolveFingerFluidBodyTransportMode(value = 'geometric_slab') {
-  const mode = String(value || 'geometric_slab');
-  if (!KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES.includes(mode)) {
-    throw new RangeError(`Unsupported finger fluid body transport mode: ${mode}`);
-  }
-  return mode;
-}
-
-export function resolveFingerFluidInterfaceFrequencyMode(value = 'coupled_detail') {
-  const mode = String(value || 'coupled_detail');
-  if (!KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_MODES.includes(mode)) {
-    throw new RangeError(`Unsupported finger fluid interface frequency mode: ${mode}`);
-  }
-  return mode;
-}
-
-export function fingerFluidAbsorptionCoefficientsForLightingMode(value = 'transport_only') {
-  const mode = resolveFingerFluidOpticalLightingMode(value);
-  return mode === 'legacy_shading' ? [0.46, 0.15, 0.055] : [1.10, 0.42, 0.18];
-}
-
-function opticalLightingRouteForMode(mode) {
-  if (mode === 'bounded_ggx') return KAMINOS_FINGER_FLUID_BOUNDED_GGX_LIGHTING_ROUTE;
-  if (mode === 'legacy_shading') return KAMINOS_FINGER_FLUID_LEGACY_SHADING_ROUTE;
-  return KAMINOS_FINGER_FLUID_TRANSPORT_ONLY_LIGHTING_ROUTE;
-}
-
-function opticalFootprintRouteForMode(mode) {
-  if (mode === 'variance_filtered') return KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_FOOTPRINT_ROUTE;
-  return KAMINOS_FINGER_FLUID_RESOLVED_DETAIL_FOOTPRINT_ROUTE;
-}
-
-function transmissionFootprintRouteForMode(mode) {
-  if (mode === 'dense_exit_filtered') return KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_FOOTPRINT_ROUTE;
-  return KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_FOOTPRINT_ROUTE;
-}
-
-function bodyTransportRouteForMode(mode) {
-  if (mode === 'robust_dense_body') return KAMINOS_FINGER_FLUID_ROBUST_DENSE_BODY_TRANSPORT_ROUTE;
-  return KAMINOS_FINGER_FLUID_GEOMETRIC_SLAB_BODY_TRANSPORT_ROUTE;
-}
-
-function interfaceFrequencyRouteForMode(mode) {
-  if (mode === 'macro_micro_separated') return KAMINOS_FINGER_FLUID_MACRO_MICRO_INTERFACE_FREQUENCY_ROUTE;
-  return KAMINOS_FINGER_FLUID_COUPLED_DETAIL_INTERFACE_FREQUENCY_ROUTE;
 }
 
 function rendererRouteForMode(mode) {
@@ -1556,6 +1626,7 @@ fn toyFloorNormal(p: vec3<f32>) -> vec3<f32> {
 }
 `;
 
+const KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN = '__KAMINOS_FINGER_FLUID_MAX_SPEED__';
 const COMPUTE_SHADER = /* wgsl */`
 struct Particle {
   position: vec4<f32>,
@@ -1567,6 +1638,13 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -1576,7 +1654,7 @@ struct MaterialTracerState {
 struct LaminarInletSample {
   positionPhase: vec4<f32>,
   velocityCore: vec4<f32>,
-  releaseSchedule: vec4<u32>,
+  releaseSchedule: vec4<f32>,
 }
 
 struct InterfaceRecord {
@@ -1633,8 +1711,13 @@ struct Params {
   forces: vec4<f32>,
   particleShift: vec4<f32>,
   chemistry: vec4<f32>,
+  sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
+  sourceControl: vec4<u32>,
+  refinementControl: vec4<u32>,
 }
+
+const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<storage, read_write> cellHeads: array<atomic<i32>>;
@@ -1685,6 +1768,7 @@ fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
 }
 
 fn laminar_inlet_source_index(index: u32) -> u32 {
+  if (params.particleShift.z > 1.5) { return 1u; }
   let allocationSlot = index % 10u;
   if (allocationSlot < 4u) { return 0u; }
   if (allocationSlot < 7u) { return 1u; }
@@ -1692,6 +1776,7 @@ fn laminar_inlet_source_index(index: u32) -> u32 {
 }
 
 fn laminar_inlet_source_local_ordinal(index: u32) -> u32 {
+  if (params.particleShift.z > 1.5) { return index; }
   let allocationSlot = index % 10u;
   let completeBlocks = index / 10u;
   if (allocationSlot < 4u) { return completeBlocks * 4u + allocationSlot; }
@@ -1700,8 +1785,10 @@ fn laminar_inlet_source_local_ordinal(index: u32) -> u32 {
 }
 
 fn laminar_inlet_source_particle_count(sourceIndex: u32) -> u32 {
-  let completeBlocks = params.particleCount / 10u;
-  let remainder = params.particleCount % 10u;
+  let baseParticleCount = params.refinementControl.x;
+  if (params.particleShift.z > 1.5) { return select(0u, baseParticleCount, sourceIndex == 1u); }
+  let completeBlocks = baseParticleCount / 10u;
+  let remainder = baseParticleCount % 10u;
   if (sourceIndex == 0u) { return completeBlocks * 4u + min(remainder, 4u); }
   if (sourceIndex == 1u) { return completeBlocks * 3u + min(u32(max(i32(remainder) - 4, 0)), 3u); }
   return completeBlocks * 3u + min(u32(max(i32(remainder) - 7, 0)), 3u);
@@ -1716,7 +1803,12 @@ fn laminar_inlet_source_from_phase(phase: f32) -> u32 {
 
 fn laminar_inlet_lane_count(sourceIndex: u32) -> u32 {
   if (sourceIndex == 0u) { return 72u; }
-  if (sourceIndex == 1u) { return 60u; }
+  if (sourceIndex == 1u) {
+    if (params.particleShift.z > 1.5) {
+      return max(1u, params.sourceControl.z * params.sourceControl.w);
+    }
+    return 60u;
+  }
   return 176u;
 }
 
@@ -1730,6 +1822,10 @@ fn laminar_inlet_lane_coordinates(sourceIndex: u32, laneIndex: u32) -> vec2<f32>
   var rows = 4u;
   var halfWidth = 0.48;
   var halfHeight = 0.13;
+  if (sourceIndex == 1u && params.particleShift.z > 1.5) {
+    columns = max(1u, params.sourceControl.z);
+    rows = max(1u, params.sourceControl.w);
+  }
   if (sourceIndex == 2u) {
     columns = 16u;
     rows = 11u;
@@ -1756,7 +1852,19 @@ fn laminar_inlet_profile_speed(sourceIndex: u32, localCoordinates: vec2<f32>) ->
   return 0.22;
 }
 
-fn laminar_inlet_release_phase(index: u32) -> vec2<u32> {
+fn slot_lane_speed_sum(columns: u32, rows: u32) -> f32 {
+  var speedSum = 0.0;
+  var row = 0u;
+  loop {
+    if (row >= rows) { break; }
+    let localV = (((f32(row) + 0.5) / f32(rows)) * 2.0 - 1.0) * 0.13 * 0.88;
+    speedSum += f32(columns) * laminar_inlet_profile_speed(1u, vec2<f32>(0.0, localV));
+    row += 1u;
+  }
+  return speedSum;
+}
+
+fn laminar_inlet_release_phase(index: u32) -> vec4<f32> {
   let sourceIndex = laminar_inlet_source_index(index);
   let localOrdinal = laminar_inlet_source_local_ordinal(index);
   let laneCount = laminar_inlet_lane_count(sourceIndex);
@@ -1769,17 +1877,29 @@ fn laminar_inlet_release_phase(index: u32) -> vec2<u32> {
   var laneSpeedSum = 41.744448;
   var expectedReleaseRate = 781.7396595559;
   if (sourceIndex == 1u) {
-    laneSpeedSum = 32.7456;
-    expectedReleaseRate = 720.1081893313;
+    let refinementFactor = max(1.0, params.particleShift.w);
+    let columns = select(15u, max(1u, params.sourceControl.z), params.particleShift.z > 1.5);
+    let rows = select(4u, max(1u, params.sourceControl.w), params.particleShift.z > 1.5);
+    laneSpeedSum = slot_lane_speed_sum(columns, rows);
+    expectedReleaseRate = 720.1081893313 * refinementFactor * refinementFactor * refinementFactor;
   } else if (sourceIndex == 2u) {
     laneSpeedSum = 38.72;
     expectedReleaseRate = 827.2396694215;
   }
   let laneReleaseRate = expectedReleaseRate * speed / max(laneSpeedSum, 0.000001);
-  let releasePeriodFrames = u32(max(1.0, floor(60.0 / max(laneReleaseRate, 0.000001) + 0.5)));
-  let cycleFrames = max(1u, laneParticleCount * releasePeriodFrames);
-  let lanePhaseOffset = ((laneIndex * 2u + 1u) * releasePeriodFrames) / (laneCount * 2u);
-  return vec2<u32>(laneOrdinal * releasePeriodFrames + lanePhaseOffset, cycleFrames);
+  let lanePhaseEvents = (f32(laneIndex) + 0.5) / f32(laneCount);
+  return vec4<f32>(f32(laneOrdinal), f32(laneParticleCount), laneReleaseRate, lanePhaseEvents);
+}
+
+fn laminar_inlet_release_due(frameIndex: u32, schedule: vec4<f32>) -> bool {
+  let laneOrdinal = u32(schedule.x);
+  let laneParticleCount = max(1u, u32(schedule.y));
+  let laneReleaseRate = schedule.z;
+  let lanePhaseEvents = schedule.w;
+  let previousEventCount = u32(floor(f32(frameIndex) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  let nextEventCount = u32(floor(f32(frameIndex + 1u) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  return nextEventCount > previousEventCount
+    && (nextEventCount - 1u) % laneParticleCount == laneOrdinal;
 }
 
 fn laminar_inlet_sample(index: u32) -> LaminarInletSample {
@@ -1812,12 +1932,12 @@ fn laminar_inlet_sample(index: u32) -> LaminarInletSample {
   }
 
   let axialSpeed = laminar_inlet_profile_speed(sourceIndex, localCoordinates);
-  let axialPosition = -reservoirLength + 0.0275;
+  let axialPosition = -reservoirLength + 0.0275 / max(1.0, params.particleShift.w);
   let releasePhase = laminar_inlet_release_phase(index);
   var sample: LaminarInletSample;
   sample.positionPhase = vec4<f32>(origin + tangent * localU + bitangent * localV + axis * axialPosition, phase);
   sample.velocityCore = vec4<f32>(axis * axialSpeed, 1.0);
-  sample.releaseSchedule = vec4<u32>(releasePhase, sourceIndex, laneIndex);
+  sample.releaseSchedule = releasePhase;
   return sample;
 }
 
@@ -1959,6 +2079,37 @@ fn kernelWeight(distance: f32) -> f32 {
   return x * x * x;
 }
 
+fn adaptive_volume_scale(index: u32) -> f32 {
+  return max(0.0, neighborTopology[index].refinement.x);
+}
+
+fn adaptive_radius_scale(index: u32) -> f32 {
+  return pow(max(adaptive_volume_scale(index), 0.000001), 1.0 / 3.0);
+}
+
+fn adaptive_pair_kernel_weight(index: u32, neighborIndex: u32, distance: f32) -> f32 {
+  let pairRadiusScale = max(adaptive_radius_scale(index), adaptive_radius_scale(neighborIndex));
+  let supportRadius = params.fluid.x * pairRadiusScale;
+  let q = distance / max(supportRadius, 0.00001);
+  if (q >= 1.0) { return 0.0; }
+  let x = 1.0 - q * q;
+  let kernelNormalization = 1.0 / max(pairRadiusScale * pairRadiusScale * pairRadiusScale, 0.000001);
+  let neighborVolumeScale = adaptive_volume_scale(neighborIndex);
+  return neighborVolumeScale * kernelNormalization * x * x * x;
+}
+
+fn adaptive_pair_kernel_gradient(index: u32, neighborIndex: u32, offset: vec3<f32>) -> vec3<f32> {
+  let distance = length(offset);
+  let pairRadiusScale = max(adaptive_radius_scale(index), adaptive_radius_scale(neighborIndex));
+  let supportRadius = params.fluid.x * pairRadiusScale;
+  if (distance <= 0.00001 || distance >= supportRadius) { return vec3<f32>(0.0); }
+  let q = distance / supportRadius;
+  let kernelNormalization = 1.0 / max(pairRadiusScale * pairRadiusScale * pairRadiusScale, 0.000001);
+  let neighborVolumeScale = adaptive_volume_scale(neighborIndex);
+  let magnitude = -6.0 * (1.0 - q) * (1.0 - q) / (supportRadius * params.fluid.y);
+  return offset / distance * magnitude * neighborVolumeScale * kernelNormalization;
+}
+
 fn kernelGradient(offset: vec3<f32>) -> vec3<f32> {
   let distance = length(offset);
   if (distance <= 0.00001 || distance >= params.fluid.x) { return vec3<f32>(0.0); }
@@ -2018,6 +2169,47 @@ fn containsNeighbor(ids: vec4<u32>, candidate: u32) -> bool {
   return candidate != ${INVALID_NEIGHBOR_ID}u && any(ids == vec4<u32>(candidate));
 }
 
+fn clear_unsupported_sheet_state(index: u32) {
+  neighborTopology[index].sheet = vec4<f32>(0.0);
+  neighborTopology[index].sheetNeighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
+  neighborTopology[index].sheetRestDistances = vec4<f32>(0.0);
+}
+
+fn measure_sheet_link_diagnostics(index: u32, position: vec3<f32>) -> vec4<f32> {
+  let ids = neighborTopology[index].sheetNeighborIds;
+  let restDistances = neighborTopology[index].sheetRestDistances;
+  var persistentLinkCount = 0.0;
+  var maximumStretch = 0.0;
+  var maximumKernelRatio = 0.0;
+  for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+    let neighborIndex = ids[slot];
+    let restDistance = restDistances[slot];
+    if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount && restDistance > 0.00001) {
+      let distance = length(particles[neighborIndex].predicted.xyz - position);
+      persistentLinkCount = persistentLinkCount + 1.0;
+      maximumStretch = max(maximumStretch, distance / restDistance);
+      maximumKernelRatio = max(maximumKernelRatio, distance / max(params.fluid.x, 0.00001));
+    }
+  }
+  return vec4<f32>(persistentLinkCount, maximumStretch, maximumKernelRatio, 0.0);
+}
+
+fn write_sheet_release_diagnostics(
+  index: u32,
+  reasonCode: f32,
+  priorActivity: f32,
+  activity: f32,
+  inletCoreWeight: f32,
+  kinematics: vec4<f32>,
+  neighborhood: vec3<f32>,
+  linkDiagnostics: vec4<f32>,
+  topology: vec4<f32>,
+) {
+  neighborTopology[index].sheetDiagnosticClassification = vec4<f32>(reasonCode, priorActivity, inletCoreWeight, linkDiagnostics.z);
+  neighborTopology[index].sheetDiagnosticKinematics = kinematics;
+  neighborTopology[index].sheetDiagnosticNeighborhood = vec4<f32>(neighborhood, linkDiagnostics.y);
+}
+
 fn supportNormalAt(position: vec3<f32>) -> vec3<f32> {
   let radius = params.fluid.x * 0.22;
   let floorDistance = abs(position.y - (floorHeight(position) + radius));
@@ -2038,12 +2230,24 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
   var particle = particles[index];
+  if (params.refinementControl.y != 0u && index >= params.refinementControl.x && particle.velocity.w < 0.0) {
+    particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
+    particle.delta = vec4<f32>(0.0);
+    particles[index] = particle;
+    return;
+  }
   let laminarInletScene = params.particleShift.z > 0.5;
+  let waterfallOracleScene = params.particleShift.z > 1.5;
+  _ = waterfallOracleScene;
   if (laminarInletScene && particle.velocity.w < 0.0) {
+    if (params.sourceControl.y != 0u && params.frameIndex >= params.sourceControl.x) {
+      particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
+      particle.delta = vec4<f32>(0.0);
+      particles[index] = particle;
+      return;
+    }
     let inletSample = laminar_inlet_sample(index);
-    let releaseFrame = inletSample.releaseSchedule.x;
-    let cycleFrames = inletSample.releaseSchedule.y;
-    if (params.frameIndex % cycleFrames != releaseFrame) {
+    if (!laminar_inlet_release_due(params.frameIndex, inletSample.releaseSchedule)) {
       particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
       particle.delta = vec4<f32>(0.0);
       particles[index] = particle;
@@ -2064,6 +2268,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     atomicAdd(&interfaceCounters[2], 1u);
   }
   let recycleLaminarInlet = laminarInletScene && particle.velocity.w >= 0.0 && particle.position.z > 2.35;
@@ -2076,6 +2281,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     return;
   }
   if (recyclePlaygroundSource) {
@@ -2097,6 +2303,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     atomicAdd(&interfaceCounters[2], 1u);
     return;
   }
@@ -2137,6 +2344,7 @@ fn measure_neighbor_topology(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (particles[index].velocity.w < 0.0) {
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
+    clear_unsupported_sheet_state(index);
     return;
   }
   let position = particles[index].predicted.xyz;
@@ -2213,7 +2421,7 @@ fn compute_material_tracer_diffusion(@builtin(global_invocation_id) gid: vec3<u3
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
             let distance = length(position - particles[neighborIndex].predicted.xyz);
-            let chemistryWeight = kernelWeight(distance);
+            let chemistryWeight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (chemistryWeight > 0.0) {
               let neighborConcentration = materialTracers[neighborIndex].concentrationDeltaRecipeSource.x;
               let neighborDelta = chemistryWeight * (neighborConcentration - concentration);
@@ -2248,9 +2456,15 @@ fn interface_density_constraint(densityRatio: f32, priorSurfaceFactor: f32) -> f
 fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
+  if (particles[index].velocity.w < 0.0 || adaptive_volume_scale(index) <= 0.0) {
+    particles[index].predicted.w = 0.0;
+    particles[index].delta.w = 0.0;
+    return;
+  }
   let position = particles[index].predicted.xyz;
   let baseCell = gridCoord(position);
-  var density = 1.0;
+  let selfRadiusScale = adaptive_radius_scale(index);
+  var density = adaptive_volume_scale(index) / max(selfRadiusScale * selfRadiusScale * selfRadiusScale, 0.000001);
   var gradientSelf = vec3<f32>(0.0);
   var gradientSquared = 0.0;
 
@@ -2265,9 +2479,9 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             density = density + weight;
-            let gradient = kernelGradient(offset);
+            let gradient = adaptive_pair_kernel_gradient(index, neighborIndex, offset);
             gradientSelf = gradientSelf + gradient;
             gradientSquared = gradientSquared + dot(gradient, gradient);
           }
@@ -2291,10 +2505,14 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
+  if (particles[index].velocity.w < 0.0 || adaptive_volume_scale(index) <= 0.0) { return; }
   let position = particles[index].predicted.xyz;
   let baseCell = gridCoord(position);
   let lambda = particles[index].predicted.w;
-  let referenceWeight = max(kernelWeight(params.fluid.x * 0.34), 0.0001);
+  let referenceWeight = max(
+    adaptive_pair_kernel_weight(index, index, params.fluid.x * adaptive_radius_scale(index) * 0.34),
+    0.0001,
+  );
   var correction = vec3<f32>(0.0);
 
   for (var z = -1; z <= 1; z = z + 1) {
@@ -2307,9 +2525,9 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
-            let weight = kernelWeight(length(offset));
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, length(offset));
             let tensile = -0.0012 * pow(weight / referenceWeight, 4.0);
-            correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * kernelGradient(offset);
+            correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * adaptive_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = particleNext[neighborIndex];
         }
@@ -2361,7 +2579,7 @@ fn classify_free_surface(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               supportWeight = supportWeight + weight;
               directionalSupport = directionalSupport + (offset / distance) * weight;
@@ -2413,7 +2631,11 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
         while (current >= 0) {
           let neighborIndex = u32(current);
           if (neighborIndex != index) {
-            let weight = kernelWeight(length(position - particles[neighborIndex].predicted.xyz));
+            let weight = adaptive_pair_kernel_weight(
+              index,
+              neighborIndex,
+              length(position - particles[neighborIndex].predicted.xyz),
+            );
             neighborVelocity = neighborVelocity + particles[neighborIndex].velocity.xyz * weight;
             neighborWeight = neighborWeight + weight;
           }
@@ -2466,7 +2688,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (position.z <= params.boundsMin.z + radius + 0.006 && velocity.z < 0.0) { velocity.z = 0.0; }
   if (position.z >= params.boundsMax.z - radius - 0.006 && velocity.z > 0.0) { velocity.z = 0.0; }
   let relaxedSpeed = length(velocity);
-  if (relaxedSpeed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / relaxedSpeed); }
+  if (relaxedSpeed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / relaxedSpeed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
 }
 
@@ -2491,7 +2713,7 @@ fn compute_vorticity(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let velocityDifference = particles[neighborIndex].delta.xyz - velocity;
-            omega = omega + cross(velocityDifference, kernelGradient(offset));
+            omega = omega + cross(velocityDifference, adaptive_pair_kernel_gradient(index, neighborIndex, offset));
           }
           current = particleNext[neighborIndex];
         }
@@ -2528,7 +2750,8 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let neighborMagnitude = length(particles[neighborIndex].velocity.xyz);
-            magnitudeGradient = magnitudeGradient + (neighborMagnitude - omegaMagnitude) * kernelGradient(offset);
+            magnitudeGradient = magnitudeGradient
+              + (neighborMagnitude - omegaMagnitude) * adaptive_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = particleNext[neighborIndex];
         }
@@ -2553,12 +2776,271 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (confinementLength > 1.25) { confinement = confinement * (1.25 / confinementLength); }
   var velocity = particle.delta.xyz + confinement * params.dt;
   let speed = length(velocity);
-  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
   particles[index].position.w = min(omegaMagnitude, 4096.0);
 }
 
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let priorSheetActivity = neighborTopology[index].sheet.w;
+  let position = particle.predicted.xyz;
+  let velocity = particle.delta.xyz;
+  let speed = length(velocity);
+  let supportContact = supportContactFrame(position).w;
+  let densityRatio = particle.delta.w / max(params.fluid.y, 0.0001);
+  let surfaceFactor = particle.predicted.w;
+  let topology = neighborTopology[index].metrics;
+  var linkDiagnostics = vec4<f32>(0.0);
+  if (priorSheetActivity > 0.0001) {
+    linkDiagnostics = measure_sheet_link_diagnostics(index, position);
+  }
+  let kinematics = vec4<f32>(speed, supportContact, densityRatio, surfaceFactor);
+  let classificationStrength = select(
+    params.sheet.x,
+    max(2.0, params.sheet.x),
+    params.refinementControl.y != 0u,
+  );
+  neighborTopology[index].sheet = vec4<f32>(0.0);
+  if (classificationStrength <= 0.0 || params.particleShift.z <= 1.5) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (particle.velocity.w < 0.0) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (speed < 0.18) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.low_transport_speed}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (supportContact >= 0.20) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.support_contact}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (densityRatio < 0.10) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.density_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (densityRatio > 1.05) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.bulk_density}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (surfaceFactor < 0.20) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_interface}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (topology.x < 0.25 || topology.y < 0.03) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.topology_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+
+  let flowTangent = velocity / speed;
+  var seed = vec3<f32>(1.0, 0.0, 0.0);
+  if (abs(flowTangent.x) >= 0.82) { seed = vec3<f32>(0.0, 0.0, 1.0); }
+  let transverseU = normalize(cross(flowTangent, seed));
+  let transverseV = normalize(cross(flowTangent, transverseU));
+  let baseCell = gridCoord(position);
+  var covarianceUU = 0.0;
+  var covarianceUV = 0.0;
+  var covarianceVV = 0.0;
+  var velocityCoherenceSum = 0.0;
+  var acceptedNeighborCount = 0u;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index && particles[neighborIndex].velocity.w >= 0.0) {
+            let offset = particles[neighborIndex].predicted.xyz - position;
+            let distance = length(offset);
+            if (distance > 0.00001 && distance < params.fluid.x) {
+              let u = dot(offset, transverseU);
+              let v = dot(offset, transverseV);
+              covarianceUU = covarianceUU + u * u;
+              covarianceUV = covarianceUV + u * v;
+              covarianceVV = covarianceVV + v * v;
+              let neighborVelocity = particles[neighborIndex].delta.xyz;
+              let neighborSpeed = length(neighborVelocity);
+              if (neighborSpeed > 0.0001) {
+                velocityCoherenceSum = velocityCoherenceSum + clamp(dot(neighborVelocity / neighborSpeed, flowTangent), -1.0, 1.0);
+              }
+              acceptedNeighborCount = acceptedNeighborCount + 1u;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  if (acceptedNeighborCount < 3u) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.neighbor_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(f32(acceptedNeighborCount), 0.0, 0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  let neighborCount = f32(acceptedNeighborCount);
+  let covarianceTrace = covarianceUU + covarianceVV;
+  let covarianceDiscriminant = sqrt(max(0.0, (covarianceUU - covarianceVV) * (covarianceUU - covarianceVV) + 4.0 * covarianceUV * covarianceUV));
+  let dominantVariance = (covarianceTrace + covarianceDiscriminant) * 0.5;
+  let transverseAnisotropy = dominantVariance / max(covarianceTrace, 0.0000001);
+  let velocityCoherence = velocityCoherenceSum / neighborCount;
+  if (velocityCoherence < 0.72) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.velocity_incoherent}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (transverseAnisotropy < 0.66) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_planar}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+
+  var eigenvector = vec2<f32>(covarianceUV, dominantVariance - covarianceUU);
+  if (length(eigenvector) < 0.000001) {
+    eigenvector = select(vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), covarianceUU >= covarianceVV);
+  }
+  eigenvector = normalize(eigenvector);
+  let widthTangent = normalize(transverseU * eigenvector.x + transverseV * eigenvector.y);
+  let sheetNormal = normalize(cross(flowTangent, widthTangent));
+  let inletCoreWeight = apply_laminar_inlet_boundary(position, particle.velocity.w, velocity).w;
+  let activity = clamp(
+    classificationStrength
+      * (1.0 - smoothstep(0.04, 0.20, supportContact))
+      * smoothstep(0.10, 0.32, densityRatio)
+      * (1.0 - smoothstep(0.90, 1.05, densityRatio))
+      * smoothstep(0.20, 0.58, surfaceFactor)
+      * smoothstep(0.25, 0.65, topology.x)
+      * smoothstep(0.03, 0.22, topology.y)
+      * smoothstep(0.72, 0.92, velocityCoherence)
+      * smoothstep(0.66, 0.86, transverseAnisotropy)
+      * smoothstep(2.0, 6.0, neighborCount)
+      * (1.0 - inletCoreWeight),
+    0.0,
+    1.0,
+  );
+  if (activity <= 0.0001) {
+    let reasonCode = select(
+      ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.activity_floor}.0,
+      ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.inlet_core}.0,
+      inletCoreWeight >= 0.9999,
+    );
+    write_sheet_release_diagnostics(index, reasonCode, priorSheetActivity, 0.0, inletCoreWeight, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (priorSheetActivity <= 0.0001) {
+    let links = neighborTopology[index].neighborIds;
+    var restDistances = vec4<f32>(0.0);
+    for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+      let neighborIndex = links[slot];
+      if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount) {
+        restDistances[slot] = length(particles[neighborIndex].predicted.xyz - position);
+      }
+    }
+    neighborTopology[index].sheetNeighborIds = links;
+    neighborTopology[index].sheetRestDistances = restDistances;
+  }
+  neighborTopology[index].sheet = vec4<f32>(sheetNormal, activity);
+  let activeLinkDiagnostics = measure_sheet_link_diagnostics(index, position);
+  write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}.0, priorSheetActivity, activity, inletCoreWeight, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), activeLinkDiagnostics, topology);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn apply_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let sheetState = neighborTopology[index].sheet;
+  let sheetActivity = sheetState.w;
+  let particle = particles[index];
+  if (sheetActivity <= 0.0001) {
+    particles[index].position = vec4<f32>(vec3<f32>(0.0), particle.position.w);
+    return;
+  }
+  let position = particle.predicted.xyz;
+  let sheetNormal = sheetState.xyz;
+  let sheetNeighborIds = neighborTopology[index].sheetNeighborIds;
+  let sheetRestDistances = neighborTopology[index].sheetRestDistances;
+  var tangentAttraction = vec3<f32>(0.0);
+  var normalOffsetSum = 0.0;
+  var normalWeight = 0.0;
+  var coherentPairCount = 0u;
+
+  for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+    let neighborIndex = sheetNeighborIds[slot];
+    let restDistance = sheetRestDistances[slot];
+    if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount && restDistance > 0.00001) {
+      let neighborSheet = neighborTopology[neighborIndex].sheet;
+      let offset = particles[neighborIndex].predicted.xyz - position;
+      let distance = length(offset);
+      let normalAlignment = abs(dot(sheetNormal, neighborSheet.xyz));
+      if (distance > 0.00001 && distance < params.fluid.x * 1.75 && neighborSheet.w > 0.0001 && normalAlignment > 0.72) {
+        let pairActivity = min(sheetActivity, neighborSheet.w) * smoothstep(0.72, 0.94, normalAlignment);
+        let normalOffset = dot(offset, sheetNormal);
+        let tangentOffset = offset - sheetNormal * normalOffset;
+        let tangentDistance = length(tangentOffset);
+        let stretch = max(0.0, tangentDistance - restDistance * 1.08);
+        let bridgeRelease = 1.0 - smoothstep(1.55, 1.75, distance / params.fluid.x);
+        if (tangentDistance > 0.00001 && stretch > 0.0) {
+          tangentAttraction = tangentAttraction + tangentOffset / tangentDistance * stretch * bridgeRelease * pairActivity;
+        }
+        let thicknessWeight = bridgeRelease * pairActivity;
+        normalOffsetSum = normalOffsetSum + normalOffset * thicknessWeight;
+        normalWeight = normalWeight + thicknessWeight;
+        coherentPairCount = coherentPairCount + 1u;
+      }
+    }
+  }
+  if (coherentPairCount < 2u || normalWeight <= 0.0001) {
+    particles[index].position = vec4<f32>(vec3<f32>(0.0), particle.position.w);
+    return;
+  }
+  let normalError = normalOffsetSum / normalWeight;
+  let pairScale = 1.0 / f32(coherentPairCount);
+  var correction = tangentAttraction * pairScale * (0.42 * params.sheet.x)
+    + sheetNormal * normalError * (0.18 * sheetActivity);
+  let correctionLimit = params.fluid.x * 0.055;
+  let correctionLength = length(correction);
+  if (correctionLength > correctionLimit) { correction = correction * (correctionLimit / correctionLength); }
+  particles[index].position = vec4<f32>(correction, particle.position.w);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn commit_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  var particle = particles[index];
+  let correction = particle.position.xyz;
+  let correctionLength = length(correction);
+  if (correctionLength > 0.0000001) {
+    let sheetState = neighborTopology[index].sheet;
+    var velocity = particle.delta.xyz + correction / max(params.dt, 0.00001);
+    let normalSpeed = dot(velocity, sheetState.xyz);
+    velocity = velocity - sheetState.xyz * normalSpeed * min(0.18, sheetState.w * params.sheet.x * 0.12);
+    let speed = length(velocity);
+    if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
+    particle.predicted = vec4<f32>(particle.predicted.xyz + correction, particle.predicted.w);
+    particle.delta = vec4<f32>(velocity, particle.delta.w);
+    particles[index] = particle;
+  }
+}
+
 fn capillary_pair_weight(
+  neighborIndex: u32,
   distance: f32,
   surfaceFactor: f32,
   neighborSurface: f32,
@@ -2570,7 +3052,10 @@ fn capillary_pair_weight(
   let cohesionBand = smoothstep(0.28, 0.58, q) * (1.0 - smoothstep(0.82, 1.0, q));
   let pairSurface = clamp((surfaceFactor + neighborSurface) * 0.5, 0.0, 1.0);
   let pairSupportConfidence = smoothstep(0.48, 0.90, min(densityRatio, neighborDensityRatio));
-  return cohesionBand * (0.15 + 0.85 * pairSurface) * pairSupportConfidence;
+  return adaptive_volume_scale(neighborIndex)
+    * cohesionBand
+    * (0.15 + 0.85 * pairSurface)
+    * pairSupportConfidence;
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -2599,6 +3084,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
               let neighborSurface = particles[neighborIndex].predicted.w;
               let neighborDensityRatio = particles[neighborIndex].delta.w / max(params.fluid.y, 0.0001);
               let weight = capillary_pair_weight(
+                neighborIndex,
                 distance,
                 surfaceFactor,
                 neighborSurface,
@@ -2641,7 +3127,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
     velocity = apply_laminar_inlet_boundary(position, particle.velocity.w, velocity).xyz;
   }
   let speed = length(velocity);
-  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
 }
 
@@ -2651,6 +3137,116 @@ fn apply_velocity_position(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (index >= params.particleCount) { return; }
   particles[index].velocity = vec4<f32>(particles[index].delta.xyz, particles[index].velocity.w);
   particles[index].position = vec4<f32>(particles[index].predicted.xyz, particles[index].position.w);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn adaptive_refine_or_merge(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (params.refinementControl.y == 0u || index >= params.refinementControl.x) { return; }
+  let childIndex = index + params.refinementControl.x;
+  if (childIndex >= params.particleCount) { return; }
+  var parent = particles[index];
+  var child = particles[childIndex];
+  var parentRefinement = neighborTopology[index].refinement;
+  let childActive = child.velocity.w >= 0.0 && neighborTopology[childIndex].refinement.x > 0.0;
+
+  if (parent.velocity.w < 0.0) {
+    parentRefinement = vec4<f32>(1.0, 0.0, 0.0, 0.0);
+    neighborTopology[index].refinement = parentRefinement;
+    if (childActive) {
+      child.velocity = vec4<f32>(vec3<f32>(0.0), -abs(child.velocity.w));
+      child.delta = vec4<f32>(0.0);
+      particles[childIndex] = child;
+      neighborTopology[childIndex].refinement = vec4<f32>(0.0, 2.0, 0.0, -1.0);
+      atomicAdd(&interfaceCounters[4], 1u);
+    }
+    return;
+  }
+
+  if (parentRefinement.y < 0.5) {
+    let sheetState = neighborTopology[index].sheet;
+    let reasonCode = neighborTopology[index].sheetDiagnosticClassification.x;
+    let supportContact = supportContactFrame(parent.position.xyz).w;
+    let speed = length(parent.velocity.xyz);
+    let splitCandidate = sheetState.w >= 0.08
+      && reasonCode == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}.0
+      && supportContact < 0.18
+      && speed >= 0.18
+      && !childActive;
+    if (!splitCandidate) { return; }
+    let flowTangent = normalize(parent.velocity.xyz + vec3<f32>(0.00001, 0.00002, 0.00003));
+    var splitDirection = cross(sheetState.xyz, flowTangent);
+    if (length(splitDirection) < 0.0001) {
+      splitDirection = cross(sheetState.xyz, vec3<f32>(1.0, 0.0, 0.0));
+    }
+    splitDirection = normalize(splitDirection + vec3<f32>(0.00001, 0.00002, 0.00003));
+    let splitOffset = splitDirection * params.fluid.x * 0.16;
+    parent.position = vec4<f32>(collideDomain(parent.position.xyz - splitOffset), parent.position.w);
+    parent.predicted = vec4<f32>(parent.position.xyz, parent.predicted.w);
+    child = parent;
+    child.position = vec4<f32>(collideDomain(parent.position.xyz + splitOffset * 2.0), parent.position.w);
+    child.predicted = vec4<f32>(child.position.xyz, parent.predicted.w);
+    particles[index] = parent;
+    particles[childIndex] = child;
+    restStates[childIndex] = restStates[index];
+    materialTracers[childIndex] = materialTracers[index];
+    neighborTopology[childIndex] = neighborTopology[index];
+    neighborTopology[index].refinement = vec4<f32>(0.5, 1.0, 0.0, 1.0);
+    neighborTopology[childIndex].refinement = vec4<f32>(0.5, 2.0, 0.0, 1.0);
+    atomicAdd(&interfaceCounters[3], 1u);
+    return;
+  }
+
+  if (!childActive) {
+    neighborTopology[index].refinement = vec4<f32>(1.0, 0.0, 0.0, -1.0);
+    return;
+  }
+  let parentSupport = supportContactFrame(parent.position.xyz).w;
+  let childSupport = supportContactFrame(child.position.xyz).w;
+  let pairDistance = length(parent.position.xyz - child.position.xyz);
+  let parentDensityRatio = parent.delta.w / max(params.fluid.y, 0.0001);
+  let childDensityRatio = child.delta.w / max(params.fluid.y, 0.0001);
+  let stableContact = max(parentSupport, childSupport) >= 0.62;
+  let stableBulk = min(parentDensityRatio, childDensityRatio) >= 0.94
+    && max(length(parent.velocity.xyz), length(child.velocity.xyz)) < 0.34;
+  let mergeCandidate = pairDistance < params.fluid.x * 0.72
+    && max(neighborTopology[index].sheet.w, neighborTopology[childIndex].sheet.w) < 0.02
+    && (stableContact || stableBulk);
+  let mergeAge = select(0.0, parentRefinement.z + params.dt, mergeCandidate);
+  neighborTopology[index].refinement.z = mergeAge;
+  neighborTopology[childIndex].refinement.z = mergeAge;
+  if (mergeAge < 0.32) { return; }
+
+  let parentVolume = max(parentRefinement.x, 0.0);
+  let childVolume = max(neighborTopology[childIndex].refinement.x, 0.0);
+  let totalVolume = max(parentVolume + childVolume, 0.000001);
+  let mergedPosition = (parent.position.xyz * parentVolume + child.position.xyz * childVolume) / totalVolume;
+  let mergedVelocity = (parent.velocity.xyz * parentVolume + child.velocity.xyz * childVolume) / totalVolume;
+  let parentTracer = materialTracers[index].concentrationDeltaRecipeSource;
+  let childTracer = materialTracers[childIndex].concentrationDeltaRecipeSource;
+  let mergedTracer = (parentTracer * parentVolume + childTracer * childVolume) / totalVolume;
+  parent.position = vec4<f32>(mergedPosition, parent.position.w);
+  parent.predicted = vec4<f32>(mergedPosition, max(parent.predicted.w, child.predicted.w));
+  parent.velocity = vec4<f32>(mergedVelocity, parent.velocity.w);
+  parent.delta = vec4<f32>(mergedVelocity, max(parent.delta.w, child.delta.w));
+  child.velocity = vec4<f32>(vec3<f32>(0.0), -abs(child.velocity.w));
+  child.predicted = vec4<f32>(child.position.xyz, 0.0);
+  child.delta = vec4<f32>(0.0);
+  particles[index] = parent;
+  particles[childIndex] = child;
+  materialTracers[index].concentrationDeltaRecipeSource = mergedTracer;
+  materialTracers[childIndex].concentrationDeltaRecipeSource = vec4<f32>(0.0);
+  restStates[index] = (restStates[index] * parentVolume + restStates[childIndex] * childVolume) / totalVolume;
+  restStates[childIndex] = vec4<f32>(0.0);
+  neighborTopology[index].refinement = vec4<f32>(1.0, 0.0, 0.0, -1.0);
+  neighborTopology[childIndex].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
+  neighborTopology[childIndex].metrics = vec4<f32>(0.0);
+  clear_unsupported_sheet_state(childIndex);
+  neighborTopology[childIndex].sheetDiagnosticClassification = vec4<f32>(${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, 0.0, 0.0, 0.0);
+  neighborTopology[childIndex].sheetDiagnosticKinematics = vec4<f32>(0.0);
+  neighborTopology[childIndex].sheetDiagnosticNeighborhood = vec4<f32>(0.0);
+  neighborTopology[childIndex].refinement = vec4<f32>(0.0, 2.0, 0.0, -1.0);
+  atomicAdd(&interfaceCounters[4], 1u);
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -2679,7 +3275,7 @@ fn compute_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>)
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].position.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               crowdingDirection = crowdingDirection + offset / distance * weight;
               crowdingWeight = crowdingWeight + weight;
@@ -2716,7 +3312,7 @@ fn apply_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index] = particle;
 }
 
-fn estimate_interface_curvature(position: vec3<f32>, interfaceNormal: vec3<f32>) -> vec2<f32> {
+fn estimate_interface_curvature(index: u32, position: vec3<f32>, interfaceNormal: vec3<f32>) -> vec2<f32> {
   let baseCell = gridCoord(position);
   var weightedNormalOffset = 0.0;
   var weightedTangentSpan = 0.0;
@@ -2734,7 +3330,7 @@ fn estimate_interface_curvature(position: vec3<f32>, interfaceNormal: vec3<f32>)
           let offset = position - particles[neighborIndex].position.xyz;
           let distance = length(offset);
           let neighborConfidence = restStates[neighborIndex].x;
-          let weight = kernelWeight(distance) * neighborConfidence;
+          let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance) * neighborConfidence;
           if (distance > 0.00001 && weight > 0.0 && neighborConfidence >= ${INTERFACE_THRESHOLD}) {
             let normalOffset = dot(offset, interfaceNormal);
             let tangentOffset = offset - interfaceNormal * dot(offset, interfaceNormal);
@@ -2796,7 +3392,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].position.xyz;
             let distance = length(offset);
-            let weight = kernelWeight(distance);
+            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               supportWeight = supportWeight + weight;
               directionalSupport = directionalSupport + offset / distance * weight;
@@ -2823,7 +3419,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportAlignment = select(1.0, dot(interfaceNormal, contactSupportNormal), contact > 0.5);
   let interfaceAge = restStates[index].y;
   if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
-  let curvatureGeometry = estimate_interface_curvature(position, interfaceNormal);
+  let curvatureGeometry = estimate_interface_curvature(index, position, interfaceNormal);
   let interfaceCurvature = curvatureGeometry.x;
   let geometryConfidence = surfaceFactor * curvatureGeometry.y;
 
@@ -2838,7 +3434,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, geometryConfidence);
   interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, interfaceCurvature);
   interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
-  interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
+  interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
 }
 
 @compute @workgroup_size(1)
@@ -2966,6 +3562,7 @@ struct Params {
   forces: vec4<f32>,
   particleShift: vec4<f32>,
   chemistry: vec4<f32>,
+  sheet: vec4<f32>,
   contactIdentity: vec4<u32>,
 }
 
@@ -3015,6 +3612,13 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3025,10 +3629,7 @@ struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
@@ -3037,6 +3638,25 @@ struct RenderParams {
 @group(0) @binding(3) var<storage, read> materialTracers: array<MaterialTracerState>;
 
 ${PLAYGROUND_WGSL}
+
+fn sheet_release_reason_color(reasonCode: f32) -> vec3<f32> {
+  let reason = u32(round(reasonCode));
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}u) { return vec3<f32>(0.12, 0.95, 0.52); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}u) { return vec3<f32>(0.20, 0.22, 0.26); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}u) { return vec3<f32>(0.08, 0.08, 0.10); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.low_transport_speed}u) { return vec3<f32>(0.26, 0.52, 0.96); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.support_contact}u) { return vec3<f32>(0.58, 0.58, 0.62); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.density_loss}u) { return vec3<f32>(0.08, 0.76, 1.00); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.bulk_density}u) { return vec3<f32>(0.12, 0.28, 0.82); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_interface}u) { return vec3<f32>(0.68, 0.50, 0.22); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.topology_loss}u) { return vec3<f32>(1.00, 0.44, 0.08); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.neighbor_loss}u) { return vec3<f32>(1.00, 0.10, 0.58); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.velocity_incoherent}u) { return vec3<f32>(0.94, 0.12, 0.12); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_planar}u) { return vec3<f32>(0.68, 0.20, 1.00); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.inlet_core}u) { return vec3<f32>(0.12, 0.94, 0.96); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.activity_floor}u) { return vec3<f32>(1.00, 0.86, 0.12); }
+  return vec3<f32>(1.0, 1.0, 1.0);
+}
 
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -3074,7 +3694,8 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     let colorMode = u32(params.cameraRight.w + 0.5);
     center = particle.position.xyz;
     speed = length(particle.velocity.xyz);
-    radius = params.viewport.z * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
+    let volumeRadiusScale = pow(max(neighborTopology[instanceIndex].refinement.x, 0.000001), 1.0 / 3.0);
+    radius = params.viewport.z * volumeRadiusScale * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
     phase = abs(particle.velocity.w);
     base = mix(cold, warm, smoothstep(0.0, 0.62, phase));
     if (colorMode == 1u) {
@@ -3082,7 +3703,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
       base = 0.42 + 0.48 * cos(vec3<f32>(0.0, 2.094, 4.188) + hash * 6.28318);
       phase = 0.0;
     } else if (colorMode == 2u) {
-      let value = clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0);
+      let value = clamp(speed / ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, 0.0, 1.0);
       base = mix(vec3<f32>(0.02, 0.10, 0.34), vec3<f32>(1.0, 0.25, 0.04), value);
       phase = 0.0;
     } else if (colorMode == 3u) {
@@ -3099,6 +3720,9 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     } else if (colorMode == 6u) {
       let concentration = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
       base = 0.52 + 0.46 * cos(vec3<f32>(0.0, 2.094, 4.188) + concentration * 6.28318);
+      phase = 0.0;
+    } else if (colorMode == 7u) {
+      base = sheet_release_reason_color(neighborTopology[instanceIndex].sheetDiagnosticClassification.x);
       phase = 0.0;
     }
   } else if (isTerrain && !isSkirt) {
@@ -3139,8 +3763,6 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
   let radiusSquared = dot(input.uv, input.uv);
   if (radiusSquared > 1.0) { discard; }
-  let opticalDebugMode = u32(params.cameraUp.w + 0.5);
-  if (opticalDebugMode == 16u) { return vec4<f32>(1.0); }
   let normal = normalize(vec3<f32>(input.uv.x, -input.uv.y, sqrt(max(0.0, 1.0 - radiusSquared))));
   let light = normalize(vec3<f32>(-0.42, 0.70, 0.58));
   let diffuse = max(dot(normal, light), 0.0);
@@ -3158,164 +3780,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-const HDR_ENVIRONMENT_SAMPLING_WGSL = /* wgsl */`
-fn decodeRgbe(encoded: vec4<f32>) -> vec3<f32> {
-  let bytes = floor(encoded * 255.0 + vec4<f32>(0.5));
-  if (bytes.a < 1.0) { return vec3<f32>(0.0); }
-  return bytes.rgb * exp2(bytes.a - 136.0);
-}
-
-fn loadEnvironmentTexel(pixel: vec2<i32>) -> vec3<f32> {
-  let dims = vec2<i32>(textureDimensions(hdrEnvironmentTexture));
-  let wrappedX = ((pixel.x % dims.x) + dims.x) % dims.x;
-  let safePixel = vec2<i32>(wrappedX, clamp(pixel.y, 0, dims.y - 1));
-  return decodeRgbe(textureLoad(hdrEnvironmentTexture, safePixel, 0));
-}
-
-fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
-  let direction = normalize(rayDirection);
-  let longitude = atan2(direction.z, direction.x);
-  let uv = vec2<f32>(fract(0.5 + longitude / (2.0 * 3.14159265)), acos(clamp(direction.y, -1.0, 1.0)) / 3.14159265);
-  let dims = vec2<f32>(textureDimensions(hdrEnvironmentTexture));
-  let texelPosition = uv * dims - vec2<f32>(0.5);
-  let base = vec2<i32>(floor(texelPosition));
-  let blend = fract(texelPosition);
-  let top = mix(loadEnvironmentTexel(base), loadEnvironmentTexel(base + vec2<i32>(1, 0)), blend.x);
-  let bottom = mix(loadEnvironmentTexel(base + vec2<i32>(0, 1)), loadEnvironmentTexel(base + vec2<i32>(1, 1)), blend.x);
-  return mix(top, bottom, blend.y) * 0.72;
-}
-
-fn sampleEnvironmentFiltered(rayDirection: vec3<f32>, roughness: f32) -> vec3<f32> {
-  let direction = normalize(rayDirection);
-  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(direction.y) > 0.92);
-  let tangent = normalize(cross(helperAxis, direction));
-  let bitangent = normalize(cross(direction, tangent));
-  let coneRadius = 0.015 + clamp(roughness * roughness, 0.0, 1.0) * 0.36;
-  return sampleEnvironment(direction) * 0.40
-    + sampleEnvironment(normalize(direction + tangent * coneRadius)) * 0.15
-    + sampleEnvironment(normalize(direction - tangent * coneRadius)) * 0.15
-    + sampleEnvironment(normalize(direction + bitangent * coneRadius)) * 0.15
-    + sampleEnvironment(normalize(direction - bitangent * coneRadius)) * 0.15;
-}
-`;
-
-const HDR_WORLD_BACKGROUND_SHADER = /* wgsl */`
-struct RenderParams {
-  viewProjection: mat4x4<f32>,
-  cameraRight: vec4<f32>,
-  cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
-  viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
-}
-
-@group(0) @binding(1) var<uniform> params: RenderParams;
-@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
-
-${HDR_ENVIRONMENT_SAMPLING_WGSL}
-
-@vertex
-fn vs_hdr_world_background(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
-  let positions = array<vec2<f32>, 3>(
-    vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0)
-  );
-  return vec4<f32>(positions[vertexIndex], 0.0, 1.0);
-}
-
-@fragment
-fn fs_hdr_world_background(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
-  let normalized = fragmentPosition.xy / params.viewport.xy;
-  let ndc = normalized * 2.0 - vec2<f32>(1.0);
-  let aspect = params.viewport.x / max(params.viewport.y, 1.0);
-  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
-  let cameraRay = normalize(
-    params.cameraForward.xyz
-      + params.cameraRight.xyz * ndc.x * aspect * tanHalfFov
-      - params.cameraUp.xyz * ndc.y * tanHalfFov
-  );
-  return vec4<f32>(sampleEnvironment(cameraRay), 1.0);
-}
-`;
-
-const FINAL_PRESENTATION_SHADER = /* wgsl */`
-struct RenderParams {
-  viewProjection: mat4x4<f32>,
-  cameraRight: vec4<f32>,
-  cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
-  viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
-}
-
-@group(0) @binding(0) var linearSceneRadiance: texture_2d<f32>;
-@group(0) @binding(1) var<uniform> params: RenderParams;
-@group(0) @binding(2) var presentationSurfaceAccumulation: texture_2d<f32>;
-@group(0) @binding(3) var presentationSupportFrontDepth: texture_2d<f32>;
-@group(0) @binding(4) var presentationCompositeDepth: texture_depth_2d;
-
-fn toneMapAces(color: vec3<f32>) -> vec3<f32> {
-  let a = 2.51;
-  let b = 0.03;
-  let c = 2.43;
-  let d = 0.59;
-  let e = 0.14;
-  return clamp((color * (a * color + vec3<f32>(b))) / (color * (c * color + vec3<f32>(d)) + vec3<f32>(e)), vec3<f32>(0.0), vec3<f32>(1.0));
-}
-
-fn viewDepthToNdc(viewDepth: f32) -> f32 {
-  let near = 0.08;
-  let far = 30.0;
-  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
-}
-
-@vertex
-fn vs_final_presentation(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
-  let positions = array<vec2<f32>, 3>(
-    vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0)
-  );
-  return vec4<f32>(positions[vertexIndex], 0.0, 1.0);
-}
-
-@fragment
-fn fs_final_presentation(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
-  let source = textureLoad(linearSceneRadiance, vec2<i32>(fragmentPosition.xy), 0);
-  let opticalDebugMode = i32(round(params.cameraUp.w));
-  let linearRadiance = max(source.rgb, vec3<f32>(0.0));
-  let exposure = ${LINEAR_SCENE_EXPOSURE};
-  let displayColor = toneMapAces(linearRadiance * exposure);
-  if (opticalDebugMode == 16) { return source; }
-  let liquidSample = textureLoad(presentationSurfaceAccumulation, vec2<i32>(fragmentPosition.xy), 0);
-  let liquidResident = liquidSample.z >= 0.018 && liquidSample.x >= 0.012;
-  let supportOrderingDepth = textureLoad(presentationSupportFrontDepth, vec2<i32>(fragmentPosition.xy), 0).y;
-  let presentedDepth = textureLoad(presentationCompositeDepth, vec2<i32>(fragmentPosition.xy), 0);
-  let expectedLiquidDepth = viewDepthToNdc(supportOrderingDepth + 0.003);
-  let liquidVisible = liquidResident && abs(presentedDepth - expectedLiquidDepth) < 0.00002;
-  let diagnosticQuantity = opticalDebugMode != 0
-    && opticalDebugMode != 12
-    && opticalDebugMode != 15
-    && opticalDebugMode != 17;
-  let diagnosticColor = clamp(linearRadiance, vec3<f32>(0.0), vec3<f32>(1.0));
-  return vec4<f32>(select(displayColor, diagnosticColor, diagnosticQuantity && liquidVisible), source.a);
-}
-`;
-
 const ANALYTIC_SUPPORT_PRESENTATION_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
 }
 
 @group(0) @binding(1) var<uniform> params: RenderParams;
-@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
-
-${HDR_ENVIRONMENT_SAMPLING_WGSL}
 
 ${PLAYGROUND_WGSL}
 
@@ -3376,7 +3849,6 @@ struct AnalyticSupportVertexOutput {
   @location(0) worldPosition: vec3<f32>,
   @location(1) worldNormal: vec3<f32>,
   @location(2) supportKind: f32,
-  @location(3) viewDepth: f32,
 }
 
 @vertex
@@ -3460,7 +3932,6 @@ fn vs_analytic_support_presentation(@builtin(vertex_index) vertexIndex: u32) -> 
   output.worldPosition = worldPosition;
   output.worldNormal = worldNormal;
   output.supportKind = supportKind;
-  output.viewDepth = max(0.001, output.position.w);
   return output;
 }
 
@@ -3471,47 +3942,14 @@ fn worldGrid(worldPosition: vec3<f32>, cellsPerWorldUnit: f32) -> f32 {
   return 1.0 - min(min(distanceToLine.x, distanceToLine.y), 1.0);
 }
 
-struct DeferredSceneOutput {
-  @location(0) color: vec4<f32>,
-  @location(1) worldNormalRoughness: vec4<f32>,
-  @location(2) albedoMetallic: vec4<f32>,
-  @location(3) linearDepthObject: vec4<f32>,
-}
-
 @fragment
-fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> DeferredSceneOutput {
+fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> @location(0) vec4<f32> {
   let normal = normalize(input.worldNormal);
-  let viewDirection = normalize(params.cameraPosition.xyz - input.worldPosition);
-  var roughness = 0.82;
-  var metallic = 0.0;
-  var baseColor = vec3<f32>(0.20, 0.23, 0.215);
-  if (input.supportKind > 3.5) {
-    roughness = 0.88;
-    baseColor = vec3<f32>(0.34, 0.38, 0.35);
-  } else if (input.supportKind > 2.5) {
-    roughness = 0.48;
-    metallic = 0.32;
-    baseColor = vec3<f32>(0.53, 0.34, 0.13);
-  } else if (input.supportKind > 1.5) {
-    roughness = 0.42;
-    metallic = 0.18;
-    baseColor = vec3<f32>(0.25, 0.39, 0.46);
-  } else if (input.supportKind > 0.5) {
-    roughness = 0.36;
-    metallic = 0.58;
-    baseColor = vec3<f32>(0.48, 0.34, 0.14);
-  }
-  if (input.supportKind > 3.5) {
-    let porousGrain = 0.82 + 0.18 * sin(dot(input.worldPosition, vec3<f32>(53.0, 71.0, 89.0)));
-    baseColor *= porousGrain;
-  }
-  let diffuseEnvironment = sampleEnvironment(normal) * 0.16;
-  let reflectionDirection = reflect(-viewDirection, normal);
-  let specularEnvironment = sampleEnvironmentFiltered(reflectionDirection, roughness);
-  let ndv = clamp(dot(normal, viewDirection), 0.0, 1.0);
-  let f0 = mix(vec3<f32>(0.04), baseColor, metallic);
-  let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - ndv, 5.0);
-  let terrainBase = baseColor * (vec3<f32>(0.62) + diffuseEnvironment) + specularEnvironment * fresnel * (1.0 - roughness * 0.72);
+  let lightDirection = normalize(vec3<f32>(-0.38, 0.82, 0.43));
+  let diffuse = max(dot(normal, lightDirection), 0.0);
+  let hemisphere = normal.y * 0.5 + 0.5;
+  let terrainLight = 0.34 + diffuse * 0.48 + hemisphere * 0.18;
+  let terrainBase = vec3<f32>(0.20, 0.23, 0.215) * terrainLight;
   let minorGrid = worldGrid(input.worldPosition, 2.0);
   let majorGrid = worldGrid(input.worldPosition, 0.5);
   var terrainColor = mix(terrainBase, vec3<f32>(0.37, 0.43, 0.40), minorGrid * 0.34);
@@ -3523,90 +3961,24 @@ fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> Defer
   terrainColor = mix(terrainColor, vec3<f32>(0.65, 0.25, 0.20), xAxis * 0.68);
   terrainColor = mix(terrainColor, vec3<f32>(0.18, 0.48, 0.60), zAxis * 0.68);
 
-  let color = select(terrainColor, terrainBase, input.supportKind > 0.5);
-  let objectId = 1.0 + floor(input.supportKind + 0.5);
-  var output: DeferredSceneOutput;
-  output.color = vec4<f32>(color, 1.0);
-  output.worldNormalRoughness = vec4<f32>(normal, roughness);
-  output.albedoMetallic = vec4<f32>(baseColor, metallic);
-  output.linearDepthObject = vec4<f32>(input.viewDepth, objectId, input.supportKind, 1.0);
-  return output;
-}
-`;
-
-const DYNAMIC_INDEXED_MESH_SHADER = /* wgsl */`
-struct RenderParams {
-  viewProjection: mat4x4<f32>,
-  cameraRight: vec4<f32>,
-  cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
-  viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
-}
-
-struct SceneParams {
-  model: mat4x4<f32>,
-  normalTransform: mat4x4<f32>,
-  albedoRoughness: vec4<f32>,
-  identityMetallicPhase: vec4<f32>,
-}
-
-@group(0) @binding(0) var<uniform> scene: SceneParams;
-@group(0) @binding(1) var<uniform> params: RenderParams;
-@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
-
-${HDR_ENVIRONMENT_SAMPLING_WGSL}
-
-struct DynamicMeshVertexOutput {
-  @builtin(position) position: vec4<f32>,
-  @location(0) worldPosition: vec3<f32>,
-  @location(1) worldNormal: vec3<f32>,
-  @location(2) viewDepth: f32,
-}
-
-@vertex
-fn vs_dynamic_indexed_mesh(
-  @location(0) localPosition: vec4<f32>,
-  @location(1) localNormal: vec4<f32>,
-) -> DynamicMeshVertexOutput {
-  let worldPosition = scene.model * localPosition;
-  let clipPosition = params.viewProjection * worldPosition;
-  var output: DynamicMeshVertexOutput;
-  output.position = clipPosition;
-  output.worldPosition = worldPosition.xyz;
-  output.worldNormal = normalize((scene.normalTransform * localNormal).xyz);
-  output.viewDepth = max(0.001, clipPosition.w);
-  return output;
-}
-
-struct DeferredSceneOutput {
-  @location(0) color: vec4<f32>,
-  @location(1) worldNormalRoughness: vec4<f32>,
-  @location(2) albedoMetallic: vec4<f32>,
-  @location(3) linearDepthObject: vec4<f32>,
-}
-
-@fragment
-fn fs_dynamic_indexed_mesh(input: DynamicMeshVertexOutput) -> DeferredSceneOutput {
-  let normal = normalize(input.worldNormal);
-  let viewDirection = normalize(params.cameraPosition.xyz - input.worldPosition);
-  let roughness = scene.albedoRoughness.w;
-  let metallic = scene.identityMetallicPhase.y;
-  let diffuseEnvironment = sampleEnvironment(normal) * 0.17;
-  let reflectionDirection = reflect(-viewDirection, normal);
-  let specularEnvironment = sampleEnvironmentFiltered(reflectionDirection, roughness);
-  let ndv = clamp(dot(normal, viewDirection), 0.0, 1.0);
-  let f0 = mix(vec3<f32>(0.04), scene.albedoRoughness.rgb, metallic);
-  let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - ndv, 5.0);
-  let color = scene.albedoRoughness.rgb * (vec3<f32>(0.07) + diffuseEnvironment) * (1.0 - metallic)
-    + specularEnvironment * fresnel * (1.0 - roughness * 0.64);
-  var output: DeferredSceneOutput;
-  output.color = vec4<f32>(color, 1.0);
-  output.worldNormalRoughness = vec4<f32>(normal, scene.albedoRoughness.w);
-  output.albedoMetallic = vec4<f32>(scene.albedoRoughness.rgb, scene.identityMetallicPhase.y);
-  output.linearDepthObject = vec4<f32>(input.viewDepth, scene.identityMetallicPhase.x, scene.identityMetallicPhase.z, 1.0);
-  return output;
+  let obstacleLight = 0.28 + diffuse * 0.58 + hemisphere * 0.14;
+  let obstacleColor = vec3<f32>(0.48, 0.34, 0.14) * obstacleLight;
+  let fixtureLight = 0.24 + diffuse * 0.62 + hemisphere * 0.14;
+  let roundFixtureColor = vec3<f32>(0.25, 0.39, 0.46) * fixtureLight + vec3<f32>(0.04, 0.12, 0.15);
+  let slotFixtureColor = vec3<f32>(0.53, 0.34, 0.13) * fixtureLight + vec3<f32>(0.10, 0.04, 0.01);
+  let porousGrain = 0.82 + 0.18 * sin(dot(input.worldPosition, vec3<f32>(53.0, 71.0, 89.0)));
+  let porousFixtureColor = vec3<f32>(0.34, 0.38, 0.35) * fixtureLight * porousGrain;
+  var color = terrainColor;
+  if (input.supportKind > 3.5) {
+    color = porousFixtureColor;
+  } else if (input.supportKind > 2.5) {
+    color = slotFixtureColor;
+  } else if (input.supportKind > 1.5) {
+    color = roundFixtureColor;
+  } else if (input.supportKind > 0.5) {
+    color = obstacleColor;
+  }
+  return vec4<f32>(color, 1.0);
 }
 `;
 
@@ -3621,6 +3993,13 @@ struct Particle {
 struct NeighborTopologyState {
   neighborIds: vec4<u32>,
   metrics: vec4<f32>,
+  sheet: vec4<f32>,
+  sheetNeighborIds: vec4<u32>,
+  sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
+  refinement: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3631,10 +4010,7 @@ struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraPosition: vec4<f32>,
   viewport: vec4<f32>,
-  opticalModes: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
@@ -3646,31 +4022,6 @@ struct RenderParams {
 @group(0) @binding(6) var refractionSceneSampler: sampler;
 @group(0) @binding(7) var opticalSlabFrontDepth: texture_2d<f32>;
 @group(0) @binding(8) var opticalSlabBackDepth: texture_2d<f32>;
-@group(0) @binding(9) var<storage, read> reflectionMeshPositions: array<vec4<f32>>;
-@group(0) @binding(10) var<storage, read> reflectionMeshIndices: array<u32>;
-
-struct SceneParams {
-  model: mat4x4<f32>,
-  normalTransform: mat4x4<f32>,
-  albedoRoughness: vec4<f32>,
-  identityMetallicPhase: vec4<f32>,
-}
-
-@group(0) @binding(11) var<uniform> reflectionScene: SceneParams;
-@group(0) @binding(12) var hdrEnvironmentTexture: texture_2d<f32>;
-@group(0) @binding(13) var deferredLinearDepthObject: texture_2d<f32>;
-@group(0) @binding(14) var deferredWorldNormalRoughness: texture_2d<f32>;
-@group(0) @binding(15) var deferredAlbedoMetallic: texture_2d<f32>;
-
-const REFLECTION_HIT_ENVIRONMENT = 0u;
-const REFLECTION_HIT_ANALYTIC = 1u;
-const REFLECTION_HIT_INDEXED_MESH = 2u;
-const REFLECTION_HIT_DEFERRED_SCENE = 3u;
-const REFLECTION_HIT_NONE = 4u;
-const OPTICAL_PROVIDER_ENVIRONMENT = 0u;
-const OPTICAL_PROVIDER_WORLD = 1u;
-const OPTICAL_PROVIDER_DEFERRED = 2u;
-const OPTICAL_PROVIDER_NONE = 3u;
 
 struct AccumVertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -3692,7 +4043,8 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   let corner = quad[vertexIndex];
   let surface = max(particle.predicted.w, 0.16);
   let densityRadius = clamp(particle.delta.w / 24.3, 0.62, 1.55);
-  let radius = params.viewport.z * mix(1.22, 1.78, surface) * densityRadius;
+  let volumeRadiusScale = pow(max(neighborTopology[instanceIndex].refinement.x, 0.000001), 1.0 / 3.0);
+  let radius = params.viewport.z * volumeRadiusScale * mix(1.22, 1.78, surface) * densityRadius;
   let worldPosition = particle.position.xyz + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
   var clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
   if (particle.velocity.w < 0.0) {
@@ -3723,13 +4075,12 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let edge = smoothstep(1.0, 0.46, r2);
   let surfaceWeight = mix(0.55, 1.0, input.surface);
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
-  let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
+  let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
-  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius);
   var output: AccumFragmentOutput;
-  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth * depthWeight);
-  output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
+  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
+  output.frontDepth = vec4<f32>(max(0.001, input.viewDepth - cap * input.radius));
   output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius);
   return output;
 }
@@ -3763,423 +4114,13 @@ fn readFrontDepth(pixel: vec2<i32>) -> f32 {
   return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
 }
 
-fn readSupportOrderingDepth(pixel: vec2<i32>) -> f32 {
-  let dims = vec2<i32>(textureDimensions(opticalSlabFrontDepth));
-  return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).y;
-}
-
 fn readBackDepth(pixel: vec2<i32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(opticalSlabBackDepth));
   return textureLoad(opticalSlabBackDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
 }
 
-struct ReflectionHit {
-  distance: f32,
-  normal: vec3<f32>,
-  kind: u32,
-  position: vec3<f32>,
-}
-
-fn reconstructWorldPosition(pixel: vec2<i32>, viewDepth: f32) -> vec3<f32> {
-  let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
-  var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
-  ndc.y = -ndc.y;
-  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
-  let aspect = dims.x / max(dims.y, 1.0);
-  return params.cameraPosition.xyz
-    + params.cameraForward.xyz * viewDepth
-    + params.cameraRight.xyz * ndc.x * viewDepth * tanHalfFov * aspect
-    + params.cameraUp.xyz * ndc.y * viewDepth * tanHalfFov;
-}
-
-fn worldSurfaceNormal(viewNormal: vec3<f32>) -> vec3<f32> {
-  let worldNormal = normalize(
-    params.cameraRight.xyz * viewNormal.x
-    + params.cameraUp.xyz * viewNormal.y
-    - params.cameraForward.xyz * viewNormal.z
-  );
-  return worldNormal;
-}
-
-fn viewDirectionToWorld(viewDirection: vec3<f32>) -> vec3<f32> {
-  return normalize(
-    params.cameraRight.xyz * viewDirection.x
-    + params.cameraUp.xyz * viewDirection.y
-    - params.cameraForward.xyz * viewDirection.z
-  );
-}
-
-struct DeferredSceneHit {
-  valid: f32,
-  distance: f32,
-  uv: vec2<f32>,
-  position: vec3<f32>,
-  normal: vec3<f32>,
-  albedo: vec3<f32>,
-  roughness: f32,
-  metallic: f32,
-  objectId: f32,
-  confidence: f32,
-}
-
-fn projectWorldToDeferred(worldPosition: vec3<f32>) -> vec4<f32> {
-  let clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
-  if (clip.w <= 0.001) { return vec4<f32>(-1.0); }
-  let ndc = clip.xy / clip.w;
-  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5);
-  return vec4<f32>(uv, clip.w, 1.0);
-}
-
-fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> DeferredSceneHit {
-  var hit: DeferredSceneHit;
-  hit.valid = 0.0;
-  hit.distance = 60.0;
-  hit.uv = vec2<f32>(-1.0);
-  hit.position = rayOrigin + rayDirection * hit.distance;
-  hit.normal = vec3<f32>(0.0, 1.0, 0.0);
-  hit.albedo = vec3<f32>(0.0);
-  hit.roughness = 1.0;
-  hit.metallic = 0.0;
-  hit.objectId = 0.0;
-  hit.confidence = 0.0;
-  let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
-  let dimsFloat = vec2<f32>(dims);
-  var distance = 0.055;
-  for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
-    let samplePosition = rayOrigin + rayDirection * distance;
-    let projected = projectWorldToDeferred(samplePosition);
-    if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
-      distance = distance + 0.05 + distance * 0.105;
-      continue;
-    }
-    let scenePixel = clamp(vec2<i32>(projected.xy * dimsFloat), vec2<i32>(0), dims - vec2<i32>(1));
-    let depthObject = textureLoad(deferredLinearDepthObject, scenePixel, 0);
-    let sceneDepth = depthObject.x;
-    let objectId = depthObject.y;
-    let depthDelta = projected.z - sceneDepth;
-    let crossingTolerance = 0.028 + distance * 0.012;
-    if (depthObject.w > 0.5 && sceneDepth < 29.5 && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
-      let normalRoughness = textureLoad(deferredWorldNormalRoughness, scenePixel, 0);
-      let albedoMetallic = textureLoad(deferredAlbedoMetallic, scenePixel, 0);
-      hit.valid = 1.0;
-      hit.uv = projected.xy;
-      hit.position = reconstructWorldPosition(scenePixel, sceneDepth);
-      hit.distance = length(hit.position - rayOrigin);
-      hit.normal = normalize(normalRoughness.xyz);
-      hit.albedo = albedoMetallic.rgb;
-      hit.roughness = normalRoughness.w;
-      hit.metallic = albedoMetallic.w;
-      hit.objectId = objectId;
-      hit.confidence = 1.0 - smoothstep(0.0, 0.22, abs(depthDelta));
-      return hit;
-    }
-    distance = distance + 0.05 + distance * 0.105;
-  }
-  return hit;
-}
-
-fn intersectTriangle(
-  rayOrigin: vec3<f32>,
-  rayDirection: vec3<f32>,
-  a: vec3<f32>,
-  b: vec3<f32>,
-  c: vec3<f32>,
-) -> vec4<f32> {
-  let edge1 = b - a;
-  let edge2 = c - a;
-  let p = cross(rayDirection, edge2);
-  let determinant = dot(edge1, p);
-  if (abs(determinant) < 0.00001) { return vec4<f32>(-1.0); }
-  let inverseDeterminant = 1.0 / determinant;
-  let t = rayOrigin - a;
-  let u = dot(t, p) * inverseDeterminant;
-  if (u < 0.0 || u > 1.0) { return vec4<f32>(-1.0); }
-  let q = cross(t, edge1);
-  let v = dot(rayDirection, q) * inverseDeterminant;
-  if (v < 0.0 || u + v > 1.0) { return vec4<f32>(-1.0); }
-  let distance = dot(edge2, q) * inverseDeterminant;
-  if (distance <= 0.012) { return vec4<f32>(-1.0); }
-  var normal = normalize(cross(edge1, edge2));
-  normal = select(normal, -normal, dot(normal, rayDirection) > 0.0);
-  return vec4<f32>(normal, distance);
-}
-
-fn traceIndexedMesh(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, current: ReflectionHit) -> ReflectionHit {
-  var hit = current;
-  for (var triangleIndex = 0u; triangleIndex < ${DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT}u; triangleIndex = triangleIndex + 1u) {
-    let indexOffset = triangleIndex * 3u;
-    let a = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset]]).xyz;
-    let b = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset + 1u]]).xyz;
-    let c = (reflectionScene.model * reflectionMeshPositions[reflectionMeshIndices[indexOffset + 2u]]).xyz;
-    let candidate = intersectTriangle(rayOrigin, rayDirection, a, b, c);
-    if (candidate.w > 0.0 && candidate.w < hit.distance) {
-      hit.distance = candidate.w;
-      hit.normal = candidate.xyz;
-      hit.kind = REFLECTION_HIT_INDEXED_MESH;
-      hit.position = rayOrigin + rayDirection * candidate.w;
-    }
-  }
-  return hit;
-}
-
-fn traceAnalyticSphere(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, current: ReflectionHit) -> ReflectionHit {
-  var hit = current;
-  let center = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let offset = rayOrigin - center;
-  let halfB = dot(offset, rayDirection);
-  let discriminant = halfB * halfB - (dot(offset, offset) - ${OBSTACLE_RADIUS * OBSTACLE_RADIUS});
-  if (discriminant > 0.0) {
-    let distance = -halfB - sqrt(discriminant);
-    if (distance > 0.012 && distance < hit.distance) {
-      hit.distance = distance;
-      hit.position = rayOrigin + rayDirection * distance;
-      hit.normal = normalize(hit.position - center);
-      hit.kind = REFLECTION_HIT_ANALYTIC;
-    }
-  }
-  return hit;
-}
-
-fn traceClosestSurface(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionHit {
-  var hit: ReflectionHit;
-  hit.distance = 60.0;
-  hit.normal = vec3<f32>(0.0, 1.0, 0.0);
-  hit.kind = REFLECTION_HIT_ENVIRONMENT;
-  hit.position = rayOrigin + rayDirection * hit.distance;
-  hit = traceIndexedMesh(rayOrigin, rayDirection, hit);
-  hit = traceAnalyticSphere(rayOrigin, rayDirection, hit);
-  return hit;
-}
-
-${HDR_ENVIRONMENT_SAMPLING_WGSL}
-
-fn integrateParticipatingRadiance(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, tMax: f32) -> vec3<f32> {
-  _ = rayOrigin;
-  _ = rayDirection;
-  _ = tMax;
-  return vec3<f32>(0.0);
-}
-
-fn shadeSurfaceHit(hit: ReflectionHit, outgoingRay: vec3<f32>) -> vec3<f32> {
-  if (hit.kind == REFLECTION_HIT_ENVIRONMENT) { return sampleEnvironment(outgoingRay); }
-  let lightDirection = normalize(vec3<f32>(-0.38, 0.82, 0.43));
-  let diffuse = max(dot(hit.normal, lightDirection), 0.0);
-  let edge = pow(1.0 - max(dot(hit.normal, -outgoingRay), 0.0), 3.0);
-  if (hit.kind == REFLECTION_HIT_INDEXED_MESH) {
-    let stripe = 0.5 + 0.5 * cos((hit.position.y + hit.position.x * 0.35) * 18.0 + reflectionScene.identityMetallicPhase.z * 2.0);
-    let base = mix(reflectionScene.albedoRoughness.rgb, vec3<f32>(1.0, 0.46, 0.08), stripe * 0.48);
-    return base * (0.24 + diffuse * 0.96) + vec3<f32>(0.24, 0.66, 1.0) * edge * 0.72;
-  }
-  return vec3<f32>(0.54, 0.32, 0.08) * (0.26 + diffuse * 0.88) + vec3<f32>(0.92, 0.68, 0.28) * edge * 0.35;
-}
-
-struct ReflectionSample {
-  radiance: vec3<f32>,
-  environmentRadiance: vec3<f32>,
-}
-
-struct OpticalQuerySample {
-  radiance: vec3<f32>,
-  environmentRadiance: vec3<f32>,
-  distance: f32,
-  hitKind: u32,
-  providerKind: u32,
-  position: vec3<f32>,
-  normal: vec3<f32>,
-  albedo: vec3<f32>,
-  roughness: f32,
-  metallic: f32,
-  objectId: f32,
-  confidence: f32,
-}
-
-fn makeNoOpticalQuerySample() -> OpticalQuerySample {
-  var sample: OpticalQuerySample;
-  sample.radiance = vec3<f32>(0.0);
-  sample.environmentRadiance = vec3<f32>(0.0);
-  sample.distance = 0.0;
-  sample.hitKind = REFLECTION_HIT_NONE;
-  sample.providerKind = OPTICAL_PROVIDER_NONE;
-  sample.position = vec3<f32>(0.0);
-  sample.normal = vec3<f32>(0.0, 1.0, 0.0);
-  sample.albedo = vec3<f32>(0.0);
-  sample.roughness = 1.0;
-  sample.metallic = 0.0;
-  sample.objectId = 0.0;
-  sample.confidence = 0.0;
-  return sample;
-}
-
-struct ReflectionQuadrature {
-  radiance: vec3<f32>,
-  environmentRadiance: vec3<f32>,
-}
-
-fn sampleWorldOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
-  let hit = traceClosestSurface(rayOrigin, rayDirection);
-  let surfaceRadiance = shadeSurfaceHit(hit, rayDirection);
-  var sample: OpticalQuerySample;
-  sample.radiance = surfaceRadiance + integrateParticipatingRadiance(rayOrigin, rayDirection, hit.distance);
-  sample.environmentRadiance = select(vec3<f32>(0.0), surfaceRadiance, hit.kind == REFLECTION_HIT_ENVIRONMENT);
-  sample.distance = hit.distance;
-  sample.hitKind = hit.kind;
-  sample.providerKind = select(OPTICAL_PROVIDER_WORLD, OPTICAL_PROVIDER_ENVIRONMENT, hit.kind == REFLECTION_HIT_ENVIRONMENT);
-  sample.position = hit.position;
-  sample.normal = hit.normal;
-  sample.albedo = select(vec3<f32>(0.54, 0.32, 0.08), reflectionScene.albedoRoughness.rgb, hit.kind == REFLECTION_HIT_INDEXED_MESH);
-  sample.roughness = select(0.42, reflectionScene.albedoRoughness.w, hit.kind == REFLECTION_HIT_INDEXED_MESH);
-  sample.metallic = select(0.0, reflectionScene.identityMetallicPhase.y, hit.kind == REFLECTION_HIT_INDEXED_MESH);
-  sample.objectId = select(2.0, reflectionScene.identityMetallicPhase.x, hit.kind == REFLECTION_HIT_INDEXED_MESH);
-  sample.confidence = 1.0;
-  return sample;
-}
-
-fn sampleHybridOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
-  let deferredHit = traceDeferredScene(rayOrigin, rayDirection);
-  if (deferredHit.valid > 0.5 && deferredHit.confidence >= 0.55) {
-    var sample: OpticalQuerySample;
-    sample.radiance = textureSampleLevel(refractionSceneColor, refractionSceneSampler, deferredHit.uv, 0.0).rgb
-      + integrateParticipatingRadiance(rayOrigin, rayDirection, deferredHit.distance);
-    sample.environmentRadiance = vec3<f32>(0.0);
-    sample.distance = deferredHit.distance;
-    sample.hitKind = REFLECTION_HIT_DEFERRED_SCENE;
-    sample.providerKind = OPTICAL_PROVIDER_DEFERRED;
-    sample.position = deferredHit.position;
-    sample.normal = deferredHit.normal;
-    sample.albedo = deferredHit.albedo;
-    sample.roughness = deferredHit.roughness;
-    sample.metallic = deferredHit.metallic;
-    sample.objectId = deferredHit.objectId;
-    sample.confidence = deferredHit.confidence;
-    return sample;
-  }
-  return sampleWorldOpticalQuery(rayOrigin, rayDirection);
-}
-
-fn integrateTransmissionQuadrature(
-  rayOrigin: vec3<f32>,
-  centerDirection: vec3<f32>,
-  center: OpticalQuerySample,
-  coneRadius: f32,
-  transmissionFootprintMode: i32,
-) -> vec3<f32> {
-  if (transmissionFootprintMode == 0) {
-    return center.radiance;
-  }
-  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
-  let tangent = normalize(cross(helperAxis, centerDirection));
-  let bitangent = normalize(cross(centerDirection, tangent));
-  var samples: array<OpticalQuerySample, 5>;
-  samples[0] = center;
-  samples[1] = sampleHybridOpticalQuery(rayOrigin, normalize(centerDirection + tangent * coneRadius));
-  samples[2] = sampleHybridOpticalQuery(rayOrigin, normalize(centerDirection - tangent * coneRadius));
-  samples[3] = sampleHybridOpticalQuery(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
-  samples[4] = sampleHybridOpticalQuery(rayOrigin, normalize(centerDirection - bitangent * coneRadius));
-  var minimumIndex = 0;
-  var maximumIndex = 0;
-  var minimumLuminance = dot(samples[0].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
-  var maximumLuminance = minimumLuminance;
-  var radianceSum = vec3<f32>(0.0);
-  for (var sampleIndex = 0; sampleIndex < 5; sampleIndex += 1) {
-    let sampleLuminance = dot(samples[sampleIndex].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
-    if (sampleLuminance < minimumLuminance) {
-      minimumLuminance = sampleLuminance;
-      minimumIndex = sampleIndex;
-    }
-    if (sampleLuminance > maximumLuminance) {
-      maximumLuminance = sampleLuminance;
-      maximumIndex = sampleIndex;
-    }
-    radianceSum += samples[sampleIndex].radiance;
-  }
-  if (maximumIndex == minimumIndex) {
-    maximumIndex = select(0, 1, minimumIndex == 0);
-  }
-  return (radianceSum - samples[minimumIndex].radiance - samples[maximumIndex].radiance) / 3.0;
-}
-
-fn reflectionSampleFromOpticalQuery(query: OpticalQuerySample) -> ReflectionSample {
-  var sample: ReflectionSample;
-  sample.radiance = query.radiance;
-  sample.environmentRadiance = query.environmentRadiance;
-  return sample;
-}
-
-fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
-  return reflectionSampleFromOpticalQuery(sampleWorldOpticalQuery(rayOrigin, rayDirection));
-}
-
-fn integrateWorldReflectionQuadrature(
-  worldPosition: vec3<f32>,
-  cameraRay: vec3<f32>,
-  worldNormal: vec3<f32>,
-  coneRadius: f32,
-  opticalFootprintMode: i32,
-) -> ReflectionQuadrature {
-  let centerDirection = normalize(reflect(cameraRay, worldNormal));
-  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
-  let tangent = normalize(cross(helperAxis, centerDirection));
-  let bitangent = normalize(cross(centerDirection, tangent));
-  let rayOrigin = worldPosition + worldNormal * 0.026;
-  let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
-  let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
-  let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
-  let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
-  let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius));
-  var quadrature: ReflectionQuadrature;
-  if (opticalFootprintMode == 0) {
-    quadrature.radiance = center.radiance * 0.36
-      + (tangentPositive.radiance + tangentNegative.radiance + bitangentPositive.radiance + bitangentNegative.radiance) * 0.16;
-    quadrature.environmentRadiance = center.environmentRadiance * 0.36
-      + (tangentPositive.environmentRadiance + tangentNegative.environmentRadiance + bitangentPositive.environmentRadiance + bitangentNegative.environmentRadiance) * 0.16;
-    return quadrature;
-  }
-  let diagonalRadius = coneRadius * 0.70710678;
-  let diagonalPositivePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent + bitangent) * diagonalRadius));
-  let diagonalPositiveNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent - bitangent) * diagonalRadius));
-  let diagonalNegativePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent + bitangent) * diagonalRadius));
-  let diagonalNegativeNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent - bitangent) * diagonalRadius));
-  var samples: array<ReflectionSample, 9>;
-  samples[0] = center;
-  samples[1] = tangentPositive;
-  samples[2] = tangentNegative;
-  samples[3] = bitangentPositive;
-  samples[4] = bitangentNegative;
-  samples[5] = diagonalPositivePositive;
-  samples[6] = diagonalPositiveNegative;
-  samples[7] = diagonalNegativePositive;
-  samples[8] = diagonalNegativeNegative;
-  var minimumIndex = 0;
-  var maximumIndex = 0;
-  var minimumLuminance = dot(samples[0].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
-  var maximumLuminance = minimumLuminance;
-  var radianceSum = vec3<f32>(0.0);
-  var environmentRadianceSum = vec3<f32>(0.0);
-  for (var sampleIndex = 0; sampleIndex < 9; sampleIndex += 1) {
-    let sampleLuminance = dot(samples[sampleIndex].radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
-    if (sampleLuminance < minimumLuminance) {
-      minimumLuminance = sampleLuminance;
-      minimumIndex = sampleIndex;
-    }
-    if (sampleLuminance > maximumLuminance) {
-      maximumLuminance = sampleLuminance;
-      maximumIndex = sampleIndex;
-    }
-    radianceSum += samples[sampleIndex].radiance;
-    environmentRadianceSum += samples[sampleIndex].environmentRadiance;
-  }
-  if (maximumIndex == minimumIndex) {
-    maximumIndex = select(0, 1, minimumIndex == 0);
-  }
-  quadrature.radiance = (radianceSum - samples[minimumIndex].radiance - samples[maximumIndex].radiance) / 7.0;
-  quadrature.environmentRadiance = (environmentRadianceSum
-    - samples[minimumIndex].environmentRadiance
-    - samples[maximumIndex].environmentRadiance) / 7.0;
-  return quadrature;
-}
-
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
-  return sampleValue.w / max(sampleValue.z, 0.0001);
+  return sampleValue.w;
 }
 
 fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
@@ -4216,90 +4157,22 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
   return select(centerDepth, candidate, populated && abs(candidate - centerDepth) < 0.72);
 }
 
-fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
-  let leftPixel = pixel + vec2<i32>(-6, 0);
-  let rightPixel = pixel + vec2<i32>(6, 0);
-  let screenUpPixel = pixel + vec2<i32>(0, -6);
-  let screenDownPixel = pixel + vec2<i32>(0, 6);
-  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
-  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
-  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
-  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
-  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
-  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
-  let viewToCamera = normalize(params.cameraPosition.xyz - center);
-  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
-  return worldNormal;
-}
-
-fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
-  let leftPixel = pixel + vec2<i32>(-2, 0);
-  let rightPixel = pixel + vec2<i32>(2, 0);
-  let screenUpPixel = pixel + vec2<i32>(0, -2);
-  let screenDownPixel = pixel + vec2<i32>(0, 2);
-  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
-  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
-  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
-  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
-  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
-  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
-  let viewToCamera = normalize(params.cameraPosition.xyz - center);
-  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
-  return worldNormal;
-}
-
-fn reconstructEntryNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
-  let left = coherentSlabDepth(pixel + vec2<i32>(-radius, 0), centerDepth, false);
-  let right = coherentSlabDepth(pixel + vec2<i32>(radius, 0), centerDepth, false);
-  let down = coherentSlabDepth(pixel + vec2<i32>(0, -radius), centerDepth, false);
-  let up = coherentSlabDepth(pixel + vec2<i32>(0, radius), centerDepth, false);
-  let gradient = vec2<f32>(right - left, up - down) / f32(radius);
+fn reconstructEntryNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
+  let left = coherentSlabDepth(pixel + vec2<i32>(-1, 0), centerDepth, false);
+  let right = coherentSlabDepth(pixel + vec2<i32>(1, 0), centerDepth, false);
+  let down = coherentSlabDepth(pixel + vec2<i32>(0, -1), centerDepth, false);
+  let up = coherentSlabDepth(pixel + vec2<i32>(0, 1), centerDepth, false);
+  let gradient = vec2<f32>(right - left, up - down);
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0));
 }
 
-struct InterfaceNormalEstimate {
-  detailNormal: vec3<f32>,
-  macroNormal: vec3<f32>,
-  microResidual: vec3<f32>,
-  filteredNormal: vec3<f32>,
-  variance: f32,
-  denseBodyConfidence: f32,
-}
-
-fn estimateInterfaceNormal(
-  pixel: vec2<i32>,
-  centerDepth: f32,
-  centerAccum: vec4<f32>,
-  coverageContinuity: f32,
-) -> InterfaceNormalEstimate {
-  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 1);
-  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 3);
-  let variance = sqrt(max(1.0 - dot(detailNormal, macroNormal), 0.0));
-  let denseBodyConfidence = smoothstep(0.68, 0.94, coverageContinuity)
-    * smoothstep(2.35, 4.60, centerAccum.x)
-    * smoothstep(1.15, 2.50, centerAccum.z);
-  let normalBlend = denseBodyConfidence * clamp(0.14 + variance * 0.9, 0.14, 0.58);
-  var estimate: InterfaceNormalEstimate;
-  estimate.detailNormal = detailNormal;
-  estimate.macroNormal = macroNormal;
-  estimate.microResidual = detailNormal - macroNormal;
-  estimate.filteredNormal = normalize(mix(detailNormal, macroNormal, normalBlend));
-  estimate.variance = variance;
-  estimate.denseBodyConfidence = denseBodyConfidence;
-  return estimate;
-}
-
-fn reconstructExitNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
-  let left = coherentSlabDepth(pixel + vec2<i32>(-radius, 0), centerDepth, true);
-  let right = coherentSlabDepth(pixel + vec2<i32>(radius, 0), centerDepth, true);
-  let down = coherentSlabDepth(pixel + vec2<i32>(0, -radius), centerDepth, true);
-  let up = coherentSlabDepth(pixel + vec2<i32>(0, radius), centerDepth, true);
-  let gradient = vec2<f32>(right - left, up - down) / f32(radius);
-  return normalize(vec3<f32>(gradient.x * 7.2, -gradient.y * 7.2, -1.0));
-}
-
 fn reconstructExitNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
-  return reconstructExitNormalAtRadius(pixel, centerDepth, 1);
+  let left = coherentSlabDepth(pixel + vec2<i32>(-1, 0), centerDepth, true);
+  let right = coherentSlabDepth(pixel + vec2<i32>(1, 0), centerDepth, true);
+  let down = coherentSlabDepth(pixel + vec2<i32>(0, -1), centerDepth, true);
+  let up = coherentSlabDepth(pixel + vec2<i32>(0, 1), centerDepth, true);
+  let gradient = vec2<f32>(right - left, up - down);
+  return normalize(vec3<f32>(gradient.x * 7.2, -gradient.y * 7.2, -1.0));
 }
 
 struct OpticalSlab {
@@ -4366,7 +4239,7 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   let pixel = vec2<i32>(fragmentPosition.xy);
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
-  let supportOrderingDepth = readSupportOrderingDepth(pixel);
+  let supportOrderingDepth = weightedDepth(centerAccum);
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let normal = reconstructSurfaceNormal(pixel, shadingDepth);
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
@@ -4391,98 +4264,22 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   return output;
 }
 
-fn distributionGgx(noh: f32, roughness: f32) -> f32 {
-  let alpha = roughness * roughness;
-  let alphaSquared = alpha * alpha;
-  let denominator = noh * noh * (alphaSquared - 1.0) + 1.0;
-  return alphaSquared / max(3.14159265 * denominator * denominator, 0.0001);
-}
-
-fn geometrySchlickGgx(nod: f32, roughness: f32) -> f32 {
-  let k = (roughness + 1.0) * (roughness + 1.0) * 0.125;
-  return nod / max(nod * (1.0 - k) + k, 0.0001);
-}
-
-fn geometrySmith(nov: f32, nol: f32, roughness: f32) -> f32 {
-  return geometrySchlickGgx(nov, roughness) * geometrySchlickGgx(nol, roughness);
-}
-
-fn fresnelSchlick(voh: f32, f0: vec3<f32>) -> vec3<f32> {
-  return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - voh, 5.0);
-}
-
-fn evaluateBoundedGgxDirectSpecular(
-  normal: vec3<f32>,
-  viewDirection: vec3<f32>,
-  lightDirection: vec3<f32>,
-  roughness: f32,
-) -> vec3<f32> {
-  let halfVector = normalize(viewDirection + lightDirection);
-  let nov = clamp(dot(normal, viewDirection), 0.0, 1.0);
-  let nol = clamp(dot(normal, lightDirection), 0.0, 1.0);
-  let noh = clamp(dot(normal, halfVector), 0.0, 1.0);
-  let voh = clamp(dot(viewDirection, halfVector), 0.0, 1.0);
-  let distribution = distributionGgx(noh, roughness);
-  let geometry = geometrySmith(nov, nol, roughness);
-  let fresnel = fresnelSchlick(voh, vec3<f32>(0.02037));
-  let specular = vec3<f32>(0.72, 0.92, 1.0) * 6.0 * distribution * geometry * fresnel * nol
-    / max(4.0 * nov * nol, 0.0001);
-  return min(specular, vec3<f32>(0.22));
-}
-
 @fragment
 fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
   let dimsFloat = vec2<f32>(dims);
   let pixel = vec2<i32>(fragmentPosition.xy);
-  let opticalLightingMode = i32(round(params.cameraForward.w));
-  let opticalFootprintMode = i32(round(params.cameraPosition.w));
-  let transmissionFootprintMode = i32(round(params.opticalModes.x));
-  let bodyTransportMode = i32(round(params.opticalModes.y));
-  let interfaceFrequencyMode = i32(round(params.opticalModes.z));
   let sceneUv = clamp((vec2<f32>(pixel) + vec2<f32>(0.5)) / dimsFloat, vec2<f32>(0.0), vec2<f32>(1.0));
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
 
-  let supportOrderingDepth = readSupportOrderingDepth(pixel);
-  let opticalDebugMode = i32(round(params.cameraUp.w));
-  if (opticalDebugMode == 16) {
-    return refractionOutput(vec4<f32>(1.0, 1.0, 1.0, 1.0), supportOrderingDepth);
-  }
-  let centerCoverage = smoothstep(0.018, 0.10, centerAccum.z)
-    * smoothstep(0.012, 0.085, centerAccum.x);
-  var coverageSupportSum = 0.0;
-  var coverageWeightSum = 0.0;
-  for (var coverageY = -2; coverageY <= 2; coverageY = coverageY + 1) {
-    for (var coverageX = -2; coverageX <= 2; coverageX = coverageX + 1) {
-      let neighborAccum = readAccum(pixel + vec2<i32>(coverageX, coverageY));
-      let neighborSupport = smoothstep(0.018, 0.075, neighborAccum.z)
-        * smoothstep(0.012, 0.065, neighborAccum.x);
-      let coverageWeight = 1.0 / (1.0 + f32(abs(coverageX) + abs(coverageY)));
-      coverageSupportSum = coverageSupportSum + neighborSupport * coverageWeight;
-      coverageWeightSum = coverageWeightSum + coverageWeight;
-    }
-  }
-  let coverageContinuity = smoothstep(0.42, 0.90, coverageSupportSum / max(coverageWeightSum, 0.001));
-  let legacyCoverage = centerCoverage * coverageContinuity;
+  let supportOrderingDepth = weightedDepth(centerAccum);
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let slab = evaluateOpticalSlab(pixel, centerAccum);
-  let interfaceNormal = estimateInterfaceNormal(pixel, slab.entryDepth, centerAccum, coverageContinuity);
-  let denseCoverageClosure = max(legacyCoverage, smoothstep(0.48, 0.84, coverageContinuity));
-  let adaptiveCoverage = mix(legacyCoverage, denseCoverageClosure, interfaceNormal.denseBodyConfidence);
-  let interfaceFidelityEnabled = opticalDebugMode != 22;
-  let geometricCoverage = select(legacyCoverage, adaptiveCoverage, interfaceFidelityEnabled);
-  let coupledTransportNormal = select(interfaceNormal.detailNormal, interfaceNormal.filteredNormal, interfaceFidelityEnabled);
-  let transportNormal = select(coupledTransportNormal, interfaceNormal.macroNormal, interfaceFrequencyMode == 1);
-  if (opticalDebugMode == 18) {
-    return refractionOutput(vec4<f32>(vec3<f32>(geometricCoverage), 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 23) {
-    return refractionOutput(vec4<f32>(interfaceNormal.denseBodyConfidence, coverageContinuity, interfaceNormal.variance, 1.0), supportOrderingDepth);
-  }
+  let normal = reconstructEntryNormal(pixel, slab.entryDepth);
   let thickness = centerAccum.x;
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
-  let insideRay = refract(-viewDir, transportNormal, 1.0 / 1.333);
+  let insideRay = refract(-viewDir, normal, 1.0 / 1.333);
   let insideRayValid = length(insideRay) > 0.001;
   let geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
   let insideOffset = projectViewRayOffset(insideRay, geometricPathLength, slab.entryDepth);
@@ -4493,55 +4290,26 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let sampledExitDepth = readBackDepth(exitPixel);
   let exitDepthValid = sampledExitDepth > slab.entryDepth + 0.004 && sampledExitDepth < 29.5;
   let exitNormal = reconstructExitNormal(exitPixel, sampledExitDepth);
-  let exitMacroNormal = reconstructExitNormalAtRadius(exitPixel, sampledExitDepth, 3);
-  let exitTransportNormal = select(exitNormal, exitMacroNormal, interfaceFrequencyMode == 1);
-  let exitNormalVariance = sqrt(max(1.0 - dot(exitNormal, exitMacroNormal), 0.0));
-  let exitRayAngularVariance = max(exitNormalVariance, interfaceNormal.variance * 0.85);
-  let outgoingRay = refract(insideRay, -exitTransportNormal, 1.333);
+  let outgoingRay = refract(insideRay, -exitNormal, 1.333);
   let outgoingRayValid = length(outgoingRay) > 0.001;
-  let exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
-  let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
   let exitDirectionDelta = outgoingRay.xy / max(abs(outgoingRay.z), 0.25)
     - insideRay.xy / max(abs(insideRay.z), 0.25);
   let exitOffset = exitDirectionDelta * clamp(geometricPathLength * 7.0, 0.0, 12.0);
   let twoInterfaceOffset = clamp(insideOffset + exitOffset, vec2<f32>(-28.0), vec2<f32>(28.0));
-  let entryOnlyOffset = reconstructRefractionOffset(transportNormal, thickness);
+  let entryOnlyOffset = reconstructRefractionOffset(normal, thickness);
   let exitValidity = slab.exitValidity
     * select(0.0, 1.0, exitInFrame)
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
-  let queryValidity = select(0.0, 1.0, exitValidity > 0.5);
-  let transmissionFootprintActivation = interfaceNormal.denseBodyConfidence
-    * smoothstep(0.04, 0.34, exitRayAngularVariance)
-    * queryValidity;
-  let transmissionConeRadius = clamp(
-    0.008 + transmissionFootprintActivation * (0.055 + exitRayAngularVariance * 0.18),
-    0.008,
-    0.22,
-  );
-  let effectiveTransmissionQuadratureMode = select(
-    0,
-    1,
-    transmissionFootprintMode == 1 && transmissionFootprintActivation > 0.05,
-  );
-  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, queryValidity);
+  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, exitValidity);
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
-  let opticalThicknessPath = thickness * 0.12;
-  let geometricSlabPath = mix(opticalThicknessPath, geometricPathLength, queryValidity);
-  let denseBodyPathActivation = interfaceNormal.denseBodyConfidence
-    * smoothstep(0.035, 0.42, opticalThicknessPath - geometricPathLength)
-    * queryValidity;
-  let robustBodyPath = mix(
-    geometricPathLength,
-    max(geometricPathLength, opticalThicknessPath),
-    denseBodyPathActivation,
-  );
-  let robustBodyPathWithFallback = mix(opticalThicknessPath, robustBodyPath, queryValidity);
-  let absorptionPath = select(geometricSlabPath, robustBodyPathWithFallback, bodyTransportMode == 1);
-  let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
-  let legacyAbsorptionCoefficient = vec3<f32>(0.46, 0.15, 0.055);
-  let absorptionCoefficient = select(calibratedAbsorptionCoefficient, legacyAbsorptionCoefficient, opticalLightingMode == 2);
-  let absorption = exp(-absorptionCoefficient * absorptionPath);
+  let ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+  let f0 = 0.02037;
+  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+  let absorptionPath = mix(thickness * 0.12, geometricPathLength, exitValidity);
+  let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
+  let opticalDebugMode = i32(round(params.cameraUp.w));
+
   if (opticalDebugMode == 1) {
     let depthView = 1.0 - exp(-supportOrderingDepth * 0.22);
     return refractionOutput(vec4<f32>(vec3<f32>(depthView), 1.0), supportOrderingDepth);
@@ -4551,7 +4319,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(depthView * 0.45, depthView * 0.72, depthView, 1.0), supportOrderingDepth);
   }
   if (opticalDebugMode == 3) {
-    return refractionOutput(vec4<f32>(transportNormal * 0.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
+    return refractionOutput(vec4<f32>(normal * 0.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
   }
   if (opticalDebugMode == 4) {
     let depthView = 1.0 - exp(-sampledExitDepth * 0.22);
@@ -4575,229 +4343,24 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     let encodedOffset = offsetPixels / 56.0 + vec2<f32>(0.5);
     return refractionOutput(vec4<f32>(encodedOffset, length(offsetPixels) / 28.0, 1.0), supportOrderingDepth);
   }
-  if (opticalDebugMode == 11) {
-    return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 32) {
-    let pathScale = max(max(geometricPathLength, opticalThicknessPath), 0.001);
-    return refractionOutput(vec4<f32>(
-      geometricPathLength / pathScale,
-      opticalThicknessPath / pathScale,
-      absorptionPath / pathScale,
-      1.0
-    ), supportOrderingDepth);
-  }
-
-  var refractionQuery = makeNoOpticalQuerySample();
-  if (queryValidity > 0.5) {
-    refractionQuery = sampleHybridOpticalQuery(exitWorldPosition + outgoingWorldRay * 0.035, outgoingWorldRay);
-  }
-  if (opticalDebugMode == 19) {
-    if (queryValidity <= 0.5) {
-      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
-    }
-    let hitKindColor = select(
-      select(
-        select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), refractionQuery.hitKind == REFLECTION_HIT_ANALYTIC),
-        vec3<f32>(0.96, 0.12, 0.38),
-        refractionQuery.hitKind == REFLECTION_HIT_INDEXED_MESH,
-      ),
-      vec3<f32>(0.16, 0.92, 0.48),
-      refractionQuery.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
-    );
-    return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 20) {
-    if (queryValidity <= 0.5) {
-      return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
-    }
-    let distanceView = 1.0 - exp(-refractionQuery.distance * 0.18);
-    return refractionOutput(vec4<f32>(distanceView, refractionQuery.confidence, 1.0 - distanceView, 1.0), supportOrderingDepth);
-  }
-  var transmissionQuadratureRadiance = refractionQuery.radiance;
-  if (queryValidity > 0.5) {
-    transmissionQuadratureRadiance = integrateTransmissionQuadrature(
-      exitWorldPosition + outgoingWorldRay * 0.035,
-      outgoingWorldRay,
-      refractionQuery,
-      transmissionConeRadius,
-      effectiveTransmissionQuadratureMode,
-    );
-  }
-  let bodyRadianceLowFrequency = transmissionQuadratureRadiance;
-  let bodyRadianceDirectionalResidual = refractionQuery.radiance - bodyRadianceLowFrequency;
-  let bodyRadianceResidualWeight = 1.0 - denseBodyPathActivation * 0.72;
-  let pathConditionedDetailDecay = interfaceNormal.denseBodyConfidence
-    * queryValidity
-    * smoothstep(0.10, 0.85, absorptionPath);
-  let transmissionDetailWeight = select(
-    bodyRadianceResidualWeight,
-    1.0 - pathConditionedDetailDecay * 0.58,
-    interfaceFrequencyMode == 1,
-  );
-  let robustBodyRadiance = max(bodyRadianceLowFrequency + bodyRadianceDirectionalResidual * transmissionDetailWeight, vec3<f32>(0.0));
-  let refractedRadiance = mix(
-    refractedScene.rgb,
-    select(transmissionQuadratureRadiance, robustBodyRadiance, bodyTransportMode == 1),
-    queryValidity,
-  );
-  if (opticalDebugMode == 21) {
-    let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);
-    return refractionOutput(vec4<f32>(fallbackDelta, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 33) {
-    let residualMagnitude = length(bodyRadianceDirectionalResidual) / max(length(bodyRadianceLowFrequency), 0.001);
-    return refractionOutput(vec4<f32>(pathConditionedDetailDecay, transmissionDetailWeight, clamp(residualMagnitude, 0.0, 1.0), 1.0), supportOrderingDepth);
-  }
-
-  let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
-  let worldPosition = reconstructWorldPosition(pixel, reflectionEntryDepth);
-  let worldNormal = reconstructWorldReflectionNormal(pixel);
-  let viewToCamera = normalize(params.cameraPosition.xyz - worldPosition);
-  let cameraRay = -viewToCamera;
-  let macroFresnelNormal = worldNormal;
-  let ndv = clamp(dot(macroFresnelNormal, viewToCamera), 0.0, 1.0);
-  let f0 = 0.02037;
-  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
   if (opticalDebugMode == 10) {
     return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
   }
-  let reflectionDetailNormal = reconstructWorldReflectionDetailNormal(pixel);
-  let unresolvedNormalVariance = sqrt(max(1.0 - dot(worldNormal, reflectionDetailNormal), 0.0));
-  let microReflectionWeight = select(
-    0.0,
-    clamp(
-      (1.0 - interfaceNormal.denseBodyConfidence) * 0.18
-        + interfaceNormal.denseBodyConfidence * unresolvedNormalVariance * 0.12,
-      0.0,
-      0.24,
-    ),
-    interfaceFrequencyMode == 1,
-  );
-  let reflectionSurfaceNormal = normalize(mix(worldNormal, reflectionDetailNormal, microReflectionWeight));
-  let reflectionDirection = normalize(reflect(cameraRay, reflectionSurfaceNormal));
-  let reflectionRoughness = clamp(
-    0.06 + unresolvedNormalVariance * 2.1 + pow(1.0 - ndv, 2.0) * 0.34,
-    0.06,
-    1.0,
-  );
-  let footprintActivation = interfaceNormal.denseBodyConfidence
-    * smoothstep(0.08, 0.42, unresolvedNormalVariance);
-  let baselineReflectionConeRadius = clamp(0.018 + reflectionRoughness * 0.10, 0.018, 0.118);
-  let varianceFilteredConeRadius = clamp(
-    baselineReflectionConeRadius + footprintActivation * (0.018 + reflectionRoughness * 0.024),
-    0.018,
-    0.16,
-  );
-  let reflectionConeRadius = select(baselineReflectionConeRadius, varianceFilteredConeRadius, opticalFootprintMode == 1);
-  let effectiveFootprintQuadratureMode = select(0, 1, opticalFootprintMode == 1 && footprintActivation > 0.05);
-  if (opticalDebugMode == 34) {
-    return refractionOutput(vec4<f32>(interfaceNormal.macroNormal * 0.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 35) {
-    return refractionOutput(vec4<f32>(interfaceNormal.microResidual * 2.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 36) {
-    return refractionOutput(vec4<f32>(unresolvedNormalVariance, microReflectionWeight / 0.24, reflectionRoughness, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 37) {
-    return refractionOutput(vec4<f32>(pathConditionedDetailDecay, transmissionDetailWeight, interfaceNormal.denseBodyConfidence, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 15) {
-    return refractionOutput(vec4<f32>(sampleEnvironmentFiltered(reflectionDirection, reflectionRoughness), 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 13 || opticalDebugMode == 14) {
-    let reflectionHit = sampleHybridOpticalQuery(worldPosition + worldNormal * 0.026, reflectionDirection);
-    if (opticalDebugMode == 13) {
-      let hitKindColor = select(
-        select(
-          select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.hitKind == REFLECTION_HIT_ANALYTIC),
-          vec3<f32>(0.96, 0.12, 0.38),
-          reflectionHit.hitKind == REFLECTION_HIT_INDEXED_MESH,
-        ),
-        vec3<f32>(0.16, 0.92, 0.48),
-        reflectionHit.hitKind == REFLECTION_HIT_DEFERRED_SCENE,
-      );
-      return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
-    }
-    let distanceView = 1.0 - exp(-reflectionHit.distance * 0.18);
-    return refractionOutput(vec4<f32>(distanceView, distanceView * 0.72, 1.0 - distanceView, 1.0), supportOrderingDepth);
-  }
-
-  let reflectionQuadrature = integrateWorldReflectionQuadrature(
-    worldPosition,
-    cameraRay,
-    reflectionSurfaceNormal,
-    reflectionConeRadius,
-    effectiveFootprintQuadratureMode,
-  );
-  let reflectionRadiance = reflectionQuadrature.radiance;
-  if (opticalDebugMode == 12) {
-    return refractionOutput(vec4<f32>(reflectionRadiance, 1.0), supportOrderingDepth);
-  }
-  let environmentContribution = reflectionQuadrature.environmentRadiance * fresnel;
-  if (opticalDebugMode == 17) {
-    return refractionOutput(vec4<f32>(environmentContribution, 1.0), supportOrderingDepth);
+  if (opticalDebugMode == 11) {
+    return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
   }
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
   let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
-  let directRoughness = select(
-    0.0,
-    clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48),
-    interfaceFidelityEnabled,
-  );
-  let directRoughnessWeight = smoothstep(0.025, 0.34, directRoughness);
-  let broadSpecularExponent = mix(38.0, 12.0, directRoughnessWeight);
-  let crestSpecularExponent = mix(128.0, 46.0, directRoughnessWeight);
-  let directLight = max(dot(transportNormal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
-  let broadSpecular = pow(directLight, broadSpecularExponent) * 0.32;
-  let crestSpecular = pow(directLight, crestSpecularExponent) * 0.46 * mix(1.0, 0.82, directRoughnessWeight);
-  let transmittedTransport = refractedRadiance * absorption * (1.0 - fresnel);
-  let reflectedTransport = reflectionRadiance * fresnel;
-  let scatterTransport = waterScatter * (1.0 - fresnel);
-  let transportOnlyColor = transmittedTransport + reflectedTransport + scatterTransport;
-  if (opticalDebugMode == 24) {
-    return refractionOutput(vec4<f32>(transmittedTransport, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 25) {
-    return refractionOutput(vec4<f32>(reflectedTransport, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 26) {
-    return refractionOutput(vec4<f32>(scatterTransport, 1.0), supportOrderingDepth);
-  }
-  let preToneLuminance = dot(transportOnlyColor, vec3<f32>(0.2126, 0.7152, 0.0722));
-  if (opticalDebugMode == 27) {
-    return refractionOutput(vec4<f32>(vec3<f32>(preToneLuminance), 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 28) {
-    return refractionOutput(vec4<f32>(unresolvedNormalVariance, interfaceNormal.denseBodyConfidence, footprintActivation, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 29) {
-    let sampleCount = select(5.0, 9.0, effectiveFootprintQuadratureMode == 1);
-    return refractionOutput(vec4<f32>(baselineReflectionConeRadius / 0.16, reflectionConeRadius / 0.16, sampleCount / 9.0, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 30) {
-    return refractionOutput(vec4<f32>(exitNormalVariance, interfaceNormal.denseBodyConfidence, transmissionFootprintActivation, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 31) {
-    let sampleCount = select(1.0, 5.0, effectiveTransmissionQuadratureMode == 1);
-    return refractionOutput(vec4<f32>(transmissionConeRadius / 0.22, f32(effectiveTransmissionQuadratureMode), sampleCount / 5.0, 1.0), supportOrderingDepth);
-  }
-  var color = transportOnlyColor;
-  if (opticalLightingMode == 1) {
-    let ggxRoughness = clamp(0.12 + directRoughness * 1.8, 0.12, 0.68);
-    color += evaluateBoundedGgxDirectSpecular(
-      worldNormal,
-      viewToCamera,
-      normalize(vec3<f32>(-0.28, 0.64, 1.72)),
-      ggxRoughness,
-    );
-  } else if (opticalLightingMode == 2) {
-    color += vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
-      + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
-  }
-  return refractionOutput(vec4<f32>(color, geometricCoverage), supportOrderingDepth);
+  let transmitted = refractedScene.rgb * absorption + waterScatter;
+  let reflectedSky = vec3<f32>(0.48, 0.78, 0.94) * (0.62 + 0.38 * max(normal.y, 0.0));
+  let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
+  let broadSpecular = pow(directLight, 38.0) * 0.32;
+  let crestSpecular = pow(directLight, 128.0) * 0.46;
+  let color = mix(transmitted, reflectedSky, fresnel)
+    + vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
+    + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
+  return refractionOutput(vec4<f32>(color, 1.0), supportOrderingDepth);
 }
 `;
 
@@ -5039,6 +4602,389 @@ function smoothstepNumber(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+export function resolveFingerFluidUnsupportedSheetStrength(
+  value = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+) {
+  const strength = finite(value, KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
+  if (strength < 0 || strength > 2) {
+    throw new RangeError(`Finger fluid unsupported-sheet strength must be within [0, 2]: ${value}`);
+  }
+  return strength;
+}
+
+export function resolveFingerFluidInletCutoffStep(value = null) {
+  if (value === null || value === undefined || value === '') return null;
+  const step = Number(value);
+  if (!Number.isSafeInteger(step) || step < 1) {
+    throw new RangeError(`Finger fluid inlet cutoff step must be a positive safe integer: ${value}`);
+  }
+  return step;
+}
+
+export function evaluateFingerFluidUnsupportedSheetNeighborhood({
+  velocity = [0, 0, 0],
+  densityRatio = 1,
+  surfaceFactor = 0,
+  supportContact = 1,
+  neighborRetention = 0,
+  neighborRetentionAge = 0,
+  kernelRadius = 0.185,
+  strength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  neighbors = [],
+} = {}) {
+  if (!Array.isArray(velocity) || velocity.length !== 3 || !velocity.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid unsupported-sheet neighborhood requires a finite 3D velocity');
+  }
+  if (!Array.isArray(neighbors) || neighbors.some(neighbor => (
+    !Array.isArray(neighbor?.offset)
+      || neighbor.offset.length !== 3
+      || !neighbor.offset.every(Number.isFinite)
+      || !Array.isArray(neighbor?.velocity)
+      || neighbor.velocity.length !== 3
+      || !neighbor.velocity.every(Number.isFinite)
+  ))) {
+    throw new TypeError('Finger fluid unsupported-sheet neighborhood requires finite offset/velocity samples');
+  }
+  if (!Number.isFinite(kernelRadius) || kernelRadius <= 0) {
+    throw new RangeError(`Finger fluid unsupported-sheet neighborhood requires a positive kernel radius: ${kernelRadius}`);
+  }
+  const safeStrength = resolveFingerFluidUnsupportedSheetStrength(strength);
+  const contact = clamp(finite(supportContact, 1), 0, 1);
+  const safeDensityRatio = Math.max(0, finite(densityRatio, 0));
+  const safeSurfaceFactor = clamp(finite(surfaceFactor, 0), 0, 1);
+  const retention = clamp(finite(neighborRetention, 0), 0, 1);
+  const retentionAge = Math.max(0, finite(neighborRetentionAge, 0));
+  const speed = Math.hypot(...velocity);
+  const flow = normalize3(velocity);
+  const seed = Math.abs(flow[0]) < 0.82 ? [1, 0, 0] : [0, 0, 1];
+  const transverseU = normalize3(cross3(flow, seed));
+  const transverseV = normalize3(cross3(flow, transverseU));
+  let covarianceUU = 0;
+  let covarianceUV = 0;
+  let covarianceVV = 0;
+  let velocityCoherenceSum = 0;
+  let acceptedNeighborCount = 0;
+  for (const neighbor of neighbors) {
+    const distance = Math.hypot(...neighbor.offset);
+    if (distance <= 1e-9 || distance >= kernelRadius) continue;
+    const u = neighbor.offset.reduce((sum, component, axis) => sum + component * transverseU[axis], 0);
+    const v = neighbor.offset.reduce((sum, component, axis) => sum + component * transverseV[axis], 0);
+    covarianceUU += u * u;
+    covarianceUV += u * v;
+    covarianceVV += v * v;
+    const neighborSpeed = Math.hypot(...neighbor.velocity);
+    velocityCoherenceSum += neighborSpeed > 1e-9
+      ? clamp(neighbor.velocity.reduce((sum, component, axis) => sum + component * flow[axis], 0) / neighborSpeed, -1, 1)
+      : 0;
+    acceptedNeighborCount += 1;
+  }
+  const covarianceTrace = covarianceUU + covarianceVV;
+  const covarianceDiscriminant = Math.sqrt(Math.max(0, (covarianceUU - covarianceVV) ** 2 + 4 * covarianceUV ** 2));
+  const transverseAnisotropy = covarianceTrace > 1e-12
+    ? (covarianceTrace + covarianceDiscriminant) * 0.5 / covarianceTrace
+    : 0;
+  const velocityCoherence = acceptedNeighborCount > 0 ? velocityCoherenceSum / acceptedNeighborCount : 0;
+
+  let releaseReason = null;
+  if (safeStrength === 0) releaseReason = 'disabled';
+  else if (contact >= 0.2) releaseReason = 'support_contact';
+  else if (acceptedNeighborCount < 3) releaseReason = 'neighbor_loss';
+  else if (speed < 0.18) releaseReason = 'low_transport_speed';
+  else if (safeDensityRatio < 0.1) releaseReason = 'density_loss';
+  else if (safeDensityRatio > 1.05) releaseReason = 'bulk_density';
+  else if (safeSurfaceFactor < 0.2) releaseReason = 'not_interface';
+  else if (retention < 0.25 || retentionAge < 0.03) releaseReason = 'topology_loss';
+  else if (velocityCoherence < 0.72) releaseReason = 'velocity_incoherent';
+  else if (transverseAnisotropy < 0.66) releaseReason = 'not_planar';
+
+  const activity = releaseReason ? 0 : clamp(
+    safeStrength
+      * (1 - smoothstepNumber(0.04, 0.20, contact))
+      * smoothstepNumber(0.10, 0.32, safeDensityRatio)
+      * (1 - smoothstepNumber(0.90, 1.05, safeDensityRatio))
+      * smoothstepNumber(0.20, 0.58, safeSurfaceFactor)
+      * smoothstepNumber(0.25, 0.65, retention)
+      * smoothstepNumber(0.03, 0.22, retentionAge)
+      * smoothstepNumber(0.72, 0.92, velocityCoherence)
+      * smoothstepNumber(0.66, 0.86, transverseAnisotropy)
+      * smoothstepNumber(2, 6, acceptedNeighborCount),
+    0,
+    1,
+  );
+  return {
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    activity: Number(activity.toFixed(6)),
+    releaseReason,
+    neighborCount: acceptedNeighborCount,
+    transverseAnisotropy: Number(transverseAnisotropy.toFixed(6)),
+    velocityCoherence: Number(velocityCoherence.toFixed(6)),
+  };
+}
+
+export function summarizeFingerFluidSheetReleaseDiagnostics(
+  topologyValues,
+  particleValues,
+  particleCount,
+) {
+  if (!Number.isSafeInteger(particleCount) || particleCount < 1) {
+    throw new TypeError(`Finger fluid sheet diagnostics require a positive particle count: ${particleCount}`);
+  }
+  const expectedTopologyValues = particleCount * NEIGHBOR_TOPOLOGY_WORDS;
+  const expectedParticleValues = particleCount * PARTICLE_FLOATS;
+  if (!topologyValues || topologyValues.length !== expectedTopologyValues) {
+    throw new RangeError(`Finger fluid sheet diagnostics received partial topology diagnostics: expected ${expectedTopologyValues}, received ${topologyValues?.length ?? 0}`);
+  }
+  if (!particleValues || particleValues.length !== expectedParticleValues) {
+    throw new RangeError(`Finger fluid sheet diagnostics received partial particle diagnostics: expected ${expectedParticleValues}, received ${particleValues?.length ?? 0}`);
+  }
+
+  const reasonCounts = Object.fromEntries(
+    Object.keys(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES).map(reason => [reason, 0]),
+  );
+  const measurementNames = [
+    'priorActivity',
+    'currentActivity',
+    'inletCoreWeight',
+    'speed',
+    'supportContact',
+    'densityRatio',
+    'surfaceFactor',
+    'neighborCount',
+    'velocityCoherence',
+    'transverseAnisotropy',
+    'topologyRetention',
+    'topologyRetentionAge',
+  ];
+  const reasonAccumulators = Object.fromEntries(
+    Object.keys(reasonCounts).map(reason => [reason, {
+      positionMin: [Infinity, Infinity, Infinity],
+      positionMax: [-Infinity, -Infinity, -Infinity],
+      positionSum: [0, 0, 0],
+      measurementSums: Object.fromEntries(measurementNames.map(name => [name, 0])),
+      maximumLinkStretch: 0,
+      maximumLinkKernelRatio: 0,
+    }]),
+  );
+  let activeParticleCount = 0;
+  let dormantParticleCount = 0;
+  let activeSheetParticleCount = 0;
+  let releasedSheetParticleCount = 0;
+  let maximumLinkStretch = 0;
+  let maximumLinkKernelRatio = 0;
+  let neighborCountSum = 0;
+  let densityRatioSum = 0;
+  let topologyRetentionSum = 0;
+
+  const requireFiniteReadback = (value, field, index) => {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`Non-finite sheet diagnostic readback for particle ${index}: ${field}=${value}`);
+    }
+    return value;
+  };
+
+  for (let index = 0; index < particleCount; index += 1) {
+    const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS;
+    const diagnosticOffset = topologyOffset + 20;
+    const channels = Array.from(topologyValues.slice(diagnosticOffset, diagnosticOffset + 12));
+    if (channels.length !== 12) {
+      throw new TypeError(`Finger fluid sheet diagnostics contain malformed channels for particle ${index}`);
+    }
+    channels.forEach((value, channelIndex) => requireFiniteReadback(value, `diagnosticChannel[${channelIndex}]`, index));
+    const reasonCode = channels[0];
+    if (!Number.isInteger(reasonCode) || !Object.hasOwn(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE, reasonCode)) {
+      throw new RangeError(`Unknown sheet release reason code ${reasonCode} for particle ${index}`);
+    }
+    const reason = KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE[reasonCode];
+    const particleOffset = index * PARTICLE_FLOATS;
+    const activeDiscriminator = requireFiniteReadback(
+      particleValues[particleOffset + 11],
+      'particle.activeDiscriminator',
+      index,
+    );
+    const active = activeDiscriminator >= 0;
+    if (!active) {
+      dormantParticleCount += 1;
+      if (reason !== 'dormant') {
+        throw new Error(`Dormant particle ${index} carries non-dormant sheet release reason ${reason}`);
+      }
+      continue;
+    }
+    if (reason === 'dormant') {
+      throw new Error(`Active particle ${index} carries dormant sheet release reason`);
+    }
+    const activity = requireFiniteReadback(topologyValues[topologyOffset + 11], 'topology.sheetActivity', index);
+    if ((reason === 'active' && activity <= 0) || (reason !== 'active' && activity > 0.0001)) {
+      throw new Error(`Particle ${index} sheet activity ${activity} contradicts release reason ${reason}`);
+    }
+    activeParticleCount += 1;
+    reasonCounts[reason] += 1;
+    const accumulator = reasonAccumulators[reason];
+    for (let axis = 0; axis < 3; axis += 1) {
+      const position = requireFiniteReadback(
+        particleValues[particleOffset + axis],
+        `particle.position[${axis}]`,
+        index,
+      );
+      accumulator.positionMin[axis] = Math.min(accumulator.positionMin[axis], position);
+      accumulator.positionMax[axis] = Math.max(accumulator.positionMax[axis], position);
+      accumulator.positionSum[axis] += position;
+    }
+    const measurements = {
+      priorActivity: channels[1],
+      currentActivity: activity,
+      inletCoreWeight: channels[2],
+      speed: channels[4],
+      supportContact: channels[5],
+      densityRatio: channels[6],
+      surfaceFactor: channels[7],
+      neighborCount: channels[8],
+      velocityCoherence: channels[9],
+      transverseAnisotropy: channels[10],
+      topologyRetention: requireFiniteReadback(
+        topologyValues[topologyOffset + 4],
+        'topology.retention',
+        index,
+      ),
+      topologyRetentionAge: requireFiniteReadback(
+        topologyValues[topologyOffset + 5],
+        'topology.retentionAge',
+        index,
+      ),
+    };
+    for (const name of measurementNames) accumulator.measurementSums[name] += measurements[name];
+    accumulator.maximumLinkStretch = Math.max(accumulator.maximumLinkStretch, channels[11]);
+    accumulator.maximumLinkKernelRatio = Math.max(accumulator.maximumLinkKernelRatio, channels[3]);
+    if (reason === 'active') activeSheetParticleCount += 1;
+    else releasedSheetParticleCount += 1;
+    neighborCountSum += channels[8];
+    densityRatioSum += channels[6];
+    topologyRetentionSum += measurements.topologyRetention;
+    maximumLinkStretch = Math.max(maximumLinkStretch, channels[11]);
+    maximumLinkKernelRatio = Math.max(maximumLinkKernelRatio, channels[3]);
+  }
+
+  const rounded = value => Number(value.toFixed(6));
+  const reasonRows = Object.entries(reasonCounts).map(([reason, count]) => {
+    const accumulator = reasonAccumulators[reason];
+    return {
+      reason,
+      code: KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES[reason],
+      particleCount: count,
+      activeParticleRatio: rounded(count / Math.max(1, activeParticleCount)),
+      positionBounds: count > 0 ? {
+        min: accumulator.positionMin.map(rounded),
+        max: accumulator.positionMax.map(rounded),
+        centroid: accumulator.positionSum.map(value => rounded(value / count)),
+      } : null,
+      measurements: count > 0 ? {
+        ...Object.fromEntries(measurementNames.map(name => [
+          `average${name[0].toUpperCase()}${name.slice(1)}`,
+          rounded(accumulator.measurementSums[name] / count),
+        ])),
+        maximumLinkStretch: rounded(accumulator.maximumLinkStretch),
+        maximumLinkKernelRatio: rounded(accumulator.maximumLinkKernelRatio),
+      } : null,
+    };
+  });
+  return {
+    schema: KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA,
+    contract: KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT,
+    layout: 'neighbor-topology-words-20-through-31-reusing-sheet-and-metrics-v0',
+    accountedParticleCount: particleCount,
+    activeParticleCount,
+    dormantParticleCount,
+    diagnosedActiveParticleCount: reasonRows.reduce((sum, row) => sum + row.particleCount, 0),
+    activeSheetParticleCount,
+    releasedSheetParticleCount,
+    reasonCounts,
+    reasonRows,
+    averageNeighborCount: Number((neighborCountSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    averageDensityRatio: Number((densityRatioSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    averageTopologyRetention: Number((topologyRetentionSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    maximumLinkStretch: Number(maximumLinkStretch.toFixed(6)),
+    maximumLinkKernelRatio: Number(maximumLinkKernelRatio.toFixed(6)),
+  };
+}
+
+export function validateFingerFluidWaterfallWitnessRenderIdentity(route, {
+  rendererMode,
+  colorMode,
+  opticalDebugMode,
+} = {}) {
+  const identity = {
+    requestedRendererMode: route?.requestedRendererMode,
+    effectiveRendererMode: route?.effectiveRendererMode,
+    requestedColorMode: route?.requestedColorMode,
+    effectiveColorMode: route?.effectiveColorMode,
+    requestedOpticalDebugMode: route?.requestedOpticalDebugMode,
+    effectiveOpticalDebugMode: route?.effectiveOpticalDebugMode,
+  };
+  if (identity.requestedRendererMode !== rendererMode
+    || identity.effectiveRendererMode !== rendererMode
+    || identity.requestedColorMode !== colorMode
+    || identity.effectiveColorMode !== colorMode
+    || identity.requestedOpticalDebugMode !== opticalDebugMode
+    || identity.effectiveOpticalDebugMode !== opticalDebugMode) {
+    throw new Error(`Requested/effective waterfall witness render identity mismatch: ${JSON.stringify({
+      expected: { rendererMode, colorMode, opticalDebugMode },
+      identity,
+    })}`);
+  }
+  return identity;
+}
+
+export function validateFingerFluidFiniteDiagnosticPayload(payload, label = 'finger fluid diagnostics') {
+  const visit = (value, path) => {
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        throw new TypeError(`Non-finite diagnostic payload at ${path}: ${value}`);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => visit(entry, `${path}[${index}]`));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const [key, entry] of Object.entries(value)) visit(entry, `${path}.${key}`);
+    }
+  };
+  visit(payload, label);
+  return payload;
+}
+
+export function evaluateFingerFluidUnsupportedSheetPair({
+  distance,
+  kernelRadius,
+  normalAlignment,
+  particleActivity,
+  neighborActivity,
+} = {}) {
+  if (![distance, kernelRadius, normalAlignment, particleActivity, neighborActivity].every(Number.isFinite)
+    || kernelRadius <= 0 || distance < 0) {
+    throw new TypeError('Finger fluid unsupported-sheet pair requires finite non-negative geometry and activity');
+  }
+  const q = distance / kernelRadius;
+  let releaseReason = null;
+  if (q >= 1.75) releaseReason = 'outside_bridge_radius';
+  else if (q <= 0.0001) releaseReason = 'degenerate_pair';
+  else if (normalAlignment < 0.72) releaseReason = 'normal_incoherent';
+  else if (particleActivity <= 0 || neighborActivity <= 0) releaseReason = 'inactive_pair';
+  const pairActivity = releaseReason
+    ? 0
+    : Math.min(particleActivity, neighborActivity) * smoothstepNumber(0.72, 0.94, normalAlignment);
+  const gapClosureWeight = releaseReason
+    ? 0
+    : pairActivity * smoothstepNumber(0.55, 0.90, q) * (1 - smoothstepNumber(1.55, 1.75, q));
+  return {
+    contract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+    q: Number(q.toFixed(6)),
+    pairActivity: Number(pairActivity.toFixed(6)),
+    gapClosureWeight: Number(gapClosureWeight.toFixed(6)),
+    releaseReason,
+  };
+}
+
 export function evaluateFingerFluidInterfaceDensityConstraint({
   densityRatio = 1,
   surfaceFactor = 0,
@@ -5212,6 +5158,22 @@ export function measureFingerFluidWaterfallContinuity(
   }
   const waterfalls = rows.map(row => {
     const sorted = [...row.samples].sort((a, b) => b.position[1] - a.position[1]);
+    const closeNeighborRadius = 0.185 * 0.55;
+    const closeNeighborCounts = row.samples.map((sample, sampleIndex) => {
+      let closeNeighborCount = 0;
+      for (let neighborIndex = 0; neighborIndex < row.samples.length; neighborIndex += 1) {
+        if (neighborIndex === sampleIndex) continue;
+        const neighbor = row.samples[neighborIndex];
+        const distance = Math.hypot(
+          sample.position[0] - neighbor.position[0],
+          sample.position[1] - neighbor.position[1],
+          sample.position[2] - neighbor.position[2],
+        );
+        if (distance <= closeNeighborRadius) closeNeighborCount += 1;
+      }
+      return closeNeighborCount;
+    });
+    const closeNeighborSupportedParticleCount = closeNeighborCounts.filter(count => count >= 4).length;
     const components = [];
     const maximumConnectedGap = 0.13;
     for (const sample of sorted) {
@@ -5237,6 +5199,10 @@ export function measureFingerFluidWaterfallContinuity(
       largestComponentParticleRatio: Number((largest.length / Math.max(1, row.samples.length)).toFixed(5)),
       connectedSurvivalLength: Number(connectedSurvivalLength.toFixed(5)),
       connectedSurvivalWidths: Number((connectedSurvivalLength / Math.max(0.001, row.apertureWidth)).toFixed(5)),
+      closeNeighborRadius,
+      averageCloseNeighborCount: Number((closeNeighborCounts.reduce((sum, value) => sum + value, 0) / Math.max(1, closeNeighborCounts.length)).toFixed(5)),
+      closeNeighborSupportedParticleCount,
+      closeNeighborSupportedParticleRatio: Number((closeNeighborSupportedParticleCount / Math.max(1, row.samples.length)).toFixed(5)),
       transverseVelocityStdDev: Number(Math.sqrt(transverseVariance).toFixed(5)),
       averageDensityRatio: Number((row.samples.reduce((sum, sample) => sum + sample.densityRatio, 0) / Math.max(1, row.samples.length)).toFixed(5)),
       averageSurfaceFactor: Number((row.samples.reduce((sum, sample) => sum + sample.surfaceFactor, 0) / Math.max(1, row.samples.length)).toFixed(5)),
@@ -5258,6 +5224,7 @@ export function measureFingerFluidWaterfallContinuity(
 export function evaluateFingerFluidWaterfallContinuityAcceptance({
   diagnostics,
   sourceParticleCounts,
+  activeSourceParticleCounts = sourceParticleCounts,
 } = {}) {
   if (diagnostics?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA
     || diagnostics?.contract !== KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT
@@ -5270,19 +5237,31 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
     || sourceParticleCounts.some(count => !Number.isSafeInteger(count) || count <= 0)) {
     throw new TypeError(`Waterfall acceptance requires positive source particle counts: ${JSON.stringify(sourceParticleCounts)}`);
   }
+  if (!Array.isArray(activeSourceParticleCounts)
+    || activeSourceParticleCounts.length !== diagnostics.waterfalls.length
+    || activeSourceParticleCounts.some((count, sourceIndex) => (
+      !Number.isSafeInteger(count)
+      || count <= 0
+      || count > sourceParticleCounts[sourceIndex]
+    ))) {
+    throw new TypeError(`Waterfall acceptance requires active source particle counts bounded by total allocation: ${JSON.stringify({ sourceParticleCounts, activeSourceParticleCounts })}`);
+  }
   const minimumSurvivalWidths = [0.75, 0.75, 0.25];
   const waterfalls = diagnostics.waterfalls.map((waterfall, sourceIndex) => {
     const sourceParticleCount = sourceParticleCounts[sourceIndex];
-    const fallingCoverageRatio = waterfall.particleCount / sourceParticleCount;
+    const activeSourceParticleCount = activeSourceParticleCounts[sourceIndex];
+    const fallingCoverageRatio = waterfall.particleCount / activeSourceParticleCount;
     const coverageAccepted = fallingCoverageRatio >= 0.08;
     const componentAccepted = waterfall.largestComponentParticleRatio >= 0.75;
     const survivalAccepted = waterfall.connectedSurvivalWidths >= minimumSurvivalWidths[sourceIndex];
+    const closeNeighborSupportAccepted = waterfall.closeNeighborSupportedParticleRatio >= 0.65;
     const transverseVelocityAccepted = Number.isFinite(waterfall.transverseVelocityStdDev)
       && waterfall.transverseVelocityStdDev <= 0.75;
     return {
       sourceIndex,
       sourceId: waterfall.sourceId,
       sourceParticleCount,
+      activeSourceParticleCount,
       fallingParticleCount: waterfall.particleCount,
       fallingCoverageRatio: Number(fallingCoverageRatio.toFixed(5)),
       minimumFallingCoverageRatio: 0.08,
@@ -5293,10 +5272,14 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
       connectedSurvivalWidths: waterfall.connectedSurvivalWidths,
       minimumConnectedSurvivalWidths: minimumSurvivalWidths[sourceIndex],
       survivalAccepted,
+      averageCloseNeighborCount: waterfall.averageCloseNeighborCount,
+      closeNeighborSupportedParticleRatio: waterfall.closeNeighborSupportedParticleRatio,
+      minimumCloseNeighborSupportedParticleRatio: 0.65,
+      closeNeighborSupportAccepted,
       transverseVelocityStdDev: waterfall.transverseVelocityStdDev,
       maximumTransverseVelocityStdDev: 0.75,
       transverseVelocityAccepted,
-      ok: coverageAccepted && componentAccepted && survivalAccepted && transverseVelocityAccepted,
+      ok: coverageAccepted && componentAccepted && survivalAccepted && closeNeighborSupportAccepted && transverseVelocityAccepted,
     };
   });
   return {
@@ -5304,14 +5287,231 @@ export function evaluateFingerFluidWaterfallContinuityAcceptance({
     diagnosticsSchema: diagnostics.schema,
     contract: diagnostics.contract,
     sourcePopulationCount: sourceParticleCounts.reduce((sum, count) => sum + count, 0),
+    activeSourcePopulationCount: activeSourceParticleCounts.reduce((sum, count) => sum + count, 0),
     waterfalls,
     ok: waterfalls.every(waterfall => waterfall.ok),
   };
 }
 
-export function measureFingerFluidWaterfallImageContinuity(rgbData, width, height, {
-  pixelMode = 'phase_liquid_rgb',
+function matchingWaterfallEvidenceIdentityValue(runtime, requestedKey, effectiveKey, label) {
+  const requested = runtime?.[requestedKey];
+  const effective = runtime?.[effectiveKey];
+  if (requested === undefined || effective === undefined || !Object.is(requested, effective)) {
+    throw new TypeError(`Waterfall soak evidence requires matching requested/effective ${label}: ${JSON.stringify({ requested, effective })}`);
+  }
+  return effective;
+}
+
+export function createFingerFluidWaterfallSoakEvidenceIdentity(runtime) {
+  if (!runtime || typeof runtime !== 'object') {
+    throw new TypeError('Waterfall soak evidence identity requires runtime route/config truth');
+  }
+  const adaptiveDensity = matchingWaterfallEvidenceIdentityValue(
+    runtime,
+    'requestedAdaptiveDensity',
+    'effectiveAdaptiveDensity',
+    'adaptive density',
+  );
+  let particleCount;
+  let baseParticleCount;
+  if (adaptiveDensity) {
+    baseParticleCount = runtime.requestedParticleCount;
+    particleCount = runtime.effectiveParticleCount;
+    if (baseParticleCount !== runtime.baseParticleCount) {
+      throw new TypeError(`Waterfall soak evidence adaptive base-population disagreement: ${JSON.stringify({ requestedParticleCount: baseParticleCount, runtimeBaseParticleCount: runtime.baseParticleCount })}`);
+    }
+    if (particleCount !== runtime.particleCount || particleCount !== runtime.simulationCapacity) {
+      throw new TypeError(`Waterfall soak evidence adaptive capacity disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount, simulationCapacity: runtime.simulationCapacity })}`);
+    }
+  } else {
+    particleCount = matchingWaterfallEvidenceIdentityValue(
+      runtime,
+      'requestedParticleCount',
+      'effectiveParticleCount',
+      'particle count',
+    );
+    baseParticleCount = particleCount;
+    if (particleCount !== runtime.particleCount) {
+      throw new TypeError(`Waterfall soak evidence particle-count runtime disagreement: ${JSON.stringify({ particleCount, runtimeParticleCount: runtime.particleCount })}`);
+    }
+  }
+  return normalizeFingerFluidWaterfallSoakEvidenceIdentity({
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
+    truthScene: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedTruthScene', 'effectiveTruthScene', 'truth scene'),
+    colorMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedColorMode', 'effectiveColorMode', 'color mode'),
+    rendererMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedRendererMode', 'effectiveRendererMode', 'renderer mode'),
+    rendererRoute: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedRenderer', 'effectiveRenderer', 'renderer route'),
+    solverBackend: runtime.solver_backend,
+    renderBackend: runtime.render_backend,
+    adapterVendor: runtime.adapterInfo?.vendor,
+    adapterArchitecture: runtime.adapterInfo?.architecture,
+    opticalDebugMode: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedOpticalDebugMode', 'effectiveOpticalDebugMode', 'optical debug mode'),
+    adaptiveDensity,
+    baseParticleCount,
+    particleCount,
+    timeIntegrationContract: runtime.timeIntegrationContract,
+    fixedTimeStepSeconds: runtime.fixedTimeStepSeconds,
+    solverRoute: runtime.solverRoute,
+    shaderRoute: runtime.shaderRoute,
+    waterfallContinuityContract: runtime.waterfallContinuityContract,
+    supportFriction: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedSupportFriction', 'effectiveSupportFriction', 'support friction'),
+    particleShiftStrength: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedParticleShiftStrength', 'effectiveParticleShiftStrength', 'particle shift'),
+    chemistryDiffusion: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedChemistryDiffusion', 'effectiveChemistryDiffusion', 'chemistry diffusion'),
+    capillaryStrength: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedCapillaryStrength', 'effectiveCapillaryStrength', 'capillary strength'),
+    thinSheetVorticityAttenuation: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedThinSheetVorticityAttenuation', 'effectiveThinSheetVorticityAttenuation', 'thin-sheet vorticity attenuation'),
+    freeFlightViscosityBoost: matchingWaterfallEvidenceIdentityValue(runtime, 'requestedFreeFlightViscosityBoost', 'effectiveFreeFlightViscosityBoost', 'free-flight viscosity boost'),
+    densityIterationsPerStep: runtime.densityIterationsPerStep,
+    substeps: runtime.substeps,
+  });
+}
+
+function normalizeFingerFluidWaterfallSoakEvidenceIdentity(identity) {
+  const stringFields = [
+    'truthScene',
+    'colorMode',
+    'rendererMode',
+    'rendererRoute',
+    'solverBackend',
+    'renderBackend',
+    'adapterVendor',
+    'adapterArchitecture',
+    'opticalDebugMode',
+    'timeIntegrationContract',
+    'solverRoute',
+    'shaderRoute',
+    'waterfallContinuityContract',
+  ];
+  const numericFields = [
+    'fixedTimeStepSeconds',
+    'supportFriction',
+    'particleShiftStrength',
+    'chemistryDiffusion',
+    'capillaryStrength',
+    'thinSheetVorticityAttenuation',
+    'freeFlightViscosityBoost',
+    'densityIterationsPerStep',
+    'substeps',
+  ];
+  if (identity?.schema !== KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA) {
+    throw new TypeError(`Waterfall soak evidence identity schema mismatch: ${identity?.schema}`);
+  }
+  for (const field of stringFields) {
+    if (typeof identity[field] !== 'string' || identity[field].length === 0) {
+      throw new TypeError(`Waterfall soak evidence identity requires ${field}: ${JSON.stringify(identity[field])}`);
+    }
+  }
+  if (!Number.isSafeInteger(identity.particleCount) || identity.particleCount < 1024) {
+    throw new TypeError(`Waterfall soak evidence identity requires a valid particleCount: ${identity.particleCount}`);
+  }
+  const adaptiveDensity = identity.adaptiveDensity === true;
+  const baseParticleCount = identity.baseParticleCount ?? identity.particleCount;
+  if (!Number.isSafeInteger(baseParticleCount) || baseParticleCount < 1024 || baseParticleCount > identity.particleCount) {
+    throw new TypeError(`Waterfall soak evidence identity requires a valid baseParticleCount: ${baseParticleCount}`);
+  }
+  if (!adaptiveDensity && baseParticleCount !== identity.particleCount) {
+    throw new TypeError(`Non-adaptive waterfall evidence cannot carry distinct base/capacity populations: ${JSON.stringify({ baseParticleCount, particleCount: identity.particleCount })}`);
+  }
+  for (const field of numericFields) {
+    if (!Number.isFinite(identity[field])) {
+      throw new TypeError(`Waterfall soak evidence identity requires finite ${field}: ${identity[field]}`);
+    }
+  }
+  return {
+    schema: KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA,
+    ...Object.fromEntries(stringFields.map(field => [field, identity[field]])),
+    adaptiveDensity,
+    baseParticleCount,
+    particleCount: identity.particleCount,
+    ...Object.fromEntries(numericFields.map(field => [field, identity[field]])),
+  };
+}
+
+export function evaluateFingerFluidWaterfallSoakAcceptance({
+  requiredTargetSteps,
+  horizons,
 } = {}) {
+  if (!Array.isArray(requiredTargetSteps)
+    || requiredTargetSteps.length === 0
+    || requiredTargetSteps.some(step => !Number.isSafeInteger(step) || step <= 0)) {
+    throw new TypeError(`Waterfall soak acceptance requires positive integer target steps: ${JSON.stringify(requiredTargetSteps)}`);
+  }
+  if (!Array.isArray(horizons)) throw new TypeError('Waterfall soak acceptance requires horizon evidence');
+  if (new Set(requiredTargetSteps).size !== requiredTargetSteps.length) {
+    throw new TypeError(`Waterfall soak acceptance requires unique target steps: ${JSON.stringify(requiredTargetSteps)}`);
+  }
+  const targetStepCounts = new Map();
+  const byTargetStep = new Map();
+  for (const horizon of horizons) {
+    const targetStep = horizon?.requestedTargetStep;
+    targetStepCounts.set(targetStep, (targetStepCounts.get(targetStep) || 0) + 1);
+    if (!byTargetStep.has(targetStep)) byTargetStep.set(targetStep, horizon);
+  }
+  const duplicateTargetSteps = requiredTargetSteps.filter(step => (targetStepCounts.get(step) || 0) > 1);
+  const missingTargetSteps = requiredTargetSteps.filter(step => !byTargetStep.has(step));
+  let commonEvidenceIdentity = null;
+  let commonEvidenceIdentityKey = null;
+  const evaluatedHorizons = requiredTargetSteps
+    .filter(step => byTargetStep.has(step))
+    .map(requestedTargetStep => {
+      const horizon = byTargetStep.get(requestedTargetStep);
+      let evidenceIdentity = null;
+      let identityError = null;
+      try {
+        evidenceIdentity = normalizeFingerFluidWaterfallSoakEvidenceIdentity(
+          horizon?.evidenceIdentity ?? horizon?.waterfallSoakEvidenceIdentity,
+        );
+      } catch (error) {
+        identityError = error.message || String(error);
+      }
+      const evidenceIdentityKey = evidenceIdentity ? JSON.stringify(evidenceIdentity) : null;
+      if (evidenceIdentity && commonEvidenceIdentity === null) {
+        commonEvidenceIdentity = evidenceIdentity;
+        commonEvidenceIdentityKey = evidenceIdentityKey;
+      }
+      const identityAccepted = evidenceIdentity !== null && evidenceIdentityKey === commonEvidenceIdentityKey;
+      if (evidenceIdentity && !identityAccepted) identityError = 'evidence identity differs from the common soak identity';
+      const capturedTargetStep = horizon?.capturedTargetStep;
+      const captureAccepted = Number.isSafeInteger(capturedTargetStep)
+        && capturedTargetStep >= requestedTargetStep
+        && capturedTargetStep <= requestedTargetStep + 8;
+      const continuityAccepted = horizon?.waterfallContinuityAcceptance?.ok === true
+        && Array.isArray(horizon?.waterfallContinuityAcceptance?.waterfalls)
+        && horizon.waterfallContinuityAcceptance.waterfalls.length === 3
+        && horizon.waterfallContinuityAcceptance.waterfalls.every(waterfall => waterfall?.closeNeighborSupportAccepted === true);
+      const imageAccepted = horizon?.waterfallImageContinuity?.ok === true;
+      return {
+        requestedTargetStep,
+        capturedTargetStep,
+        evidenceIdentity,
+        identityAccepted,
+        identityError,
+        captureAccepted,
+        continuityAccepted,
+        imageAccepted,
+        ok: identityAccepted && captureAccepted && continuityAccepted && imageAccepted,
+      };
+    });
+  const rejectedTargetSteps = evaluatedHorizons.filter(horizon => !horizon.ok).map(horizon => horizon.requestedTargetStep);
+  const identityRejectedTargetSteps = evaluatedHorizons
+    .filter(horizon => !horizon.identityAccepted)
+    .map(horizon => horizon.requestedTargetStep);
+  return {
+    schema: 'kaminos.finger-fluid.waterfall-soak-acceptance.v0',
+    requiredTargetSteps: [...requiredTargetSteps],
+    commonEvidenceIdentity,
+    missingTargetSteps,
+    duplicateTargetSteps,
+    identityRejectedTargetSteps,
+    rejectedTargetSteps,
+    horizons: evaluatedHorizons,
+    ok: missingTargetSteps.length === 0
+      && duplicateTargetSteps.length === 0
+      && identityRejectedTargetSteps.length === 0
+      && rejectedTargetSteps.length === 0,
+  };
+}
+
+export function measureFingerFluidWaterfallImageContinuity(rgbData, width, height) {
   if (!(rgbData instanceof Uint8Array)) throw new TypeError('Waterfall image continuity requires Uint8Array RGB data');
   if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
     throw new RangeError(`Waterfall image continuity requires positive integer dimensions: ${width}x${height}`);
@@ -5319,89 +5519,64 @@ export function measureFingerFluidWaterfallImageContinuity(rgbData, width, heigh
   if (rgbData.length !== width * height * 3) {
     throw new RangeError(`Waterfall image continuity RGB length mismatch: ${rgbData.length} !== ${width * height * 3}`);
   }
-  if (!['phase_liquid_rgb', 'binary_liquid_support'].includes(pixelMode)) {
-    throw new RangeError(`Unsupported waterfall image continuity pixel mode: ${pixelMode}`);
-  }
   const minX = 0;
   const maxX = Math.max(1, Math.floor(width * 0.72));
   const minY = Math.max(0, Math.floor(height * 0.34));
   const maxY = Math.max(minY + 1, Math.floor(height * 0.64));
   const corridorWidth = maxX - minX;
-  const binarySupport = pixelMode === 'binary_liquid_support';
-  let binaryForegroundPixelCount = 0;
-  if (binarySupport) {
-    for (let offset = 0; offset < rgbData.length; offset += 3) {
-      if (rgbData[offset] >= 240 && rgbData[offset + 1] >= 240 && rgbData[offset + 2] >= 240) {
-        binaryForegroundPixelCount += 1;
-      }
-    }
-  }
   const rowLiquidWidthRatios = [];
+  const rowLargestRunRatios = [];
   for (let y = minY; y < maxY; y += 1) {
     let liquidPixelCount = 0;
+    let currentRun = 0;
+    let largestRun = 0;
     for (let x = minX; x < maxX; x += 1) {
       const offset = (y * width + x) * 3;
       const r = rgbData[offset];
       const g = rgbData[offset + 1];
       const b = rgbData[offset + 2];
-      const liquid = binarySupport
-        ? r >= 240 && g >= 240 && b >= 240
-        : b >= 58 && b >= r * 1.28 && b >= g * 0.92 && g >= r * 1.02;
-      if (liquid) liquidPixelCount += 1;
+      const liquid = b >= 58 && b >= r * 1.28 && b >= g * 0.92 && g >= r * 1.02;
+      if (liquid) {
+        liquidPixelCount += 1;
+        currentRun += 1;
+        largestRun = Math.max(largestRun, currentRun);
+      } else {
+        currentRun = 0;
+      }
     }
     rowLiquidWidthRatios.push(liquidPixelCount / corridorWidth);
+    rowLargestRunRatios.push(largestRun / corridorWidth);
   }
   const sortedRatios = [...rowLiquidWidthRatios].sort((a, b) => a - b);
+  const sortedRunRatios = [...rowLargestRunRatios].sort((a, b) => a - b);
   const percentile10 = sortedRatios[Math.floor((sortedRatios.length - 1) * 0.10)] || 0;
-  const percentile90 = sortedRatios[Math.floor((sortedRatios.length - 1) * 0.90)] || 0;
+  const percentile10LargestRun = sortedRunRatios[Math.floor((sortedRunRatios.length - 1) * 0.10)] || 0;
   const minimumRowWidthRatio = sortedRatios[0] || 0;
   const occupiedRowRatio = rowLiquidWidthRatios.filter(ratio => ratio >= 0.08).length / rowLiquidWidthRatios.length;
-  const framePixelCount = width * height;
-  const binaryBackgroundPixelCount = binarySupport ? framePixelCount - binaryForegroundPixelCount : null;
-  const frameLiquidOccupancyRatio = binarySupport ? binaryForegroundPixelCount / framePixelCount : null;
-  const percentileAccepted = percentile10 >= 0.20;
+  const percentileAccepted = percentile10 >= 0.25;
   const minimumRowAccepted = minimumRowWidthRatio >= 0.08;
   const occupiedRowsAccepted = occupiedRowRatio >= 0.95;
-  const frameForegroundAccepted = !binarySupport || frameLiquidOccupancyRatio >= 0.001;
-  const frameBackgroundAccepted = !binarySupport || frameLiquidOccupancyRatio <= 0.90;
-  const corridorUpperTailAccepted = !binarySupport || percentile90 <= 0.95;
-  const binarySupportLocalizationAccepted = frameForegroundAccepted
-    && frameBackgroundAccepted
-    && corridorUpperTailAccepted;
+  const largestRunAccepted = percentile10LargestRun >= 0.04;
   return {
-    schema: 'kaminos.finger-fluid.waterfall-image-continuity.v0',
-    measurement: pixelMode === 'binary_liquid_support'
-      ? 'same_camera_sphere_debug_binary_liquid_support_row_coverage_v1'
-      : 'same_camera_sphere_debug_rgb24_row_coverage_v0',
-    pixelMode,
+    schema: 'kaminos.finger-fluid.waterfall-image-continuity.v1',
+    measurement: 'same_camera_sphere_debug_rgb24_row_coverage_and_run_v1',
     width,
     height,
     corridor: { minX, maxX, minY, maxY },
     rowCount: rowLiquidWidthRatios.length,
     percentile10LiquidWidthRatio: Number(percentile10.toFixed(5)),
-    minimumRequiredPercentile10LiquidWidthRatio: 0.20,
-    percentile90LiquidWidthRatio: Number(percentile90.toFixed(5)),
-    maximumAllowedPercentile90LiquidWidthRatio: binarySupport ? 0.95 : null,
+    minimumRequiredPercentile10LiquidWidthRatio: 0.25,
     minimumRowLiquidWidthRatio: Number(minimumRowWidthRatio.toFixed(5)),
     minimumRequiredRowLiquidWidthRatio: 0.08,
+    percentile10LargestRunRatio: Number(percentile10LargestRun.toFixed(5)),
+    minimumRequiredPercentile10LargestRunRatio: 0.04,
     occupiedRowRatio: Number(occupiedRowRatio.toFixed(5)),
     minimumOccupiedRowRatio: 0.95,
-    binaryForegroundPixelCount: binarySupport ? binaryForegroundPixelCount : null,
-    binaryBackgroundPixelCount,
-    frameLiquidOccupancyRatio: binarySupport ? Number(frameLiquidOccupancyRatio.toFixed(5)) : null,
-    minimumFrameLiquidOccupancyRatio: binarySupport ? 0.001 : null,
-    maximumFrameLiquidOccupancyRatio: binarySupport ? 0.90 : null,
     percentileAccepted,
     minimumRowAccepted,
     occupiedRowsAccepted,
-    frameForegroundAccepted,
-    frameBackgroundAccepted,
-    corridorUpperTailAccepted,
-    binarySupportLocalizationAccepted,
-    ok: percentileAccepted
-      && minimumRowAccepted
-      && occupiedRowsAccepted
-      && binarySupportLocalizationAccepted,
+    largestRunAccepted,
+    ok: percentileAccepted && minimumRowAccepted && occupiedRowsAccepted && largestRunAccepted,
   };
 }
 
@@ -5559,6 +5734,27 @@ function createLaminarInletParticles(particleCount) {
   return data;
 }
 
+function createWaterfallOracleParticles(particleCount, preset) {
+  const data = new Float32Array(particleCount * PARTICLE_FLOATS);
+  for (let index = 0; index < particleCount; index += 1) {
+    const sample = sampleFingerFluidWaterfallOracleParticle(index, preset, { particleCount });
+    const offset = index * PARTICLE_FLOATS;
+    data[offset + 0] = sample.position[0];
+    data[offset + 1] = sample.position[1];
+    data[offset + 2] = sample.position[2];
+    data[offset + 3] = 1;
+    data[offset + 4] = sample.position[0];
+    data[offset + 5] = sample.position[1];
+    data[offset + 6] = sample.position[2];
+    data[offset + 7] = 0;
+    data[offset + 8] = sample.velocity[0];
+    data[offset + 9] = sample.velocity[1];
+    data[offset + 10] = sample.velocity[2];
+    data[offset + 11] = sample.activeAtFrameZero ? sample.phase : -sample.phase;
+  }
+  return data;
+}
+
 function createPackedTruthSceneParticles(particleCount, {
   center,
   horizontalAspect = [1, 1],
@@ -5595,11 +5791,16 @@ function createPackedTruthSceneParticles(particleCount, {
   return data;
 }
 
-export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground') {
+export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground', {
+  waterfallOraclePreset = 'baseline',
+} = {}) {
   const safeParticleCount = Math.max(1, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
   const effectiveScene = resolveFingerFluidTruthScene(scene);
   if (effectiveScene === 'multi_regime_playground') return createMultiRegimePlaygroundParticles(safeParticleCount);
   if (effectiveScene === 'laminar_inlets') return createLaminarInletParticles(safeParticleCount);
+  if (effectiveScene === 'waterfall_resolution_oracle') {
+    return createWaterfallOracleParticles(safeParticleCount, resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset));
+  }
   if (effectiveScene === 'deep_pool_rest') {
     return createPackedTruthSceneParticles(safeParticleCount, {
       center: [-1.25, 0.58],
@@ -5642,7 +5843,7 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     const density = particleData[offset + 15];
     if (![...position, ...velocity, density].every(Number.isFinite)) continue;
     finiteParticleCount += 1;
-    const active = effectiveScene !== 'laminar_inlets' || particleData[offset + 11] >= 0;
+    const active = !isFingerFluidLaminarSourceScene(effectiveScene) || particleData[offset + 11] >= 0;
     if (!active) {
       dormantParticleCount += 1;
       retainedParticleCount += Number(position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]));
@@ -5683,7 +5884,7 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     contract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
     boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
     scene: effectiveScene,
-    populationMode: effectiveScene === 'multi_regime_playground' || effectiveScene === 'laminar_inlets'
+    populationMode: effectiveScene === 'multi_regime_playground' || isFingerFluidLaminarSourceScene(effectiveScene)
       ? 'finite_source_recirculation'
       : 'closed_particle_population',
     particleCount: count,
@@ -5763,10 +5964,10 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     }
     const activeParticleCount = Number.isInteger(snapshot.activeParticleCount)
       ? snapshot.activeParticleCount
-      : effectiveScene === 'laminar_inlets' ? NaN : snapshot.finiteParticleCount;
+      : isFingerFluidLaminarSourceScene(effectiveScene) ? NaN : snapshot.finiteParticleCount;
     const dormantParticleCount = Number.isInteger(snapshot.dormantParticleCount)
       ? snapshot.dormantParticleCount
-      : effectiveScene === 'laminar_inlets' ? NaN : 0;
+      : isFingerFluidLaminarSourceScene(effectiveScene) ? NaN : 0;
     const required = [
       snapshot.particleCount,
       snapshot.finiteParticleCount,
@@ -5836,7 +6037,7 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     if (snapshot.occupiedVolumeProxy < MIN_TRUTH_OCCUPIED_VOLUME) {
       throw new Error(`Finger fluid truth checkpoint ${index} has collapsed absolute support: ${snapshot.occupiedVolumeProxy}; minimum ${MIN_TRUTH_OCCUPIED_VOLUME}`);
     }
-    if (effectiveScene !== 'multi_regime_playground' && effectiveScene !== 'laminar_inlets' && snapshot.sourceRecirculationCount !== 0) {
+    if (effectiveScene !== 'multi_regime_playground' && !isFingerFluidLaminarSourceScene(effectiveScene) && snapshot.sourceRecirculationCount !== 0) {
       throw new Error(`Finger fluid truth checkpoint ${index} recirculated a closed population`);
     }
     return snapshot;
@@ -5887,10 +6088,10 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
   return receipt;
 }
 
-function createInitialMaterialTracers(particleData, particleCount) {
+function createInitialMaterialTracers(particleData, particleCount, sourceParticleCount = particleCount) {
   const data = new Float32Array(particleCount * MATERIAL_TRACER_FLOATS);
   for (let index = 0; index < particleCount; index += 1) {
-    const phase = Math.abs(particleData[index * PARTICLE_FLOATS + 11]);
+    const phase = index < sourceParticleCount ? Math.abs(particleData[index * PARTICLE_FLOATS + 11]) : 0;
     const offset = index * MATERIAL_TRACER_FLOATS;
     data[offset] = phase;
     data[offset + 1] = 0;
@@ -5900,57 +6101,13 @@ function createInitialMaterialTracers(particleData, particleCount) {
   return data;
 }
 
-function createDynamicReflectionMeshData() {
-  const positions = [];
-  const normals = [];
-  const indices = [];
-  const addFace = (normal, corners) => {
-    const base = positions.length / 4;
-    for (const corner of corners) {
-      positions.push(...corner, 1);
-      normals.push(...normal, 0);
-    }
-    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  const x = 0.42;
-  const y = 0.72;
-  const z = 0.20;
-  addFace([1, 0, 0], [[x, -y, -z], [x, y, -z], [x, y, z], [x, -y, z]]);
-  addFace([-1, 0, 0], [[-x, -y, z], [-x, y, z], [-x, y, -z], [-x, -y, -z]]);
-  addFace([0, 1, 0], [[-x, y, -z], [-x, y, z], [x, y, z], [x, y, -z]]);
-  addFace([0, -1, 0], [[-x, -y, z], [-x, -y, -z], [x, -y, -z], [x, -y, z]]);
-  addFace([0, 0, 1], [[x, -y, z], [x, y, z], [-x, y, z], [-x, -y, z]]);
-  addFace([0, 0, -1], [[-x, -y, -z], [-x, y, -z], [x, y, -z], [x, -y, -z]]);
-  return {
-    positions: new Float32Array(positions),
-    normals: new Float32Array(normals),
-    indices: new Uint32Array(indices),
-  };
-}
-
-function dynamicReflectionMeshMatrices(phase) {
-  const angle = finite(phase, 0);
-  const cosine = Math.cos(angle);
-  const sine = Math.sin(angle);
-  const model = new Float32Array([
-    cosine, 0, -sine, 0,
-    0, 1, 0, 0,
-    sine, 0, cosine, 0,
-    0.52, -0.02, -0.68, 1,
-  ]);
-  const normal = new Float32Array(model);
-  normal[12] = 0;
-  normal[13] = 0;
-  normal[14] = 0;
-  return { model, normal };
-}
-
-function createUnavailableSolver(reason) {
+function createUnavailableSolver(reason, details = {}) {
   return {
     available: false,
     solver_backend: 'webgpu_unavailable',
     render_backend: 'webgpu_unavailable',
     reason,
+    ...details,
     destroy() {},
   };
 }
@@ -5964,17 +6121,17 @@ export async function createWebGPUFingerFluidSolver({
   colorMode = 'phase',
   rendererMode = 'screen_space_surface',
   opticalDebugMode = 'shaded',
-  opticalLightingMode = 'transport_only',
-  opticalFootprintMode = 'resolved_detail',
-  transmissionFootprintMode = 'resolved_exit',
-  bodyTransportMode = 'geometric_slab',
-  interfaceFrequencyMode = 'coupled_detail',
   particleShiftStrength = 0,
   supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
   capillaryStrength = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   thinSheetVorticityAttenuation = KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   freeFlightViscosityBoost = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  unsupportedSheetStrength = KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  adaptiveDensity = false,
+  maxFluidSpeed = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
+  inletCutoffStep = null,
+  waterfallOraclePreset = 'baseline',
   transparentBackground = false,
 } = {}) {
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
@@ -5990,42 +6147,61 @@ export async function createWebGPUFingerFluidSolver({
   });
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
-  let hdrEnvironment;
-  try {
-    hdrEnvironment = await loadFingerFluidHdrEnvironment();
-  } catch (error) {
-    device.destroy();
-    return createUnavailableSolver(`HDR environment initialization failed: ${error.message || String(error)}`);
-  }
 
-  const safeParticleCount = Math.max(1024, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
+  const safeBaseParticleCount = resolveFingerFluidParticleCount(particleCount);
+  const safeAdaptiveDensity = Boolean(adaptiveDensity);
+  const safeParticleCount = safeAdaptiveDensity ? safeBaseParticleCount * 2 : safeBaseParticleCount;
+  const particleAllocationCapacity = measureFingerFluidParticleAllocationCapacity(device.limits);
+  const particleAllocationPreflight = evaluateFingerFluidParticleAllocationRequest(safeParticleCount, particleAllocationCapacity);
+  if (!particleAllocationPreflight.ok) {
+    return createUnavailableSolver(particleAllocationPreflight.reason, {
+      requestedParticleCount: safeBaseParticleCount,
+      requestedSimulationCapacity: safeParticleCount,
+      effectiveParticleCount: null,
+      particleAllocationCapacity,
+      particleAllocationPreflight,
+    });
+  }
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
+  const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
+  const waterfallOracleConfig = safeTruthScene === 'waterfall_resolution_oracle'
+    ? createFingerFluidWaterfallOracleConfig(safeWaterfallOraclePreset)
+    : null;
+  const safeKernelRadius = waterfallOracleConfig?.kernelRadius ?? 0.185;
+  const safeVisibleParticleRadius = waterfallOracleConfig?.visibleParticleRadius ?? 0.046;
+  const safeRestDensity = 24.3;
+  const safeSourceRefinementFactor = waterfallOracleConfig?.refinementFactor ?? 1;
   const analyticSupportVertexCount = ANALYTIC_SUPPORT_BASE_VERTEX_COUNT
-    + (safeTruthScene === 'laminar_inlets' ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0);
+    + (isFingerFluidLaminarSourceScene(safeTruthScene) ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0);
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
-  const safeOpticalLightingMode = resolveFingerFluidOpticalLightingMode(opticalLightingMode);
-  const safeOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(opticalFootprintMode);
-  const safeTransmissionFootprintMode = resolveFingerFluidTransmissionFootprintMode(transmissionFootprintMode);
-  const safeBodyTransportMode = resolveFingerFluidBodyTransportMode(bodyTransportMode);
-  const safeInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(interfaceFrequencyMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
   const safeCapillaryStrength = resolveFingerFluidCapillaryStrength(capillaryStrength);
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
   const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
+  const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
+  const safeMaxFluidSpeed = resolveFingerFluidMaxSpeed(maxFluidSpeed);
+  const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const particleData = createFingerFluidTruthSceneParticles(safeParticleCount, safeTruthScene);
+  const baseParticleData = createFingerFluidTruthSceneParticles(safeBaseParticleCount, safeTruthScene, {
+    waterfallOraclePreset: safeWaterfallOraclePreset,
+  });
+  const particleData = new Float32Array(safeParticleCount * PARTICLE_FLOATS);
+  particleData.set(baseParticleData);
+  for (let index = safeBaseParticleCount; index < safeParticleCount; index += 1) {
+    particleData[index * PARTICLE_FLOATS + 11] = -2;
+  }
   const laminarSourcePopulation = safeTruthScene === 'laminar_inlets'
-    ? createFingerFluidLaminarSourcePopulation(safeParticleCount)
+    ? createFingerFluidLaminarSourcePopulation(safeBaseParticleCount)
     : null;
-  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount);
+  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount, safeBaseParticleCount);
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
   const particleBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particles',
@@ -6044,7 +6220,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 144,
+    size: 192,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -6069,7 +6245,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters',
-    size: 12,
+    size: 20,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
   const liquidFireContactRecordsBuffer = device.createBuffer({
@@ -6099,7 +6275,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersReadbackBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters-readback',
-    size: 12,
+    size: 20,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const interfaceRecordsReadbackBuffer = device.createBuffer({
@@ -6129,42 +6305,26 @@ export async function createWebGPUFingerFluidSolver({
   });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(energyDiagnosticsBuffer, 0, new Float32Array(safeParticleCount * ENERGY_RECORD_FLOATS));
-  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
+  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(5));
   device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
   const initialTopology = new Uint32Array(safeParticleCount * NEIGHBOR_TOPOLOGY_WORDS);
+  const initialTopologyFloats = new Float32Array(initialTopology.buffer);
   for (let index = 0; index < safeParticleCount; index += 1) {
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS, index * NEIGHBOR_TOPOLOGY_WORDS + 4);
+    initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS + 12, index * NEIGHBOR_TOPOLOGY_WORDS + 16);
+    const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
+    initialTopologyFloats[refinementOffset] = index < safeBaseParticleCount ? 1 : 0;
+    initialTopologyFloats[refinementOffset + 1] = index < safeBaseParticleCount ? 0 : 2;
   }
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
   device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
 
-  const dynamicReflectionMeshData = createDynamicReflectionMeshData();
-  const dynamicReflectionMeshPositionBuffer = device.createBuffer({
-    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-positions',
-    size: dynamicReflectionMeshData.positions.byteLength,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  });
-  const dynamicReflectionMeshNormalBuffer = device.createBuffer({
-    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-normals',
-    size: dynamicReflectionMeshData.normals.byteLength,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-  });
-  const dynamicReflectionMeshIndexBuffer = device.createBuffer({
-    label: 'kaminos-finger-fluid-dynamic-reflection-mesh-indices',
-    size: dynamicReflectionMeshData.indices.byteLength,
-    usage: GPUBufferUsage.INDEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  });
-  const dynamicReflectionSceneParamsBuffer = device.createBuffer({
-    label: 'kaminos-finger-fluid-dynamic-reflection-scene-params',
-    size: 160,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  device.queue.writeBuffer(dynamicReflectionMeshPositionBuffer, 0, dynamicReflectionMeshData.positions);
-  device.queue.writeBuffer(dynamicReflectionMeshNormalBuffer, 0, dynamicReflectionMeshData.normals);
-  device.queue.writeBuffer(dynamicReflectionMeshIndexBuffer, 0, dynamicReflectionMeshData.indices);
-
-  const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: COMPUTE_SHADER });
+  const computeShader = COMPUTE_SHADER.replaceAll(
+    KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
+    String(safeMaxFluidSpeed),
+  );
+  const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const computeLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-compute-layout',
     entries: [
@@ -6200,8 +6360,12 @@ export async function createWebGPUFingerFluidSolver({
       velocity: await pipelineFor('compute_velocity_viscosity'),
       vorticity: await pipelineFor('compute_vorticity'),
       confinement: await pipelineFor('apply_vorticity_confinement'),
+      classifyUnsupportedSheet: await pipelineFor('classify_unsupported_sheet'),
+      applyUnsupportedSheet: await pipelineFor('apply_unsupported_sheet_support'),
+      commitUnsupportedSheet: await pipelineFor('commit_unsupported_sheet_support'),
       cohesion: await pipelineFor('apply_surface_cohesion'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
+      adaptiveDensity: await pipelineFor('adaptive_refine_or_merge'),
       clearInterface: await pipelineFor('clear_interface_counters'),
       compactInterface: await pipelineFor('compact_interface_records'),
       measureTopology: await pipelineFor('measure_neighbor_topology'),
@@ -6275,34 +6439,9 @@ export async function createWebGPUFingerFluidSolver({
   const format = navigator.gpu.getPreferredCanvasFormat();
   const canvasAlphaMode = transparentBackground ? 'premultiplied' : 'opaque';
   context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
-  const hdrEnvironmentTexture = device.createTexture({
-    label: 'kaminos-finger-fluid-hdr-environment-rgbe',
-    size: [hdrEnvironment.width, hdrEnvironment.height],
-    format: 'rgba8unorm',
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-  });
-  const hdrEnvironmentUnpaddedBytesPerRow = hdrEnvironment.width * 4;
-  const hdrEnvironmentBytesPerRow = Math.ceil(hdrEnvironmentUnpaddedBytesPerRow / 256) * 256;
-  let hdrEnvironmentUpload = hdrEnvironment.rgbe;
-  if (hdrEnvironmentBytesPerRow !== hdrEnvironmentUnpaddedBytesPerRow) {
-    hdrEnvironmentUpload = new Uint8Array(hdrEnvironmentBytesPerRow * hdrEnvironment.height);
-    for (let row = 0; row < hdrEnvironment.height; row += 1) {
-      const sourceOffset = row * hdrEnvironmentUnpaddedBytesPerRow;
-      hdrEnvironmentUpload.set(
-        hdrEnvironment.rgbe.subarray(sourceOffset, sourceOffset + hdrEnvironmentUnpaddedBytesPerRow),
-        row * hdrEnvironmentBytesPerRow,
-      );
-    }
-  }
-  device.queue.writeTexture(
-    { texture: hdrEnvironmentTexture },
-    hdrEnvironmentUpload,
-    { bytesPerRow: hdrEnvironmentBytesPerRow, rowsPerImage: hdrEnvironment.height },
-    { width: hdrEnvironment.width, height: hdrEnvironment.height, depthOrArrayLayers: 1 },
-  );
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
-    size: 160,
+    size: 112,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
@@ -6310,18 +6449,6 @@ export async function createWebGPUFingerFluidSolver({
   const analyticSupportPresentationModule = device.createShaderModule({
     label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
     code: ANALYTIC_SUPPORT_PRESENTATION_SHADER,
-  });
-  const dynamicIndexedMeshModule = device.createShaderModule({
-    label: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
-    code: DYNAMIC_INDEXED_MESH_SHADER,
-  });
-  const hdrWorldBackgroundModule = device.createShaderModule({
-    label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-    code: HDR_WORLD_BACKGROUND_SHADER,
-  });
-  const finalPresentationModule = device.createShaderModule({
-    label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
-    code: FINAL_PRESENTATION_SHADER,
   });
   const screenSpaceAccumulationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-screen-space-accumulation-layout',
@@ -6337,14 +6464,12 @@ export async function createWebGPUFingerFluidSolver({
     entries: [
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     ],
   });
   const analyticSupportPresentationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-analytic-support-presentation-layout',
     entries: [
-      { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
     ],
   });
   const screenSpaceRefractionCompositeLayout = device.createBindGroupLayout({
@@ -6356,55 +6481,17 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
       { binding: 8, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 9, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
-      { binding: 10, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
-      { binding: 11, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-      { binding: 13, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 14, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 15, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-    ],
-  });
-  const dynamicIndexedMeshLayout = device.createBindGroupLayout({
-    label: 'kaminos-finger-fluid-dynamic-indexed-mesh-layout',
-    entries: [
-      { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-    ],
-  });
-  const hdrWorldBackgroundLayout = device.createBindGroupLayout({
-    label: 'kaminos-finger-fluid-hdr-world-background-layout',
-    entries: [
-      { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 12, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-    ],
-  });
-  const finalPresentationLayout = device.createBindGroupLayout({
-    label: 'kaminos-finger-fluid-final-presentation-layout',
-    entries: [
-      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     ],
   });
   const screenSpaceAccumulationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceAccumulationLayout] });
   const screenSpaceCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceCompositeLayout] });
   const analyticSupportPresentationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [analyticSupportPresentationLayout] });
   const screenSpaceRefractionCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceRefractionCompositeLayout] });
-  const dynamicIndexedMeshPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [dynamicIndexedMeshLayout] });
-  const hdrWorldBackgroundPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [hdrWorldBackgroundLayout] });
-  const finalPresentationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [finalPresentationLayout] });
   let renderPipeline;
   let screenSpaceSurfaceAccumulationPipeline;
   let screenSpaceSurfaceCompositePipeline;
   let analyticSupportPresentationPipeline;
   let screenSpaceRefractionCompositePipeline;
-  let dynamicIndexedMeshPipeline;
-  let hdrWorldBackgroundPipeline;
-  let finalPresentationPipeline;
   try {
     renderPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
@@ -6414,7 +6501,7 @@ export async function createWebGPUFingerFluidSolver({
         module: renderModule,
         entryPoint: 'fs_main',
         targets: [{
-          format: LINEAR_SCENE_FORMAT,
+          format,
           blend: {
             color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
             alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -6436,7 +6523,7 @@ export async function createWebGPUFingerFluidSolver({
             format: 'rgba16float',
             blend: {
               color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
             },
           },
           {
@@ -6465,7 +6552,7 @@ export async function createWebGPUFingerFluidSolver({
         module: screenSpaceModule,
         entryPoint: 'fs_composite',
         targets: [{
-          format: LINEAR_SCENE_FORMAT,
+          format,
           blend: {
             color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
             alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -6473,7 +6560,7 @@ export async function createWebGPUFingerFluidSolver({
         }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
     });
     analyticSupportPresentationPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
@@ -6482,36 +6569,7 @@ export async function createWebGPUFingerFluidSolver({
       fragment: {
         module: analyticSupportPresentationModule,
         entryPoint: 'fs_analytic_support_presentation',
-        targets: [
-          { format: LINEAR_SCENE_FORMAT },
-          { format: 'rgba16float' },
-          { format: 'rgba8unorm' },
-          { format: 'rgba16float' },
-        ],
-      },
-      primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-    });
-    dynamicIndexedMeshPipeline = await device.createRenderPipelineAsync({
-      label: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
-      layout: dynamicIndexedMeshPipelineLayout,
-      vertex: {
-        module: dynamicIndexedMeshModule,
-        entryPoint: 'vs_dynamic_indexed_mesh',
-        buffers: [
-          { arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] },
-          { arrayStride: 16, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x4' }] },
-        ],
-      },
-      fragment: {
-        module: dynamicIndexedMeshModule,
-        entryPoint: 'fs_dynamic_indexed_mesh',
-        targets: [
-          { format: LINEAR_SCENE_FORMAT },
-          { format: 'rgba16float' },
-          { format: 'rgba8unorm' },
-          { format: 'rgba16float' },
-        ],
+        targets: [{ format }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
@@ -6523,38 +6581,10 @@ export async function createWebGPUFingerFluidSolver({
       fragment: {
         module: screenSpaceModule,
         entryPoint: 'fs_refraction',
-        targets: [{
-          format: LINEAR_SCENE_FORMAT,
-          blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-          },
-        }],
-      },
-      primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-    });
-    hdrWorldBackgroundPipeline = await device.createRenderPipelineAsync({
-      label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-      layout: hdrWorldBackgroundPipelineLayout,
-      vertex: { module: hdrWorldBackgroundModule, entryPoint: 'vs_hdr_world_background' },
-      fragment: {
-        module: hdrWorldBackgroundModule,
-        entryPoint: 'fs_hdr_world_background',
-        targets: [{ format: LINEAR_SCENE_FORMAT }],
-      },
-      primitive: { topology: 'triangle-list', cullMode: 'none' },
-    });
-    finalPresentationPipeline = await device.createRenderPipelineAsync({
-      label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
-      layout: finalPresentationPipelineLayout,
-      vertex: { module: finalPresentationModule, entryPoint: 'vs_final_presentation' },
-      fragment: {
-        module: finalPresentationModule,
-        entryPoint: 'fs_final_presentation',
         targets: [{ format }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
     });
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
@@ -6574,24 +6604,6 @@ export async function createWebGPUFingerFluidSolver({
     layout: analyticSupportPresentationLayout,
     entries: [
       { binding: 1, resource: { buffer: renderParamsBuffer } },
-      { binding: 12, resource: hdrEnvironmentTexture.createView() },
-    ],
-  });
-  const dynamicIndexedMeshBindGroup = device.createBindGroup({
-    label: 'kaminos-finger-fluid-dynamic-indexed-mesh-bind-group',
-    layout: dynamicIndexedMeshLayout,
-    entries: [
-      { binding: 0, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
-      { binding: 1, resource: { buffer: renderParamsBuffer } },
-      { binding: 12, resource: hdrEnvironmentTexture.createView() },
-    ],
-  });
-  const hdrWorldBackgroundBindGroup = device.createBindGroup({
-    label: 'kaminos-finger-fluid-hdr-world-background-bind-group',
-    layout: hdrWorldBackgroundLayout,
-    entries: [
-      { binding: 1, resource: { buffer: renderParamsBuffer } },
-      { binding: 12, resource: hdrEnvironmentTexture.createView() },
     ],
   });
 
@@ -6602,11 +6614,6 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceSurfaceCompositeBindGroup = null;
   let screenSpaceRefractionSceneTexture = null;
   let screenSpaceRefractionCompositeBindGroup = null;
-  let linearSceneRadianceTexture = null;
-  let finalPresentationBindGroup = null;
-  let deferredWorldNormalRoughnessTexture = null;
-  let deferredAlbedoMetallicTexture = null;
-  let deferredLinearDepthObjectTexture = null;
   const screenSpaceRefractionSceneSampler = device.createSampler({
     label: 'kaminos-finger-fluid-refraction-scene-sampler',
     magFilter: 'linear',
@@ -6623,6 +6630,8 @@ export async function createWebGPUFingerFluidSolver({
   let postProjectionGridRefreshCount = 0;
   let freeSurfaceClassificationPassCount = 0;
   let surfaceCohesionPassCount = 0;
+  let sheetSupportPassCount = 0;
+  let adaptiveDensityPassCount = 0;
   let interfaceCompactionPassCount = 0;
   let topologyMeasurementPassCount = 0;
   let particleShiftPassCount = 0;
@@ -6640,53 +6649,9 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceRefractionRenderFrameCount = 0;
   let screenSpaceRefractionScenePassCount = 0;
   let screenSpaceRefractionCompositePassCount = 0;
-  let deferredScenePassCount = 0;
-  let dynamicIndexedMeshDrawCount = 0;
-  let worldSpaceReflectionCompositePassCount = 0;
-  let hybridOpticalQueryCompositePassCount = 0;
-  let hdrWorldBackgroundPassCount = 0;
-  let finalPresentationPassCount = 0;
-  let lastRenderFrameId = 0;
-  let lastDeferredSceneFrameId = 0;
-  let lastDynamicIndexedMeshDrawFrameId = 0;
-  let lastReflectionProviderFrameId = 0;
-  let lastOpticalQueryFrameId = 0;
-  let reflectionMeshPhase = 0.36;
-  let reflectionMeshTransformGeneration = 1;
-  let lastDeferredMeshTransformGeneration = 0;
-  let lastDeferredMeshPhase = 0;
-  let lastReflectionProviderTransformGeneration = 0;
-  let lastReflectionProviderPhase = 0;
-  let reflectionMeshWitnessOverride = false;
-  let lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastOpticalDebugMode = safeOpticalDebugMode;
-  let lastRequestedOpticalLightingMode = safeOpticalLightingMode;
-  let lastEffectiveOpticalLightingMode = safeRendererMode === 'screen_space_refraction'
-    ? safeOpticalLightingMode
-    : 'not_executed';
-  let lastOpticalLightingFallbackReason = null;
-  let lastRequestedOpticalFootprintMode = safeOpticalFootprintMode;
-  let lastEffectiveOpticalFootprintMode = safeRendererMode === 'screen_space_refraction'
-    ? safeOpticalFootprintMode
-    : 'not_executed';
-  let lastOpticalFootprintFallbackReason = null;
-  let lastRequestedTransmissionFootprintMode = safeTransmissionFootprintMode;
-  let lastEffectiveTransmissionFootprintMode = safeRendererMode === 'screen_space_refraction'
-    ? safeTransmissionFootprintMode
-    : 'not_executed';
-  let lastTransmissionFootprintFallbackReason = null;
-  let lastRequestedBodyTransportMode = safeBodyTransportMode;
-  let lastEffectiveBodyTransportMode = safeRendererMode === 'screen_space_refraction'
-    ? safeBodyTransportMode
-    : 'not_executed';
-  let lastBodyTransportFallbackReason = null;
-  let lastRequestedInterfaceFrequencyMode = safeInterfaceFrequencyMode;
-  let lastEffectiveInterfaceFrequencyMode = safeRendererMode === 'screen_space_refraction'
-    ? safeInterfaceFrequencyMode
-    : 'not_executed';
-  let lastInterfaceFrequencyFallbackReason = null;
   let lastRendererFallbackReason = null;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -6709,7 +6674,7 @@ export async function createWebGPUFingerFluidSolver({
       label: 'kaminos-finger-fluid-depth',
       size: [targetWidth, targetHeight],
       format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     screenSpaceSurfaceAccumulationTexture?.destroy();
     screenSpaceSurfaceAccumulationTexture = device.createTexture({
@@ -6732,40 +6697,12 @@ export async function createWebGPUFingerFluidSolver({
       format: 'rgba16float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
-    linearSceneRadianceTexture?.destroy();
-    linearSceneRadianceTexture = device.createTexture({
-      label: 'kaminos-finger-fluid-linear-scene-radiance',
-      size: [targetWidth, targetHeight],
-      format: LINEAR_SCENE_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
-    });
     screenSpaceRefractionSceneTexture?.destroy();
     screenSpaceRefractionSceneTexture = device.createTexture({
       label: 'kaminos-finger-fluid-refraction-scene-color',
       size: [targetWidth, targetHeight],
-      format: LINEAR_SCENE_FORMAT,
+      format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-    });
-    deferredWorldNormalRoughnessTexture?.destroy();
-    deferredWorldNormalRoughnessTexture = device.createTexture({
-      label: 'kaminos-finger-fluid-deferred-world-normal-roughness',
-      size: [targetWidth, targetHeight],
-      format: 'rgba16float',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    deferredAlbedoMetallicTexture?.destroy();
-    deferredAlbedoMetallicTexture = device.createTexture({
-      label: 'kaminos-finger-fluid-deferred-albedo-metallic',
-      size: [targetWidth, targetHeight],
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    deferredLinearDepthObjectTexture?.destroy();
-    deferredLinearDepthObjectTexture = device.createTexture({
-      label: 'kaminos-finger-fluid-deferred-linear-depth-object',
-      size: [targetWidth, targetHeight],
-      format: 'rgba16float',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     screenSpaceSurfaceAccumulationBindGroup = device.createBindGroup({
       label: 'kaminos-finger-fluid-screen-space-accumulation-bind-group',
@@ -6783,7 +6720,6 @@ export async function createWebGPUFingerFluidSolver({
       entries: [
         { binding: 1, resource: { buffer: renderParamsBuffer } },
         { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
-        { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
       ],
     });
     screenSpaceRefractionCompositeBindGroup = device.createBindGroup({
@@ -6796,60 +6732,14 @@ export async function createWebGPUFingerFluidSolver({
         { binding: 6, resource: screenSpaceRefractionSceneSampler },
         { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
         { binding: 8, resource: screenSpaceOpticalSlabBackDepthTexture.createView() },
-        { binding: 9, resource: { buffer: dynamicReflectionMeshPositionBuffer } },
-        { binding: 10, resource: { buffer: dynamicReflectionMeshIndexBuffer } },
-        { binding: 11, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
-        { binding: 12, resource: hdrEnvironmentTexture.createView() },
-        { binding: 13, resource: deferredLinearDepthObjectTexture.createView() },
-        { binding: 14, resource: deferredWorldNormalRoughnessTexture.createView() },
-        { binding: 15, resource: deferredAlbedoMetallicTexture.createView() },
-      ],
-    });
-    finalPresentationBindGroup = device.createBindGroup({
-      label: 'kaminos-finger-fluid-final-presentation-bind-group',
-      layout: finalPresentationLayout,
-      entries: [
-        { binding: 0, resource: linearSceneRadianceTexture.createView() },
-        { binding: 1, resource: { buffer: renderParamsBuffer } },
-        { binding: 2, resource: screenSpaceSurfaceAccumulationTexture.createView() },
-        { binding: 3, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
-        { binding: 4, resource: depthTexture.createView() },
       ],
     });
     configuredExtent = key;
     return { width: targetWidth, height: targetHeight };
   }
 
-  function writeDynamicReflectionSceneParams() {
-    const { model, normal } = dynamicReflectionMeshMatrices(reflectionMeshPhase);
-    const data = new Float32Array(40);
-    data.set(model, 0);
-    data.set(normal, 16);
-    data.set([0.90, 0.10, 0.045, 0.24], 32);
-    data.set([DYNAMIC_REFLECTION_MESH_OBJECT_ID, 0.68, reflectionMeshPhase, reflectionMeshTransformGeneration], 36);
-    device.queue.writeBuffer(dynamicReflectionSceneParamsBuffer, 0, data);
-  }
-
-  function setReflectionMeshPhaseForWitness(phase) {
-    const nextPhase = Number(phase);
-    if (!Number.isFinite(nextPhase) || Math.abs(nextPhase) > Math.PI * 8) {
-      throw new RangeError(`Finger Fluid reflection mesh phase must be finite and bounded, received: ${phase}`);
-    }
-    if (nextPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
-    reflectionMeshPhase = nextPhase;
-    reflectionMeshWitnessOverride = true;
-    writeDynamicReflectionSceneParams();
-    return {
-      schema: 'kaminos.dynamic-indexed-mesh-transform.v0',
-      objectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
-      phase: reflectionMeshPhase,
-      transformGeneration: reflectionMeshTransformGeneration,
-      stepCount,
-    };
-  }
-
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(144);
+    const buffer = new ArrayBuffer(192);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -6861,8 +6751,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(28, GRID_CELL_COUNT, true);
     BOUNDS_MIN.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
     BOUNDS_MAX.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
-    view.setFloat32(64, 0.185, true);
-    view.setFloat32(68, 24.3, true);
+    view.setFloat32(64, safeKernelRadius, true);
+    view.setFloat32(68, safeRestDensity, true);
     view.setFloat32(72, 0.012, true);
     view.setFloat32(76, 0.22, true);
     view.setFloat32(80, -9.2, true);
@@ -6871,15 +6761,28 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
     view.setFloat32(100, safeSupportFriction, true);
-    view.setFloat32(104, safeTruthScene === 'laminar_inlets' ? 1 : 0, true);
+    view.setFloat32(104, safeTruthScene === 'waterfall_resolution_oracle' ? 2 : safeTruthScene === 'laminar_inlets' ? 1 : 0, true);
+    view.setFloat32(108, safeSourceRefinementFactor, true);
     view.setFloat32(112, safeChemistryDiffusion, true);
     view.setFloat32(116, safeCapillaryStrength, true);
     view.setFloat32(120, safeThinSheetVorticityAttenuation, true);
     view.setFloat32(124, safeFreeFlightViscosityBoost, true);
-    view.setUint32(128, liquidFireContactAllocationGeneration, true);
-    view.setUint32(132, liquidFireContactEpoch, true);
-    view.setUint32(136, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
-    view.setUint32(140, 1, true);
+    view.setFloat32(128, safeUnsupportedSheetStrength, true);
+    view.setFloat32(132, 0.62, true);
+    view.setFloat32(136, 0.66, true);
+    view.setFloat32(140, 0.78, true);
+    view.setUint32(144, liquidFireContactAllocationGeneration, true);
+    view.setUint32(148, liquidFireContactEpoch, true);
+    view.setUint32(152, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
+    view.setUint32(156, 1, true);
+    view.setUint32(160, safeInletCutoffStep ?? 0xffffffff, true);
+    view.setUint32(164, safeInletCutoffStep === null ? 0 : 1, true);
+    view.setUint32(168, waterfallOracleConfig?.laneColumns ?? 0, true);
+    view.setUint32(172, waterfallOracleConfig?.laneRows ?? 0, true);
+    view.setUint32(176, safeBaseParticleCount, true);
+    view.setUint32(180, safeAdaptiveDensity ? 1 : 0, true);
+    view.setUint32(184, safeParticleCount, true);
+    view.setUint32(188, 1, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -6937,6 +6840,14 @@ export async function createWebGPUFingerFluidSolver({
         vorticityPassCount += 2;
       }
       dispatchEnergy(pass, energyPipelines.vorticity);
+      if (safeUnsupportedSheetStrength > 0 || safeAdaptiveDensity) {
+        dispatch(pass, pipelines.classifyUnsupportedSheet, safeParticleCount);
+      }
+      if (safeUnsupportedSheetStrength > 0) {
+        dispatch(pass, pipelines.applyUnsupportedSheet, safeParticleCount);
+        dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
+        sheetSupportPassCount += 3;
+      }
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatchEnergy(pass, energyPipelines.cohesion);
@@ -6952,6 +6863,10 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);
         particleShiftPassCount += 2;
+      }
+      if (safeAdaptiveDensity) {
+        dispatch(pass, pipelines.adaptiveDensity, safeBaseParticleCount);
+        adaptiveDensityPassCount += 1;
       }
       pass.end();
       device.queue.submit([encoder.finish()]);
@@ -6972,67 +6887,16 @@ export async function createWebGPUFingerFluidSolver({
     colorMode = safeColorMode,
     rendererMode = safeRendererMode,
     opticalDebugMode = safeOpticalDebugMode,
-    opticalLightingMode = safeOpticalLightingMode,
-    opticalFootprintMode = safeOpticalFootprintMode,
-    transmissionFootprintMode = safeTransmissionFootprintMode,
-    bodyTransportMode = safeBodyTransportMode,
-    interfaceFrequencyMode = safeInterfaceFrequencyMode,
   } = {}) {
     if (destroyed) return;
     const extent = ensureExtent(width, height, pixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
-    const requestedOpticalLightingMode = String(opticalLightingMode || safeOpticalLightingMode);
-    const resolvedOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
-    const requestedOpticalFootprintMode = String(opticalFootprintMode || safeOpticalFootprintMode);
-    const resolvedOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(requestedOpticalFootprintMode);
-    const requestedTransmissionFootprintMode = String(transmissionFootprintMode || safeTransmissionFootprintMode);
-    const resolvedTransmissionFootprintMode = resolveFingerFluidTransmissionFootprintMode(requestedTransmissionFootprintMode);
-    const requestedBodyTransportMode = String(bodyTransportMode || safeBodyTransportMode);
-    const resolvedBodyTransportMode = resolveFingerFluidBodyTransportMode(requestedBodyTransportMode);
-    const requestedInterfaceFrequencyMode = String(interfaceFrequencyMode || safeInterfaceFrequencyMode);
-    const resolvedInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode);
-    const effectiveOpticalLightingMode = effectiveRendererMode === 'screen_space_refraction'
-      ? resolvedOpticalLightingMode
-      : 'not_executed';
-    const effectiveOpticalFootprintMode = effectiveRendererMode === 'screen_space_refraction'
-      ? resolvedOpticalFootprintMode
-      : 'not_executed';
-    const effectiveTransmissionFootprintMode = effectiveRendererMode === 'screen_space_refraction'
-      ? resolvedTransmissionFootprintMode
-      : 'not_executed';
-    const effectiveBodyTransportMode = effectiveRendererMode === 'screen_space_refraction'
-      ? resolvedBodyTransportMode
-      : 'not_executed';
-    const effectiveInterfaceFrequencyMode = effectiveRendererMode === 'screen_space_refraction'
-      ? resolvedInterfaceFrequencyMode
-      : 'not_executed';
-    const renderFrameId = directRenderFrameCount + 1;
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
     lastOpticalDebugMode = effectiveOpticalDebugMode;
-    lastRequestedOpticalLightingMode = requestedOpticalLightingMode;
-    lastEffectiveOpticalLightingMode = effectiveOpticalLightingMode;
-    lastOpticalLightingFallbackReason = null;
-    lastRequestedOpticalFootprintMode = requestedOpticalFootprintMode;
-    lastEffectiveOpticalFootprintMode = effectiveOpticalFootprintMode;
-    lastOpticalFootprintFallbackReason = null;
-    lastRequestedTransmissionFootprintMode = requestedTransmissionFootprintMode;
-    lastEffectiveTransmissionFootprintMode = effectiveTransmissionFootprintMode;
-    lastTransmissionFootprintFallbackReason = null;
-    lastRequestedBodyTransportMode = requestedBodyTransportMode;
-    lastEffectiveBodyTransportMode = effectiveBodyTransportMode;
-    lastBodyTransportFallbackReason = null;
-    lastRequestedInterfaceFrequencyMode = requestedInterfaceFrequencyMode;
-    lastEffectiveInterfaceFrequencyMode = effectiveInterfaceFrequencyMode;
-    lastInterfaceFrequencyFallbackReason = null;
     lastRendererFallbackReason = null;
-    if (!reflectionMeshWitnessOverride) {
-      const animatedPhase = (stepCount * 0.012) % (Math.PI * 2);
-      if (animatedPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
-      reflectionMeshPhase = animatedPhase;
-    }
     const cp = Math.cos(pitch);
     const eye = [
       target[0] + Math.sin(yaw) * cp * distance,
@@ -7045,65 +6909,26 @@ export async function createWebGPUFingerFluidSolver({
     const projection = perspectiveMatrix(Math.PI / 3.15, extent.width / extent.height, 0.08, 30);
     const view = lookAtMatrix(eye, target, [0, 1, 0]);
     const viewProjection = multiplyMatrices(projection, view);
-    const renderData = new Float32Array(40);
+    const renderData = new Float32Array(28);
     const effectiveColorMode = resolveFingerFluidColorMode(colorMode);
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
     renderData.set([...right, colorModeIndex], 16);
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
-    renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 24);
-    renderData.set([...eye, KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.indexOf(resolvedOpticalFootprintMode)], 28);
-    renderData.set([extent.width, extent.height, 0.046, safeParticleCount], 32);
-    renderData.set([
-      KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES.indexOf(resolvedTransmissionFootprintMode),
-      KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES.indexOf(resolvedBodyTransportMode),
-      KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_MODES.indexOf(resolvedInterfaceFrequencyMode),
-      0,
-    ], 36);
+    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 24);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
-    writeDynamicReflectionSceneParams();
 
     const currentTexture = context.getCurrentTexture();
     const currentTextureView = currentTexture.createView();
-    const linearSceneRadianceView = linearSceneRadianceTexture.createView();
     const encoder = device.createCommandEncoder({ label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}` });
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
-    const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
-    const hdrWorldBackgroundPass = encoder.beginRenderPass({
-      label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-      colorAttachments: [{
-        view: linearSceneRadianceView,
-        clearValue: { r: 0, g: 0, b: 0, a: transparentBackground ? 0 : 1 },
-        loadOp: 'clear',
-        storeOp: 'store',
-      }],
-    });
-    if (!transparentBackground && !liquidSupportDiagnostic) {
-      hdrWorldBackgroundPass.setPipeline(hdrWorldBackgroundPipeline);
-      hdrWorldBackgroundPass.setBindGroup(0, hdrWorldBackgroundBindGroup);
-      hdrWorldBackgroundPass.draw(3);
-    }
-    hdrWorldBackgroundPass.end();
-    hdrWorldBackgroundPassCount += 1;
     const analyticSupportPresentationPass = encoder.beginRenderPass({
       label: `${KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE}:shared-color-depth`,
       colorAttachments: [{
-        view: linearSceneRadianceView,
-        loadOp: 'load',
-        storeOp: 'store',
-      }, {
-        view: deferredWorldNormalRoughnessTexture.createView(),
-        clearValue: { r: 0, g: 1, b: 0, a: 1 },
-        loadOp: 'clear',
-        storeOp: 'store',
-      }, {
-        view: deferredAlbedoMetallicTexture.createView(),
-        clearValue: { r: 0, g: 0, b: 0, a: 0 },
-        loadOp: 'clear',
-        storeOp: 'store',
-      }, {
-        view: deferredLinearDepthObjectTexture.createView(),
-        clearValue: { r: 30, g: 0, b: 0, a: 0 },
+        view: currentTextureView,
+        clearValue: transparentBackground
+          ? { r: 0, g: 0, b: 0, a: 0 }
+          : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
         loadOp: 'clear',
         storeOp: 'store',
       }],
@@ -7121,55 +6946,9 @@ export async function createWebGPUFingerFluidSolver({
     analyticSupportPresentationPassCount += 1;
     analyticSupportDepthPassCount += 1;
 
-    const dynamicIndexedMeshPass = encoder.beginRenderPass({
-      label: `${KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE}:dynamic-indexed-mesh`,
-      colorAttachments: [{
-        view: linearSceneRadianceView,
-        loadOp: 'load',
-        storeOp: 'store',
-      }, {
-        view: deferredWorldNormalRoughnessTexture.createView(),
-        loadOp: 'load',
-        storeOp: 'store',
-      }, {
-        view: deferredAlbedoMetallicTexture.createView(),
-        loadOp: 'load',
-        storeOp: 'store',
-      }, {
-        view: deferredLinearDepthObjectTexture.createView(),
-        loadOp: 'load',
-        storeOp: 'store',
-      }],
-      depthStencilAttachment: {
-        view: depthTexture.createView(),
-        depthLoadOp: 'load',
-        depthStoreOp: 'store',
-      },
-    });
-    const isolateWorldReflection = refractionEnabled
-      && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(effectiveOpticalDebugMode);
-    if (!isolateWorldReflection) {
-      dynamicIndexedMeshPass.setPipeline(dynamicIndexedMeshPipeline);
-      dynamicIndexedMeshPass.setBindGroup(0, dynamicIndexedMeshBindGroup);
-      dynamicIndexedMeshPass.setVertexBuffer(0, dynamicReflectionMeshPositionBuffer);
-      dynamicIndexedMeshPass.setVertexBuffer(1, dynamicReflectionMeshNormalBuffer);
-      dynamicIndexedMeshPass.setIndexBuffer(dynamicReflectionMeshIndexBuffer, 'uint32');
-      dynamicIndexedMeshPass.drawIndexed(DYNAMIC_REFLECTION_MESH_INDEX_COUNT);
-      dynamicIndexedMeshDrawCount += 1;
-      lastDynamicIndexedMeshDrawFrameId = renderFrameId;
-      lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
-    } else {
-      lastDynamicMeshPresentationMode = 'suppressed_in_reflection_debug_provider_remains_active_v0';
-    }
-    dynamicIndexedMeshPass.end();
-    deferredScenePassCount += 1;
-    lastDeferredSceneFrameId = renderFrameId;
-    lastDeferredMeshTransformGeneration = reflectionMeshTransformGeneration;
-    lastDeferredMeshPhase = reflectionMeshPhase;
-
     if (refractionEnabled) {
       encoder.copyTextureToTexture(
-        { texture: linearSceneRadianceTexture },
+        { texture: currentTexture },
         { texture: screenSpaceRefractionSceneTexture },
         { width: extent.width, height: extent.height, depthOrArrayLayers: 1 },
       );
@@ -7180,9 +6959,8 @@ export async function createWebGPUFingerFluidSolver({
       const pass = encoder.beginRenderPass({
         label: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
         colorAttachments: [{
-          view: linearSceneRadianceView,
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
+          view: currentTextureView,
+          loadOp: 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
@@ -7202,7 +6980,7 @@ export async function createWebGPUFingerFluidSolver({
         colorAttachments: [
           {
             view: screenSpaceSurfaceAccumulationTexture.createView(),
-            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            clearValue: { r: 0, g: 0, b: 0, a: 30 },
             loadOp: 'clear',
             storeOp: 'store',
           },
@@ -7232,13 +7010,11 @@ export async function createWebGPUFingerFluidSolver({
           ? `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:two-interface-optical-slab-composite`
           : `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:edge-preserving-surface-composite`,
         colorAttachments: [{
-          view: linearSceneRadianceView,
-          clearValue: liquidSupportDiagnostic
-            ? { r: 0, g: 0, b: 0, a: 1 }
-            : transparentBackground
+          view: currentTextureView,
+          clearValue: transparentBackground
             ? { r: 0, g: 0, b: 0, a: 0 }
             : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
-          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
+          loadOp: 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
@@ -7254,36 +7030,13 @@ export async function createWebGPUFingerFluidSolver({
       if (refractionEnabled) {
         screenSpaceRefractionCompositePassCount += 1;
         screenSpaceRefractionRenderFrameCount += 1;
-        if (lastOpticalDebugMode !== 'interface_fidelity') {
-          worldSpaceReflectionCompositePassCount += 1;
-          hybridOpticalQueryCompositePassCount += 1;
-          lastOpticalQueryFrameId = renderFrameId;
-          lastReflectionProviderFrameId = renderFrameId;
-          lastReflectionProviderTransformGeneration = reflectionMeshTransformGeneration;
-          lastReflectionProviderPhase = reflectionMeshPhase;
-        }
       } else {
         screenSpaceSurfaceCompositePassCount += 1;
         screenSpaceSurfaceRenderFrameCount += 1;
       }
     }
-    const finalPresentationPass = encoder.beginRenderPass({
-      label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
-      colorAttachments: [{
-        view: currentTextureView,
-        clearValue: { r: 0, g: 0, b: 0, a: transparentBackground ? 0 : 1 },
-        loadOp: 'clear',
-        storeOp: 'store',
-      }],
-    });
-    finalPresentationPass.setPipeline(finalPresentationPipeline);
-    finalPresentationPass.setBindGroup(0, finalPresentationBindGroup);
-    finalPresentationPass.draw(3);
-    finalPresentationPass.end();
-    finalPresentationPassCount += 1;
     device.queue.submit([encoder.finish()]);
     directRenderFrameCount += 1;
-    lastRenderFrameId = renderFrameId;
   }
 
   async function requestDiagnostics() {
@@ -7298,7 +7051,7 @@ export async function createWebGPUFingerFluidSolver({
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
       encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
-      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 12);
+      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 20);
       encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
       encoder.copyBufferToBuffer(neighborTopologyBuffer, 0, neighborTopologyReadbackBuffer, 0, safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES);
@@ -7338,6 +7091,9 @@ export async function createWebGPUFingerFluidSolver({
       let neighborRetentionSum = 0;
       let neighborRetentionAgeSum = 0;
       let movingLockedParticleCount = 0;
+      let unsupportedSheetActiveParticleCount = 0;
+      let unsupportedSheetActivitySum = 0;
+      let maximumUnsupportedSheetActivity = 0;
       const neighborRetentionHistogram = [0, 0, 0, 0];
       const chemistryHistogram = [0, 0, 0, 0, 0, 0, 0, 0];
       let chemistryMass = 0;
@@ -7347,25 +7103,43 @@ export async function createWebGPUFingerFluidSolver({
       let chemistryRecipeDeviationSum = 0;
       let activeParticleCount = 0;
       let dormantParticleCount = 0;
+      let representedVolume = 0;
+      const adaptiveMomentum = [0, 0, 0];
+      let unrefinedBaseParticleCount = 0;
+      let refinedParentCount = 0;
+      let activeChildCount = 0;
+      let reservedChildCount = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         const restOffset = index * REST_STATE_FLOATS;
         const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 4;
+        const sheetOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 8;
         const chemistryOffset = index * MATERIAL_TRACER_FLOATS;
+        const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
+        const volumeScale = Math.max(0, topologyValues[refinementOffset]);
+        const refinementRole = Math.round(topologyValues[refinementOffset + 1]);
         const concentration = materialTracerValues[chemistryOffset];
         const recipe = materialTracerValues[chemistryOffset + 2];
-        chemistryMass += concentration;
-        sourceResetMassAdjustment += materialTracerValues[chemistryOffset + 3];
+        chemistryMass += concentration * volumeScale;
+        sourceResetMassAdjustment += materialTracerValues[chemistryOffset + 3] * volumeScale;
         chemistryMin = Math.min(chemistryMin, concentration);
         chemistryMax = Math.max(chemistryMax, concentration);
         chemistryRecipeDeviationSum += Math.abs(concentration - recipe);
         chemistryHistogram[Math.min(7, Math.max(0, Math.floor(concentration * 8)))] += 1;
-        const active = safeTruthScene !== 'laminar_inlets' || values[offset + 11] >= 0;
+        representedVolume += volumeScale;
+        const active = values[offset + 11] >= 0 && volumeScale > 0;
         if (!active) {
           dormantParticleCount += 1;
+          if (index >= safeBaseParticleCount) reservedChildCount += 1;
           continue;
         }
         activeParticleCount += 1;
+        if (refinementRole === 0) unrefinedBaseParticleCount += 1;
+        if (refinementRole === 1) refinedParentCount += 1;
+        if (refinementRole === 2) activeChildCount += 1;
+        for (let axis = 0; axis < 3; axis += 1) {
+          adaptiveMomentum[axis] += values[offset + 8 + axis] * volumeScale;
+        }
         for (let axis = 0; axis < 3; axis += 1) {
           min[axis] = Math.min(min[axis], values[offset + axis]);
           max[axis] = Math.max(max[axis], values[offset + axis]);
@@ -7402,9 +7176,30 @@ export async function createWebGPUFingerFluidSolver({
         neighborRetentionSum += neighborRetention;
         neighborRetentionAgeSum += topologyValues[topologyOffset + 1];
         if (topologyValues[topologyOffset + 3] >= 0.5) movingLockedParticleCount += 1;
+        const unsupportedSheetActivity = topologyValues[sheetOffset + 3];
+        unsupportedSheetActivitySum += unsupportedSheetActivity;
+        maximumUnsupportedSheetActivity = Math.max(maximumUnsupportedSheetActivity, unsupportedSheetActivity);
+        if (unsupportedSheetActivity >= 0.01) unsupportedSheetActiveParticleCount += 1;
         neighborRetentionHistogram[Math.min(3, Math.max(0, Math.floor(neighborRetention * 4)))] += 1;
       }
       const physicalParticleCount = Math.max(1, activeParticleCount);
+      const adaptiveDensityLedger = {
+        contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+        enabled: safeAdaptiveDensity,
+        baseParticleCount: safeBaseParticleCount,
+        simulationCapacity: safeParticleCount,
+        activeParticleCount,
+        unrefinedBaseParticleCount,
+        refinedParentCount,
+        activeChildCount,
+        reservedChildCount,
+        representedVolume: Number(representedVolume.toFixed(6)),
+        momentum: adaptiveMomentum.map(value => Number(value.toFixed(6))),
+        chemistryMass: Number(chemistryMass.toFixed(6)),
+        splitCount: interfaceCounters[3],
+        mergeCount: interfaceCounters[4],
+        accountingValid: Math.abs(representedVolume - safeBaseParticleCount) <= Math.max(0.001, safeBaseParticleCount * 0.000001),
+      };
       const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
       const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
       const activeInterfaceCount = Math.min(interfaceCounters[0], safeParticleCount);
@@ -7494,12 +7289,16 @@ export async function createWebGPUFingerFluidSolver({
       }
       const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
         scene: safeTruthScene,
-        restDensity: 24.3,
+        restDensity: safeRestDensity,
+        kernelRadius: safeKernelRadius,
         sourceRecirculationCount: interfaceCounters[2],
       });
       const energyLedger = summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount);
       const waterfallContinuityDiagnostics = safeTruthScene === 'laminar_inlets'
         ? measureFingerFluidWaterfallContinuity(values, restStateValues, safeParticleCount)
+        : null;
+      const unsupportedSheetReleaseDiagnostics = safeUnsupportedSheetStrength > 0 || safeAdaptiveDensity
+        ? summarizeFingerFluidSheetReleaseDiagnostics(topologyValues, values, safeParticleCount)
         : null;
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
@@ -7512,6 +7311,7 @@ export async function createWebGPUFingerFluidSolver({
         },
         activeParticleCount,
         dormantParticleCount,
+        adaptiveDensityLedger,
         averageSpeed: Number((speedSum / physicalParticleCount).toFixed(4)),
         maxSpeed: Number(maxSpeed.toFixed(4)),
         averageDensity: Number((densitySum / physicalParticleCount).toFixed(4)),
@@ -7528,6 +7328,13 @@ export async function createWebGPUFingerFluidSolver({
         averageNeighborRetentionAge: Number((neighborRetentionAgeSum / physicalParticleCount).toFixed(4)),
         movingLockedParticleCount,
         movingLockedParticleRatio: Number((movingLockedParticleCount / physicalParticleCount).toFixed(4)),
+        unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+        unsupportedSheetStrength: safeUnsupportedSheetStrength,
+        unsupportedSheetActiveParticleCount,
+        unsupportedSheetActiveParticleRatio: Number((unsupportedSheetActiveParticleCount / physicalParticleCount).toFixed(6)),
+        averageUnsupportedSheetActivity: Number((unsupportedSheetActivitySum / physicalParticleCount).toFixed(6)),
+        maximumUnsupportedSheetActivity: Number(maximumUnsupportedSheetActivity.toFixed(6)),
+        unsupportedSheetReleaseDiagnostics,
         neighborRetentionHistogram,
         neighborRetentionHistogramEdges: [0, 0.25, 0.5, 0.75, 1.001],
         chemistry: {
@@ -7562,13 +7369,16 @@ export async function createWebGPUFingerFluidSolver({
         fluidTruthSnapshot,
         playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, restStateValues, topologyValues, safeParticleCount),
         laminarInletDiagnostics: safeTruthScene === 'laminar_inlets'
-          ? measureFingerFluidLaminarInletDiagnostics(values, safeParticleCount)
+          ? measureFingerFluidLaminarInletDiagnostics(values, safeParticleCount, undefined, {
+            sourceParticleCount: safeBaseParticleCount,
+          })
           : null,
         waterfallContinuityDiagnostics,
         sourceRecirculationCount: interfaceCounters[2],
+        inletCutoffStep: safeInletCutoffStep,
+        inletCutoffReached: safeInletCutoffStep !== null && diagnosticsStepCount >= safeInletCutoffStep,
         interfaceCarrier: {
           schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
-          interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
           sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
           recordFloats: INTERFACE_RECORD_FLOATS,
           recordBytes: INTERFACE_RECORD_BYTES,
@@ -7584,7 +7394,7 @@ export async function createWebGPUFingerFluidSolver({
           contactRecordCount,
           minimumContactSupportAlignment: contactRecordCount > 0 ? Number(minimumContactSupportAlignment.toFixed(4)) : null,
           curvatureResolutionMode: 'kernel-bandwidth-reject-unresolved-v0',
-          maximumResolvableCurvature: Number((2 / 0.185).toFixed(6)),
+          maximumResolvableCurvature: Number((2 / safeKernelRadius).toFixed(6)),
           resolvedCurvatureRecordCount,
           unresolvedCurvatureRecordCount,
           curvatureResolutionRatio: Number((resolvedCurvatureRecordCount / Math.max(1, activeInterfaceCount)).toFixed(6)),
@@ -7649,6 +7459,16 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
+      unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
+      waterfallOracleContract: waterfallOracleConfig?.contract || null,
+      oracleReleaseScheduleContract: waterfallOracleConfig?.releaseScheduleContract || null,
+      requestedWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? waterfallOraclePreset : null,
+      effectiveWaterfallOraclePreset: safeTruthScene === 'waterfall_resolution_oracle' ? safeWaterfallOraclePreset : null,
+      oracleParticleSpacing: waterfallOracleConfig?.particleSpacing ?? null,
+      oracleParticleSpacingScale: waterfallOracleConfig ? 1 / waterfallOracleConfig.refinementFactor : null,
+      oracleKernelScale: waterfallOracleConfig ? safeKernelRadius / 0.185 : null,
+      oracleSourceFlux: waterfallOracleConfig?.physicalSourceFlux ?? null,
+      oracleSourceFluxScale: waterfallOracleConfig ? 1 : null,
       interfacePressureContract: KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT,
       restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,
       supportTransportContract: KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT,
@@ -7667,6 +7487,16 @@ export async function createWebGPUFingerFluidSolver({
           expectedFlux: Number(measureFingerFluidLaminarInletFlux(descriptor).toFixed(6)),
         })),
       } : null,
+      waterfallResolutionOracle: waterfallOracleConfig ? {
+        ...waterfallOracleConfig,
+        requestedPreset: waterfallOraclePreset,
+        effectivePreset: safeWaterfallOraclePreset,
+        particleCount: safeParticleCount,
+        densityIterations: safeDensityIterations,
+        fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+        requestedEqualsEffective: waterfallOraclePreset === safeWaterfallOraclePreset,
+        visualDisposition: 'pending_operator_observation',
+      } : null,
       truthGauntletContract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
       truthScene: safeTruthScene,
       colorMode: safeColorMode,
@@ -7676,6 +7506,26 @@ export async function createWebGPUFingerFluidSolver({
       capillaryStrength: safeCapillaryStrength,
       thinSheetVorticityAttenuation: safeThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: safeFreeFlightViscosityBoost,
+      unsupportedSheetStrength: safeUnsupportedSheetStrength,
+      adaptiveDensityContract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+      adaptiveDensity: safeAdaptiveDensity,
+      adaptiveDensityPassCount,
+      adaptiveDensityLedger: diagnostics?.adaptiveDensityLedger || {
+        contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
+        enabled: safeAdaptiveDensity,
+        baseParticleCount: safeBaseParticleCount,
+        simulationCapacity: safeParticleCount,
+        splitCount: 0,
+        mergeCount: 0,
+        accountingValid: null,
+      },
+      pulseDrainageContract: KAMINOS_FINGER_FLUID_PULSE_DRAINAGE_CONTRACT,
+      inletCutoffStep: safeInletCutoffStep,
+      inletCutoffReached: safeInletCutoffStep !== null && frameIndex >= safeInletCutoffStep,
+      sheetSupportPassCount,
+      energyLedgerAttribution: safeUnsupportedSheetStrength > 0
+        ? 'cohesion_stage_includes_unsupported_sheet_support_then_surface_cohesion'
+        : 'nominal_projection_viscosity_vorticity_cohesion_stages',
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
@@ -7689,8 +7539,8 @@ export async function createWebGPUFingerFluidSolver({
         obstacleVertexCount: ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT,
         inletFixtureContract: KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT,
         inletFixtureCollisionMode: 'implicit_prescribed_inlet_core_no_separate_mesh_collision_v0',
-        inletFixtureVertexCount: safeTruthScene === 'laminar_inlets' ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0,
-        inletFixtures: safeTruthScene === 'laminar_inlets' ? [
+        inletFixtureVertexCount: isFingerFluidLaminarSourceScene(safeTruthScene) ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0,
+        inletFixtures: isFingerFluidLaminarSourceScene(safeTruthScene) ? [
           { id: 'round-spout', presentation: 'open_round_tube', vertexCount: ANALYTIC_SUPPORT_ROUND_INLET_VERTEX_COUNT },
           { id: 'slot-spout', presentation: 'open_rectangular_duct', vertexCount: ANALYTIC_SUPPORT_SLOT_INLET_VERTEX_COUNT },
           { id: 'porous-patch', presentation: 'homogenized_visual_boundary_not_resolved_pore_geometry', vertexCount: ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT },
@@ -7700,12 +7550,10 @@ export async function createWebGPUFingerFluidSolver({
         rendered: directRenderFrameCount > 0,
       },
       interfaceCarrierSchema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
-      interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
       interfaceCapacity: safeParticleCount,
       candidateCapMode: 'uncapped_exact_particle_population_capacity',
       interfaceCarrier: diagnostics?.interfaceCarrier || {
         schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
-        interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
         sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
         recordFloats: INTERFACE_RECORD_FLOATS,
         recordBytes: INTERFACE_RECORD_BYTES,
@@ -7747,6 +7595,8 @@ export async function createWebGPUFingerFluidSolver({
         ? 'material_tagged_finite_particle_loop_v0'
         : safeTruthScene === 'laminar_inlets'
           ? 'descriptor_laminar_inlet_finite_particle_loop_v0'
+          : safeTruthScene === 'waterfall_resolution_oracle'
+            ? 'isolated_slot_uniform_resolution_finite_particle_loop_v0'
         : 'closed_particle_population_no_source_recirculation_v0',
       sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
@@ -7757,41 +7607,6 @@ export async function createWebGPUFingerFluidSolver({
       fallbackReason: lastRendererFallbackReason,
       renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
       opticalDebugMode: lastOpticalDebugMode,
-      requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
-      effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
-      requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
-      effectiveOpticalLightingRoute: lastEffectiveOpticalLightingMode === 'not_executed'
-        ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
-        : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
-      opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
-      requestedOpticalFootprintMode: lastRequestedOpticalFootprintMode,
-      effectiveOpticalFootprintMode: lastEffectiveOpticalFootprintMode,
-      requestedOpticalFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
-      effectiveOpticalFootprintRoute: lastEffectiveOpticalFootprintMode === 'not_executed'
-        ? KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE
-        : opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
-      opticalFootprintFallbackReason: lastOpticalFootprintFallbackReason,
-      requestedTransmissionFootprintMode: lastRequestedTransmissionFootprintMode,
-      effectiveTransmissionFootprintMode: lastEffectiveTransmissionFootprintMode,
-      requestedTransmissionFootprintRoute: transmissionFootprintRouteForMode(lastRequestedTransmissionFootprintMode),
-      effectiveTransmissionFootprintRoute: lastEffectiveTransmissionFootprintMode === 'not_executed'
-        ? KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_NOT_EXECUTED_ROUTE
-        : transmissionFootprintRouteForMode(lastEffectiveTransmissionFootprintMode),
-      transmissionFootprintFallbackReason: lastTransmissionFootprintFallbackReason,
-      requestedBodyTransportMode: lastRequestedBodyTransportMode,
-      effectiveBodyTransportMode: lastEffectiveBodyTransportMode,
-      requestedBodyTransportRoute: bodyTransportRouteForMode(lastRequestedBodyTransportMode),
-      effectiveBodyTransportRoute: lastEffectiveBodyTransportMode === 'not_executed'
-        ? KAMINOS_FINGER_FLUID_BODY_TRANSPORT_NOT_EXECUTED_ROUTE
-        : bodyTransportRouteForMode(lastEffectiveBodyTransportMode),
-      bodyTransportFallbackReason: lastBodyTransportFallbackReason,
-      requestedInterfaceFrequencyMode: lastRequestedInterfaceFrequencyMode,
-      effectiveInterfaceFrequencyMode: lastEffectiveInterfaceFrequencyMode,
-      requestedInterfaceFrequencyRoute: interfaceFrequencyRouteForMode(lastRequestedInterfaceFrequencyMode),
-      effectiveInterfaceFrequencyRoute: lastEffectiveInterfaceFrequencyMode === 'not_executed'
-        ? KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_NOT_EXECUTED_ROUTE
-        : interfaceFrequencyRouteForMode(lastEffectiveInterfaceFrequencyMode),
-      interfaceFrequencyFallbackReason: lastInterfaceFrequencyFallbackReason,
       opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
       sphereDebugRendererRoute: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
       screenSpaceSurfaceRendererRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
@@ -7801,11 +7616,18 @@ export async function createWebGPUFingerFluidSolver({
       analyticSupportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
       analyticSupportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
       particleCount: safeParticleCount,
+      baseParticleCount: safeBaseParticleCount,
+      simulationCapacity: safeParticleCount,
+      particleAllocationCapacity,
+      particleAllocationPreflight,
       gridDimensions: [...GRID_DIMS],
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: safeDensityIterations,
       restDensity: 24.3,
-      maxFluidSpeed: MAX_FLUID_SPEED,
+      kernelRadius: safeKernelRadius,
+      visibleParticleRadius: safeVisibleParticleRadius,
+      maxFluidSpeed: safeMaxFluidSpeed,
+      speedReferenceScale: KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE,
       substeps: safeSubsteps,
       stepCount,
       linkedCellGridBuildCount,
@@ -7831,153 +7653,13 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceRefractionRenderFrameCount,
       screenSpaceRefractionScenePassCount,
       screenSpaceRefractionCompositePassCount,
-      deferredScenePassCount,
-      dynamicIndexedMeshDrawCount,
-      worldSpaceReflectionCompositePassCount,
-      hybridOpticalQueryCompositePassCount,
-      hdrWorldBackgroundPassCount,
-      finalPresentationPassCount,
-      linearHdrSceneEvidence: {
-        requestedRoute: KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE,
-        effectiveRoute: KAMINOS_FINGER_FLUID_LINEAR_HDR_SCENE_ROUTE,
-        format: LINEAR_SCENE_FORMAT,
-        colorSpace: 'scene_linear_rec2020_agnostic_rgb_v0',
-        backgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-        environmentFilterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
-        backgroundPassCount: hdrWorldBackgroundPassCount,
-        worldLightingConsumers: [...LINEAR_HDR_WORLD_LIGHTING_CONSUMERS],
-        fallbackReason: null,
-      },
-      finalPresentationEvidence: {
-        requestedRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
-        effectiveRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
-        sourceFormat: LINEAR_SCENE_FORMAT,
-        targetFormat: format,
-        toneMap: 'aces-fitted-v0',
-        exposure: LINEAR_SCENE_EXPOSURE,
-        displayTransformCountPerFrame: 1,
-        exactDiagnosticBypass: 'liquid_support',
-        diagnosticVisibilityRoute: 'post-composite-depth24plus-identity-v0',
-        passCount: finalPresentationPassCount,
-        fallbackReason: null,
-      },
-      deferredSceneEvidence: {
-        requestedRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
-        effectiveRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
-        route: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
-        fallbackReason: null,
-        passCount: deferredScenePassCount,
-        dynamicIndexedMeshDrawCount,
-        renderFrameId: lastRenderFrameId,
-        deferredSceneFrameId: lastDeferredSceneFrameId,
-        dynamicIndexedMeshLastDrawFrameId: lastDynamicIndexedMeshDrawFrameId,
-        dynamicMesh: {
-          objectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
-          vertexCount: DYNAMIC_REFLECTION_MESH_VERTEX_COUNT,
-          indexCount: DYNAMIC_REFLECTION_MESH_INDEX_COUNT,
-          triangleCount: DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
-          transformGeneration: lastDeferredMeshTransformGeneration,
-          phase: Number(lastDeferredMeshPhase.toFixed(6)),
-          presentationMode: lastDynamicMeshPresentationMode,
-          animationMode: reflectionMeshWitnessOverride ? 'witness_phase_override_v0' : 'simulation_tick_phase_v0',
-        },
-        attachments: configuredExtent ? {
-          worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
-          albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
-          linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
-        } : null,
-      },
-      ...(lastEffectiveRendererMode === 'screen_space_refraction' && lastOpticalDebugMode !== 'interface_fidelity' ? {
-        opticalQueryEvidence: {
-          schema: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA,
-          requestedRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          effectiveRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          route: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
-          worldProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          environmentRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
-          resolverOrder: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER,
-          fallbackReason: null,
-          queryFrameId: lastOpticalQueryFrameId,
-          compositePassCount: hybridOpticalQueryCompositePassCount,
-          maximumDeferredMarchSteps: 24,
-          minimumDeferredConfidence: 0.55,
-          deferredInputs: configuredExtent ? {
-            linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
-            worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
-            albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
-          } : null,
-          consumers: ['reflection_center_ray', 'two_interface_refraction_exit_ray'],
-          resultFields: ['origin', 'direction', 'cone', 'interval', 'hit_kind', 'object_id', 'distance', 'normal', 'material', 'radiance', 'transmittance', 'confidence', 'provider', 'fallback'],
-          deferredMissDisposition: 'uncapped_world_mesh_then_hdr_environment_v0',
-          invalidSlabDisposition: 'legacy_entry_interface_uv_only_no_exit_query_claim_v0',
-          participatingRadianceBoundary: 'reserved_zero_until_flame_contract_v0',
-        },
-        worldSpaceReflectionEvidence: {
-          schema: KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA,
-          requestedProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          effectiveProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          providerRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          accelerationRoute: KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
-          quadratureRoute: lastEffectiveOpticalFootprintMode === 'variance_filtered'
-            ? KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE
-            : KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
-          requestedFootprintMode: lastRequestedOpticalFootprintMode,
-          effectiveFootprintMode: lastEffectiveOpticalFootprintMode,
-          requestedFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
-          effectiveFootprintRoute: opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
-          footprintFallbackReason: lastOpticalFootprintFallbackReason,
-          minimumQuadratureSampleCount: 5,
-          maximumQuadratureSampleCount: lastEffectiveOpticalFootprintMode === 'variance_filtered' ? 9 : 5,
-          quadratureSampleCountMode: lastEffectiveOpticalFootprintMode === 'variance_filtered'
-            ? 'adaptive_5_sparse_9_dense_v0'
-            : 'fixed_5_v0',
-          quadratureEstimator: lastEffectiveOpticalFootprintMode === 'variance_filtered'
-            ? 'trimmed_min_max_7_of_9_equal_weight_v0'
-            : 'weighted_five_ray_mean_v0',
-          quadratureWeightSum: 1,
-          hitKindDiagnosticScope: 'center_ray_only_v0',
-          fallbackReason: null,
-          compositePassCount: worldSpaceReflectionCompositePassCount,
-          reflectionProviderFrameId: lastReflectionProviderFrameId,
-          candidateCapMode: 'uncapped_exact_dynamic_mesh_triangle_population_v0',
-          exactTriangleCount: DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
-          hitKinds: ['environment', 'analytic_sphere', 'indexed_mesh'],
-          dynamicMeshObjectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
-          dynamicMeshTransformGeneration: lastReflectionProviderTransformGeneration,
-          dynamicMeshPhase: Number(lastReflectionProviderPhase.toFixed(6)),
-          dynamicMeshPresentationMode: lastDynamicMeshPresentationMode,
-          participatingRadianceBoundary: 'integrateParticipatingRadiance(ray,tMax)_reserved_not_executed_v0',
-          composition: 'fresnel_world_reflection_plus_two_interface_refraction_v0',
-        },
-        environmentMapEvidence: {
-          schema: 'kaminos.hdr-environment-map.v0',
-          requestedRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
-          effectiveRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
-          assetId: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID,
-          assetSha256: hdrEnvironment.assetSha256,
-          runtimeAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL,
-          sourceAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL,
-          sourcePageUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL,
-          license: 'CC0-1.0',
-          encodedByteLength: hdrEnvironment.encodedByteLength,
-          decodeRoute: 'cpu-radiance-rle-rgbe-v0',
-          samplingRoute: 'wgsl-manual-bilinear-rgbe-equirectangular-v0',
-          filterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
-          worldBackgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-          width: hdrEnvironment.width,
-          height: hdrEnvironment.height,
-          gpuTextureFormat: 'rgba8unorm',
-          fallbackReason: null,
-        },
-      } : {}),
       supportPresentationEvidence: {
         route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
         depthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         colorDepthAuthority: 'same_pass_same_analytic_geometry_v0',
         geometrySource: 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
         calibrationLandmarks: 'world_anchored_half_unit_grid_major_grid_and_axes_v0',
-        refractionCaptureOrder: 'copy_after_deferred_scene_v0',
+        refractionCaptureOrder: 'copy_after_analytic_support_presentation_v0',
         passCount: analyticSupportPresentationPassCount,
         particleSupportDrawCount,
       },
@@ -7990,7 +7672,7 @@ export async function createWebGPUFingerFluidSolver({
           label: 'kaminos-finger-fluid-surface-accumulation',
           format: 'rgba16float',
           extent: configuredExtent,
-          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'nearest_particle_center_view_depth'],
         } : null,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceSurfaceCompositePassCount,
@@ -8002,24 +7684,13 @@ export async function createWebGPUFingerFluidSolver({
         route: KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
         opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
-        opticalQueryRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-        deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
-        interfaceFidelityRoute: KAMINOS_FINGER_FLUID_INTERFACE_FIDELITY_ROUTE,
-        coverageClosure: 'dense_support_footprint_closure_sparse_identity_v0',
-        normalFiltering: 'detail_macro_chord_variance_blend_v0',
-        legacyDebugMode: 'legacy_interface',
-        opticalTransportExecution: lastEffectiveRendererMode !== 'screen_space_refraction'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastOpticalDebugMode === 'interface_fidelity'
-            ? 'not_executed_early_interface_diagnostic_v0'
-            : 'executed_refraction_and_reflection_transport_v0',
         slabRoute: KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
         slabGeometryPassCount: screenSpaceOpticalSlabGeometryPassCount,
         frontDepthTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-optical-slab-front-depth',
           format: 'rgba16float',
           extent: configuredExtent,
-          channels: ['projected_particle_sphere_front_view_depth_min', 'nearest_particle_center_view_depth_min'],
+          channel: 'projected_particle_sphere_front_view_depth_min',
         } : null,
         backDepthTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-optical-slab-back-depth',
@@ -8027,123 +7698,23 @@ export async function createWebGPUFingerFluidSolver({
           extent: configuredExtent,
           channel: 'projected_particle_sphere_back_view_depth_max',
         } : null,
-        accumulationTexture: configuredExtent ? {
-          label: 'kaminos-finger-fluid-surface-accumulation',
-          format: 'rgba16float',
-          extent: configuredExtent,
-          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
-        } : null,
         slabGeometry: 'projected_particle_interval_hull_not_watertight_surface_v0',
         invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
         supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         analyticSupportDepthPassCount,
         opticalDebugMode: lastOpticalDebugMode,
-        requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
-        effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
-        requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
-        effectiveOpticalLightingRoute: lastEffectiveOpticalLightingMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_LIGHTING_NOT_EXECUTED_ROUTE
-          : opticalLightingRouteForMode(lastEffectiveOpticalLightingMode),
-        opticalLightingFallbackReason: lastOpticalLightingFallbackReason,
-        requestedOpticalFootprintMode: lastRequestedOpticalFootprintMode,
-        effectiveOpticalFootprintMode: lastEffectiveOpticalFootprintMode,
-        requestedOpticalFootprintRoute: opticalFootprintRouteForMode(lastRequestedOpticalFootprintMode),
-        effectiveOpticalFootprintRoute: lastEffectiveOpticalFootprintMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_FOOTPRINT_NOT_EXECUTED_ROUTE
-          : opticalFootprintRouteForMode(lastEffectiveOpticalFootprintMode),
-        opticalFootprintFallbackReason: lastOpticalFootprintFallbackReason,
-        reflectionFootprintComposition: lastEffectiveOpticalFootprintMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveOpticalFootprintMode === 'variance_filtered'
-            ? 'dense_unresolved_variance_widens_normalized_nine_ray_reflection_lobe_v0'
-            : 'resolved_detail_normalized_five_ray_reflection_lobe_v0',
-        requestedTransmissionFootprintMode: lastRequestedTransmissionFootprintMode,
-        effectiveTransmissionFootprintMode: lastEffectiveTransmissionFootprintMode,
-        requestedTransmissionFootprintRoute: transmissionFootprintRouteForMode(lastRequestedTransmissionFootprintMode),
-        effectiveTransmissionFootprintRoute: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_NOT_EXECUTED_ROUTE
-          : transmissionFootprintRouteForMode(lastEffectiveTransmissionFootprintMode),
-        transmissionFootprintFallbackReason: lastTransmissionFootprintFallbackReason,
-        transmissionFootprintComposition: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered'
-            ? 'dense_exit_variance_trimmed_three_of_five_hybrid_query_radiance_v0'
-            : 'resolved_exit_single_hybrid_query_radiance_v0',
-        transmissionQuadratureRoute: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_NOT_EXECUTED_ROUTE
-          : lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered'
-            ? KAMINOS_FINGER_FLUID_DENSE_EXIT_TRANSMISSION_QUADRATURE_ROUTE
-            : KAMINOS_FINGER_FLUID_RESOLVED_EXIT_TRANSMISSION_ROUTE,
-        transmissionQuadratureMinimumSampleCount: lastEffectiveTransmissionFootprintMode === 'not_executed' ? null : 1,
-        transmissionQuadratureMaximumSampleCount: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? null
-          : lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered' ? 5 : 1,
-        transmissionQuadratureSampleCountMode: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered'
-            ? 'adaptive_1_sparse_sheet_5_dense_exit_v0'
-            : 'fixed_1_v0',
-        transmissionQuadratureEstimator: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveTransmissionFootprintMode === 'dense_exit_filtered'
-            ? 'trimmed_min_max_3_of_5_equal_weight_v0'
-            : 'resolved_center_ray_v0',
-        transmissionApplicability: lastEffectiveTransmissionFootprintMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : 'dense_body_and_unresolved_entry_or_exit_normal_only_sparse_sheet_resolved_v0',
-        requestedBodyTransportMode: lastRequestedBodyTransportMode,
-        effectiveBodyTransportMode: lastEffectiveBodyTransportMode,
-        requestedBodyTransportRoute: bodyTransportRouteForMode(lastRequestedBodyTransportMode),
-        effectiveBodyTransportRoute: lastEffectiveBodyTransportMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_BODY_TRANSPORT_NOT_EXECUTED_ROUTE
-          : bodyTransportRouteForMode(lastEffectiveBodyTransportMode),
-        bodyTransportFallbackReason: lastBodyTransportFallbackReason,
-        bodyTransportComposition: lastEffectiveBodyTransportMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveBodyTransportMode === 'robust_dense_body'
-            ? 'dense_valid_geometric_thickness_path_closure_with_filtered_radiance_residual_v1'
-            : 'geometric_valid_exit_path_with_entry_thickness_fallback_v0',
-        bodyTransportApplicability: lastEffectiveBodyTransportMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : 'valid_dense_body_only_sparse_sheet_and_invalid_slab_baseline_v1',
-        requestedInterfaceFrequencyMode: lastRequestedInterfaceFrequencyMode,
-        effectiveInterfaceFrequencyMode: lastEffectiveInterfaceFrequencyMode,
-        requestedInterfaceFrequencyRoute: interfaceFrequencyRouteForMode(lastRequestedInterfaceFrequencyMode),
-        effectiveInterfaceFrequencyRoute: lastEffectiveInterfaceFrequencyMode === 'not_executed'
-          ? KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_NOT_EXECUTED_ROUTE
-          : interfaceFrequencyRouteForMode(lastEffectiveInterfaceFrequencyMode),
-        interfaceFrequencyFallbackReason: lastInterfaceFrequencyFallbackReason,
-        interfaceFrequencyComposition: lastEffectiveInterfaceFrequencyMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveInterfaceFrequencyMode === 'macro_micro_separated'
-            ? 'macro_snell_fresnel_bounded_micro_reflection_path_conditioned_transmission_v1'
-            : 'coupled_detail_interface_transport_baseline_v0',
-        interfaceFrequencyApplicability: lastEffectiveInterfaceFrequencyMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : 'all_refraction_fragments_macro_transport_bounded_micro_optics_v1',
-        lightingComposition: lastEffectiveOpticalLightingMode === 'not_executed'
-          ? 'not_executed_non_refraction_renderer_v0'
-          : lastEffectiveOpticalLightingMode === 'transport_only'
-            ? 'fresnel_reflection_refraction_absorption_scatter_no_direct_addition_v0'
-            : lastEffectiveOpticalLightingMode === 'bounded_ggx'
-              ? 'transport_plus_energy_bounded_view_dependent_ggx_v0'
-              : 'diagnostic_legacy_absorption_and_post_fresnel_additive_lobes_v0',
         sceneColorTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-refraction-scene-color',
-          format: LINEAR_SCENE_FORMAT,
+          format,
           extent: configuredExtent,
-          source: 'same-camera-linear-hdr-scene-radiance-v0',
+          source: 'same-camera-analytic-support-presentation-color-v0',
         } : null,
         scenePassCount: screenSpaceRefractionScenePassCount,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceRefractionCompositePassCount,
-        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_then_hybrid_exit_ray_query_v0',
+        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_v0',
         fresnel: 'schlick_f0_0.02037_v0',
         absorption: 'beer_lambert_from_particle_optical_thickness_v0',
-        absorptionCoefficients: lastEffectiveOpticalLightingMode === 'not_executed'
-          ? null
-          : fingerFluidAbsorptionCoefficientsForLightingMode(lastEffectiveOpticalLightingMode),
-        coverage: 'geometric_accumulation_support_alpha_independent_of_fresnel_v0',
       },
       diagnosticsPending,
       diagnosticsRequestCount,
@@ -8180,11 +7751,6 @@ export async function createWebGPUFingerFluidSolver({
     restStateBuffer.destroy();
     neighborTopologyBuffer.destroy();
     materialTracerBuffer.destroy();
-    dynamicReflectionMeshPositionBuffer.destroy();
-    dynamicReflectionMeshNormalBuffer.destroy();
-    dynamicReflectionMeshIndexBuffer.destroy();
-    dynamicReflectionSceneParamsBuffer.destroy();
-    hdrEnvironmentTexture.destroy();
     interfaceCountersReadbackBuffer.destroy();
     interfaceRecordsReadbackBuffer.destroy();
     restStateReadbackBuffer.destroy();
@@ -8196,11 +7762,7 @@ export async function createWebGPUFingerFluidSolver({
     screenSpaceSurfaceAccumulationTexture?.destroy();
     screenSpaceOpticalSlabFrontDepthTexture?.destroy();
     screenSpaceOpticalSlabBackDepthTexture?.destroy();
-    linearSceneRadianceTexture?.destroy();
     screenSpaceRefractionSceneTexture?.destroy();
-    deferredWorldNormalRoughnessTexture?.destroy();
-    deferredAlbedoMetallicTexture?.destroy();
-    deferredLinearDepthObjectTexture?.destroy();
   }
 
   device.lost.then(info => {
@@ -8213,16 +7775,10 @@ export async function createWebGPUFingerFluidSolver({
     solver_backend: 'webgpu_compute',
     render_backend: 'webgpu_direct_render',
     renderer_mode: safeRendererMode,
-    optical_lighting_mode: safeOpticalLightingMode,
-    optical_footprint_mode: safeOpticalFootprintMode,
-    transmission_footprint_mode: safeTransmissionFootprintMode,
-    body_transport_mode: safeBodyTransportMode,
-    interface_frequency_mode: safeInterfaceFrequencyMode,
     step,
     render,
     requestDiagnostics,
     getLiquidFireContactDescriptor,
-    setReflectionMeshPhaseForWitness,
     getDebugState,
     destroy,
   };

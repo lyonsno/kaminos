@@ -5,6 +5,7 @@ export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA = 'kaminos.webgpu-model-resource-tensor.v0';
+export const WEBGPU_MODEL_RESOURCE_RESIDENT_REUSE_SCHEMA = 'kaminos.webgpu-model-resource-resident-reuse.v0';
 export const WEBGPU_MODEL_RESOURCE_SHARING_POLICIES = Object.freeze({
   semanticIdentity: 'semantic-identity',
   contentAddressedPhysicalDedupe: 'content-addressed-physical-dedupe',
@@ -616,7 +617,14 @@ function releaseLeases(leases) {
   const failures = [];
   for (const lease of [...leases].reverse()) {
     try {
-      releases.push(lease.release());
+      const release = lease.release();
+      releases.push(release);
+      if (release?.status === 'release-failed') {
+        failures.push({
+          resourceId: lease.resourceId,
+          message: String(release.message || 'lease release failed'),
+        });
+      }
     } catch (error) {
       failures.push({
         resourceId: lease.resourceId,
@@ -624,11 +632,194 @@ function releaseLeases(leases) {
       });
     }
   }
+  const invalidatedLeaseCount = releases.filter(release => release?.status === 'invalidated').length;
+  const releasedLeaseCount = releases.filter(release => (
+    release?.status == null
+    || release.status === 'released'
+    || release.status === 'already-released'
+  )).length;
   return deepFreeze({
-    releasedLeaseCount: releases.length,
+    releasedLeaseCount,
+    invalidatedLeaseCount,
     failedReleaseCount: failures.length,
     releases,
     failures,
+  });
+}
+
+function modelAllocationDescriptor(manifest, allocation) {
+  const sharedPhysical = manifest.resourceSharing.policy
+    === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
+  return {
+    resourceId: allocation.resourceId,
+    declaredBytes: allocation.byteLength,
+    kind: 'model-weight-buffer',
+    metadata: {
+      resourceSharingPolicy: manifest.resourceSharing.policy,
+      physicalResourceId: allocation.physicalResourceId,
+      bundleSha256: manifest.bundle.sha256,
+      bundleByteLength: manifest.bundle.byteLength,
+      sourceByteOffset: allocation.byteOffset,
+      byteLength: allocation.byteLength,
+      usage: allocation.usage,
+      ...(sharedPhysical ? {} : {
+        semanticResourceId: allocation.semanticResourceId,
+        modelId: manifest.modelId,
+        revision: manifest.revision,
+        manifestMetadata: manifest.metadata,
+        allocationId: allocation.allocationId,
+        allocationMetadata: allocation.metadata,
+        tensorSemantics: allocation.tensors,
+      }),
+    },
+  };
+}
+
+function modelAllocationFromLease(manifest, allocation, lease) {
+  return Object.freeze({
+    allocationId: allocation.allocationId,
+    resourceId: allocation.resourceId,
+    physicalResourceId: allocation.physicalResourceId,
+    semanticResourceId: allocation.semanticResourceId,
+    semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
+    resourceSharingPolicy: manifest.resourceSharing.policy,
+    leaseId: lease.leaseId,
+    generation: lease.generation,
+    byteOffset: allocation.byteOffset,
+    byteLength: allocation.byteLength,
+    usage: allocation.usage,
+    buffer: lease.resource,
+  });
+}
+
+function createModelResourceLease({ manifest, route, verification, residentReuseReport, leases, allocations }) {
+  const allocationById = new Map(allocations.map(allocation => [allocation.allocationId, allocation]));
+  const tensors = Object.create(null);
+  for (const manifestAllocation of manifest.allocations) {
+    const allocation = allocationById.get(manifestAllocation.allocationId);
+    for (const tensor of manifestAllocation.tensors) {
+      tensors[tensor.name] = Object.freeze({
+        schema: WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
+        name: tensor.name,
+        dtype: tensor.dtype,
+        shape: tensor.shape,
+        strides: tensor.strides,
+        elements: tensor.elements,
+        bytesPerElement: tensor.bytesPerElement,
+        byteLength: tensor.byteLength,
+        allocationByteLength: manifestAllocation.byteLength,
+        ownsBuffer: false,
+        paddingReserved: true,
+        usage: manifestAllocation.usage,
+        allocationId: manifestAllocation.allocationId,
+        resourceId: manifestAllocation.resourceId,
+        physicalResourceId: manifestAllocation.physicalResourceId,
+        semanticResourceId: manifestAllocation.semanticResourceId,
+        semanticLeaseId: allocation.semanticLeaseId,
+        resourceSharingPolicy: manifest.resourceSharing.policy,
+        buffer: allocation.buffer,
+        bufferOffset: tensor.byteOffset,
+        metadata: tensor.metadata,
+      });
+    }
+  }
+
+  let released = false;
+  return Object.freeze({
+    schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+    identity: manifest.identity,
+    modelId: manifest.modelId,
+    revision: manifest.revision,
+    resourceSharing: manifest.resourceSharing,
+    routeId: route.routeId,
+    manifest,
+    verification,
+    residentReuseReport: residentReuseReport ?? null,
+    allocations: Object.freeze(allocations),
+    tensors: Object.freeze(tensors),
+    release() {
+      if (released) {
+        return deepFreeze({
+          schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+          identity: manifest.identity,
+          routeId: route.routeId,
+          status: 'already-released',
+          releasedLeaseCount: 0,
+        });
+      }
+      released = true;
+      const cleanup = releaseLeases(leases);
+      return deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+        identity: manifest.identity,
+        routeId: route.routeId,
+        status: cleanup.failedReleaseCount > 0
+          ? 'release-failed'
+          : (cleanup.invalidatedLeaseCount > 0 ? 'invalidated' : 'released'),
+        ...cleanup,
+      });
+    },
+  });
+}
+
+export async function loadResidentWebGpuModelResources(input = {}) {
+  const { manifest, route, signal } = input;
+  if (input.bundle != null || input.source != null) {
+    throw new Error('resident model resource reuse accepts manifest identity only; source and bundle custody are not read');
+  }
+  if (input.maxResources != null || input.maxBytes != null || input.retentionLimit != null) {
+    throw new Error('resident model resource reuse is uncapped; maxResources, maxBytes, and retentionLimit are not supported');
+  }
+  assertRoute(route);
+  if (typeof route.residency.acquireExisting !== 'function') {
+    throw new Error('route.residency must expose acquireExisting for resident model reuse');
+  }
+  throwIfAborted(signal);
+  const validation = validateWebGpuModelResourceManifest(manifest);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+  const leases = [];
+  const allocations = [];
+  try {
+    for (const allocation of manifest.allocations) {
+      throwIfAborted(signal);
+      let lease;
+      try {
+        lease = await route.residency.acquireExisting({
+          ...modelAllocationDescriptor(manifest, allocation),
+          signal,
+        });
+      } catch (cause) {
+        const error = new Error(`failed to reacquire resident model allocation ${allocation.allocationId}: ${String(cause?.message || cause)}`);
+        error.name = cause?.name || 'Error';
+        error.code = cause?.code;
+        error.resourceId = cause?.resourceId || allocation.resourceId;
+        error.cause = cause;
+        error.phase = 'resident-allocation';
+        error.allocationId = allocation.allocationId;
+        throw error;
+      }
+      leases.push(lease);
+      allocations.push(modelAllocationFromLease(manifest, allocation, lease));
+    }
+  } catch (error) {
+    error.cleanup = releaseLeases(leases);
+    throw error;
+  }
+  const residentReuseReport = deepFreeze({
+    schema: WEBGPU_MODEL_RESOURCE_RESIDENT_REUSE_SCHEMA,
+    status: 'resident-reused',
+    manifestIdentity: manifest.identity,
+    routeId: route.routeId,
+    allocationResourceIds: allocations.map(allocation => allocation.resourceId),
+    authority: 'resident-allocation-identity-and-metadata-match-normalized-manifest-source-bytes-not-reread',
+  });
+  return createModelResourceLease({
+    manifest,
+    route,
+    verification: null,
+    residentReuseReport,
+    leases,
+    allocations,
   });
 }
 
@@ -672,30 +863,8 @@ export async function loadWebGpuModelResources(input = {}) {
       throwIfAborted(signal);
       let lease;
       try {
-        const sharedPhysical = manifest.resourceSharing.policy
-          === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
         lease = await route.residency.acquireOrCreate({
-          resourceId: allocation.resourceId,
-          declaredBytes: allocation.byteLength,
-          kind: 'model-weight-buffer',
-          metadata: {
-            resourceSharingPolicy: manifest.resourceSharing.policy,
-            physicalResourceId: allocation.physicalResourceId,
-            bundleSha256: manifest.bundle.sha256,
-            bundleByteLength: manifest.bundle.byteLength,
-            sourceByteOffset: allocation.byteOffset,
-            byteLength: allocation.byteLength,
-            usage: allocation.usage,
-            ...(sharedPhysical ? {} : {
-              semanticResourceId: allocation.semanticResourceId,
-              modelId: manifest.modelId,
-              revision: manifest.revision,
-              manifestMetadata: manifest.metadata,
-              allocationId: allocation.allocationId,
-              allocationMetadata: allocation.metadata,
-              tensorSemantics: allocation.tensors,
-            }),
-          },
+          ...modelAllocationDescriptor(manifest, allocation),
           signal,
           create({ signal: flightSignal }) {
             throwIfAborted(flightSignal);
@@ -729,20 +898,7 @@ export async function loadWebGpuModelResources(input = {}) {
         throw error;
       }
       leases.push(lease);
-      allocations.push(Object.freeze({
-        allocationId: allocation.allocationId,
-        resourceId: allocation.resourceId,
-        physicalResourceId: allocation.physicalResourceId,
-        semanticResourceId: allocation.semanticResourceId,
-        semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
-        resourceSharingPolicy: manifest.resourceSharing.policy,
-        leaseId: lease.leaseId,
-        generation: lease.generation,
-        byteOffset: allocation.byteOffset,
-        byteLength: allocation.byteLength,
-        usage: allocation.usage,
-        buffer: lease.resource,
-      }));
+      allocations.push(modelAllocationFromLease(manifest, allocation, lease));
     }
   } catch (error) {
     error.cleanup = releaseLeases(leases);
@@ -750,68 +906,12 @@ export async function loadWebGpuModelResources(input = {}) {
     throw error;
   }
 
-  const allocationById = new Map(allocations.map(allocation => [allocation.allocationId, allocation]));
-  const tensors = Object.create(null);
-  for (const manifestAllocation of manifest.allocations) {
-    const allocation = allocationById.get(manifestAllocation.allocationId);
-    for (const tensor of manifestAllocation.tensors) {
-      tensors[tensor.name] = Object.freeze({
-        schema: WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
-        name: tensor.name,
-        dtype: tensor.dtype,
-        shape: tensor.shape,
-        strides: tensor.strides,
-        elements: tensor.elements,
-        bytesPerElement: tensor.bytesPerElement,
-        byteLength: tensor.byteLength,
-        allocationByteLength: manifestAllocation.byteLength,
-        ownsBuffer: false,
-        paddingReserved: true,
-        usage: manifestAllocation.usage,
-        allocationId: manifestAllocation.allocationId,
-        resourceId: manifestAllocation.resourceId,
-        physicalResourceId: manifestAllocation.physicalResourceId,
-        semanticResourceId: manifestAllocation.semanticResourceId,
-        semanticLeaseId: allocation.semanticLeaseId,
-        resourceSharingPolicy: manifest.resourceSharing.policy,
-        buffer: allocation.buffer,
-        bufferOffset: tensor.byteOffset,
-        metadata: tensor.metadata,
-      });
-    }
-  }
-
-  let released = false;
-  return Object.freeze({
-    schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
-    identity: manifest.identity,
-    modelId: manifest.modelId,
-    revision: manifest.revision,
-    resourceSharing: manifest.resourceSharing,
-    routeId: route.routeId,
+  return createModelResourceLease({
     manifest,
+    route,
     verification,
-    allocations: Object.freeze(allocations),
-    tensors: Object.freeze(tensors),
-    release() {
-      if (released) {
-        return deepFreeze({
-          schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
-          identity: manifest.identity,
-          routeId: route.routeId,
-          status: 'already-released',
-          releasedLeaseCount: 0,
-        });
-      }
-      released = true;
-      const cleanup = releaseLeases(leases);
-      return deepFreeze({
-        schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
-        identity: manifest.identity,
-        routeId: route.routeId,
-        status: cleanup.failedReleaseCount === 0 ? 'released' : 'release-failed',
-        ...cleanup,
-      });
-    },
+    residentReuseReport: null,
+    leases,
+    allocations,
   });
 }

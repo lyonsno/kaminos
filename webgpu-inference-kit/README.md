@@ -154,8 +154,8 @@ A shared inference session can verify one content-addressed weight bundle, uploa
 import {
   WEBGPU_BUFFER_USAGE,
   createWebGpuInferenceSession,
+  createWebGpuModelResourceCacheStorage,
   defineWebGpuModelResourceManifest,
-  prepareWebGpuModelResourceBundle,
 } from "@kaminos/webgpu-inference-kit";
 
 const manifest = defineWebGpuModelResourceManifest({
@@ -195,19 +195,34 @@ const session = await createWebGpuInferenceSession({
 });
 const sharp = await session.registerRoute({ routeId: "sharp.image-to-splat.webgpu-local.v0" });
 const sf3d = await session.registerRoute({ routeId: "sf3d.image-to-mesh.webgpu-local.v0" });
-const preparedWeights = await prepareWebGpuModelResourceBundle(
-  manifest,
-  weightBytes.buffer,
-  { ownership: "transfer" },
-);
 
-const [sharpWeights, sf3dWeights] = await Promise.all([
-  sharp.loadModelResources({ manifest, bundle: preparedWeights }),
-  sf3d.loadModelResources({ manifest, bundle: preparedWeights }),
-]);
+const modelBundleCache = createWebGpuModelResourceCacheStorage({
+  cacheId: "cache-storage:kaminos-model-bundles-v1",
+  cacheName: "kaminos-model-bundles-v1",
+  cacheStorage: caches,
+  baseUrl: new URL("/__kaminos_model_cache__/", location.origin),
+});
+
+const loadController = new AbortController();
+const sharpWeights = await sharp.loadModelResourcesFromSource({
+  manifest,
+  source: new URL("./vision-model.weights.bin", import.meta.url),
+  cache: modelBundleCache,
+  signal: loadController.signal,
+  onProgress(event) {
+    console.info("model bytes loaded", event.loadedBytes, event.totalBytes);
+  },
+});
+
+const sf3dWeights = await sf3d.loadModelResourcesFromSource({
+  manifest,
+  source: new URL("./vision-model.weights.bin", import.meta.url),
+  cache: modelBundleCache,
+});
 
 sharpWeights.tensors["decoder.weight"].buffer ===
   sf3dWeights.tensors["decoder.weight"].buffer; // true
+sf3dWeights.acquisitionReport.cache.status; // "hit"
 
 // Tensor views expose buffer, bufferOffset, byteLength, shape, strides, and dtype,
 // so they can be bound directly by runtime kernels and phase programs.
@@ -215,8 +230,13 @@ const decoderWeight = sharpWeights.tensors["decoder.weight"];
 
 sharpWeights.release();
 sf3dWeights.release();
-preparedWeights.release();
 ```
+
+`route.loadModelResourcesFromSource()` is the direct browser porting path. It accepts URL, `Request`, `Response`, `Blob`, `ArrayBuffer`, and typed-array sources; acquires and verifies the complete bundle; uploads allocations through the session's shared single-flight residency; releases intermediate host custody on every terminal path; and returns one independently releasable model lease with `acquisitionReport`. It streams uncapped progress events, honors `AbortSignal` while fetch, stream, cache, or upload work is pending, and records requested versus effective source identity. Acquisition defaults to copy custody; pass `{ ownership: "transfer" }` explicitly when an uncached full `ArrayBuffer` may be detached.
+
+`createWebGpuModelResourceCacheStorage()` adapts the browser CacheStorage API with an explicit caller-owned `cacheId`, cache name, and HTTP(S) key namespace. Keys are derived from the manifest digest and byte length. Invalid cached bytes are deleted and refetched; transient cache failures remain visible in `acquisitionReport` while a valid source load can still succeed. The lower-level `acquireWebGpuModelResourceBundle()` and `route.loadModelResources()` calls remain available when a port needs to hold verified host bytes or control the source and upload phases separately.
+
+The complete-bundle acquisition path assembles the complete source before exact-byte verification. On a cache miss, peak host memory may include that assembled source, the verified custody snapshot, and one independent cache-write buffer. It does not claim streaming verification directly into GPU allocations; ports with very large bundles should use the chunk-plan path below or account for those three representations.
 
 Resource sharing is semantic by default. Model id, revision, manifest metadata, allocation metadata, tensor layout and metadata, bundle bytes, range, and usage all participate in the authenticated allocation identity. Equal bytes under different model semantics therefore produce different resident buffers.
 
@@ -233,6 +253,161 @@ That policy selects the content-addressed `physicalResourceId` for residency whi
 
 Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. `prepareWebGpuModelResourceBundle()` makes ownership explicit: `copy` preserves mutable caller input, while `transfer` accepts a full `ArrayBuffer`, detaches it, and verifies/uploads the transferred storage without the loader allocating its own second full-size byte array. Transfer is ownership-consuming even when digest verification later fails; use `copy` when the caller must retain retry bytes. Prepared handles are module-authenticated, bound to the complete normalized manifest, do not expose mutable bytes, and reject reuse after release. Bundle length or digest mismatch fails before upload. Concurrent loads single-flight each policy-selected allocation identity, while cancellation and partial failure release every model lease already acquired. Released GPU buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
 
+### Load Large Models As Verified Packages
+
+When one whole-model bundle would amplify host memory too far, compose several independently authenticated manifests into one model resource package. The route loads package resources strictly in declaration order, releases each source's intermediate custody before acquiring the next, and returns one composite lease:
+
+```js
+import { defineWebGpuModelResourcePackage } from "@kaminos/webgpu-inference-kit";
+
+const modelPackage = defineWebGpuModelResourcePackage({
+  packageId: "acme/vision-model:browser-f16",
+  modelId: "acme/vision-model",
+  revision: "0123456789abcdef",
+  resources: [
+    { resourceId: "encoder", manifest: encoderManifest },
+    { resourceId: "decoder", chunkPlan: decoderChunkPlan },
+    { resourceId: "head", manifest: headManifest },
+  ],
+});
+
+const modelPackageSources = {
+  encoder: new URL("./encoder.weights.bin", import.meta.url),
+  decoder: Object.fromEntries(decoderChunkPlan.chunkIds.map(chunkId => [
+    chunkId,
+    new URL(`./decoder/${chunkId}.bin`, import.meta.url),
+  ])),
+  head: new URL("./head.weights.bin", import.meta.url),
+};
+
+const weights = await sharp.loadModelResourcePackageFromSources({
+  package: modelPackage,
+  sources: modelPackageSources,
+  cache: modelBundleCache,
+  signal: loadController.signal,
+  onProgress(event) {
+    console.info(event.resourceId, event.resourceEvent.loadedBytes);
+  },
+});
+
+const encoderWeight = weights.tensors["encoder.weight"];
+weights.report.sourceMemoryBound.largestResourceByteLength;
+weights.report.sourceMemoryBound.largestSourceByteLength;
+weights.release();
+```
+
+Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and package identity binds each child's normalized allocation and tensor semantics. A child with `manifest` uses whole-source acquisition; a child with `chunkPlan` uses that plan's manifest and nested chunk source map. Source-only `v0` package identities remain compatible, while chunk-backed children additionally bind loader kind and chunk-plan identity. The complete ordinary and nested source maps are copied and every source class is validated before GPU work starts. One-shot packages, reusable package loaders, and direct chunk plans snapshot supported `fetchOptions` before work; each package child and each chunk fetch receives an independent materialization. Ordinary nested records and normalized headers materialize without inherited prototype authority. Standard `Headers`, header records, and tuple-array `HeadersInit` values are accepted and normalized to a null-prototype header record; arbitrary nested arrays are rejected rather than receiving unstable custom semantics. Accessors, cycles, abort signals, streams, functions, shared memory, and unsupported host objects also fail admission instead of leaking caller or prior-fetch mutation into a later request. Multi-resource packages reject mutable `ArrayBuffer` and typed-array whole-resource sources at admission instead of cloning and retaining a second whole-model byte set; wrap direct bytes in immutable `Blob`s or use URL, `Request`, or `Response` sources. A later single mutable chunk is snapshotted at package admission, while multi-chunk plans retain their existing mutable-byte rejection. Fetch-backed content and consumable response bodies are still read when their declared child reaches the sequential loader; the package does not claim to snapshot remote content at admission.
+
+Each child retains its own whole-source acquisition report or chunk-load report, CacheStorage identity, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired, names the exact failed package resource, and preserves the child authority report.
+
+This bounds source acquisition to the largest ordinary child source or declared chunk while loading package children sequentially. It does not claim an exact browser-process memory peak or eliminate the cache-miss copies inside the currently active source unit.
+
+For phase-aware loading, admit the same complete package and source map once with `route.createModelResourcePackageLoader()`. Admission validates every source and snapshots lawful mutable direct inputs before any GPU work, while `acquireResource()` loads only the named child and returns an independently releasable lease. A later acquisition reuses matching ordinary allocations directly from session residency without refetching source bytes; explicit eviction falls back to the source captured at admission. Chunk-backed children retain their chunk verification provenance and resident reuse path. Use replayable URL, `Request`, or `Blob` sources when an evicted resource may need to load again; a consumed `Response` remains a one-shot source rather than pretending to be replayable.
+
+### Hold Only The Model Resources A Phase Needs
+
+Long-running ports can declare the model resources required by each execution phase, prefetch the next useful resources, and release departed leases only after the target working set is complete:
+
+```js
+import {
+  createWebGpuPhaseResourceWorkingSet,
+  defineWebGpuPhaseResourcePlan,
+} from "@kaminos/webgpu-inference-kit";
+
+const packageLoader = sharp.createModelResourcePackageLoader({
+  loaderId: "sharp.browser-f16.phase-loader",
+  package: modelPackage,
+  sources: modelPackageSources,
+  cache: modelBundleCache,
+});
+
+const phasePlan = defineWebGpuPhaseResourcePlan({
+  planId: "sharp.image-to-splat.browser-f16",
+  resources: modelPackage.resources.map(resource => ({
+    resourceId: resource.resourceId,
+    declaredBytes: resource.manifest.bundle.byteLength,
+  })),
+  phases: [
+    {
+      phaseId: "encode-image",
+      requiredResourceIds: ["encoder"],
+      prefetchResourceIds: ["decoder"],
+    },
+    {
+      phaseId: "decode-splats",
+      requiredResourceIds: ["decoder", "head"],
+    },
+  ],
+});
+
+const workingSet = createWebGpuPhaseResourceWorkingSet({
+  controllerId: "sharp:run-42:working-set",
+  plan: phasePlan,
+  residencySnapshot: () => session.residency.snapshot(),
+  acquireResource: packageLoader.acquireResource,
+});
+
+await workingSet.transitionToPhase("encode-image", { signal });
+await runEncoder();
+const decodeTransition = await workingSet.transitionToPhase("decode-splats", { signal });
+decodeTransition.heldDeclaredBytes;
+decodeTransition.residency.evictionCandidates;
+
+workingSet.close();
+packageLoader.close();
+```
+
+The controller acquires required resources first and declared prefetch resources second, preserves existing leases across adjacent phases, and does not release the old phase until the complete target set has loaded. Acquisition failure or cancellation rolls back new leases and leaves the previous phase intact. If any release cannot be confirmed, the controller enters a recoverable `release-failed` or `close-failed` state, clears the phase claim, retains only unresolved leases in its snapshot, and lets `close()` retry that exact remainder. Device-loss invalidation clears non-retryable custody separately as `invalidatedResourceIds` and produces `prepared-after-invalidation` or `closed-after-invalidation` instead of relabeling invalidation as release. Residency diagnostics are caller-supplied and fail visibly without changing lease lifecycle. Plans, reports, transitions, and resource counts are uncapped.
+
+### Stream Allocations As Authenticated Chunks
+
+When one allocation is itself too large to assemble before upload, pair its existing semantic manifest with a chunk plan. Every allocation is covered exactly by independently authenticated, allocation-relative chunks, and each verified chunk is written directly into its declared buffer range:
+
+```js
+import {
+  createWebGpuModelResourceCacheStorage,
+  defineWebGpuModelResourceChunkPlan,
+} from "@kaminos/webgpu-inference-kit";
+
+const chunkPlan = defineWebGpuModelResourceChunkPlan({
+  planId: "acme/vision-model:browser-f16-chunks",
+  manifest,
+  allocations: manifest.allocations.map(allocation => ({
+    allocationId: allocation.allocationId,
+    chunks: converterChunks[allocation.allocationId].map(chunk => ({
+      chunkId: chunk.id,
+      byteOffset: chunk.allocationByteOffset,
+      byteLength: chunk.byteLength,
+      sha256: chunk.sha256,
+    })),
+  })),
+});
+
+const weights = await route.loadModelResourceChunksFromSources({
+  plan: chunkPlan,
+  sources: Object.fromEntries(chunkPlan.chunkIds.map(chunkId => [
+    chunkId,
+    new URL(`./weights/${chunkId}.bin`, import.meta.url),
+  ])),
+  cache: createWebGpuModelResourceCacheStorage({
+    cacheId: "vision-model-weights",
+    cacheName: "kaminos-model-weights-v1",
+    cacheStorage: globalThis.caches,
+    baseUrl: "https://app.example/.kaminos/model-cache/",
+  }),
+});
+
+weights.tensors["encoder.blocks.0.attn.qkv.weight"];
+weights.chunkReport.sourceMemoryBound.largestChunkByteLength;
+weights.release();
+```
+
+Chunk ids are globally unique inside a plan. Chunks must be positive, contiguous, 4-byte-aligned, and cover each allocation exactly in declaration order; chunk boundaries cannot cross allocations. Plan identity binds the manifest's normalized allocation/tensor semantics, logical chunk ids, ordered coverage, byte lengths, and chunk SHA-256 digests. Chunk-backed physical identities permit explicit content-addressed allocation reuse, while the default semantic policy keeps model meaning in the resource identity.
+
+The route validates the complete source map before work, fetches and verifies one chunk at a time through the same persistent cache contract, and publishes an allocation through the existing resource factory only after all of its chunks verify. Corrupt persistent chunks are deleted, refetched, reverified, and replaced before upload. Corruption or all-waiter cancellation destroys the unpublished buffer; failure reports retain the exact allocation, chunk, cache/source report, completed allocations, progress, and cleanup. Concurrent routes single-flight the allocation and every waiter receives the creator's exact chunk failure identity. Successful flight joiners and later resident reusers expose the same immutable per-allocation verification provenance that authorized the original publication, without refetching or duplicating the GPU allocation. Multi-chunk plans reject mutable direct byte sources instead of cloning a whole model at admission; use immutable `Blob`, URL, `Request`, or `Response` sources. A single mutable chunk is snapshotted synchronously before the first asynchronous boundary. Fetch-backed content and consumable bodies are read when their chunk reaches the sequential loader; remote bytes are not snapshotted at plan admission.
+
+The chunk route's byte authority is complete allocation coverage by the declared per-chunk SHA-256 digests. It does not claim to recompute `manifest.bundle.sha256`, authenticate unused bundle gaps, expose browser-global memory, or eliminate the current cache-miss copies within one chunk. Peak loader-owned source custody is bounded by the largest declared chunk, not an exact browser-process peak. There is no hidden chunk count or byte cap.
+
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
@@ -240,6 +415,7 @@ Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
 - `createWebGpuSchedulerApplication(input)`: bind adaptive decisions to one route and one declared control set, preserve submitted work as non-preemptible, and let active invocations consume newer exact revisions only at explicit pre-encoding boundaries.
+- `createWebGpuForegroundOpportunityInterlock(input)`: let live foreground consumers place real GPU work ahead of the next inference encode at an explicit safe boundary, with uncapped demand, submission, cancellation, and failure receipts.
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)`: describe non-preemptible submitted command work, preserve uncapped measured duty, and bind reusable chunk controls to effective route/run/clock identity.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)`: capture runtime-owned submissions automatically, preserve honest host-submit timing authority, and join a complete external measurement set into governor-ready duty observations.
 - `createWebGpuHostPhaseRecorder(input)`: record uncapped, route/run/clock-bound CPU preprocessing, command encoding, queue submission, readback, presentation, and custom host intervals while preserving failed phases and the last trustworthy interval.
@@ -253,10 +429,18 @@ Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with
 - `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
-- `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, then issue independent route leases over the one resulting object.
+- `defineWebGpuPhaseResourcePlan(input)` and `createWebGpuPhaseResourceWorkingSet(input)`: declare phase-required and prefetched model resources, acquire complete target working sets before releasing departed leases, expose exact held-byte and residency pressure, and preserve recoverable unresolved custody after cancellation or release failure.
+- `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, issue independent route leases over the one resulting object, and optionally settle report-bearing cancellation from the creator's exact terminal failure.
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
 - `prepareWebGpuModelResourceBundle(manifest, bundle, options)`: establish a releasable, manifest-bound verified byte-custody handle using safe-copy or zero-copy `ArrayBuffer` transfer ownership.
+- `acquireWebGpuModelResourceBundle(manifest, source, options)`: fetch or consume browser-native model bytes, stream uncapped progress, honor cancellation, verify exact manifest identity, recover from corrupt persistent cache entries, and return a verified custody handle plus effective-source report.
+- `describeWebGpuModelResourceSource(source)`: validate a browser-native model source without fetching or consuming it and return its immutable source-class description.
+- `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
+- `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
+- `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose ordinary source-backed and chunk-plan-backed same-model children into one sequential package, preserve each child's verification/cache/report identity, and return one composite lease bounded by the largest ordinary source or chunk.
+- `route.createModelResourcePackageLoader(input)`: validate one complete heterogeneous package admission without GPU work, acquire named children independently for phase working sets, reuse still-resident ordinary allocations without refetching, and fall back to admitted authenticated sources after explicit eviction.
+- `defineWebGpuModelResourceChunkPlan(input)` and `route.loadModelResourceChunksFromSources(input)`: bind a semantic model manifest to exact per-allocation chunk coverage, verify/cache one source chunk at a time, upload verified bytes directly into ranged GPU buffer offsets, and publish each allocation through shared single-flight residency only after complete chunk verification.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
@@ -421,6 +605,47 @@ if (decision.schedulerChanged) runtime.applySchedulerDecision(decision);
 ```
 
 `runProgram()` opens and closes one invocation automatically. Before every compute or staged-readback command is encoded, the runtime refreshes that invocation to the newest valid scheduler revision, resolves any matching `commandDuty.chunkControl`, and later stores the exact boundary receipt in the submitted duty descriptor. Boundary rows begin as `pending-encode-validation`, settle to `encoded`, or fail as `failed-before-encode` with an exact phase; ending an invocation with an unsettled boundary fails it explicitly. Pending and encoded boundaries say submission is `not-claimed`; only a pre-encoding failure says `not-submitted`. The uncapped application snapshot proves boundary uptake and encoding outcome, while the command-duty report separately proves which encoded duties reached `queue.submit()`. Together they name requested and effective revision, yield delay, phase controls, route, invocation, phase, duty, and failure without relabeling old work. Custom raw-queue adapters call `invocation.refreshAtBoundary({ boundaryId, dutyId, phase, position: "before-encode" })`, consume `invocation.getControl(controlId)` to choose the next bounded duty, and call `invocation.settleBoundary({ boundaryId, status: "encoded" })` only after encoding succeeds; failures settle with `status: "failed-before-encode"`, `phase`, and `error`. `runtime.runKernel()` and staged readback perform that lifecycle automatically. Nothing here pretends an already submitted command buffer can be split or preempted.
+
+### Put Real Foreground Work Between Inference Duties
+
+`yieldMs: 0` gives the browser event loop a turn, but it does not guarantee that a live renderer submits before inference occupies the queue again. Configure `foregroundOpportunities` when the foreground application can identify actual frame demand and encode against the same device:
+
+```js
+const runtime = await createWebGpuInferenceRuntime({
+  routeId,
+  device,
+  adapterName,
+  kernel,
+  schedulerApplication,
+  foregroundOpportunities: {
+    runId: crypto.randomUUID(),
+  },
+});
+
+function requestKilnFrame(frameId) {
+  return runtime.requestForegroundOpportunity({
+    requestId: `kiln-frame:${frameId}`,
+    metadata: { frameId },
+    run({ device, submit, signal }) {
+      if (signal.aborted) return;
+      const commandBuffer = encodeKilnFrame(device, frameId);
+      submit([commandBuffer], {
+        submissionId: `kiln-frame:${frameId}:submit`,
+        metadata: { frameId },
+      });
+    },
+  });
+}
+
+requestAnimationFrame(frameId => {
+  const frame = requestKilnFrame(frameId);
+  frame.completion.then(receipt => updateFrameDiagnostics(receipt));
+});
+```
+
+At the next runtime-owned compute or staged-readback boundary, every request already pending is serviced before the scheduler refreshes and before inference constructs its next command duty. A scheduler decision produced by that foreground work can therefore govern the immediately following inference encode. Requests arriving while an opportunity is open are retained for the next boundary, preventing an endless producer from silently extending one interleave window forever. Service turns are serialized across concurrent invocations: a later inference boundary cannot encode through a foreground callback that is still active, and demand arriving during that callback is serviced by the queued boundary turn. The runtime takes the direct preparation path only when no request or service turn is pending, active, or queued.
+
+The submission lease records each `queue.submit()` call and preserves callback, serialization, cancellation, and submission failures. `cancel(reason)` removes a pending request or aborts an active callback through its signal. Raw adapters using the synchronous `runtime.prepareCommandDuty()` path fail loudly while foreground pressure exists; await `runtime.prepareCommandDutyAtBoundary()` at the pre-encode boundary so the opportunity is serviced before inference resumes. Receipts prove callback execution and queue submission return only; they do not prove GPU completion, compositor presentation, or frame cadence. An already submitted inference duty remains non-preemptible, so responsive products still need adapter chunk bounds small enough to reach these opportunities within their frame budget.
 
 ## Background Inference Queue
 
