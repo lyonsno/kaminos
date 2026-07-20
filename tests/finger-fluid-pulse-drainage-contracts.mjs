@@ -182,6 +182,8 @@ assert.match(witnessSource, /pulse_drainage/);
 assert.match(witnessSource, /--capture-steps/);
 assert.match(witnessSource, /--pulse-preset/);
 assert.match(witnessSource, /sourceRecirculationCountStableAfterCutoff/);
+assert.match(witnessSource, /const expectedPulseControlReadout = createFingerFluidPulseControlReadout\(/, 'exact-step captures preserve source-open identity even without a cutoff');
+assert.doesNotMatch(witnessSource, /const expectedPulseControlReadout = cutoffStep === null \? null/, 'no-cut routes cannot erase exact-step pulse readout identity');
 assert.match(witnessSource, /unsupportedSheetStrength !== 2/);
 assert.match(witnessSource, /kaminos\.finger-fluid\.pulse-drainage-witness\.v0/);
 assert.match(indexSource, /pulseControlReadout/);

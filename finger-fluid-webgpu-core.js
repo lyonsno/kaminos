@@ -21,6 +21,27 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT = 'wgsl-analytic-lami
 export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-distinct-flux-cadenced-inlet-population-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
+export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
+export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.sheet-release-diagnostics.v0';
+export const KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES = Object.freeze({
+  active: 0,
+  disabled: 1,
+  dormant: 2,
+  low_transport_speed: 3,
+  support_contact: 4,
+  density_loss: 5,
+  bulk_density: 6,
+  not_interface: 7,
+  topology_loss: 8,
+  neighbor_loss: 9,
+  velocity_incoherent: 10,
+  not_planar: 11,
+  inlet_core: 12,
+  activity_floor: 13,
+});
+const KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE = Object.freeze(Object.fromEntries(
+  Object.entries(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES).map(([reason, code]) => [code, reason]),
+));
 export const KAMINOS_FINGER_FLUID_INTERFACE_PRESSURE_CONTRACT = 'wgsl-unilateral-free-surface-pressure-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_DIAGNOSTICS_SCHEMA = 'kaminos.finger-fluid.waterfall-continuity-diagnostics.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_SOAK_EVIDENCE_IDENTITY_SCHEMA = 'kaminos.finger-fluid.waterfall-soak-evidence-identity.v0';
@@ -111,7 +132,8 @@ const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
 const REST_STATE_FLOATS = 4;
 const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
-const NEIGHBOR_TOPOLOGY_WORDS = 20;
+export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 32;
+const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
@@ -120,7 +142,7 @@ const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
 
-export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
+export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze(['baseline', 'production', 'high']);
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
@@ -1359,6 +1381,9 @@ struct NeighborTopologyState {
   sheet: vec4<f32>,
   sheetNeighborIds: vec4<u32>,
   sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -1852,6 +1877,41 @@ fn clear_unsupported_sheet_state(index: u32) {
   neighborTopology[index].sheet = vec4<f32>(0.0);
   neighborTopology[index].sheetNeighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
   neighborTopology[index].sheetRestDistances = vec4<f32>(0.0);
+}
+
+fn measure_sheet_link_diagnostics(index: u32, position: vec3<f32>) -> vec4<f32> {
+  let ids = neighborTopology[index].sheetNeighborIds;
+  let restDistances = neighborTopology[index].sheetRestDistances;
+  var persistentLinkCount = 0.0;
+  var maximumStretch = 0.0;
+  var maximumKernelRatio = 0.0;
+  for (var slot = 0u; slot < 4u; slot = slot + 1u) {
+    let neighborIndex = ids[slot];
+    let restDistance = restDistances[slot];
+    if (neighborIndex != ${INVALID_NEIGHBOR_ID}u && neighborIndex < params.particleCount && restDistance > 0.00001) {
+      let distance = length(particles[neighborIndex].predicted.xyz - position);
+      persistentLinkCount = persistentLinkCount + 1.0;
+      maximumStretch = max(maximumStretch, distance / restDistance);
+      maximumKernelRatio = max(maximumKernelRatio, distance / max(params.fluid.x, 0.00001));
+    }
+  }
+  return vec4<f32>(persistentLinkCount, maximumStretch, maximumKernelRatio, 0.0);
+}
+
+fn write_sheet_release_diagnostics(
+  index: u32,
+  reasonCode: f32,
+  priorActivity: f32,
+  activity: f32,
+  inletCoreWeight: f32,
+  kinematics: vec4<f32>,
+  neighborhood: vec3<f32>,
+  linkDiagnostics: vec4<f32>,
+  topology: vec4<f32>,
+) {
+  neighborTopology[index].sheetDiagnosticClassification = vec4<f32>(reasonCode, priorActivity, inletCoreWeight, linkDiagnostics.z);
+  neighborTopology[index].sheetDiagnosticKinematics = kinematics;
+  neighborTopology[index].sheetDiagnosticNeighborhood = vec4<f32>(neighborhood, linkDiagnostics.y);
 }
 
 fn supportNormalAt(position: vec3<f32>) -> vec3<f32> {
@@ -2410,22 +2470,56 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (index >= params.particleCount) { return; }
   let particle = particles[index];
   let priorSheetActivity = neighborTopology[index].sheet.w;
-  neighborTopology[index].sheet = vec4<f32>(0.0);
-  if (params.sheet.x <= 0.0 || params.particleShift.z <= 1.5 || particle.velocity.w < 0.0) {
-    clear_unsupported_sheet_state(index);
-    return;
-  }
-
   let position = particle.predicted.xyz;
   let velocity = particle.delta.xyz;
   let speed = length(velocity);
-  if (speed < 0.18) { clear_unsupported_sheet_state(index); return; }
   let supportContact = supportContactFrame(position).w;
-  if (supportContact >= 0.20) { clear_unsupported_sheet_state(index); return; }
   let densityRatio = particle.delta.w / max(params.fluid.y, 0.0001);
   let surfaceFactor = particle.predicted.w;
   let topology = neighborTopology[index].metrics;
-  if (densityRatio < 0.10 || densityRatio > 1.05 || surfaceFactor < 0.20 || topology.x < 0.25 || topology.y < 0.03) {
+  var linkDiagnostics = vec4<f32>(0.0);
+  if (priorSheetActivity > 0.0001) {
+    linkDiagnostics = measure_sheet_link_diagnostics(index, position);
+  }
+  let kinematics = vec4<f32>(speed, supportContact, densityRatio, surfaceFactor);
+  neighborTopology[index].sheet = vec4<f32>(0.0);
+  if (params.sheet.x <= 0.0 || params.particleShift.z <= 1.5) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (particle.velocity.w < 0.0) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (speed < 0.18) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.low_transport_speed}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (supportContact >= 0.20) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.support_contact}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (densityRatio < 0.10) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.density_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (densityRatio > 1.05) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.bulk_density}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (surfaceFactor < 0.20) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_interface}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (topology.x < 0.25 || topology.y < 0.03) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.topology_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
   }
@@ -2472,14 +2566,24 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
     }
   }
-  if (acceptedNeighborCount < 3u) { clear_unsupported_sheet_state(index); return; }
+  if (acceptedNeighborCount < 3u) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.neighbor_loss}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(f32(acceptedNeighborCount), 0.0, 0.0), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
   let neighborCount = f32(acceptedNeighborCount);
   let covarianceTrace = covarianceUU + covarianceVV;
   let covarianceDiscriminant = sqrt(max(0.0, (covarianceUU - covarianceVV) * (covarianceUU - covarianceVV) + 4.0 * covarianceUV * covarianceUV));
   let dominantVariance = (covarianceTrace + covarianceDiscriminant) * 0.5;
   let transverseAnisotropy = dominantVariance / max(covarianceTrace, 0.0000001);
   let velocityCoherence = velocityCoherenceSum / neighborCount;
-  if (velocityCoherence < 0.72 || transverseAnisotropy < 0.66) {
+  if (velocityCoherence < 0.72) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.velocity_incoherent}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
+    clear_unsupported_sheet_state(index);
+    return;
+  }
+  if (transverseAnisotropy < 0.66) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_planar}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
   }
@@ -2508,6 +2612,12 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
     1.0,
   );
   if (activity <= 0.0001) {
+    let reasonCode = select(
+      ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.activity_floor}.0,
+      ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.inlet_core}.0,
+      inletCoreWeight >= 0.9999,
+    );
+    write_sheet_release_diagnostics(index, reasonCode, priorSheetActivity, 0.0, inletCoreWeight, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
   }
@@ -2524,6 +2634,8 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
     neighborTopology[index].sheetRestDistances = restDistances;
   }
   neighborTopology[index].sheet = vec4<f32>(sheetNormal, activity);
+  let activeLinkDiagnostics = measure_sheet_link_diagnostics(index, position);
+  write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}.0, priorSheetActivity, activity, inletCoreWeight, kinematics, vec3<f32>(neighborCount, velocityCoherence, transverseAnisotropy), activeLinkDiagnostics, topology);
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -3015,6 +3127,9 @@ struct NeighborTopologyState {
   sheet: vec4<f32>,
   sheetNeighborIds: vec4<u32>,
   sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -3034,6 +3149,25 @@ struct RenderParams {
 @group(0) @binding(3) var<storage, read> materialTracers: array<MaterialTracerState>;
 
 ${PLAYGROUND_WGSL}
+
+fn sheet_release_reason_color(reasonCode: f32) -> vec3<f32> {
+  let reason = u32(round(reasonCode));
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.active}u) { return vec3<f32>(0.12, 0.95, 0.52); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}u) { return vec3<f32>(0.20, 0.22, 0.26); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}u) { return vec3<f32>(0.08, 0.08, 0.10); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.low_transport_speed}u) { return vec3<f32>(0.26, 0.52, 0.96); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.support_contact}u) { return vec3<f32>(0.58, 0.58, 0.62); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.density_loss}u) { return vec3<f32>(0.08, 0.76, 1.00); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.bulk_density}u) { return vec3<f32>(0.12, 0.28, 0.82); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_interface}u) { return vec3<f32>(0.68, 0.50, 0.22); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.topology_loss}u) { return vec3<f32>(1.00, 0.44, 0.08); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.neighbor_loss}u) { return vec3<f32>(1.00, 0.10, 0.58); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.velocity_incoherent}u) { return vec3<f32>(0.94, 0.12, 0.12); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.not_planar}u) { return vec3<f32>(0.68, 0.20, 1.00); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.inlet_core}u) { return vec3<f32>(0.12, 0.94, 0.96); }
+  if (reason == ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.activity_floor}u) { return vec3<f32>(1.00, 0.86, 0.12); }
+  return vec3<f32>(1.0, 1.0, 1.0);
+}
 
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -3096,6 +3230,9 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     } else if (colorMode == 6u) {
       let concentration = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
       base = 0.52 + 0.46 * cos(vec3<f32>(0.0, 2.094, 4.188) + concentration * 6.28318);
+      phase = 0.0;
+    } else if (colorMode == 7u) {
+      base = sheet_release_reason_color(neighborTopology[instanceIndex].sheetDiagnosticClassification.x);
       phase = 0.0;
     }
   } else if (isTerrain && !isSkirt) {
@@ -3369,6 +3506,9 @@ struct NeighborTopologyState {
   sheet: vec4<f32>,
   sheetNeighborIds: vec4<u32>,
   sheetRestDistances: vec4<f32>,
+  sheetDiagnosticClassification: vec4<f32>,
+  sheetDiagnosticKinematics: vec4<f32>,
+  sheetDiagnosticNeighborhood: vec4<f32>,
 }
 
 struct MaterialTracerState {
@@ -4086,6 +4226,166 @@ export function evaluateFingerFluidUnsupportedSheetNeighborhood({
     neighborCount: acceptedNeighborCount,
     transverseAnisotropy: Number(transverseAnisotropy.toFixed(6)),
     velocityCoherence: Number(velocityCoherence.toFixed(6)),
+  };
+}
+
+export function summarizeFingerFluidSheetReleaseDiagnostics(
+  topologyValues,
+  particleValues,
+  particleCount,
+) {
+  if (!Number.isSafeInteger(particleCount) || particleCount < 1) {
+    throw new TypeError(`Finger fluid sheet diagnostics require a positive particle count: ${particleCount}`);
+  }
+  const expectedTopologyValues = particleCount * NEIGHBOR_TOPOLOGY_WORDS;
+  const expectedParticleValues = particleCount * PARTICLE_FLOATS;
+  if (!topologyValues || topologyValues.length !== expectedTopologyValues) {
+    throw new RangeError(`Finger fluid sheet diagnostics received partial topology diagnostics: expected ${expectedTopologyValues}, received ${topologyValues?.length ?? 0}`);
+  }
+  if (!particleValues || particleValues.length !== expectedParticleValues) {
+    throw new RangeError(`Finger fluid sheet diagnostics received partial particle diagnostics: expected ${expectedParticleValues}, received ${particleValues?.length ?? 0}`);
+  }
+
+  const reasonCounts = Object.fromEntries(
+    Object.keys(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES).map(reason => [reason, 0]),
+  );
+  const measurementNames = [
+    'priorActivity',
+    'currentActivity',
+    'inletCoreWeight',
+    'speed',
+    'supportContact',
+    'densityRatio',
+    'surfaceFactor',
+    'neighborCount',
+    'velocityCoherence',
+    'transverseAnisotropy',
+    'topologyRetention',
+    'topologyRetentionAge',
+  ];
+  const reasonAccumulators = Object.fromEntries(
+    Object.keys(reasonCounts).map(reason => [reason, {
+      positionMin: [Infinity, Infinity, Infinity],
+      positionMax: [-Infinity, -Infinity, -Infinity],
+      positionSum: [0, 0, 0],
+      measurementSums: Object.fromEntries(measurementNames.map(name => [name, 0])),
+      maximumLinkStretch: 0,
+      maximumLinkKernelRatio: 0,
+    }]),
+  );
+  let activeParticleCount = 0;
+  let dormantParticleCount = 0;
+  let activeSheetParticleCount = 0;
+  let releasedSheetParticleCount = 0;
+  let maximumLinkStretch = 0;
+  let maximumLinkKernelRatio = 0;
+  let neighborCountSum = 0;
+  let densityRatioSum = 0;
+  let topologyRetentionSum = 0;
+
+  for (let index = 0; index < particleCount; index += 1) {
+    const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS;
+    const diagnosticOffset = topologyOffset + 20;
+    const channels = Array.from(topologyValues.slice(diagnosticOffset, diagnosticOffset + 12));
+    if (channels.length !== 12 || channels.some(value => !Number.isFinite(value))) {
+      throw new TypeError(`Finger fluid sheet diagnostics contain malformed channels for particle ${index}`);
+    }
+    const reasonCode = channels[0];
+    if (!Number.isInteger(reasonCode) || !Object.hasOwn(KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE, reasonCode)) {
+      throw new RangeError(`Unknown sheet release reason code ${reasonCode} for particle ${index}`);
+    }
+    const reason = KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASONS_BY_CODE[reasonCode];
+    const active = particleValues[index * PARTICLE_FLOATS + 11] >= 0;
+    if (!active) {
+      dormantParticleCount += 1;
+      if (reason !== 'dormant') {
+        throw new Error(`Dormant particle ${index} carries non-dormant sheet release reason ${reason}`);
+      }
+      continue;
+    }
+    if (reason === 'dormant') {
+      throw new Error(`Active particle ${index} carries dormant sheet release reason`);
+    }
+    const activity = topologyValues[topologyOffset + 11];
+    if ((reason === 'active' && activity <= 0) || (reason !== 'active' && activity > 0.0001)) {
+      throw new Error(`Particle ${index} sheet activity ${activity} contradicts release reason ${reason}`);
+    }
+    activeParticleCount += 1;
+    reasonCounts[reason] += 1;
+    const accumulator = reasonAccumulators[reason];
+    const particleOffset = index * PARTICLE_FLOATS;
+    for (let axis = 0; axis < 3; axis += 1) {
+      const position = particleValues[particleOffset + axis];
+      accumulator.positionMin[axis] = Math.min(accumulator.positionMin[axis], position);
+      accumulator.positionMax[axis] = Math.max(accumulator.positionMax[axis], position);
+      accumulator.positionSum[axis] += position;
+    }
+    const measurements = {
+      priorActivity: channels[1],
+      currentActivity: activity,
+      inletCoreWeight: channels[2],
+      speed: channels[4],
+      supportContact: channels[5],
+      densityRatio: channels[6],
+      surfaceFactor: channels[7],
+      neighborCount: channels[8],
+      velocityCoherence: channels[9],
+      transverseAnisotropy: channels[10],
+      topologyRetention: topologyValues[topologyOffset + 4],
+      topologyRetentionAge: topologyValues[topologyOffset + 5],
+    };
+    for (const name of measurementNames) accumulator.measurementSums[name] += measurements[name];
+    accumulator.maximumLinkStretch = Math.max(accumulator.maximumLinkStretch, channels[11]);
+    accumulator.maximumLinkKernelRatio = Math.max(accumulator.maximumLinkKernelRatio, channels[3]);
+    if (reason === 'active') activeSheetParticleCount += 1;
+    else releasedSheetParticleCount += 1;
+    neighborCountSum += channels[8];
+    densityRatioSum += channels[6];
+    topologyRetentionSum += topologyValues[topologyOffset + 4];
+    maximumLinkStretch = Math.max(maximumLinkStretch, channels[11]);
+    maximumLinkKernelRatio = Math.max(maximumLinkKernelRatio, channels[3]);
+  }
+
+  const rounded = value => Number(value.toFixed(6));
+  const reasonRows = Object.entries(reasonCounts).map(([reason, count]) => {
+    const accumulator = reasonAccumulators[reason];
+    return {
+      reason,
+      code: KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES[reason],
+      particleCount: count,
+      activeParticleRatio: rounded(count / Math.max(1, activeParticleCount)),
+      positionBounds: count > 0 ? {
+        min: accumulator.positionMin.map(rounded),
+        max: accumulator.positionMax.map(rounded),
+        centroid: accumulator.positionSum.map(value => rounded(value / count)),
+      } : null,
+      measurements: count > 0 ? {
+        ...Object.fromEntries(measurementNames.map(name => [
+          `average${name[0].toUpperCase()}${name.slice(1)}`,
+          rounded(accumulator.measurementSums[name] / count),
+        ])),
+        maximumLinkStretch: rounded(accumulator.maximumLinkStretch),
+        maximumLinkKernelRatio: rounded(accumulator.maximumLinkKernelRatio),
+      } : null,
+    };
+  });
+  return {
+    schema: KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA,
+    contract: KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT,
+    layout: 'neighbor-topology-words-20-through-31-reusing-sheet-and-metrics-v0',
+    accountedParticleCount: particleCount,
+    activeParticleCount,
+    dormantParticleCount,
+    diagnosedActiveParticleCount: reasonRows.reduce((sum, row) => sum + row.particleCount, 0),
+    activeSheetParticleCount,
+    releasedSheetParticleCount,
+    reasonCounts,
+    reasonRows,
+    averageNeighborCount: Number((neighborCountSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    averageDensityRatio: Number((densityRatioSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    averageTopologyRetention: Number((topologyRetentionSum / Math.max(1, activeParticleCount)).toFixed(6)),
+    maximumLinkStretch: Number(maximumLinkStretch.toFixed(6)),
+    maximumLinkKernelRatio: Number(maximumLinkKernelRatio.toFixed(6)),
   };
 }
 
@@ -6321,6 +6621,9 @@ export async function createWebGPUFingerFluidSolver({
       const waterfallContinuityDiagnostics = safeTruthScene === 'laminar_inlets'
         ? measureFingerFluidWaterfallContinuity(values, restStateValues, safeParticleCount)
         : null;
+      const unsupportedSheetReleaseDiagnostics = safeUnsupportedSheetStrength > 0
+        ? summarizeFingerFluidSheetReleaseDiagnostics(topologyValues, values, safeParticleCount)
+        : null;
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
@@ -6354,6 +6657,7 @@ export async function createWebGPUFingerFluidSolver({
         unsupportedSheetActiveParticleRatio: Number((unsupportedSheetActiveParticleCount / physicalParticleCount).toFixed(6)),
         averageUnsupportedSheetActivity: Number((unsupportedSheetActivitySum / physicalParticleCount).toFixed(6)),
         maximumUnsupportedSheetActivity: Number(maximumUnsupportedSheetActivity.toFixed(6)),
+        unsupportedSheetReleaseDiagnostics,
         neighborRetentionHistogram,
         neighborRetentionHistogramEdges: [0, 0.25, 0.5, 0.75, 1.001],
         chemistry: {

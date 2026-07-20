@@ -250,7 +250,7 @@ assert.match(webgpuCoreSource, /averageNeighborRetention/, 'sparse diagnostics q
 assert.match(webgpuCoreSource, /averageNeighborRetentionAge/, 'sparse diagnostics expose how long topology remains locked');
 assert.match(webgpuCoreSource, /movingLockedParticleCount/, 'sparse diagnostics count energetic particles trapped in persistent topology');
 assert.match(webgpuCoreSource, /neighborRetentionHistogram/, 'sparse diagnostics expose retention distribution instead of laundering it into one average');
-assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_COLOR_MODES\s*=\s*Object\.freeze\(\['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry'\]\)/, 'renderer diagnostic modes include the passive transported material field');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_COLOR_MODES\s*=\s*Object\.freeze\(\['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release'\]\)/, 'renderer diagnostic modes include transported material and sheet release reasons');
 assert.match(webgpuCoreSource, /@group\(0\) @binding\(2\) var<storage, read> neighborTopology:\s*array<NeighborTopologyState>/, 'renderer consumes the same GPU topology state measured by the solver');
 assert.match(webgpuCoreSource, /@group\(0\) @binding\(3\) var<storage, read> materialTracers:\s*array<MaterialTracerState>/, 'renderer reads the transported tracer directly from GPU state');
 assert.match(webgpuCoreSource, /let sphereCenter = vec3<f32>\(\$\{OBSTACLE_CENTER\[0\]\}, \$\{OBSTACLE_CENTER\[1\]\}, \$\{OBSTACLE_CENTER\[2\]\}\)/, 'collision shader consumes the shared obstacle center');
@@ -960,7 +960,7 @@ assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...val
 assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, sourceFrameId: 'fallback-frame' }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, sourceFrameId: validContactHeader.sourceFrameId }), /source frame identity/, 'fallback source frames cannot impersonate liquid world truth');
 assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, packedCount: 79 }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, sourceFrameId: validContactHeader.sourceFrameId }), /accounting/, 'source, packed, and rejected counts must reconcile exactly');
 assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, malformedCount: 1 }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, sourceFrameId: validContactHeader.sourceFrameId }), /malformed/, 'malformed source records fail closed');
-assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_COLOR_MODES, ['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_COLOR_MODES, ['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
 assert.equal(typeof webgpuMod.measureNeighborRetention, 'function');
 assert.equal(webgpuMod.measureNeighborRetention([1, 2, 3, 4], [1, 2, 3, 4]), 1);
 assert.equal(webgpuMod.measureNeighborRetention([1, 2, 3, 4], [2, 4, 5, 6]), 0.5);

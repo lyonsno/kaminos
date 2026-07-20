@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 
 import {
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT,
+  KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA,
   createFingerFluidPulseControlReadout,
   createFingerFluidWaterfallOracleConfig,
   createFingerFluidWaterfallOracleEvidenceIdentity,
@@ -264,7 +266,7 @@ function validateEffectiveIdentity({
     distance: camera.distance,
     target: camera.target,
   } : null;
-  const expectedPulseControlReadout = cutoffStep === null ? null : createFingerFluidPulseControlReadout({
+  const expectedPulseControlReadout = createFingerFluidPulseControlReadout({
     stepCount: capturedStep,
     inletCutoffStep: cutoffStep,
     witnessTargetStep: targetCaptureStep,
@@ -478,6 +480,20 @@ async function runPreset(preset, port, {
       || !Number.isFinite(sheetDiagnostics?.averageUnsupportedSheetActivity)
       || !Number.isFinite(sheetDiagnostics?.maximumUnsupportedSheetActivity)) {
       throw new Error(`unsupported-sheet diagnostics missing or stale at capture: ${JSON.stringify({ capturedStep, diagnosticsReceipt, sheetDiagnostics })}`);
+    }
+    if (sheetStrength > 0) {
+      const releaseDiagnostics = sheetDiagnostics?.unsupportedSheetReleaseDiagnostics;
+      const reasonRowParticleCount = Array.isArray(releaseDiagnostics?.reasonRows)
+        ? releaseDiagnostics.reasonRows.reduce((sum, row) => sum + Number(row?.particleCount || 0), 0)
+        : -1;
+      if (releaseDiagnostics?.schema !== KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTICS_SCHEMA
+        || releaseDiagnostics?.contract !== KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT
+        || releaseDiagnostics?.accountedParticleCount !== pageState.debug.runtime.particleCount
+        || releaseDiagnostics.activeParticleCount + releaseDiagnostics.dormantParticleCount !== releaseDiagnostics.accountedParticleCount
+        || releaseDiagnostics.diagnosedActiveParticleCount !== releaseDiagnostics.activeParticleCount
+        || reasonRowParticleCount !== releaseDiagnostics.activeParticleCount) {
+        throw new Error(`sheet release diagnostics missing or partial at capture: ${JSON.stringify({ capturedStep, releaseDiagnostics, reasonRowParticleCount })}`);
+      }
     }
     if (cutoffStep !== null && (
       sheetDiagnostics?.inletCutoffStep !== cutoffStep
