@@ -53,6 +53,9 @@ const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
 const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
+const LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY = 'live-raymarch-complete-flame-native-cell-coefficients-v0';
+const LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES = 4 * Float32Array.BYTES_PER_ELEMENT;
+const LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY = 'native-cell-projected-footprint-jacobian-v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
@@ -119,6 +122,7 @@ const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS
 const NONRIDGE_OPTICAL_ROW_STRIDE_BYTES = NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES = SOURCE_BASIS_GPU_ROW_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES = FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const BOUNDARY_SPLAT_RUNTIME_COTANGENT_AUTHORITY = 'runtime-cotangent-packed-in-candidate-shape-v0';
 
 export function boundarySplatCapacityLimitReceipt({
   capacity,
@@ -2105,6 +2109,14 @@ fn writeNonRidgeSourceBasisCaptureRow(
   nonRidgeOpticalCaptureRows[base + 26u] = nonRidgeMembershipEmission.z;
   nonRidgeOpticalCaptureRows[base + 27u] = nonRidgeMembershipEmission.w;
   nonRidgeOpticalCaptureRows[base + 28u] = nonRidgeExtinction;
+}
+
+fn writeLiveCompleteFlameOpticalCoefficient(cellIndex: u32, coefficient: vec4<f32>) {
+  let base = cellIndex * 4u;
+  nonRidgeOpticalCaptureRows[base] = coefficient.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = coefficient.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = coefficient.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = coefficient.w;
 }
 
 struct FlowReconstructionSample {
@@ -4588,7 +4600,7 @@ fn makeRaymarchResult(
 }
 
 fn raymarchVolume(in: VSOut) -> RaymarchResult {
-  let fullGridCapture = nonRidgeOpticalCaptureHeader.mode == 3u;
+  let fullGridCapture = nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -5740,17 +5752,24 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       );
       let nonRidgeMembership = (1.0 - ridgeOwnershipWeight) * step(0.000001, nonRidgeOpticalSignal);
       if (cellIndex < nonRidgeOpticalCaptureHeader.capacity) {
-        writeNonRidgeSourceBasisCaptureRow(
-          cellIndex,
-          directFlameCandidateSidecar,
-          material,
-          fireLayer,
-          microLayer,
-          vec4<f32>(combustionFrontTopology, state.xyz),
-          vec4<f32>(sourceBasisReaction, sourceBasisInterface, sourceBasisCurl, sourceBasisDivergence),
-          vec4<f32>(nonRidgeMembership, nonRidgeEmissionCoefficient),
-          nonRidgeExtinctionCoefficient,
-        );
+        if (nonRidgeOpticalCaptureHeader.mode == 4u) {
+          writeLiveCompleteFlameOpticalCoefficient(
+            cellIndex,
+            vec4<f32>(completeFlameEmissionCoefficient, completeFlameExtinctionCoefficient),
+          );
+        } else {
+          writeNonRidgeSourceBasisCaptureRow(
+            cellIndex,
+            directFlameCandidateSidecar,
+            material,
+            fireLayer,
+            microLayer,
+            vec4<f32>(combustionFrontTopology, state.xyz),
+            vec4<f32>(sourceBasisReaction, sourceBasisInterface, sourceBasisCurl, sourceBasisDivergence),
+            vec4<f32>(nonRidgeMembership, nonRidgeEmissionCoefficient),
+            nonRidgeExtinctionCoefficient,
+          );
+        }
         atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
       } else {
         atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
@@ -6118,6 +6137,23 @@ struct BoundarySplatFeatureRow {
   fire: vec4<f32>,
   micro: vec4<f32>,
 };
+
+fn boundarySplatOctahedralEncode(direction: vec3<f32>) -> vec2<f32> {
+  let unit = normalize(direction);
+  let projected = unit / max(abs(unit.x) + abs(unit.y) + abs(unit.z), 1e-8);
+  if (projected.z >= 0.0) { return projected.xy; }
+  let signs = select(vec2<f32>(-1.0), vec2<f32>(1.0), projected.xy >= vec2<f32>(0.0));
+  return (vec2<f32>(1.0) - abs(projected.yx)) * signs;
+}
+
+fn boundarySplatOctahedralDecode(encoded: vec2<f32>) -> vec3<f32> {
+  var direction = vec3<f32>(encoded, 1.0 - abs(encoded.x) - abs(encoded.y));
+  if (direction.z < 0.0) {
+    let signs = select(vec2<f32>(-1.0), vec2<f32>(1.0), direction.xy >= vec2<f32>(0.0));
+    direction = vec3<f32>((vec2<f32>(1.0) - abs(direction.yx)) * signs, direction.z);
+  }
+  return normalize(direction);
+}
 
 struct FlowKernelDescriptorRow {
   positionCell: vec4<f32>,
@@ -6595,12 +6631,14 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let kernelMomentCovariance = boundarySplatCamera.cameraRight.w > 1.5;
   var effectiveMajorRadius = baseMajorRadius;
   let effectiveMinorRadius = baseMinorRadius;
+  var packedKernelTangent = vec2<f32>(0.0);
   if (kernelMomentCovariance) {
     let flowFrame = boundarySplatFlowFrame(world);
     let kernelMomentVariance = 0.5 * reconstructionStrength * flowFrame.tangentRadius.w * flowFrame.tangentRadius.w;
     let kernelMajorRadius = sqrt(baseMajorRadius * baseMajorRadius + kernelMomentVariance);
     let kernelMinorRadius = baseMinorRadius;
     effectiveMajorRadius = max(kernelMajorRadius, kernelMinorRadius);
+    packedKernelTangent = boundarySplatOctahedralEncode(flowFrame.tangentRadius.xyz);
   }
   let effectiveAxisAreaScale = max(
     effectiveMajorRadius * effectiveMinorRadius * globalRadius * globalRadius / max(radius * radius, 1e-8),
@@ -6631,7 +6669,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (conserveAreaOpacity) {
     boundarySplats[candidateIndex].colorOpacity.a = effectiveOpacity;
   }
-  boundarySplats[candidateIndex].shape = vec4<f32>(effectiveMajorRadius, effectiveMinorRadius, sidecar.z, fireSignal);
+  boundarySplats[candidateIndex].shape = vec4<f32>(effectiveMajorRadius, effectiveMinorRadius, packedKernelTangent);
   boundarySplats[candidateIndex].worldNormalAreaOpacity = vec4<f32>(worldNormal, baseIntegratedAlpha);
   boundarySplats[candidateIndex].ridgeNonRidgeOptical = vec4<f32>(
     ridgeEmissionCoefficient,
@@ -6755,7 +6793,7 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   var kernelTangent = tangent;
   var kernelBitangent = bitangent;
   if (kernelMomentCovariance) {
-    kernelTangent = normalize(flowKernelDescriptorRowsForRender[sourceCandidateIndex].tangentCoherence.xyz);
+    kernelTangent = boundarySplatOctahedralDecode(splat.shape.zw);
     kernelBitangent = normalize(cross(normal, kernelTangent));
   }
   let covarianceAxisX = select(tangent, kernelTangent, kernelMomentCovariance);
@@ -6769,7 +6807,13 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   out.colorOpacity = splat.colorOpacity;
   var ridgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.x, splat.ridgeNonRidgeOptical.y);
   var nonRidgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.z, splat.ridgeNonRidgeOptical.w);
-  if (boundarySplatCamera.unionControls.z > 0.5) {
+  if (boundarySplatCamera.unionControls.z > 1.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let completeOptical = boundarySplatLiveUnionCoefficients[nativeCellIndex];
+    let ridgeWeight = clamp(splat.positionSupport.w, 0.0, 1.0);
+    ridgeOptical = completeOptical * ridgeWeight;
+    nonRidgeOptical = completeOptical - ridgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 0.5) {
     let nativeCellIndex = u32(splat.nativeCellMembership.x);
     let rowPlusOne = boundarySplatLiveUnionLookup[nativeCellIndex];
     if (rowPlusOne > 0u) {
@@ -6849,26 +6893,37 @@ fn boundarySplatBilinearVs(
   let tapIndex = depositIndex / neighborsPerTap;
   let neighborRank = depositIndex % neighborsPerTap;
   let splat = boundarySplatsForRender[candidateIndex];
-  let descriptor = flowKernelDescriptorRowsForRender[candidateIndex];
   let viewportSize = max(boundarySplatCamera.depositionControls.yz, vec2<f32>(1.0));
   let centerClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz, 1.0);
-  let tangent = normalize(select(descriptor.tangentCoherence.xyz, splat.worldNormalAreaOpacity.xyz, persistentCohort));
+  let tangent = normalize(select(boundarySplatOctahedralDecode(splat.shape.zw), splat.worldNormalAreaOpacity.xyz, persistentCohort));
+  let bitangent = normalize(cross(splat.worldNormalAreaOpacity.xyz, tangent));
   let tangentClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + tangent * 0.03, 1.0);
+  let bitangentClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + bitangent * 0.03, 1.0);
   let centerNdc = centerClip.xy / max(centerClip.w, 0.00001);
   let tangentNdc = tangentClip.xy / max(tangentClip.w, 0.00001);
+  let bitangentNdc = bitangentClip.xy / max(bitangentClip.w, 0.00001);
   let tangentPixels = vec2<f32>(
     (tangentNdc.x - centerNdc.x) * 0.5 * viewportSize.x,
     -(tangentNdc.y - centerNdc.y) * 0.5 * viewportSize.y,
   );
+  let bitangentPixels = vec2<f32>(
+    (bitangentNdc.x - centerNdc.x) * 0.5 * viewportSize.x,
+    -(bitangentNdc.y - centerNdc.y) * 0.5 * viewportSize.y,
+  );
   let tangentPixelLength = max(length(tangentPixels), 0.00001);
   let tangentPixelDirection = tangentPixels / tangentPixelLength;
-  let liveBaseRadiusWorld = (2.0 / f32(GRID)) * (0.60 + descriptor.sidecar.w * 2.65 + descriptor.sidecar.z * 0.48);
-  let baseRadiusWorld = select(liveBaseRadiusWorld, splat.shape.x, persistentCohort);
+  let baseRadiusWorld = splat.shape.x;
   let pixelWorldScale = max(tangentPixelLength / 0.03, 1.0);
+  let bitangentPixelWorldScale = max(length(bitangentPixels) / 0.03, 1.0);
   let majorRadiusPixels = clamp(
     sqrt(baseRadiusWorld * baseRadiusWorld + 0.5 * 0.03 * 0.03) * pixelWorldScale,
     0.75,
     5.0,
+  );
+  let minorRadiusPixels = max(splat.shape.y * bitangentPixelWorldScale, 0.5);
+  let projectedFootprintJacobian = max(
+    majorRadiusPixels * minorRadiusPixels * boundarySplatKernelIntegral(3.4),
+    1.0,
   );
   let centerPixel = vec2<f32>(
     (centerNdc.x * 0.5 + 0.5) * viewportSize.x,
@@ -6908,6 +6963,12 @@ fn boundarySplatBilinearVs(
   if (persistentCohort) {
     ridgeOptical = splat.colorOpacity;
     nonRidgeOptical = splat.ridgeNonRidgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 1.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let completeOptical = boundarySplatLiveUnionCoefficients[nativeCellIndex];
+    let ridgeWeight = clamp(splat.positionSupport.w, 0.0, 1.0);
+    ridgeOptical = completeOptical * ridgeWeight;
+    nonRidgeOptical = completeOptical - ridgeOptical;
   } else if (boundarySplatCamera.unionControls.z > 0.5) {
     let nativeCellIndex = u32(splat.nativeCellMembership.x);
     let rowPlusOne = boundarySplatLiveUnionLookup[nativeCellIndex];
@@ -6924,7 +6985,8 @@ fn boundarySplatBilinearVs(
   out.ridgeOptical = ridgeOptical;
   out.nonRidgeOptical = nonRidgeOptical;
   out.unionEnabled = select(boundarySplatCamera.unionControls.x, 1.0, persistentCohort);
-  out.depositionWeight = boundarySplatBilinearTapWeight(tapIndex) * bilinearWeight;
+  out.depositionWeight = boundarySplatBilinearTapWeight(tapIndex) * bilinearWeight
+    * select(1.0, projectedFootprintJacobian, boundarySplatCamera.unionControls.z > 1.5);
   let projectedDepth = clamp(centerClip.z / max(centerClip.w, 1e-6), 0.0, 0.999999);
   out.depthBin = u32(floor(projectedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
   return out;
@@ -6972,6 +7034,14 @@ fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> 
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let gaussian = exp(-radius2 * kernelSharpness);
   let energyCompensation = boundarySplatEnergyCompensation(footprintRadius, kernelSharpness);
+  if (in.unionEnabled > 0.5) {
+    let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+    let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+    return vec4<f32>(
+      sharedEmissionCoefficient * gaussian,
+      sharedTotalExtinctionCoefficient * gaussian,
+    );
+  }
   let alpha = max(in.colorOpacity.a * gaussian * energyCompensation, 0.0);
   return vec4<f32>(in.colorOpacity.rgb * alpha, alpha);
 }
@@ -7260,6 +7330,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLiveFallbackReason: null,
     selectiveHeadLiveReplayAnchor: null,
     selectiveHeadLiveCapturePaused: false,
+    selectiveHeadLiveExactPause: null,
     selectiveHeadLive: null,
     backend: 'inactive',
     active: false,
@@ -7414,6 +7485,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
     boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
+    boundarySplatRuntimeCotangentAuthority: BOUNDARY_SPLAT_RUNTIME_COTANGENT_AUTHORITY,
     boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatFeatureCaptureRequested: normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture),
     boundarySplatFeatureCaptureEffective: false,
@@ -7424,6 +7496,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatLiveUnionOverlayFallbackReason: null,
     boundarySplatLiveUnionOverlayStatus: 'off',
     boundarySplatLiveUnionOverlayReceipt: null,
+    liveCompleteFlameOpticalCoefficientReceipt: null,
+    liveCompleteFlameOpticalFrameReceipt: null,
+    liveCompleteFlameOpticalCoefficientsEnabled: false,
     flowKernelDescriptorCaptureRequested: normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture),
     flowKernelDescriptorCaptureEffective: false,
     flowKernelDescriptorCaptureIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
@@ -7871,6 +7946,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatLiveUnionOverlay = null;
   let boundarySplatLiveUnionOverlayGpuResources = null;
+  let boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+  let liveCompleteFlameCoefficientUniformBuffer = null;
+  let liveCompleteFlameCoefficientWriteBindGroups = [];
+  let liveCompleteFlameCoefficientDispatchTexture = null;
+  let liveCompleteFlameOpticalCoefficientsEnabled = false;
   let boundarySplatLiveUnionCoefficientDummyBuffer = null;
   let boundarySplatLiveUnionLookupDummyBuffer = null;
   let nonRidgeOpticalCaptureHeaderBuffer = null;
@@ -7907,6 +7987,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let format = null;
   let raf = 0;
   let selectiveHeadLiveCapturePaused = false;
+  let selectiveHeadLiveExactPause = null;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -8382,6 +8463,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBuffer?.destroy();
     boundarySplatLiveUnionCoefficientDummyBuffer?.destroy();
     boundarySplatLiveUnionLookupDummyBuffer?.destroy();
+    boundarySplatLiveCompleteFlameCoefficientBuffer?.destroy();
+    liveCompleteFlameCoefficientUniformBuffer?.destroy();
+    liveCompleteFlameCoefficientDispatchTexture?.destroy();
     nonRidgeOpticalCaptureHeaderBuffer?.destroy();
     nonRidgeOpticalCaptureRowBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
@@ -8399,6 +8483,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBufferCapacity = 0;
     boundarySplatLiveUnionCoefficientDummyBuffer = null;
     boundarySplatLiveUnionLookupDummyBuffer = null;
+    boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+    liveCompleteFlameCoefficientUniformBuffer = null;
+    liveCompleteFlameCoefficientDispatchTexture = null;
+    liveCompleteFlameCoefficientWriteBindGroups = [];
+    liveCompleteFlameOpticalCoefficientsEnabled = false;
+    state.liveCompleteFlameOpticalCoefficientReceipt = null;
+    state.liveCompleteFlameOpticalFrameReceipt = null;
+    state.liveCompleteFlameOpticalCoefficientsEnabled = false;
     nonRidgeOpticalCaptureHeaderBuffer = null;
     nonRidgeOpticalCaptureRowBuffer = null;
     nonRidgeOpticalCaptureSession = null;
@@ -8576,48 +8668,79 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     lastTemporalCameraSignature = signature;
   }
 
+  function createFluidRenderBindGroup({
+    label,
+    fluidRead,
+    fluidWrite,
+    frontRead,
+    frontWrite,
+    captureRows,
+    uniformsBuffer = uniformBuffer,
+  }) {
+    return device.createBindGroup({
+      label,
+      layout: bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: uniformsBuffer } },
+        { binding: 1, resource: { buffer: fluidRead } },
+        { binding: 2, resource: { buffer: fluidWrite } },
+        { binding: 3, resource: { buffer: majorantBuffer } },
+        { binding: 4, resource: historyTexture.createView() },
+        { binding: 5, resource: historySampler },
+        { binding: 6, resource: { buffer: externalEmitterBuffer } },
+        { binding: 7, resource: { buffer: frontRead } },
+        { binding: 8, resource: { buffer: frontWrite } },
+        { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+        { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+        { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
+        { binding: 12, resource: { buffer: captureRows } },
+      ],
+    });
+  }
+
   function rebuildFluidBindGroups() {
     if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
-      device.createBindGroup({
+      createFluidRenderBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[0] } },
-          { binding: 2, resource: { buffer: fluidBuffers[1] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: frontBuffers[0] } },
-          { binding: 8, resource: { buffer: frontBuffers[1] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
-          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
-        ],
+        fluidRead: fluidBuffers[0],
+        fluidWrite: fluidBuffers[1],
+        frontRead: frontBuffers[0],
+        frontWrite: frontBuffers[1],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
       }),
-      device.createBindGroup({
+      createFluidRenderBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 B to A`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[1] } },
-          { binding: 2, resource: { buffer: fluidBuffers[0] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: frontBuffers[1] } },
-          { binding: 8, resource: { buffer: frontBuffers[0] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
-          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
-        ],
+        fluidRead: fluidBuffers[1],
+        fluidWrite: fluidBuffers[0],
+        frontRead: frontBuffers[1],
+        frontWrite: frontBuffers[0],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
       }),
     ];
+    liveCompleteFlameCoefficientWriteBindGroups = boundarySplatLiveCompleteFlameCoefficientBuffer
+      && liveCompleteFlameCoefficientUniformBuffer
+      ? [
+          createFluidRenderBindGroup({
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 A`,
+            fluidRead: fluidBuffers[0],
+            fluidWrite: fluidBuffers[1],
+            frontRead: frontBuffers[0],
+            frontWrite: frontBuffers[1],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          }),
+          createFluidRenderBindGroup({
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 B`,
+            fluidRead: fluidBuffers[1],
+            fluidWrite: fluidBuffers[0],
+            frontRead: frontBuffers[1],
+            frontWrite: frontBuffers[0],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          }),
+        ]
+      : [];
   }
 
   function rebuildSelectiveHeadLiveBindGroups() {
@@ -8651,25 +8774,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const makeRole = (role, fluid, front) => ({
       descriptorSource: { role, fluid, front },
-      render: device.createBindGroup({
+      render: createFluidRenderBindGroup({
         label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} render`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluid } },
-          { binding: 2, resource: { buffer: fluidBuffers[0] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: front } },
-          { binding: 8, resource: { buffer: frontBuffers[0] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
-          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
-        ],
+        fluidRead: fluid,
+        fluidWrite: fluidBuffers[0],
+        frontRead: front,
+        frontWrite: frontBuffers[0],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
       }),
+      coefficientRender: boundarySplatLiveCompleteFlameCoefficientBuffer
+        && liveCompleteFlameCoefficientUniformBuffer
+        ? createFluidRenderBindGroup({
+            label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} live complete-flame coefficients`,
+            fluidRead: fluid,
+            fluidWrite: fluidBuffers[0],
+            frontRead: front,
+            frontWrite: frontBuffers[0],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          })
+        : null,
       majorant: device.createBindGroup({
         label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} majorant`,
         layout: majorantFluidBindGroupLayout,
@@ -9000,7 +9124,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         {
           binding: 10,
           resource: {
-            buffer: boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer
+            buffer: boundarySplatLiveCompleteFlameCoefficientBuffer
+              || boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer
               || boundarySplatLiveUnionCoefficientDummyBuffer,
           },
         },
@@ -10840,7 +10965,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatCamera.set([
         boundarySplatMode === 'kernel_moment_full_flame_union' ? 1 : 0,
         Math.max(0, Math.min(4, Number(controlsSnapshot.reactionBoundaryGradient ?? 2.60))),
-        state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0,
+        boundarySplatLiveCompleteFlameCoefficientBuffer
+          && state.liveCompleteFlameOpticalCoefficientReceipt?.status === 'effective'
+          ? 2
+          : (state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0),
         0.011764705882352941,
       ], 36);
       const bilinearRequested = state.fullSupportDepositionRequested === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
@@ -10849,7 +10977,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ? Boolean(boundarySplatBilinearRenderPipeline) && Boolean(boundarySplatBilinearIndirectBuffer)
         : boundarySplatMode === 'kernel_moment_full_flame_union'
           && !state.boundarySplatInstanceConsumerEffective
-          && flowKernelDescriptorBufferCapacity === boundarySplatCapacity
           && Boolean(boundarySplatBilinearRenderPipeline)
           && Boolean(boundarySplatBilinearIndirectBuffer);
       state.fullSupportDepositionEffective = bilinearRequested && bilinearAvailable
@@ -10858,7 +10985,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.fullSupportDepositionFallbackReason = bilinearRequested && !bilinearAvailable
         ? (state.boundarySplatInstanceConsumerEffective
             ? 'bilinear-deposition-not-admitted-for-full-support-instance-consumer'
-            : 'bilinear-requires-full-union-flow-descriptors-and-pipeline')
+            : 'bilinear-requires-full-union-compact-cotangent-and-pipeline')
         : null;
       splatCamera.set([
         state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY ? 1 : 0,
@@ -11928,10 +12055,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function flowKernelDescriptorRowsRequested() {
-    const mode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
-    return flowKernelDescriptorCaptureRequested()
-      || mode === 'kernel_moment_covariance'
-      || mode === 'kernel_moment_full_flame_union';
+    return flowKernelDescriptorCaptureRequested();
   }
 
   function boundarySplatUnionReceipt(counts = {}) {
@@ -13769,6 +13893,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  function activateBoundarySplatLiveUnionCoefficientOverlayForOperatorExploration(payload = {}) {
+    const exactPauseReceipt = payload.exactPauseReceipt || null;
+    const requiredSimStepCount = Number(payload.requiredSimStepCount);
+    const fail = reason => {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = reason;
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'operator-exploration-live-state-admission',
+        authority: 'operator-exploration-only-live-state-route-admission-v0',
+        reason,
+      });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    };
+    if (!boundarySplatLiveUnionOverlay || !boundarySplatLiveUnionOverlayGpuResources) {
+      return fail('overlay-not-loaded');
+    }
+    if (!Number.isInteger(requiredSimStepCount) || requiredSimStepCount < 0) {
+      return fail('invalid-required-live-sim-step');
+    }
+    if (exactPauseReceipt?.ok !== true
+      || exactPauseReceipt.authority !== 'renderer-internal-exact-sim-step-pause-gpu-complete-v0'
+      || exactPauseReceipt.gpuComplete !== true
+      || exactPauseReceipt.paused !== true) {
+      return fail('exact-live-pause-receipt-required');
+    }
+    if (exactPauseReceipt.requestedSimStepCount !== requiredSimStepCount
+      || exactPauseReceipt.effectiveSimStepCount !== requiredSimStepCount
+      || state.simStepCount !== requiredSimStepCount) {
+      return fail(`exact-live-step-substitution:${requiredSimStepCount}:${exactPauseReceipt.effectiveSimStepCount}:${state.simStepCount}`);
+    }
+    if (exactPauseReceipt.effectiveRoute !== ROUTE_IDENTITY || state.effectiveRoute !== ROUTE_IDENTITY) {
+      return fail(`exact-live-route-substitution:${exactPauseReceipt.effectiveRoute}:${state.effectiveRoute}`);
+    }
+    if (boundarySplatLiveUnionOverlay.receipt.grid !== gridSize) {
+      return fail(`exact-live-grid-substitution:${boundarySplatLiveUnionOverlay.receipt.grid}:${gridSize}`);
+    }
+    state.boundarySplatLiveUnionOverlayEffectiveIdentity = boundarySplatLiveUnionOverlay.receipt.overlayIdentity;
+    state.boundarySplatLiveUnionOverlayFallbackReason = null;
+    state.boundarySplatLiveUnionOverlayStatus = 'operator-exploration-effective';
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'operator-exploration-effective',
+      failurePhase: null,
+      authority: 'operator-exploration-only-live-state-route-admission-v0',
+      decisionBearing: false,
+      populationAuditApplied: false,
+      sourceHashReadbackApplied: false,
+      exactPauseReceipt: { ...exactPauseReceipt },
+      admittedRowCount: boundarySplatLiveUnionOverlay.receipt.admittedRowCount,
+      sourceOverlayIdentity: boundarySplatLiveUnionOverlay.receipt.sourceOverlayIdentity,
+      admissionIndexSha256: boundarySplatLiveUnionOverlay.manifest.source.state.admissionIndexSha256,
+      sampleCap: null,
+      droppedRowCount: 0,
+    });
+    rebuildBoundarySplatBindGroups();
+    emitStatus({ phase: 'boundary-splat-live-union-overlay-operator-exploration-effective' });
+    return { ...state.boundarySplatLiveUnionOverlayReceipt };
+  }
+
   async function auditBoundarySplatLiveUnionCoefficientOverlayPopulation(options = {}) {
     if (!boundarySplatLiveUnionOverlay || !boundarySplatLiveUnionOverlayGpuResources) {
       state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
@@ -14218,6 +14402,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       controls?.update?.();
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+      let liveCoefficientEncoded = false;
       const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
       state.lookFreeze = lookFreeze;
       if (lookFreeze) {
@@ -14234,6 +14419,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           readBindGroup: selectiveMajorant,
           force: state.selectiveHeadLiveEffectiveRole !== 'off',
         });
+      }
+      if (liveCompleteFlameOpticalCoefficientsEnabled) {
+        liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
+        if (!liveCoefficientEncoded
+          || state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount !== state.simStepCount) {
+          throw new Error(
+            `live-optical-frame-step-mismatch:producer=${state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount ?? 'none'}:consumer=${state.simStepCount}`,
+          );
+        }
       }
       const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
       const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
@@ -14275,7 +14469,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           );
           splatApplied = splatEncoded;
         }
-        if (composition.definition.splat && !splatApplied) {
+        if (composition.definition.splat && !splatApplied && !liveCompleteFlameOpticalCoefficientsEnabled) {
           encodeDraw(
             encoder,
             currentTexture.createView(),
@@ -14288,6 +14482,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.selectiveHeadLiveCompositionFallbackReason = state.boundarySplatFallbackReason || 'boundary-splat-route-unavailable';
           state.volumeReconstructionStyle = 'selective-head-live-fallback-raymarch';
           emitStatus({ phase: 'selective-head-live-composition-fallback', reason: state.selectiveHeadLiveCompositionFallbackReason });
+        }
+        if (liveCompleteFlameOpticalCoefficientsEnabled) {
+          const producedSimStepCount = state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount ?? null;
+          const consumedSimStepCount = splatEncoded ? state.simStepCount : null;
+          const presentedSimStepCount = splatApplied ? state.simStepCount : null;
+          const stepMismatch = !liveCoefficientEncoded
+            || producedSimStepCount !== state.simStepCount
+            || consumedSimStepCount !== state.simStepCount
+            || presentedSimStepCount !== state.simStepCount;
+          state.liveCompleteFlameOpticalFrameReceipt = {
+            identity: 'live-complete-flame-same-command-buffer-frame-v0',
+            status: stepMismatch ? 'failed' : 'effective',
+            frameCount: state.frameCount,
+            producedSimStepCount,
+            consumedSimStepCount,
+            presentedSimStepCount,
+            coefficientEncoded: liveCoefficientEncoded,
+            splatEncoded,
+            splatApplied,
+            cpuCoefficientReadbackApplied: false,
+            fallbackReason: stepMismatch ? 'live-optical-frame-step-mismatch' : null,
+          };
+          state.liveCompleteFlameOpticalCoefficientReceipt = {
+            ...state.liveCompleteFlameOpticalCoefficientReceipt,
+            status: stepMismatch ? 'failed' : 'effective',
+            consumedSimStepCount,
+            presentedSimStepCount,
+            fallbackReason: stepMismatch ? 'live-optical-frame-step-mismatch' : null,
+          };
+          if (stepMismatch) {
+            throw new Error(
+              `live-optical-frame-step-mismatch:producer=${producedSimStepCount ?? 'none'}:consumer=${consumedSimStepCount ?? 'none'}:presentation=${presentedSimStepCount ?? 'none'}`,
+            );
+          }
         }
         const selectivePassReceipt = recordSelectiveHeadLivePassReceipt({
           composition: composition.effective === 'off' ? composition.requested : composition.effective,
@@ -14345,10 +14573,77 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
+      if (selectiveHeadLiveExactPause) {
+        const exactPause = selectiveHeadLiveExactPause;
+        if (state.simStepCount >= exactPause.targetSimStepCount) {
+          selectiveHeadLiveExactPause = null;
+          selectiveHeadLiveCapturePaused = true;
+          state.selectiveHeadLiveCapturePaused = true;
+          state.selectiveHeadLiveExactPause = {
+            status: state.simStepCount === exactPause.targetSimStepCount ? 'gpu-pending' : 'failed',
+            targetSimStepCount: exactPause.targetSimStepCount,
+            effectiveSimStepCount: state.simStepCount,
+          };
+          const failureReason = state.simStepCount === exactPause.targetSimStepCount
+            ? null
+            : `exact-step-overshot:${exactPause.targetSimStepCount}:${state.simStepCount}`;
+          Promise.resolve(device.queue?.onSubmittedWorkDone?.()).then(() => {
+            const receipt = {
+              ok: failureReason === null,
+              reason: failureReason,
+              authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+              requestedSimStepCount: exactPause.targetSimStepCount,
+              effectiveSimStepCount: state.simStepCount,
+              frameCount: state.frameCount,
+              paused: true,
+              gpuComplete: true,
+              routeIdentity: ROUTE_IDENTITY,
+              effectiveRoute: state.effectiveRoute,
+              backend: state.backend,
+            };
+            state.selectiveHeadLiveExactPause = { ...receipt };
+            exactPause.resolve(receipt);
+          }, error => {
+            const receipt = {
+              ok: false,
+              reason: `exact-step-gpu-completion-failed:${error?.message || String(error)}`,
+              authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+              requestedSimStepCount: exactPause.targetSimStepCount,
+              effectiveSimStepCount: state.simStepCount,
+              frameCount: state.frameCount,
+              paused: true,
+              gpuComplete: false,
+              routeIdentity: ROUTE_IDENTITY,
+              effectiveRoute: state.effectiveRoute,
+              backend: state.backend,
+            };
+            state.selectiveHeadLiveExactPause = { ...receipt };
+            exactPause.resolve(receipt);
+          });
+        }
+      }
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
     } catch (err) {
+      if (selectiveHeadLiveExactPause) {
+        selectiveHeadLiveExactPause.resolve({
+          ok: false,
+          reason: `exact-step-render-failed:${err?.message || String(err)}`,
+          authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+          requestedSimStepCount: selectiveHeadLiveExactPause.targetSimStepCount,
+          effectiveSimStepCount: state.simStepCount,
+          frameCount: state.frameCount,
+          paused: true,
+          gpuComplete: false,
+          routeIdentity: ROUTE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        });
+        selectiveHeadLiveExactPause = null;
+        selectiveHeadLiveCapturePaused = true;
+        state.selectiveHeadLiveCapturePaused = true;
+      }
       state.active = false;
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
@@ -15041,7 +15336,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     );
     updateUniforms(captureTimeMs);
     let fullGridDispatchTexture = null;
-    if (mode !== 3) ensureFrameTexture();
+    if (mode < 3) ensureFrameTexture();
     else {
       fullGridDispatchTexture = device.createTexture({
         label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} ${gridSize}x${gridSize} dispatch`,
@@ -15077,6 +15372,329 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     } finally {
       readback.destroy();
       fullGridDispatchTexture?.destroy();
+    }
+  }
+
+  function enableLiveCompleteFlameOpticalCoefficients() {
+    const failed = (failurePhase, reason) => {
+      liveCompleteFlameOpticalCoefficientsEnabled = false;
+      state.liveCompleteFlameOpticalCoefficientsEnabled = false;
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ok: false,
+        status: 'failed',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        failurePhase,
+        reason,
+      };
+      return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+    };
+    if (!device || !state.active) return failed('admission', 'inactive');
+    if (!selectiveHeadLiveCapturePaused) {
+      return failed('admission', 'live-complete-flame-enable-requires-paused-transition');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const maxBufferSize = Number(device.limits?.maxBufferSize || 0);
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBufferSize || byteLength > maxBindingBytes) {
+      return failed('allocation', `live-complete-flame-coefficient-buffer-limit:${byteLength}:${maxBufferSize}:${maxBindingBytes}`);
+    }
+    boundarySplatLiveCompleteFlameCoefficientBuffer?.destroy();
+    liveCompleteFlameCoefficientUniformBuffer?.destroy();
+    liveCompleteFlameCoefficientDispatchTexture?.destroy();
+    boundarySplatLiveCompleteFlameCoefficientBuffer = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent ${gridSize}^3`,
+      size: byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    liveCompleteFlameCoefficientUniformBuffer = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} isolated uniforms`,
+      size: uniforms.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    liveCompleteFlameCoefficientDispatchTexture = device.createTexture({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent dispatch`,
+      size: [gridSize, gridSize, 1],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    liveCompleteFlameOpticalCoefficientsEnabled = true;
+    state.liveCompleteFlameOpticalCoefficientsEnabled = true;
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ok: true,
+      status: 'enabled-awaiting-first-frame',
+      authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+      evidenceAuthority: 'operator-exploration-only',
+      decisionBearing: false,
+      rowCount,
+      byteLength,
+      grid: gridSize,
+      producerPass: 'ordinary-frame-full-grid-complete-flame-coefficient-write-v0',
+      consumerAddressing: 'candidate-native-cell-membership-direct-index-v0',
+      coefficientProjection: LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY,
+      allocation: 'persistent-one-buffer-one-dispatch-target-v0',
+      cpuCoefficientReadbackApplied: false,
+      fallbackReason: null,
+    };
+    rebuildFluidBindGroups();
+    rebuildBoundarySplatBindGroups();
+    return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+  }
+
+  function encodeLiveCompleteFlameOpticalCoefficients(encoder) {
+    if (!liveCompleteFlameOpticalCoefficientsEnabled) return false;
+    const bindGroup = selectiveHeadLiveRoleGroups('coefficientRender')
+      || liveCompleteFlameCoefficientWriteBindGroups[currentFluid];
+    if (!encoder || !bindGroup || !liveCompleteFlameCoefficientUniformBuffer || !liveCompleteFlameCoefficientDispatchTexture || !readbackPipeline) {
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ...state.liveCompleteFlameOpticalCoefficientReceipt,
+        ok: false,
+        status: 'failed',
+        failurePhase: 'frame-encode',
+        reason: 'live-complete-flame-coefficient-producer-unavailable',
+      };
+      return false;
+    }
+    const rowCount = gridCellCount(gridSize);
+    const coefficientUniforms = uniforms.slice();
+    coefficientUniforms[307] = APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].uniform;
+    coefficientUniforms[316] = 0;
+    device.queue.writeBuffer(liveCompleteFlameCoefficientUniformBuffer, 0, coefficientUniforms);
+    device.queue.writeBuffer(
+      nonRidgeOpticalCaptureHeaderBuffer,
+      0,
+      new Uint32Array([0, rowCount, 4, 0]),
+    );
+    encodeDraw(
+      encoder,
+      liveCompleteFlameCoefficientDispatchTexture.createView(),
+      `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} live frame ${state.simStepCount}`,
+      readbackPipeline,
+      { bindGroup },
+    );
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ...state.liveCompleteFlameOpticalCoefficientReceipt,
+      ok: true,
+      status: 'encoded',
+      failurePhase: null,
+      reason: null,
+      producedFrameCount: state.frameCount,
+      producedSimStepCount: state.simStepCount,
+      sourceIdentity: {
+        routeIdentity: ROUTE_IDENTITY,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        role: state.selectiveHeadLiveEffectiveRole,
+        controlsSignature: temporalControlSignature(controlsSnapshot),
+        coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
+      },
+      cpuCoefficientReadbackApplied: false,
+      fallbackReason: null,
+    };
+    return true;
+  }
+
+  async function sampleLiveCompleteFlameOpticalCoefficientStats(options = {}) {
+    if (!liveCompleteFlameOpticalCoefficientsEnabled || !boundarySplatLiveCompleteFlameCoefficientBuffer) {
+      throw new Error('live-complete-flame-coefficient-sample-unavailable');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const requestedSampleCount = Math.floor(Number(options.sampleCount) || 8192);
+    const sampleCount = Math.max(1, Math.min(rowCount, requestedSampleCount));
+    const headerByteLength = 4 * Uint32Array.BYTES_PER_ELEMENT;
+    const coefficientByteLength = sampleCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const byteLength = headerByteLength + coefficientByteLength;
+    const readback = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} sparse witness sample`,
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const sampledFrameCount = state.frameCount;
+    const sampledSimStepCount = state.simStepCount;
+    try {
+      const encoder = device.createCommandEncoder({
+        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} sparse witness sample encoder`,
+      });
+      encoder.copyBufferToBuffer(
+        nonRidgeOpticalCaptureHeaderBuffer,
+        0,
+        readback,
+        0,
+        headerByteLength,
+      );
+      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        const cellIndex = Math.floor(sampleIndex * rowCount / sampleCount);
+        encoder.copyBufferToBuffer(
+          boundarySplatLiveCompleteFlameCoefficientBuffer,
+          cellIndex * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+          readback,
+          headerByteLength + sampleIndex * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+          LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+        );
+      }
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const mapped = readback.getMappedRange();
+      const header = new Uint32Array(mapped, 0, 4);
+      const values = new Float32Array(mapped, headerByteLength, coefficientByteLength / Float32Array.BYTES_PER_ELEMENT);
+      const producerHeader = {
+        rowCount: header[0],
+        capacity: header[1],
+        mode: header[2],
+        overflowCount: header[3],
+      };
+      let positiveCoefficientCount = 0;
+      let nonFiniteCoefficientCount = 0;
+      let maximumEmission = 0;
+      let maximumExtinction = 0;
+      let emissionSum = 0;
+      let extinctionSum = 0;
+      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        const offset = sampleIndex * 4;
+        const emission = Math.max(values[offset], values[offset + 1], values[offset + 2]);
+        const extinction = values[offset + 3];
+        if (![values[offset], values[offset + 1], values[offset + 2], extinction].every(Number.isFinite)) {
+          nonFiniteCoefficientCount += 1;
+          continue;
+        }
+        maximumEmission = Math.max(maximumEmission, emission);
+        maximumExtinction = Math.max(maximumExtinction, extinction);
+        emissionSum += Math.max(0, emission);
+        extinctionSum += Math.max(0, extinction);
+        if (emission > 1e-8 || extinction > 1e-8) positiveCoefficientCount += 1;
+      }
+      return {
+        identity: 'live-complete-flame-sparse-coefficient-witness-v0',
+        authority: 'diagnostic-even-stride-native-cell-gpu-buffer-sample-v0',
+        coefficientAuthority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        rowCount,
+        sampleCount,
+        producerHeader,
+        sampledFrameCount,
+        sampledSimStepCount,
+        positiveCoefficientCount,
+        nonFiniteCoefficientCount,
+        maximumEmission,
+        maximumExtinction,
+        meanPositiveEmission: emissionSum / Math.max(1, positiveCoefficientCount),
+        meanPositiveExtinction: extinctionSum / Math.max(1, positiveCoefficientCount),
+      };
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  async function materializeLiveCompleteFlameOpticalCoefficients(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ok: false,
+        status: 'failed',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        failurePhase,
+        reason,
+        lastTrustworthyEvidence,
+      };
+      return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+    };
+    if (!device || !state.active) return failed('admission', 'inactive');
+    if (!selectiveHeadLiveCapturePaused) {
+      return failed('admission', 'live-complete-flame-coefficients-require-paused-simulator');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const maxBufferSize = Number(device.limits?.maxBufferSize || 0);
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBufferSize || byteLength > maxBindingBytes) {
+      return failed('allocation', `live-complete-flame-coefficient-buffer-limit:${byteLength}:${maxBufferSize}:${maxBindingBytes}`, {
+        rowCount,
+        byteLength,
+        maxBufferSize,
+        maxStorageBufferBindingSize: maxBindingBytes,
+      });
+    }
+
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let idleRowsBuffer = null;
+    let exactCoefficientBuffer = null;
+    const priorCoefficientBuffer = boundarySplatLiveCompleteFlameCoefficientBuffer;
+    boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ok: false,
+      status: 'materializing',
+      authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+      rowCount,
+      byteLength,
+    };
+    rebuildBoundarySplatBindGroups();
+    try {
+      setAppearanceDecompositionMode('complete-flame-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+      exactCoefficientBuffer = device.createBuffer({
+        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3`,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE,
+      });
+      nonRidgeOpticalCaptureRowBuffer = exactCoefficientBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 4,
+        capacity: rowCount,
+        captureTimeMs,
+        label: 'live-complete-flame-native-cell-write',
+      });
+      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0) {
+        throw new Error(`live-complete-flame-full-grid-count-drift-or-overflow:${rowCount}:${writePass.rowCount}:${writePass.overflowCount}`);
+      }
+      nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      boundarySplatLiveCompleteFlameCoefficientBuffer = exactCoefficientBuffer;
+      exactCoefficientBuffer = null;
+      const receipt = {
+        ok: true,
+        status: 'effective',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        evidenceAuthority: 'operator-exploration-only',
+        decisionBearing: false,
+        rowCount,
+        byteLength,
+        observedRowCount: writePass.rowCount,
+        overflowCount: writePass.overflowCount,
+        grid: gridSize,
+        sourceIdentity: {
+          routeIdentity: ROUTE_IDENTITY,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          controlsSignature: temporalControlSignature(controlsSnapshot),
+          coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
+        },
+        producerPass: 'full-grid-raymarch-complete-flame-coefficient-write-v0',
+        consumerAddressing: 'candidate-native-cell-membership-direct-index-v0',
+        coefficientProjection: LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY,
+        cpuCoefficientReadbackApplied: false,
+        fallbackReason: null,
+      };
+      state.liveCompleteFlameOpticalCoefficientReceipt = receipt;
+      rebuildBoundarySplatBindGroups();
+      priorCoefficientBuffer?.destroy();
+      return { ...receipt, sourceIdentity: { ...receipt.sourceIdentity } };
+    } catch (error) {
+      boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+      priorCoefficientBuffer?.destroy();
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (nonRidgeOpticalCaptureRowBuffer !== idleRowsBuffer && idleRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      exactCoefficientBuffer?.destroy();
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
     }
   }
 
@@ -19768,6 +20386,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     },
     setSelectiveHeadLiveCapturePaused(paused) {
+      if (Boolean(paused) && selectiveHeadLiveExactPause) {
+        const exactPause = selectiveHeadLiveExactPause;
+        selectiveHeadLiveExactPause = null;
+        exactPause.resolve({
+          ok: false,
+          reason: 'exact-step-pause-cancelled-by-manual-pause',
+          authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+          requestedSimStepCount: exactPause.targetSimStepCount,
+          effectiveSimStepCount: state.simStepCount,
+          frameCount: state.frameCount,
+          paused: true,
+          gpuComplete: false,
+          routeIdentity: ROUTE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        });
+      }
       selectiveHeadLiveCapturePaused = Boolean(paused);
       state.selectiveHeadLiveCapturePaused = selectiveHeadLiveCapturePaused;
       cancelAnimationFrame(raf);
@@ -19779,6 +20414,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepCount: state.simStepCount,
         authority: 'witness-owned-presented-frame-pause-release-v0',
       };
+    },
+    enableLiveCompleteFlameOpticalCoefficients,
+    sampleLiveCompleteFlameOpticalCoefficientStats,
+    async pauseSelectiveHeadLiveAtSimStep(target) {
+      const targetSimStepCount = Number(target);
+      const baseReceipt = {
+        authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+        requestedSimStepCount: targetSimStepCount,
+        effectiveSimStepCount: state.simStepCount,
+        frameCount: state.frameCount,
+        routeIdentity: ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      if (!Number.isInteger(targetSimStepCount) || targetSimStepCount < 0) {
+        return { ...baseReceipt, ok: false, reason: 'invalid-exact-step-target', paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (!state.active || !device) {
+        return { ...baseReceipt, ok: false, reason: 'inactive', paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (state.simStepCount > targetSimStepCount) {
+        return { ...baseReceipt, ok: false, reason: `exact-step-already-passed:${targetSimStepCount}:${state.simStepCount}`, paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (selectiveHeadLiveExactPause) {
+        return { ...baseReceipt, ok: false, reason: `exact-step-pause-already-armed:${selectiveHeadLiveExactPause.targetSimStepCount}`, paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (state.simStepCount === targetSimStepCount) {
+        selectiveHeadLiveCapturePaused = true;
+        state.selectiveHeadLiveCapturePaused = true;
+        cancelAnimationFrame(raf);
+        raf = 0;
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        const receipt = { ...baseReceipt, ok: true, reason: null, paused: true, gpuComplete: true };
+        state.selectiveHeadLiveExactPause = { ...receipt };
+        return receipt;
+      }
+      const receiptPromise = new Promise(resolve => {
+        selectiveHeadLiveExactPause = { targetSimStepCount, resolve };
+      });
+      state.selectiveHeadLiveExactPause = {
+        status: 'armed',
+        targetSimStepCount,
+        effectiveSimStepCount: state.simStepCount,
+      };
+      if (selectiveHeadLiveCapturePaused) {
+        selectiveHeadLiveCapturePaused = false;
+        state.selectiveHeadLiveCapturePaused = false;
+      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(render);
+      return receiptPromise;
     },
     async stepSelectiveHeadLiveCaptureFrame() {
       if (!state.active || !device) return { ok: false, reason: 'inactive' };
@@ -19895,6 +20581,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     debugState() {
       return {
         ...state,
+        cameraSignature: temporalCameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
@@ -19917,6 +20604,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     advanceDebugImportedFieldSteps,
     resumeDebugImportedFieldLive,
     beginDebugNonRidgeOpticalCapture,
+    materializeLiveCompleteFlameOpticalCoefficients,
     readDebugNonRidgeOpticalCaptureChunk,
     releaseDebugNonRidgeOpticalCapture,
     applyDebugNonRidgeCausalControls,
@@ -19927,6 +20615,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
     loadBoundarySplatLiveUnionCoefficientOverlay,
+    activateBoundarySplatLiveUnionCoefficientOverlayForOperatorExploration,
     auditBoundarySplatLiveUnionCoefficientOverlayPopulation,
     auditBoundarySplatLiveUnionSourceHashes,
     clearBoundarySplatLiveUnionCoefficientOverlay,

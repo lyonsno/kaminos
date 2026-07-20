@@ -17918,6 +17918,148 @@ async function initKaminosVolumeRoute() {
     }
     return { kind, byteLength: byteOffset, chunkCount };
   };
+  const bootstrapLiveFullSupportOpticsState = async () => {
+    const bootstrapStartedAtMs = performance.now();
+    const requestedStepRaw = params.get('full_support_live_step');
+    if (requestedStepRaw === null) return null;
+    const importParameters = [
+      'full_support_source_field_manifest',
+      'full_support_source_fluid',
+      'full_support_source_front',
+    ];
+    if (importParameters.some(parameter => params.has(parameter))) {
+      throw new Error('full-support-live-route-conflicts-with-field-import');
+    }
+    if (params.has('full_support_stage_b_manifest') || params.has('full_support_stage_b_manifest_sha256')) {
+      throw new Error('full-support-live-route-conflicts-with-stage-b-media-bootstrap');
+    }
+    const requestedSimStepCount = Number(requestedStepRaw);
+    if (!Number.isInteger(requestedSimStepCount) || requestedSimStepCount !== FULL_SUPPORT_STAGE_A.state.simStepCount) {
+      throw new Error(`full-support-live-step-unsupported:${requestedStepRaw}`);
+    }
+    const requestedSource = params.get('full_support_source') || 'analytical-exact';
+    const sourceSelect = document.getElementById('volume-full-support-source');
+    if (![...sourceSelect.options].some(option => option.value === requestedSource)) {
+      throw new Error(`full-support-source-unknown:${requestedSource}`);
+    }
+    if (requestedSource !== 'analytical-exact') {
+      throw new Error(`full-support-live-source-requires-live-producer:${requestedSource}`);
+    }
+    renderFullSupportReceipt({ status: 'loading', failures: ['advancing-live-simulator-to-exact-step'] });
+    const exactPauseStartedAtMs = performance.now();
+    const exactPauseReceipt = await volumePrototype.pauseSelectiveHeadLiveAtSimStep(requestedSimStepCount);
+    const exactPauseElapsedMs = performance.now() - exactPauseStartedAtMs;
+    if (exactPauseReceipt?.ok !== true
+      || exactPauseReceipt.effectiveSimStepCount !== requestedSimStepCount
+      || exactPauseReceipt.gpuComplete !== true) {
+      throw new Error(`full-support-live-exact-pause-failed:${exactPauseReceipt?.reason || 'unknown'}`);
+    }
+
+    sourceSelect.value = requestedSource;
+    const splatMode = document.getElementById('volume-boundary-splat-mode');
+    splatMode.value = 'kernel_moment_full_flame_union';
+    syncControls({ target: splatMode });
+    const requestedDeposition = 'flow-kernel-moment-gaussian-raster-v0';
+    const depositionReceipt = volumePrototype.setFullSupportDepositionMode(requestedDeposition);
+    const overlayReceipt = volumePrototype.clearBoundarySplatLiveUnionCoefficientOverlay({
+      reason: 'live-raymarch-native-cell-coefficients-selected',
+      silent: true,
+    });
+    const coefficientEnableReceipt = volumePrototype.enableLiveCompleteFlameOpticalCoefficients();
+    if (coefficientEnableReceipt?.ok !== true) {
+      throw new Error(`live-complete-flame-coefficient-enable-failed:${coefficientEnableReceipt?.reason || 'unknown'}`);
+    }
+    const compositionReceipt = volumePrototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
+    const presentationReceipt = volumePrototype.setBoundarySplatPresentationMode(FULL_SUPPORT_STAGE_A.stageB.identity);
+    const liveResumeStartedAtMs = performance.now();
+    const resumeReceipt = volumePrototype.setSelectiveHeadLiveCapturePaused(false);
+    if (resumeReceipt?.paused !== false) throw new Error('live-optical-render-loop-resume-failed');
+    let effectiveState = null;
+    while (performance.now() - liveResumeStartedAtMs < 15000) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      effectiveState = volumePrototype.debugState();
+      if (effectiveState.error) throw new Error(`live-optical-frame-failed:${effectiveState.error}`);
+      const frameReceipt = effectiveState.liveCompleteFlameOpticalFrameReceipt;
+      if (frameReceipt?.status === 'effective'
+        && frameReceipt.producedSimStepCount > requestedSimStepCount
+        && frameReceipt.producedSimStepCount === frameReceipt.consumedSimStepCount
+        && frameReceipt.producedSimStepCount === frameReceipt.presentedSimStepCount
+        && effectiveState.boundarySplatCandidateCount > 0
+        && effectiveState.boundarySplatOverflowCount === 0) break;
+    }
+    const coefficientReceipt = effectiveState?.liveCompleteFlameOpticalCoefficientReceipt;
+    const liveFrameReceipt = effectiveState?.liveCompleteFlameOpticalFrameReceipt;
+    const failures = [];
+    if (liveFrameReceipt?.status !== 'effective') failures.push(liveFrameReceipt?.fallbackReason || 'live-optical-frame-not-effective');
+    if (!(effectiveState?.simStepCount > requestedSimStepCount)) failures.push('live-simulator-did-not-advance-after-warmup');
+    if (!(effectiveState?.boundarySplatCandidateCount > 0)) failures.push('live-population-empty');
+    if (effectiveState?.boundarySplatOverflowCount !== 0) failures.push('live-population-overflow');
+    if (effectiveState?.fullSupportDepositionEffective !== requestedDeposition) failures.push('live-deposition-substitution');
+    if (effectiveState.boundarySplatPresentationModeEffective !== FULL_SUPPORT_STAGE_A.stageB.identity) failures.push('live-optical-recurrence-substitution');
+    if (effectiveState.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') failures.push('live-composition-substitution');
+    if (effectiveState.boundarySplatPresentationModeFallbackReason) failures.push(`live-optical-fallback:${effectiveState.boundarySplatPresentationModeFallbackReason}`);
+    if (coefficientReceipt?.cpuCoefficientReadbackApplied !== false) failures.push('live-coefficient-cpu-readback-applied');
+    const loadReceipt = {
+      status: failures.length === 0 ? 'effective' : 'failed',
+      authority: coefficientReceipt?.authority || coefficientEnableReceipt.authority,
+      coefficientSource: coefficientReceipt?.sourceIdentity || null,
+      overlayApplied: false,
+      fallbackReason: failures[0] || null,
+    };
+    const receipt = {
+      schema: 'kaminos.pyro.live-full-support-optics-bootstrap.v0',
+      status: failures.length === 0 ? 'effective' : 'failed',
+      authority: 'live-simulator-exact-step-v0',
+      evidenceAuthority: 'operator-exploration-only',
+      decisionBearing: false,
+      sourceFieldImportApplied: false,
+      stageBMediaBootstrapApplied: false,
+      fullGridHashReadbackApplied: false,
+      fullPopulationReadbackApplied: false,
+      simulationMotionRequested: 'live',
+      simulationMotionEffective: failures.length === 0 ? 'live' : 'failed',
+      cameraMotionRequested: 'interactive',
+      cameraMotionEffective: failures.length === 0 ? 'interactive' : 'failed',
+      timings: {
+        exactPauseElapsedMs,
+        liveResumeToFirstEffectiveFrameMs: performance.now() - liveResumeStartedAtMs,
+        totalBootstrapElapsedMs: performance.now() - bootstrapStartedAtMs,
+      },
+      requestedSimStepCount,
+      effectiveSimStepCount: effectiveState.simStepCount,
+      requestedSource,
+      effectiveSource: failures.length === 0 ? requestedSource : null,
+      coefficientAuthority: coefficientReceipt.authority,
+      coefficientReceipt,
+      coefficientEnableReceipt,
+      liveFrameReceipt,
+      exactPauseReceipt,
+      resumeReceipt,
+      compositionReceipt,
+      depositionReceipt,
+      loadReceipt,
+      overlayReceipt,
+      presentationReceipt,
+      rendererRequested: true,
+      rendererEncoded: liveFrameReceipt?.splatEncoded === true,
+      rendererApplied: liveFrameReceipt?.splatApplied === true,
+      requestedComposition: 'splat-only-v0',
+      effectiveComposition: effectiveState.selectiveHeadLiveCompositionEffective,
+      requestedOpticalRecurrence: FULL_SUPPORT_STAGE_A.stageB.identity,
+      effectiveOpticalRecurrence: effectiveState.boundarySplatPresentationModeEffective,
+      failures,
+    };
+    window.__kaminosLiveFullSupportOpticsBootstrapReceipt = receipt;
+    window.__kaminosFullSupportStageABootstrapReceipt = receipt;
+    renderFullSupportReceipt({
+      ...receipt,
+      rowCount: effectiveState.boundarySplatCandidateCount,
+      overflowCount: effectiveState.boundarySplatOverflowCount,
+      effectiveDeposition: effectiveState.fullSupportDepositionEffective,
+      effectiveTransport: effectiveState.boundarySplatPresentationModeEffective,
+    });
+    return receipt;
+  };
   const bootstrapFullSupportStageAState = async () => {
     const manifestUrl = params.get('full_support_source_field_manifest');
     const fluidUrl = params.get('full_support_source_fluid');
@@ -18004,6 +18146,7 @@ async function initKaminosVolumeRoute() {
   });
   window.__kaminosApplyFullSupportSource = applyFullSupportSource;
   window.__kaminosBootstrapFullSupportStageAState = bootstrapFullSupportStageAState;
+  window.__kaminosBootstrapLiveFullSupportOpticsState = bootstrapLiveFullSupportOpticsState;
   const persistentCohortStatus = document.getElementById('volume-persistent-cohort-status');
   const renderPersistentCohortReceipt = receipt => {
     window.__kaminosPersistentSparseCohortReceipt = receipt;
@@ -18601,10 +18744,15 @@ async function initKaminosVolumeRoute() {
       setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
     }
   }
-  bootstrapFullSupportStageAState().then(async stageAReceipt => {
+  const liveFullSupportOpticsRequested = params.has('full_support_live_step');
+  const fullSupportBootstrap = liveFullSupportOpticsRequested
+    ? bootstrapLiveFullSupportOpticsState()
+    : bootstrapFullSupportStageAState();
+  fullSupportBootstrap.then(async stageAReceipt => {
     if (stageAReceipt?.status !== 'effective') {
       throw new Error(`stage-a-bootstrap-required:${stageAReceipt?.failures?.join(',') || stageAReceipt?.status || 'unknown'}`);
     }
+    if (liveFullSupportOpticsRequested) return stageAReceipt;
     const cohortReceipt = await bootstrapPersistentSparseCohort();
     if (cohortReceipt?.status === 'failed') {
       throw new Error(`persistent-cohort-bootstrap-failed:${cohortReceipt.failures?.join(',') || 'unknown'}`);

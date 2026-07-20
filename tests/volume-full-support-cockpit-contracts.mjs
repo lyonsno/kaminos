@@ -144,10 +144,10 @@ assert.doesNotMatch(
 );
 assert.ok(
   index.indexOf('await volumePrototype.setActive(true);', index.indexOf("params.get('kaminos_volume_smoke') === '1'"))
-    < index.indexOf('bootstrapFullSupportStageAState().then'),
-  'routed WebGPU activation must complete before checksum-state bootstrap begins',
+    < index.indexOf('const fullSupportBootstrap = liveFullSupportOpticsRequested'),
+  'routed WebGPU activation must complete before either live-state or checksum-state bootstrap begins',
 );
-assert.match(index, /bootstrapFullSupportStageAState\(\)\.then\(stageAReceipt[\s\S]*return bootstrapStageBConsumer\(\)/, 'Stage B must wait for effective Stage A state and overlays');
+assert.match(index, /fullSupportBootstrap\.then\(async stageAReceipt[\s\S]*return bootstrapStageBConsumer\(\)/, 'Stage B must wait for effective replay-backed Stage A state and overlays');
 assert.match(core, /loadBoundarySplatLiveUnionCoefficientOverlay/, 'renderer exposes checksum-bound overlay loading');
 assert.match(core, /auditBoundarySplatLiveUnionCoefficientOverlayPopulation/, 'renderer gates overlay effectiveness on exact population');
 assert.match(core, /flow-tangent-five-tap-bilinear-v0/, 'renderer names the exact live deposition treatment');
