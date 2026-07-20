@@ -36,5 +36,35 @@ assert.match(
   /if \(productFrameOwner === 'caller'\) \{[\s\S]*private-frame-submit-forbidden/,
   'caller-owned product mode must reject the private render-and-submit loop',
 );
+assert.match(
+  core,
+  /@group\(1\) @binding\(1\) var productSceneDepth: texture_depth_2d/,
+  'product smoke shader must bind caller scene depth as a depth texture',
+);
+assert.match(
+  core,
+  /fn productSceneDepthEndT\([\s\S]*textureLoad\(productSceneDepth[\s\S]*u\.invViewProj/,
+  'product smoke must reconstruct a local-space ray far bound from caller depth',
+);
+assert.match(
+  core,
+  /productViewProj\.multiplyMatrices\(viewProj, productModelMatrix\)[\s\S]*productLocalCameraPosition/,
+  'product smoke rays must use the same scene-owned placement transform as splats',
+);
+assert.match(
+  core,
+  /productRaymarchPipeline[\s\S]*dstFactor: 'one-minus-src-alpha'/,
+  'product smoke must optically composite over caller color instead of replacing it',
+);
+assert.match(
+  core,
+  /encodeProductSmokeRaymarch\([\s\S]*encodeBoundarySplatPresentation/,
+  'caller frame must encode depth-bounded broad smoke before fire-authoritative splats',
+);
+assert.match(
+  core,
+  /status: 'effective'[\s\S]*smokeRaymarchEncoded: smokeApplied[\s\S]*smokeDepthFarBoundEffective: smokeApplied/,
+  'product receipt must report full two-pass effectiveness only after smoke depth is encoded',
+);
 
 console.log('Kaminos product fire adapter source contract verified');
