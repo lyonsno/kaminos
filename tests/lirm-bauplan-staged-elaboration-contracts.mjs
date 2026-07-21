@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import {
   buildLirmBauplanStagedElaborationPlan,
@@ -6,6 +9,9 @@ import {
 import {
   createLirmSpeciationArmatureImplicitBodyBundle,
 } from '../lirm-speciation-armature-core.js';
+import {
+  resolveComparatorMapSources,
+} from '../artifacts/lirm-bauplan-staged-elaboration-assay-v0/assay-contract.mjs';
 
 const plan = buildLirmBauplanStagedElaborationPlan();
 assert.equal(plan.schema, 'kaminos.lirm-bauplan-staged-elaboration-plan.v0');
@@ -73,5 +79,26 @@ assert.deepEqual(
   repeat.stages.map(stage => stage.candidate),
   plan.stages.map(stage => stage.candidate),
 );
+
+const comparatorFixtureRoot = await mkdtemp(join(tmpdir(), 'lirm-bauplan-comparator-'));
+try {
+  const localRoot = join(comparatorFixtureRoot, 'local');
+  const missingLegacyRoot = join(comparatorFixtureRoot, 'missing-legacy');
+  await mkdir(localRoot, { recursive: true });
+  for (const kind of ['clay', 'depth', 'normal']) {
+    await writeFile(join(localRoot, `${kind}.png`), `committed-${kind}`);
+  }
+  const resolved = await resolveComparatorMapSources({
+    localRoot,
+    legacyRoot: missingLegacyRoot,
+  });
+  assert.deepEqual(Object.keys(resolved), ['clay', 'depth', 'normal']);
+  for (const [kind, map] of Object.entries(resolved)) {
+    assert.equal(map.imported, false);
+    assert.equal(await readFile(map.path, 'utf8'), `committed-${kind}`);
+  }
+} finally {
+  await rm(comparatorFixtureRoot, { recursive: true, force: true });
+}
 
 console.log('LIRM bauplan staged elaboration contracts passed');

@@ -39,18 +39,44 @@ async function evidence(path) {
   return { byteSize: bytes.length, sha256: hashBytes(bytes) };
 }
 
+export async function resolveComparatorMapSources({
+  localRoot,
+  legacyRoot,
+}) {
+  await mkdir(localRoot, { recursive: true });
+  const maps = {};
+  for (const [kind, legacyName] of Object.entries(MAP_SOURCE_NAMES)) {
+    const localPath = join(localRoot, `${kind}.png`);
+    let imported = false;
+    try {
+      await readFile(localPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await copyFile(join(legacyRoot, legacyName), localPath);
+      imported = true;
+    }
+    maps[kind] = {
+      path: localPath,
+      imported,
+      legacyPath: join(legacyRoot, legacyName),
+    };
+  }
+  return maps;
+}
+
 async function copyComparator() {
   const targetRoot = join(artifactRoot, 'controls', 'annular-comparator');
-  await mkdir(targetRoot, { recursive: true });
+  const sources = await resolveComparatorMapSources({
+    localRoot: targetRoot,
+    legacyRoot: COMPARATOR_ROOT,
+  });
   const maps = {};
-  for (const [kind, sourceName] of Object.entries(MAP_SOURCE_NAMES)) {
-    const sourcePath = join(COMPARATOR_ROOT, sourceName);
-    const targetPath = join(targetRoot, `${kind}.png`);
-    await copyFile(sourcePath, targetPath);
+  for (const [kind, source] of Object.entries(sources)) {
     maps[kind] = {
-      path: relative(artifactRoot, targetPath),
-      sourcePath: relative(repoRoot, sourcePath),
-      ...(await evidence(targetPath)),
+      path: relative(artifactRoot, source.path),
+      historicalSourcePath: relative(repoRoot, source.legacyPath),
+      resolvedFrom: source.imported ? 'legacy-import' : 'committed-local',
+      ...(await evidence(source.path)),
     };
   }
   return maps;
