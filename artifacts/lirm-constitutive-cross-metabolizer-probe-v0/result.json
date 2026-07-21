@@ -1,0 +1,35 @@
+{
+  "schema": "kaminos.lirm-constitutive-cross-metabolizer-probe-result.v0",
+  "status": "complete-inspected",
+  "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+  "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "contactSheet": {
+    "path": "constitutive-cross-metabolizer-contact-sheet.png",
+    "sha256": "185a01d3b10108cb7383b35afbf332796b1f6d3fae80a15759295b7994539b4d",
+    "pixelGrid": "2048x548",
+    "visualInspection": "inspected at original resolution"
+  },
+  "cells": [
+    {
+      "id": "cleft-crown-x-lateral-sail-f1-crown-dominant",
+      "seed": 720301,
+      "jobId": "de64113a90b1",
+      "sha256": "b22cc96fa1e65b7b6f587e8966dedd3e3262a9276656407926505fc82d7ca6fb",
+      "verdict": "shared annular body plan strongly preserved; crown masses, lateral projections, suspended organ, aperture, and sparse supports metabolized into an articulated multi-headed organism"
+    },
+    {
+      "id": "cleft-crown-x-lateral-sail-f1-sail-dominant",
+      "seed": 720301,
+      "jobId": "4d42764b7d44",
+      "sha256": "63223279262859330691f362fe51ea8c346c3262d3f427525d269f9df7499d8b",
+      "verdict": "shared annular body plan strongly preserved; metabolized organism is smoother and less upper-clustered than the crown-dominant control"
+    }
+  ],
+  "decision": {
+    "exoticTopologySurvivesMetabolization": true,
+    "sharedScaffoldPressure": "strong",
+    "oppositeDominanceInheritance": "weak but directionally visible",
+    "convergence": "Both controls enter the same annular flesh-creature semantic basin under the shared seed and prompt.",
+    "nextGate": "Increase the geometric separation or semantic-region pressure between descendants before paying for 3D generation; do not interpret this pair as independent species."
+  }
+}

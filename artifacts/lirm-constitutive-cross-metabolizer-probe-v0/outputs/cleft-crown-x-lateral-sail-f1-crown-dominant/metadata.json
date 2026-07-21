@@ -1,0 +1,27 @@
+{
+  "name": "clay-implicit",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "de64113a90b1",
+  "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/clay-implicit.png",
+  "input_name": "clay-implicit.png",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/depth-implicit.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/normal-implicit.png",
+    "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-constitutive-cross-metabolizer-probe-v0/prompt.txt",
+    "seed": "720301",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-silhouette-basin-0717"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1784602386.665285,
+  "duration_s": 161.5
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.lirm-constitutive-cross-metabolizer-probe.v0",
+  "question": "Can Flux metabolize two opposite-dominance descendants into coherent creatures while preserving their shared inherited body plan and their distinct crown-versus-sail silhouette pressure?",
+  "sourceArtifact": "../lirm-heritable-hybrid-cross-v0",
+  "prompt": "prompt.txt",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+  "requestedParameters": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGiB": 48,
+    "seed": 720301
+  },
+  "controls": [
+    {
+      "id": "cleft-crown-x-lateral-sail-f1-crown-dominant",
+      "claySha256": "fc90fbf0a3684e1f67c899a41171dbda19698f748d3078e4270816080ba21b79",
+      "depthSha256": "510166228c7ad373db21c0801a1421b4c752597a1ebb3f1c774f8f8c64203f4d",
+      "normalSha256": "6d3ba117bf2cfbafab0d0171c9e8686b03f93cfcf869e99938ad9b518c1ac529"
+    },
+    {
+      "id": "cleft-crown-x-lateral-sail-f1-sail-dominant",
+      "claySha256": "291ff555aa3d207bfd41f1d2deba9a2108235bdef0bc399207312555964573e1",
+      "depthSha256": "5917e97360e25b1cee8d530eddedf137b98abbc67136fa64c463549aba7be2c8",
+      "normalSha256": "b1d546b8b5b1b63ff5653a91cd79e2634acd8ff045257a4c8cf30808459b389a"
+    }
+  ],
+  "preservationContract": [
+    "single connected organism",
+    "open annular torso and empty central aperture",
+    "bifid cleft crown",
+    "broad lateral sails",
+    "suspended interior organ",
+    "sparse tripod-like supports",
+    "control-specific crown-versus-sail silhouette dominance"
+  ],
+  "firstDecisionBoundary": "Inspect the same-seed two-cell still-image comparison before any Trellis submission or additional constitutive generation."
+}

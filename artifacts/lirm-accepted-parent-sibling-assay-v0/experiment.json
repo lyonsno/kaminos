@@ -1,0 +1,35 @@
+{
+  "schema": "kaminos.lirm-accepted-parent-sibling-assay.v0",
+  "question": "Can one accepted attractive creature image become a reusable parent for bounded, identity-preserving movement through mass and posture space?",
+  "parent": {
+    "path": "../lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/output.png",
+    "sha256": "9e398f9fb2292e16c79e1e8cd7d31d4a768266f88a74c18fffb4fdcf398d7153",
+    "generationSeed": 719024,
+    "pixelGrid": "512x512"
+  },
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+  "requestedParameters": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGiB": 48
+  },
+  "sharedSeeds": [720201, 720202],
+  "mutations": [
+    {"id": "heavy", "prompt": "prompts/heavy.txt", "target": "approximately 35 percent greater torso girth and belly depth"},
+    {"id": "lean", "prompt": "prompts/lean.txt", "target": "approximately 25 percent less torso girth and belly depth"},
+    {"id": "slumped", "prompt": "prompts/slumped.txt", "target": "lower trunk carriage with dimensions substantially preserved"}
+  ],
+  "identityInvariants": [
+    "single connected creature",
+    "same head and face",
+    "four limbs at corresponding locations",
+    "same trunk segment count and order",
+    "same dorsal plate sequence",
+    "same tail, palette, materials, camera, lighting, framing, and background"
+  ],
+  "firstDecisionBoundary": "Inspect the six-cell still-image contact sheet before any Trellis submission."
+}

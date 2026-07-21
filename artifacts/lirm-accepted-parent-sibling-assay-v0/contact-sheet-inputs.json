@@ -1,0 +1,51 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/output.png",
+      "title": "accepted parent",
+      "viewLabel": "SOURCE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+      "title": "seed 720201",
+      "viewLabel": "HEAVY +35%"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/lean-seed720201/output.png",
+      "title": "seed 720201",
+      "viewLabel": "LEAN -25%"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/slumped-seed720201/output.png",
+      "title": "seed 720201",
+      "viewLabel": "SLUMPED"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/output.png",
+      "title": "accepted parent",
+      "viewLabel": "SOURCE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720202/output.png",
+      "title": "seed 720202",
+      "viewLabel": "HEAVY +35%"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/lean-seed720202/output.png",
+      "title": "seed 720202",
+      "viewLabel": "LEAN -25%"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/slumped-seed720202/output.png",
+      "title": "seed 720202",
+      "viewLabel": "SLUMPED"
+    }
+  ]
+}
+

@@ -1,0 +1,25 @@
+{
+  "name": "output",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "56b28dd9af76",
+  "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-cute-control-probe-v0/stability/lirm03-clay-seed719024/output.png",
+  "input_name": "output.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-accepted-parent-sibling-assay-v0/prompts/slumped.txt",
+    "seed": "720201",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-silhouette-basin-0717"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1784602131.78392,
+  "duration_s": 95.7
+}

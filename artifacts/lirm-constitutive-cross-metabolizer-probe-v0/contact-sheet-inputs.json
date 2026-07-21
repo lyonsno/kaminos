@@ -1,0 +1,31 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/clay-implicit.png",
+      "title": "crown-dominant F1",
+      "viewLabel": "CONTROL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-constitutive-cross-metabolizer-probe-v0/outputs/cleft-crown-x-lateral-sail-f1-crown-dominant/output.png",
+      "title": "crown-dominant F1",
+      "viewLabel": "METABOLIZED"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-sail-dominant/cleft-crown-x-lateral-sail-f1-sail-dominant/clay-implicit.png",
+      "title": "sail-dominant F1",
+      "viewLabel": "CONTROL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-constitutive-cross-metabolizer-probe-v0/outputs/cleft-crown-x-lateral-sail-f1-sail-dominant/output.png",
+      "title": "sail-dominant F1",
+      "viewLabel": "METABOLIZED"
+    }
+  ]
+}
+

@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.lirm-accepted-parent-sibling-assay-result.v0",
+  "status": "complete-inspected",
+  "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+  "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "contactSheet": {
+    "path": "accepted-parent-sibling-contact-sheet.png",
+    "sha256": "330e58f7d9322f97726ddf392e66eb909f0008627d9c34ec9911ee7c416138f2",
+    "pixelGrid": "2048x1096",
+    "visualInspection": "inspected at original resolution"
+  },
+  "cells": [
+    {"mutation": "heavy", "seed": 720201, "jobId": "3a1c325924f2", "sha256": "e8781e71f115989826bab5d29cc3e158514d148df700e64404dc9d43046d32dc", "verdict": "strong local sibling; requested mass increase and identity/studio regime preserved"},
+    {"mutation": "heavy", "seed": 720202, "jobId": "942c96e7bc05", "sha256": "f6d0bf4119e5b3e316cabc0875913195e0673158c48c91fa903ceee7840bf5f5", "verdict": "requested mass increase succeeds with broader camera, background, expression, and proportion drift"},
+    {"mutation": "lean", "seed": 720201, "jobId": "5b5344d8fcd9", "sha256": "e9b58da67ddaa1b8ec33e53089efcf284231acd400d811cf316761d58334e63c", "verdict": "attractive in-family redraw; requested torso mass subtraction is not established"},
+    {"mutation": "lean", "seed": 720202, "jobId": "cfd9cab5d7af", "sha256": "3c27e5c09ef18f6b9a82164e2ae353aec555d002248c4ba77dd5ba8200bdc6ff", "verdict": "attractive in-family redraw with studio drift; requested torso mass subtraction is not established"},
+    {"mutation": "slumped", "seed": 720201, "jobId": "56b28dd9af76", "sha256": "0d55283c9c5b5a433cb739ce69b210484b1b1925f49e8e151f8d2a894e593103", "verdict": "strong lowered head and trunk carriage with species identity preserved"},
+    {"mutation": "slumped", "seed": 720202, "jobId": "64be5afeb63d", "sha256": "7abf398da2644ee5eea21d7c04bb25f070c579ed8a1da2b9caada347d2d0f098", "verdict": "strong lowered carriage with broader framing and background drift"}
+  ],
+  "decision": {
+    "acceptedParentMutationViable": true,
+    "axisDependenceEstablished": true,
+    "repeatableAxes": ["greater torso mass", "lowered carriage"],
+    "unprovenAxes": ["reduced torso mass"],
+    "aestheticFloor": "All six outputs remain attractive, legible, and in-family; no hostile basin appeared.",
+    "nextGate": "Do not send the full sheet to Trellis. After the constitutive checkpoint, select at most one identity-preserving sibling if a 3D inheritance smoke remains decision-relevant."
+  }
+}
