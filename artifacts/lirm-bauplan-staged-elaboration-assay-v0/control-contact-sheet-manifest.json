@@ -1,0 +1,32 @@
+{
+  "schema": "kaminos.lirm-bauplan-staged-elaboration-control-sheet.v0",
+  "columns": 4,
+  "rows": 1,
+  "width": 1280,
+  "cellWidth": 320,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/staged-lineage/bauplan-only/clay-implicit.png",
+      "title": "G0 bauplan",
+      "viewLabel": "bauplan only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/staged-lineage/bauplan-plus-dorsal-plates/clay-implicit.png",
+      "title": "G1 developmental-module",
+      "viewLabel": "dorsal-plate-series"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.png",
+      "title": "G2 anatomical-elaboration",
+      "viewLabel": "dorsal-plate-series + paired-anterior-tactile-fork"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/annular-comparator/clay.png",
+      "title": "HOSTILE COMPARATOR",
+      "viewLabel": "annular visible-locus control"
+    }
+  ]
+}

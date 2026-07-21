@@ -1,0 +1,31 @@
+{
+  "columns": 2,
+  "rows": 2,
+  "width": 1024,
+  "cellWidth": 512,
+  "cellHeight": 570,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/imagegen/bauplan-only/output.png",
+      "title": "G0 bauplan",
+      "viewLabel": "connected body + axial supports"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/imagegen/bauplan-plus-dorsal-plates/output.png",
+      "title": "G1 + dorsal plates",
+      "viewLabel": "same body, one attached module"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/imagegen/bauplan-plus-dorsal-plates-and-tactile-fork/output.png",
+      "title": "G2 + tactile fork",
+      "viewLabel": "same body, second role-bearing module"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/imagegen/annular-comparator/output.png",
+      "title": "annular comparator",
+      "viewLabel": "visible loci without shared bauplan"
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "schema": "kaminos.lirm-bauplan-staged-elaboration-assay.v0",
+  "status": "still-image-assay-complete-agent-inspected",
+  "phase": "fixed-route-imagegen-compared",
+  "requestedRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "lastTrustworthyEvidence": "four fixed-seed Flux outputs visually inspected: the staged lineage preserves one crawler body while adding dorsal and paired terminal modules; the annular comparator remains an upright ring-bodied organism organized around its void and visible loci",
+  "sourceCandidateId": "lirm-armature-03",
+  "sourceSeed": "molten-lirm-seed-0707",
+  "staged": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "receiptPath": "controls/staged-lineage/receipt.json",
+    "outputs": [
+      {
+        "id": "bauplan-only",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": null,
+        "generation": 0,
+        "stageKind": "bauplan",
+        "developmentalModules": [],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-only/clay-implicit.png",
+            "byteSize": 28445,
+            "sha256": "sha256:ce377100c07db7e24bd28cf912cbb41eb3323e4a63bd5c21996adee545c08ec5"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-only/depth-implicit.png",
+            "byteSize": 15184,
+            "sha256": "sha256:3715950da89484944bc8f1d80165e84d15b0b7c699c505dd79e8960bb18fa5a6"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-only/normal-implicit.png",
+            "byteSize": 37433,
+            "sha256": "sha256:a4b93c888c6fc4655fcf9766e64936b02a0b3f09f5a5a5d67a3732cc1e99e25f"
+          }
+        }
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": "bauplan-only",
+        "generation": 1,
+        "stageKind": "developmental-module",
+        "developmentalModules": [
+          "dorsal-plate-series"
+        ],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/clay-implicit.png",
+            "byteSize": 31831,
+            "sha256": "sha256:e977f8cd2445ced320128353f8e494e19b46027723af45c93ae18b12a86d2cb8"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/depth-implicit.png",
+            "byteSize": 15965,
+            "sha256": "sha256:893b7c6d1819e3e0ab1338ec3e224781cd430da0d3ca551d956ac664bf91f38d"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/normal-implicit.png",
+            "byteSize": 39582,
+            "sha256": "sha256:1d7a34cd3ad38166a75d46b7767ffe0b5b0121f9ba1368df7ec5dbb74febf972"
+          }
+        }
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates-and-tactile-fork",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": "bauplan-plus-dorsal-plates",
+        "generation": 2,
+        "stageKind": "anatomical-elaboration",
+        "developmentalModules": [
+          "dorsal-plate-series",
+          "paired-anterior-tactile-fork"
+        ],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.png",
+            "byteSize": 33877,
+            "sha256": "sha256:57df635c89c5153290a831f06eb4f132a5027a2b45cd64c997ba6c4259e97082"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/depth-implicit.png",
+            "byteSize": 16840,
+            "sha256": "sha256:a23489ac9b45011f7924f33854525b125f1a4a7eb25774fdf09048c8d7d34da3"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/normal-implicit.png",
+            "byteSize": 41683,
+            "sha256": "sha256:48106f42b69308de1ca3b32c7bfb84649fee6d1c309f5616dcc03e4a580abfee"
+          }
+        }
+      }
+    ]
+  },
+  "comparator": {
+    "id": "cleft-crown-x-lateral-sail-f1-crown-dominant",
+    "maps": {
+      "clay": {
+        "path": "controls/annular-comparator/clay.png",
+        "sourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/clay-implicit.png",
+        "byteSize": 55798,
+        "sha256": "sha256:fc90fbf0a3684e1f67c899a41171dbda19698f748d3078e4270816080ba21b79"
+      },
+      "depth": {
+        "path": "controls/annular-comparator/depth.png",
+        "sourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/depth-implicit.png",
+        "byteSize": 32013,
+        "sha256": "sha256:510166228c7ad373db21c0801a1421b4c752597a1ebb3f1c774f8f8c64203f4d"
+      },
+      "normal": {
+        "path": "controls/annular-comparator/normal.png",
+        "sourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/normal-implicit.png",
+        "byteSize": 69477,
+        "sha256": "sha256:6d3ba117bf2cfbafab0d0171c9e8686b03f93cfcf869e99938ad9b518c1ac529"
+      }
+    }
+  },
+  "fixedImagegenRequest": {
+    "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seed": 720401,
+    "promptPath": "prompt.txt"
+  },
+  "controlSheet": {
+    "path": "control-contact-sheet.png",
+    "byteSize": 125942,
+    "sha256": "sha256:7b13af44e8d6b1dc30bc580f0718457434ae7f7680e6affa4db6586934dcdb5b"
+  },
+  "controlInspection": {
+    "status": "agent-inspected",
+    "finding": "The final control ladder keeps camera, axial body, terminal masses, and support topology visually stable. G1 adds an integrated dorsal plate series; G2 adds a clearly discriminable paired terminal fork. The comparator is materially more elaborate and is organized around an open annulus rather than the shared crawler bauplan."
+  },
+  "imagegenResults": {
+    "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "routeIdentityVerified": true,
+    "allJobsExitedZero": true,
+    "allOutputsAgentInspected": true,
+    "results": [
+      {
+        "id": "bauplan-only",
+        "jobId": "e5ee48d2ddb6",
+        "durationSeconds": 67.7,
+        "outputPath": "imagegen/bauplan-only/output.png",
+        "metadataPath": "imagegen/bauplan-only/metadata.json",
+        "sha256": "sha256:e1791e44ea0d47c31974bf0c04164950173adfd9a812d3bedc28c51fc8f6942b",
+        "inspection": "A simple connected green crawler with one continuous curved body and small grounded keratin supports. No aperture, organ proliferation, or disconnected mass was invented."
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates",
+        "jobId": "b9111b9f2b2f",
+        "durationSeconds": 61.3,
+        "outputPath": "imagegen/bauplan-plus-dorsal-plates/output.png",
+        "metadataPath": "imagegen/bauplan-plus-dorsal-plates/metadata.json",
+        "sha256": "sha256:a425edb4bd2e326b3ce4802825801f5fafe6223c7f5a28e8df019586b2922dd7",
+        "inspection": "The same body, pose, supports, material, and framing survive. The added dorsal controls become one integrated stepped plate series rather than a new organism or loose detail."
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates-and-tactile-fork",
+        "jobId": "4884d6575b7a",
+        "durationSeconds": 228.8,
+        "outputPath": "imagegen/bauplan-plus-dorsal-plates-and-tactile-fork/output.png",
+        "metadataPath": "imagegen/bauplan-plus-dorsal-plates-and-tactile-fork/metadata.json",
+        "sha256": "sha256:f84074926d8220591e6379e867b51ec38564ea20faf8bc0fcb1f3caa81b0cdb3",
+        "inspection": "The G1 body and dorsal series survive nearly unchanged. The second module becomes two attached upright terminal feelers. The still does not establish that imagegen interpreted that terminal as the anatomical head."
+      },
+      {
+        "id": "annular-comparator",
+        "jobId": "5d3b696c20fc",
+        "durationSeconds": 174.0,
+        "outputPath": "imagegen/annular-comparator/output.png",
+        "metadataPath": "imagegen/annular-comparator/metadata.json",
+        "sha256": "sha256:25c979f83f485a0c668fb78e3fffe83e83bfe43ff1d6aa5ca31737b77836095a",
+        "inspection": "A coherent upright ring-bodied organism with three ground contacts, lateral limbs, upper lobes, and a dominant central void. It is not visually collapsed or strongly horrific, but the visible loci remain the organismal schema instead of being metabolized into the staged crawler family."
+      }
+    ],
+    "contactSheet": {
+      "path": "result-contact-sheet.png",
+      "manifestPath": "result-contact-sheet-manifest.json",
+      "sha256": "sha256:1beb287671fbca0fc8d4d6d7d08a9f60f1a4f15b857130047410dc6ed98ab430"
+    }
+  },
+  "verdict": {
+    "summary": "At this fixed seed and route, a low-frequency organismal bauplan acts as a strong inheritance carrier: successive body-attached modules are added without re-solving the creature's overall identity. The annular comparator also yields a coherent organism, so this assay does not show that weak hierarchy necessarily causes horror; it shows that elaborate visible loci without a shared developmental scaffold produce a different, less conventionally grounded body schema and weaker membership in the intended crawler family.",
+    "supportedClaims": [
+      "The shared bauplan survives two staged elaborations with unusually high visual identity retention.",
+      "The dorsal series and paired terminal fork are independently controllable enough to become legible attached anatomy.",
+      "The comparator's annulus and proliferated loci remain load-bearing in the generated organism."
+    ],
+    "unsupportedClaims": [
+      "Developmental hierarchy universally prevents grotesque outputs.",
+      "The result generalizes across seeds, prompts, cameras, or morphology families.",
+      "The tactile fork has been semantically interpreted as a head-mounted sensory organ.",
+      "Any result is spatially coherent enough for Trellis."
+    ],
+    "nextDiscriminator": "Repeat the four-cell assay across a small seed panel and one second base bauplan before adding more module complexity or invoking Trellis."
+  },
+  "falseClosureGuards": {
+    "controlRenderProvesImageBasin": false,
+    "friendlyOutputAloneProvesBauplanHypothesis": false,
+    "hostileComparatorMustUseSameImageRequest": true,
+    "trellisClaim": "not_made; still-image inspection does not establish spatial coherence"
+  }
+}

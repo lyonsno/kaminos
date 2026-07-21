@@ -1,0 +1,27 @@
+{
+  "name": "clay",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "5d3b696c20fc",
+  "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/annular-comparator/clay.png",
+  "input_name": "clay.png",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/annular-comparator/depth.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/controls/annular-comparator/normal.png",
+    "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-bauplan-staged-elaboration-assay-v0/prompt.txt",
+    "seed": "720401",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-silhouette-basin-0717"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1784612384.571023,
+  "duration_s": 174.0
+}

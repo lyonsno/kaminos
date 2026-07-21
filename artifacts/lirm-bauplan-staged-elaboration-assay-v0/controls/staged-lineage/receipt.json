@@ -1,0 +1,315 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-implicit-body-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "seed": "molten-lirm-seed-0707",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "candidateIds": [
+    "bauplan-only",
+    "bauplan-plus-dorsal-plates",
+    "bauplan-plus-dorsal-plates-and-tactile-fork"
+  ],
+  "bundles": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "bauplan-only",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 27,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "bauplan-only/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "bauplan-only/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "bauplan-only/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "bauplan-only/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "bauplan-only/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "bauplan-only/trellis-source.svg",
+        "rasterPath": "bauplan-only/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "bauplan-plus-dorsal-plates",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 34,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "bauplan-plus-dorsal-plates/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "bauplan-plus-dorsal-plates/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "bauplan-plus-dorsal-plates/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "bauplan-plus-dorsal-plates/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "bauplan-plus-dorsal-plates/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "bauplan-plus-dorsal-plates/trellis-source.svg",
+        "rasterPath": "bauplan-plus-dorsal-plates/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "bauplan-plus-dorsal-plates-and-tactile-fork",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 36,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "bauplan-plus-dorsal-plates-and-tactile-fork/trellis-source.svg",
+        "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "implicitBodyClaim": "raymarched_control_surface_only",
+    "projectionProxyClaim": "superseded_by_implicit_surface"
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "bundles": [
+      {
+        "candidateId": "bauplan-only",
+        "bundle": "bauplan-only/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "bauplan-only/clay-implicit.svg",
+            "rasterPath": "bauplan-only/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "bauplan-only/depth-implicit.svg",
+            "rasterPath": "bauplan-only/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "bauplan-only/normal-implicit.svg",
+            "rasterPath": "bauplan-only/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "bauplan-only/mask-implicit.svg",
+            "rasterPath": "bauplan-only/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "bauplan-only/semantic-implicit.svg",
+            "rasterPath": "bauplan-only/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "bauplan-only/trellis-source.svg",
+          "rasterPath": "bauplan-only/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "bauplan-plus-dorsal-plates",
+        "bundle": "bauplan-plus-dorsal-plates/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "bauplan-plus-dorsal-plates/clay-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "bauplan-plus-dorsal-plates/depth-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "bauplan-plus-dorsal-plates/normal-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "bauplan-plus-dorsal-plates/mask-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "bauplan-plus-dorsal-plates/semantic-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "bauplan-plus-dorsal-plates/trellis-source.svg",
+          "rasterPath": "bauplan-plus-dorsal-plates/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "bauplan-plus-dorsal-plates-and-tactile-fork",
+        "bundle": "bauplan-plus-dorsal-plates-and-tactile-fork/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "bauplan-plus-dorsal-plates-and-tactile-fork/depth-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "bauplan-plus-dorsal-plates-and-tactile-fork/normal-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "bauplan-plus-dorsal-plates-and-tactile-fork/mask-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "bauplan-plus-dorsal-plates-and-tactile-fork/semantic-implicit.svg",
+            "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "bauplan-plus-dorsal-plates-and-tactile-fork/trellis-source.svg",
+          "rasterPath": "bauplan-plus-dorsal-plates-and-tactile-fork/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      }
+    ]
+  }
+}
