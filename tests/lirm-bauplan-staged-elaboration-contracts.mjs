@@ -10,8 +10,15 @@ import {
   createLirmSpeciationArmatureImplicitBodyBundle,
 } from '../lirm-speciation-armature-core.js';
 import {
+  LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT,
   resolveComparatorMapSources,
 } from '../artifacts/lirm-bauplan-staged-elaboration-assay-v0/assay-contract.mjs';
+
+assert.equal(
+  LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT,
+  'control-generation-receipt.json',
+);
+assert.notEqual(LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT, 'receipt.json');
 
 const plan = buildLirmBauplanStagedElaborationPlan();
 assert.equal(plan.schema, 'kaminos.lirm-bauplan-staged-elaboration-plan.v0');

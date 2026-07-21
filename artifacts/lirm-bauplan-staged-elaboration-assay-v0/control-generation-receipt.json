@@ -1,0 +1,160 @@
+{
+  "schema": "kaminos.lirm-bauplan-staged-elaboration-assay.v0",
+  "status": "controls-complete-uninspected",
+  "phase": "control-sheet-written",
+  "requestedRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "lastTrustworthyEvidence": "three shared-bauplan descendants and one annular comparator rendered under one camera; imagegen not yet fired",
+  "sourceCandidateId": "lirm-armature-03",
+  "sourceSeed": "molten-lirm-seed-0707",
+  "staged": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "receiptPath": "controls/staged-lineage/receipt.json",
+    "outputs": [
+      {
+        "id": "bauplan-only",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": null,
+        "generation": 0,
+        "stageKind": "bauplan",
+        "developmentalModules": [],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-only/clay-implicit.png",
+            "byteSize": 28445,
+            "sha256": "sha256:ce377100c07db7e24bd28cf912cbb41eb3323e4a63bd5c21996adee545c08ec5"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-only/depth-implicit.png",
+            "byteSize": 15184,
+            "sha256": "sha256:3715950da89484944bc8f1d80165e84d15b0b7c699c505dd79e8960bb18fa5a6"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-only/normal-implicit.png",
+            "byteSize": 37433,
+            "sha256": "sha256:a4b93c888c6fc4655fcf9766e64936b02a0b3f09f5a5a5d67a3732cc1e99e25f"
+          }
+        }
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": "bauplan-only",
+        "generation": 1,
+        "stageKind": "developmental-module",
+        "developmentalModules": [
+          "dorsal-plate-series"
+        ],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/clay-implicit.png",
+            "byteSize": 31831,
+            "sha256": "sha256:e977f8cd2445ced320128353f8e494e19b46027723af45c93ae18b12a86d2cb8"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/depth-implicit.png",
+            "byteSize": 15965,
+            "sha256": "sha256:893b7c6d1819e3e0ab1338ec3e224781cd430da0d3ca551d956ac664bf91f38d"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates/normal-implicit.png",
+            "byteSize": 39582,
+            "sha256": "sha256:1d7a34cd3ad38166a75d46b7767ffe0b5b0121f9ba1368df7ec5dbb74febf972"
+          }
+        }
+      },
+      {
+        "id": "bauplan-plus-dorsal-plates-and-tactile-fork",
+        "lineageId": "lirm-armature-03-bauplan",
+        "parentId": "bauplan-plus-dorsal-plates",
+        "generation": 2,
+        "stageKind": "anatomical-elaboration",
+        "developmentalModules": [
+          "dorsal-plate-series",
+          "paired-anterior-tactile-fork"
+        ],
+        "bauplanContract": {
+          "enclosure": "single-connected-body",
+          "polarity": "terminal-head-and-mouth",
+          "contactTopology": "seven-axial-supports"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/clay-implicit.png",
+            "byteSize": 33877,
+            "sha256": "sha256:57df635c89c5153290a831f06eb4f132a5027a2b45cd64c997ba6c4259e97082"
+          },
+          "depth": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/depth-implicit.png",
+            "byteSize": 16840,
+            "sha256": "sha256:a23489ac9b45011f7924f33854525b125f1a4a7eb25774fdf09048c8d7d34da3"
+          },
+          "normal": {
+            "path": "controls/staged-lineage/bauplan-plus-dorsal-plates-and-tactile-fork/normal-implicit.png",
+            "byteSize": 41683,
+            "sha256": "sha256:48106f42b69308de1ca3b32c7bfb84649fee6d1c309f5616dcc03e4a580abfee"
+          }
+        }
+      }
+    ]
+  },
+  "comparator": {
+    "id": "cleft-crown-x-lateral-sail-f1-crown-dominant",
+    "maps": {
+      "clay": {
+        "path": "controls/annular-comparator/clay.png",
+        "historicalSourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/clay-implicit.png",
+        "resolvedFrom": "committed-local",
+        "byteSize": 55798,
+        "sha256": "sha256:fc90fbf0a3684e1f67c899a41171dbda19698f748d3078e4270816080ba21b79"
+      },
+      "depth": {
+        "path": "controls/annular-comparator/depth.png",
+        "historicalSourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/depth-implicit.png",
+        "resolvedFrom": "committed-local",
+        "byteSize": 32013,
+        "sha256": "sha256:510166228c7ad373db21c0801a1421b4c752597a1ebb3f1c774f8f8c64203f4d"
+      },
+      "normal": {
+        "path": "controls/annular-comparator/normal.png",
+        "historicalSourcePath": "artifacts/lirm-heritable-hybrid-cross-v0/candidates/cleft-crown-x-lateral-sail-f1-crown-dominant/cleft-crown-x-lateral-sail-f1-crown-dominant/normal-implicit.png",
+        "resolvedFrom": "committed-local",
+        "byteSize": 69477,
+        "sha256": "sha256:6d3ba117bf2cfbafab0d0171c9e8686b03f93cfcf869e99938ad9b518c1ac529"
+      }
+    }
+  },
+  "fixedImagegenRequest": {
+    "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seed": 720401,
+    "promptPath": "prompt.txt"
+  },
+  "controlSheet": {
+    "path": "control-contact-sheet.png",
+    "byteSize": 125942,
+    "sha256": "sha256:7b13af44e8d6b1dc30bc580f0718457434ae7f7680e6affa4db6586934dcdb5b"
+  },
+  "falseClosureGuards": {
+    "controlRenderProvesImageBasin": false,
+    "friendlyOutputAloneProvesBauplanHypothesis": false,
+    "hostileComparatorMustUseSameImageRequest": true,
+    "trellisClaim": "forbidden_until_still_image_inspection"
+  }
+}

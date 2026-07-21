@@ -33,6 +33,8 @@ const MAP_SOURCE_NAMES = Object.freeze({
   depth: 'depth-implicit.png',
   normal: 'normal-implicit.png',
 });
+export const LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT =
+  'control-generation-receipt.json';
 
 async function evidence(path) {
   const bytes = await readFile(path);
@@ -154,7 +156,10 @@ function sheetManifest(staged, comparator) {
 
 export async function writeLirmBauplanStagedElaborationControls() {
   await mkdir(artifactRoot, { recursive: true });
-  const receiptPath = join(artifactRoot, 'receipt.json');
+  const receiptPath = join(
+    artifactRoot,
+    LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT,
+  );
   const initialized = {
     schema: 'kaminos.lirm-bauplan-staged-elaboration-assay.v0',
     status: 'running',
