@@ -5,6 +5,7 @@
   "requestedRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
   "effectiveRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
   "expectedDonorSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "expectedFitReportSha256": "sha256:911058ad565378d202588dacb641478809827f0a70266c4a81b705548ac8ef23",
   "requestedConfig": {
     "phase": 0.21,
     "amplitude": 0.1,
@@ -35,15 +36,16 @@
     "triangleCount": 188385
   },
   "timing": {
-    "startedAt": "2026-07-22T06:39:05.156Z",
-    "finishedAt": "2026-07-22T06:39:05.994Z",
-    "durationSeconds": 0.838
+    "startedAt": "2026-07-22T06:53:52.366Z",
+    "finishedAt": "2026-07-22T06:53:53.177Z",
+    "durationSeconds": 0.811
   },
   "lastTrustworthyEvidence": "eight-view silhouette and depth deformation witnesses visually inspected and accepted",
   "outputInventory": {
     "registration": {
       "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/registration.json",
-      "bytes": 5099
+      "bytes": 5099,
+      "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
     },
     "primaryWitness": {
       "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-witness.png",
@@ -114,6 +116,11 @@
       "The nearest-centerline binding preserves attached detail but does not independently articulate generated limbs."
     ],
     "artifacts": [
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/registration.json",
+        "bytes": 5099,
+        "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
+      },
       {
         "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-witness.png",
         "bytes": 18042,

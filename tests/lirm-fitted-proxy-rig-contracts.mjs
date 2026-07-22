@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,17 +19,18 @@ for (const name of [
   assert.equal(typeof fitted[name], 'function', `expected fitted proxy-rig export ${name}`);
 }
 
-const packet = JSON.parse(readFileSync(
-  new URL('../artifacts/lirm-speciation-armature-witness-v0/control-packets/lirm-armature-03/packet.json', import.meta.url),
-  'utf8',
-));
-const program = fitted.createPreservedProxyArmatureProgram(packet);
+const durablePacketPath = new URL('../artifacts/lirm-speciation-armature-witness-v0/control-packets/lirm-armature-03/packet.json', import.meta.url);
+const durablePacketBytes = readFileSync(durablePacketPath);
+const packet = JSON.parse(durablePacketBytes.toString('utf8'));
+const sourcePacketSha256 = `sha256:${createHash('sha256').update(durablePacketBytes).digest('hex')}`;
+const program = fitted.createPreservedProxyArmatureProgram(packet, { sourcePacketSha256 });
 const initialParameters = Object.fromEntries(program.parameterSpecs.map(spec => [spec.id, spec.initial]));
 const primitives = program.createPrimitives(initialParameters);
 
 assert.equal(program.id, 'kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0');
 assert.equal(program.sourceCandidateId, 'lirm-armature-03');
 assert.equal(program.sourcePrimitiveCount, 30);
+assert.equal(program.sourcePacketSha256, sourcePacketSha256);
 assert.equal(primitives.length, packet.proxyPrimitives.length, 'source primitive topology must be frozen');
 assert.deepEqual(
   primitives.map(primitive => primitive.sourcePrimitiveId),
@@ -65,11 +67,13 @@ const registration = fitted.createFittedProxyRigRegistration({
   fitReport,
   armatureProgram: program,
   expectedDonorSha256: donorSha256,
+  requireEvidenceFiles: false,
 });
 assert.equal(registration.schema, 'kaminos.lirm-fitted-proxy-rig-registration.v0');
 assert.equal(registration.fitMode, 'semantic-sdf-held-out-multiview-v0');
 assert.equal(registration.sourceCandidateId, 'lirm-armature-03');
 assert.equal(registration.sourcePrimitiveCount, 30);
+assert.equal(registration.sourcePacketSha256, sourcePacketSha256);
 assert.equal(registration.stationCount, 13);
 assert.equal(registration.manualControlCount, 0);
 assert.equal(registration.headDirection, '-Z');
@@ -80,6 +84,7 @@ assert.throws(
     fitReport: { ...fitReport, status: 'assay-passed-uninspected' },
     armatureProgram: program,
     expectedDonorSha256: donorSha256,
+    requireEvidenceFiles: false,
   }),
   /visually inspected and accepted/,
 );
@@ -88,8 +93,19 @@ assert.throws(
     fitReport,
     armatureProgram: program,
     expectedDonorSha256: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+    requireEvidenceFiles: false,
   }),
   /donor hash mismatch/,
+);
+const driftedFitReport = structuredClone(fitReport);
+driftedFitReport.acceptance.visualInspection.artifacts[0].sha256 = `sha256:${'0'.repeat(64)}`;
+assert.throws(
+  () => fitted.createFittedProxyRigRegistration({
+    fitReport: driftedFitReport,
+    armatureProgram: program,
+    expectedDonorSha256: donorSha256,
+  }),
+  /inspection artifact hash mismatch/,
 );
 
 const positions = [];
@@ -133,7 +149,9 @@ const failureDir = await mkdtemp(join(tmpdir(), 'kaminos-fitted-proxy-rig-failur
 const packetPath = join(failureDir, 'packet.json');
 const fitReportPath = join(failureDir, 'fit-report.json');
 await writeFile(packetPath, `${JSON.stringify(packet)}\n`);
-await writeFile(fitReportPath, `${JSON.stringify(fitReport)}\n`);
+const fitReportBytes = Buffer.from(`${JSON.stringify(fitReport)}\n`);
+const expectedFitReportSha256 = `sha256:${createHash('sha256').update(fitReportBytes).digest('hex')}`;
+await writeFile(fitReportPath, fitReportBytes);
 await assert.rejects(
   () => fitted.runFittedProxyRigProof({
     donorPath: join(failureDir, 'missing.glb'),
@@ -141,6 +159,7 @@ await assert.rejects(
     fitReportPath,
     outDir: failureDir,
     expectedDonorSha256: donorSha256,
+    expectedFitReportSha256,
   }),
   /missing donor/,
 );
@@ -151,7 +170,24 @@ assert.equal(failureReport.failurePhase, 'donor-admission');
 assert.equal(failureReport.requestedRoute, 'kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0');
 assert.equal(failureReport.effectiveRoute, null);
 assert.equal(failureReport.expectedDonorSha256, donorSha256);
+assert.equal(failureReport.expectedFitReportSha256, expectedFitReportSha256);
 assert.equal(failureReport.outputInventory.primaryWitness, null);
+
+const fitHashFailureDir = await mkdtemp(join(tmpdir(), 'kaminos-fitted-proxy-rig-fit-hash-'));
+await assert.rejects(
+  () => fitted.runFittedProxyRigProof({
+    donorPath: join(fitHashFailureDir, 'unused.glb'),
+    sourcePacketPath: packetPath,
+    fitReportPath,
+    outDir: fitHashFailureDir,
+    expectedDonorSha256: donorSha256,
+    expectedFitReportSha256: `sha256:${'f'.repeat(64)}`,
+  }),
+  /fit report hash mismatch/,
+);
+const fitHashFailureReport = JSON.parse(readFileSync(join(fitHashFailureDir, 'proof-report.json'), 'utf8'));
+assert.equal(fitHashFailureReport.status, 'failed');
+assert.equal(fitHashFailureReport.failurePhase, 'fit-report-admission');
 
 console.log(JSON.stringify({
   status: 'passed',

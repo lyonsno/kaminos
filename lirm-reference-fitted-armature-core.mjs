@@ -117,21 +117,23 @@ function fittedProxyPrimitive(source, index, candidateId, parameters) {
   };
 }
 
-export function createPreservedProxyArmatureProgram(packet) {
+export function createPreservedProxyArmatureProgram(packet, { sourcePacketSha256 } = {}) {
   if (packet?.schema !== 'kaminos.lirm-speciation-armature-control-packet.v0') {
     throw new Error('preserved proxy armature requires an exact lirm control packet');
   }
   if (typeof packet.candidateId !== 'string' || !packet.candidateId.trim()) throw new Error('control packet requires candidateId');
   if (!Array.isArray(packet.proxyPrimitives) || packet.proxyPrimitives.length === 0) throw new Error('control packet has no proxy primitives');
   const sourcePrimitives = structuredClone(packet.proxyPrimitives);
-  const sourcePacketSha256 = `sha256:${createHash('sha256').update(JSON.stringify(packet)).digest('hex')}`;
+  const exactSourcePacketSha256 = sourcePacketSha256
+    ?? `sha256:${createHash('sha256').update(JSON.stringify(packet)).digest('hex')}`;
+  if (!/^sha256:[0-9a-f]{64}$/.test(exactSourcePacketSha256)) throw new Error('source packet hash is missing or malformed');
   const program = {
     id: `kaminos.lirm-preserved-proxy-armature.${packet.candidateId}.v0`,
     parameterVocabulary: 'kaminos.lirm-preserved-proxy-armature.8-low-frequency-parameters.v0',
     parameterSpecs: PRESERVED_PROXY_PARAMETER_SPECS,
     sourceCandidateId: packet.candidateId,
     sourcePrimitiveCount: sourcePrimitives.length,
-    sourcePacketSha256,
+    sourcePacketSha256: exactSourcePacketSha256,
     createPrimitives(parameters) {
       const p = parameterObject(parameters, PRESERVED_PROXY_PARAMETER_SPECS);
       return sourcePrimitives.map((primitive, index) => fittedProxyPrimitive(primitive, index, packet.candidateId, p));
@@ -148,12 +150,17 @@ function proxySegmentFrame(a, b) {
   return { tangent, lateral, normal };
 }
 
-export function createFittedProxyRigRegistration({ fitReport, armatureProgram, expectedDonorSha256 }) {
+export function createFittedProxyRigRegistration({
+  fitReport,
+  armatureProgram,
+  expectedDonorSha256,
+  requireEvidenceFiles = true,
+}) {
   if (fitReport?.status !== 'assay-passed-inspected'
       || fitReport.acceptance?.visualInspection?.disposition !== 'accepted') {
     throw new Error('fitted proxy rig requires a visually inspected and accepted fit');
   }
-  validateReferenceFitReport(fitReport, { requireFiles: false });
+  validateReferenceFitReport(fitReport, { requireFiles: requireEvidenceFiles });
   const { projection } = resolveArmatureProgram(armatureProgram);
   if (fitReport.effectiveArmatureProgramId !== projection.id || fitReport.requestedArmatureProgramId !== projection.id) {
     throw new Error('fitted proxy rig armature program identity mismatch');
@@ -388,6 +395,7 @@ export async function runFittedProxyRigProof({
   fitReportPath,
   outDir,
   expectedDonorSha256,
+  expectedFitReportSha256,
   phase = 0.21,
   amplitude = 0.1,
   width = 64,
@@ -404,6 +412,7 @@ export async function runFittedProxyRigProof({
     requestedRoute: FITTED_PROXY_RIG_PROOF_ROUTE,
     effectiveRoute: null,
     expectedDonorSha256,
+    expectedFitReportSha256,
     requestedConfig: { phase, amplitude, width, height },
     effectiveConfig: null,
     sourcePacket: { path: sourcePacketPath ? resolve(sourcePacketPath) : null, sha256: null },
@@ -419,8 +428,8 @@ export async function runFittedProxyRigProof({
     if (!existsSync(sourcePacketPath)) throw new Error(`missing source packet: ${sourcePacketPath}`);
     const packetBytes = await readFile(sourcePacketPath);
     const packet = JSON.parse(packetBytes.toString('utf8'));
-    const program = createPreservedProxyArmatureProgram(packet);
     report.sourcePacket.sha256 = `sha256:${createHash('sha256').update(packetBytes).digest('hex')}`;
+    const program = createPreservedProxyArmatureProgram(packet, { sourcePacketSha256: report.sourcePacket.sha256 });
     report.sourcePacket.candidateId = packet.candidateId;
     report.sourcePacket.primitiveCount = packet.proxyPrimitives.length;
     report.lastTrustworthyEvidence = 'exact source packet admitted; fit report not yet admitted';
@@ -431,7 +440,15 @@ export async function runFittedProxyRigProof({
     const fitBytes = await readFile(fitReportPath);
     const fitReport = JSON.parse(fitBytes.toString('utf8'));
     report.fitReport.sha256 = `sha256:${createHash('sha256').update(fitBytes).digest('hex')}`;
-    const registration = createFittedProxyRigRegistration({ fitReport, armatureProgram: program, expectedDonorSha256 });
+    if (report.fitReport.sha256 !== expectedFitReportSha256) {
+      throw new Error(`fit report hash mismatch: ${report.fitReport.sha256} != ${expectedFitReportSha256}`);
+    }
+    const registration = createFittedProxyRigRegistration({
+      fitReport,
+      armatureProgram: program,
+      expectedDonorSha256,
+      requireEvidenceFiles: true,
+    });
     report.fitReport.status = fitReport.status;
     report.fitReport.armatureProgramId = fitReport.effectiveArmatureProgramId;
     report.lastTrustworthyEvidence = 'accepted held-out fit admitted; donor bytes not yet admitted';
@@ -490,6 +507,7 @@ export async function runFittedProxyRigProof({
     await writeFile(depthWitnessPath, depthWitness.bytes);
     const registrationPath = resolve(outputRoot, 'registration.json');
     await writeJsonAtomic(registrationPath, registration);
+    const registrationBytes = await readFile(registrationPath);
     report.status = 'proof-passed-uninspected';
     report.effectiveRoute = FITTED_PROXY_RIG_PROOF_ROUTE;
     report.effectiveConfig = { phase, amplitude, width, height };
@@ -514,7 +532,11 @@ export async function runFittedProxyRigProof({
       finite: true,
     };
     report.outputInventory = {
-      registration: { path: registrationPath, bytes: statSync(registrationPath).size },
+      registration: {
+        path: registrationPath,
+        bytes: registrationBytes.length,
+        sha256: `sha256:${createHash('sha256').update(registrationBytes).digest('hex')}`,
+      },
       primaryWitness: {
         path: witnessPath,
         bytes: witness.bytes.length,
@@ -572,7 +594,11 @@ export async function recordFittedProxyRigProofVisualInspection({
     throw new Error('proxy rig proof mechanical contract is not satisfied');
   }
   const artifacts = [];
-  for (const item of [report.outputInventory?.primaryWitness, report.outputInventory?.depthWitness]) {
+  for (const item of [
+    report.outputInventory?.registration,
+    report.outputInventory?.primaryWitness,
+    report.outputInventory?.depthWitness,
+  ]) {
     if (!item?.path || !existsSync(item.path)) throw new Error(`missing proxy rig visual artifact: ${item?.path ?? 'unknown'}`);
     const bytes = await readFile(item.path);
     const sha256 = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;

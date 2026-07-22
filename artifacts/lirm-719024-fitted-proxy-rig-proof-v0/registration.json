@@ -2,7 +2,7 @@
   "schema": "kaminos.lirm-fitted-proxy-rig-registration.v0",
   "fitMode": "semantic-sdf-held-out-multiview-v0",
   "sourceCandidateId": "lirm-armature-03",
-  "sourcePacketSha256": "sha256:d21b35a7a3fd3f2763d5dec1f589b4053d03be09bdd8838eb7f1f4d2e2b47527",
+  "sourcePacketSha256": "sha256:438dc7cdd1839d1f1d993312fbe5e41976329d1f96542d9eb3e097e743e63d8f",
   "sourcePrimitiveCount": 30,
   "armatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
   "donorSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
