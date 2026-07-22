@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 export const REFERENCE_FIT_ROUTE = 'kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0';
@@ -152,6 +152,7 @@ function proxySegmentFrame(a, b) {
 
 export function createFittedProxyRigRegistration({
   fitReport,
+  fitReportPath,
   armatureProgram,
   expectedDonorSha256,
   requireEvidenceFiles = true,
@@ -160,7 +161,7 @@ export function createFittedProxyRigRegistration({
       || fitReport.acceptance?.visualInspection?.disposition !== 'accepted') {
     throw new Error('fitted proxy rig requires a visually inspected and accepted fit');
   }
-  validateReferenceFitReport(fitReport, { requireFiles: requireEvidenceFiles });
+  validateReferenceFitReport(fitReport, { requireFiles: requireEvidenceFiles, reportPath: fitReportPath });
   const { projection } = resolveArmatureProgram(armatureProgram);
   if (fitReport.effectiveArmatureProgramId !== projection.id || fitReport.requestedArmatureProgramId !== projection.id) {
     throw new Error('fitted proxy rig armature program identity mismatch');
@@ -445,6 +446,7 @@ export async function runFittedProxyRigProof({
     }
     const registration = createFittedProxyRigRegistration({
       fitReport,
+      fitReportPath,
       armatureProgram: program,
       expectedDonorSha256,
       requireEvidenceFiles: true,
@@ -1186,7 +1188,14 @@ async function writeJsonAtomic(path, value) {
   await rename(temporary, path);
 }
 
-export function validateReferenceFitReport(report, { requireFiles = true } = {}) {
+function resolveReportArtifactPath(recordedPath, reportPath) {
+  if (typeof recordedPath !== 'string' || !reportPath) return recordedPath;
+  if (!isAbsolute(recordedPath)) return resolve(dirname(resolve(reportPath)), recordedPath);
+  if (existsSync(recordedPath)) return recordedPath;
+  return resolve(dirname(resolve(reportPath)), basename(recordedPath));
+}
+
+export function validateReferenceFitReport(report, { requireFiles = true, reportPath = null } = {}) {
   if (report?.schema !== 'kaminos.lirm-reference-fitted-armature-assay.v0') throw new Error('unexpected reference-fit report schema');
   if (report.requestedRoute !== REFERENCE_FIT_ROUTE || report.effectiveRoute !== REFERENCE_FIT_ROUTE) {
     throw new Error('reference-fit route identity mismatch');
@@ -1246,8 +1255,9 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
   for (const artifact of artifacts) {
     if (typeof artifact?.path !== 'string' || !Number.isInteger(artifact.bytes) || artifact.bytes <= 0) throw new Error('report requires nonempty witness artifacts');
     if (requireFiles) {
-      if (!existsSync(artifact.path)) throw new Error(`missing witness artifact: ${artifact.path}`);
-      if (statSync(artifact.path).size !== artifact.bytes) throw new Error(`witness artifact byte drift: ${artifact.path}`);
+      const artifactPath = resolveReportArtifactPath(artifact.path, reportPath);
+      if (!existsSync(artifactPath)) throw new Error(`missing witness artifact: ${artifact.path}`);
+      if (statSync(artifactPath).size !== artifact.bytes) throw new Error(`witness artifact byte drift: ${artifact.path}`);
     }
   }
   if (report.status === 'assay-passed-inspected') {
@@ -1265,7 +1275,8 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
         throw new Error(`inspection artifact hash is missing or malformed: ${expected.path}`);
       }
       if (requireFiles) {
-        const currentHash = `sha256:${createHash('sha256').update(readFileSync(expected.path)).digest('hex')}`;
+        const artifactPath = resolveReportArtifactPath(expected.path, reportPath);
+        const currentHash = `sha256:${createHash('sha256').update(readFileSync(artifactPath)).digest('hex')}`;
         if (currentHash !== inspected.sha256) throw new Error(`inspection artifact hash mismatch: ${expected.path}`);
       }
     }
@@ -1278,10 +1289,11 @@ export async function recordReferenceFitVisualInspection({ reportPath, dispositi
   if (typeof visibleDelta !== 'string' || visibleDelta.trim().length < 20) throw new Error('visual inspection requires a concrete visible delta');
   if (!Array.isArray(limitations)) throw new TypeError('visual inspection limitations must be an array');
   const report = JSON.parse(await readFile(reportPath, 'utf8'));
-  validateReferenceFitReport(report);
+  validateReferenceFitReport(report, { reportPath });
   const artifacts = [];
   for (const item of [report.outputInventory.primaryWitness, report.outputInventory.depthWitness]) {
-    const bytes = await readFile(item.path);
+    const artifactPath = resolveReportArtifactPath(item.path, reportPath);
+    const bytes = await readFile(artifactPath);
     if (bytes.length !== item.bytes) throw new Error(`witness artifact byte drift: ${item.path}`);
     artifacts.push({
       path: item.path,
@@ -1300,7 +1312,7 @@ export async function recordReferenceFitVisualInspection({ reportPath, dispositi
     ? 'exact-camera residual witnesses visually inspected and accepted'
     : 'exact-camera residual witnesses visually inspected and rejected';
   await writeJsonAtomic(resolve(reportPath), report);
-  if (disposition === 'accepted') validateReferenceFitReport(report);
+  if (disposition === 'accepted') validateReferenceFitReport(report, { reportPath });
   return report;
 }
 

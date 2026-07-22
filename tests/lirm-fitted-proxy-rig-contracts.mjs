@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const fitted = await import('../lirm-reference-fitted-armature-core.mjs');
 
@@ -44,10 +45,11 @@ assert.deepEqual(
 assert.equal(primitives.filter(primitive => primitive.role === 'bodyMass').length, 13);
 assert.ok(primitives.every(primitive => ['ellipsoid', 'capsule'].includes(primitive.kind)));
 
-const priorReport = JSON.parse(readFileSync(
-  new URL('../artifacts/lirm-reference-fitted-armature-assay-v0/report.json', import.meta.url),
-  'utf8',
+const priorReportPath = fileURLToPath(new URL(
+  '../artifacts/lirm-reference-fitted-armature-assay-v0/report.json',
+  import.meta.url,
 ));
+const priorReport = JSON.parse(readFileSync(priorReportPath, 'utf8'));
 const donorSha256 = 'sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
 const fitReport = structuredClone(priorReport);
 fitReport.status = 'assay-passed-inspected';
@@ -103,10 +105,18 @@ assert.throws(
   /donor hash mismatch/,
 );
 const driftedFitReport = structuredClone(fitReport);
+for (const item of [
+  ...driftedFitReport.acceptance.visualInspection.artifacts,
+  driftedFitReport.outputInventory.primaryWitness,
+  driftedFitReport.outputInventory.depthWitness,
+]) {
+  item.path = `/destroyed/worktree/${item.path.split('/').at(-1)}`;
+}
 driftedFitReport.acceptance.visualInspection.artifacts[0].sha256 = `sha256:${'0'.repeat(64)}`;
 assert.throws(
   () => fitted.createFittedProxyRigRegistration({
     fitReport: driftedFitReport,
+    fitReportPath: priorReportPath,
     armatureProgram: program,
     expectedDonorSha256: donorSha256,
   }),
@@ -156,6 +166,9 @@ const fitReportPath = join(failureDir, 'fit-report.json');
 await writeFile(packetPath, `${JSON.stringify(packet)}\n`);
 const fitReportBytes = Buffer.from(`${JSON.stringify(fitReport)}\n`);
 const expectedFitReportSha256 = `sha256:${createHash('sha256').update(fitReportBytes).digest('hex')}`;
+for (const name of ['silhouette-residual-witness.png', 'depth-residual-witness.png']) {
+  await writeFile(join(failureDir, name), readFileSync(join(dirname(priorReportPath), name)));
+}
 await writeFile(fitReportPath, fitReportBytes);
 await assert.rejects(
   () => fitted.runFittedProxyRigProof({
