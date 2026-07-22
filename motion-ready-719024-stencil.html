@@ -543,7 +543,7 @@ document.getElementById('load-stencil').addEventListener('click', async () => {
   state.stencil = validateOracleStencilDocument(JSON.parse(stored), EXPECTED);
   state.selectedRegionId = null;
   await refreshDerivedEvidence(`local saved ${state.stencil.authoring.status} stencil`);
-  setStatus('Loaded and revalidated exact-cast draft');
+  setStatus(`Loaded and revalidated exact-cast ${state.stencil.authoring.status}`);
 });
 acceptButton.addEventListener('click', async () => {
   state.stencil = setOracleStencilStatus(state.stencil, 'accepted');

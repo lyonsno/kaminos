@@ -18,6 +18,7 @@ assert.match(page, /Contact/, 'workbench exposes contact-patch authoring directl
 assert.match(page, /Preserve/, 'workbench exposes preservation-region authoring directly');
 assert.match(page, /acceptButton\.disabled/, 'workbench makes incomplete acceptance visibly unavailable');
 assert.match(page, /required.*body-axis.*appendage-chain.*contact-patch.*preservation-region/is, 'workbench names the complete primitive acceptance gate');
+assert.match(page, /Loaded and revalidated exact-cast \$\{state\.stencil\.authoring\.status\}/, 'reload status must expose the persisted stencil authority state');
 assert.match(page, /kaminosOracleStencilDebugState/, 'workbench exposes machine-readable live state');
 assert.match(page, /requestedStencilSource/, 'debug state distinguishes requested stencil input');
 assert.match(page, /effectiveStencilSource/, 'debug state records the effective stencil source');
