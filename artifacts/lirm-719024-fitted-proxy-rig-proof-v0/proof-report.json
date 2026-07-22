@@ -1,0 +1,129 @@
+{
+  "schema": "kaminos.lirm-fitted-proxy-rig-proof.v0",
+  "status": "proof-passed-inspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
+  "effectiveRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
+  "expectedDonorSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "requestedConfig": {
+    "phase": 0.21,
+    "amplitude": 0.1,
+    "width": 64,
+    "height": 52
+  },
+  "effectiveConfig": {
+    "phase": 0.21,
+    "amplitude": 0.1,
+    "width": 64,
+    "height": 52
+  },
+  "sourcePacket": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-speciation-armature-witness-v0/control-packets/lirm-armature-03/packet.json",
+    "sha256": "sha256:438dc7cdd1839d1f1d993312fbe5e41976329d1f96542d9eb3e097e743e63d8f",
+    "candidateId": "lirm-armature-03",
+    "primitiveCount": 30
+  },
+  "fitReport": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/fit-diagonal/report.json",
+    "sha256": "sha256:911058ad565378d202588dacb641478809827f0a70266c4a81b705548ac8ef23",
+    "status": "assay-passed-inspected",
+    "armatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0"
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/motion-ready-719024/creature.glb",
+    "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "triangleCount": 188385
+  },
+  "timing": {
+    "startedAt": "2026-07-22T06:39:05.156Z",
+    "finishedAt": "2026-07-22T06:39:05.994Z",
+    "durationSeconds": 0.838
+  },
+  "lastTrustworthyEvidence": "eight-view silhouette and depth deformation witnesses visually inspected and accepted",
+  "outputInventory": {
+    "registration": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/registration.json",
+      "bytes": 5099
+    },
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-witness.png",
+      "bytes": 18042,
+      "sha256": "sha256:8ddbb38e3b851c1669fd6648a55b790a5dd4596ad78c38dd418912fbe7c0f7b7",
+      "columns": [
+        "rest-cast",
+        "posed-cast",
+        "rest-posed-overlay"
+      ],
+      "cameraIds": [
+        "az000",
+        "az045",
+        "az090",
+        "az135",
+        "az180",
+        "az225",
+        "az270",
+        "az315"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-depth-witness.png",
+      "bytes": 32528,
+      "sha256": "sha256:6bcc00118ad1d570526e2b2a8e10e1e51b993721445fe36746119e2176389298",
+      "columns": [
+        "rest-depth",
+        "posed-depth",
+        "depth-change"
+      ],
+      "cameraIds": [
+        "az000",
+        "az045",
+        "az090",
+        "az135",
+        "az180",
+        "az225",
+        "az270",
+        "az315"
+      ]
+    }
+  },
+  "registration": {
+    "schema": "kaminos.lirm-fitted-proxy-rig-registration.v0",
+    "fitMode": "semantic-sdf-held-out-multiview-v0",
+    "stationCount": 13,
+    "manualControlCount": 0,
+    "headDirection": "-Z"
+  },
+  "binding": {
+    "kind": "nearest-rest-centerline-segment-with-local-frame",
+    "vertexCount": 565155,
+    "maxInfluenceStations": 2,
+    "manualControlCount": 0
+  },
+  "metrics": {
+    "zeroPoseMaxError": 2.220446049250313e-16,
+    "activePoseMaxDisplacement": 0.2394335410680604,
+    "activePoseMeanDisplacement": 0.06537149049632683,
+    "topologyPreserved": true,
+    "finite": true
+  },
+  "visualInspection": {
+    "disposition": "accepted",
+    "visibleDelta": "Across all eight canonical views, the posed cast bends as one coherent segmented body while retaining its head, limbs, dorsal plates, and local depth ordering; silhouette and depth witnesses show bounded low-frequency displacement without fragmentation, inversion-shaped collapse, or loss of the source gestalt.",
+    "limitations": [
+      "This is one static analytic pose, not a locomotion sequence or contact-conditioned motion proof.",
+      "The nearest-centerline binding preserves attached detail but does not independently articulate generated limbs."
+    ],
+    "artifacts": [
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-witness.png",
+        "bytes": 18042,
+        "sha256": "sha256:8ddbb38e3b851c1669fd6648a55b790a5dd4596ad78c38dd418912fbe7c0f7b7"
+      },
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/deformation-depth-witness.png",
+        "bytes": 32528,
+        "sha256": "sha256:6bcc00118ad1d570526e2b2a8e10e1e51b993721445fe36746119e2176389298"
+      }
+    ]
+  }
+}

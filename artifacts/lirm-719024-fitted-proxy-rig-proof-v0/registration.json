@@ -1,0 +1,209 @@
+{
+  "schema": "kaminos.lirm-fitted-proxy-rig-registration.v0",
+  "fitMode": "semantic-sdf-held-out-multiview-v0",
+  "sourceCandidateId": "lirm-armature-03",
+  "sourcePacketSha256": "sha256:d21b35a7a3fd3f2763d5dec1f589b4053d03be09bdd8838eb7f1f4d2e2b47527",
+  "sourcePrimitiveCount": 30,
+  "armatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+  "donorSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "stationCount": 13,
+  "manualControlCount": 0,
+  "headDirection": "-Z",
+  "stations": [
+    {
+      "id": "station-00",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-0",
+      "t": 0,
+      "position": {
+        "x": 0,
+        "y": 0.05003115264,
+        "z": 0.568693012992
+      },
+      "radius": {
+        "x": 0.17356782817279998,
+        "y": 0.18106512383999998,
+        "z": 0.11082222817279999
+      }
+    },
+    {
+      "id": "station-01",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-1",
+      "t": 0.09775779571561197,
+      "position": {
+        "x": 0,
+        "y": 0.14056371456,
+        "z": 0.466619908096
+      },
+      "radius": {
+        "x": 0.18612865784319998,
+        "y": 0.19416852096,
+        "z": 0.1188422578432
+      }
+    },
+    {
+      "id": "station-02",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-2",
+      "t": 0.18512704532256097,
+      "position": {
+        "x": 0,
+        "y": 0.20727191807999998,
+        "z": 0.3645468032
+      },
+      "radius": {
+        "x": 0.19868948751359997,
+        "y": 0.20727191807999998,
+        "z": 0.12686228751359999
+      }
+    },
+    {
+      "id": "station-03",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-3",
+      "t": 0.2606349462903324,
+      "position": {
+        "x": 0,
+        "y": 0.23347871232,
+        "z": 0.26247369830399997
+      },
+      "radius": {
+        "x": 0.20896652997119997,
+        "y": 0.21799287935999997,
+        "z": 0.13342412997119998
+      }
+    },
+    {
+      "id": "station-04",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-4",
+      "t": 0.33474054243443047,
+      "position": {
+        "x": 0,
+        "y": 0.21680166144,
+        "z": 0.160400593408
+      },
+      "radius": {
+        "x": 0.21695978521599996,
+        "y": 0.2263314048,
+        "z": 0.138527785216
+      }
+    },
+    {
+      "id": "station-05",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-5",
+      "t": 0.41774855954392176,
+      "position": {
+        "x": 0,
+        "y": 0.16200563712,
+        "z": 0.058327488512
+      },
+      "radius": {
+        "x": 0.22266925324799997,
+        "y": 0.2322874944,
+        "z": 0.142173253248
+      }
+    },
+    {
+      "id": "station-06",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-6",
+      "t": 0.5111154257675927,
+      "position": {
+        "x": 0,
+        "y": 0.08100281856,
+        "z": -0.043745616384
+      },
+      "radius": {
+        "x": 0.22381114685439998,
+        "y": 0.23347871232,
+        "z": 0.1429023468544
+      }
+    },
+    {
+      "id": "station-07",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-7",
+      "t": 0.6055528845172164,
+      "position": {
+        "x": 0,
+        "y": -0.0023824358399999997,
+        "z": -0.14581872128
+      },
+      "radius": {
+        "x": 0.22266925324799997,
+        "y": 0.2322874944,
+        "z": 0.142173253248
+      }
+    },
+    {
+      "id": "station-08",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-8",
+      "t": 0.6929221341241654,
+      "position": {
+        "x": 0,
+        "y": -0.06909063936,
+        "z": -0.247891826176
+      },
+      "radius": {
+        "x": 0.21695978521599996,
+        "y": 0.2263314048,
+        "z": 0.138527785216
+      }
+    },
+    {
+      "id": "station-09",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-9",
+      "t": 0.7704107974168297,
+      "position": {
+        "x": 0,
+        "y": -0.10482717695999999,
+        "z": -0.349964931072
+      },
+      "radius": {
+        "x": 0.20896652997119997,
+        "y": 0.21799287935999997,
+        "z": 0.13342412997119998
+      }
+    },
+    {
+      "id": "station-10",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-10",
+      "t": 0.8435665916331077,
+      "position": {
+        "x": 0,
+        "y": -0.10720961279999999,
+        "z": -0.45203803596799996
+      },
+      "radius": {
+        "x": 0.19868948751359997,
+        "y": 0.20727191807999998,
+        "z": 0.12686228751359999
+      }
+    },
+    {
+      "id": "station-11",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-11",
+      "t": 0.9199950697091267,
+      "position": {
+        "x": 0,
+        "y": -0.07623794687999999,
+        "z": -0.554111140864
+      },
+      "radius": {
+        "x": 0.18612865784319998,
+        "y": 0.19416852096,
+        "z": 0.1188422578432
+      }
+    },
+    {
+      "id": "station-12",
+      "sourcePrimitiveId": "lirm-armature-03:proxy-12",
+      "t": 1,
+      "position": {
+        "x": 0,
+        "y": -0.030971665919999995,
+        "z": -0.65618424576
+      },
+      "radius": {
+        "x": 0.17356782817279998,
+        "y": 0.18106512383999998,
+        "z": 0.11082222817279999
+      }
+    }
+  ]
+}

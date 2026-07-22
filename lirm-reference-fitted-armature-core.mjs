@@ -40,6 +40,559 @@ export const CRAWLER_ARMATURE_PROGRAM = Object.freeze({
   createPrimitives: createReferenceArmaturePrimitives,
 });
 
+const PRESERVED_PROXY_PARAMETER_SPECS = Object.freeze([
+  { id: 'axialScale', semanticRole: 'axialExtent', initial: 1, min: 0.58, max: 1.62, step: 0.16 },
+  { id: 'lateralScale', semanticRole: 'lateralMass', initial: 1, min: 0.58, max: 1.74, step: 0.16 },
+  { id: 'verticalScale', semanticRole: 'verticalMass', initial: 1, min: 0.58, max: 1.74, step: 0.16 },
+  { id: 'headScale', semanticRole: 'headOrientation', initial: 1, min: 0.62, max: 1.58, step: 0.14 },
+  { id: 'limbLengthScale', semanticRole: 'contactLimb', initial: 1, min: 0.52, max: 1.82, step: 0.18 },
+  { id: 'limbSpreadScale', semanticRole: 'contactFootprint', initial: 1, min: 0.52, max: 1.82, step: 0.18 },
+  { id: 'dorsalLift', semanticRole: 'dorsalProfile', initial: 0, min: -0.22, max: 0.3, step: 0.08 },
+  { id: 'contactDrop', semanticRole: 'groundContact', initial: 0, min: -0.28, max: 0.2, step: 0.08 },
+]);
+
+const PRESERVED_PROXY_ROLE_MAP = Object.freeze({
+  body_mass: 'bodyMass',
+  head_orientation: 'headOrientation',
+  terminal_mouth: 'facialLandmark',
+  limb_bud: 'contactLimb',
+  shell_plate: 'dorsalProfile',
+  contact_point: 'groundContact',
+});
+
+function sourceProxyAxis(primitive) {
+  const side = primitive.side === 'right' ? 1 : primitive.side === 'left' ? -1 : 0.3;
+  const forward = primitive.t ? (primitive.t - 0.5) * 0.28 : 0;
+  return normalize(v3(forward, side, 0.18));
+}
+
+function fittedProxyPoint(source, parameters, role) {
+  const lateralMultiplier = ['contactLimb', 'groundContact'].includes(role) ? parameters.limbSpreadScale : 1;
+  const verticalOffset = role === 'dorsalProfile' ? parameters.dorsalLift
+    : role === 'groundContact' ? parameters.contactDrop : 0;
+  return v3(
+    source.z * parameters.lateralScale * lateralMultiplier,
+    source.y * parameters.verticalScale + verticalOffset,
+    -source.x * parameters.axialScale,
+  );
+}
+
+function fittedProxyPrimitive(source, index, candidateId, parameters) {
+  const role = PRESERVED_PROXY_ROLE_MAP[source.role] ?? source.role;
+  const sourcePrimitiveId = `${candidateId}:proxy-${index}`;
+  const center = fittedProxyPoint(source.center, parameters, role);
+  if (source.kind === 'capsule') {
+    const axis = sourceProxyAxis(source);
+    const halfLength = (source.length || source.radius || 0.08) * 0.48 * parameters.limbLengthScale;
+    const sourceA = sub(source.center, mul(axis, halfLength));
+    const sourceB = add(source.center, mul(axis, halfLength));
+    return {
+      kind: 'capsule', role, sourceRole: source.role, sourcePrimitiveId,
+      a: fittedProxyPoint(sourceA, parameters, role),
+      b: fittedProxyPoint(sourceB, parameters, role),
+      radius: Math.max(0.012, source.radius * (parameters.lateralScale + parameters.verticalScale) * 0.5),
+    };
+  }
+  if (source.kind === 'box') {
+    const size = source.size ?? {};
+    return {
+      kind: 'ellipsoid', role, sourceRole: source.role, sourcePrimitiveId, center,
+      radius: v3(
+        Math.max(0.012, (size.z ?? 0.03) * 0.9 * parameters.lateralScale),
+        Math.max(0.018, (size.y ?? 0.05) * 0.72 * parameters.verticalScale),
+        Math.max(0.035, (size.x ?? 0.08) * 0.52 * parameters.axialScale),
+      ),
+    };
+  }
+  const radius = Math.max(0.018, source.radius ?? 0.04);
+  const headMultiplier = role === 'headOrientation' ? parameters.headScale : 1;
+  const lateralMultiplier = role === 'groundContact' ? parameters.limbSpreadScale : 1;
+  return {
+    kind: 'ellipsoid', role, sourceRole: source.role, sourcePrimitiveId, center,
+    radius: v3(
+      radius * parameters.lateralScale * lateralMultiplier * headMultiplier,
+      radius * parameters.verticalScale * headMultiplier,
+      radius * parameters.axialScale * headMultiplier,
+    ),
+  };
+}
+
+export function createPreservedProxyArmatureProgram(packet) {
+  if (packet?.schema !== 'kaminos.lirm-speciation-armature-control-packet.v0') {
+    throw new Error('preserved proxy armature requires an exact lirm control packet');
+  }
+  if (typeof packet.candidateId !== 'string' || !packet.candidateId.trim()) throw new Error('control packet requires candidateId');
+  if (!Array.isArray(packet.proxyPrimitives) || packet.proxyPrimitives.length === 0) throw new Error('control packet has no proxy primitives');
+  const sourcePrimitives = structuredClone(packet.proxyPrimitives);
+  const sourcePacketSha256 = `sha256:${createHash('sha256').update(JSON.stringify(packet)).digest('hex')}`;
+  const program = {
+    id: `kaminos.lirm-preserved-proxy-armature.${packet.candidateId}.v0`,
+    parameterVocabulary: 'kaminos.lirm-preserved-proxy-armature.8-low-frequency-parameters.v0',
+    parameterSpecs: PRESERVED_PROXY_PARAMETER_SPECS,
+    sourceCandidateId: packet.candidateId,
+    sourcePrimitiveCount: sourcePrimitives.length,
+    sourcePacketSha256,
+    createPrimitives(parameters) {
+      const p = parameterObject(parameters, PRESERVED_PROXY_PARAMETER_SPECS);
+      return sourcePrimitives.map((primitive, index) => fittedProxyPrimitive(primitive, index, packet.candidateId, p));
+    },
+  };
+  return Object.freeze(program);
+}
+
+function proxySegmentFrame(a, b) {
+  const tangent = normalize(sub(b, a));
+  const reference = Math.abs(dot(tangent, v3(0, 1, 0))) > 0.92 ? v3(1, 0, 0) : v3(0, 1, 0);
+  const lateral = normalize(cross(reference, tangent));
+  const normal = normalize(cross(tangent, lateral));
+  return { tangent, lateral, normal };
+}
+
+export function createFittedProxyRigRegistration({ fitReport, armatureProgram, expectedDonorSha256 }) {
+  if (fitReport?.status !== 'assay-passed-inspected'
+      || fitReport.acceptance?.visualInspection?.disposition !== 'accepted') {
+    throw new Error('fitted proxy rig requires a visually inspected and accepted fit');
+  }
+  validateReferenceFitReport(fitReport, { requireFiles: false });
+  const { projection } = resolveArmatureProgram(armatureProgram);
+  if (fitReport.effectiveArmatureProgramId !== projection.id || fitReport.requestedArmatureProgramId !== projection.id) {
+    throw new Error('fitted proxy rig armature program identity mismatch');
+  }
+  if (fitReport.donor?.sha256 !== expectedDonorSha256) {
+    throw new Error(`fitted proxy rig donor hash mismatch: ${fitReport.donor?.sha256} != ${expectedDonorSha256}`);
+  }
+  const primitives = armatureProgram.createPrimitives(fitReport.fittedParameters);
+  const body = primitives.filter(primitive => primitive.role === 'bodyMass' && primitive.kind === 'ellipsoid');
+  if (body.length < 3) throw new Error('fitted proxy rig requires at least three preserved body-mass stations');
+  body.sort((left, right) => right.center.z - left.center.z);
+  let cumulative = 0;
+  const distances = body.slice(1).map((primitive, index) => {
+    const distance = length3(sub(primitive.center, body[index].center));
+    cumulative += distance;
+    return distance;
+  });
+  const totalLength = Math.max(cumulative, 1e-9);
+  cumulative = 0;
+  const stations = body.map((primitive, index) => {
+    if (index > 0) cumulative += distances[index - 1];
+    return {
+      id: `station-${String(index).padStart(2, '0')}`,
+      sourcePrimitiveId: primitive.sourcePrimitiveId,
+      t: cumulative / totalLength,
+      position: { ...primitive.center },
+      radius: { ...primitive.radius },
+    };
+  });
+  return {
+    schema: 'kaminos.lirm-fitted-proxy-rig-registration.v0',
+    fitMode: 'semantic-sdf-held-out-multiview-v0',
+    sourceCandidateId: armatureProgram.sourceCandidateId,
+    sourcePacketSha256: armatureProgram.sourcePacketSha256,
+    sourcePrimitiveCount: armatureProgram.sourcePrimitiveCount,
+    armatureProgramId: projection.id,
+    donorSha256: expectedDonorSha256,
+    stationCount: stations.length,
+    manualControlCount: 0,
+    headDirection: '-Z',
+    stations,
+  };
+}
+
+function packedProxyPositions(positions) {
+  if (!Array.isArray(positions) && !ArrayBuffer.isView(positions)) throw new TypeError('proxy rig binding requires positions');
+  if (positions.length === 0) throw new Error('proxy rig binding requires at least one vertex');
+  if (typeof positions[0] === 'number') {
+    if (positions.length % 3 !== 0) throw new Error('packed position length must be divisible by three');
+    return Float64Array.from(positions);
+  }
+  const packed = new Float64Array(positions.length * 3);
+  positions.forEach((point, index) => {
+    if (![point?.x, point?.y, point?.z].every(Number.isFinite)) throw new Error(`invalid position at ${index}`);
+    packed[index * 3] = point.x; packed[index * 3 + 1] = point.y; packed[index * 3 + 2] = point.z;
+  });
+  return packed;
+}
+
+export function createFittedProxyRigBinding({ positions, registration }) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0' || registration.manualControlCount !== 0) {
+    throw new Error('proxy rig binding requires an automatic fitted registration');
+  }
+  const restPositions = packedProxyPositions(positions);
+  const vertexCount = restPositions.length / 3;
+  const segmentIndices = new Uint16Array(vertexCount);
+  const segmentMix = new Float64Array(vertexCount);
+  const localCoordinates = new Float64Array(vertexCount * 3);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const point = v3(restPositions[vertex * 3], restPositions[vertex * 3 + 1], restPositions[vertex * 3 + 2]);
+    let best = null;
+    for (let segment = 0; segment < registration.stations.length - 1; segment += 1) {
+      const a = registration.stations[segment].position;
+      const b = registration.stations[segment + 1].position;
+      const ab = sub(b, a);
+      const mix = clamp(dot(sub(point, a), ab) / Math.max(dot(ab, ab), 1e-12), 0, 1);
+      const anchor = add(a, mul(ab, mix));
+      const distance = length3(sub(point, anchor));
+      if (!best || distance < best.distance) best = { segment, mix, anchor, distance };
+    }
+    const a = registration.stations[best.segment].position;
+    const b = registration.stations[best.segment + 1].position;
+    const frame = proxySegmentFrame(a, b);
+    const residual = sub(point, best.anchor);
+    segmentIndices[vertex] = best.segment;
+    segmentMix[vertex] = best.mix;
+    localCoordinates[vertex * 3] = dot(residual, frame.lateral);
+    localCoordinates[vertex * 3 + 1] = dot(residual, frame.normal);
+    localCoordinates[vertex * 3 + 2] = dot(residual, frame.tangent);
+  }
+  return {
+    schema: 'kaminos.lirm-fitted-proxy-rig-binding.v0',
+    registration,
+    vertexCount,
+    manualControlCount: 0,
+    restPositions,
+    segmentIndices,
+    segmentMix,
+    localCoordinates,
+  };
+}
+
+export function createFittedProxyRigPose({ registration, phase = 0, amplitude = 0.1 }) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0') throw new Error('proxy rig pose requires fitted registration');
+  if (!Number.isFinite(phase) || !Number.isFinite(amplitude) || amplitude < 0 || amplitude > 0.35) {
+    throw new Error('proxy rig pose requires finite phase and amplitude in [0, 0.35]');
+  }
+  const stationPositions = registration.stations.map((station, index) => {
+    if (amplitude === 0) return { ...station.position };
+    const previous = registration.stations[Math.max(0, index - 1)].position;
+    const next = registration.stations[Math.min(registration.stations.length - 1, index + 1)].position;
+    const frame = proxySegmentFrame(previous, next);
+    const envelope = Math.sin(Math.PI * station.t);
+    const wave = Math.sin((station.t * 1.6 + phase) * Math.PI * 2);
+    const lift = Math.max(0, Math.cos((station.t * 1.6 + phase) * Math.PI * 2));
+    return add(
+      add(station.position, mul(frame.lateral, amplitude * envelope * wave)),
+      mul(frame.normal, amplitude * 0.22 * envelope * lift),
+    );
+  });
+  return {
+    schema: 'kaminos.lirm-fitted-proxy-rig-pose.v0',
+    sourceCandidateId: registration.sourceCandidateId,
+    phase,
+    amplitude,
+    stationPositions,
+  };
+}
+
+export function deformFittedProxyRigBinding({ binding, pose }) {
+  if (binding?.schema !== 'kaminos.lirm-fitted-proxy-rig-binding.v0') throw new Error('proxy rig deformation requires fitted binding');
+  if (pose?.schema !== 'kaminos.lirm-fitted-proxy-rig-pose.v0'
+      || pose.stationPositions?.length !== binding.registration.stations.length) {
+    throw new Error('proxy rig deformation pose does not match registration');
+  }
+  const output = new Float64Array(binding.vertexCount * 3);
+  for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
+    const segment = binding.segmentIndices[vertex];
+    const mix = binding.segmentMix[vertex];
+    const a = pose.stationPositions[segment];
+    const b = pose.stationPositions[segment + 1];
+    const frame = proxySegmentFrame(a, b);
+    const anchor = add(a, mul(sub(b, a), mix));
+    const point = add(add(add(
+      anchor,
+      mul(frame.lateral, binding.localCoordinates[vertex * 3]),
+    ), mul(frame.normal, binding.localCoordinates[vertex * 3 + 1])), mul(frame.tangent, binding.localCoordinates[vertex * 3 + 2]));
+    output[vertex * 3] = point.x; output[vertex * 3 + 1] = point.y; output[vertex * 3 + 2] = point.z;
+  }
+  return output;
+}
+
+export const FITTED_PROXY_RIG_PROOF_ROUTE = 'kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0';
+
+function packedPositionsToTriangles(positions) {
+  if (positions.length % 9 !== 0) throw new Error('deformed triangle soup lost topology');
+  const triangles = [];
+  for (let index = 0; index < positions.length; index += 9) {
+    triangles.push([
+      v3(positions[index], positions[index + 1], positions[index + 2]),
+      v3(positions[index + 3], positions[index + 4], positions[index + 5]),
+      v3(positions[index + 6], positions[index + 7], positions[index + 8]),
+    ]);
+  }
+  return triangles;
+}
+
+function createProxyRigWitnessSheet({ restById, posedById, width, height }) {
+  const scale = 3; const gap = 4; const header = 6;
+  const cellWidth = width * scale; const cellHeight = height * scale;
+  const outWidth = cellWidth * 3 + gap * 4;
+  const outHeight = (cellHeight + header) * REFERENCE_FIT_CAMERAS.length + gap * (REFERENCE_FIT_CAMERAS.length + 1);
+  const pixels = new Uint8Array(outWidth * outHeight * 3).fill(18);
+  REFERENCE_FIT_CAMERAS.forEach((camera, row) => {
+    const rest = restById[camera.id]; const posed = posedById[camera.id];
+    const y0 = gap + row * (cellHeight + header + gap) + header;
+    const headerColor = row % 2 ? [70, 116, 104] : [186, 143, 61];
+    for (let y = y0 - header; y < y0 - 1; y += 1) for (let x = gap; x < outWidth - gap; x += 1) {
+      pixels.set(headerColor, (y * outWidth + x) * 3);
+    }
+    const sources = [
+      index => rest.mask[index] ? [236, 232, 218] : [0, 0, 0],
+      index => posed.mask[index] ? [90, 205, 177] : [0, 0, 0],
+      index => rest.mask[index] && posed.mask[index] ? [242, 242, 238]
+        : rest.mask[index] ? [232, 72, 74] : posed.mask[index] ? [65, 132, 236] : [0, 0, 0],
+    ];
+    sources.forEach((colorAt, column) => paintCell(
+      pixels, outWidth, gap + column * (cellWidth + gap), y0, width, height, colorAt, scale,
+    ));
+  });
+  return { width: outWidth, height: outHeight, bytes: encodeRgbPng(outWidth, outHeight, pixels) };
+}
+
+function createProxyRigDepthWitnessSheet({ restById, posedById, width, height }) {
+  const scale = 3; const gap = 4; const header = 6;
+  const cellWidth = width * scale; const cellHeight = height * scale;
+  const outWidth = cellWidth * 3 + gap * 4;
+  const outHeight = (cellHeight + header) * REFERENCE_FIT_CAMERAS.length + gap * (REFERENCE_FIT_CAMERAS.length + 1);
+  const pixels = new Uint8Array(outWidth * outHeight * 3).fill(18);
+  REFERENCE_FIT_CAMERAS.forEach((camera, row) => {
+    const rest = restById[camera.id]; const posed = posedById[camera.id];
+    const y0 = gap + row * (cellHeight + header + gap) + header;
+    const headerColor = row % 2 ? [70, 116, 104] : [186, 143, 61];
+    for (let y = y0 - header; y < y0 - 1; y += 1) for (let x = gap; x < outWidth - gap; x += 1) {
+      pixels.set(headerColor, (y * outWidth + x) * 3);
+    }
+    const depthColor = render => index => {
+      const value = render.mask[index] ? Math.round((1 - render.depth[index]) * 255) : 0;
+      return [value, value, value];
+    };
+    const sources = [
+      depthColor(rest),
+      depthColor(posed),
+      index => {
+        if (!rest.mask[index] && !posed.mask[index]) return [0, 0, 0];
+        if (!rest.mask[index]) return [45, 92, 225];
+        if (!posed.mask[index]) return [225, 58, 65];
+        const error = Math.min(255, Math.round(Math.abs(rest.depth[index] - posed.depth[index]) * 1400));
+        return [error, 190 - Math.round(error * 0.45), 96];
+      },
+    ];
+    sources.forEach((colorAt, column) => paintCell(
+      pixels, outWidth, gap + column * (cellWidth + gap), y0, width, height, colorAt, scale,
+    ));
+  });
+  return { width: outWidth, height: outHeight, bytes: encodeRgbPng(outWidth, outHeight, pixels) };
+}
+
+export async function runFittedProxyRigProof({
+  donorPath,
+  sourcePacketPath,
+  fitReportPath,
+  outDir,
+  expectedDonorSha256,
+  phase = 0.21,
+  amplitude = 0.1,
+  width = 64,
+  height = 52,
+} = {}) {
+  const outputRoot = resolve(outDir);
+  await mkdir(outputRoot, { recursive: true });
+  const reportPath = resolve(outputRoot, 'proof-report.json');
+  const startedAtMs = Date.now();
+  const report = {
+    schema: 'kaminos.lirm-fitted-proxy-rig-proof.v0',
+    status: 'running',
+    failurePhase: null,
+    requestedRoute: FITTED_PROXY_RIG_PROOF_ROUTE,
+    effectiveRoute: null,
+    expectedDonorSha256,
+    requestedConfig: { phase, amplitude, width, height },
+    effectiveConfig: null,
+    sourcePacket: { path: sourcePacketPath ? resolve(sourcePacketPath) : null, sha256: null },
+    fitReport: { path: fitReportPath ? resolve(fitReportPath) : null, sha256: null },
+    donor: { path: donorPath ? resolve(donorPath) : null, sha256: null, triangleCount: null },
+    timing: { startedAt: new Date(startedAtMs).toISOString(), finishedAt: null, durationSeconds: null },
+    lastTrustworthyEvidence: 'invocation recorded; source packet not yet admitted',
+    outputInventory: { registration: null, primaryWitness: null },
+  };
+  await writeJsonAtomic(reportPath, report);
+  let activePhase = 'source-packet-admission';
+  try {
+    if (!existsSync(sourcePacketPath)) throw new Error(`missing source packet: ${sourcePacketPath}`);
+    const packetBytes = await readFile(sourcePacketPath);
+    const packet = JSON.parse(packetBytes.toString('utf8'));
+    const program = createPreservedProxyArmatureProgram(packet);
+    report.sourcePacket.sha256 = `sha256:${createHash('sha256').update(packetBytes).digest('hex')}`;
+    report.sourcePacket.candidateId = packet.candidateId;
+    report.sourcePacket.primitiveCount = packet.proxyPrimitives.length;
+    report.lastTrustworthyEvidence = 'exact source packet admitted; fit report not yet admitted';
+    activePhase = 'fit-report-admission';
+    await writeJsonAtomic(reportPath, report);
+
+    if (!existsSync(fitReportPath)) throw new Error(`missing fit report: ${fitReportPath}`);
+    const fitBytes = await readFile(fitReportPath);
+    const fitReport = JSON.parse(fitBytes.toString('utf8'));
+    report.fitReport.sha256 = `sha256:${createHash('sha256').update(fitBytes).digest('hex')}`;
+    const registration = createFittedProxyRigRegistration({ fitReport, armatureProgram: program, expectedDonorSha256 });
+    report.fitReport.status = fitReport.status;
+    report.fitReport.armatureProgramId = fitReport.effectiveArmatureProgramId;
+    report.lastTrustworthyEvidence = 'accepted held-out fit admitted; donor bytes not yet admitted';
+    activePhase = 'donor-admission';
+    await writeJsonAtomic(reportPath, report);
+
+    if (!existsSync(donorPath)) throw new Error(`missing donor: ${donorPath}`);
+    const donor = await loadGlbTriangleSoup(donorPath);
+    if (donor.sha256 !== expectedDonorSha256) throw new Error(`donor hash mismatch: ${donor.sha256} != ${expectedDonorSha256}`);
+    report.donor.sha256 = donor.sha256;
+    report.donor.triangleCount = donor.triangleCount;
+    report.lastTrustworthyEvidence = `${donor.triangleCount} normalized donor triangles admitted; binding not yet computed`;
+    activePhase = 'binding-and-zero-pose';
+    await writeJsonAtomic(reportPath, report);
+
+    const restObjects = donor.triangles.flat();
+    const binding = createFittedProxyRigBinding({ positions: restObjects, registration });
+    const restPose = createFittedProxyRigPose({ registration, phase: 0, amplitude: 0 });
+    const restPacked = deformFittedProxyRigBinding({ binding, pose: restPose });
+    let maxRestError = 0;
+    for (let index = 0; index < restPacked.length; index += 1) {
+      maxRestError = Math.max(maxRestError, Math.abs(restPacked[index] - binding.restPositions[index]));
+    }
+    if (maxRestError > 1e-9) throw new Error(`zero pose reconstruction error exceeded contract: ${maxRestError}`);
+    const pose = createFittedProxyRigPose({ registration, phase, amplitude });
+    const posedPacked = deformFittedProxyRigBinding({ binding, pose });
+    let maxDisplacement = 0; let displacementSum = 0;
+    for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
+      const dx = posedPacked[vertex * 3] - restPacked[vertex * 3];
+      const dy = posedPacked[vertex * 3 + 1] - restPacked[vertex * 3 + 1];
+      const dz = posedPacked[vertex * 3 + 2] - restPacked[vertex * 3 + 2];
+      const displacement = Math.hypot(dx, dy, dz);
+      if (!Number.isFinite(displacement)) throw new Error(`non-finite deformation at vertex ${vertex}`);
+      maxDisplacement = Math.max(maxDisplacement, displacement);
+      displacementSum += displacement;
+    }
+    if (maxDisplacement < Math.max(0.005, amplitude * 0.15)) throw new Error('active pose produced no material deformation');
+    report.lastTrustworthyEvidence = 'zero pose exact and active deformation finite; visual witness not yet written';
+    activePhase = 'visual-witness';
+    await writeJsonAtomic(reportPath, report);
+
+    const posedTriangles = packedPositionsToTriangles(posedPacked);
+    const restById = {}; const posedById = {};
+    for (const camera of REFERENCE_FIT_CAMERAS) {
+      restById[camera.id] = rasterizeTriangleSoup({ triangles: donor.triangles, camera, width, height });
+      posedById[camera.id] = rasterizeTriangleSoup({ triangles: posedTriangles, camera, width, height });
+      const restPixels = restById[camera.id].mask.reduce((sum, value) => sum + value, 0);
+      const posedPixels = posedById[camera.id].mask.reduce((sum, value) => sum + value, 0);
+      if (restPixels < 8 || posedPixels < 8) throw new Error(`blank or partial deformation witness for ${camera.id}`);
+    }
+    const witness = createProxyRigWitnessSheet({ restById, posedById, width, height });
+    const depthWitness = createProxyRigDepthWitnessSheet({ restById, posedById, width, height });
+    const witnessPath = resolve(outputRoot, 'deformation-witness.png');
+    const depthWitnessPath = resolve(outputRoot, 'deformation-depth-witness.png');
+    await writeFile(witnessPath, witness.bytes);
+    await writeFile(depthWitnessPath, depthWitness.bytes);
+    const registrationPath = resolve(outputRoot, 'registration.json');
+    await writeJsonAtomic(registrationPath, registration);
+    report.status = 'proof-passed-uninspected';
+    report.effectiveRoute = FITTED_PROXY_RIG_PROOF_ROUTE;
+    report.effectiveConfig = { phase, amplitude, width, height };
+    report.registration = {
+      schema: registration.schema,
+      fitMode: registration.fitMode,
+      stationCount: registration.stationCount,
+      manualControlCount: registration.manualControlCount,
+      headDirection: registration.headDirection,
+    };
+    report.binding = {
+      kind: 'nearest-rest-centerline-segment-with-local-frame',
+      vertexCount: binding.vertexCount,
+      maxInfluenceStations: 2,
+      manualControlCount: binding.manualControlCount,
+    };
+    report.metrics = {
+      zeroPoseMaxError: maxRestError,
+      activePoseMaxDisplacement: maxDisplacement,
+      activePoseMeanDisplacement: displacementSum / binding.vertexCount,
+      topologyPreserved: posedTriangles.length === donor.triangleCount,
+      finite: true,
+    };
+    report.outputInventory = {
+      registration: { path: registrationPath, bytes: statSync(registrationPath).size },
+      primaryWitness: {
+        path: witnessPath,
+        bytes: witness.bytes.length,
+        sha256: `sha256:${createHash('sha256').update(witness.bytes).digest('hex')}`,
+        columns: ['rest-cast', 'posed-cast', 'rest-posed-overlay'],
+        cameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
+      },
+      depthWitness: {
+        path: depthWitnessPath,
+        bytes: depthWitness.bytes.length,
+        sha256: `sha256:${createHash('sha256').update(depthWitness.bytes).digest('hex')}`,
+        columns: ['rest-depth', 'posed-depth', 'depth-change'],
+        cameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
+      },
+    };
+    report.lastTrustworthyEvidence = 'exact rest reconstruction and finite active deformation witnessed across all eight canonical cameras; visual inspection pending';
+    const finishedAtMs = Date.now();
+    report.timing.finishedAt = new Date(finishedAtMs).toISOString();
+    report.timing.durationSeconds = (finishedAtMs - startedAtMs) / 1000;
+    await writeJsonAtomic(reportPath, report);
+    return report;
+  } catch (error) {
+    report.status = 'failed';
+    report.failurePhase = activePhase;
+    report.error = String(error?.stack ?? error);
+    const finishedAtMs = Date.now();
+    report.timing.finishedAt = new Date(finishedAtMs).toISOString();
+    report.timing.durationSeconds = (finishedAtMs - startedAtMs) / 1000;
+    await writeJsonAtomic(reportPath, report);
+    throw error;
+  }
+}
+
+export async function recordFittedProxyRigProofVisualInspection({
+  reportPath,
+  disposition,
+  visibleDelta,
+  limitations = [],
+}) {
+  if (!['accepted', 'rejected'].includes(disposition)) throw new Error('proxy rig visual disposition must be accepted or rejected');
+  if (typeof visibleDelta !== 'string' || visibleDelta.trim().length < 20) {
+    throw new Error('proxy rig visual inspection requires a concrete visible delta');
+  }
+  if (!Array.isArray(limitations)) throw new TypeError('proxy rig visual inspection limitations must be an array');
+  const exactPath = resolve(reportPath);
+  const report = JSON.parse(await readFile(exactPath, 'utf8'));
+  if (report.schema !== 'kaminos.lirm-fitted-proxy-rig-proof.v0' || report.status !== 'proof-passed-uninspected') {
+    throw new Error('proxy rig visual inspection requires an uninspected passed proof');
+  }
+  if (report.requestedRoute !== FITTED_PROXY_RIG_PROOF_ROUTE || report.effectiveRoute !== FITTED_PROXY_RIG_PROOF_ROUTE) {
+    throw new Error('proxy rig proof route identity mismatch');
+  }
+  if (report.metrics?.topologyPreserved !== true || report.metrics?.finite !== true
+      || report.metrics?.zeroPoseMaxError > 1e-9 || report.registration?.manualControlCount !== 0) {
+    throw new Error('proxy rig proof mechanical contract is not satisfied');
+  }
+  const artifacts = [];
+  for (const item of [report.outputInventory?.primaryWitness, report.outputInventory?.depthWitness]) {
+    if (!item?.path || !existsSync(item.path)) throw new Error(`missing proxy rig visual artifact: ${item?.path ?? 'unknown'}`);
+    const bytes = await readFile(item.path);
+    const sha256 = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    if (bytes.length !== item.bytes || sha256 !== item.sha256) throw new Error(`proxy rig visual artifact drift: ${item.path}`);
+    artifacts.push({ path: item.path, bytes: bytes.length, sha256 });
+  }
+  report.visualInspection = {
+    disposition,
+    visibleDelta: visibleDelta.trim(),
+    limitations: [...limitations],
+    artifacts,
+  };
+  report.status = disposition === 'accepted' ? 'proof-passed-inspected' : 'proof-visual-rejected';
+  report.lastTrustworthyEvidence = disposition === 'accepted'
+    ? 'eight-view silhouette and depth deformation witnesses visually inspected and accepted'
+    : 'eight-view silhouette and depth deformation witnesses visually inspected and rejected';
+  await writeJsonAtomic(exactPath, report);
+  return report;
+}
+
 const COMPONENTS = {
   5120: { bytes: 1, read: 'getInt8' },
   5121: { bytes: 1, read: 'getUint8' },

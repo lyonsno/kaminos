@@ -1,0 +1,992 @@
+{
+  "schema": "kaminos.lirm-reference-fitted-armature-assay.v0",
+  "status": "assay-missed-threshold-uninspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "effectiveRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "requestedArmatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+  "effectiveArmatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+  "armatureProgram": {
+    "id": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+    "parameterVocabulary": "kaminos.lirm-preserved-proxy-armature.8-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "axialScale",
+        "semanticRole": "axialExtent",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.62,
+        "step": 0.16
+      },
+      {
+        "id": "lateralScale",
+        "semanticRole": "lateralMass",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.74,
+        "step": 0.16
+      },
+      {
+        "id": "verticalScale",
+        "semanticRole": "verticalMass",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.74,
+        "step": 0.16
+      },
+      {
+        "id": "headScale",
+        "semanticRole": "headOrientation",
+        "initial": 1,
+        "min": 0.62,
+        "max": 1.58,
+        "step": 0.14
+      },
+      {
+        "id": "limbLengthScale",
+        "semanticRole": "contactLimb",
+        "initial": 1,
+        "min": 0.52,
+        "max": 1.82,
+        "step": 0.18
+      },
+      {
+        "id": "limbSpreadScale",
+        "semanticRole": "contactFootprint",
+        "initial": 1,
+        "min": 0.52,
+        "max": 1.82,
+        "step": 0.18
+      },
+      {
+        "id": "dorsalLift",
+        "semanticRole": "dorsalProfile",
+        "initial": 0,
+        "min": -0.22,
+        "max": 0.3,
+        "step": 0.08
+      },
+      {
+        "id": "contactDrop",
+        "semanticRole": "groundContact",
+        "initial": 0,
+        "min": -0.28,
+        "max": 0.2,
+        "step": 0.08
+      }
+    ]
+  },
+  "requestedCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "effectiveCameraIds": [
+    "az000",
+    "az045",
+    "az090",
+    "az135",
+    "az180",
+    "az225",
+    "az270",
+    "az315"
+  ],
+  "requestedFitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "requestedHeldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "fitViewIds": [
+    "az000",
+    "az090",
+    "az180",
+    "az270"
+  ],
+  "heldOutViewIds": [
+    "az045",
+    "az135",
+    "az225",
+    "az315"
+  ],
+  "timing": {
+    "startedAt": "2026-07-22T06:29:41.584Z",
+    "finishedAt": "2026-07-22T06:29:53.425Z",
+    "durationSeconds": 11.841
+  },
+  "lastTrustworthyEvidence": "fit and held-out metrics computed; visual witness written but not inspected",
+  "outputInventory": {
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/fit/silhouette-residual-witness.png",
+      "bytes": 19755,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-overlay",
+        "initial-overlay"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/fit/depth-residual-witness.png",
+      "bytes": 31553,
+      "columns": [
+        "donor",
+        "initial",
+        "fitted",
+        "fitted-depth-error",
+        "initial-depth-error"
+      ]
+    },
+    "donorEvidence": [
+      {
+        "cameraId": "az000",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az045",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az090",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az135",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az180",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az225",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az270",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      },
+      {
+        "cameraId": "az315",
+        "kind": "software-raster-mask-depth",
+        "width": 48,
+        "height": 40
+      }
+    ]
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/motion-ready-719024/creature.glb",
+    "bytes": 8934204,
+    "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "triangleCount": 188385,
+    "sourceBounds": {
+      "min": {
+        "x": -0.18455950915813446,
+        "y": -0.2068822681903839,
+        "z": -0.4996844232082367
+      },
+      "max": {
+        "x": 0.18466870486736298,
+        "y": 0.2093127816915512,
+        "z": 0.5002209544181824
+      },
+      "center": {
+        "x": 0.00005459785461425781,
+        "y": 0.0012152567505836487,
+        "z": 0.00026826560497283936
+      },
+      "diagonal": 1.1442720645829454
+    },
+    "normalization": {
+      "kind": "bbox-center-diagonal-scale",
+      "targetDiagonal": 2.15,
+      "scale": 1.8789237861745876
+    }
+  },
+  "plan": {
+    "schema": "kaminos.lirm-reference-fitted-armature-plan.v0",
+    "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+    "donor": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-0722/artifacts/motion-ready-719024/creature.glb",
+      "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e"
+    },
+    "requestedCameraIds": [
+      "az000",
+      "az045",
+      "az090",
+      "az135",
+      "az180",
+      "az225",
+      "az270",
+      "az315"
+    ],
+    "fitViewIds": [
+      "az000",
+      "az090",
+      "az180",
+      "az270"
+    ],
+    "heldOutViewIds": [
+      "az045",
+      "az135",
+      "az225",
+      "az315"
+    ],
+    "requestedArmatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+    "armatureProgram": {
+      "id": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0",
+      "parameterVocabulary": "kaminos.lirm-preserved-proxy-armature.8-low-frequency-parameters.v0",
+      "parameterSpecs": [
+        {
+          "id": "axialScale",
+          "semanticRole": "axialExtent",
+          "initial": 1,
+          "min": 0.58,
+          "max": 1.62,
+          "step": 0.16
+        },
+        {
+          "id": "lateralScale",
+          "semanticRole": "lateralMass",
+          "initial": 1,
+          "min": 0.58,
+          "max": 1.74,
+          "step": 0.16
+        },
+        {
+          "id": "verticalScale",
+          "semanticRole": "verticalMass",
+          "initial": 1,
+          "min": 0.58,
+          "max": 1.74,
+          "step": 0.16
+        },
+        {
+          "id": "headScale",
+          "semanticRole": "headOrientation",
+          "initial": 1,
+          "min": 0.62,
+          "max": 1.58,
+          "step": 0.14
+        },
+        {
+          "id": "limbLengthScale",
+          "semanticRole": "contactLimb",
+          "initial": 1,
+          "min": 0.52,
+          "max": 1.82,
+          "step": 0.18
+        },
+        {
+          "id": "limbSpreadScale",
+          "semanticRole": "contactFootprint",
+          "initial": 1,
+          "min": 0.52,
+          "max": 1.82,
+          "step": 0.18
+        },
+        {
+          "id": "dorsalLift",
+          "semanticRole": "dorsalProfile",
+          "initial": 0,
+          "min": -0.22,
+          "max": 0.3,
+          "step": 0.08
+        },
+        {
+          "id": "contactDrop",
+          "semanticRole": "groundContact",
+          "initial": 0,
+          "min": -0.28,
+          "max": 0.2,
+          "step": 0.08
+        }
+      ]
+    },
+    "parameterSpecs": [
+      {
+        "id": "axialScale",
+        "semanticRole": "axialExtent",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.62,
+        "step": 0.16
+      },
+      {
+        "id": "lateralScale",
+        "semanticRole": "lateralMass",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.74,
+        "step": 0.16
+      },
+      {
+        "id": "verticalScale",
+        "semanticRole": "verticalMass",
+        "initial": 1,
+        "min": 0.58,
+        "max": 1.74,
+        "step": 0.16
+      },
+      {
+        "id": "headScale",
+        "semanticRole": "headOrientation",
+        "initial": 1,
+        "min": 0.62,
+        "max": 1.58,
+        "step": 0.14
+      },
+      {
+        "id": "limbLengthScale",
+        "semanticRole": "contactLimb",
+        "initial": 1,
+        "min": 0.52,
+        "max": 1.82,
+        "step": 0.18
+      },
+      {
+        "id": "limbSpreadScale",
+        "semanticRole": "contactFootprint",
+        "initial": 1,
+        "min": 0.52,
+        "max": 1.82,
+        "step": 0.18
+      },
+      {
+        "id": "dorsalLift",
+        "semanticRole": "dorsalProfile",
+        "initial": 0,
+        "min": -0.22,
+        "max": 0.3,
+        "step": 0.08
+      },
+      {
+        "id": "contactDrop",
+        "semanticRole": "groundContact",
+        "initial": 0,
+        "min": -0.28,
+        "max": 0.2,
+        "step": 0.08
+      }
+    ],
+    "evidencePredicate": {
+      "allowCameraFallback": false,
+      "allowMissingOrPartialDonorEvidence": false,
+      "heldOutViewsMayInfluenceOptimization": false,
+      "requireHeldOutSilhouetteImprovementCount": 3,
+      "requireHeldOutMeanDepthImprovement": true
+    },
+    "falseClosureGuards": {
+      "productionCreatureClaim": "forbidden",
+      "meshCopyClaim": "forbidden",
+      "learnedPriorClaim": "not_trained",
+      "topologySelectionClaim": "not_assayed"
+    }
+  },
+  "initialParameters": {
+    "axialScale": 1,
+    "lateralScale": 1,
+    "verticalScale": 1,
+    "headScale": 1,
+    "limbLengthScale": 1,
+    "limbSpreadScale": 1,
+    "dorsalLift": 0,
+    "contactDrop": 0
+  },
+  "fittedParameters": {
+    "axialScale": 0.80878208,
+    "lateralScale": 1.22158208,
+    "verticalScale": 1.2319303936000001,
+    "headScale": 1.2524529056,
+    "limbLengthScale": 0.8785984672000001,
+    "limbSpreadScale": 1.3653216927999998,
+    "dorsalLift": -0.04252095999999999,
+    "contactDrop": 0.0464
+  },
+  "parameterSpecs": [
+    {
+      "id": "axialScale",
+      "semanticRole": "axialExtent",
+      "initial": 1,
+      "min": 0.58,
+      "max": 1.62,
+      "step": 0.16
+    },
+    {
+      "id": "lateralScale",
+      "semanticRole": "lateralMass",
+      "initial": 1,
+      "min": 0.58,
+      "max": 1.74,
+      "step": 0.16
+    },
+    {
+      "id": "verticalScale",
+      "semanticRole": "verticalMass",
+      "initial": 1,
+      "min": 0.58,
+      "max": 1.74,
+      "step": 0.16
+    },
+    {
+      "id": "headScale",
+      "semanticRole": "headOrientation",
+      "initial": 1,
+      "min": 0.62,
+      "max": 1.58,
+      "step": 0.14
+    },
+    {
+      "id": "limbLengthScale",
+      "semanticRole": "contactLimb",
+      "initial": 1,
+      "min": 0.52,
+      "max": 1.82,
+      "step": 0.18
+    },
+    {
+      "id": "limbSpreadScale",
+      "semanticRole": "contactFootprint",
+      "initial": 1,
+      "min": 0.52,
+      "max": 1.82,
+      "step": 0.18
+    },
+    {
+      "id": "dorsalLift",
+      "semanticRole": "dorsalProfile",
+      "initial": 0,
+      "min": -0.22,
+      "max": 0.3,
+      "step": 0.08
+    },
+    {
+      "id": "contactDrop",
+      "semanticRole": "groundContact",
+      "initial": 0,
+      "min": -0.28,
+      "max": 0.2,
+      "step": 0.08
+    }
+  ],
+  "optimization": {
+    "kind": "deterministic-bounded-coordinate-search",
+    "passes": 5,
+    "objective": 0.41705622999281966,
+    "trace": [
+      {
+        "pass": -1,
+        "parameterId": null,
+        "direction": 0,
+        "score": 0.5480242625858016,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "axialScale",
+        "direction": -1,
+        "value": 0.84,
+        "score": 0.5011099583425443,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "lateralScale",
+        "direction": 1,
+        "value": 1.16,
+        "score": 0.47740783170576345,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "verticalScale",
+        "direction": 1,
+        "value": 1.16,
+        "score": 0.45228849803489674,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "headScale",
+        "direction": 1,
+        "value": 1.1400000000000001,
+        "score": 0.44817850195146075,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "limbLengthScale",
+        "direction": -1,
+        "value": 0.8200000000000001,
+        "score": 0.44817836533509114,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "limbSpreadScale",
+        "direction": 1,
+        "value": 1.18,
+        "score": 0.4480733064082949,
+        "accepted": true
+      },
+      {
+        "pass": 0,
+        "parameterId": "dorsalLift",
+        "direction": 0,
+        "value": 0,
+        "score": 0.4480733064082949,
+        "accepted": false
+      },
+      {
+        "pass": 0,
+        "parameterId": "contactDrop",
+        "direction": 0,
+        "value": 0,
+        "score": 0.4480733064082949,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "axialScale",
+        "direction": 0,
+        "value": 0.84,
+        "score": 0.4480733064082949,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "lateralScale",
+        "direction": 1,
+        "value": 1.2528,
+        "score": 0.44352872437910923,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "verticalScale",
+        "direction": 0,
+        "value": 1.16,
+        "score": 0.44352872437910923,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "headScale",
+        "direction": 1,
+        "value": 1.2212,
+        "score": 0.4407564883837258,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "limbLengthScale",
+        "direction": 1,
+        "value": 0.9244000000000001,
+        "score": 0.44070760287823024,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "limbSpreadScale",
+        "direction": 1,
+        "value": 1.2844,
+        "score": 0.4367509750492414,
+        "accepted": true
+      },
+      {
+        "pass": 1,
+        "parameterId": "dorsalLift",
+        "direction": 0,
+        "value": 0,
+        "score": 0.4367509750492414,
+        "accepted": false
+      },
+      {
+        "pass": 1,
+        "parameterId": "contactDrop",
+        "direction": 1,
+        "value": 0.0464,
+        "score": 0.4339581334411168,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "axialScale",
+        "direction": 0,
+        "value": 0.84,
+        "score": 0.4339581334411168,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "lateralScale",
+        "direction": 0,
+        "value": 1.2528,
+        "score": 0.4339581334411168,
+        "accepted": false
+      },
+      {
+        "pass": 2,
+        "parameterId": "verticalScale",
+        "direction": 1,
+        "value": 1.213824,
+        "score": 0.4320118210320354,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "headScale",
+        "direction": 1,
+        "value": 1.268296,
+        "score": 0.43081692450020964,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "limbLengthScale",
+        "direction": -1,
+        "value": 0.8638480000000002,
+        "score": 0.4308151590317284,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "limbSpreadScale",
+        "direction": 1,
+        "value": 1.344952,
+        "score": 0.4241278394056468,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "dorsalLift",
+        "direction": -1,
+        "value": -0.026911999999999995,
+        "score": 0.4233187431804005,
+        "accepted": true
+      },
+      {
+        "pass": 2,
+        "parameterId": "contactDrop",
+        "direction": 0,
+        "value": 0.0464,
+        "score": 0.4233187431804005,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "axialScale",
+        "direction": -1,
+        "value": 0.80878208,
+        "score": 0.4223234537035636,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "lateralScale",
+        "direction": -1,
+        "value": 1.22158208,
+        "score": 0.4189660844541389,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "verticalScale",
+        "direction": 0,
+        "value": 1.213824,
+        "score": 0.4189660844541389,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "headScale",
+        "direction": 0,
+        "value": 1.268296,
+        "score": 0.4189660844541389,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "limbLengthScale",
+        "direction": 1,
+        "value": 0.8989681600000001,
+        "score": 0.41896605334753584,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "limbSpreadScale",
+        "direction": 0,
+        "value": 1.344952,
+        "score": 0.41896605334753584,
+        "accepted": false
+      },
+      {
+        "pass": 3,
+        "parameterId": "dorsalLift",
+        "direction": -1,
+        "value": -0.04252095999999999,
+        "score": 0.41830876238457126,
+        "accepted": true
+      },
+      {
+        "pass": 3,
+        "parameterId": "contactDrop",
+        "direction": 0,
+        "value": 0.0464,
+        "score": 0.41830876238457126,
+        "accepted": false
+      },
+      {
+        "pass": 4,
+        "parameterId": "axialScale",
+        "direction": 0,
+        "value": 0.80878208,
+        "score": 0.41830876238457126,
+        "accepted": false
+      },
+      {
+        "pass": 4,
+        "parameterId": "lateralScale",
+        "direction": 0,
+        "value": 1.22158208,
+        "score": 0.41830876238457126,
+        "accepted": false
+      },
+      {
+        "pass": 4,
+        "parameterId": "verticalScale",
+        "direction": 1,
+        "value": 1.2319303936000001,
+        "score": 0.4176469754810142,
+        "accepted": true
+      },
+      {
+        "pass": 4,
+        "parameterId": "headScale",
+        "direction": -1,
+        "value": 1.2524529056,
+        "score": 0.4170685256229799,
+        "accepted": true
+      },
+      {
+        "pass": 4,
+        "parameterId": "limbLengthScale",
+        "direction": -1,
+        "value": 0.8785984672000001,
+        "score": 0.41706689215675147,
+        "accepted": true
+      },
+      {
+        "pass": 4,
+        "parameterId": "limbSpreadScale",
+        "direction": 1,
+        "value": 1.3653216927999998,
+        "score": 0.41705622999281966,
+        "accepted": true
+      },
+      {
+        "pass": 4,
+        "parameterId": "dorsalLift",
+        "direction": 0,
+        "value": -0.04252095999999999,
+        "score": 0.41705622999281966,
+        "accepted": false
+      },
+      {
+        "pass": 4,
+        "parameterId": "contactDrop",
+        "direction": 0,
+        "value": 0.0464,
+        "score": 0.41705622999281966,
+        "accepted": false
+      }
+    ]
+  },
+  "metrics": {
+    "initial": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.45925925925925926,
+            "depthMae": 0.08786432440080566,
+            "occupancyError": 0.5407407407407407,
+            "donorPixels": 135,
+            "armaturePixels": 62
+          },
+          "az090": {
+            "iou": 0.5164835164835165,
+            "depthMae": 0.021121560377323018,
+            "occupancyError": 0.1476510067114094,
+            "donorPixels": 298,
+            "armaturePixels": 254
+          },
+          "az180": {
+            "iou": 0.5103448275862069,
+            "depthMae": 0.10305529336206529,
+            "occupancyError": 0.2619047619047619,
+            "donorPixels": 126,
+            "armaturePixels": 93
+          },
+          "az270": {
+            "iou": 0.5467032967032966,
+            "depthMae": 0.020253532927971996,
+            "occupancyError": 0.11073825503355705,
+            "donorPixels": 298,
+            "armaturePixels": 265
+          }
+        },
+        "meanIou": 0.5081977250080698,
+        "meanDepthMae": 0.05807367776704149,
+        "meanOccupancyError": 0.26525869109761724
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.5331010452961672,
+            "depthMae": 0.034734865148466666,
+            "occupancyError": 0.14345991561181434,
+            "donorPixels": 237,
+            "armaturePixels": 203
+          },
+          "az135": {
+            "iou": 0.5121951219512195,
+            "depthMae": 0.032715988569200494,
+            "occupancyError": 0.16101694915254236,
+            "donorPixels": 236,
+            "armaturePixels": 198
+          },
+          "az225": {
+            "iou": 0.5310344827586206,
+            "depthMae": 0.03153639315197906,
+            "occupancyError": 0.11864406779661017,
+            "donorPixels": 236,
+            "armaturePixels": 208
+          },
+          "az315": {
+            "iou": 0.5241379310344828,
+            "depthMae": 0.02912510221929505,
+            "occupancyError": 0.1350210970464135,
+            "donorPixels": 237,
+            "armaturePixels": 205
+          }
+        },
+        "meanIou": 0.5251171452601225,
+        "meanDepthMae": 0.032028087272235314,
+        "meanOccupancyError": 0.1395355074018451
+      }
+    },
+    "fitted": {
+      "fit": {
+        "byView": {
+          "az000": {
+            "iou": 0.7028985507246377,
+            "depthMae": 0.11623642407943001,
+            "occupancyError": 0.25925925925925924,
+            "donorPixels": 135,
+            "armaturePixels": 100
+          },
+          "az090": {
+            "iou": 0.5902578796561605,
+            "depthMae": 0.025045791417126127,
+            "occupancyError": 0.13758389261744966,
+            "donorPixels": 298,
+            "armaturePixels": 257
+          },
+          "az180": {
+            "iou": 0.6036585365853658,
+            "depthMae": 0.08300235868655738,
+            "occupancyError": 0.0873015873015873,
+            "donorPixels": 126,
+            "armaturePixels": 137
+          },
+          "az270": {
+            "iou": 0.6073446327683616,
+            "depthMae": 0.021940825300058205,
+            "occupancyError": 0.09060402684563758,
+            "donorPixels": 298,
+            "armaturePixels": 271
+          }
+        },
+        "meanIou": 0.6260398999336314,
+        "meanDepthMae": 0.061556349870792934,
+        "meanOccupancyError": 0.14368719150598347
+      },
+      "heldOut": {
+        "byView": {
+          "az045": {
+            "iou": 0.5912162162162162,
+            "depthMae": 0.03593969022458985,
+            "occupancyError": 0.012658227848101266,
+            "donorPixels": 237,
+            "armaturePixels": 234
+          },
+          "az135": {
+            "iou": 0.5862068965517241,
+            "depthMae": 0.039620535807129785,
+            "occupancyError": 0.05084745762711865,
+            "donorPixels": 236,
+            "armaturePixels": 224
+          },
+          "az225": {
+            "iou": 0.6195286195286195,
+            "depthMae": 0.03494627943014197,
+            "occupancyError": 0.038135593220338986,
+            "donorPixels": 236,
+            "armaturePixels": 245
+          },
+          "az315": {
+            "iou": 0.5850340136054422,
+            "depthMae": 0.028152443038537842,
+            "occupancyError": 0.03375527426160337,
+            "donorPixels": 237,
+            "armaturePixels": 229
+          }
+        },
+        "meanIou": 0.5954964364755004,
+        "meanDepthMae": 0.03466473712509986,
+        "meanOccupancyError": 0.03384913823929057
+      }
+    }
+  },
+  "acceptance": {
+    "heldOutSilhouetteImprovementCount": 4,
+    "requiredHeldOutSilhouetteImprovementCount": 3,
+    "heldOutDepthImproved": false,
+    "boundPinnedParameters": [],
+    "semanticParameterIdsStable": true,
+    "visualInspection": "pending"
+  },
+  "falseClosureGuards": {
+    "productionCreatureClaim": "forbidden",
+    "meshCopyClaim": "forbidden",
+    "learnedPriorClaim": "not_trained",
+    "topologySelectionClaim": "not_assayed"
+  }
+}
