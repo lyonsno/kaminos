@@ -1,4 +1,5 @@
 export const WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA = 'kaminos.webgpu-foreground-opportunity-interlock.v0';
+export const WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA = 'kaminos.webgpu-foreground-opportunity-pressure.v0';
 export const WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA = 'kaminos.webgpu-foreground-opportunity-receipt.v0';
 export const WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-opportunity-service.v0';
 
@@ -346,17 +347,31 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     }
   }
 
+  function pressureSnapshot() {
+    return Object.freeze({
+      schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+      routeId: state.routeId,
+      runId: state.runId,
+      pendingRequestCount: state.pending.length,
+      activeRequestCount: state.activeRequestCount,
+      activeServiceCount: state.activeServiceCount,
+      queuedServiceCount: state.queuedServiceCount,
+      authority: 'live-foreground-opportunity-counters-no-history-clone',
+    });
+  }
+
   function snapshot() {
+    const pressure = pressureSnapshot();
     return deepFreeze({
       schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
       routeId: state.routeId,
       runId: state.runId,
       retention: 'uncapped',
       requestCount: state.requests.size,
-      pendingRequestCount: state.pending.filter(requestState => requestState.status === 'pending').length,
-      activeRequestCount: state.activeRequestCount,
-      activeServiceCount: state.activeServiceCount,
-      queuedServiceCount: state.queuedServiceCount,
+      pendingRequestCount: pressure.pendingRequestCount,
+      activeRequestCount: pressure.activeRequestCount,
+      activeServiceCount: pressure.activeServiceCount,
+      queuedServiceCount: pressure.queuedServiceCount,
       receiptCount: state.receipts.length,
       receipts: clone(state.receipts),
       serviceCount: state.services.length,
@@ -383,6 +398,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
     request,
     serviceAtBoundary,
+    pressureSnapshot,
     snapshot,
     finish,
   });
