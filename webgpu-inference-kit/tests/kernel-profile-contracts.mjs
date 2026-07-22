@@ -17,7 +17,7 @@ assert.equal(
   'the exported runtime kit identity must match the installed package manifest',
 );
 
-assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.33');
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.34');
 
 const kernel = createKernelProfileMetadata({
   profile: 'conv-transpose2d-stride2',
