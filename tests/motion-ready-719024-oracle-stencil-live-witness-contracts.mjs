@@ -10,10 +10,12 @@ assert.match(witness, /requestedUrl/, 'live witness records its requested route'
 assert.match(witness, /effectiveUrl/, 'live witness records its effective route');
 assert.match(witness, /repoRoot/, 'live witness records the reviewed repository root');
 assert.match(witness, /gitHead/, 'live witness records the reviewed source revision');
+assert.match(witness, /expectedGitHeadResolved/, 'live witness resolves abbreviated expected revisions to canonical commit identity');
 assert.match(witness, /dirtyStatus/, 'live witness records whether source differs from the reviewed revision');
 assert.match(witness, /servedHtmlHash/, 'live witness records the effective served HTML identity');
 assert.match(witness, /servedModuleHash/, 'live witness records the effective served stencil-module identity');
 assert.match(witness, /implementation effective-byte identity mismatch/, 'live witness fails loud when served code differs from reviewed source');
+assert.match(witness, /chromeProcess && chromeProcess\.exitCode/, 'pre-browser witness failure must not attempt to kill a missing Chrome process');
 assert.match(witness, /requestedStencilSource/, 'live witness distinguishes requested stencil input');
 assert.match(witness, /effectiveStencilSource/, 'live witness rejects silent stencil fallback');
 assert.match(witness, /blank operator draft/, 'live witness verifies that fresh authoring starts blank');

@@ -49,6 +49,7 @@ const implementationIdentity = {
   gitHead: execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   dirtyStatus: execFileSync('git', ['-C', repoRoot, 'status', '--short'], { encoding: 'utf8' }).trim(),
   expectedGitHead,
+  expectedGitHeadResolved: null,
   localHtmlHash: sha256(readFileSync(localHtmlPath)),
   localModuleHash: sha256(readFileSync(localModulePath)),
   servedHtmlUrl: null,
@@ -199,8 +200,16 @@ try {
   mkdirSync(outDir, { recursive: true });
   mkdirSync(userDataDir, { recursive: true });
   phase = 'verifying-implementation-identity';
-  if (expectedGitHead && implementationIdentity.gitHead !== expectedGitHead) {
-    throw new Error(`implementation git head mismatch: ${implementationIdentity.gitHead} !== ${expectedGitHead}`);
+  if (expectedGitHead) {
+    implementationIdentity.expectedGitHeadResolved = execFileSync(
+      'git',
+      ['-C', repoRoot, 'rev-parse', `${expectedGitHead}^{commit}`],
+      { encoding: 'utf8' },
+    ).trim();
+  }
+  if (implementationIdentity.expectedGitHeadResolved
+    && implementationIdentity.gitHead !== implementationIdentity.expectedGitHeadResolved) {
+    throw new Error(`implementation git head mismatch: ${implementationIdentity.gitHead} !== ${implementationIdentity.expectedGitHeadResolved}`);
   }
   await fetchImplementationIdentity(requestedUrl, implementationIdentity.localHtmlHash, 'HTML', 'Html');
   const moduleUrl = new URL('./motion-ready-719024-stencil.js', requestedUrl);
@@ -300,7 +309,7 @@ try {
 } catch (error) {
   writeReport({ ok: false, error: String(error.stack || error) });
   if (ws) await closeCdpBrowser(ws, chromeProcess, delay).catch(() => null);
-  else if (chromeProcess?.exitCode == null && chromeProcess?.signalCode == null) chromeProcess.kill('SIGTERM');
+  else if (chromeProcess && chromeProcess.exitCode == null && chromeProcess.signalCode == null) chromeProcess.kill('SIGTERM');
   console.error(error.stack || error);
   process.exitCode = 1;
 }
