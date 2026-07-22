@@ -832,10 +832,6 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return foregroundOpportunitySnapshot();
     },
 
-    foregroundOpportunityPressureSnapshot() {
-      return foregroundOpportunityPressureSnapshot();
-    },
-
     finishForegroundOpportunities() {
       if (!foregroundOpportunities) {
         throw new Error('foreground opportunity interlock is not configured for this runtime');
@@ -1176,6 +1172,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       });
     },
   };
+
+  if (typeof foregroundOpportunities?.pressureSnapshot === 'function') {
+    runtime.foregroundOpportunityPressureSnapshot = foregroundOpportunityPressureSnapshot;
+  }
 
   return runtime;
 }

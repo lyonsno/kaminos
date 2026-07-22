@@ -408,6 +408,35 @@ assert.throws(
   /activeServiceCount.*non-negative integer/i,
 );
 
+let legacyFullSnapshotCalls = 0;
+const legacyExternalRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runtimeLabel: 'legacy-external-foreground-snapshot',
+  device: runtimeDevice,
+  queue: runtimeQueue,
+  adapterName: 'Legacy External Foreground Snapshot',
+  kernel: { profile: 'legacy-external-foreground-snapshot' },
+  foregroundOpportunities: {
+    ...externalMethods,
+    snapshot() {
+      legacyFullSnapshotCalls += 1;
+      return externalSnapshot();
+    },
+  },
+});
+assert.equal(
+  typeof legacyExternalRuntime.foregroundOpportunityPressureSnapshot,
+  'undefined',
+  'a full-history compatibility fallback must not impersonate the constant-time public capability',
+);
+const legacySnapshotCallsAfterConstruction = legacyFullSnapshotCalls;
+await legacyExternalRuntime.prepareCommandDutyAtBoundary({ phase: 'legacy-vit-block-microphase' });
+assert.equal(
+  legacyFullSnapshotCalls,
+  legacySnapshotCallsAfterConstruction + 1,
+  'legacy duty preparation may retain the honest full-history compatibility path',
+);
+
 let hotPathFullSnapshotCalls = 0;
 let hotPathPressureSnapshotCalls = 0;
 const hotPathExternalRuntime = await createWebGpuInferenceRuntime({
