@@ -23,6 +23,11 @@ const durablePacketPath = new URL('../artifacts/lirm-speciation-armature-witness
 const durablePacketBytes = readFileSync(durablePacketPath);
 const packet = JSON.parse(durablePacketBytes.toString('utf8'));
 const sourcePacketSha256 = `sha256:${createHash('sha256').update(durablePacketBytes).digest('hex')}`;
+assert.throws(
+  () => fitted.createPreservedProxyArmatureProgram(packet),
+  /exact source packet byte hash/,
+  'the exported helper must not synthesize provenance from parsed JSON',
+);
 const program = fitted.createPreservedProxyArmatureProgram(packet, { sourcePacketSha256 });
 const initialParameters = Object.fromEntries(program.parameterSpecs.map(spec => [spec.id, spec.initial]));
 const primitives = program.createPrimitives(initialParameters);

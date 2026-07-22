@@ -124,16 +124,16 @@ export function createPreservedProxyArmatureProgram(packet, { sourcePacketSha256
   if (typeof packet.candidateId !== 'string' || !packet.candidateId.trim()) throw new Error('control packet requires candidateId');
   if (!Array.isArray(packet.proxyPrimitives) || packet.proxyPrimitives.length === 0) throw new Error('control packet has no proxy primitives');
   const sourcePrimitives = structuredClone(packet.proxyPrimitives);
-  const exactSourcePacketSha256 = sourcePacketSha256
-    ?? `sha256:${createHash('sha256').update(JSON.stringify(packet)).digest('hex')}`;
-  if (!/^sha256:[0-9a-f]{64}$/.test(exactSourcePacketSha256)) throw new Error('source packet hash is missing or malformed');
+  if (!/^sha256:[0-9a-f]{64}$/.test(sourcePacketSha256 ?? '')) {
+    throw new Error('preserved proxy armature requires the exact source packet byte hash');
+  }
   const program = {
     id: `kaminos.lirm-preserved-proxy-armature.${packet.candidateId}.v0`,
     parameterVocabulary: 'kaminos.lirm-preserved-proxy-armature.8-low-frequency-parameters.v0',
     parameterSpecs: PRESERVED_PROXY_PARAMETER_SPECS,
     sourceCandidateId: packet.candidateId,
     sourcePrimitiveCount: sourcePrimitives.length,
-    sourcePacketSha256: exactSourcePacketSha256,
+    sourcePacketSha256,
     createPrimitives(parameters) {
       const p = parameterObject(parameters, PRESERVED_PROXY_PARAMETER_SPECS);
       return sourcePrimitives.map((primitive, index) => fittedProxyPrimitive(primitive, index, packet.candidateId, p));
