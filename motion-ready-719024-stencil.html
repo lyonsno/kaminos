@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Kaminos 719024 Oracle Stencil</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #0a0c0d; color: #dde2dc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  button, input { font: inherit; }
+  #viewport { position: absolute; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #toolbar { position: absolute; inset: 14px auto auto 14px; z-index: 4; width: min(350px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; border: 1px solid rgba(185, 204, 177, 0.22); border-radius: 7px; background: rgba(12, 15, 15, 0.91); box-shadow: 0 14px 36px rgba(0, 0, 0, 0.38); backdrop-filter: blur(12px); }
+  #header { padding: 11px 12px 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+  #title { color: #f0dda5; font-size: 12px; font-weight: 760; }
+  #status { margin-top: 4px; color: #8ec5a1; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #status.error { color: #ef8d83; }
+  #identity { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 3px 8px; margin-top: 8px; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .key { color: #657069; }
+  .value { overflow: hidden; color: #b2bcb5; text-overflow: ellipsis; white-space: nowrap; }
+  .section { padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+  .section-label { margin-bottom: 7px; color: #7d8981; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+  .segments { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  button { min-width: 0; height: 29px; padding: 0 8px; border: 1px solid #3b443e; border-radius: 5px; background: #202522; color: #d8ded9; font-size: 10px; cursor: pointer; }
+  button:hover { border-color: #637166; background: #29302b; }
+  button.active { border-color: #d8bd68; background: #3a3320; color: #ffe7a2; }
+  button.danger:hover { border-color: #985c57; color: #f0a49d; }
+  button:disabled { cursor: default; opacity: 0.38; }
+  .segments button { padding: 0 3px; }
+  .field { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 7px; margin-top: 7px; }
+  .field label { color: #89938c; font-size: 10px; }
+  .field input[type="range"] { width: 100%; accent-color: #d5bb68; }
+  .field output { color: #e8d899; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
+  #region-label { width: 100%; height: 29px; padding: 0 8px; border: 1px solid #3b443e; border-radius: 5px; outline: none; background: #151917; color: #dce2dd; font-size: 10px; }
+  #region-label:focus { border-color: #8d996f; }
+  #pending { margin-top: 7px; color: #d7c27f; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #region-list { display: grid; gap: 5px; }
+  .region { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; height: auto; min-height: 35px; padding: 6px 8px; text-align: left; }
+  .region strong, .region small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .region strong { font-size: 10px; }
+  .region small { margin-top: 2px; color: #77827b; font: 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .region .count { color: #d4bd72; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #empty { color: #68736c; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .actions + .actions { margin-top: 5px; }
+  #stencil-import { display: none; }
+  #mode-chip { position: absolute; right: 14px; bottom: 14px; z-index: 4; padding: 8px 10px; border: 1px solid rgba(224, 199, 116, 0.28); border-radius: 6px; background: rgba(12, 15, 15, 0.78); color: #dbc783; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; }
+  @media (max-width: 720px) {
+    #toolbar { width: min(330px, calc(100vw - 20px)); inset: 10px auto auto 10px; max-height: calc(100vh - 20px); }
+    #mode-chip { display: none; }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./lib/three.webgpu.js",
+    "three/webgpu": "./lib/three.webgpu.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="viewport"></div>
+<aside id="toolbar" aria-label="Oracle stencil workbench">
+  <div id="header">
+    <div id="title">719024 / Rest-space stencil</div>
+    <div id="status">Loading exact cast...</div>
+    <div id="identity">
+      <span class="key">cast</span><span class="value" id="cast-id">motion-ready-719024</span>
+      <span class="key">cast sha</span><span class="value" id="cast-sha">pending</span>
+      <span class="key">registration</span><span class="value" id="registration-sha">pending</span>
+      <span class="key">stencil</span><span class="value" id="stencil-sha">blank draft</span>
+      <span class="key">source</span><span class="value" id="stencil-source">blank draft</span>
+    </div>
+  </div>
+  <section class="section">
+    <div class="section-label">Author</div>
+    <div class="segments" id="modes">
+      <button type="button" data-mode="inspect" class="active" title="Orbit and inspect the exact rest-space cast">Inspect</button>
+      <button type="button" data-mode="body-axis" title="Place head and tail axis handles">Body axis</button>
+      <button type="button" data-mode="appendage-chain" title="Place attachment, bend, and effector handles">Appendage</button>
+      <button type="button" data-mode="contact-patch" title="Place a broad distal contact region">Contact</button>
+      <button type="button" data-mode="preservation-region" title="Place an ellipsoidal preservation region">Preserve</button>
+    </div>
+    <div class="field">
+      <label for="region-label">Label</label>
+      <input id="region-label" value="" placeholder="front left limb">
+      <span></span>
+    </div>
+    <div class="field">
+      <label for="size-x">Size X</label>
+      <input id="size-x" type="range" min="0.03" max="1.5" step="0.01" value="0.18">
+      <output id="size-x-value" for="size-x">0.18</output>
+    </div>
+    <div class="field">
+      <label for="size-y">Size Y</label>
+      <input id="size-y" type="range" min="0.03" max="1.5" step="0.01" value="0.18">
+      <output id="size-y-value" for="size-y">0.18</output>
+    </div>
+    <div class="field">
+      <label for="size-z">Size Z</label>
+      <input id="size-z" type="range" min="0.03" max="1.5" step="0.01" value="0.18">
+      <output id="size-z-value" for="size-z">0.18</output>
+    </div>
+    <div id="pending">inspect / orbit enabled</div>
+  </section>
+  <section class="section">
+    <div class="section-label">Semantic regions</div>
+    <div id="region-list"><div id="empty">No authored regions</div></div>
+  </section>
+  <section class="section">
+    <div class="actions">
+      <button id="reset-pending" type="button">Clear points</button>
+      <button id="delete-region" class="danger" type="button" disabled>Delete</button>
+      <button id="clear-stencil" class="danger" type="button">Clear all</button>
+    </div>
+    <div class="actions">
+      <button id="save-stencil" type="button">Save draft</button>
+      <button id="load-stencil" type="button">Load saved</button>
+      <button id="accept-stencil" type="button">Accept</button>
+    </div>
+    <div class="actions">
+      <button id="export-stencil" type="button">Export JSON</button>
+      <button id="import-stencil-button" type="button">Import JSON</button>
+      <button id="frame-cast" type="button">Frame cast</button>
+    </div>
+    <input id="stencil-import" type="file" accept="application/json,.json">
+  </section>
+</aside>
+<div id="mode-chip">inspect / exact rest space</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {
+  ORACLE_STENCIL_AUTHORITY,
+  ORACLE_STENCIL_BINDING_SCHEMA,
+  createOracleStencilDocument,
+  deriveOracleStencilBinding,
+  hashOracleStencil,
+  removeOracleStencilRegion,
+  setOracleStencilStatus,
+  upsertOracleStencilRegion,
+  validateOracleStencilDocument,
+} from './motion-ready-719024-stencil.js';
+
+const parameters = new URLSearchParams(location.search);
+const PATHS = Object.freeze({
+  creature: parameters.get('creature_url') || './artifacts/motion-ready-719024/creature.glb',
+  registration: parameters.get('registration_url') || './artifacts/motion-ready-719024/registration.json',
+});
+const EXPECTED = Object.freeze({
+  castId: 'motion-ready-719024',
+  castHash: '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
+  registrationHash: 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
+});
+const requestedStencilSource = parameters.get('stencil_url');
+const operatorSession = parameters.get('operator_session') || `local-${crypto.randomUUID()}`;
+const storageKey = `kaminos:oracle-stencil:${EXPECTED.castHash}:${EXPECTED.registrationHash}`;
+const consoleFailures = [];
+window.addEventListener('error', event => consoleFailures.push(String(event.error?.stack || event.message || event.error || 'window error')));
+window.addEventListener('unhandledrejection', event => consoleFailures.push(String(event.reason?.stack || event.reason || 'unhandled rejection')));
+
+const statusElement = document.getElementById('status');
+const castShaElement = document.getElementById('cast-sha');
+const registrationShaElement = document.getElementById('registration-sha');
+const stencilShaElement = document.getElementById('stencil-sha');
+const stencilSourceElement = document.getElementById('stencil-source');
+const pendingElement = document.getElementById('pending');
+const regionListElement = document.getElementById('region-list');
+const modeChip = document.getElementById('mode-chip');
+const labelInput = document.getElementById('region-label');
+const sizeInputs = ['x', 'y', 'z'].map(axis => document.getElementById(`size-${axis}`));
+const sizeOutputs = ['x', 'y', 'z'].map(axis => document.getElementById(`size-${axis}-value`));
+const deleteButton = document.getElementById('delete-region');
+const importInput = document.getElementById('stencil-import');
+
+function setStatus(message, error = false) {
+  statusElement.textContent = message;
+  statusElement.classList.toggle('error', error);
+}
+
+function shortHash(hash) {
+  return hash ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : 'pending';
+}
+
+async function sha256(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function fetchBytesWithIdentity(path, expectedHash, label) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${label} fetch failed with HTTP ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  const hash = await sha256(bytes);
+  if (hash !== expectedHash) throw new Error(`${label} effective-byte identity mismatch: ${hash}`);
+  return { path: response.url, bytes, hash, byteLength: bytes.byteLength };
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c0d);
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.01, 100);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+document.getElementById('viewport').appendChild(renderer.domElement);
+await renderer.init();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.minDistance = 0.3;
+controls.maxDistance = 14;
+scene.add(new THREE.HemisphereLight(0xd8e4d3, 0x26302d, 1.7));
+const keyLight = new THREE.DirectionalLight(0xffdfae, 3.0);
+keyLight.position.set(-4, 7, 5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x8ebbb4, 1.4);
+rimLight.position.set(5, 3, -5);
+scene.add(rimLight);
+
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(6, 96),
+  new THREE.MeshStandardMaterial({ color: 0x242927, roughness: 0.96, metalness: 0 }),
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+const grid = new THREE.GridHelper(8, 32, 0x535d56, 0x303733);
+grid.material.transparent = true;
+grid.material.opacity = 0.28;
+scene.add(grid);
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const overlayMaterial = Object.freeze({
+  'body-axis': 0xf0ca69,
+  'appendage-chain': 0x73c4da,
+  'contact-patch': 0xf08e66,
+  'preservation-region': 0xb28ae8,
+});
+const state = {
+  schema: 'kaminos.motion-ready-719024.oracle-stencil-workbench-state.v0',
+  ok: false,
+  loaded: false,
+  mode: 'inspect',
+  pendingPoints: [],
+  selectedRegionId: null,
+  stencil: null,
+  stencilHash: null,
+  requestedStencilSource,
+  effectiveStencilSource: null,
+  castEvidence: null,
+  registrationEvidence: null,
+  registration: null,
+  creatureRoot: null,
+  creatureMesh: null,
+  originalPositions: null,
+  overlayRoot: new THREE.Group(),
+  bindingPoints: null,
+  derivedBinding: null,
+};
+scene.add(state.overlayRoot);
+
+function requiredPointCount(mode) {
+  return mode === 'body-axis' ? 2 : mode === 'appendage-chain' ? 3 : mode === 'inspect' ? 0 : 1;
+}
+
+function defaultLabel(mode) {
+  const count = state.stencil?.regions.filter(region => region.kind === mode).length || 0;
+  return mode === 'body-axis' ? 'Head to tail'
+    : mode === 'appendage-chain' ? `Appendage ${count + 1}`
+      : mode === 'contact-patch' ? `Contact ${count + 1}`
+        : mode === 'preservation-region' ? `Preserve ${count + 1}` : '';
+}
+
+function slugify(value) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'region';
+}
+
+function currentSizes() {
+  return sizeInputs.map(input => Number(input.value));
+}
+
+function updatePendingReadout() {
+  const needed = requiredPointCount(state.mode);
+  pendingElement.textContent = state.mode === 'inspect'
+    ? 'inspect / orbit enabled'
+    : `${state.mode} / points ${state.pendingPoints.length}/${needed}`;
+  modeChip.textContent = state.mode === 'inspect' ? 'inspect / exact rest space' : `${state.mode} / click exact cast`;
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  state.pendingPoints = [];
+  state.selectedRegionId = null;
+  controls.enabled = mode === 'inspect';
+  document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === mode));
+  labelInput.value = defaultLabel(mode);
+  deleteButton.disabled = true;
+  updatePendingReadout();
+  renderRegionList();
+  rebuildOverlays();
+}
+
+function pointGeometry(radius = 0.035) {
+  return new THREE.SphereGeometry(radius, 16, 10);
+}
+
+function overlaySphere(point, radius, color, opacity = 0.26) {
+  const sphere = new THREE.Mesh(
+    pointGeometry(1),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthTest: false }),
+  );
+  sphere.position.fromArray(point);
+  sphere.scale.setScalar(radius);
+  sphere.renderOrder = 6;
+  return sphere;
+}
+
+function overlayLine(points, color) {
+  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => new THREE.Vector3(...point)));
+  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.92, depthTest: false }));
+  line.renderOrder = 7;
+  return line;
+}
+
+function rebuildOverlays() {
+  state.overlayRoot.clear();
+  if (!state.creatureMesh || !state.stencil) return;
+  state.creatureMesh.add(state.overlayRoot);
+  for (const region of state.stencil.regions) {
+    const color = overlayMaterial[region.kind];
+    const selected = region.id === state.selectedRegionId;
+    if (region.points.length > 1) state.overlayRoot.add(overlayLine(region.points, color));
+    region.points.forEach((point, index) => {
+      const radius = region.kind === 'preservation-region'
+        ? 1
+        : Array.isArray(region.radii[index]) ? region.radii[index][0] : region.radii[index];
+      const marker = overlaySphere(point, radius, color, selected ? 0.42 : 0.2);
+      if (region.kind === 'preservation-region') marker.scale.fromArray(region.radii[0]);
+      marker.userData.regionId = region.id;
+      state.overlayRoot.add(marker);
+    });
+  }
+  const pendingColor = overlayMaterial[state.mode] || 0xffffff;
+  if (state.pendingPoints.length > 1) state.overlayRoot.add(overlayLine(state.pendingPoints, pendingColor));
+  state.pendingPoints.forEach(point => state.overlayRoot.add(overlaySphere(point, 0.045, pendingColor, 0.72)));
+  updateBindingOverlay();
+}
+
+function updateBindingOverlay() {
+  if (state.bindingPoints) {
+    state.creatureMesh.remove(state.bindingPoints);
+    state.bindingPoints.geometry.dispose();
+    state.bindingPoints.material.dispose();
+    state.bindingPoints = null;
+  }
+  const selected = state.derivedBinding?.regions.find(region => region.id === state.selectedRegionId);
+  if (!selected?.vertexIndices.length) return;
+  const positions = new Float32Array(selected.vertexIndices.length * 3);
+  selected.vertexIndices.forEach((vertex, index) => {
+    positions[index * 3] = state.originalPositions[vertex * 3];
+    positions[index * 3 + 1] = state.originalPositions[vertex * 3 + 1];
+    positions[index * 3 + 2] = state.originalPositions[vertex * 3 + 2];
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: overlayMaterial[state.stencil.regions.find(region => region.id === state.selectedRegionId)?.kind] || 0xffffff,
+    size: 0.016,
+    transparent: true,
+    opacity: 0.88,
+    depthTest: false,
+  });
+  state.bindingPoints = new THREE.Points(geometry, material);
+  state.bindingPoints.renderOrder = 8;
+  state.creatureMesh.add(state.bindingPoints);
+}
+
+async function refreshDerivedEvidence(sourceLabel = state.effectiveStencilSource) {
+  state.stencil = validateOracleStencilDocument(state.stencil, {
+    castId: EXPECTED.castId,
+    castHash: EXPECTED.castHash,
+    registrationHash: EXPECTED.registrationHash,
+  });
+  state.stencilHash = await hashOracleStencil(state.stencil);
+  state.derivedBinding = await deriveOracleStencilBinding(state.stencil, state.originalPositions, EXPECTED);
+  state.effectiveStencilSource = sourceLabel;
+  stencilShaElement.textContent = shortHash(state.stencilHash);
+  stencilSourceElement.textContent = sourceLabel;
+  renderRegionList();
+  rebuildOverlays();
+}
+
+function renderRegionList() {
+  regionListElement.replaceChildren();
+  if (!state.stencil.regions.length) {
+    const empty = document.createElement('div');
+    empty.id = 'empty';
+    empty.textContent = 'No authored regions';
+    regionListElement.appendChild(empty);
+    deleteButton.disabled = true;
+    return;
+  }
+  for (const region of state.stencil.regions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `region${region.id === state.selectedRegionId ? ' active' : ''}`;
+    const binding = state.derivedBinding?.regions.find(candidate => candidate.id === region.id);
+    const text = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = region.label;
+    const small = document.createElement('small');
+    small.textContent = `${region.kind} / ${region.id}`;
+    text.append(strong, small);
+    const count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = `${binding?.vertexIndices.length || 0}v`;
+    button.append(text, count);
+    button.addEventListener('click', () => selectRegion(region.id));
+    regionListElement.appendChild(button);
+  }
+  deleteButton.disabled = !state.selectedRegionId;
+}
+
+function selectRegion(regionId) {
+  state.selectedRegionId = regionId;
+  const region = state.stencil.regions.find(candidate => candidate.id === regionId);
+  if (region) {
+    labelInput.value = region.label;
+    const radii = region.kind === 'preservation-region' ? region.radii[0] : [region.radii[0], region.radii[0], region.radii[0]];
+    sizeInputs.forEach((input, index) => { input.value = String(radii[index]); });
+    sizeOutputs.forEach((output, index) => { output.value = Number(radii[index]).toFixed(2); });
+  }
+  renderRegionList();
+  rebuildOverlays();
+}
+
+async function addPendingPoint(localPoint) {
+  state.pendingPoints.push(localPoint.toArray());
+  updatePendingReadout();
+  rebuildOverlays();
+  const needed = requiredPointCount(state.mode);
+  if (state.pendingPoints.length < needed) return;
+  const label = labelInput.value.trim() || defaultLabel(state.mode);
+  const sizes = currentSizes();
+  const id = state.mode === 'body-axis'
+    ? 'body-axis'
+    : `${state.mode}-${slugify(label)}-${state.stencil.regions.filter(region => region.kind === state.mode).length + 1}`;
+  const radii = state.mode === 'preservation-region'
+    ? [sizes]
+    : state.pendingPoints.map(() => sizes[0]);
+  state.stencil = upsertOracleStencilRegion(state.stencil, {
+    id,
+    kind: state.mode,
+    label,
+    points: state.pendingPoints,
+    radii,
+  });
+  state.pendingPoints = [];
+  state.selectedRegionId = id;
+  labelInput.value = defaultLabel(state.mode);
+  await refreshDerivedEvidence('unsaved operator draft');
+  setStatus(`Authored ${label}`);
+}
+
+renderer.domElement.addEventListener('pointerdown', async event => {
+  if (!state.loaded || state.mode === 'inspect' || event.button !== 0) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(state.creatureMesh, false)[0];
+  if (!hit) return;
+  const local = state.creatureMesh.worldToLocal(hit.point.clone());
+  await addPendingPoint(local);
+});
+
+document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
+sizeInputs.forEach((input, index) => input.addEventListener('input', async () => {
+  sizeOutputs[index].value = Number(input.value).toFixed(2);
+  const region = state.stencil?.regions.find(candidate => candidate.id === state.selectedRegionId);
+  if (!region) return;
+  const sizes = currentSizes();
+  const radii = region.kind === 'preservation-region' ? [sizes] : region.radii.map(() => sizes[0]);
+  state.stencil = upsertOracleStencilRegion(state.stencil, { ...region, radii });
+  await refreshDerivedEvidence('unsaved operator draft');
+}));
+
+labelInput.addEventListener('change', async () => {
+  const region = state.stencil?.regions.find(candidate => candidate.id === state.selectedRegionId);
+  if (!region || !labelInput.value.trim()) return;
+  state.stencil = upsertOracleStencilRegion(state.stencil, { ...region, label: labelInput.value.trim() });
+  await refreshDerivedEvidence('unsaved operator draft');
+});
+
+document.getElementById('reset-pending').addEventListener('click', () => {
+  state.pendingPoints = [];
+  updatePendingReadout();
+  rebuildOverlays();
+});
+deleteButton.addEventListener('click', async () => {
+  if (!state.selectedRegionId) return;
+  state.stencil = removeOracleStencilRegion(state.stencil, state.selectedRegionId);
+  state.selectedRegionId = null;
+  await refreshDerivedEvidence('unsaved operator draft');
+});
+document.getElementById('clear-stencil').addEventListener('click', async () => {
+  state.stencil = createOracleStencilDocument({ ...EXPECTED, authoringSessionId: operatorSession });
+  state.selectedRegionId = null;
+  state.pendingPoints = [];
+  await refreshDerivedEvidence('blank operator draft');
+});
+document.getElementById('save-stencil').addEventListener('click', async () => {
+  localStorage.setItem(storageKey, JSON.stringify(state.stencil));
+  await refreshDerivedEvidence('local saved draft');
+  setStatus('Saved exact-cast semantic draft');
+});
+document.getElementById('load-stencil').addEventListener('click', async () => {
+  const stored = localStorage.getItem(storageKey);
+  if (!stored) return setStatus('No saved exact-cast draft', true);
+  state.stencil = validateOracleStencilDocument(JSON.parse(stored), EXPECTED);
+  state.selectedRegionId = null;
+  await refreshDerivedEvidence('local saved draft');
+  setStatus('Loaded and revalidated exact-cast draft');
+});
+document.getElementById('accept-stencil').addEventListener('click', async () => {
+  state.stencil = setOracleStencilStatus(state.stencil, 'accepted');
+  localStorage.setItem(storageKey, JSON.stringify(state.stencil));
+  await refreshDerivedEvidence('local accepted stencil');
+  setStatus('Accepted semantic stencil for bounded experiments');
+});
+document.getElementById('export-stencil').addEventListener('click', () => {
+  const blob = new Blob([`${JSON.stringify(state.stencil, null, 2)}\n`], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `kaminos-719024-oracle-stencil-${state.stencilHash.slice(0, 12)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+});
+document.getElementById('import-stencil-button').addEventListener('click', () => importInput.click());
+importInput.addEventListener('change', async () => {
+  const file = importInput.files?.[0];
+  if (!file) return;
+  state.stencil = validateOracleStencilDocument(JSON.parse(await file.text()), EXPECTED);
+  state.selectedRegionId = null;
+  await refreshDerivedEvidence(`imported ${file.name}`);
+  setStatus('Imported and revalidated semantic stencil');
+  importInput.value = '';
+});
+
+function frameCast() {
+  const box = new THREE.Box3().setFromObject(state.creatureRoot);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z) * 0.72;
+  controls.target.copy(center);
+  camera.position.copy(center).add(new THREE.Vector3(radius * 1.35, radius * 0.68, radius * 2.2));
+  camera.near = Math.max(0.005, radius / 100);
+  camera.far = Math.max(50, radius * 20);
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+document.getElementById('frame-cast').addEventListener('click', frameCast);
+
+async function loadWorkbench() {
+  const [castEvidence, registrationEvidence] = await Promise.all([
+    fetchBytesWithIdentity(PATHS.creature, EXPECTED.castHash, 'cast'),
+    fetchBytesWithIdentity(PATHS.registration, EXPECTED.registrationHash, 'registration'),
+  ]);
+  state.castEvidence = castEvidence;
+  state.registrationEvidence = registrationEvidence;
+  state.registration = JSON.parse(new TextDecoder().decode(registrationEvidence.bytes));
+  castShaElement.textContent = shortHash(castEvidence.hash);
+  registrationShaElement.textContent = shortHash(registrationEvidence.hash);
+
+  const loader = new GLTFLoader();
+  const gltf = await loader.parseAsync(castEvidence.bytes, new URL(PATHS.creature, location.href).href);
+  state.creatureRoot = gltf.scene;
+  state.creatureRoot.name = 'motion-ready-719024-exact-rest-cast';
+  const meshes = [];
+  state.creatureRoot.traverse(child => {
+    if (!child.isMesh || !child.geometry?.attributes?.position) return;
+    meshes.push(child);
+    child.castShadow = true;
+    child.receiveShadow = true;
+    child.material = child.material.clone();
+    child.material.roughness = Math.max(0.52, Number(child.material.roughness) || 0.52);
+  });
+  if (meshes.length !== 1) throw new Error(`oracle stencil workbench expected one exact-cast mesh, found ${meshes.length}`);
+  state.creatureMesh = meshes[0];
+  state.originalPositions = new Float32Array(state.creatureMesh.geometry.attributes.position.array);
+  scene.add(state.creatureRoot);
+
+  const initialBox = new THREE.Box3().setFromObject(state.creatureRoot);
+  const initialCenter = initialBox.getCenter(new THREE.Vector3());
+  state.creatureRoot.position.x -= initialCenter.x;
+  state.creatureRoot.position.z -= initialCenter.z;
+  state.creatureRoot.position.y -= initialBox.min.y;
+
+  if (requestedStencilSource) {
+    const response = await fetch(requestedStencilSource, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`stencil source fetch failed with HTTP ${response.status}`);
+    state.stencil = validateOracleStencilDocument(await response.json(), EXPECTED);
+    state.effectiveStencilSource = response.url;
+  } else {
+    state.stencil = createOracleStencilDocument({ ...EXPECTED, authoringSessionId: operatorSession });
+    state.effectiveStencilSource = 'blank operator draft';
+  }
+  await refreshDerivedEvidence(state.effectiveStencilSource);
+  state.loaded = true;
+  state.ok = true;
+  frameCast();
+  setStatus('Exact rest cast verified / stencil authoring active');
+}
+
+window.kaminosOracleStencilDebugState = () => ({
+  schema: 'kaminos.motion-ready-719024.oracle-stencil-debug.v0',
+  ok: state.ok,
+  loaded: state.loaded,
+  requested: {
+    castPath: PATHS.creature,
+    registrationPath: PATHS.registration,
+    requestedStencilSource: state.requestedStencilSource,
+    operatorSession,
+  },
+  effective: {
+    castId: EXPECTED.castId,
+    castHash: state.castEvidence?.hash || null,
+    castByteLength: state.castEvidence?.byteLength || null,
+    registrationHash: state.registrationEvidence?.hash || null,
+    registrationByteLength: state.registrationEvidence?.byteLength || null,
+    effectiveStencilSource: state.effectiveStencilSource,
+    stencilHash: state.stencilHash,
+    stencilAuthority: state.stencil?.authoring?.authority || null,
+    stencilStatus: state.stencil?.authoring?.status || null,
+    regionCount: state.stencil?.regions?.length || 0,
+    regionKinds: state.stencil?.regions?.map(region => region.kind) || [],
+    derivedBinding: state.derivedBinding ? {
+      schema: state.derivedBinding.schema,
+      authority: state.derivedBinding.authority,
+      stencilHash: state.derivedBinding.stencilHash,
+      vertexCount: state.derivedBinding.vertexCount,
+      regions: state.derivedBinding.regions.map(region => ({ id: region.id, vertexCount: region.vertexIndices.length })),
+    } : null,
+  },
+  authoring: {
+    mode: state.mode,
+    pendingPointCount: state.pendingPoints.length,
+    selectedRegionId: state.selectedRegionId,
+  },
+  consoleFailures: [...consoleFailures],
+});
+window.kaminosOracleStencilDocument = () => JSON.parse(JSON.stringify(state.stencil));
+window.kaminosOracleStencilSetMode = setMode;
+window.kaminosOracleStencilAddLocalPoint = async point => addPendingPoint(new THREE.Vector3(...point));
+window.kaminosOracleStencilSelectRegion = selectRegion;
+
+loadWorkbench().catch(error => {
+  consoleFailures.push(String(error.stack || error));
+  setStatus(error.message || String(error), true);
+  console.error(error);
+});
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
