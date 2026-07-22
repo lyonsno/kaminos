@@ -1,6 +1,7 @@
 export const WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA = 'kaminos.webgpu-foreground-opportunity-interlock.v0';
 export const WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA = 'kaminos.webgpu-foreground-opportunity-receipt.v0';
 export const WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-opportunity-service.v0';
+export const WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA = 'kaminos.webgpu-foreground-opportunity-pressure.v0';
 
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -63,6 +64,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     sequence: 0,
     serviceSequence: 0,
     pending: [],
+    pendingRequestCount: 0,
     requests: new Map(),
     receipts: [],
     services: [],
@@ -132,6 +134,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     };
     state.requests.set(requestState.requestId, requestState);
     state.pending.push(requestState);
+    state.pendingRequestCount += 1;
 
     return Object.freeze({
       requestId: requestState.requestId,
@@ -158,6 +161,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
           settledAtMs: now(),
           cancellation: { reason: String(reason) },
         });
+        state.pendingRequestCount -= 1;
         state.pending = state.pending.filter(candidate => candidate !== requestState);
         return receipt;
       },
@@ -165,7 +169,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
   }
 
   async function serviceBoundaryTurn(boundary) {
-    const captured = state.pending.filter(requestState => requestState.status === 'pending');
+    const captured = state.pending;
     if (captured.length === 0) {
       state.noDemandBoundaryCount += 1;
       return deepFreeze({
@@ -180,8 +184,8 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
         authority: 'no-foreground-demand-observed-at-safe-boundary',
       });
     }
-    const capturedSet = new Set(captured);
-    state.pending = state.pending.filter(requestState => !capturedSet.has(requestState));
+    state.pending = [];
+    state.pendingRequestCount = 0;
     state.serviceSequence += 1;
     const serviceStartedAtMs = now();
     const receipts = [];
@@ -346,6 +350,19 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     }
   }
 
+  function pressure() {
+    return Object.freeze({
+      schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+      routeId: state.routeId,
+      runId: state.runId,
+      pendingRequestCount: state.pendingRequestCount,
+      activeRequestCount: state.activeRequestCount,
+      activeServiceCount: state.activeServiceCount,
+      queuedServiceCount: state.queuedServiceCount,
+      authority: 'constant-time-live-pressure-counters-no-history-or-completion-claim',
+    });
+  }
+
   function snapshot() {
     return deepFreeze({
       schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
@@ -353,7 +370,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
       runId: state.runId,
       retention: 'uncapped',
       requestCount: state.requests.size,
-      pendingRequestCount: state.pending.filter(requestState => requestState.status === 'pending').length,
+      pendingRequestCount: state.pendingRequestCount,
       activeRequestCount: state.activeRequestCount,
       activeServiceCount: state.activeServiceCount,
       queuedServiceCount: state.queuedServiceCount,
@@ -383,6 +400,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
     request,
     serviceAtBoundary,
+    pressure,
     snapshot,
     finish,
   });

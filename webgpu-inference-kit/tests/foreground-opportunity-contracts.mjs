@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA,
+  WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
   createWebGpuInferenceRuntime,
@@ -71,6 +72,9 @@ const firstRequest = interlock.request({
     return { frameId: 'frame-1' };
   },
 });
+assert.equal(interlock.pressure().pendingRequestCount, 1);
+assert.equal(Object.hasOwn(interlock.pressure(), 'receipts'), false);
+assert.equal(Object.hasOwn(interlock.pressure(), 'services'), false);
 
 const firstService = await interlock.serviceAtBoundary({
   invocationId: 'sharp-invocation-a',
@@ -84,6 +88,7 @@ assert.equal(firstService.capturedRequestCount, 1);
 assert.equal(firstService.servicedRequestCount, 1);
 assert.deepEqual(submissions, [['foreground-frame-1-command']]);
 assert.equal(interlock.snapshot().pendingRequestCount, 1);
+assert.equal(interlock.pressure().pendingRequestCount, 1);
 
 const firstReceipt = await firstRequest.completion;
 assert.equal(firstReceipt.schema, WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA);
@@ -369,6 +374,32 @@ await assert.rejects(
   }),
   /route mismatch/i,
 );
+await assert.rejects(
+  () => createWebGpuInferenceRuntime({
+    routeId: 'sharp.image-to-splat.webgpu-local.v0',
+    runtimeLabel: 'invalid-external-foreground-pressure',
+    device: runtimeDevice,
+    queue: runtimeQueue,
+    adapterName: 'Invalid External Foreground Pressure',
+    kernel: { profile: 'invalid-external-foreground-pressure' },
+    foregroundOpportunities: {
+      ...externalMethods,
+      pressure() {
+        return {
+          schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+          routeId: 'sharp.image-to-splat.webgpu-local.v0',
+          runId: 'external-foreground-opportunities',
+          pendingRequestCount: -1,
+          activeRequestCount: 0,
+          activeServiceCount: 0,
+          queuedServiceCount: 0,
+          authority: 'constant-time-live-pressure-counters-no-history-or-completion-claim',
+        };
+      },
+    },
+  }),
+  /pressure pendingRequestCount.*non-negative integer/i,
+);
 let externalSnapshotIsValid = true;
 const mutableExternalRuntime = await createWebGpuInferenceRuntime({
   routeId: 'sharp.image-to-splat.webgpu-local.v0',
@@ -391,6 +422,56 @@ assert.throws(
   () => mutableExternalRuntime.foregroundOpportunitySnapshot(),
   /activeServiceCount.*non-negative integer/i,
 );
+
+let hotPathSnapshotAllowed = true;
+let hotPathSnapshotCount = 0;
+let hotPathPressureCount = 0;
+const constantTimeExternalRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runtimeLabel: 'constant-time-external-foreground-pressure',
+  device: runtimeDevice,
+  queue: runtimeQueue,
+  adapterName: 'Constant-Time External Foreground Pressure',
+  kernel: { profile: 'constant-time-external-foreground-pressure' },
+  foregroundOpportunities: {
+    ...externalMethods,
+    pressure() {
+      hotPathPressureCount += 1;
+      return {
+        schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+        routeId: 'sharp.image-to-splat.webgpu-local.v0',
+        runId: 'external-foreground-opportunities',
+        pendingRequestCount: 0,
+        activeRequestCount: 0,
+        activeServiceCount: 0,
+        queuedServiceCount: 0,
+        authority: 'constant-time-live-pressure-counters-no-history-or-completion-claim',
+      };
+    },
+    snapshot() {
+      hotPathSnapshotCount += 1;
+      if (!hotPathSnapshotAllowed) {
+        throw new Error('full retained history was traversed in the command-duty hot path');
+      }
+      return externalSnapshot();
+    },
+  },
+});
+const constructionSnapshotCount = hotPathSnapshotCount;
+hotPathSnapshotAllowed = false;
+await constantTimeExternalRuntime.prepareCommandDutyAtBoundary({ phase: 'constant-time-pressure-check' });
+assert.equal(hotPathSnapshotCount, constructionSnapshotCount);
+assert.ok(hotPathPressureCount >= 1);
+assert.deepEqual(interlock.pressure(), {
+  schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runId: 'foreground-opportunity-contract-a',
+  pendingRequestCount: 0,
+  activeRequestCount: 0,
+  activeServiceCount: 0,
+  queuedServiceCount: 0,
+  authority: 'constant-time-live-pressure-counters-no-history-or-completion-claim',
+});
 const schedulerApplication = createWebGpuSchedulerApplication({
   routeId: 'sharp.image-to-splat.webgpu-local.v0',
   scheduler: {

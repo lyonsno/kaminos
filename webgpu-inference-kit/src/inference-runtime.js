@@ -28,6 +28,7 @@ import {
   createWebGpuSchedulerApplication,
 } from './scheduler-application.js';
 import {
+  WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
 } from './foreground-opportunity.js';
@@ -79,6 +80,33 @@ function validateForegroundOpportunitySnapshot(snapshot, routeId) {
   return snapshot;
 }
 
+function validateForegroundOpportunityPressure(pressure, routeId) {
+  if (!pressure || typeof pressure !== 'object' || Array.isArray(pressure)) {
+    throw new Error('foregroundOpportunities pressure must be an object');
+  }
+  if (pressure.schema !== WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA) {
+    throw new Error(`foregroundOpportunities pressure schema must be ${WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA}`);
+  }
+  if (pressure.routeId !== routeId) throw new Error('foregroundOpportunities pressure route mismatch');
+  if (!isNonEmptyString(pressure.runId)) {
+    throw new Error('foregroundOpportunities pressure runId must be a non-empty caller-owned identity');
+  }
+  for (const field of [
+    'pendingRequestCount',
+    'activeRequestCount',
+    'activeServiceCount',
+    'queuedServiceCount',
+  ]) {
+    if (!Number.isInteger(pressure[field]) || pressure[field] < 0) {
+      throw new Error(`foregroundOpportunities pressure ${field} must be a non-negative integer`);
+    }
+  }
+  if (pressure.authority !== 'constant-time-live-pressure-counters-no-history-or-completion-claim') {
+    throw new Error('foregroundOpportunities pressure authority is invalid');
+  }
+  return pressure;
+}
+
 function validateForegroundOpportunityInterlock(interlock, routeId) {
   for (const method of ['request', 'serviceAtBoundary', 'snapshot', 'finish']) {
     if (typeof interlock?.[method] !== 'function') {
@@ -86,6 +114,9 @@ function validateForegroundOpportunityInterlock(interlock, routeId) {
     }
   }
   validateForegroundOpportunitySnapshot(interlock.snapshot(), routeId);
+  if (typeof interlock.pressure === 'function') {
+    validateForegroundOpportunityPressure(interlock.pressure(), routeId);
+  }
   return interlock;
 }
 
@@ -578,6 +609,26 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     return validateForegroundOpportunitySnapshot(foregroundOpportunities.snapshot(), input.routeId);
   }
 
+  function foregroundOpportunityPressure() {
+    if (!foregroundOpportunities) {
+      throw new Error('foreground opportunity interlock is not configured for this runtime');
+    }
+    if (typeof foregroundOpportunities.pressure === 'function') {
+      return validateForegroundOpportunityPressure(foregroundOpportunities.pressure(), input.routeId);
+    }
+    const snapshot = foregroundOpportunitySnapshot();
+    return {
+      schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+      routeId: snapshot.routeId,
+      runId: snapshot.runId,
+      pendingRequestCount: snapshot.pendingRequestCount,
+      activeRequestCount: snapshot.activeRequestCount,
+      activeServiceCount: snapshot.activeServiceCount,
+      queuedServiceCount: snapshot.queuedServiceCount,
+      authority: 'constant-time-live-pressure-counters-no-history-or-completion-claim',
+    };
+  }
+
   function initializeCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
     const descriptor = clone(descriptorInput || {});
     if (!isNonEmptyString(descriptor.phase)) throw new Error('command duty phase must be a non-empty string');
@@ -633,7 +684,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   }
 
   function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
-    if (foregroundOpportunities && hasForegroundOpportunityPressure(foregroundOpportunitySnapshot())) {
+    if (foregroundOpportunities && hasForegroundOpportunityPressure(foregroundOpportunityPressure())) {
       throw new Error(
         'foreground opportunity pressure requires awaiting prepareCommandDutyAtBoundary() before inference encode',
       );
@@ -663,8 +714,8 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   async function prepareCommandDutyAtBoundary(descriptorInput = {}, schedulerInvocation = null) {
     const descriptor = initializeCommandDuty(descriptorInput, schedulerInvocation);
     if (!foregroundOpportunities) return refreshCommandDuty(descriptor, schedulerInvocation);
-    const foregroundSnapshot = foregroundOpportunitySnapshot();
-    if (!hasForegroundOpportunityPressure(foregroundSnapshot)) {
+    const foregroundPressure = foregroundOpportunityPressure();
+    if (!hasForegroundOpportunityPressure(foregroundPressure)) {
       return refreshCommandDuty(descriptor, schedulerInvocation);
     }
     if (!isNonEmptyString(schedulerInvocation?.invocationId)) {
@@ -787,6 +838,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
     foregroundOpportunitySnapshot() {
       return foregroundOpportunitySnapshot();
+    },
+
+    foregroundOpportunityPressure() {
+      return foregroundOpportunityPressure();
     },
 
     finishForegroundOpportunities() {
