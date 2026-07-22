@@ -16,6 +16,8 @@ assert.match(page, /Body axis/, 'workbench exposes body-axis authoring directly'
 assert.match(page, /Appendage/, 'workbench exposes appendage-chain authoring directly');
 assert.match(page, /Contact/, 'workbench exposes contact-patch authoring directly');
 assert.match(page, /Preserve/, 'workbench exposes preservation-region authoring directly');
+assert.match(page, /acceptButton\.disabled/, 'workbench makes incomplete acceptance visibly unavailable');
+assert.match(page, /required.*body-axis.*appendage-chain.*contact-patch.*preservation-region/is, 'workbench names the complete primitive acceptance gate');
 assert.match(page, /kaminosOracleStencilDebugState/, 'workbench exposes machine-readable live state');
 assert.match(page, /requestedStencilSource/, 'debug state distinguishes requested stencil input');
 assert.match(page, /effectiveStencilSource/, 'debug state records the effective stencil source');

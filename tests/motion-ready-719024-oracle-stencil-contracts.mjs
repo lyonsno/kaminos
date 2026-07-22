@@ -9,6 +9,7 @@ import {
   deriveOracleStencilBinding,
   hashOracleStencil,
   perturbOracleStencilRegion,
+  setOracleStencilStatus,
   upsertOracleStencilRegion,
   validateOracleStencilDocument,
 } from '../motion-ready-719024-stencil.js';
@@ -57,6 +58,25 @@ stencil = upsertOracleStencilRegion(stencil, {
 });
 
 const validated = validateOracleStencilDocument(stencil, identity);
+assert.equal(setOracleStencilStatus(validated, 'accepted').authoring.status, 'accepted');
+assert.throws(
+  () => setOracleStencilStatus(createOracleStencilDocument({
+    ...identity,
+    authoringSessionId: 'blank-accept-reproduction',
+  }), 'accepted'),
+  /accepted oracle stencil requires.*body-axis.*appendage-chain.*contact-patch.*preservation-region/,
+  'blank drafts must not acquire accepted operator-semantic authority',
+);
+for (const omittedKind of ['body-axis', 'appendage-chain', 'contact-patch', 'preservation-region']) {
+  assert.throws(
+    () => setOracleStencilStatus({
+      ...validated,
+      regions: validated.regions.filter(region => region.kind !== omittedKind),
+    }, 'accepted'),
+    new RegExp(`accepted oracle stencil requires.*${omittedKind}`),
+    `acceptance must fail while ${omittedKind} is missing`,
+  );
+}
 assert.deepEqual(
   JSON.parse(canonicalizeOracleStencil(validated)),
   JSON.parse(canonicalizeOracleStencil(JSON.parse(JSON.stringify(validated)))),

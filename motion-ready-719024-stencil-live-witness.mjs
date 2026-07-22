@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { closeCdpBrowser, requestCdp } from './motion-ready-719024-cdp.js';
 
 const args = new Map();
@@ -33,6 +35,27 @@ const windowWidth = positiveInt(args.get('--window-width'), 1440, '--window-widt
 const windowHeight = positiveInt(args.get('--window-height'), 960, '--window-height');
 const chrome = process.env.KAMINOS_CHROME || args.get('--chrome') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-motion-ready-719024-stencil-profile-${port}-${process.pid}`;
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)));
+const expectedGitHead = args.get('--expected-git-head') || null;
+const localHtmlPath = resolve(repoRoot, 'motion-ready-719024-stencil.html');
+const localModulePath = resolve(repoRoot, 'motion-ready-719024-stencil.js');
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+const implementationIdentity = {
+  repoRoot,
+  gitHead: execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  dirtyStatus: execFileSync('git', ['-C', repoRoot, 'status', '--short'], { encoding: 'utf8' }).trim(),
+  expectedGitHead,
+  localHtmlHash: sha256(readFileSync(localHtmlPath)),
+  localModuleHash: sha256(readFileSync(localModulePath)),
+  servedHtmlUrl: null,
+  servedHtmlHash: null,
+  servedModuleUrl: null,
+  servedModuleHash: null,
+};
 
 let phase = 'initializing';
 let stderr = '';
@@ -49,6 +72,7 @@ function writeReport(report) {
     requestedUrl: url,
     effectiveUrl,
     requestedStencilSource: requestedUrl.searchParams.get('stencil_url'),
+    implementationIdentity,
     syntheticAuthoring: true,
     semanticQualityClaim: 'not-claimed',
     browserVersion,
@@ -70,6 +94,20 @@ async function cdpFetch(path) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`);
   if (!response.ok) throw new Error(`CDP ${path} returned ${response.status}`);
   return response.json();
+}
+
+async function fetchImplementationIdentity(requestUrl, localHash, label, identityPrefix) {
+  const response = await fetch(requestUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${label} implementation fetch failed with HTTP ${response.status}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const hash = sha256(bytes);
+  implementationIdentity[`served${identityPrefix}Url`] = response.url;
+  implementationIdentity[`served${identityPrefix}Hash`] = hash;
+  lastTrustworthyEvidence = { phase, label, url: response.url, hash };
+  if (hash !== localHash) {
+    throw new Error(`${label} implementation effective-byte identity mismatch: served ${hash}, local ${localHash}`);
+  }
+  return { url: response.url, hash };
 }
 
 async function waitForCdp() {
@@ -160,6 +198,13 @@ async function authorRegion(mode, label, points, sizes) {
 try {
   mkdirSync(outDir, { recursive: true });
   mkdirSync(userDataDir, { recursive: true });
+  phase = 'verifying-implementation-identity';
+  if (expectedGitHead && implementationIdentity.gitHead !== expectedGitHead) {
+    throw new Error(`implementation git head mismatch: ${implementationIdentity.gitHead} !== ${expectedGitHead}`);
+  }
+  await fetchImplementationIdentity(requestedUrl, implementationIdentity.localHtmlHash, 'HTML', 'Html');
+  const moduleUrl = new URL('./motion-ready-719024-stencil.js', requestedUrl);
+  await fetchImplementationIdentity(moduleUrl, implementationIdentity.localModuleHash, 'stencil module', 'Module');
   phase = 'launching-chrome';
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
@@ -177,8 +222,7 @@ try {
   const version = await waitForCdp();
   browserVersion = version.Browser || null;
   const pages = await cdpFetch('/json/list');
-  const page = pages.find(entry => entry.type === 'page' && entry.url.includes('motion-ready-719024-stencil'))
-    || pages.find(entry => entry.type === 'page') || pages[0];
+  const page = pages.find(entry => entry.type === 'page' && entry.url === url);
   if (!page?.webSocketDebuggerUrl) throw new Error('No debuggable stencil page found');
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
@@ -195,11 +239,15 @@ try {
   assert.equal(blank.effective.effectiveStencilSource, 'blank operator draft');
   assert.equal(blank.effective.regionCount, 0, 'fresh workbench silently loaded stale/default semantics');
   assert.deepEqual(blank.consoleFailures, []);
+  assert.equal(await evaluate(`document.getElementById('accept-stencil').disabled`), true, 'blank acceptance must remain disabled');
 
   phase = 'authoring-synthetic-oracle-stencil';
   await authorRegion('body-axis', 'Head to tail', [[0, 0, -0.47], [0, 0, 0.47]], [0.12, 0.12, 0.12]);
+  assert.equal(await evaluate(`document.getElementById('accept-stencil').disabled`), true, 'incomplete body-axis acceptance must remain disabled');
   await authorRegion('appendage-chain', 'Front left limb', [[0.14, -0.02, -0.22], [0.17, -0.13, -0.25], [0.16, -0.2, -0.27]], [0.07, 0.07, 0.07]);
+  assert.equal(await evaluate(`document.getElementById('accept-stencil').disabled`), true, 'incomplete appendage acceptance must remain disabled');
   await authorRegion('contact-patch', 'Front left contact', [[0.16, -0.2, -0.27]], [0.06, 0.06, 0.06]);
+  assert.equal(await evaluate(`document.getElementById('accept-stencil').disabled`), true, 'incomplete contact acceptance must remain disabled');
   await authorRegion('preservation-region', 'Trunk volume', [[0, 0, 0.05]], [0.17, 0.18, 0.34]);
   const authored = await waitForState(debug => debug.effective.regionCount === 4, 'four-kind authored stencil');
   assert.deepEqual([...authored.effective.regionKinds].sort(), [
@@ -209,11 +257,15 @@ try {
   assert.equal(authored.effective.derivedBinding.schema, 'kaminos.oracle-mechanical-stencil-binding.v0');
   assert.equal(authored.effective.derivedBinding.stencilHash, authored.effective.stencilHash);
   assert.ok(authored.effective.derivedBinding.regions.every(region => region.vertexCount > 0), 'an authored region bound to no exact-cast vertices');
+  assert.equal(await evaluate(`document.getElementById('accept-stencil').disabled`), false, 'complete stencil did not enable acceptance');
+  await evaluate(`document.getElementById('accept-stencil').click()`);
+  const accepted = await waitForState(debug => debug.effective.stencilStatus === 'accepted', 'accepted complete stencil');
+  assert.equal(accepted.effective.regionCount, 4);
 
   phase = 'save-clear-reload-round-trip';
-  const authoredHash = authored.effective.stencilHash;
+  const authoredHash = accepted.effective.stencilHash;
   await evaluate(`document.getElementById('save-stencil').click()`);
-  await waitForState(debug => debug.effective.effectiveStencilSource === 'local saved draft', 'saved semantic draft');
+  await waitForState(debug => debug.effective.effectiveStencilSource === 'local saved accepted stencil', 'saved accepted semantic stencil');
   const storageSnapshot = await evaluate(`localStorage.getItem(${JSON.stringify(`kaminos:oracle-stencil:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e:cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6`)})`);
   assert.ok(storageSnapshot?.includes('operator-authored-rest-space-semantics'), 'save path did not persist semantic authority');
   await evaluate(`document.getElementById('clear-stencil').click()`);
@@ -221,7 +273,7 @@ try {
   await evaluate(`document.getElementById('load-stencil').click()`);
   const reloaded = await waitForState(debug => debug.effective.regionCount === 4, 'reloaded semantic draft');
   assert.equal(reloaded.effective.stencilHash, authoredHash, 'save/reload changed semantic stencil identity');
-  assert.equal(reloaded.effective.effectiveStencilSource, 'local saved draft');
+  assert.equal(reloaded.effective.effectiveStencilSource, 'local saved accepted stencil');
   assert.deepEqual(reloaded.consoleFailures, []);
 
   phase = 'capturing-operator-viewport';

@@ -38,7 +38,10 @@ const server = createServer(async (request, response) => {
     const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '') || 'motion-ready-719024-stencil.html';
     const path = resolve(repoRoot, relative);
     if (!path.startsWith(`${repoRoot}/`)) throw new Error('path escapes fixture root');
-    const bytes = await readFile(path);
+    let bytes = await readFile(path);
+    if (requestUrl.searchParams.get('stale_implementation') === '1' && relative === 'motion-ready-719024-stencil.html') {
+      bytes = Buffer.concat([bytes, Buffer.from('\n<!-- stale implementation fixture -->\n')]);
+    }
     response.writeHead(200, { 'content-type': contentType(path), 'cache-control': 'no-store' });
     response.end(bytes);
   } catch (error) {
@@ -76,14 +79,35 @@ async function runFailure(name, commandArgs, parentTimeoutMs = 12_000) {
 
 try {
   const base = `http://127.0.0.1:${serverPort}`;
+  const staleImplementation = await runFailure('stale-implementation', [
+    '--chrome', chrome,
+    '--url', `${base}/motion-ready-719024-stencil.html?stale_implementation=1`,
+    '--debug-port', String(20_700 + (process.pid % 200)),
+    '--witness-timeout-ms', '4000',
+  ]);
+  assert.equal(staleImplementation.phase, 'verifying-implementation-identity');
+  assert.match(staleImplementation.error, /implementation effective-byte identity mismatch/);
+
   const blank = await runFailure('blank-route', [
     '--chrome', chrome,
     '--url', `${base}/blank.html`,
     '--debug-port', String(21_000 + (process.pid % 200)),
     '--witness-timeout-ms', '700',
   ]);
-  assert.equal(blank.phase, 'loading-blank-rest-space-workbench');
-  assert.equal(blank.lastTrustworthyEvidence.status, 'blank oracle fixture');
+  assert.equal(blank.phase, 'verifying-implementation-identity');
+  assert.match(blank.error, /HTML implementation effective-byte identity mismatch/);
+  assert.equal(blank.requestedUrl, `${base}/blank.html?operator_session=oracle-stencil-live-witness`);
+  assert.equal(
+    blank.implementationIdentity.servedHtmlUrl,
+    `${base}/blank.html?operator_session=oracle-stencil-live-witness`,
+  );
+  assert.match(blank.implementationIdentity.localHtmlHash, /^[a-f0-9]{64}$/);
+  assert.match(blank.implementationIdentity.servedHtmlHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(
+    blank.implementationIdentity.localHtmlHash,
+    blank.implementationIdentity.servedHtmlHash,
+    'blank substitute must retain the hash mismatch that rejected it',
+  );
 
   const tampered = await runFailure('tampered-registration', [
     '--chrome', chrome,

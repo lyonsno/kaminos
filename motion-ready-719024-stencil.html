@@ -138,9 +138,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   ORACLE_STENCIL_AUTHORITY,
   ORACLE_STENCIL_BINDING_SCHEMA,
+  ORACLE_STENCIL_REQUIRED_ACCEPTED_REGION_KINDS,
   createOracleStencilDocument,
   deriveOracleStencilBinding,
   hashOracleStencil,
+  oracleStencilAcceptanceMissingKinds,
   removeOracleStencilRegion,
   setOracleStencilStatus,
   upsertOracleStencilRegion,
@@ -176,7 +178,9 @@ const labelInput = document.getElementById('region-label');
 const sizeInputs = ['x', 'y', 'z'].map(axis => document.getElementById(`size-${axis}`));
 const sizeOutputs = ['x', 'y', 'z'].map(axis => document.getElementById(`size-${axis}-value`));
 const deleteButton = document.getElementById('delete-region');
+const acceptButton = document.getElementById('accept-stencil');
 const importInput = document.getElementById('stencil-import');
+const acceptanceContract = `required: ${ORACLE_STENCIL_REQUIRED_ACCEPTED_REGION_KINDS.join(', ')}`;
 
 function setStatus(message, error = false) {
   statusElement.textContent = message;
@@ -399,6 +403,11 @@ async function refreshDerivedEvidence(sourceLabel = state.effectiveStencilSource
   state.effectiveStencilSource = sourceLabel;
   stencilShaElement.textContent = shortHash(state.stencilHash);
   stencilSourceElement.textContent = sourceLabel;
+  const missingAcceptanceKinds = oracleStencilAcceptanceMissingKinds(state.stencil);
+  acceptButton.disabled = missingAcceptanceKinds.length > 0;
+  acceptButton.title = missingAcceptanceKinds.length
+    ? `${acceptanceContract}; missing ${missingAcceptanceKinds.join(', ')}`
+    : 'Accept the complete exact-cast semantic stencil';
   renderRegionList();
   rebuildOverlays();
 }
@@ -524,18 +533,19 @@ document.getElementById('clear-stencil').addEventListener('click', async () => {
 });
 document.getElementById('save-stencil').addEventListener('click', async () => {
   localStorage.setItem(storageKey, JSON.stringify(state.stencil));
-  await refreshDerivedEvidence('local saved draft');
-  setStatus('Saved exact-cast semantic draft');
+  const status = state.stencil.authoring.status;
+  await refreshDerivedEvidence(`local saved ${status} stencil`);
+  setStatus(`Saved exact-cast semantic ${status}`);
 });
 document.getElementById('load-stencil').addEventListener('click', async () => {
   const stored = localStorage.getItem(storageKey);
   if (!stored) return setStatus('No saved exact-cast draft', true);
   state.stencil = validateOracleStencilDocument(JSON.parse(stored), EXPECTED);
   state.selectedRegionId = null;
-  await refreshDerivedEvidence('local saved draft');
+  await refreshDerivedEvidence(`local saved ${state.stencil.authoring.status} stencil`);
   setStatus('Loaded and revalidated exact-cast draft');
 });
-document.getElementById('accept-stencil').addEventListener('click', async () => {
+acceptButton.addEventListener('click', async () => {
   state.stencil = setOracleStencilStatus(state.stencil, 'accepted');
   localStorage.setItem(storageKey, JSON.stringify(state.stencil));
   await refreshDerivedEvidence('local accepted stencil');

@@ -1,6 +1,12 @@
 export const ORACLE_STENCIL_SCHEMA = 'kaminos.oracle-mechanical-stencil.v0';
 export const ORACLE_STENCIL_BINDING_SCHEMA = 'kaminos.oracle-mechanical-stencil-binding.v0';
 export const ORACLE_STENCIL_AUTHORITY = 'operator-authored-rest-space-semantics';
+export const ORACLE_STENCIL_REQUIRED_ACCEPTED_REGION_KINDS = Object.freeze([
+  'body-axis',
+  'appendage-chain',
+  'contact-patch',
+  'preservation-region',
+]);
 
 const REGION_KINDS = new Set([
   'body-axis',
@@ -120,6 +126,11 @@ export function validateOracleStencilDocument(document, expected = {}) {
     ids.add(normalized.id);
     return normalized;
   });
+  const missingAcceptedKinds = ORACLE_STENCIL_REQUIRED_ACCEPTED_REGION_KINDS
+    .filter(kind => !regions.some(region => region.kind === kind));
+  if (document.authoring.status === 'accepted' && missingAcceptedKinds.length) {
+    throw new Error(`accepted oracle stencil requires ${missingAcceptedKinds.join(', ')}`);
+  }
 
   return {
     schema: ORACLE_STENCIL_SCHEMA,
@@ -151,6 +162,7 @@ export function upsertOracleStencilRegion(document, region) {
   const normalized = validateOracleStencilDocument(document);
   const nextRegion = normalizeRegion(region, normalized.regions.length);
   const next = clone(normalized);
+  next.authoring.status = 'draft';
   const index = next.regions.findIndex(candidate => candidate.id === nextRegion.id);
   if (index >= 0) next.regions[index] = nextRegion;
   else next.regions.push(nextRegion);
@@ -165,6 +177,7 @@ export function removeOracleStencilRegion(document, regionId) {
   const normalized = validateOracleStencilDocument(document);
   return {
     ...normalized,
+    authoring: { ...normalized.authoring, status: 'draft' },
     regions: normalized.regions.filter(region => region.id !== regionId),
   };
 }
@@ -194,7 +207,17 @@ export function perturbOracleStencilRegion(document, regionId, perturbation = {}
     };
   });
   if (!found) throw new Error(`oracle stencil region ${regionId} does not exist`);
-  return validateOracleStencilDocument({ ...normalized, regions });
+  return validateOracleStencilDocument({
+    ...normalized,
+    authoring: { ...normalized.authoring, status: 'draft' },
+    regions,
+  });
+}
+
+export function oracleStencilAcceptanceMissingKinds(document) {
+  const normalized = validateOracleStencilDocument(document);
+  return ORACLE_STENCIL_REQUIRED_ACCEPTED_REGION_KINDS
+    .filter(kind => !normalized.regions.some(region => region.kind === kind));
 }
 
 function capsuleMembership(point, points, radii) {
