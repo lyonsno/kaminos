@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -47,11 +48,12 @@ const { validateLiveRebakeExercise } = await import('../fire-actor-live-parity-w
 const { FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS } = await import('../fire-actor-live-parity-contract.mjs');
 const controls = structuredClone(FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS);
 const pixelIdentity = 'a'.repeat(64);
+const sha256Json = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const source = {
   requestedMode: 'live',
   effectiveMode: 'live',
-  stateId: `fireactor-live-${'b'.repeat(64)}`,
-  sourceStateIdentity: 'c'.repeat(64),
+  stateId: null,
+  sourceStateIdentity: null,
   fluidSha256: 'd'.repeat(64),
   frontSha256: 'e'.repeat(64),
   cameraIdentity: 'camera-signature',
@@ -65,10 +67,11 @@ const source = {
   liveCaptureLease: { beforeRelease: 120, afterRelease: 120, restoredPaused: true },
 };
 const treatmentProducerReceipt = {
-  sourceStateIdentity: source.sourceStateIdentity,
+  sourceStateIdentity: null,
   source: {
     mode: 'live',
-    stateId: source.stateId,
+    grid: 128,
+    stateId: null,
     fluidSha256: source.fluidSha256,
     frontSha256: source.frontSha256,
     cameraIdentity: source.cameraIdentity,
@@ -76,13 +79,55 @@ const treatmentProducerReceipt = {
     routeIdentity: source.routeIdentity,
     effectiveRoute: source.effectiveRoute,
     backend: source.backend,
+    exportAuthority: source.exportAuthority,
+    exportIdentity: source.exportIdentity,
   },
   effectiveControls: controls,
-  stageBIdentity: 'f'.repeat(64),
+  controlsIdentity: '2'.repeat(64),
+  fixedProductionControlsIdentity: '3'.repeat(64),
+  projectionIdentity: '4'.repeat(64),
+  candidateIdentity: '5'.repeat(64),
+  coefficientIdentity: '6'.repeat(64),
+  covarianceIdentity: '7'.repeat(64),
+  stageBIdentity: null,
   depositionIdentity: '1'.repeat(64),
   pixelIdentity,
   projection: { identity: 'fixed-stage-b-analytical-camera-v0' },
 };
+const stateBasis = {
+  mode: treatmentProducerReceipt.source.mode,
+  grid: treatmentProducerReceipt.source.grid,
+  fluidSha256: treatmentProducerReceipt.source.fluidSha256,
+  frontSha256: treatmentProducerReceipt.source.frontSha256,
+  cameraIdentity: treatmentProducerReceipt.source.cameraIdentity,
+  simStepCount: treatmentProducerReceipt.source.simStepCount,
+  routeIdentity: treatmentProducerReceipt.source.routeIdentity,
+  effectiveRoute: treatmentProducerReceipt.source.effectiveRoute,
+  backend: treatmentProducerReceipt.source.backend,
+  exportAuthority: treatmentProducerReceipt.source.exportAuthority,
+  exportIdentity: treatmentProducerReceipt.source.exportIdentity,
+};
+source.stateId = `fireactor-live-${sha256Json(stateBasis)}`;
+treatmentProducerReceipt.source.stateId = source.stateId;
+source.sourceStateIdentity = sha256Json({
+  stateId: source.stateId,
+  grid: treatmentProducerReceipt.source.grid,
+  fluidSha256: source.fluidSha256,
+  frontSha256: source.frontSha256,
+  cameraIdentity: source.cameraIdentity,
+});
+treatmentProducerReceipt.sourceStateIdentity = source.sourceStateIdentity;
+treatmentProducerReceipt.stageBIdentity = sha256Json({
+  sourceStateIdentity: treatmentProducerReceipt.sourceStateIdentity,
+  controlsIdentity: treatmentProducerReceipt.controlsIdentity,
+  fixedProductionControlsIdentity: treatmentProducerReceipt.fixedProductionControlsIdentity,
+  projectionIdentity: treatmentProducerReceipt.projectionIdentity,
+  candidateIdentity: treatmentProducerReceipt.candidateIdentity,
+  coefficientIdentity: treatmentProducerReceipt.coefficientIdentity,
+  covarianceIdentity: treatmentProducerReceipt.covarianceIdentity,
+  depositionIdentity: treatmentProducerReceipt.depositionIdentity,
+  pixelIdentity: treatmentProducerReceipt.pixelIdentity,
+});
 const validExercise = {
   beforeStep: 120,
   afterStep: 120,
@@ -119,6 +164,8 @@ const validExercise = {
     baselinePixelByteLength: 1024,
     rawPixelSha256: pixelIdentity,
     canvasPixelSha256: pixelIdentity,
+    engineBefore: { simStepCount: 120, cameraSignature: source.cameraIdentity, paused: true },
+    engineAfter: { simStepCount: 120, cameraSignature: source.cameraIdentity, paused: true },
     producerReceipts: { treatment: treatmentProducerReceipt },
   },
   pixels: { changedPixels: 12, litPixels: 12, sha256: 'b'.repeat(64) },
@@ -132,6 +179,17 @@ for (const [name, mutate, pattern] of [
   ['wrong package', value => { value.result.receipt.packageSha256 = '9'.repeat(64); }, /mount identity/],
   ['missing source hash', value => { value.result.receipt.source.fluidSha256 = null; }, /source identity/],
   ['wrong route', value => { value.result.receipt.source.effectiveRoute = 'fallback'; }, /source identity/],
+  ['fallback export authority', value => { value.result.receipt.source.exportAuthority = 'cached-fallback'; }, /source identity/],
+  ['stale camera', value => {
+    value.result.receipt.source.cameraIdentity = 'stale-default-camera';
+    value.result.producerReceipts.treatment.source.cameraIdentity = 'stale-default-camera';
+  }, /engine capture identity/],
+  ['state identity mismatch', value => { value.result.receipt.source.stateId = `fireactor-live-${'9'.repeat(64)}`; }, /producer receipt|derived from/],
+  ['source identity mismatch', value => {
+    value.result.receipt.source.sourceStateIdentity = '9'.repeat(64);
+    value.result.producerReceipts.treatment.sourceStateIdentity = '9'.repeat(64);
+  }, /internally inconsistent/],
+  ['Stage B identity mismatch', value => { value.result.producerReceipts.treatment.stageBIdentity = '9'.repeat(64); }, /producer receipt|Stage B identity/],
   ['missing producer receipt', value => { delete value.result.producerReceipts; }, /producer receipt/],
   ['producer identity mismatch', value => { value.result.producerReceipts.treatment.pixelIdentity = '9'.repeat(64); }, /producer receipt/],
   ['raw pixel mismatch', value => { value.result.rawPixelSha256 = '9'.repeat(64); }, /raw pixel/],

@@ -127,12 +127,26 @@ export function installFireActorLiveParitySurface({
       throw new Error(`${surface} live parity control rebake is unavailable`);
     }
     const instance = await engine();
+    const before = instance.debugState();
     const result = await runControlRebake({ engine: instance, request: clone(request) });
+    const after = instance.debugState();
     if (result?.receipt?.status !== 'applied' || !(result.pixels instanceof Uint8ClampedArray)) {
       throw new Error(`${surface} live parity control rebake returned an invalid result`);
     }
     controlRebakeReceipt = clone(result.receipt);
-    return result;
+    return {
+      ...result,
+      engineBefore: {
+        simStepCount: before.simStepCount,
+        cameraSignature: before.cameraSignature,
+        paused: before.selectiveHeadLiveCapturePaused === true,
+      },
+      engineAfter: {
+        simStepCount: after.simStepCount,
+        cameraSignature: after.cameraSignature,
+        paused: after.selectiveHeadLiveCapturePaused === true,
+      },
+    };
   }
 
   async function receipt() {

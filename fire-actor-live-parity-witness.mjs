@@ -14,6 +14,8 @@ const EXPECTED_REVISION = 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f2
 const EXPECTED_MOUNT = 'firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7';
 const EXPECTED_PACKAGE = 'f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc';
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const EXPECTED_EXPORT_AUTHORITY = 'debug-full-grid-webgpu-copy-buffer-readback';
+const EXPECTED_EXPORT_IDENTITY = 'full-grid-fluid-front-boundary-sidecars-v0';
 const HEX_64 = /^[a-f0-9]{64}$/;
 const EXPECTED_ENGINE = Object.freeze({
   sourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
@@ -28,6 +30,10 @@ function parseArgs(argv) {
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+function sha256Json(value) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
 async function cdpJson(port, path) {
@@ -307,9 +313,17 @@ export function validateLiveRebakeExercise(exercise) {
     || !source?.cameraIdentity || source.cameraRole !== 'capture-context-not-analytical-projection'
     || source.routeIdentity !== EXPECTED_ROUTE || source.effectiveRoute !== EXPECTED_ROUTE
     || !String(source.backend || '').startsWith('WebGPU:')
-    || !source.exportAuthority || !source.exportIdentity
+    || source.exportAuthority !== EXPECTED_EXPORT_AUTHORITY
+    || source.exportIdentity !== EXPECTED_EXPORT_IDENTITY
     || source.liveCaptureLease?.beforeRelease !== 120 || source.liveCaptureLease?.afterRelease !== 120) {
     throw new Error('Wake rebake live source identity mismatch');
+  }
+  const engineBefore = exercise.result.engineBefore;
+  const engineAfter = exercise.result.engineAfter;
+  if (engineBefore?.simStepCount !== 120 || engineAfter?.simStepCount !== 120
+    || engineBefore.cameraSignature !== source.cameraIdentity
+    || engineAfter.cameraSignature !== source.cameraIdentity) {
+    throw new Error('Wake rebake engine capture identity mismatch');
   }
   if (Object.keys(receipt.requestedControls || {}).length !== 14 || Object.keys(receipt.effectiveControls || {}).length !== 14) {
     throw new Error('Wake rebake did not exercise exactly fourteen controls');
@@ -343,11 +357,53 @@ export function validateLiveRebakeExercise(exercise) {
     || treatment.source?.routeIdentity !== source.routeIdentity
     || treatment.source?.effectiveRoute !== source.effectiveRoute
     || treatment.source?.backend !== source.backend
+    || treatment.source?.exportAuthority !== source.exportAuthority
+    || treatment.source?.exportIdentity !== source.exportIdentity
     || !same(treatment.effectiveControls, receipt.effectiveControls)
     || treatment.stageBIdentity !== receipt.identities?.treatmentStageB
     || treatment.depositionIdentity !== receipt.identities?.deposition
     || treatment.pixelIdentity !== receipt.identities?.pixels) {
     throw new Error('Wake rebake producer receipt mismatch');
+  }
+  const stateBasis = {
+    mode: treatment.source.mode,
+    grid: treatment.source.grid,
+    fluidSha256: treatment.source.fluidSha256,
+    frontSha256: treatment.source.frontSha256,
+    cameraIdentity: treatment.source.cameraIdentity,
+    simStepCount: treatment.source.simStepCount,
+    routeIdentity: treatment.source.routeIdentity,
+    effectiveRoute: treatment.source.effectiveRoute,
+    backend: treatment.source.backend,
+    exportAuthority: treatment.source.exportAuthority,
+    exportIdentity: treatment.source.exportIdentity,
+  };
+  if (source.stateId !== `fireactor-live-${sha256Json(stateBasis)}`) {
+    throw new Error('Wake rebake live state identity is not derived from the captured source');
+  }
+  const expectedSourceStateIdentity = sha256Json({
+    stateId: source.stateId,
+    grid: treatment.source.grid,
+    fluidSha256: source.fluidSha256,
+    frontSha256: source.frontSha256,
+    cameraIdentity: source.cameraIdentity,
+  });
+  if (source.sourceStateIdentity !== expectedSourceStateIdentity) {
+    throw new Error('Wake rebake producer source identity is internally inconsistent');
+  }
+  const expectedStageBIdentity = sha256Json({
+    sourceStateIdentity: treatment.sourceStateIdentity,
+    controlsIdentity: treatment.controlsIdentity,
+    fixedProductionControlsIdentity: treatment.fixedProductionControlsIdentity,
+    projectionIdentity: treatment.projectionIdentity,
+    candidateIdentity: treatment.candidateIdentity,
+    coefficientIdentity: treatment.coefficientIdentity,
+    covarianceIdentity: treatment.covarianceIdentity,
+    depositionIdentity: treatment.depositionIdentity,
+    pixelIdentity: treatment.pixelIdentity,
+  });
+  if (treatment.stageBIdentity !== expectedStageBIdentity) {
+    throw new Error('Wake rebake Stage B identity is internally inconsistent');
   }
   if (receipt.projection?.identity !== 'fixed-stage-b-analytical-camera-v0'
     || treatment.projection?.identity !== receipt.projection.identity) {
