@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -112,6 +112,13 @@ for (const item of [
 ]) {
   item.path = `/destroyed/worktree/${item.path.split('/').at(-1)}`;
 }
+const relocatedRegistration = fitted.createFittedProxyRigRegistration({
+  fitReport: driftedFitReport,
+  fitReportPath: priorReportPath,
+  armatureProgram: program,
+  expectedDonorSha256: donorSha256,
+});
+assert.equal(relocatedRegistration.stationCount, 13, 'stale absolute witness paths must recover from exact sibling evidence');
 driftedFitReport.acceptance.visualInspection.artifacts[0].sha256 = `sha256:${'0'.repeat(64)}`;
 assert.throws(
   () => fitted.createFittedProxyRigRegistration({
@@ -121,6 +128,29 @@ assert.throws(
     expectedDonorSha256: donorSha256,
   }),
   /inspection artifact hash mismatch/,
+);
+
+const traversalDir = await mkdtemp(join(tmpdir(), 'kaminos-fitted-proxy-rig-traversal-'));
+const traversalReportDir = join(traversalDir, 'report');
+const traversalOutsideDir = join(traversalDir, 'outside');
+await mkdir(traversalReportDir);
+await mkdir(traversalOutsideDir);
+const traversalFitReport = structuredClone(fitReport);
+for (const item of [
+  ...traversalFitReport.acceptance.visualInspection.artifacts,
+  traversalFitReport.outputInventory.primaryWitness,
+  traversalFitReport.outputInventory.depthWitness,
+]) {
+  const name = item.path.split('/').at(-1);
+  item.path = `../outside/${name}`;
+  await writeFile(join(traversalOutsideDir, name), readFileSync(join(dirname(priorReportPath), name)));
+}
+assert.throws(
+  () => fitted.validateReferenceFitReport(traversalFitReport, {
+    reportPath: join(traversalReportDir, 'report.json'),
+  }),
+  /missing witness artifact/,
+  'relative witness paths must not be reinterpreted against the supplied report path',
 );
 
 const positions = [];

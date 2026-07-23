@@ -1190,7 +1190,7 @@ async function writeJsonAtomic(path, value) {
 
 function resolveReportArtifactPath(recordedPath, reportPath) {
   if (typeof recordedPath !== 'string' || !reportPath) return recordedPath;
-  if (!isAbsolute(recordedPath)) return resolve(dirname(resolve(reportPath)), recordedPath);
+  if (!isAbsolute(recordedPath)) return recordedPath;
   if (existsSync(recordedPath)) return recordedPath;
   return resolve(dirname(resolve(reportPath)), basename(recordedPath));
 }
