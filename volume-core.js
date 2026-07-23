@@ -13294,10 +13294,10 @@ export function createKaminosVolumePrototype({
       if (!splatsEncoded) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
       }
+      writeTimestamp(4, 'kaminos boundary splat timestamp before splat raster');
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 4,
           endOfPassWriteIndex: 5,
         },
       });

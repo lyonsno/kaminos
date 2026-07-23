@@ -87,6 +87,11 @@ assert.match(
   /writeTimestamp\(0, 'kaminos boundary splat timestamp before simulation'\);[\s\S]*?encodeSim\(encoder\);[\s\S]*?writeTimestamp\(1, 'kaminos boundary splat timestamp after simulation'\)/,
   'GPU profile brackets simulation with explicit timestamp markers',
 );
+assert.match(
+  volumeCore,
+  /writeTimestamp\(4, 'kaminos boundary splat timestamp before splat raster'\);[\s\S]*?encodeBoundarySplatDraw\([\s\S]*?endOfPassWriteIndex:\s*5/,
+  'GPU profile brackets splat raster without an implicit beginning timestamp',
+);
 assert.match(index, /window\.kaminosFireActorParity\s*=/, 'cockpit exposes the shared live parity API');
 assert.match(index, /id="volume-steps"[^>]+step="1"/, 'cockpit ray-step slider must preserve caller-selected integer counts without rounding');
 assert.match(index, /verifyFireActorParityPackage/, 'cockpit parity verifies the canonical package without a machine-local preset dependency');
