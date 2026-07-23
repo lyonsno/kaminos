@@ -112,6 +112,118 @@ export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL = 'https://pol
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 export const KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT = 'deterministic-binary-volume-weighted-sheet-refinement-v0';
+export const KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid-representation-frame.v1';
+export const KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE = 'kaminos-fluid-representation-frame-v1';
+export const KAMINOS_FLUID_SIMULATION_RESIDENCY_AUTHORITY = 'simulation-physical-event-hysteresis-v1';
+
+export function validateFingerFluidOpticalRepresentationFrame(frame, expectedIdentity = {}) {
+  if (!frame || typeof frame !== 'object') {
+    throw new TypeError('Fluid representation frame is missing');
+  }
+  if (
+    !expectedIdentity
+    || typeof expectedIdentity !== 'object'
+    || typeof expectedIdentity.sourceRevision !== 'string'
+    || expectedIdentity.sourceRevision.trim().length === 0
+    || !Number.isInteger(expectedIdentity.fluidEpoch)
+    || expectedIdentity.fluidEpoch < 0
+    || !Number.isInteger(expectedIdentity.terrainEpoch)
+    || expectedIdentity.terrainEpoch < 0
+  ) {
+    throw new Error('Expected fluid representation frame identity is incomplete');
+  }
+  if (frame.schema !== KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA) {
+    throw new Error(`Fluid representation frame schema is unsupported: ${frame.schema || 'missing'}`);
+  }
+  if (
+    frame.requestedRoute !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
+    || frame.effectiveRoute !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
+    || frame.requestedRoute !== frame.effectiveRoute
+  ) {
+    throw new Error(`Fluid representation frame route disagreement: ${JSON.stringify({
+      requestedRoute: frame.requestedRoute || null,
+      effectiveRoute: frame.effectiveRoute || null,
+    })}`);
+  }
+  if (!Object.hasOwn(frame, 'fallbackReason') || frame.fallbackReason !== null) {
+    throw new Error(`Fluid representation frame fallback is not accepted: ${frame.fallbackReason || 'missing'}`);
+  }
+  if (typeof frame.sourceRevision !== 'string' || frame.sourceRevision.trim().length === 0) {
+    throw new Error('Fluid representation frame source revision is missing');
+  }
+  if (
+    frame.sourceRevision !== expectedIdentity.sourceRevision
+  ) {
+    throw new Error(`Fluid representation frame source revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.sourceRevision,
+      observed: frame.sourceRevision,
+    })}`);
+  }
+  if (!Number.isInteger(frame.fluidEpoch) || frame.fluidEpoch < 0) {
+    throw new Error(`Fluid representation frame fluid epoch is invalid: ${frame.fluidEpoch}`);
+  }
+  if (frame.fluidEpoch !== expectedIdentity.fluidEpoch) {
+    throw new Error(`Stale or substituted fluid epoch: ${JSON.stringify({
+      expected: expectedIdentity.fluidEpoch,
+      observed: frame.fluidEpoch,
+    })}`);
+  }
+  if (!Number.isInteger(frame.terrainEpoch) || frame.terrainEpoch < 0) {
+    throw new Error(`Fluid representation frame terrain epoch is invalid: ${frame.terrainEpoch}`);
+  }
+  if (frame.terrainEpoch !== expectedIdentity.terrainEpoch) {
+    throw new Error(`Stale or substituted terrain epoch: ${JSON.stringify({
+      expected: expectedIdentity.terrainEpoch,
+      observed: frame.terrainEpoch,
+    })}`);
+  }
+  if (!Number.isFinite(frame.physicalMetersPerWorldUnit) || frame.physicalMetersPerWorldUnit <= 0) {
+    throw new Error(`Fluid representation frame physical scale is invalid: ${frame.physicalMetersPerWorldUnit}`);
+  }
+  if (frame.cameraIndependent !== true) {
+    throw new Error('Fluid representation frame must be camera independent');
+  }
+  if (frame.residencyAuthority !== KAMINOS_FLUID_SIMULATION_RESIDENCY_AUTHORITY) {
+    throw new Error(`Fluid representation frame residency authority is invalid: ${frame.residencyAuthority || 'missing'}`);
+  }
+  if (frame.completeness !== 'complete') {
+    throw new Error(`Fluid representation frame is not complete: ${frame.completeness || 'missing'}`);
+  }
+  if (!Number.isFinite(frame.confidence) || frame.confidence < 0 || frame.confidence > 1) {
+    throw new Error(`Fluid representation frame confidence is invalid: ${frame.confidence}`);
+  }
+
+  const representations = frame.representations;
+  if (!representations || typeof representations !== 'object') {
+    throw new Error('Fluid representation frame representations are missing');
+  }
+  const availableRepresentations = [];
+  for (const name of ['macro', 'local', 'parcel']) {
+    const representation = representations[name];
+    if (!representation || representation.available !== true) continue;
+    if (typeof representation.source !== 'string' || representation.source.trim().length === 0) {
+      throw new Error(`Fluid representation frame ${name} representation source is missing`);
+    }
+    availableRepresentations.push(name);
+  }
+  if (availableRepresentations.length === 0) {
+    throw new Error('Fluid representation frame has no available representation');
+  }
+
+  return Object.freeze({
+    schema: frame.schema,
+    requestedRoute: frame.requestedRoute,
+    effectiveRoute: frame.effectiveRoute,
+    sourceRevision: frame.sourceRevision,
+    fluidEpoch: frame.fluidEpoch,
+    terrainEpoch: frame.terrainEpoch,
+    physicalMetersPerWorldUnit: frame.physicalMetersPerWorldUnit,
+    confidence: frame.confidence,
+    cameraIndependent: true,
+    residencyAuthority: frame.residencyAuthority,
+    availableRepresentations: Object.freeze(availableRepresentations),
+  });
+}
 
 function radianceFailure(message) {
   throw new Error(`Radiance HDR ${message}`);
