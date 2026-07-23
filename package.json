@@ -2,6 +2,10 @@
   "name": "kaminos",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "fluid-contracts",
+    "fluid-webgpu"
+  ],
   "dependencies": {
     "@kaminos/webgpu-inference-kit": "^0.1.6"
   }
