@@ -1536,7 +1536,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="24" max="160" step="4" value="96">
+      <input type="range" id="volume-steps" min="24" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
@@ -2697,6 +2697,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
+import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
@@ -17854,6 +17855,9 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  if (params.get('promoted_fire_parity') === '1') {
+    volumePrototype.setSelectiveHeadLiveCapturePaused(true);
+  }
   const readFireActorParityCamera = () => ({
     type: camera.type,
     fov: camera.fov,
@@ -17875,13 +17879,60 @@ async function initKaminosVolumeRoute() {
     window._kaminosDirty?.();
     return readFireActorParityCamera();
   };
+  let fireActorParityPackageVerification = null;
+  const verifyFireActorParityPackage = async () => {
+    if (fireActorParityPackageVerification) return fireActorParityPackageVerification;
+    fireActorParityPackageVerification = (async () => {
+      const packageUrl = './artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json';
+      const response = await fetch(packageUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`cockpit live parity package fetch failed: ${response.status}`);
+      const text = await response.text();
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => (
+        byte.toString(16).padStart(2, '0')
+      )).join('');
+      const packageDocument = JSON.parse(text);
+      if (packageDocument.schema !== 'kaminos.volume.basin-promotion-package.v1'
+        || packageDocument.revision !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.basinRevision
+        || digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.packageSha256) {
+        throw new Error('cockpit live parity package identity mismatch');
+      }
+      const preset = packageDocument.settingsPreset?.artifact?.preset;
+      const basinControls = Object.values(preset?.domControls || {});
+      const rendererControls = Object.values(preset?.rendererControls || {});
+      const substitutions = [...basinControls, ...rendererControls].flatMap(control => {
+        const element = document.getElementById(control.id);
+        if (!element) return [{ id: control.id, requested: control.value, effective: null }];
+        const requested = Object.hasOwn(control, 'rawValue') ? control.rawValue : control.value;
+        const effective = readVolumeDomControlValue(element);
+        const equal = typeof requested === 'number' && typeof effective === 'number'
+          ? Math.abs(requested - effective) <= 0.000001
+          : String(requested) === String(effective);
+        return equal ? [] : [{ id: control.id, requested, effective }];
+      });
+      if (basinControls.length !== 186 || rendererControls.length !== 3 || substitutions.length) {
+        throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
+      }
+      return {
+        schema: 'kaminos.fire-actor-live-parity-package-verification.v1',
+        status: 'verified',
+        packageUrl,
+        packageSha256: digest,
+        revision: packageDocument.revision,
+        controls: { basin: basinControls.length, renderer: rendererControls.length },
+      };
+    })();
+    return fireActorParityPackageVerification;
+  };
   window.kaminosFireActorParity = installFireActorLiveParitySurface({
     surface: 'cockpit',
+    prepareSurface: async () => {
+      document.getElementById('sidebar').hidden = true;
+      document.getElementById('volume-authored-mix-panel').hidden = true;
+      await new Promise(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+      window.dispatchEvent(new Event('resize'));
+    },
     ensureEngine: async () => {
-      const expectedPreset = 'vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c';
-      if (activeVolumeSettingsPresetReceipt?.presetId !== expectedPreset) {
-        throw new Error(`cockpit live parity requires exact settings preset ${expectedPreset}`);
-      }
+      await verifyFireActorParityPackage();
       if (!volumePrototype.debugState().active) await volumePrototype.setActive(true);
       return volumePrototype;
     },

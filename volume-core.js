@@ -20897,13 +20897,14 @@ export function createKaminosVolumePrototype({
       raf = requestAnimationFrame(render);
       return receiptPromise;
     },
-    async stepSelectiveHeadLiveCaptureFrame() {
+    async stepSelectiveHeadLiveCaptureFrame(options = {}) {
       if (!state.active || !device) return { ok: false, reason: 'inactive' };
       if (!selectiveHeadLiveCapturePaused) return { ok: false, reason: 'capture-not-paused' };
       const beforeFrameCount = state.frameCount;
       const beforeSimStepCount = state.simStepCount;
       selectiveHeadLiveCapturePaused = false;
-      render(performance.now());
+      const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+      render(sampleNow);
       selectiveHeadLiveCapturePaused = true;
       state.selectiveHeadLiveCapturePaused = true;
       cancelAnimationFrame(raf);
@@ -20919,6 +20920,7 @@ export function createKaminosVolumePrototype({
         beforeSimStepCount,
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
+        sampleNowMs: sampleNow,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
         requestedRole: state.selectiveHeadLiveRole,
         roleAuthority: state.selectiveHeadLiveRoleAuthority,

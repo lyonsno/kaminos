@@ -38,6 +38,7 @@ const receipt = {
     gpuComplete: true,
     pauseAuthority: descriptor.state.pauseAuthority,
     controlsSignature: descriptor.state.controlsSignature,
+    deterministicClock: structuredClone(descriptor.state.deterministicClock),
   },
   camera: structuredClone(descriptor.camera),
   actor: structuredClone(descriptor.actor),
@@ -69,9 +70,13 @@ assert.match(
   /'smoke-raymarch-only-v0'[\s\S]*?raymarch:\s*true,[\s\S]*?splat:\s*false,[\s\S]*?raymarchFireAuthority:\s*0/,
   'smoke-only parity arm must raymarch broad smoke without raymarched or splatted fire',
 );
+assert.match(volumeCore, /stepSelectiveHeadLiveCaptureFrame\(options\s*=\s*\{\}\)[\s\S]*?render\(sampleNow\)/, 'deterministic parity stepping supplies an explicit simulation clock');
 assert.match(index, /window\.kaminosFireActorParity\s*=/, 'cockpit exposes the shared live parity API');
+assert.match(index, /id="volume-steps"[^>]+step="1"/, 'cockpit ray-step slider must preserve caller-selected integer counts without rounding');
+assert.match(index, /verifyFireActorParityPackage/, 'cockpit parity verifies the canonical package without a machine-local preset dependency');
 assert.match(browserContract, /pauseAtExactStep/, 'cockpit parity uses exact-step GPU-complete pause');
 assert.match(browserContract, /setArm/, 'cockpit parity exposes live presentation arms');
+assert.match(browserContract, /captureSelectiveHeadLiveFrame[\s\S]*advanceSim:\s*false[\s\S]*presentToCanvas:\s*true/, 'arm switching presents the frozen state instead of changing receipts only');
 assert.match(browserContract, /applyCamera/, 'cockpit parity accepts exact camera transfer');
 assert.match(browserContract, /kaminos-fire-parity-command/, 'cockpit parity accepts workbench postMessage commands');
 

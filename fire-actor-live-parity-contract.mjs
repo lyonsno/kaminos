@@ -47,6 +47,11 @@ function parityBasis() {
       targetSimStep: 120,
       pauseAuthority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
       controlsSignature: 'vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c',
+      deterministicClock: {
+        authority: 'parity-fixed-30hz-step-clock-v0',
+        startNowMs: 1000,
+        stepDeltaMs: 1000 / 30,
+      },
     },
     camera: {
       type: 'PerspectiveCamera',
@@ -78,6 +83,19 @@ function same(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
+function sameCamera(left, right) {
+  const close = (a, b) => Math.abs(Number(a) - Number(b)) <= 1e-9;
+  const closeArray = (a, b) => Array.isArray(a) && Array.isArray(b)
+    && a.length === b.length && a.every((value, index) => close(value, b[index]));
+  return left?.type === right?.type
+    && close(left?.fov, right?.fov)
+    && close(left?.near, right?.near)
+    && close(left?.far, right?.far)
+    && closeArray(left?.position, right?.position)
+    && closeArray(left?.target, right?.target)
+    && closeArray(left?.up, right?.up);
+}
+
 export function validateFireActorLiveParityReceipt(receipt, descriptor) {
   if (!receipt || receipt.schema !== RECEIPT_SCHEMA || receipt.status !== 'effective') {
     throw new Error('live parity receipt is not effective');
@@ -96,7 +114,12 @@ export function validateFireActorLiveParityReceipt(receipt, descriptor) {
   if (receipt.state?.controlsSignature !== descriptor.state.controlsSignature) {
     throw new Error('live parity controls signature mismatch');
   }
-  if (!same(receipt.camera, descriptor.camera)) throw new Error('live parity camera mismatch');
+  if (!same(receipt.state?.deterministicClock, descriptor.state.deterministicClock)) {
+    throw new Error('live parity deterministic clock mismatch');
+  }
+  if (!sameCamera(receipt.camera, descriptor.camera)) {
+    throw new Error(`live parity camera mismatch: requested ${canonicalJson(descriptor.camera)}, effective ${canonicalJson(receipt.camera)}`);
+  }
   if (!same(receipt.actor, descriptor.actor)) throw new Error('live parity actor transform mismatch');
   const arm = receipt.presentation?.arm;
   if (!FIRE_ACTOR_LIVE_PARITY_ARMS.includes(arm) || !same(receipt.presentation, { arm, ...descriptor.presentation.arms[arm] })) {

@@ -16,10 +16,12 @@ export function installFireActorLiveParitySurface({
   readCamera,
   readActor = () => ({ transform: { translate: [0, 0, 0], scale: 1 } }),
   readFallbackReason,
+  prepareSurface = async () => {},
 }) {
   const descriptorPromise = createFireActorLiveParityDescriptor();
   let arm = 'composite';
   let exactPauseReceipt = null;
+  let deterministicClockReceipt = null;
 
   async function engine() {
     const candidate = await ensureEngine();
@@ -41,13 +43,18 @@ export function installFireActorLiveParitySurface({
     const smokeReceipt = instance.setRaymarchSmokePresentationMode(presentation.smoke);
     arm = nextArm;
     if (instance.debugState()?.selectiveHeadLiveCapturePaused === true) {
-      await instance.sampleFrame({ advanceSim: false, includeRgba: false });
+      const frame = await instance.captureSelectiveHeadLiveFrame({ advanceSim: false, presentToCanvas: true });
+      if (!frame?.ok || frame.simStepCount !== instance.debugState().simStepCount) {
+        throw new Error(`${surface} live parity arm presentation failed: ${frame?.reason || 'simulation step changed'}`);
+      }
     }
     return { ...presentation, compositionReceipt, smokeReceipt };
   }
 
   async function begin(options = {}) {
-    await engine();
+    await prepareSurface();
+    const instance = await engine();
+    instance.setSelectiveHeadLiveCapturePaused(true);
     await applyCamera(options.camera);
     await setArm(options.arm || arm);
     return state();
@@ -56,7 +63,23 @@ export function installFireActorLiveParitySurface({
   async function pauseAtExactStep(target = null) {
     const descriptor = await descriptorPromise;
     const requested = target ?? descriptor.state.targetSimStep;
-    const receipt = await (await engine()).pauseSelectiveHeadLiveAtSimStep(requested);
+    const instance = await engine();
+    const before = instance.debugState();
+    if (before.simStepCount === 0) {
+      instance.setSelectiveHeadLiveCapturePaused(true);
+      const clock = descriptor.state.deterministicClock;
+      for (let step = 1; step <= requested; step += 1) {
+        const sampleNow = clock.startNowMs + (step - 1) * clock.stepDeltaMs;
+        const stepped = await instance.stepSelectiveHeadLiveCaptureFrame({ now: sampleNow });
+        if (!stepped?.ok || stepped.simStepCount !== step || stepped.sampleNowMs !== sampleNow) {
+          throw new Error(`deterministic parity step failed at ${step}: ${stepped?.reason || stepped?.simStepCount}`);
+        }
+      }
+      deterministicClockReceipt = clone(clock);
+    } else if (before.simStepCount !== requested || !deterministicClockReceipt) {
+      throw new Error(`deterministic parity settle requires a fresh step-zero engine: ${before.simStepCount}`);
+    }
+    const receipt = await instance.pauseSelectiveHeadLiveAtSimStep(requested);
     if (!receipt?.ok || receipt.paused !== true || receipt.gpuComplete !== true) {
       throw new Error(`exact parity pause failed: ${receipt?.reason || 'missing receipt'}`);
     }
@@ -66,6 +89,7 @@ export function installFireActorLiveParitySurface({
 
   async function play() {
     exactPauseReceipt = null;
+    deterministicClockReceipt = null;
     return (await engine()).setSelectiveHeadLiveCapturePaused(false);
   }
 
@@ -97,6 +121,7 @@ export function installFireActorLiveParitySurface({
         gpuComplete: exactPauseReceipt?.gpuComplete === true,
         pauseAuthority: exactPauseReceipt?.authority || null,
         controlsSignature: descriptor.state.controlsSignature,
+        deterministicClock: clone(deterministicClockReceipt),
       },
       camera: readCamera(),
       actor: readActor(),
@@ -123,12 +148,14 @@ export function installFireActorLiveParitySurface({
       descriptor,
       arm,
       exactPauseReceipt: clone(exactPauseReceipt),
+      deterministicClockReceipt: clone(deterministicClockReceipt),
       engine: clone(readEngine()?.debugState?.() || null),
       camera: readCamera(),
     };
   }
 
   const api = {
+    ping: async () => ({ surface, status: 'installed' }),
     descriptor: () => descriptorPromise,
     begin,
     pauseAtExactStep,
