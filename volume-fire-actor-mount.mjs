@@ -346,31 +346,42 @@ function normalizeActivation(value = {}) {
   }
   const inferenceRequired = boolean(value.inferenceRequired, 'fire actor activation inferenceRequired');
   const routeRef = value.routeRef ? String(value.routeRef) : null;
+  const authority = requiredString(value.authority, 'fire actor activation authority');
   if (mode === 'operator-preview' && inferenceRequired) throw new Error('operator preview cannot require inference');
   if (mode === 'operator-preview' && routeRef) throw new Error('operator preview cannot carry a route ref');
+  if (mode === 'operator-preview' && authority !== 'operator-selected-preview') {
+    throw new Error('operator preview authority must be operator-selected-preview');
+  }
   if (mode === 'consumer-route' && !routeRef) throw new Error('consumer route activation requires an explicit route ref');
   return {
     mode,
-    authority: requiredString(value.authority, 'fire actor activation authority'),
+    authority,
     inferenceRequired,
     routeRef,
   };
+}
+
+function fireActorEpisodeIdentity({ episodeId, mountId, activation }) {
+  return contentIdentity('fireepisode', {
+    schema: FIRE_ACTOR_EPISODE_SCHEMA,
+    episodeId,
+    mountId,
+    activation,
+  });
 }
 
 export function beginFireActorEpisode({ mount, episodeId, activation } = {}) {
   const actorMount = validateActorMount(mount);
   const normalizedEpisodeId = requiredString(episodeId, 'fire actor episode id');
   const normalizedActivation = normalizeActivation(activation);
-  const identityBasis = {
-    schema: FIRE_ACTOR_EPISODE_SCHEMA,
-    episodeId: normalizedEpisodeId,
-    mountId: actorMount.mountId,
-    activation: normalizedActivation,
-  };
   return {
     schema: FIRE_ACTOR_EPISODE_SCHEMA,
     status: 'recording',
-    episodeIdentity: contentIdentity('fireepisode', identityBasis),
+    episodeIdentity: fireActorEpisodeIdentity({
+      episodeId: normalizedEpisodeId,
+      mountId: actorMount.mountId,
+      activation: normalizedActivation,
+    }),
     episodeId: normalizedEpisodeId,
     mountId: actorMount.mountId,
     actorId: actorMount.actorId,
@@ -390,10 +401,25 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
   if (episode?.schema !== FIRE_ACTOR_EPISODE_SCHEMA || episode.status !== 'recording') {
     throw new Error('fire actor episode is not recording');
   }
+  const activation = normalizeActivation(episode.activation);
+  const expectedEpisodeIdentity = fireActorEpisodeIdentity({
+    episodeId: requiredString(episode.episodeId, 'fire actor episode id'),
+    mountId: actorMount.mountId,
+    activation,
+  });
   if (episode.mountId !== actorMount.mountId
+    || episode.episodeIdentity !== expectedEpisodeIdentity
+    || episode.actorId !== actorMount.actorId
+    || episode.basinRevision !== actorMount.basin.revision
+    || episode.policyId !== actorMount.policy.policyId
     || effectivePresentation?.mountId !== actorMount.mountId
     || effectivePresentation?.episodeId !== episode.episodeId) {
     throw new Error('fire actor episode identity mismatch');
+  }
+  if (episode.requestedPresentation?.composition !== actorMount.representation.composition
+    || episode.requestedPresentation?.rendererIdentity !== actorMount.representation.rendererIdentity
+    || episode.requestedPresentation?.policyId !== actorMount.policy.policyId) {
+    throw new Error('fire actor episode requested presentation identity mismatch');
   }
   if (effectivePresentation.policyId !== actorMount.policy.policyId
     || effectivePresentation.basinRevision !== actorMount.basin.revision
@@ -405,9 +431,17 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
     throw new Error(`fire actor effective presentation fallback: ${effectivePresentation.fallbackReason}`);
   }
   return {
-    ...structuredClone(episode),
+    schema: FIRE_ACTOR_EPISODE_SCHEMA,
     status: 'completed',
-    inferenceRan: episode.activation.inferenceRequired,
+    episodeIdentity: expectedEpisodeIdentity,
+    episodeId: episode.episodeId,
+    mountId: actorMount.mountId,
+    actorId: actorMount.actorId,
+    basinRevision: actorMount.basin.revision,
+    policyId: actorMount.policy.policyId,
+    activation,
+    requestedPresentation: structuredClone(episode.requestedPresentation),
+    inferenceRan: activation.inferenceRequired,
     effectivePresentation: structuredClone(effectivePresentation),
   };
 }
