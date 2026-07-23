@@ -546,7 +546,7 @@ assert.equal(state.acceptance.iframeAcceptance, false);
 assert.equal(state.acceptance.openDirectAcceptance, false);
 
 const webgpuMod = await import(webgpuCorePath);
-assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRUTH_SCENES, ['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle']);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRUTH_SCENES, ['multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle', 'live_hand_inlets']);
 assert.equal(webgpuMod.resolveFingerFluidTruthScene('deep_pool_rest'), 'deep_pool_rest');
 assert.throws(() => webgpuMod.resolveFingerFluidTruthScene('quietly_default'), /Unsupported finger fluid truth scene/);
 assert.equal(typeof webgpuMod.createFingerFluidTruthSceneParticles, 'function');
