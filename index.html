@@ -13611,31 +13611,89 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       adapterReport,
       sharpRunDebug: sharpResult.runDebug,
     });
-    const reportTransport = compactSharpInlineReportDocument({
-      schema: 'kaminos.sharp-inline-pipeline-report.v0',
-      status: 'real',
-      pipelineId: 'sharp-image-to-splat-live-v0',
-      requestedPipelineId: 'sharp-image-to-splat-live-v0',
-      effectiveRouteConfig: {
-        routeId: 'sharp-image-to-splat-live-v0',
-        routeAuthority: 'same-browser-product-realm-shared-device',
-      },
-      authoritativeTrace: persistedEvidence.authoritativeTrace,
-      durationMs: sharpResult.runDebug?.elapsedMs || null,
-      pipelineScheduler: persistedEvidence.pipelineScheduler,
-      stages: [{
-        id: 'run-sharp-image-to-splat',
+    let reportTransport;
+    let schedulerTelemetryArchive;
+    try {
+      schedulerTelemetryArchive = sharpResult.schedulerTelemetryArchive;
+      reportTransport = compactSharpInlineReportDocument({
+        schema: 'kaminos.sharp-inline-pipeline-report.v0',
         status: 'real',
-        durationMs: sharpResult.runDebug?.elapsedMs || null,
-        effectiveRoute: {
-          adapterReport: persistedEvidence.adapterReport,
-          pipelineScheduler: persistedEvidence.pipelineScheduler,
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        requestedPipelineId: 'sharp-image-to-splat-live-v0',
+        effectiveRouteConfig: {
+          routeId: 'sharp-image-to-splat-live-v0',
+          routeAuthority: 'same-browser-product-realm-shared-device',
         },
-      }],
-      artifacts: { splat: artifact },
-    }, {
-      schedulerTelemetryArchive: sharpResult.schedulerTelemetryArchive,
-    });
+        authoritativeTrace: persistedEvidence.authoritativeTrace,
+        durationMs: sharpResult.runDebug?.elapsedMs || null,
+        pipelineScheduler: persistedEvidence.pipelineScheduler,
+        stages: [{
+          id: 'run-sharp-image-to-splat',
+          status: 'real',
+          durationMs: sharpResult.runDebug?.elapsedMs || null,
+          effectiveRoute: {
+            adapterReport: persistedEvidence.adapterReport,
+            pipelineScheduler: persistedEvidence.pipelineScheduler,
+          },
+        }],
+        artifacts: { splat: artifact },
+      }, {
+        schedulerTelemetryArchive,
+      });
+    } catch (error) {
+      const failureDocument = {
+        schema: 'kaminos.sharp-inline-failure-report.v0',
+        status: 'failed',
+        phase: 'scheduler-archive-compaction',
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        firingId,
+        error: error?.message || String(error),
+        effectiveRoute: {
+          route: 'same-browser-product-realm-shared-device',
+          sharpRevision: inline.mount.revision,
+          moduleUrl: inline.mount.moduleUrl,
+          weightsUrl: inline.mount.weightsUrl,
+        },
+        artifacts: { splat: artifact },
+        rejectedArchive: {
+          schema: schedulerTelemetryArchive?.schema || null,
+          status: schedulerTelemetryArchive?.status || null,
+          retention: schedulerTelemetryArchive?.retention || null,
+          runId: schedulerTelemetryArchive?.runId || null,
+          clockId: schedulerTelemetryArchive?.clockId || null,
+          eventCount: Number.isInteger(schedulerTelemetryArchive?.eventCount)
+            ? schedulerTelemetryArchive.eventCount
+            : null,
+          observedEventCount: Array.isArray(schedulerTelemetryArchive?.events)
+            ? schedulerTelemetryArchive.events.length
+            : null,
+        },
+        lastTrustworthyEvidence: {
+          inferenceStatus: sharpResult.runDebug?.status || null,
+          outputs: sharpResult.runDebug?.outputs || null,
+          schedulerStatus: sharpResult.runDebug?.schedulerTelemetry?.status || null,
+          artifact,
+        },
+      };
+      const failureReceipt = await persistSharpInlineRunReport({
+        document: failureDocument,
+        firingId,
+        lastTrustworthyOutput: artifact,
+      });
+      return {
+        ok: false,
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        phase: failureDocument.phase,
+        error: failureDocument.error,
+        report: {
+          path: failureReceipt.path,
+          readUrl: failureReceipt.readUrl,
+          document: failureReceipt.document,
+        },
+        reportPath: failureReceipt.path,
+        reportReadUrl: failureReceipt.readUrl,
+      };
+    }
     const rawResult = {
       schema: 'kaminos.pipeline-run-result.v0',
       ok: true,

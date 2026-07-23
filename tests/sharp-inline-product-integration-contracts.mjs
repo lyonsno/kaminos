@@ -109,12 +109,12 @@ assert.match(
 );
 assert.equal(
   (page.match(/report:\s*\{\s*path:\s*failureReceipt\.path,\s*readUrl:\s*failureReceipt\.readUrl,\s*document:\s*failureReceipt\.document,?\s*\}/g) || []).length,
-  2,
-  'both inline failure returns must expose the durable receipt through the canonical result.report shape',
+  3,
+  'every inline failure return must expose the durable receipt through the canonical result.report shape',
 );
 assert.match(
   page,
-  /let foregroundModeActivated = false[\s\S]{0,9000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
+  /let foregroundModeActivated = false[\s\S]{0,14000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
 assert.match(
@@ -255,8 +255,13 @@ assert.match(
 );
 assert.match(
   page,
-  /const reportTransport = compactSharpInlineReportDocument\(\{[\s\S]{0,5000}schedulerTelemetryArchive:\s*sharpResult\.schedulerTelemetryArchive/,
+  /reportTransport = compactSharpInlineReportDocument\(\{[\s\S]{0,5000}schedulerTelemetryArchive/,
   'the success route must hand the explicit sealed SHARP archive to the uncapped transport',
+);
+assert.match(
+  page,
+  /let reportTransport;[\s\S]{0,300}try \{[\s\S]{0,500}reportTransport = compactSharpInlineReportDocument\([\s\S]{0,5000}catch \(error\) \{[\s\S]{0,1200}phase:\s*'scheduler-archive-compaction'[\s\S]{0,2500}persistSharpInlineRunReport\(\{[\s\S]{0,500}lastTrustworthyOutput:\s*artifact/,
+  'a sealed archive rejection after PLY ingest must durably report its phase and the exact persisted artifact identity',
 );
 assert.match(
   page,
