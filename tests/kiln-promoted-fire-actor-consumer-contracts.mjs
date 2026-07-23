@@ -68,7 +68,7 @@ assert.deepEqual(application.presentation, {
 });
 assert.deepEqual(application.productTransform, { translate: [0, 0, 0], scale: 1 });
 
-const preview = beginKilnPromotedFireActorPreview({
+const preview = await beginKilnPromotedFireActorPreview({
   loaded,
   episodeId: 'wake-kiln-operator-preview-001',
   rendererEpisode: {
@@ -84,7 +84,7 @@ assert.equal(preview.activation.inferenceRequired, false);
 assert.equal(preview.activation.routeRef, null);
 assert.equal(preview.mountId, loaded.mount.mountId);
 
-const completed = completeKilnPromotedFireActorPreview({
+const completed = await completeKilnPromotedFireActorPreview({
   loaded,
   preview,
   rendererEpisode: {
@@ -109,6 +109,7 @@ assert.equal(completed.effectivePresentation.inferenceRan, false);
 
 const tamperedMount = JSON.parse(readFileSync(mountPath, 'utf8'));
 tamperedMount.policy.requested.smoke.renderScale = 0.5;
+tamperedMount.policy.effective.smoke.renderScale = 0.5;
 await assert.rejects(
   () => loadKilnPromotedFireActor({
     mountUrl,
