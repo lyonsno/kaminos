@@ -538,11 +538,52 @@ Long browser WebGPU routes need to say how they behave under contention. The pac
 - `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)` for visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)` for portable command-boundary attribution and adaptive chunk-control selection across model ports.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)` for automatic runtime submission capture and strict measured-duty projection.
+- `createWebGpuAdaptiveCommandDutyPlanner(input)` for exact within-kernel ranges that grow or shrink toward a caller-owned completed-duty duration. The caller supplies the total work, initial range, duration target, and minimum/maximum chunk bounds; the planner preserves complete coverage and does not pretend to know the final range count until execution finishes.
 - `createForegroundBudgetGovernor(input)` for a long-lived adaptive control loop. The caller supplies scheduler bounds, attribution policy, hysteresis, and an `episodeEpochId`; each observation carries the same epoch plus a unique episode/firing identity. Exact replays cannot vote twice. `forgetEpisode()` and `clearDecisionHistory()` discard cached decisions while preserving replay protection, and `beginEpisodeEpoch(nextId)` is the explicit boundary that reclaims those identities and resets hysteresis while preserving the tuned scheduler.
 - `createWebGpuSchedulerApplication(input)` for guarded application of governor decisions. It rejects foreign routes, skipped/stale/replayed revisions, undeclared controls, bounds mismatches, capped boundary retention, duplicate boundaries, and refresh attempts anywhere except an explicit `before-encode` boundary. Applying a revision while an invocation is active changes future invocations immediately but changes that active invocation only when it reaches its next boundary.
 - `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)` for the current SHARP default-vs-cooperative comparison contract.
 
 This is the layer that should help SHARP, SF3D, Kimodo, image generators, and future long routes become breathable enough to coexist with rendering or other inference work in the same browser GPU process.
+
+For a single large kernel, adapt exact ranges from completed queue time instead of choosing one fixed chunk size for every operation:
+
+```js
+const planner = createWebGpuAdaptiveCommandDutyPlanner({
+  plannerId: `${routeRunId}:decoder-conv`,
+  unit: "output-item",
+  totalItems: outputElements,
+  initialChunkItems: 524_288,
+  targetDurationMs: 8,
+  bounds: {
+    minChunkItems: 65_536,
+    maxChunkItems: outputElements,
+  },
+  metadata: { routeId, phase: "decoder-conv" },
+});
+
+for (let range = planner.nextRange(); range; range = planner.nextRange()) {
+  const encoder = device.createCommandEncoder();
+  encodeDecoderRange(encoder, {
+    outputStart: range.itemStart,
+    outputCount: range.itemCount,
+  });
+  device.queue.submit([encoder.finish()]);
+
+  const queueStartMs = performance.now();
+  await device.queue.onSubmittedWorkDone();
+  planner.observeRange({
+    rangeId: range.rangeId,
+    observedDurationMs: performance.now() - queueStartMs,
+    timingAuthority: "queue-work-done",
+  });
+  await serviceForegroundAndYield();
+}
+
+const completedPlan = planner.snapshot();
+completedPlan.actualRangeCount;
+```
+
+Only one range may be pending at a time. Stale range ids and non-queue timing fail without advancing coverage. Every range carries exact completed-items-over-total progress; `actualRangeCount` remains `null` until the final range completes. History is uncapped, and the planner never invents chunk bounds beyond those supplied by the model adapter or higher-level governor.
 
 ```js
 const scheduler = {
