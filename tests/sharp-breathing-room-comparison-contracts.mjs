@@ -130,7 +130,7 @@ function schedulerVerification({
       effective: 262144,
       status: 'verified',
       adaptive: true,
-      adaptiveTargetDurationMs: 8,
+      adaptiveTargetDurationMs: 12,
       adaptiveMinChunkItems: 65536,
       adaptiveMaxChunkItems: 8388608,
       observedAdaptiveRangeCount: 2,
@@ -163,7 +163,7 @@ function schedulerVerification({
           decoderKernelChunkItems: 262144,
           decoderKernelMinChunkItems: 65536,
           decoderKernelMaxChunkItems: 8388608,
-          decoderKernelTargetDurationMs: 8,
+          decoderKernelTargetDurationMs: 12,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
         },
@@ -173,7 +173,7 @@ function schedulerVerification({
           decoderKernelChunkItems: 262144,
           decoderKernelMinChunkItems: 65536,
           decoderKernelMaxChunkItems: 8388608,
-          decoderKernelTargetDurationMs: 8,
+          decoderKernelTargetDurationMs: 12,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
           unsupportedFields: [],
@@ -315,7 +315,7 @@ assert.equal(profiles.profiles[1].scheduler.spnFusionChunkItems, 524288);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelChunkItems, 262144);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelMinChunkItems, 65536);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelMaxChunkItems, 8388608);
-assert.equal(profiles.profiles[1].scheduler.decoderKernelTargetDurationMs, 8);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelTargetDurationMs, 12);
 assert.equal(profiles.profiles[1].scheduler.plyAssemblyMode, 'worker');
 assert.equal(profiles.profiles[1].scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(profiles.profiles[1].unsupportedFields, []);
@@ -333,7 +333,7 @@ assert.equal(friendlyProfile.scheduler.spnFusionChunkItems, 524288);
 assert.equal(friendlyProfile.scheduler.decoderKernelChunkItems, 262144);
 assert.equal(friendlyProfile.scheduler.decoderKernelMinChunkItems, 65536);
 assert.equal(friendlyProfile.scheduler.decoderKernelMaxChunkItems, 8388608);
-assert.equal(friendlyProfile.scheduler.decoderKernelTargetDurationMs, 8);
+assert.equal(friendlyProfile.scheduler.decoderKernelTargetDurationMs, 12);
 assert.equal(friendlyProfile.scheduler.plyAssemblyMode, 'worker');
 assert.equal(friendlyProfile.scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(friendlyProfile.unsupportedFields, []);

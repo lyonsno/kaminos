@@ -26,7 +26,7 @@ assert.deepEqual(
     decoderKernelChunkItems: 262144,
     decoderKernelMinChunkItems: 65536,
     decoderKernelMaxChunkItems: 8388608,
-    decoderKernelTargetDurationMs: 8,
+    decoderKernelTargetDurationMs: 12,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   },
@@ -99,7 +99,22 @@ assert.match(
 );
 assert.match(
   page,
-  /let foregroundModeActivated = false[\s\S]{0,6500}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
+  /phase:\s*'splat-ingest'[\s\S]{0,1800}sharpRunDebug:\s*sharpResult\.runDebug[\s\S]{0,1000}lastTrustworthyEvidence:\s*\{[\s\S]{0,1000}schedulerStatus:[\s\S]{0,1800}persistSharpInlineRunReport/,
+  'a failure after successful inference must persist the exact SHARP run debug instead of erasing the expensive run',
+);
+assert.match(
+  page,
+  /persistSharpInlineSplat\(sharpResult, firingId\)[\s\S]{0,2200}catch \(error\)[\s\S]{0,1800}phase:\s*'splat-ingest'/,
+  'PLY ingest must be guarded by a durable post-inference failure report',
+);
+assert.equal(
+  (page.match(/report:\s*\{\s*path:\s*failureReceipt\.path,\s*readUrl:\s*failureReceipt\.readUrl,\s*document:\s*failureReceipt\.document,?\s*\}/g) || []).length,
+  2,
+  'both inline failure returns must expose the durable receipt through the canonical result.report shape',
+);
+assert.match(
+  page,
+  /let foregroundModeActivated = false[\s\S]{0,9000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
 assert.match(

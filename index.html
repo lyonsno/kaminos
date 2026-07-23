@@ -13185,7 +13185,7 @@ function sharpInlineSchedulerProfile(profileId) {
       decoderKernelChunkItems: 262144,
       decoderKernelMinChunkItems: 65536,
       decoderKernelMaxChunkItems: 8388608,
-      decoderKernelTargetDurationMs: 8,
+      decoderKernelTargetDurationMs: 12,
       plyAssemblyMode: 'worker',
       retirePostInferenceBuffers: true,
     };
@@ -13441,6 +13441,11 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         phase: failureDocument.phase,
         error: failureDocument.error,
         sharpRunDebug: failureDocument.sharpRunDebug,
+        report: {
+          path: failureReceipt.path,
+          readUrl: failureReceipt.readUrl,
+          document: failureReceipt.document,
+        },
         reportPath: failureReceipt.path,
         reportReadUrl: failureReceipt.readUrl,
       };
@@ -13449,7 +13454,56 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       throw new Error('SHARP inline route did not complete the real SPN-to-PLY path');
     }
     onProgress?.({ progress: 0.94, message: 'The model finished; Kaminos is storing the cast.' });
-    const entry = await persistSharpInlineSplat(sharpResult, firingId);
+    let entry;
+    try {
+      entry = await persistSharpInlineSplat(sharpResult, firingId);
+    } catch (error) {
+      const terminalOutput = {
+        plyBlobObserved: sharpResult?.plyBlob instanceof Blob,
+        plyBytes: sharpResult?.plyBlob?.size || 0,
+        plyType: sharpResult?.plyBlob?.type || null,
+      };
+      const failureDocument = {
+        schema: 'kaminos.sharp-inline-failure-report.v0',
+        status: 'failed',
+        phase: 'splat-ingest',
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        firingId,
+        error: error?.message || String(error),
+        effectiveRoute: {
+          route: 'same-browser-product-realm-shared-device',
+          sharpRevision: inline.mount.revision,
+          moduleUrl: inline.mount.moduleUrl,
+          weightsUrl: inline.mount.weightsUrl,
+        },
+        terminalOutput,
+        sharpRunDebug: sharpResult.runDebug,
+        lastTrustworthyEvidence: {
+          inferenceStatus: sharpResult.runDebug?.status || null,
+          outputs: sharpResult.runDebug?.outputs || null,
+          schedulerStatus: sharpResult.runDebug?.schedulerTelemetry?.status || null,
+          terminalOutput,
+        },
+      };
+      const failureReceipt = await persistSharpInlineRunReport({
+        document: failureDocument,
+        firingId,
+      });
+      return {
+        ok: false,
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        phase: failureDocument.phase,
+        error: failureDocument.error,
+        sharpRunDebug: failureDocument.sharpRunDebug,
+        report: {
+          path: failureReceipt.path,
+          readUrl: failureReceipt.readUrl,
+          document: failureReceipt.document,
+        },
+        reportPath: failureReceipt.path,
+        reportReadUrl: failureReceipt.readUrl,
+      };
+    }
     const foregroundSnapshot = activeForegroundKilnHeartbeat?.report({ phase: 'burning' }) || null;
     const backgroundHeartbeat = createSharpInlineBackgroundHeartbeat(sharpResult.runDebug, foregroundSnapshot);
     const pipelineScheduler = {
