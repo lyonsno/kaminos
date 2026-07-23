@@ -15,7 +15,7 @@ assert.doesNotMatch(
 );
 assert.match(
   index,
-  /progressEvent:\s*kilnRouteBenchReceiveProgressEvent\(event,\s*performance\.now\(\)\)/,
+  /const progressEvent\s*=\s*kilnRouteBenchReceiveProgressEvent\(event,\s*performance\.now\(\)\)/,
   'Kaminos must stamp progress arrival on its own monotonic clock',
 );
 assert.match(

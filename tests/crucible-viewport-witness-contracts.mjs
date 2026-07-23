@@ -113,7 +113,7 @@ assert.deepEqual(
   {
     mode: 'cooperative',
     spnPatchChunkSize: 1,
-    yieldMs: 3,
+    yieldMs: 4,
     waitForSubmittedWorkDone: true,
     gaussianPhaseYieldMs: 4,
     vitBlockChunkSize: 1,
@@ -151,7 +151,7 @@ assert.deepEqual(
   {
     mode: 'cooperative',
     spnPatchChunkSize: 1,
-    yieldMs: 3,
+    yieldMs: 4,
     waitForSubmittedWorkDone: true,
     gaussianPhaseYieldMs: 4,
     vitBlockChunkSize: 1,

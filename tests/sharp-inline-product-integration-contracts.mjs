@@ -14,7 +14,7 @@ assert.deepEqual(
   {
     mode: 'cooperative',
     spnPatchChunkSize: 1,
-    yieldMs: 3,
+    yieldMs: 4,
     waitForSubmittedWorkDone: true,
     gaussianPhaseYieldMs: 4,
     vitBlockChunkSize: 1,
@@ -65,6 +65,28 @@ assert.match(
   page,
   /const sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*event\s*=>\s*onProgress\?\.\(event\)/,
   'the product route must forward uncapped SHARP inference progress instead of jumping from setup to storage',
+);
+const progressUpdaterSource = page.match(
+  /function setKilnRouteBenchProgress\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(
+  progressUpdaterSource,
+  'live SHARP progress must have a dedicated DOM update path instead of entering the full Crucible renderer',
+);
+assert.doesNotMatch(
+  progressUpdaterSource?.[0] || '',
+  /renderCrucibleViewportWorkspace|refreshSharpBreathingRoomComparisonSummary/,
+  'per-duty progress updates must not rebuild the full Crucible workspace or comparison surface',
+);
+assert.doesNotMatch(
+  progressUpdaterSource?.[0] || '',
+  /setInfo\(/,
+  'per-duty progress updates must not dirty the full Kaminos scene',
+);
+assert.match(
+  page,
+  /const onProgress = event => \{[\s\S]{0,1200}setKilnRouteBenchProgress\(/,
+  'the live inline route must consume every progress event through the progress-only updater',
 );
 assert.match(
   page,

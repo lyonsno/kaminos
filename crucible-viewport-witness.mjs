@@ -144,13 +144,13 @@ function expectedSchedulerForProfile(profileId) {
     retirePostInferenceBuffers: true,
   };
   if (profileId === 'cooperative-spn-gaussian') {
-    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
+    return { ...common, yieldMs: 4, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
   }
   if (profileId === 'cooperative-fixed-16ms-donation') {
     return { ...common, yieldMs: 16, gaussianPhaseYieldMs: 16, routeTailYieldMs: 16 };
   }
   if (profileId === 'cooperative-spn-fusion-tiles-524288') {
-    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
+    return { ...common, yieldMs: 4, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
   }
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
 }

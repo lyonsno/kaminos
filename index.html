@@ -13173,7 +13173,7 @@ function sharpInlineSchedulerProfile(profileId) {
     return {
       mode: 'cooperative',
       spnPatchChunkSize: 1,
-      yieldMs: 3,
+      yieldMs: 4,
       waitForSubmittedWorkDone: true,
       gaussianPhaseYieldMs: 4,
       vitBlockChunkSize: 1,
@@ -14508,6 +14508,49 @@ function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
   refreshSharpBreathingRoomComparisonSummary(extra.comparisonState || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
   renderCrucibleViewportWorkspace();
   if (message) setInfo(message);
+}
+
+function setKilnRouteBenchProgress(message, event, extra = {}) {
+  const route = selectedKilnRouteBenchRoute(extra.routeId);
+  const progressEvent = kilnRouteBenchReceiveProgressEvent(event, performance.now());
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    status: 'running',
+    message: message || '',
+    ...extra,
+    progressEvent,
+    updatedAt: new Date().toISOString(),
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+
+  const status = document.getElementById('sharp-breathing-room-status');
+  if (status) {
+    status.textContent = message || '';
+    status.dataset.status = 'running';
+    status.dataset.kilnRouteId = route.id;
+  }
+  const workspace = document.getElementById('crucible-viewport-workspace');
+  if (workspace) workspace.dataset.crucibleRouteStatus = 'running';
+
+  const presentation = kilnRouteBenchProgressPresentation(progressEvent, performance.now());
+  const progress = document.getElementById('crucible-viewport-progress');
+  const progressFill = document.getElementById('crucible-viewport-progress-fill');
+  const progressLabel = document.getElementById('crucible-viewport-progress-label');
+  const fireHelp = document.getElementById('crucible-viewport-fire-help');
+  if (progress) {
+    progress.hidden = false;
+    progress.classList.toggle('indeterminate', presentation.fillPercent === null);
+  }
+  if (progressFill) {
+    progressFill.style.setProperty(
+      '--crucible-route-progress',
+      presentation.fillPercent === null ? '8%' : `${presentation.fillPercent}%`,
+    );
+  }
+  if (progressLabel) progressLabel.textContent = presentation.label;
+  if (fireHelp) fireHelp.textContent = message || 'The furnace is working on this image.';
 }
 
 function refreshKilnRouteBenchProgressPresentation() {
@@ -18995,11 +19038,10 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
     const onProgress = event => {
         const progress = Number.isFinite(event?.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
         const progressMessage = event?.message || 'The model is working on your cast.';
-        setKilnRouteBenchStatus(`${profileLabel}: ${progressMessage}${progress}`, 'running', {
+        setKilnRouteBenchProgress(`${profileLabel}: ${progressMessage}${progress}`, event, {
           routeId: route.id,
           source,
           runningProfileId: profileId,
-          progressEvent: kilnRouteBenchReceiveProgressEvent(event, performance.now()),
         });
       };
     run = pipelineId === 'sharp-image-to-splat-live-v0'
