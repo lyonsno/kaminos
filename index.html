@@ -2695,7 +2695,8 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=full-support-stage-a-0717';
+import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
+import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
@@ -17853,6 +17854,55 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  const readFireActorParityCamera = () => ({
+    type: camera.type,
+    fov: camera.fov,
+    near: camera.near,
+    far: camera.far,
+    position: camera.position.toArray(),
+    target: controls.target.toArray(),
+    up: camera.up.toArray(),
+  });
+  const applyFireActorParityCamera = async spec => {
+    camera.fov = Number(spec.fov);
+    camera.near = Number(spec.near);
+    camera.far = Number(spec.far);
+    camera.position.fromArray(spec.position);
+    camera.up.fromArray(spec.up);
+    controls.target.fromArray(spec.target);
+    camera.updateProjectionMatrix();
+    controls.update();
+    window._kaminosDirty?.();
+    return readFireActorParityCamera();
+  };
+  window.kaminosFireActorParity = installFireActorLiveParitySurface({
+    surface: 'cockpit',
+    ensureEngine: async () => {
+      const expectedPreset = 'vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c';
+      if (activeVolumeSettingsPresetReceipt?.presetId !== expectedPreset) {
+        throw new Error(`cockpit live parity requires exact settings preset ${expectedPreset}`);
+      }
+      if (!volumePrototype.debugState().active) await volumePrototype.setActive(true);
+      return volumePrototype;
+    },
+    readEngine: () => volumePrototype,
+    applyCamera: applyFireActorParityCamera,
+    readCamera: readFireActorParityCamera,
+    readFallbackReason: (debug, presentation) => {
+      if (debug.error) return debug.error;
+      if (debug.selectiveHeadLiveFallbackReason) return debug.selectiveHeadLiveFallbackReason;
+      if (debug.selectiveHeadLiveCompositionFallbackReason) return debug.selectiveHeadLiveCompositionFallbackReason;
+      if (debug.selectiveHeadLiveCompositionEffective !== presentation.composition) {
+        return `composition-mismatch:${debug.selectiveHeadLiveCompositionEffective}`;
+      }
+      if (debug.raymarchSmokePresentationModeFallbackReason) return debug.raymarchSmokePresentationModeFallbackReason;
+      if (debug.raymarchSmokePresentationModeEffective !== presentation.smoke) {
+        return `smoke-presentation-mismatch:${debug.raymarchSmokePresentationModeEffective}`;
+      }
+      if (presentation.splats === 'on' && debug.boundarySplatFallbackReason) return debug.boundarySplatFallbackReason;
+      return null;
+    },
+  });
   const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
   window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
   syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
