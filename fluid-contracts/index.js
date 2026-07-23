@@ -2,10 +2,12 @@ export const TERRAIN_FLUID_FRAME_SCHEMA = 'kaminos.fluid.terrain-fluid-frame.v1'
 export const FLUID_TERRAIN_FEEDBACK_FRAME_SCHEMA = 'kaminos.fluid.terrain-feedback-frame.v1';
 export const FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid.representation-frame.v1';
 export const FLUID_EXCHANGE_RECEIPT_SCHEMA = 'kaminos.fluid.exchange-receipt.v1';
+export const TERRAIN_REMAP_RECEIPT_SCHEMA = 'kaminos.fluid.terrain-remap-receipt.v1';
 export const REPRESENTATION_OWNERSHIP_LEDGER_SCHEMA = 'kaminos.fluid.ownership-ledger.v1';
 export const REPRESENTATION_OWNERSHIP_IDENTITY = 'macro-local-parcel-exclusive-v1';
 
 const MOTION_CLASSES = new Set(['stable', 'ordinary_morph', 'phase_morph', 'shock_reset']);
+const REMAP_MOTION_CLASSES = new Set(['ordinary_morph', 'phase_morph']);
 const REPRESENTATIONS = new Set(['macro', 'local', 'parcel']);
 const RECEIPT_STATES = new Set(['requested', 'staged', 'committed', 'rejected']);
 
@@ -135,6 +137,12 @@ export function validateTerrainFluidFrame(frame, expectations = {}) {
   if (expectations.minimumEpoch != null) invariant(frame.currentEpoch >= expectations.minimumEpoch, `terrain frame epoch ${frame.currentEpoch} is stale; minimum ${expectations.minimumEpoch}`);
   invariant(MOTION_CLASSES.has(frame.motionClass), `unsupported terrain motion class: ${frame.motionClass}`);
   if (frame.motionClass === 'shock_reset') string(frame.shockId, 'shockId');
+  if (frame.motionClass === 'phase_morph') {
+    invariant(
+      frame.motionSubstepEnvelope != null && nonNegative(frame.motionSubstepEnvelope, 'motionSubstepEnvelope') > 0,
+      'phase_morph terrain frame requires a positive motion substep envelope',
+    );
+  }
   invariant(frame.complete === true, 'terrain frame is incomplete');
   const grid = gridShape(frame.grid);
   invariant(frame.expectedSampleCount === grid.sampleCount, 'terrain frame expected sample count mismatch');
@@ -196,6 +204,16 @@ export function validateRepresentationOwnershipLedger(ledger) {
 function materialMap(value, label) {
   invariant(value && typeof value === 'object' && !Array.isArray(value), `${label} must be an object`);
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [string(key, `${label} key`), nonNegative(entry, `${label}.${key}`)]));
+}
+
+function finiteMap(value, label) {
+  invariant(value && typeof value === 'object' && !Array.isArray(value), `${label} must be an object`);
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [string(key, `${label} key`), finite(entry, `${label}.${key}`)]));
+}
+
+function stringArray(value, label) {
+  invariant(Array.isArray(value), `${label} must be an array`);
+  return value.map((entry, index) => string(entry, `${label}[${index}]`));
 }
 
 export function createFluidExchangeReceipt(options = {}) {
@@ -264,6 +282,76 @@ export function validateFluidExchangeReceipt(receipt) {
   return { ...receipt, residual: { volume: volumeResidual, momentum: momentumResidual, materials: materialsResidual } };
 }
 
+export function createTerrainRemapReceipt(options = {}) {
+  return {
+    schema: TERRAIN_REMAP_RECEIPT_SCHEMA,
+    receiptId: string(options.receiptId, 'receiptId'),
+    mode: string(options.mode, 'mode'),
+    state: string(options.state, 'state'),
+    terrainId: string(options.terrainId, 'terrainId'),
+    sourceId: string(options.sourceId, 'sourceId'),
+    transformId: string(options.transformId, 'transformId'),
+    previousTerrainEpoch: integer(options.previousTerrainEpoch, 'previousTerrainEpoch'),
+    terrainEpoch: integer(options.terrainEpoch, 'terrainEpoch'),
+    fluidEpoch: integer(options.fluidEpoch, 'fluidEpoch'),
+    predecessorReceiptIds: stringArray(options.predecessorReceiptIds ?? [], 'predecessorReceiptIds'),
+    lineageIds: stringArray(options.lineageIds ?? [], 'lineageIds'),
+    displacedVolume: finite(options.displacedVolume, 'displacedVolume'),
+    supportWork: finite(options.supportWork, 'supportWork'),
+    maximumBedDisplacement: nonNegative(options.maximumBedDisplacement, 'maximumBedDisplacement'),
+    maximumSupportSpeed: nonNegative(options.maximumSupportSpeed, 'maximumSupportSpeed'),
+    deltaSeconds: nonNegative(options.deltaSeconds, 'deltaSeconds'),
+    motionSubstepEnvelope: nonNegative(options.motionSubstepEnvelope, 'motionSubstepEnvelope'),
+    residual: {
+      volume: finite(options.volumeResidual, 'volumeResidual'),
+      momentum: vector(options.momentumResidual, 3, 'momentumResidual'),
+      materials: finiteMap(options.materialResiduals ?? {}, 'materialResiduals'),
+    },
+    tolerance: nonNegative(options.tolerance ?? 1e-9, 'tolerance'),
+  };
+}
+
+export function validateTerrainRemapReceipt(receipt) {
+  invariant(receipt?.schema === TERRAIN_REMAP_RECEIPT_SCHEMA, 'terrain remap receipt schema mismatch');
+  string(receipt.receiptId, 'receiptId');
+  invariant(REMAP_MOTION_CLASSES.has(receipt.mode), `invalid terrain remap mode: ${receipt.mode}`);
+  invariant(RECEIPT_STATES.has(receipt.state), `invalid terrain remap receipt state: ${receipt.state}`);
+  string(receipt.terrainId, 'terrainId');
+  string(receipt.sourceId, 'sourceId');
+  string(receipt.transformId, 'transformId');
+  const previousTerrainEpoch = integer(receipt.previousTerrainEpoch, 'previousTerrainEpoch');
+  const terrainEpoch = integer(receipt.terrainEpoch, 'terrainEpoch');
+  const fluidEpoch = integer(receipt.fluidEpoch, 'fluidEpoch');
+  invariant(previousTerrainEpoch >= 0, 'previousTerrainEpoch must be non-negative');
+  invariant(terrainEpoch > previousTerrainEpoch, 'terrain remap receipt must advance terrain epoch');
+  invariant(fluidEpoch >= 0, 'fluidEpoch must be non-negative');
+  stringArray(receipt.predecessorReceiptIds, 'predecessorReceiptIds');
+  stringArray(receipt.lineageIds, 'lineageIds');
+  finite(receipt.displacedVolume, 'displacedVolume');
+  finite(receipt.supportWork, 'supportWork');
+  nonNegative(receipt.maximumBedDisplacement, 'maximumBedDisplacement');
+  nonNegative(receipt.maximumSupportSpeed, 'maximumSupportSpeed');
+  invariant(nonNegative(receipt.deltaSeconds, 'deltaSeconds') > 0, 'deltaSeconds must be positive');
+  invariant(nonNegative(receipt.motionSubstepEnvelope, 'motionSubstepEnvelope') > 0, 'motionSubstepEnvelope must be positive');
+  const tolerance = nonNegative(receipt.tolerance, 'tolerance');
+  const volumeResidual = finite(receipt.residual?.volume, 'residual.volume');
+  const momentumResidual = vector(receipt.residual?.momentum, 3, 'residual.momentum');
+  const materialResiduals = finiteMap(receipt.residual?.materials, 'residual.materials');
+  if (receipt.state === 'committed') {
+    invariant(Math.abs(volumeResidual) <= tolerance, `terrain remap volume residual exceeds tolerance: ${volumeResidual}`);
+    invariant(momentumResidual.every(value => Math.abs(value) <= tolerance), `terrain remap momentum residual exceeds tolerance: ${momentumResidual.join(',')}`);
+    invariant(Object.values(materialResiduals).every(value => Math.abs(value) <= tolerance), 'terrain remap material residual exceeds tolerance');
+  }
+  return {
+    ...receipt,
+    residual: {
+      volume: volumeResidual,
+      momentum: momentumResidual,
+      materials: materialResiduals,
+    },
+  };
+}
+
 function createOutputFrame(schema, options) {
   const grid = gridShape(options.grid);
   return {
@@ -302,6 +390,7 @@ export function createFluidTerrainFeedbackFrame(options = {}) {
     representationIdentity: string(options.representationIdentity, 'representationIdentity'),
     fields: options.fields,
     conservationReceiptIds: Array.isArray(options.conservationReceiptIds) ? options.conservationReceiptIds.map((id, index) => string(id, `conservationReceiptIds[${index}]`)) : [],
+    lineageIds: Array.isArray(options.lineageIds) ? options.lineageIds.map((id, index) => string(id, `lineageIds[${index}]`)) : [],
   };
 }
 
@@ -316,6 +405,8 @@ export function validateFluidTerrainFeedbackFrame(frame, expectations = {}) {
   }
   invariant(Array.isArray(frame.conservationReceiptIds), 'conservationReceiptIds must be an array');
   frame.conservationReceiptIds.forEach((id, index) => string(id, `conservationReceiptIds[${index}]`));
+  invariant(Array.isArray(frame.lineageIds), 'lineageIds must be an array');
+  frame.lineageIds.forEach((id, index) => string(id, `lineageIds[${index}]`));
   return frame;
 }
 
@@ -331,6 +422,8 @@ export function createFluidRepresentationFrame(options = {}) {
     local: options.local,
     parcels: options.parcels,
     physicalMaterial: options.physicalMaterial,
+    conservationReceiptIds: Array.isArray(options.conservationReceiptIds) ? options.conservationReceiptIds.map((id, index) => string(id, `conservationReceiptIds[${index}]`)) : [],
+    lineageIds: Array.isArray(options.lineageIds) ? options.lineageIds.map((id, index) => string(id, `lineageIds[${index}]`)) : [],
   };
 }
 
@@ -340,6 +433,10 @@ export function validateFluidRepresentationFrame(frame, expectations = {}) {
     invariant(!(forbidden in frame), `fluid representation frame contains camera-owned state: ${forbidden}`);
   }
   invariant(frame.ownershipIdentity === REPRESENTATION_OWNERSHIP_IDENTITY, 'representation ownership identity mismatch');
+  invariant(Array.isArray(frame.conservationReceiptIds), 'conservationReceiptIds must be an array');
+  frame.conservationReceiptIds.forEach((id, index) => string(id, `conservationReceiptIds[${index}]`));
+  invariant(Array.isArray(frame.lineageIds), 'lineageIds must be an array');
+  frame.lineageIds.forEach((id, index) => string(id, `lineageIds[${index}]`));
   const grid = gridShape(frame.macro?.grid);
   invariant(grid.width === outputGrid.width && grid.height === outputGrid.height, 'macro grid dimensions do not match output grid');
   invariant(grid.spacing.every((value, index) => value === outputGrid.spacing[index]), 'macro grid spacing does not match output grid');

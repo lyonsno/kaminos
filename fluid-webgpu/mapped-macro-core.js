@@ -2,10 +2,12 @@ import {
   createFluidExchangeReceipt,
   createFluidRepresentationFrame,
   createFluidTerrainFeedbackFrame,
+  createTerrainRemapReceipt,
   REPRESENTATION_OWNERSHIP_IDENTITY,
   validateFluidExchangeReceipt,
   validateFluidRepresentationFrame,
   validateFluidTerrainFeedbackFrame,
+  validateTerrainRemapReceipt,
   validateTerrainFluidFrame,
 } from '@kaminos/fluid-contracts';
 
@@ -81,6 +83,73 @@ function validateReferenceMetric(terrainFrame) {
     }
   }
   return terrainFrame;
+}
+
+function sameVector(left, right, tolerance = 1e-9) {
+  return left.length === right.length
+    && left.every((value, index) => Math.abs(value - right[index]) <= tolerance);
+}
+
+function normalizedDirection(values, offset) {
+  const magnitude = length3(values, offset);
+  return [
+    values[offset] / magnitude,
+    values[offset + 1] / magnitude,
+    values[offset + 2] / magnitude,
+  ];
+}
+
+function validateSequentialTerrain(previousTerrainFrame, terrainFrame) {
+  invariant(terrainFrame.currentEpoch > previousTerrainFrame.currentEpoch, 'terrain remap requires a newer epoch');
+  invariant(
+    terrainFrame.priorEpoch === previousTerrainFrame.currentEpoch,
+    `terrain frame prior epoch ${terrainFrame.priorEpoch} does not match current terrain epoch ${previousTerrainFrame.currentEpoch}`,
+  );
+  invariant(terrainFrame.route.effective === previousTerrainFrame.route.effective, 'terrain route identity changed');
+  invariant(terrainFrame.source.effective === previousTerrainFrame.source.effective, 'terrain source identity changed');
+  invariant(terrainFrame.producer.id === previousTerrainFrame.producer.id, 'terrain producer identity changed');
+  invariant(terrainFrame.terrainId === previousTerrainFrame.terrainId, 'terrain identity changed');
+  invariant(terrainFrame.supportClass === previousTerrainFrame.supportClass, 'terrain support class changed');
+  invariant(terrainFrame.transformId === previousTerrainFrame.transformId, 'terrain chart transform changed');
+  invariant(terrainFrame.worldMetersPerUnit === previousTerrainFrame.worldMetersPerUnit, 'terrain physical scale changed');
+  invariant(sameVector(terrainFrame.gravity, previousTerrainFrame.gravity), 'terrain gravity changed');
+  invariant(
+    terrainFrame.grid.width === previousTerrainFrame.grid.width
+      && terrainFrame.grid.height === previousTerrainFrame.grid.height,
+    'terrain remap grid topology changed',
+  );
+  invariant(sameVector(terrainFrame.grid.spacing, previousTerrainFrame.grid.spacing), 'terrain remap grid spacing changed');
+  invariant(sameVector(terrainFrame.grid.origin, previousTerrainFrame.grid.origin), 'terrain remap grid origin changed');
+  const sampleCount = terrainFrame.grid.width * terrainFrame.grid.height;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const offset = index * 3;
+    for (const field of ['tangentU', 'tangentV', 'normal']) {
+      invariant(
+        sameVector(
+          normalizedDirection(terrainFrame.fields[field], offset),
+          normalizedDirection(previousTerrainFrame.fields[field], offset),
+          1e-6,
+        ),
+        `terrain chart basis rotation is unsupported at sample ${index} (${field})`,
+      );
+    }
+  }
+}
+
+function conservationTotals(state, terrainFrame) {
+  const coordinateArea = terrainFrame.grid.spacing[0] * terrainFrame.grid.spacing[1];
+  let volume = 0;
+  const momentum = [0, 0, 0];
+  const materials = Object.fromEntries(Object.keys(state.materialMasses ?? {}).map(key => [key, 0]));
+  for (let index = 0; index < state.mappedDepth.length; index += 1) {
+    volume += state.mappedDepth[index] * coordinateArea;
+    momentum[0] += state.mappedMomentumU[index] * coordinateArea;
+    momentum[2] += state.mappedMomentumV[index] * coordinateArea;
+    for (const [key, values] of Object.entries(state.materialMasses ?? {})) {
+      materials[key] += values[index] * coordinateArea;
+    }
+  }
+  return { volume, momentum, materials };
 }
 
 function finiteStateArray(values, count, label, nonNegative = false) {
@@ -475,10 +544,54 @@ export function remapMappedMacroState(state, previousTerrainFrame, terrainFrame,
   validateState(state, previousTerrainFrame);
   validateTerrainFluidFrame(terrainFrame);
   validateReferenceMetric(terrainFrame);
-  invariant(previousTerrainFrame.grid.width === terrainFrame.grid.width && previousTerrainFrame.grid.height === terrainFrame.grid.height, 'terrain remap grid topology mismatch');
-  invariant(terrainFrame.currentEpoch > previousTerrainFrame.currentEpoch, 'terrain remap requires a newer epoch');
+  validateSequentialTerrain(previousTerrainFrame, terrainFrame);
   const mode = options.mode ?? terrainFrame.motionClass;
-  invariant(mode === 'ordinary_morph', `mapped macro reference currently supports ordinary_morph remap, received ${mode}`);
+  invariant(mode === terrainFrame.motionClass, `terrain remap mode ${mode} does not match frame motion class ${terrainFrame.motionClass}`);
+  invariant(mode !== 'shock_reset', 'mapped macro reference rejects shock_reset terrain remap');
+  invariant(mode === 'ordinary_morph' || mode === 'phase_morph', `mapped macro reference does not support terrain remap mode ${mode}`);
+  const coordinateArea = terrainFrame.grid.spacing[0] * terrainFrame.grid.spacing[1];
+  const before = conservationTotals(state, previousTerrainFrame);
+  let maximumBedDisplacement = 0;
+  let maximumSupportSpeed = 0;
+  let displacedVolume = 0;
+  let supportWork = 0;
+  const gravity = Math.hypot(...terrainFrame.gravity);
+  const fluidDensityKgM3 = finite(options.fluidDensityKgM3 ?? 997, 'fluidDensityKgM3');
+  invariant(fluidDensityKgM3 > 0, 'fluidDensityKgM3 must be positive');
+  for (let index = 0; index < state.mappedDepth.length; index += 1) {
+    const bedDisplacement = terrainFrame.fields.bedHeight[index] - previousTerrainFrame.fields.bedHeight[index];
+    const supportSpeed = length3(terrainFrame.fields.supportVelocity, index * 3);
+    maximumBedDisplacement = Math.max(maximumBedDisplacement, Math.abs(bedDisplacement));
+    maximumSupportSpeed = Math.max(maximumSupportSpeed, supportSpeed);
+    if (state.mappedDepth[index] > DEFAULT_DRY_TOLERANCE) {
+      const meanJacobian = 0.5 * (
+        previousTerrainFrame.fields.jacobian[index]
+        + terrainFrame.fields.jacobian[index]
+      );
+      const sweptVolume = bedDisplacement * meanJacobian * coordinateArea;
+      const meanDepth = state.mappedDepth[index] / meanJacobian;
+      displacedVolume += sweptVolume;
+      supportWork += fluidDensityKgM3 * gravity * meanDepth * sweptVolume;
+    }
+  }
+  let deltaSeconds = 0;
+  let motionSubstepEnvelope = 0;
+  if (mode === 'phase_morph') {
+    deltaSeconds = finite(options.deltaSeconds, 'phase_morph deltaSeconds');
+    invariant(deltaSeconds > 0, 'phase_morph deltaSeconds must be positive');
+    motionSubstepEnvelope = finite(terrainFrame.motionSubstepEnvelope, 'phase_morph motionSubstepEnvelope');
+    invariant(motionSubstepEnvelope > 0, 'phase_morph motionSubstepEnvelope must be positive');
+    invariant(deltaSeconds <= motionSubstepEnvelope + 1e-12, `phase_morph deltaSeconds ${deltaSeconds} exceeds source substep envelope ${motionSubstepEnvelope}`);
+    const allowedBedDisplacement = finite(options.maximumBedDisplacement, 'phase_morph maximumBedDisplacement');
+    const allowedSupportSpeed = finite(options.maximumSupportSpeed, 'phase_morph maximumSupportSpeed');
+    invariant(allowedBedDisplacement >= 0, 'phase_morph maximumBedDisplacement must be non-negative');
+    invariant(allowedSupportSpeed >= 0, 'phase_morph maximumSupportSpeed must be non-negative');
+    invariant(maximumBedDisplacement <= allowedBedDisplacement + 1e-12, `phase_morph bed displacement ${maximumBedDisplacement} exceeds limit ${allowedBedDisplacement}`);
+    invariant(maximumSupportSpeed <= allowedSupportSpeed + 1e-12, `phase_morph support speed ${maximumSupportSpeed} exceeds limit ${allowedSupportSpeed}`);
+  } else {
+    deltaSeconds = finite(options.deltaSeconds ?? terrainFrame.motionSubstepEnvelope ?? 1, 'ordinary_morph deltaSeconds');
+    motionSubstepEnvelope = finite(terrainFrame.motionSubstepEnvelope ?? deltaSeconds, 'ordinary_morph motionSubstepEnvelope');
+  }
   const next = {
     ...cloneState(state, previousTerrainFrame),
     terrainEpoch: terrainFrame.currentEpoch,
@@ -488,17 +601,36 @@ export function remapMappedMacroState(state, previousTerrainFrame, terrainFrame,
       next.referenceFreeSurface[index] += terrainFrame.fields.bedHeight[index] - previousTerrainFrame.fields.bedHeight[index];
     }
   }
+  const after = conservationTotals(next, terrainFrame);
+  const materialKeys = new Set([...Object.keys(before.materials), ...Object.keys(after.materials)]);
+  const receipt = createTerrainRemapReceipt({
+    receiptId: options.receiptId ?? `terrain-remap:${terrainFrame.terrainId}:${previousTerrainFrame.currentEpoch}->${terrainFrame.currentEpoch}`,
+    mode,
+    state: 'committed',
+    terrainId: terrainFrame.terrainId,
+    sourceId: terrainFrame.source.effective,
+    transformId: terrainFrame.transformId,
+    previousTerrainEpoch: previousTerrainFrame.currentEpoch,
+    terrainEpoch: terrainFrame.currentEpoch,
+    fluidEpoch: next.fluidEpoch,
+    predecessorReceiptIds: options.predecessorReceiptIds ?? [],
+    lineageIds: options.lineageIds ?? [],
+    displacedVolume,
+    supportWork,
+    maximumBedDisplacement,
+    maximumSupportSpeed,
+    deltaSeconds,
+    motionSubstepEnvelope,
+    volumeResidual: before.volume - after.volume,
+    momentumResidual: before.momentum.map((value, index) => value - after.momentum[index]),
+    materialResiduals: Object.fromEntries(
+      Array.from(materialKeys, key => [key, (before.materials[key] ?? 0) - (after.materials[key] ?? 0)]),
+    ),
+    tolerance: options.tolerance ?? 1e-9,
+  });
   return {
     state: next,
-    receipt: {
-      schema: 'kaminos.fluid.terrain-remap-receipt.v1',
-      mode,
-      previousTerrainEpoch: previousTerrainFrame.currentEpoch,
-      terrainEpoch: terrainFrame.currentEpoch,
-      displacedVolume: 0,
-      volumeResidual: 0,
-      supportWork: 0,
-    },
+    receipt: validateTerrainRemapReceipt(receipt),
   };
 }
 
@@ -589,6 +721,7 @@ export function createMacroFluidTerrainFeedbackFrame(state, terrainFrame, option
     fields: { depth, wetness, tangentMomentum },
     dirtyRegions: options.dirtyRegions ?? terrainFrame.dirtyRegions,
     conservationReceiptIds: options.conservationReceiptIds ?? [],
+    lineageIds: options.lineageIds ?? [],
     complete: true,
   });
   return validateFluidTerrainFeedbackFrame(frame, {
@@ -622,6 +755,8 @@ export function createMacroFluidRepresentationFrame(state, terrainFrame, options
       absorptionPerMeter: [0.05, 0.02, 0.01],
     },
     dirtyRegions: options.dirtyRegions ?? terrainFrame.dirtyRegions,
+    conservationReceiptIds: options.conservationReceiptIds ?? [],
+    lineageIds: options.lineageIds ?? [],
     complete: true,
   });
   return validateFluidRepresentationFrame(frame, {
@@ -635,6 +770,20 @@ export function createMappedMacroRuntime(options = {}) {
   const producerRevision = options.producerRevision;
   invariant(typeof producerRevision === 'string' && producerRevision.length > 0, 'producerRevision must be a non-empty string');
   const receiptIds = [];
+  const lineageIds = [];
+
+  function updateTerrain(updateOptions = {}) {
+    const nextTerrain = validateTerrainFluidFrame(updateOptions.terrainFrame);
+    const result = remapMappedMacroState(state, terrainFrame, nextTerrain, {
+      ...updateOptions,
+      predecessorReceiptIds: receiptIds,
+      lineageIds,
+    });
+    state = result.state;
+    terrainFrame = nextTerrain;
+    receiptIds.push(result.receipt.receiptId);
+    return result.receipt;
+  }
 
   const api = {
     get identity() {
@@ -650,23 +799,31 @@ export function createMappedMacroRuntime(options = {}) {
     snapshot() {
       return cloneState(state, terrainFrame);
     },
+    updateTerrain,
     step(stepOptions = {}) {
       const nextTerrain = validateTerrainFluidFrame(stepOptions.terrainFrame ?? terrainFrame);
+      let terrainRemapReceipt = null;
       if (nextTerrain.currentEpoch > terrainFrame.currentEpoch) {
-        state = remapMappedMacroState(state, terrainFrame, nextTerrain, { mode: nextTerrain.motionClass }).state;
-        terrainFrame = nextTerrain;
+        terrainRemapReceipt = updateTerrain({
+          ...(stepOptions.remap ?? stepOptions),
+          terrainFrame: nextTerrain,
+          mode: nextTerrain.motionClass,
+        });
       } else {
         invariant(nextTerrain.currentEpoch === terrainFrame.currentEpoch, `runtime rejected stale terrain epoch ${nextTerrain.currentEpoch}`);
         terrainFrame = nextTerrain;
       }
       const result = advanceMappedMacroState(state, terrainFrame, stepOptions);
       state = result.state;
-      return result.receipt;
+      return terrainRemapReceipt == null
+        ? result.receipt
+        : { ...result.receipt, terrainRemapReceipt };
     },
     depositLocal(depositOptions = {}) {
       const result = depositLocalToMacro(state, terrainFrame, depositOptions);
       state = result.state;
       receiptIds.push(result.receipt.transactionId);
+      if (!lineageIds.includes(result.receipt.lineageId)) lineageIds.push(result.receipt.lineageId);
       return result.receipt;
     },
     feedback(frameOptions = {}) {
@@ -674,12 +831,15 @@ export function createMappedMacroRuntime(options = {}) {
         ...frameOptions,
         producerRevision,
         conservationReceiptIds: frameOptions.conservationReceiptIds ?? receiptIds,
+        lineageIds: frameOptions.lineageIds ?? lineageIds,
       });
     },
     representation(frameOptions = {}) {
       return createMacroFluidRepresentationFrame(state, terrainFrame, {
         ...frameOptions,
         producerRevision,
+        conservationReceiptIds: frameOptions.conservationReceiptIds ?? receiptIds,
+        lineageIds: frameOptions.lineageIds ?? lineageIds,
       });
     },
   };
