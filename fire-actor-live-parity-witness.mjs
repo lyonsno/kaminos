@@ -10,8 +10,8 @@ import { inflateSync } from 'node:zlib';
 const ARMS = ['splats', 'smoke', 'composite'];
 const EXPECTED_REVISION = 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95';
 const EXPECTED_ENGINE = Object.freeze({
-  sourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
-  sha256: '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d',
+  sourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
+  sha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
 });
 
 function parseArgs(argv) {
@@ -351,12 +351,19 @@ export async function runLiveParityWitness(options = {}) {
     const initial = await evaluate(ws, `window.kaminosFireActorParityWorkbench.controlState()`);
     await evaluate(ws, `document.querySelector('[data-command="play"]').click()`);
     await waitFor(ws, `document.getElementById('status')?.textContent === 'both surfaces playing'`, timeoutMs, 'parity play');
-    const playing = await waitForControlState(
-      ws,
-      state => ['cockpit', 'kiln'].every(surface => state[surface].simStepCount > initial[surface].simStepCount),
-      timeoutMs,
-      'parity simulation advance',
-    );
+    let playing;
+    try {
+      playing = await waitForControlState(
+        ws,
+        state => ['cockpit', 'kiln'].every(surface => state[surface].simStepCount > initial[surface].simStepCount),
+        timeoutMs,
+        'parity simulation advance',
+      );
+    } catch (error) {
+      playing = await evaluate(ws, `window.kaminosFireActorParityWorkbench.controlState()`);
+      liveControlExercise = { initial, playing };
+      throw new Error(`${error.message}; last control state ${JSON.stringify(playing)}`);
+    }
     await evaluate(ws, `document.querySelector('[data-command="pause"]').click()`);
     await waitFor(ws, `document.getElementById('status')?.textContent === 'both surfaces paused'`, timeoutMs, 'parity pause');
     const paused = await evaluate(ws, `window.kaminosFireActorParityWorkbench.controlState()`);

@@ -11,8 +11,8 @@ const EXPECTED = Object.freeze({
   mountId: 'firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7',
   policyId: 'firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17',
   revision: 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95',
-  engineSourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
-  engineSha256: '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d',
+  engineSourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
+  engineSha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
   splatMode: 'kernel_moment_covariance',
 });
 

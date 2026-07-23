@@ -7,8 +7,8 @@ import { validatePromotedFireWitnessState } from '../kiln-promoted-fire-witness.
 const expected = {
   status: 'recording',
   engineIdentity: {
-    sourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
-    effectiveSha256: '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d',
+    sourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
+    effectiveSha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
   },
   loaded: {
     mount: {

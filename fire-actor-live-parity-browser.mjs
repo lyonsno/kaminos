@@ -12,6 +12,7 @@ export function installFireActorLiveParitySurface({
   surface,
   ensureEngine,
   readEngine,
+  readEngineIdentity,
   applyCamera: applyHostCamera,
   readCamera,
   readActor = () => ({ transform: { translate: [0, 0, 0], scale: 1 } }),
@@ -44,10 +45,24 @@ export function installFireActorLiveParitySurface({
     const smokeReceipt = instance.setRaymarchSmokePresentationMode(presentation.smoke);
     arm = nextArm;
     if (instance.debugState()?.selectiveHeadLiveCapturePaused === true) {
-      const frame = await instance.captureSelectiveHeadLiveFrame({ advanceSim: false, presentToCanvas: true });
+      const frame = await instance.captureSelectiveHeadLiveFrame({
+        advanceSim: false,
+        presentToCanvas: true,
+        collectGpuTiming: true,
+        presentationArm: nextArm,
+      });
       if (!frame?.ok || frame.simStepCount !== instance.debugState().simStepCount) {
         throw new Error(`${surface} live parity arm presentation failed: ${frame?.reason || 'simulation step changed'}`);
       }
+      if (frame.gpuStageTiming?.timestampStatus !== 'available'
+        || frame.gpuStageTiming?.sample?.arm !== nextArm
+        || frame.gpuStageTiming?.sample?.simStepCount !== frame.simStepCount) {
+        throw new Error(`${surface} live parity arm GPU timing failed: ${frame.gpuStageTiming?.reason || 'sample identity mismatch'}`);
+      }
+      gpuStageTimingReceipt = {
+        ...clone(frame.gpuStageTiming),
+        aggregationAuthority: 'independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0',
+      };
     }
     return { ...presentation, compositionReceipt, smokeReceipt };
   }
@@ -69,17 +84,6 @@ export function installFireActorLiveParitySurface({
     if (before.simStepCount !== requested || !deterministicClockReceipt) {
       instance.setSelectiveHeadLiveCapturePaused(true);
       const clock = descriptor.state.deterministicClock;
-      const timingSample = await instance.sampleFrame({
-        advanceSim: true,
-        includeRgba: false,
-        now: clock.startNowMs,
-      });
-      const timingProfile = timingSample?.boundarySplatGpuProfile;
-      if (timingProfile?.timestampStatus !== 'available'
-        || timingProfile.reason !== 'timestamp-query-sampled') {
-        throw new Error(`live GPU stage timing failed: ${timingProfile?.reason || timingSample?.reason || 'missing profile'}`);
-      }
-      gpuStageTimingReceipt = clone(timingProfile);
       const replay = await instance.sampleDeterministicReplayFrame({
         steps: requested,
         startTimeMs: clock.startNowMs,
@@ -100,6 +104,7 @@ export function installFireActorLiveParitySurface({
       throw new Error(`exact parity pause failed: ${receipt?.reason || 'missing receipt'}`);
     }
     exactPauseReceipt = receipt;
+    await setArm(arm);
     return receipt;
   }
 
@@ -124,13 +129,14 @@ export function installFireActorLiveParitySurface({
     const bounds = canvas.getBoundingClientRect();
     const presentation = fireActorLiveParityPresentation(arm);
     const fallbackReason = readFallbackReason(debug, presentation) || null;
+    const measuredEngineIdentity = await readEngineIdentity();
     const value = {
       schema: 'kaminos.fire-actor-live-parity-receipt.v1',
       status: 'effective',
       surface,
       descriptorId: descriptor.descriptorId,
       basin: clone(descriptor.basin),
-      engine: clone(descriptor.engine),
+      engine: clone(measuredEngineIdentity),
       state: {
         requestedSimStep: exactPauseReceipt?.requestedSimStepCount ?? null,
         effectiveSimStep: debug.simStepCount,

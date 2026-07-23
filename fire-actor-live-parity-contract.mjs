@@ -4,6 +4,7 @@ const REQUIRED_GPU_TIMING_STAGES = Object.freeze([
   'simulation',
   'sidecar',
   'compaction',
+  'finalize',
   'candidateCopy',
   'indirectSetup',
   'splatRaster',
@@ -17,8 +18,8 @@ export const FIRE_ACTOR_LIVE_PARITY_IDENTITY = Object.freeze({
   basinHandle: 'big-raymarch-hero-flamebowl-cotangent-covariance',
   basinRevision: 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95',
   packageSha256: 'f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc',
-  engineSourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
-  engineSha256: '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d',
+  engineSourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
+  engineSha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
 });
 
 const ARM_PRESENTATION = Object.freeze({
@@ -142,11 +143,37 @@ export function validateFireActorLiveParityReceipt(receipt, descriptor) {
   if (!same(receipt.controls, descriptor.controls)) throw new Error('live parity control coverage mismatch');
   if (receipt.fallbackReason !== null) throw new Error(`live parity fallback is forbidden: ${receipt.fallbackReason}`);
   const gpuTiming = receipt.gpuStageTiming;
-  if (gpuTiming?.identity !== 'boundary-splat-stage-gpu-timestamp-profile-v0'
+  const presentationUsesSplats = receipt.presentation.splats === 'on';
+  const presentationUsesRaymarch = receipt.presentation.smoke === 'on';
+  const expectedSample = {
+    authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+    arm,
+    simStepCount: receipt.state.effectiveSimStep,
+    advanceSim: false,
+    presentation: receipt.presentation,
+  };
+  const expectedStageStatus = stage => {
+    if (stage === 'simulation') return 'not-run-frozen-state';
+    if (stage === 'candidateCopy') return 'removed';
+    if (['compaction', 'finalize', 'indirectSetup', 'splatRaster'].includes(stage)) {
+      return presentationUsesSplats ? 'sampled' : 'not-requested-by-presentation';
+    }
+    if (stage === 'matchedRaymarchRaster') {
+      return presentationUsesRaymarch ? 'sampled' : 'not-requested-by-presentation';
+    }
+    return 'sampled';
+  };
+  if (gpuTiming?.identity !== 'selective-head-live-arm-gpu-timestamp-profile-v0'
     || gpuTiming.timestampStatus !== 'available'
     || gpuTiming.reason !== 'timestamp-query-sampled'
-    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== 'sampled'
-      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms))) {
+    || gpuTiming.aggregationAuthority !== 'independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0'
+    || !same(gpuTiming.sample, expectedSample)
+    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== expectedStageStatus(stage)
+      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms)
+      || gpuTiming.stages[stage].ms < 0)) {
+    if (gpuTiming && !same(gpuTiming.sample, expectedSample)) {
+      throw new Error('live parity GPU stage timing sample does not match the effective arm and step');
+    }
     throw new Error('live parity GPU stage timing is missing or unsampled');
   }
   return receipt;

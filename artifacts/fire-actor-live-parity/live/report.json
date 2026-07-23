@@ -6,8 +6,8 @@
   "requested": {
     "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
     "engine": {
-      "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-      "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+      "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+      "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
     },
     "simStep": 120,
     "arms": [
@@ -30,19 +30,19 @@
         "height": 1456,
         "changedPixels": 705602,
         "litPixels": 568989,
-        "sha256": "052c7b06eb2889c4878208bd2d2e079deb8627cd136e796a69c33dd6841005f9"
+        "sha256": "eca98a35a97b8db0ee6748c20d7483533fc34fbe5cd2bbad68834fa888d7af4c"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
         "changedPixels": 705602,
         "litPixels": 568989,
-        "sha256": "a925c328892a3dcbef37e87f4eea93a36ebffbc4d51270ed8e1b71104b000309"
+        "sha256": "0be49faf39ab486d838b37b6dffba1c6c6da4a5bc414fa55f2e4f77f6221c4ab"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.0000074404761904761905,
+        "meanAbsoluteChannelDelta": 0.000005151098901098901,
         "maxChannelDelta": 1,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
@@ -53,22 +53,22 @@
       "cockpit": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1414439,
-        "litPixels": 1312349,
-        "sha256": "16b3ed30e6b56e39006ff343e8023e68706f396084e86b06d00f3de73985b62b"
+        "changedPixels": 1414748,
+        "litPixels": 1312944,
+        "sha256": "6e14f75d7090d46596b8fa73616bb59d6e691d966254d2e8d56335789cc72d45"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1414442,
-        "litPixels": 1312351,
-        "sha256": "4a95604c9a65799fff653deb878bffdc8651995a828ff1632c6945687c5e990a"
+        "changedPixels": 1414756,
+        "litPixels": 1312941,
+        "sha256": "ab20038954b13da0e7ee6173d0d2ff12933c581177eea17e1a2fdaa0664b33d2"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.003794499771062271,
-        "maxChannelDelta": 9,
+        "meanAbsoluteChannelDelta": 0.0041243131868131866,
+        "maxChannelDelta": 10,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
         "pixelsOverToleranceRatio": 0
@@ -78,21 +78,21 @@
       "cockpit": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1419693,
-        "litPixels": 1328234,
-        "sha256": "aeae925439655b9472ff3f820a0836f3196497d868ce8aec5f915af37352e3dd"
+        "changedPixels": 1418851,
+        "litPixels": 1327375,
+        "sha256": "e1ecfcb40a5bbf407bc6f369fadfe172dc6267ba11f9ca24ebc61eaf51724d0e"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1419693,
-        "litPixels": 1328246,
-        "sha256": "f97eac5bca19b55988e42d00e19f14364b946677655de97a172a380de47120b4"
+        "changedPixels": 1418851,
+        "litPixels": 1327377,
+        "sha256": "51c57257e352d6d1082fb91a0b87156f245a5ef10d6490c8e7cf2b38d515598b"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.0033050022893772895,
+        "meanAbsoluteChannelDelta": 0.003619219322344322,
         "maxChannelDelta": 10,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
@@ -106,15 +106,15 @@
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "cockpit",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -135,9 +135,9 @@
           "near": 0.01,
           "far": 100,
           "position": [
-            1.6499999999999997,
-            0.4200000000000003,
-            3.149999999999999
+            1.6499999999999995,
+            0.42000000000000026,
+            3.1499999999999986
           ],
           "target": [
             0,
@@ -181,11 +181,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.6000000014901161,
-          "cpuFrameP95Ms": 0.6000000014901161,
+          "rafFps": 6.397952655150345,
+          "frameDeltaMs": 156.30000000000018,
+          "frameP95Ms": 156.30000000000018,
+          "cpuFrameMs": 0.5,
+          "cpuFrameP95Ms": 1,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -193,66 +193,75 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "splats",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "splats",
+              "smoke": "off",
+              "splats": "on",
+              "composition": "splat-only-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 15.138816
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 8.323072
+              "ms": 2.228224
             },
             "compaction": {
               "status": "sampled",
-              "ms": 5.963776
+              "ms": 1.114112
+            },
+            "finalize": {
+              "status": "sampled",
+              "ms": 0
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 2.424832
+              "ms": 0
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 3.014656
+              "ms": 2.94912
             },
             "matchedRaymarchRaster": {
-              "status": "sampled",
-              "ms": 45.809664
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "total": {
               "status": "sampled",
-              "ms": 80.674816
+              "ms": 6.356992
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       },
       "kiln": {
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "kiln",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -273,9 +282,9 @@
           "near": 0.01,
           "far": 100,
           "position": [
-            1.6499999999999997,
-            0.4200000000000003,
-            3.149999999999999
+            1.6499999999999995,
+            0.42000000000000026,
+            3.1499999999999986
           ],
           "target": [
             0,
@@ -319,11 +328,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.19999999925494194,
-          "cpuFrameP95Ms": 0.19999999925494194,
+          "rafFps": 6.40204865556979,
+          "frameDeltaMs": 156.19999999999982,
+          "frameP95Ms": 156.19999999999982,
+          "cpuFrameMs": 0.29999999701976776,
+          "cpuFrameP95Ms": 0.5999999977648258,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -331,51 +340,60 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "splats",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "splats",
+              "smoke": "off",
+              "splats": "on",
+              "composition": "splat-only-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 8.716288
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.65536
+              "ms": 0.917504
             },
             "compaction": {
               "status": "sampled",
-              "ms": 1.96608
+              "ms": 1.703936
+            },
+            "finalize": {
+              "status": "sampled",
+              "ms": 0
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 0.065536
+              "ms": 0.262144
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 48.49664
+              "ms": 2.883584
             },
             "matchedRaymarchRaster": {
-              "status": "sampled",
-              "ms": 39.518208
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "total": {
               "status": "sampled",
-              "ms": 99.418112
+              "ms": 5.57056
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       }
     },
@@ -384,15 +402,15 @@
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "cockpit",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -459,11 +477,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.6000000014901161,
-          "cpuFrameP95Ms": 0.6000000014901161,
+          "rafFps": 6.397952655150345,
+          "frameDeltaMs": 156.30000000000018,
+          "frameP95Ms": 156.30000000000018,
+          "cpuFrameMs": 0.5,
+          "cpuFrameP95Ms": 1,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -471,66 +489,75 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "smoke",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "smoke",
+              "smoke": "on",
+              "splats": "off",
+              "composition": "smoke-raymarch-only-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 15.138816
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 8.323072
+              "ms": 1.376256
             },
             "compaction": {
-              "status": "sampled",
-              "ms": 5.963776
+              "status": "not-requested-by-presentation",
+              "ms": 0
+            },
+            "finalize": {
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
-              "status": "sampled",
-              "ms": 2.424832
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "splatRaster": {
-              "status": "sampled",
-              "ms": 3.014656
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 45.809664
+              "ms": 59.703296
             },
             "total": {
               "status": "sampled",
-              "ms": 80.674816
+              "ms": 67.698688
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       },
       "kiln": {
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "kiln",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -597,11 +624,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.19999999925494194,
-          "cpuFrameP95Ms": 0.19999999925494194,
+          "rafFps": 6.40204865556979,
+          "frameDeltaMs": 156.19999999999982,
+          "frameP95Ms": 156.19999999999982,
+          "cpuFrameMs": 0.29999999701976776,
+          "cpuFrameP95Ms": 0.5999999977648258,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -609,51 +636,60 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "smoke",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "smoke",
+              "smoke": "on",
+              "splats": "off",
+              "composition": "smoke-raymarch-only-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 8.716288
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.65536
+              "ms": 1.31072
             },
             "compaction": {
-              "status": "sampled",
-              "ms": 1.96608
+              "status": "not-requested-by-presentation",
+              "ms": 0
+            },
+            "finalize": {
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
-              "status": "sampled",
-              "ms": 0.065536
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "splatRaster": {
-              "status": "sampled",
-              "ms": 48.49664
+              "status": "not-requested-by-presentation",
+              "ms": 0
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 39.518208
+              "ms": 82.444288
             },
             "total": {
               "status": "sampled",
-              "ms": 99.418112
+              "ms": 90.43968
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       }
     },
@@ -662,15 +698,15 @@
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "cockpit",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -737,11 +773,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.6000000014901161,
-          "cpuFrameP95Ms": 0.6000000014901161,
+          "rafFps": 6.397952655150345,
+          "frameDeltaMs": 156.30000000000018,
+          "frameP95Ms": 156.30000000000018,
+          "cpuFrameMs": 0.5,
+          "cpuFrameP95Ms": 1,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -749,66 +785,75 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "composite",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "composite",
+              "smoke": "on",
+              "splats": "on",
+              "composition": "smoke-raymarch-under-splats-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 15.138816
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 8.323072
+              "ms": 3.866624
             },
             "compaction": {
               "status": "sampled",
-              "ms": 5.963776
+              "ms": 83.820544
+            },
+            "finalize": {
+              "status": "sampled",
+              "ms": 11.075584
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 2.424832
+              "ms": 0
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 3.014656
+              "ms": 1.441792
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 45.809664
+              "ms": 51.511296
             },
             "total": {
               "status": "sampled",
-              "ms": 80.674816
+              "ms": 115.605504
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       },
       "kiln": {
         "schema": "kaminos.fire-actor-live-parity-receipt.v1",
         "status": "effective",
         "surface": "kiln",
-        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "descriptorId": "fireparity-db3180dadf6c809ae3b6d9a8208b2308fe91a09f0c4affb027c1d5fadcfeede4",
         "basin": {
           "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
           "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
           "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
         },
         "engine": {
-          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
-          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+          "sourceCommit": "ef85ee89e63fe2276c951e7c401cd719d62bf3ce",
+          "sha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
         },
         "state": {
           "requestedSimStep": 120,
@@ -875,11 +920,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 0,
-          "frameDeltaMs": 0,
-          "frameP95Ms": 0,
-          "cpuFrameMs": 0.19999999925494194,
-          "cpuFrameP95Ms": 0.19999999925494194,
+          "rafFps": 6.40204865556979,
+          "frameDeltaMs": 156.19999999999982,
+          "frameP95Ms": 156.19999999999982,
+          "cpuFrameMs": 0.29999999701976776,
+          "cpuFrameP95Ms": 0.5999999977648258,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -887,51 +932,60 @@
           "queueTimingAvailable": false
         },
         "gpuStageTiming": {
-          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
-          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
-          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
-          "timestampFeature": "timestamp-query",
+          "identity": "selective-head-live-arm-gpu-timestamp-profile-v0",
           "timestampStatus": "available",
           "reason": "timestamp-query-sampled",
-          "timeUnit": "ms",
-          "candidateCopyBytes": 0,
-          "boundarySplatCopyBytesThisFrame": 0,
+          "sample": {
+            "authority": "same-state-selective-render-composition-gpu-timestamp-v0",
+            "arm": "composite",
+            "simStepCount": 120,
+            "advanceSim": false,
+            "presentation": {
+              "arm": "composite",
+              "smoke": "on",
+              "splats": "on",
+              "composition": "smoke-raymarch-under-splats-v0"
+            }
+          },
           "stages": {
             "simulation": {
-              "status": "sampled",
-              "ms": 8.716288
+              "status": "not-run-frozen-state",
+              "ms": 0
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.65536
+              "ms": 3.60448
             },
             "compaction": {
               "status": "sampled",
-              "ms": 1.96608
+              "ms": 83.427328
+            },
+            "finalize": {
+              "status": "sampled",
+              "ms": 2.29376
             },
             "candidateCopy": {
-              "status": "sampled",
-              "ms": 0,
-              "disposition": "removed-full-capacity-copy",
-              "candidateCopyBytes": 0
+              "status": "removed",
+              "ms": 0
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 0.065536
+              "ms": 0
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 48.49664
+              "ms": 3.670016
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 39.518208
+              "ms": 101.449728
             },
             "total": {
               "status": "sampled",
-              "ms": 99.418112
+              "ms": 116.65408
             }
-          }
+          },
+          "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
         }
       }
     }
@@ -1012,7 +1066,7 @@
             0
           ]
         },
-        "simStepCount": 121,
+        "simStepCount": 124,
         "paused": false
       },
       "kiln": {
@@ -1037,7 +1091,7 @@
             0
           ]
         },
-        "simStepCount": 121,
+        "simStepCount": 124,
         "paused": false
       }
     },
@@ -1064,7 +1118,7 @@
             0
           ]
         },
-        "simStepCount": 121,
+        "simStepCount": 124,
         "paused": true
       },
       "kiln": {
@@ -1089,7 +1143,7 @@
             0
           ]
         },
-        "simStepCount": 121,
+        "simStepCount": 124,
         "paused": true
       }
     },
