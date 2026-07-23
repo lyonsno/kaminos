@@ -13413,12 +13413,20 @@ async function persistSharpInlineSplat(sharpResult, firingId) {
   return result.entry;
 }
 
-async function persistSharpInlineRunReport({ document, firingId, traceCollections } = {}) {
+async function persistSharpInlineRunReport({
+  document,
+  firingId,
+  traceCollections,
+  schedulerTelemetryArchive,
+  lastTrustworthyOutput,
+} = {}) {
   return persistSharpInlineReportSession({
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId,
     document,
     traceCollections,
+    schedulerTelemetryArchive,
+    lastTrustworthyOutput,
   });
 }
 
@@ -13481,6 +13489,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       const failureReceipt = await persistSharpInlineRunReport({
         document: failureDocument,
         firingId,
+        schedulerTelemetryArchive: sharpResult?.schedulerTelemetryArchive,
       });
       return {
         ok: false,
@@ -13535,6 +13544,8 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       const failureReceipt = await persistSharpInlineRunReport({
         document: failureDocument,
         firingId,
+        schedulerTelemetryArchive: sharpResult?.schedulerTelemetryArchive,
+        lastTrustworthyOutput: terminalOutput,
       });
       return {
         ok: false,
@@ -13622,6 +13633,8 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         },
       }],
       artifacts: { splat: artifact },
+    }, {
+      schedulerTelemetryArchive: sharpResult.schedulerTelemetryArchive,
     });
     const rawResult = {
       schema: 'kaminos.pipeline-run-result.v0',
@@ -13648,6 +13661,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       document: rawResult.report.document,
       firingId,
       traceCollections: reportTransport.collections,
+      lastTrustworthyOutput: artifact,
     });
     rawResult.report.path = reportReceipt.path;
     rawResult.report.readUrl = reportReceipt.readUrl;

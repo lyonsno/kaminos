@@ -101,6 +101,11 @@ assert.match(
 );
 assert.match(
   serve,
+  /"lastTrustworthyOutput":\s*payload\.get\("lastTrustworthyOutput"\)[\s\S]{0,12000}"lastTrustworthyOutput":\s*state\.get\("lastTrustworthyOutput"\)/,
+  'start and abort failure reports must preserve the last trustworthy PLY identity',
+);
+assert.match(
+  serve,
   /"\.ndjson": "application\/x-ndjson"/,
   'trace artifact read URLs must serve first-class NDJSON media',
 );

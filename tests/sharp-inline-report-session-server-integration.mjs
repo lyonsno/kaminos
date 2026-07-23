@@ -39,6 +39,11 @@ try {
       status: 'real',
       marker: 'compact-document',
     },
+    lastTrustworthyOutput: {
+      path: '/tmp/already-ingested.ply',
+      sha256: 'c'.repeat(64),
+      bytes: 66060836,
+    },
     collections: [{
       id: 'scheduler-events',
       jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
@@ -135,6 +140,11 @@ try {
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId: 'abort-test',
     document: { schema: 'failure-test.v0' },
+    lastTrustworthyOutput: {
+      path: '/tmp/failure-output.ply',
+      sha256: 'd'.repeat(64),
+      bytes: 42,
+    },
     collections: [{
       id: 'progress-events',
       jsonPointer: '#/sharpRunDebug/progressEvents',
@@ -156,6 +166,11 @@ try {
   assert.deepEqual(failure.countMismatches['progress-events'], {
     clientClaimed: 999,
     durable: 0,
+  });
+  assert.deepEqual(failure.lastTrustworthyOutput, {
+    path: '/tmp/failure-output.ply',
+    sha256: 'd'.repeat(64),
+    bytes: 42,
   });
   assert.equal(
     JSON.parse(readFileSync(path.join(abortStart.body.outputRoot, 'sharp-inline-report-state.json'), 'utf8')).status,

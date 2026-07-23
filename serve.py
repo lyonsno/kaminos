@@ -1549,6 +1549,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             raw_collections = payload.get("collections")
             if not isinstance(raw_collections, list):
                 raise ValueError("SHARP inline report collections must be an array")
+            last_trustworthy_output = payload.get("lastTrustworthyOutput")
+            if last_trustworthy_output is not None and not isinstance(last_trustworthy_output, dict):
+                raise ValueError("SHARP inline lastTrustworthyOutput must be an object")
             collections = {}
             for raw_collection in raw_collections:
                 if not isinstance(raw_collection, dict):
@@ -1598,6 +1601,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "reportPath": str(run_dir / "sharp-inline-report.json"),
             "startedAt": _utc_timestamp(),
             "document": document,
+            "lastTrustworthyOutput": last_trustworthy_output,
             "collections": collections,
         }
         try:
@@ -1620,6 +1624,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         "firingId": payload.get("firingId"),
                         "sessionId": session_id,
                         "error": str(error),
+                        "lastTrustworthyOutput": payload.get("lastTrustworthyOutput"),
                         "lastTrustworthyCounts": {
                             collection_id: 0 for collection_id in collections
                         },
@@ -1831,6 +1836,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     "firingId": state.get("firingId"),
                     "sessionId": session_id,
                     "error": payload.get("error") or "SHARP inline report session aborted",
+                    "lastTrustworthyOutput": state.get("lastTrustworthyOutput")
+                    or payload.get("lastTrustworthyOutput"),
                     "lastTrustworthyCounts": durable_counts,
                     "clientClaimedCounts": client_counts if isinstance(client_counts, dict) else None,
                     "countMismatches": count_mismatches,

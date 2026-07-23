@@ -245,13 +245,23 @@ assert.match(
 );
 assert.match(
   page,
-  /async function persistSharpInlineRunReport\(\{ document, firingId, traceCollections \}[\s\S]{0,600}persistSharpInlineReportSession\(\{[\s\S]{0,400}document,[\s\S]{0,300}traceCollections/,
+  /async function persistSharpInlineRunReport\(\{[\s\S]{0,300}document,[\s\S]{0,300}traceCollections,[\s\S]{0,300}schedulerTelemetryArchive,[\s\S]{0,300}lastTrustworthyOutput,[\s\S]{0,400}persistSharpInlineReportSession\(\{[\s\S]{0,400}document,[\s\S]{0,300}traceCollections/,
   'the compact inline envelope and uncapped trace collections must enter the report-session transport',
 );
 assert.match(
   page,
   /const reportReceipt = await persistSharpInlineRunReport\(\{[\s\S]{0,400}traceCollections: reportTransport\.collections[\s\S]{0,400}rawResult\.report\.path = reportReceipt\.path[\s\S]{0,400}rawResult\.bundle\.document\.outputRoot = reportReceipt\.outputRoot/,
   'the finished report session must rebind the remembered run to its effective pipeline-runs identity',
+);
+assert.match(
+  page,
+  /const reportTransport = compactSharpInlineReportDocument\(\{[\s\S]{0,5000}schedulerTelemetryArchive:\s*sharpResult\.schedulerTelemetryArchive/,
+  'the success route must hand the explicit sealed SHARP archive to the uncapped transport',
+);
+assert.match(
+  page,
+  /persistSharpInlineRunReport\(\{[\s\S]{0,500}lastTrustworthyOutput:\s*artifact/,
+  'terminal report transport must retain the already-ingested PLY identity across archive failure',
 );
 assert.match(
   page,

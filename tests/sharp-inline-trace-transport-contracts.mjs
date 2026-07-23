@@ -60,13 +60,22 @@ const document = {
     },
   },
 };
+const schedulerTelemetryArchive = {
+  schema: 'sharp-webgpu.scheduler-event-archive.v0',
+  status: 'sealed',
+  retention: 'uncapped',
+  runId: 'run-test',
+  clockId: 'clock-test',
+  eventCount: events.length,
+  events,
+};
 
-const compacted = compactSharpInlineReportDocument(document);
+const compacted = compactSharpInlineReportDocument(document, { schedulerTelemetryArchive });
 assert.equal(compacted.collections.length, 9, 'every uncapped trace collection must be externalized');
 assert.equal(
   compacted.collections.find(collection => collection.id === 'scheduler-events')?.values,
-  events,
-  'scheduler event aliases must share one collection without copying the array',
+  schedulerTelemetryArchive.events,
+  'the exact sealed scheduler archive array must be transported without copying',
 );
 assert.equal(
   compacted.document.authoritativeTrace.sharpRunDebug.schedulerTelemetry.eventsRef.collectionId,
@@ -89,6 +98,21 @@ assert.deepEqual(
     monodepthPhaseLabels: ['project-feature'],
   },
   'the compact envelope must retain the exact scheduler facts consumed synchronously by comparison UI',
+);
+assert.equal(
+  compacted.document.authoritativeTrace.sharpRunDebug.schedulerTelemetry.eventArchive.traceArtifactRef,
+  '#/traceArtifacts/scheduler-events',
+  'the compact SHARP archive descriptor must resolve to the exact uncapped trace artifact',
+);
+assert.throws(
+  () => compactSharpInlineReportDocument(document, {
+    schedulerTelemetryArchive: {
+      ...schedulerTelemetryArchive,
+      events: [...events],
+    },
+  }),
+  /exact scheduler telemetry source array/,
+  'Kaminos must reject a copied or substituted archive array',
 );
 assert.deepEqual(
   compacted.document.authoritativeTrace.backgroundHeartbeat.overlapReferenceSpace,
@@ -181,6 +205,12 @@ const receipt = await persistSharpInlineReportSession({
   pipelineId: 'sharp-image-to-splat-live-v0',
   firingId: 'firing-test',
   document,
+  schedulerTelemetryArchive,
+  lastTrustworthyOutput: {
+    path: '/tmp/splat.ply',
+    sha256: 'a'.repeat(64),
+    bytes: 66060836,
+  },
   chunkRows: 3,
   taskYield: async () => {
     yieldCount += 1;
@@ -204,6 +234,15 @@ assert.doesNotMatch(
   /event-6|progress-row/,
   'session start must not contain externalized trace rows',
 );
+assert.deepEqual(
+  requests.find(request => request.url.endsWith('/start'))?.payload.lastTrustworthyOutput,
+  {
+    path: '/tmp/splat.ply',
+    sha256: 'a'.repeat(64),
+    bytes: 66060836,
+  },
+  'report session start must durably receive the already-ingested PLY identity',
+);
 
 let abortPayload = null;
 let chunkAttempts = 0;
@@ -225,6 +264,12 @@ await assert.rejects(
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId: 'firing-failure',
     document,
+    schedulerTelemetryArchive,
+    lastTrustworthyOutput: {
+      path: '/tmp/failure-splat.ply',
+      sha256: 'b'.repeat(64),
+      bytes: 42,
+    },
     chunkRows: 3,
     taskYield: async () => {},
   }),
@@ -234,6 +279,11 @@ assert.equal(chunkAttempts, 1);
 assert.equal(abortPayload?.sessionId, 'session-failure');
 assert.equal(abortPayload?.phase, 'trace-chunk-upload');
 assert.equal(abortPayload?.lastTrustworthyCounts['scheduler-events'], 0);
+assert.deepEqual(abortPayload?.lastTrustworthyOutput, {
+  path: '/tmp/failure-splat.ply',
+  sha256: 'b'.repeat(64),
+  bytes: 42,
+});
 
 let finishAttempts = 0;
 let abortAttempts = 0;
