@@ -1,0 +1,97 @@
+{
+  "schema": "kaminos.lirm-smooth-fitted-proxy-rig-visual-admission.v0",
+  "status": "satisfies",
+  "happy": true,
+  "inspectedAt": "2026-07-23T05:23:21.624Z",
+  "exactVisualClaim": "At amplitude 0.18, exact cast 719024 can traverse a deterministic rest/C/rest/S/rest/asymmetric/rest low-frequency fitted-curve cycle without the pervasive shear, station scarring, tearing, or shape collapse seen in the rejected composed-motion witness.",
+  "acceptedPredicate": {
+    "castRemainsRecognizable": true,
+    "broadVolumeRemainsCompact": true,
+    "dorsalPlatesRemainAttached": true,
+    "appendagesRemainAttached": true,
+    "motionIsContiguousAcrossCycle": true,
+    "globalShearAbsent": true,
+    "profileAndThreeQuarterAgree": true
+  },
+  "identity": {
+    "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+    "sourceHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "registrationHash": "a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9",
+    "parameterization": "monotonic-axial-z",
+    "amplitude": 0.18,
+    "motionParameterization": "smooth-endpoint-vertex-interpolation"
+  },
+  "sparseWitness": {
+    "assayReport": "../lirm-719024-smooth-fitted-proxy-rig-assay-v0/report.json",
+    "smoothCBend": {
+      "flippedTriangles": 0,
+      "edgeRatioP99": 1.148229450132483,
+      "edgeRatioMax": 1.263902544930374
+    },
+    "smoothSBend": {
+      "flippedTriangles": 3,
+      "edgeRatioP99": 1.3277083892030277,
+      "edgeRatioMax": 1.8373707617070012
+    },
+    "smoothAsymmetric": {
+      "flippedTriangles": 7,
+      "edgeRatioP99": 1.2920527446486698,
+      "edgeRatioMax": 1.6127690765182974
+    }
+  },
+  "denseWitness": {
+    "captureReport": "capture-report.json",
+    "requestedRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+    "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+    "frameCountPerView": 72,
+    "frameRate": 12,
+    "phaseStep": 0.013888888888888888,
+    "evidence": [
+      {
+        "path": "capture-report.json",
+        "bytes": 305814,
+        "sha256": "sha256:182baa7b94a5da7f9134973c580e2b4a532b8efbbe7f0a186fa79e187b0d4b6c",
+        "role": "route-bound frame and pixel-evidence inventory"
+      },
+      {
+        "path": "profile.mp4",
+        "bytes": 266589,
+        "sha256": "sha256:e702ef1f65b66aa040940996e148990fb1fa69b449f9a5829358b619fc1cc2ab",
+        "role": "72-frame contiguous profile motion"
+      },
+      {
+        "path": "three-quarter.mp4",
+        "bytes": 229365,
+        "sha256": "sha256:b9eadf3ae4d69b9da681c621fb0dce9714f81ac67f419fcd3ad483d6a568b973",
+        "role": "72-frame contiguous three-quarter motion"
+      },
+      {
+        "path": "profile-dense-full-cycle.png",
+        "bytes": 217637,
+        "sha256": "sha256:5860fefe7efbef2c2b1c290cc7c8d66ac8edd469ef6d4a3b620035865c80d7f5",
+        "role": "18-sample profile full-cycle sheet"
+      },
+      {
+        "path": "three-quarter-dense-full-cycle.png",
+        "bytes": 183254,
+        "sha256": "sha256:94773c8d02c3cb1f8a0cde7646da462afa9a4c0ed7fa06e7483208994d1f68e1",
+        "role": "18-sample three-quarter full-cycle sheet"
+      }
+    ],
+    "producer": "lirm-smooth-fitted-proxy-rig-motion-witness.mjs"
+  },
+  "directReadAgainstBaseline": {
+    "baseline": "kaminos@e4eb1941 motion-ready 719024 pre-carrier witness",
+    "baselineMechanism": "axial-parallel-transport-wave-v1",
+    "result": "The accepted baseline keeps a compact cast envelope under a modest axial wave. The fitted-curve cycle at amplitude 0.18 retains the same broad compactness and attachment behavior while exercising larger low-frequency C, S, and asymmetric poses. The former amplitude 0.24 route exceeded that envelope with visible neck/anterior-belly elasticity and was classified partial; it was not exposed to the operator.",
+    "residual": "The strongest S transition changes the neck silhouette, but it remains continuous and reads as bounded body bending rather than elastic damage."
+  },
+  "verdict": "satisfies",
+  "deniedClaims": [
+    "This does not establish locomotion, terrain contact, propulsion, or root motion.",
+    "This does not establish automatic semantic limb discovery or limb-specific articulation.",
+    "This does not establish arbitrary-cast generalization.",
+    "The browser cycle interpolates final vertices between exact smooth endpoint GLBs; it does not recompute the fitted curve at every animation frame.",
+    "This is an admitted low-frequency deformation substrate, not production motion closure."
+  ]
+}

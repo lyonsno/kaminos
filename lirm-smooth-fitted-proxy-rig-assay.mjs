@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import {
   createFittedProxyRigBinding,
   createSmoothFittedProxyRigBinding,
@@ -289,7 +289,7 @@ function hardPoseFromSmooth(registration, smoothPose) {
   };
 }
 
-async function writeDeformedGlb({ sourceJson, sourceBinary, primitive, positions, indices, outputPath }) {
+async function writeDeformedGlb({ sourceJson, sourceBinary, primitive, positions, indices, outputPath, outputRoot }) {
   const json = structuredClone(sourceJson);
   const binary = Buffer.from(sourceBinary);
   writeFloatAccessor(json, binary, primitive.attributes.POSITION, positions, 'VEC3');
@@ -297,7 +297,7 @@ async function writeDeformedGlb({ sourceJson, sourceBinary, primitive, positions
   updatePositionBounds(json.accessors[primitive.attributes.POSITION], positions);
   const bytes = encodeGlb(json, binary);
   await writeFile(outputPath, bytes);
-  return { path: outputPath, bytes: bytes.length, sha256: sha256(bytes) };
+  return { path: relative(outputRoot, outputPath), bytes: bytes.length, sha256: sha256(bytes) };
 }
 
 export async function runSmoothFittedProxyRigAssay({
@@ -320,8 +320,8 @@ export async function runSmoothFittedProxyRigAssay({
     effectiveRoute: null,
     requestedConfig: { sampleCount, amplitude, parameterization: 'monotonic-axial-z' },
     effectiveConfig: null,
-    source: { path: sourcePath ? resolve(sourcePath) : null, sha256: null },
-    registration: { path: registrationPath ? resolve(registrationPath) : null, sha256: null },
+    source: { path: sourcePath ? relative(outputRoot, resolve(sourcePath)) : null, sha256: null },
+    registration: { path: registrationPath ? relative(outputRoot, resolve(registrationPath)) : null, sha256: null },
     outputInventory: {},
     results: {},
     timing: { startedAt: new Date(startedAt).toISOString(), finishedAt: null, durationSeconds: null },
@@ -388,6 +388,7 @@ export async function runSmoothFittedProxyRigAssay({
         positions: denormalizePositions(smoothPositions, normalization),
         indices,
         outputPath: smoothOutputPath,
+        outputRoot,
       });
       report.results[preset] = {
         smooth: deformationMetrics(normalization.values, smoothPositions, indices),
@@ -401,6 +402,7 @@ export async function runSmoothFittedProxyRigAssay({
           positions: denormalizePositions(hardPositions, normalization),
           indices,
           outputPath: resolve(outputRoot, 'legacy-s-bend.glb'),
+          outputRoot,
         });
       }
       await writeJsonAtomic(reportPath, report);

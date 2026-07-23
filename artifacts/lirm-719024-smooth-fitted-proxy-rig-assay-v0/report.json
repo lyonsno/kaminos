@@ -6,12 +6,12 @@
   "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
   "requestedConfig": {
     "sampleCount": 192,
-    "amplitude": 0.24,
+    "amplitude": 0.18,
     "parameterization": "monotonic-axial-z"
   },
   "effectiveConfig": {
     "sampleCount": 192,
-    "amplitude": 0.24,
+    "amplitude": 0.18,
     "parameterization": "monotonic-axial-z",
     "presets": [
       "c-bend",
@@ -21,137 +21,137 @@
     "legacyControl": "s-bend"
   },
   "source": {
-    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/motion-ready-719024/creature.glb",
+    "path": "../motion-ready-719024/creature.glb",
     "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e"
   },
   "registration": {
-    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
+    "path": "../lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
     "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
   },
   "outputInventory": {
     "smooth-c-bend": {
-      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-c-bend.glb",
-      "bytes": 8934188,
-      "sha256": "sha256:c2d3cb980d0488fbfb90cdf7747740a64252e199a9c1fd46b0d0e3975a8fb35a"
+      "path": "smooth-c-bend.glb",
+      "bytes": 8934192,
+      "sha256": "sha256:d11dec96a20b39457faf9dbddb22627cf99b475e75119d3efb7eda15012d4cd6"
     },
     "smooth-s-bend": {
-      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-s-bend.glb",
+      "path": "smooth-s-bend.glb",
       "bytes": 8934188,
-      "sha256": "sha256:5f4a8af84fb392083361b31f0312f0f16e441dc235ad6733c0e2fd723a8ca646"
+      "sha256": "sha256:23c1af48f2d0ea354327a1a5607c64b125e0d7d3f5c741fc1fcbb3fa7ff31a90"
     },
     "legacy-s-bend": {
-      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/legacy-s-bend.glb",
+      "path": "legacy-s-bend.glb",
       "bytes": 8934188,
-      "sha256": "sha256:9ead3fff5c8b1279c8b570b822e6ca452b93ead311eb43b3a382099858059b35"
+      "sha256": "sha256:0e7366b1d663b78fd3fc65d7352a2fe3faafdd4449d8f62c481e41fa729453c6"
     },
     "smooth-asymmetric": {
-      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-asymmetric.glb",
-      "bytes": 8934188,
-      "sha256": "sha256:b3a368742fbf520a04120532123534697ea3a204ee022c220402621662828728"
+      "path": "smooth-asymmetric.glb",
+      "bytes": 8934192,
+      "sha256": "sha256:8b7e06c5c792ac84923feb8b5135b7856ac4ef2310efc5c33c84866c60280a23"
     }
   },
   "results": {
     "c-bend": {
       "smooth": {
-        "maxDisplacement": 0.2876581816819257,
+        "maxDisplacement": 0.21638626406595346,
         "edgeRatio": {
-          "p001": 0.7298145317096414,
-          "p01": 0.8324073869729558,
-          "median": 1.0000000000000033,
-          "p99": 1.200791517206582,
-          "p999": 1.2723886281460475,
-          "min": 0.6165711609023049,
-          "max": 1.3554983755041508
+          "p001": 0.7969539581215993,
+          "p01": 0.8727561897965183,
+          "median": 1.0000000000000029,
+          "p99": 1.148229450132483,
+          "p999": 1.2058386188376755,
+          "min": 0.7168622917285461,
+          "max": 1.263902544930374
         },
-        "flippedTriangles": 1,
+        "flippedTriangles": 0,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       },
       "hard": {
-        "maxDisplacement": 0.2867486492209963,
+        "maxDisplacement": 0.2156975065303479,
         "edgeRatio": {
-          "p001": 0.445309312703503,
-          "p01": 0.9999999999999647,
-          "median": 1.0000000000000002,
-          "p99": 1.9817264221812825,
-          "p999": 4.458615637387446,
-          "min": 0.02799679914652814,
-          "max": 15.79055765082803
+          "p001": 0.4542815867115883,
+          "p01": 0.9999999999999358,
+          "median": 1,
+          "p99": 1.6708866618244052,
+          "p999": 3.4849003877039086,
+          "min": 0.08149331563482433,
+          "max": 11.646236261358455
         },
-        "flippedTriangles": 1746,
+        "flippedTriangles": 1228,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       }
     },
     "s-bend": {
       "smooth": {
-        "maxDisplacement": 0.4733310839520148,
+        "maxDisplacement": 0.356380394536331,
         "edgeRatio": {
-          "p001": 0.4187783215806593,
-          "p01": 0.5747694598568036,
-          "median": 1.0000000000000007,
-          "p99": 1.4569258747806064,
-          "p999": 1.8304317624420678,
-          "min": 0.19265471264817188,
-          "max": 2.168136796219238
+          "p001": 0.566215762650771,
+          "p01": 0.6825050729102573,
+          "median": 1.0000000000000004,
+          "p99": 1.3277083892030277,
+          "p999": 1.595552056484105,
+          "min": 0.42482181032261324,
+          "max": 1.8373707617070012
         },
-        "flippedTriangles": 11,
+        "flippedTriangles": 3,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       },
       "hard": {
-        "maxDisplacement": 0.2404178163195355,
+        "maxDisplacement": 0.18091689885079837,
         "edgeRatio": {
-          "p001": 0.5695373970712471,
-          "p01": 0.9999999999999745,
-          "median": 1.0000000000000002,
-          "p99": 3.570153303497262,
-          "p999": 10.850831889561105,
-          "min": 0.12724038888805136,
-          "max": 37.67288226065045
+          "p001": 0.5176638564143314,
+          "p01": 0.9999999999999705,
+          "median": 1,
+          "p99": 2.7803458884329313,
+          "p999": 8.18498598581003,
+          "min": 0.09055744684983599,
+          "max": 28.466121994350875
         },
-        "flippedTriangles": 2806,
+        "flippedTriangles": 2478,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       }
     },
     "asymmetric": {
       "smooth": {
-        "maxDisplacement": 0.2679364576079437,
+        "maxDisplacement": 0.20078865028018722,
         "edgeRatio": {
-          "p001": 0.46732422207100704,
-          "p01": 0.646661199410708,
-          "median": 1.0000000000000004,
-          "p99": 1.4056095289335535,
-          "p999": 1.592905776932993,
-          "min": 0.20856116584666992,
-          "max": 1.8415653017527371
+          "p001": 0.5758472882303,
+          "p01": 0.7264958980367133,
+          "median": 1.0000000000000002,
+          "p99": 1.2920527446486698,
+          "p999": 1.4226395909779823,
+          "min": 0.3046100345790489,
+          "max": 1.6127690765182974
         },
-        "flippedTriangles": 16,
+        "flippedTriangles": 7,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       },
       "hard": {
-        "maxDisplacement": 0.15983373782067167,
+        "maxDisplacement": 0.11935979142015898,
         "edgeRatio": {
-          "p001": 0.5197426233431796,
-          "p01": 0.9999999999999726,
-          "median": 1.0000000000000002,
-          "p99": 2.600683332615264,
-          "p999": 7.672408186094816,
-          "min": 0.0928775328888079,
-          "max": 24.30425198220058
+          "p001": 0.4972602763416484,
+          "p01": 0.9999999999999669,
+          "median": 1,
+          "p99": 2.0325714672291118,
+          "p999": 5.793446493672507,
+          "min": 0.08605107088138668,
+          "max": 17.702534831922268
         },
-        "flippedTriangles": 2389,
+        "flippedTriangles": 1990,
         "degenerateTriangles": 0,
         "triangleCount": 188385
       }
     }
   },
   "timing": {
-    "startedAt": "2026-07-23T02:37:25.923Z",
-    "finishedAt": "2026-07-23T02:37:27.520Z",
-    "durationSeconds": 1.597
+    "startedAt": "2026-07-23T05:13:46.888Z",
+    "finishedAt": "2026-07-23T05:13:48.481Z",
+    "durationSeconds": 1.593
   },
   "lastTrustworthyEvidence": "exact textured GLB variants and deformation metrics written; visual inspection pending",
   "binding": {

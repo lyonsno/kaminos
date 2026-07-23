@@ -185,6 +185,7 @@
       <button type="button" data-pose="s">S bend</button>
       <button type="button" data-pose="asym">Asymmetric</button>
     </div>
+    <button type="button" data-action="motion" aria-pressed="false">Play motion</button>
     <div class="toolbar-spacer"></div>
     <label class="toggle"><input id="wireframe" type="checkbox" /> Wireframe</label>
     <div class="segmented diagnostic" role="group" aria-label="Diagnostic control">
@@ -213,6 +214,7 @@
     const identity = document.querySelector('#identity');
     const wireframeInput = document.querySelector('#wireframe');
     const poseButtons = [...document.querySelectorAll('[data-pose]')];
+    const motionButton = document.querySelector('[data-action="motion"]');
     const metricPose = document.querySelector('#metric-pose');
     const metricFlips = document.querySelector('#metric-flips');
     const metricP99 = document.querySelector('#metric-p99');
@@ -236,6 +238,8 @@
       asym: 'Asymmetric',
       legacy: 'Segmented control',
     };
+    const MOTION_SEQUENCE = ['rest', 'c', 'rest', 's', 'rest', 'asym', 'rest'];
+    const MOTION_SEGMENT_SECONDS = 1.35;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -288,9 +292,14 @@
 
     const loader = new GLTFLoader();
     const objects = new Map();
+    const motionMeshes = [];
     let report = null;
     let currentPose = 'rest';
     let framed = false;
+    let motionActive = false;
+    let motionPhase = 0;
+    let lastRenderTime = null;
+    let lastMetricUpdate = 0;
 
     window.__LIRM_INSPECTOR_STATE__ = {
       status: 'loading',
@@ -298,8 +307,16 @@
       effectiveRoute: null,
       sourceHash: SOURCE_HASH,
       registrationHash: REGISTRATION_HASH,
+      effectiveAmplitude: null,
       currentPose,
       loadedPoses: [],
+      denseMotion: {
+        status: 'unmounted',
+        active: false,
+        phase: 0,
+        sequence: [...MOTION_SEQUENCE],
+        parameterization: 'smooth-endpoint-vertex-interpolation',
+      },
     };
 
     function loadGLB(url) {
@@ -329,6 +346,162 @@
       }
     }
 
+    function meshList(root) {
+      const meshes = [];
+      root.traverse((node) => { if (node.isMesh) meshes.push(node); });
+      return meshes;
+    }
+
+    function buildMotionObject() {
+      const smoothRoots = MOTION_SEQUENCE.map(name => objects.get(name));
+      if (smoothRoots.some(root => !root)) throw new Error('dense motion requires every smooth pose');
+      const poseMeshes = Object.fromEntries([...new Set(MOTION_SEQUENCE)].map(name => [name, meshList(objects.get(name))]));
+      const restMeshes = poseMeshes.rest;
+      for (const [name, meshes] of Object.entries(poseMeshes)) {
+        if (meshes.length !== restMeshes.length) throw new Error(`motion mesh count mismatch for ${name}`);
+      }
+      const root = objects.get('rest').clone(true);
+      styleObject(root);
+      const animatedMeshes = meshList(root);
+      for (let index = 0; index < animatedMeshes.length; index += 1) {
+        const mesh = animatedMeshes[index];
+        mesh.geometry = mesh.geometry.clone();
+        const positions = {};
+        const normals = {};
+        for (const [name, meshes] of Object.entries(poseMeshes)) {
+          const sourcePosition = meshes[index].geometry.getAttribute('position');
+          const sourceNormal = meshes[index].geometry.getAttribute('normal');
+          if (!sourcePosition || !sourceNormal
+              || sourcePosition.count !== mesh.geometry.getAttribute('position').count
+              || sourceNormal.count !== mesh.geometry.getAttribute('normal').count) {
+            throw new Error(`motion vertex layout mismatch for ${name} mesh ${index}`);
+          }
+          positions[name] = Float32Array.from(sourcePosition.array);
+          normals[name] = Float32Array.from(sourceNormal.array);
+        }
+        motionMeshes.push({ mesh, positions, normals });
+      }
+      root.name = 'pose-motion';
+      root.visible = false;
+      objects.set('motion', root);
+      scene.add(root);
+      window.__LIRM_INSPECTOR_STATE__.denseMotion.status = 'mounted';
+    }
+
+    function smoothstep(value) {
+      return value * value * (3 - 2 * value);
+    }
+
+    function applyMotionPhase(normalizedPhase) {
+      motionPhase = ((normalizedPhase % 1) + 1) % 1;
+      const segmentPosition = motionPhase * (MOTION_SEQUENCE.length - 1);
+      const segment = Math.min(MOTION_SEQUENCE.length - 2, Math.floor(segmentPosition));
+      const mix = smoothstep(segmentPosition - segment);
+      const from = MOTION_SEQUENCE[segment];
+      const to = MOTION_SEQUENCE[segment + 1];
+      for (const entry of motionMeshes) {
+        const position = entry.mesh.geometry.getAttribute('position');
+        const normal = entry.mesh.geometry.getAttribute('normal');
+        const fromPosition = entry.positions[from];
+        const toPosition = entry.positions[to];
+        const fromNormal = entry.normals[from];
+        const toNormal = entry.normals[to];
+        for (let index = 0; index < position.array.length; index += 1) {
+          position.array[index] = fromPosition[index] + (toPosition[index] - fromPosition[index]) * mix;
+          normal.array[index] = fromNormal[index] + (toNormal[index] - fromNormal[index]) * mix;
+        }
+        position.needsUpdate = true;
+        normal.needsUpdate = true;
+        entry.mesh.geometry.computeBoundingBox();
+      }
+      Object.assign(window.__LIRM_INSPECTOR_STATE__.denseMotion, {
+        phase: motionPhase,
+        segment,
+        from,
+        to,
+        mix,
+      });
+      return window.__LIRM_INSPECTOR_STATE__.denseMotion;
+    }
+
+    function motionScreenProbe() {
+      const root = objects.get('motion');
+      if (!root?.visible) throw new Error('motion object is not visible');
+      root.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(root);
+      if (bounds.isEmpty()) throw new Error('motion object has empty bounds');
+      const projected = [];
+      for (const x of [bounds.min.x, bounds.max.x]) {
+        for (const y of [bounds.min.y, bounds.max.y]) {
+          for (const z of [bounds.min.z, bounds.max.z]) {
+            const point = new THREE.Vector3(x, y, z).project(camera);
+            projected.push({
+              x: (point.x * 0.5 + 0.5) * innerWidth,
+              y: (-point.y * 0.5 + 0.5) * innerHeight,
+            });
+          }
+        }
+      }
+      const raw = {
+        minX: Math.min(...projected.map(point => point.x)),
+        minY: Math.min(...projected.map(point => point.y)),
+        maxX: Math.max(...projected.map(point => point.x)),
+        maxY: Math.max(...projected.map(point => point.y)),
+      };
+      const clipped = {
+        minX: Math.max(0, raw.minX),
+        minY: Math.max(0, raw.minY),
+        maxX: Math.min(innerWidth, raw.maxX),
+        maxY: Math.min(innerHeight, raw.maxY),
+      };
+      const width = Math.max(0, clipped.maxX - clipped.minX);
+      const height = Math.max(0, clipped.maxY - clipped.minY);
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        raw,
+        clipped: { ...clipped, width, height },
+        areaRatio: width * height / (innerWidth * innerHeight),
+        intersectsViewport: width > 0 && height > 0,
+      };
+    }
+
+    window.__lirmMotionScreenProbe = motionScreenProbe;
+
+    function setMotionPhase(normalizedPhase) {
+      motionActive = false;
+      motionButton.textContent = 'Play motion';
+      motionButton.setAttribute('aria-pressed', 'false');
+      for (const root of objects.values()) root.visible = false;
+      objects.get('motion').visible = true;
+      currentPose = 'motion';
+      applyMotionPhase(normalizedPhase);
+      metricPose.textContent = `${LABELS[window.__LIRM_INSPECTOR_STATE__.denseMotion.from]} to ${LABELS[window.__LIRM_INSPECTOR_STATE__.denseMotion.to]}`;
+      metricFlips.textContent = 'dense witness';
+      metricP99.textContent = 'continuous';
+      metricMax.textContent = 'bounded endpoints';
+      window.__LIRM_INSPECTOR_STATE__.currentPose = currentPose;
+      window.__LIRM_INSPECTOR_STATE__.denseMotion.active = false;
+      return window.__LIRM_INSPECTOR_STATE__.denseMotion;
+    }
+
+    window.__setLirmMotionPhase = setMotionPhase;
+
+    function setMotionActive(enabled) {
+      motionActive = enabled;
+      for (const root of objects.values()) root.visible = false;
+      objects.get('motion').visible = true;
+      currentPose = 'motion';
+      motionButton.textContent = enabled ? 'Pause motion' : 'Play motion';
+      motionButton.setAttribute('aria-pressed', String(enabled));
+      for (const button of poseButtons) button.setAttribute('aria-pressed', 'false');
+      window.__LIRM_INSPECTOR_STATE__.currentPose = currentPose;
+      window.__LIRM_INSPECTOR_STATE__.denseMotion.active = enabled;
+      if (enabled) lastRenderTime = null;
+      const params = new URLSearchParams(location.search);
+      if (enabled) params.set('motion', '1'); else params.delete('motion');
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+    }
+
     function metricsFor(pose) {
       if (!report || pose === 'rest') return null;
       const key = pose === 'c' ? 'c-bend' : pose === 's' || pose === 'legacy' ? 's-bend' : 'asymmetric';
@@ -345,6 +518,10 @@
 
     function showPose(pose) {
       if (!objects.has(pose)) return;
+      motionActive = false;
+      motionButton.textContent = 'Play motion';
+      motionButton.setAttribute('aria-pressed', 'false');
+      window.__LIRM_INSPECTOR_STATE__.denseMotion.active = false;
       currentPose = pose;
       for (const [name, root] of objects) root.visible = name === pose;
       for (const button of poseButtons) button.setAttribute('aria-pressed', String(button.dataset.pose === pose));
@@ -384,7 +561,22 @@
       framed = true;
     }
 
-    function render() {
+    function render(time) {
+      if (motionActive) {
+        if (lastRenderTime === null) lastRenderTime = time;
+        const deltaSeconds = Math.min(0.1, Math.max(0, (time - lastRenderTime) / 1000));
+        lastRenderTime = time;
+        const cycleSeconds = MOTION_SEGMENT_SECONDS * (MOTION_SEQUENCE.length - 1);
+        applyMotionPhase(motionPhase + deltaSeconds / cycleSeconds);
+        if (time - lastMetricUpdate > 120) {
+          const motion = window.__LIRM_INSPECTOR_STATE__.denseMotion;
+          metricPose.textContent = `${LABELS[motion.from]} to ${LABELS[motion.to]}`;
+          metricFlips.textContent = 'dense witness';
+          metricP99.textContent = `${Math.round(motion.phase * 100)}% cycle`;
+          metricMax.textContent = 'bounded endpoints';
+          lastMetricUpdate = time;
+        }
+      }
       controls.update();
       renderer.render(scene, camera);
     }
@@ -411,6 +603,7 @@
           objects.set(pose, root);
           scene.add(root);
         }
+        buildMotionObject();
         frameObjects();
 
         const params = new URLSearchParams(location.search);
@@ -418,15 +611,22 @@
         const initialPose = objects.has(requestedPose) ? requestedPose : 'rest';
         wireframeInput.checked = params.get('wire') === '1';
         setWireframe(wireframeInput.checked);
-        showPose(initialPose);
+        if (params.get('motion') === '1') {
+          applyMotionPhase(Number(params.get('phase') ?? 0));
+          if (params.get('paused') === '1') setMotionPhase(Number(params.get('phase') ?? 0));
+          else setMotionActive(true);
+        } else {
+          showPose(initialPose);
+        }
 
         identity.dataset.state = 'loaded';
-        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${REGISTRATION_HASH.slice(0, 16)}... | 148,118 vertices | amplitude 0.24`;
+        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${REGISTRATION_HASH.slice(0, 16)}... | 148,118 vertices | amplitude ${report.effectiveConfig.amplitude}`;
         Object.assign(window.__LIRM_INSPECTOR_STATE__, {
           status: 'loaded',
           effectiveRoute: report.effectiveRoute,
+          effectiveAmplitude: report.effectiveConfig.amplitude,
           loadedPoses: [...objects.keys()],
-          currentPose: initialPose,
+          currentPose,
           framed,
         });
         document.documentElement.dataset.inspectorStatus = 'loaded';
@@ -441,6 +641,7 @@
     }
 
     for (const button of poseButtons) button.addEventListener('click', () => showPose(button.dataset.pose));
+    motionButton.addEventListener('click', () => setMotionActive(!motionActive));
     wireframeInput.addEventListener('change', () => {
       setWireframe(wireframeInput.checked);
       const params = new URLSearchParams(location.search);
