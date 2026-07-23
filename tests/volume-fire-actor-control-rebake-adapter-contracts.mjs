@@ -123,7 +123,16 @@ const adapter = fireActor.createFireActorControlRebakeAdapter({
   mount,
   readLiveState: async () => {
     liveReads += 1;
-    return tinyState('live');
+    const state = tinyState('live');
+    state.liveCaptureLease = {
+      currentSimStep: () => state.source.simStepCount,
+      release: () => ({
+        beforeRelease: state.source.simStepCount,
+        afterRelease: state.source.simStepCount,
+        restoredPaused: true,
+      }),
+    };
+    return state;
   },
   bakedBoundary: {
     authority: 'baked',
@@ -170,6 +179,8 @@ assert.deepEqual(result.receipt.passes.requested, result.receipt.passes.applied)
 assert.deepEqual(result.receipt.passes.encoded, []);
 assert.equal(result.receipt.simulatorAdvanced, false);
 assert.equal(result.receipt.fallbackReason, null);
+assert.equal(result.receipt.projection.identity, 'fixed-stage-b-analytical-camera-v0');
+assert.equal(result.receipt.source.cameraRole, 'capture-context-not-analytical-projection');
 assert.equal(result.pixels.length, 48 * 48 * 4);
 assert.equal(liveReads, 0);
 
@@ -181,6 +192,35 @@ const live = await adapter.rebake({
 });
 assert.equal(live.receipt.source.effectiveMode, 'live');
 assert.equal(liveReads, 1);
+
+const advancingState = tinyState('live');
+let advancingStep = 120;
+advancingState.liveCaptureLease = {
+  currentSimStep: () => advancingStep,
+  release: () => {
+    const beforeRelease = advancingStep;
+    advancingStep += 1;
+    return { beforeRelease, afterRelease: advancingStep };
+  },
+};
+const advancingAdapter = fireActor.createFireActorControlRebakeAdapter({
+  mount,
+  readLiveState: async () => advancingState,
+  bakedBoundary: {
+    authority: 'baked',
+    identity: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+  },
+});
+await assert.rejects(
+  advancingAdapter.rebake({
+    sourceMode: 'live',
+    requestedControls,
+    width: 32,
+    height: 32,
+  }),
+  /fire-actor-rebake-live-state-advanced/,
+  'a running engine that advances while the capture lease is released must not produce a false no-advance receipt',
+);
 
 await assert.rejects(
   adapter.rebake({

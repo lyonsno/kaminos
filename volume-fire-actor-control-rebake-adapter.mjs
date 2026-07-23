@@ -222,6 +222,16 @@ export function createVolumeEngineStageBStateReader(engine) {
     const wasPaused = before.selectiveHeadLiveCapturePaused === true;
     if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(true);
     let session = null;
+    let stateReturned = false;
+    let leaseReleased = false;
+    const releaseCaptureLease = () => {
+      if (leaseReleased) throw new Error('fire-actor-rebake-live-capture-lease-already-released');
+      const beforeRelease = engine.debugState().simStepCount;
+      if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(false);
+      const afterRelease = engine.debugState().simStepCount;
+      leaseReleased = true;
+      return { beforeRelease, afterRelease, restoredPaused: wasPaused };
+    };
     try {
       session = await engine.beginDebugFullFieldExport();
       if (session?.ok !== true || session.status !== 'captured' || session.completeFieldCoverage !== true) {
@@ -250,7 +260,7 @@ export function createVolumeEngineStageBStateReader(engine) {
         exportAuthority: session.authority,
         exportIdentity: session.identity,
       };
-      return {
+      const liveState = {
         grid: session.grid,
         fluid,
         front,
@@ -258,10 +268,17 @@ export function createVolumeEngineStageBStateReader(engine) {
           ...sourceBasis,
           stateId: `fireactor-live-${await sha256Json(sourceBasis)}`,
         },
+        liveCaptureLease: Object.freeze({
+          sourceSimStep: before.simStepCount,
+          currentSimStep: () => engine.debugState().simStepCount,
+          release: releaseCaptureLease,
+        }),
       };
+      stateReturned = true;
+      return liveState;
     } finally {
       if (session?.sessionId) engine.releaseDebugFullFieldExport({ sessionId: session.sessionId });
-      if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(false);
+      if (!stateReturned && !wasPaused && !leaseReleased) releaseCaptureLease();
     }
   };
 }
@@ -328,26 +345,47 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
       validateState(sourceState, sourceMode);
       if (sourceMode === 'frozen') await verifyFrozenStateHashes(sourceState);
       const beforeSimStep = sourceState.source.simStepCount;
-      const baseline = await rebakeAnalyticalStageB({
-        state: sourceState,
-        controls: baselineRequested,
-        width,
-        height,
-      });
-      const treatment = await rebakeAnalyticalStageB({
-        state: sourceState,
-        controls: requested,
-        width,
-        height,
-      });
-      if (baseline.receipt.sourceStateIdentity !== treatment.receipt.sourceStateIdentity) {
-        throw new Error('fire-actor-rebake-source-state-drift');
+      const liveCaptureLease = sourceMode === 'live' ? sourceState.liveCaptureLease : null;
+      if (sourceMode === 'live'
+        && (typeof liveCaptureLease?.currentSimStep !== 'function' || typeof liveCaptureLease?.release !== 'function')) {
+        throw new Error('fire-actor-rebake-live-capture-lease-missing');
       }
-      if (treatment.receipt.fallback !== null || treatment.receipt.postLoadMutation !== 'analytical-rebake-only') {
-        throw new Error('fire-actor-rebake-producer-authority-mismatch');
-      }
-      const appliedPasses = [...treatment.receipt.appliedPasses];
-      const receipt = {
+      let liveCaptureLeaseReleased = false;
+      try {
+        if (liveCaptureLease && liveCaptureLease.currentSimStep() !== beforeSimStep) {
+          throw new Error('fire-actor-rebake-live-state-advanced-before-rebake');
+        }
+        const baseline = await rebakeAnalyticalStageB({
+          state: sourceState,
+          controls: baselineRequested,
+          width,
+          height,
+        });
+        const treatment = await rebakeAnalyticalStageB({
+          state: sourceState,
+          controls: requested,
+          width,
+          height,
+        });
+        if (baseline.receipt.sourceStateIdentity !== treatment.receipt.sourceStateIdentity) {
+          throw new Error('fire-actor-rebake-source-state-drift');
+        }
+        if (treatment.receipt.fallback !== null || treatment.receipt.postLoadMutation !== 'analytical-rebake-only') {
+          throw new Error('fire-actor-rebake-producer-authority-mismatch');
+        }
+        let leaseReceipt = null;
+        if (liveCaptureLease) {
+          if (liveCaptureLease.currentSimStep() !== beforeSimStep) {
+            throw new Error('fire-actor-rebake-live-state-advanced-during-rebake');
+          }
+          leaseReceipt = liveCaptureLease.release();
+          liveCaptureLeaseReleased = true;
+          if (leaseReceipt.beforeRelease !== beforeSimStep || leaseReceipt.afterRelease !== beforeSimStep) {
+            throw new Error(`fire-actor-rebake-live-state-advanced:${beforeSimStep}:${leaseReceipt.afterRelease}`);
+          }
+        }
+        const appliedPasses = [...treatment.receipt.appliedPasses];
+        const receipt = {
         schema: FIRE_ACTOR_CONTROL_REBAKE_RECEIPT_SCHEMA,
         status: 'applied',
         mountId: actorMount.mountId,
@@ -368,10 +406,14 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
           fluidSha256: sourceState.source.fluidSha256,
           frontSha256: sourceState.source.frontSha256,
           cameraIdentity: sourceState.source.cameraIdentity,
+          cameraRole: 'capture-context-not-analytical-projection',
           simStepCount: sourceState.source.simStepCount,
           routeIdentity: sourceState.source.routeIdentity,
           effectiveRoute: sourceState.source.effectiveRoute || sourceState.source.routeIdentity,
           backend: sourceState.source.backend,
+          exportAuthority: sourceState.source.exportAuthority || null,
+          exportIdentity: sourceState.source.exportIdentity || null,
+          liveCaptureLease: leaseReceipt,
         },
         boundary: {
           baseline: clone(baselineBoundary),
@@ -393,18 +435,22 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
         },
         simulatorAdvanced: sourceState.source.simStepCount !== beforeSimStep,
         fallbackReason: null,
+        projection: clone(treatment.receipt.projection),
         output: clone(treatment.receipt.output),
-      };
-      validateFireActorControlRebakeReceipt(receipt, { mount: actorMount, requestedControls: requested, sourceMode });
-      return {
-        receipt,
-        pixels: treatment.pixels,
-        baselinePixels: baseline.pixels,
-        producerReceipts: {
-          baseline: baseline.receipt,
-          treatment: treatment.receipt,
-        },
-      };
+        };
+        validateFireActorControlRebakeReceipt(receipt, { mount: actorMount, requestedControls: requested, sourceMode });
+        return {
+          receipt,
+          pixels: treatment.pixels,
+          baselinePixels: baseline.pixels,
+          producerReceipts: {
+            baseline: baseline.receipt,
+            treatment: treatment.receipt,
+          },
+        };
+      } finally {
+        if (liveCaptureLease && !liveCaptureLeaseReleased) liveCaptureLease.release();
+      }
     },
   });
 }

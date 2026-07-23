@@ -60,6 +60,16 @@ export const PRODUCTION_STAGE_B_FIXED = Object.freeze({
   fireLuma: 5,
 });
 
+export const STAGE_B_ANALYTICAL_PROJECTION = Object.freeze({
+  identity: 'fixed-stage-b-analytical-camera-v0',
+  authority: 'fixed-cpu-analytical-projection-not-live-capture-camera-v0',
+  type: 'PerspectiveCamera',
+  position: Object.freeze([0, 0.6, 3]),
+  target: Object.freeze([0, 0, 0]),
+  up: Object.freeze([0, 1, 0]),
+  fov: 40,
+});
+
 function clamp(value, low, high) {
   return Math.max(low, Math.min(high, Number(value)));
 }
@@ -203,7 +213,7 @@ function velocityDifferentials(fluid, x, y, z, grid) {
 
 function fixedCameraProject(x, y, z, grid, width, height) {
   const world = [((x + 0.5) / grid) * 2 - 1, ((y + 0.5) / grid) * 2 - 1, ((z + 0.5) / grid) * 2 - 1];
-  const position = [0, 0.6, 3];
+  const position = STAGE_B_ANALYTICAL_PROJECTION.position;
   const forwardLength = Math.hypot(0, -0.6, -3);
   const forward = [0, -0.6 / forwardLength, -3 / forwardLength];
   const right = [1, 0, 0];
@@ -488,7 +498,8 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
   const pixelIdentity = await hashBytes(pixels);
   const controlsIdentity = await hashJson(effectiveControls);
   const fixedProductionControlsIdentity = await hashJson(PRODUCTION_STAGE_B_FIXED);
-  const stageBIdentity = await hashJson({ sourceStateIdentity, controlsIdentity, fixedProductionControlsIdentity, candidateIdentity, coefficientIdentity, covarianceIdentity, depositionIdentity, pixelIdentity });
+  const projectionIdentity = await hashJson(STAGE_B_ANALYTICAL_PROJECTION);
+  const stageBIdentity = await hashJson({ sourceStateIdentity, controlsIdentity, fixedProductionControlsIdentity, projectionIdentity, candidateIdentity, coefficientIdentity, covarianceIdentity, depositionIdentity, pixelIdentity });
   const receipt = {
     schema: 'kaminos.volume.stage-b-analytical-rebake-receipt.v0',
     status: 'effective',
@@ -497,6 +508,8 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
     controlsIdentity,
     fixedProductionControls: PRODUCTION_STAGE_B_FIXED,
     fixedProductionControlsIdentity,
+    projection: STAGE_B_ANALYTICAL_PROJECTION,
+    projectionIdentity,
     sourceStateIdentity,
     source: { ...state.source, grid },
     stageBIdentity,
