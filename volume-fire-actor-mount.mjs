@@ -370,6 +370,14 @@ function fireActorEpisodeIdentity({ episodeId, mountId, activation }) {
   });
 }
 
+function requestedPresentationFromMount(actorMount) {
+  return {
+    composition: actorMount.representation.composition,
+    rendererIdentity: actorMount.representation.rendererIdentity,
+    policyId: actorMount.policy.policyId,
+  };
+}
+
 export function beginFireActorEpisode({ mount, episodeId, activation } = {}) {
   const actorMount = validateActorMount(mount);
   const normalizedEpisodeId = requiredString(episodeId, 'fire actor episode id');
@@ -388,11 +396,7 @@ export function beginFireActorEpisode({ mount, episodeId, activation } = {}) {
     basinRevision: actorMount.basin.revision,
     policyId: actorMount.policy.policyId,
     activation: normalizedActivation,
-    requestedPresentation: {
-      composition: actorMount.representation.composition,
-      rendererIdentity: actorMount.representation.rendererIdentity,
-      policyId: actorMount.policy.policyId,
-    },
+    requestedPresentation: requestedPresentationFromMount(actorMount),
   };
 }
 
@@ -416,9 +420,8 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
     || effectivePresentation?.episodeId !== episode.episodeId) {
     throw new Error('fire actor episode identity mismatch');
   }
-  if (episode.requestedPresentation?.composition !== actorMount.representation.composition
-    || episode.requestedPresentation?.rendererIdentity !== actorMount.representation.rendererIdentity
-    || episode.requestedPresentation?.policyId !== actorMount.policy.policyId) {
+  const requestedPresentation = requestedPresentationFromMount(actorMount);
+  if (canonicalJson(episode.requestedPresentation) !== canonicalJson(requestedPresentation)) {
     throw new Error('fire actor episode requested presentation identity mismatch');
   }
   if (effectivePresentation.policyId !== actorMount.policy.policyId
@@ -440,7 +443,7 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
     basinRevision: actorMount.basin.revision,
     policyId: actorMount.policy.policyId,
     activation,
-    requestedPresentation: structuredClone(episode.requestedPresentation),
+    requestedPresentation,
     inferenceRan: activation.inferenceRequired,
     effectivePresentation: structuredClone(effectivePresentation),
   };

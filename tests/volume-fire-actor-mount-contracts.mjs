@@ -213,6 +213,31 @@ try {
     );
   }
   assert.throws(
+    () => completeFireActorEpisode({
+      mount: first.mount,
+      episode: {
+        ...structuredClone(episode),
+        requestedPresentation: {
+          ...episode.requestedPresentation,
+          routeRef: 'sharp://route/forged',
+          fallbackReason: null,
+          rendererMutation: 'claimed',
+        },
+      },
+      effectivePresentation: {
+        mountId: first.mount.mountId,
+        episodeId: episode.episodeId,
+        policyId: first.mount.policy.policyId,
+        basinRevision: revision,
+        composition: first.mount.representation.composition,
+        rendererIdentity: first.mount.representation.rendererIdentity,
+        fallbackReason: null,
+      },
+    }),
+    /requested presentation identity mismatch/,
+    'completion must reject requested-presentation extra claims',
+  );
+  assert.throws(
     () => beginFireActorEpisode({
       mount: first.mount,
       episodeId: 'preview-with-route-authority-label',
