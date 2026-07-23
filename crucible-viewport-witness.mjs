@@ -950,11 +950,17 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
   const report = pipelineReport || {};
   const stage = (report.stages || [])[0] || {};
   const adapter = stage.effectiveRoute?.adapterReport || {};
-  const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
-  const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
+  const authoritativeTrace = report.authoritativeTrace || {};
+  const authoritativeScheduler = authoritativeTrace.sharpRunDebug?.schedulerTelemetry || null;
+  const backgroundHeartbeat = adapter.backgroundHeartbeat || authoritativeTrace.backgroundHeartbeat || null;
+  const schedulerEvents = adapter.breathingRoom?.telemetry?.events
+    || authoritativeScheduler?.eventTrace?.events
+    || authoritativeScheduler?.events
+    || [];
   const schedulerBoundaryAssertions = adapter.schedulerVerification?.boundaryAssertions
     || adapter.breathingRoom?.boundaryAssertions
     || adapter.breathingRoom?.telemetry?.boundaryAssertions
+    || authoritativeScheduler?.boundaryAssertions
     || [];
   const spnFusionTileEvents = schedulerEvents
     .filter(event => event?.phase === 'spn-fusion'

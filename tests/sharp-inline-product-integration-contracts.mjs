@@ -129,6 +129,97 @@ assert.match(
 );
 assert.match(
   page,
+  /overlappedEventRefs/,
+  'foreground gap attribution must retain stable event references instead of expanding event payloads into every frame row',
+);
+assert.doesNotMatch(
+  page,
+  /\boverlappedEvents,\s*\n/,
+  'foreground gap rows must not duplicate complete scheduler event payloads',
+);
+const persistedEvidenceBuilderSource = page.match(
+  /function createSharpInlinePersistedEvidence\([\s\S]*?\n}\n(?=\nasync function )/,
+);
+assert.ok(
+  persistedEvidenceBuilderSource,
+  'the inline route must normalize its durable evidence before synchronous report serialization',
+);
+const createSharpInlinePersistedEvidence = vm.runInNewContext(`(${persistedEvidenceBuilderSource?.[0]})`);
+const uniqueTraceEvent = { kind: 'unique-full-trace-event', dutyId: 'trace-duty-1' };
+const fullRunDebug = {
+  schedulerTelemetry: {
+    eventTrace: { events: [uniqueTraceEvent] },
+    boundaryAssertions: [{ field: 'decoderKernelAdaptiveRanges', status: 'verified' }],
+  },
+};
+const persistedEvidence = createSharpInlinePersistedEvidence({
+  adapterReport: {
+    schema: 'kaminos.sharp-inline-product-route-report.v0',
+    revision: 'sharp-test-revision',
+    effectiveRoute: 'same-browser-product-realm-shared-device',
+    sharedGpu: { exactObjectIdentityVerified: true },
+    firingId: 'firing-test',
+    foregroundOpportunityMode: 'lease-driven',
+    foregroundFrameCount: 42,
+    requestedScheduler: { mode: 'cooperative' },
+    effectiveScheduler: { mode: 'cooperative' },
+    breathingRoom: {
+      requestedScheduler: { mode: 'cooperative' },
+      effectiveScheduler: { mode: 'cooperative' },
+      telemetry: fullRunDebug.schedulerTelemetry,
+      boundaryAssertions: fullRunDebug.schedulerTelemetry.boundaryAssertions,
+    },
+    schedulerVerification: fullRunDebug.schedulerTelemetry,
+    sharpRunDebug: fullRunDebug,
+    backgroundHeartbeat: {
+      schema: 'sharp-webgpu.background-heartbeat.v0',
+      worstFrameGaps: [{ overlappedEventRefs: ['event:0'] }],
+    },
+    pipelineScheduler: {
+      schema: 'kaminos.pipeline-scheduler-composition.v0',
+      schedulerVerification: fullRunDebug.schedulerTelemetry,
+    },
+  },
+  sharpRunDebug: fullRunDebug,
+});
+const persistedEvidenceJson = JSON.stringify(persistedEvidence);
+assert.equal(
+  (persistedEvidenceJson.match(/unique-full-trace-event/g) || []).length,
+  1,
+  'the durable evidence envelope must serialize the complete uncapped trace exactly once',
+);
+assert.equal(
+  persistedEvidence.adapterReport.sharpRunDebugRef,
+  '#/authoritativeTrace/sharpRunDebug',
+  'the compact adapter projection must point at the one authoritative SHARP trace',
+);
+assert.equal(
+  persistedEvidence.adapterReport.backgroundHeartbeatRef,
+  '#/authoritativeTrace/backgroundHeartbeat',
+  'the compact adapter projection must point at the one authoritative foreground heartbeat',
+);
+assert.equal(
+  persistedEvidence.pipelineScheduler.schema,
+  'kaminos.pipeline-scheduler-composition-reference.v0',
+  'the compact scheduler projection must identify itself as a reference rather than impersonating full scheduler evidence',
+);
+assert.match(
+  page,
+  /const rawResult = \{[\s\S]{0,5000}inlineSharp:\s*persistedEvidence\.adapterReport/,
+  'the actual remembered pipeline result must carry only the compact inline adapter projection',
+);
+assert.doesNotMatch(
+  page,
+  /inlineSharp:\s*adapterReport/,
+  'the actual remembered pipeline result must not retain the duplicated full live adapter envelope',
+);
+assert.match(
+  page,
+  /overlapReferenceSpace:\s*\{[\s\S]{0,800}eventSource:[\s\S]{0,800}intervalSource:/,
+  'the durable heartbeat must declare how every compact overlap reference resolves',
+);
+assert.match(
+  page,
   /breathingRoom: \{[\s\S]{0,1000}requestedScheduler: backgroundHeartbeat\.requestedScheduler[\s\S]{0,500}effectiveScheduler: backgroundHeartbeat\.effectiveScheduler[\s\S]{0,500}telemetry: sharpResult\.runDebug\?\.schedulerTelemetry/,
   'the durable adapter must project canonical scheduler telemetry through the established witness surface',
 );

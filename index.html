@@ -13269,6 +13269,9 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
   };
   const foregroundSamples = Array.isArray(foregroundSnapshot?.samples) ? foregroundSnapshot.samples : [];
   const overlapCandidates = [...events, ...intervals];
+  const overlapCandidateRefs = new Map();
+  events.forEach((event, index) => overlapCandidateRefs.set(event, `event:${index}`));
+  intervals.forEach((interval, index) => overlapCandidateRefs.set(interval, `interval:${index}`));
   const worstFrameGaps = [];
   for (let index = 1; index < foregroundSamples.length; index += 1) {
     const previous = foregroundSamples[index - 1];
@@ -13276,7 +13279,7 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
     const gapStartMs = Math.max(startMs, previous?.timestampMs);
     const gapEndMs = Math.min(endMs, current?.timestampMs);
     if (!Number.isFinite(gapStartMs) || !Number.isFinite(gapEndMs) || gapEndMs <= gapStartMs) continue;
-    const overlappedEvents = overlapCandidates.filter(candidate => {
+    const overlappedEventRefs = overlapCandidates.filter(candidate => {
       if (Number.isFinite(candidate?.intervalStartMs) && Number.isFinite(candidate?.intervalEndMs)) {
         return candidate.intervalEndMs > gapStartMs && candidate.intervalStartMs < gapEndMs;
       }
@@ -13284,13 +13287,13 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
         return candidate.endMs > gapStartMs && candidate.startMs < gapEndMs;
       }
       return Number.isFinite(candidate?.tMs) && candidate.tMs >= gapStartMs && candidate.tMs <= gapEndMs;
-    });
+    }).map(candidate => overlapCandidateRefs.get(candidate));
     worstFrameGaps.push({
       startMs: gapStartMs,
       endMs: gapEndMs,
       durationMs: Number((gapEndMs - gapStartMs).toFixed(3)),
-      overlapClassification: overlappedEvents.length ? 'scheduler-event-overlap' : 'uninstrumented-gap',
-      overlappedEvents,
+      overlapClassification: overlappedEventRefs.length ? 'scheduler-event-overlap' : 'uninstrumented-gap',
+      overlappedEventRefs,
     });
   }
   worstFrameGaps.sort((left, right) => right.durationMs - left.durationMs);
@@ -13328,6 +13331,13 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
       intervals,
       ...(pairingFailures.length ? { pairingFailures } : {}),
     },
+    overlapReferenceSpace: {
+      schema: 'kaminos.sharp-overlap-reference-space.v0',
+      eventSource: scheduler?.eventTrace?.events
+        ? '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events'
+        : '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/events',
+      intervalSource: '#/authoritativeTrace/backgroundHeartbeat/gpuDutyIntervals/intervals',
+    },
     inferenceWindow,
     gapRetention: 'uncapped',
     mohelIndicator: {
@@ -13336,6 +13346,48 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
       diagnostic: 'All foreground frame gaps overlapping the inference window are retained.',
     },
     worstFrameGaps,
+  };
+}
+
+function createSharpInlinePersistedEvidence({ adapterReport, sharpRunDebug } = {}) {
+  const backgroundHeartbeat = adapterReport?.backgroundHeartbeat || null;
+  const pipelineScheduler = adapterReport?.pipelineScheduler || null;
+  return {
+    schema: 'kaminos.sharp-inline-persisted-evidence.v0',
+    authoritativeTrace: {
+      sharpRunDebug: sharpRunDebug || null,
+      backgroundHeartbeat,
+    },
+    adapterReport: {
+      schema: adapterReport?.schema || 'kaminos.sharp-inline-product-route-report.v0',
+      revision: adapterReport?.revision || null,
+      effectiveRoute: adapterReport?.effectiveRoute || null,
+      sharedGpu: adapterReport?.sharedGpu || null,
+      firingId: adapterReport?.firingId || null,
+      foregroundOpportunityMode: adapterReport?.foregroundOpportunityMode || null,
+      foregroundFrameCount: adapterReport?.foregroundFrameCount || 0,
+      requestedScheduler: adapterReport?.requestedScheduler || null,
+      effectiveScheduler: adapterReport?.effectiveScheduler || null,
+      breathingRoom: {
+        requestedScheduler: adapterReport?.breathingRoom?.requestedScheduler || null,
+        effectiveScheduler: adapterReport?.breathingRoom?.effectiveScheduler || null,
+        boundaryAssertions: adapterReport?.breathingRoom?.boundaryAssertions || [],
+        telemetryRef: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry',
+      },
+      schedulerVerificationRef: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry',
+      sharpRunDebugRef: '#/authoritativeTrace/sharpRunDebug',
+      backgroundHeartbeatRef: '#/authoritativeTrace/backgroundHeartbeat',
+      pipelineSchedulerRef: '#/pipelineScheduler',
+    },
+    pipelineScheduler: {
+      schema: 'kaminos.pipeline-scheduler-composition-reference.v0',
+      sourceSchema: pipelineScheduler?.schema || null,
+      requestedScheduler: adapterReport?.requestedScheduler || null,
+      effectiveScheduler: adapterReport?.effectiveScheduler || null,
+      schedulerRef: '#/authoritativeTrace/sharpRunDebug/sharpScheduler',
+      schedulerVerificationRef: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry',
+      backpressureRef: '#/authoritativeTrace/sharpRunDebug/backpressure',
+    },
   };
 }
 
@@ -13549,6 +13601,10 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       backgroundHeartbeat,
       pipelineScheduler,
     };
+    const persistedEvidence = createSharpInlinePersistedEvidence({
+      adapterReport,
+      sharpRunDebug: sharpResult.runDebug,
+    });
     const rawResult = {
       schema: 'kaminos.pipeline-run-result.v0',
       ok: true,
@@ -13568,13 +13624,17 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
             routeId: 'sharp-image-to-splat-live-v0',
             routeAuthority: 'same-browser-product-realm-shared-device',
           },
+          authoritativeTrace: persistedEvidence.authoritativeTrace,
           durationMs: sharpResult.runDebug?.elapsedMs || null,
-          pipelineScheduler,
+          pipelineScheduler: persistedEvidence.pipelineScheduler,
           stages: [{
             id: 'run-sharp-image-to-splat',
             status: 'real',
             durationMs: sharpResult.runDebug?.elapsedMs || null,
-            effectiveRoute: { adapterReport, pipelineScheduler },
+            effectiveRoute: {
+              adapterReport: persistedEvidence.adapterReport,
+              pipelineScheduler: persistedEvidence.pipelineScheduler,
+            },
           }],
           artifacts: { splat: artifact },
         },
@@ -13586,7 +13646,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           artifacts: [artifact],
         },
       },
-      inlineSharp: adapterReport,
+      inlineSharp: persistedEvidence.adapterReport,
     };
     const reportReceipt = await persistSharpInlineRunReport({
       document: rawResult.report.document,
@@ -15378,7 +15438,11 @@ function pipelineRunUsesAdapterFixture(result) {
 function pipelineRunSchedulerEvidence(result) {
   if (!result || typeof result !== 'object') return null;
   if (result.schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return result.schedulerEvidence;
+  if (result.schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition-reference.v0') return result.schedulerEvidence;
   if (result.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') return result.pipelineScheduler;
+  if (result.inlineSharp?.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
+    return result.inlineSharp.pipelineScheduler;
+  }
   const stages = result.report?.document?.stages || [];
   for (const stage of stages) {
     const routeEvidence = stage?.effectiveRoute?.pipelineScheduler;
@@ -15386,9 +15450,72 @@ function pipelineRunSchedulerEvidence(result) {
     const adapterEvidence = stage?.effectiveRoute?.adapterReport?.pipelineScheduler;
     if (adapterEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return adapterEvidence;
   }
+  const authoritativeDebug = result.report?.document?.authoritativeTrace?.sharpRunDebug;
+  if (authoritativeDebug) {
+    return {
+      schema: 'kaminos.pipeline-scheduler-composition.v0',
+      scheduler: authoritativeDebug.sharpScheduler || null,
+      schedulerVerification: authoritativeDebug.schedulerTelemetry || null,
+      backpressure: authoritativeDebug.backpressure || null,
+      requestedScheduler: authoritativeDebug.schedulerTelemetry?.requestedScheduler || null,
+      effectiveScheduler: authoritativeDebug.schedulerTelemetry?.effectiveScheduler || null,
+    };
+  }
   const reportEvidence = result.report?.document?.pipelineScheduler;
-  if (reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return reportEvidence;
+  if (reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0'
+    || reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition-reference.v0') {
+    return reportEvidence;
+  }
   return null;
+}
+
+function pipelineRunSchedulerEvidenceReference(result) {
+  if (!result || typeof result !== 'object') return null;
+  const existingReferences = [
+    result.schedulerEvidence,
+    result.pipelineScheduler,
+    result.inlineSharp?.pipelineScheduler,
+    result.report?.document?.pipelineScheduler,
+  ];
+  const existingReference = existingReferences.find(
+    reference => reference?.schema === 'kaminos.pipeline-scheduler-composition-reference.v0',
+  ) || null;
+  const hasAuthoritativeTrace = Boolean(result.report?.document?.authoritativeTrace?.sharpRunDebug);
+  if (existingReference && !hasAuthoritativeTrace) return existingReference;
+  const evidence = pipelineRunSchedulerEvidence(result);
+  if (!evidence) return existingReference;
+  const scheduler = evidence.scheduler || null;
+  const verification = evidence.schedulerVerification || null;
+  const breathability = scheduler?.breathability || null;
+  const spans = Array.isArray(breathability?.spans) ? breathability.spans.length : 0;
+  const checkpoints = Array.isArray(breathability?.checkpoints) ? breathability.checkpoints.length : 0;
+  return {
+    ...(existingReference || {}),
+    schema: 'kaminos.pipeline-scheduler-composition-reference.v0',
+    sourceSchema: existingReference?.sourceSchema || evidence.schema || null,
+    reportPath: result.report?.path || null,
+    requestedScheduler: evidence.requestedScheduler || scheduler?.requestedScheduler || null,
+    effectiveScheduler: evidence.effectiveScheduler || scheduler?.effectiveScheduler || null,
+    verificationState: verification?.status || evidence.verificationState || evidence.status || null,
+    verificationSummary: verification ? {
+      status: verification.status || null,
+      classification: verification.classification || null,
+      downgrades: Array.isArray(verification.downgrades) ? verification.downgrades : [],
+      unsupportedFields: verification.scheduler?.unsupportedFields || verification.unsupportedFields || [],
+    } : null,
+    schedulerSchema: scheduler?.schema || null,
+    backpressureSchema: evidence.backpressure?.schema || null,
+    breathabilitySummary: {
+      status: spans && checkpoints
+        ? 'kit-backed-breathability'
+        : (scheduler?.schema === 'kaminos.webgpu-route-scheduler.v0' ? 'scheduler-without-breathability' : 'missing'),
+      spanCount: spans,
+      checkpointCount: checkpoints,
+    },
+    schedulerRef: hasAuthoritativeTrace ? '#/authoritativeTrace/sharpRunDebug/sharpScheduler' : null,
+    schedulerVerificationRef: hasAuthoritativeTrace ? '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry' : null,
+    backpressureRef: hasAuthoritativeTrace ? '#/authoritativeTrace/sharpRunDebug/backpressure' : null,
+  };
 }
 
 function finiteKilnEvidenceNumber(value) {
@@ -15423,7 +15550,7 @@ function sharpBreathingRoomRunStage(result) {
 }
 
 function sharpBreathingRoomAdapterReport(result) {
-  return sharpBreathingRoomRunStage(result)?.effectiveRoute?.adapterReport || null;
+  return result?.inlineSharp || sharpBreathingRoomRunStage(result)?.effectiveRoute?.adapterReport || null;
 }
 
 function sharpBreathingRoomRunDurationMs(result) {
@@ -15449,7 +15576,10 @@ function sharpBreathingRoomSchedulerEventDurationMs(result) {
 function sharpBreathingRoomSchedulerEvents(result) {
   const evidence = pipelineRunSchedulerEvidence(result);
   const adapterReport = sharpBreathingRoomAdapterReport(result);
+  const authoritativeTelemetry = result?.report?.document?.authoritativeTrace?.sharpRunDebug?.schedulerTelemetry;
   const candidates = [
+    authoritativeTelemetry?.eventTrace?.events,
+    authoritativeTelemetry?.events,
     evidence?.schedulerVerification?.eventTrace?.events,
     evidence?.eventTrace?.events,
     evidence?.scheduler?.schedulerVerification?.eventTrace?.events,
@@ -15659,11 +15789,12 @@ function refreshSharpBreathingRoomComparisonSummary(state = null) {
 function pipelineGraphSchedulerEvidenceState(evidence) {
   if (!evidence) return 'missing';
   if (evidence.schedulerVerification?.status) return evidence.schedulerVerification.status;
+  if (evidence.verificationSummary?.status) return evidence.verificationSummary.status;
   return evidence.verificationState || evidence.status || 'unknown';
 }
 
 function pipelineGraphSchedulerVerificationLabel(evidence) {
-  const receipt = evidence?.schedulerVerification || null;
+  const receipt = evidence?.schedulerVerification || evidence?.verificationSummary || null;
   if (!receipt) return 'missing';
   const status = receipt.status || 'unknown';
   const classification = receipt.classification || 'unknown';
@@ -15683,7 +15814,10 @@ function pipelineGraphSchedulerEvidenceLabel(evidence) {
   const state = pipelineGraphSchedulerEvidenceState(evidence);
   if (state === 'verified') return 'verified scheduler evidence';
   if (state === 'unsupported') {
-    const unsupportedFields = evidence?.schedulerVerification?.scheduler?.unsupportedFields || evidence?.unsupportedFields || [];
+    const unsupportedFields = evidence?.schedulerVerification?.scheduler?.unsupportedFields
+      || evidence?.verificationSummary?.unsupportedFields
+      || evidence?.unsupportedFields
+      || [];
     const unsupported = unsupportedFields.length ? `: ${unsupportedFields.join(', ')}` : '';
     return `unsupported scheduler fields${unsupported}`;
   }
@@ -15701,6 +15835,7 @@ function pipelineGraphSchedulerBreathability(evidence) {
 
 function pipelineGraphSchedulerBreathabilityState(evidence) {
   if (!evidence) return 'missing';
+  if (evidence.breathabilitySummary?.status) return evidence.breathabilitySummary.status;
   const breathability = pipelineGraphSchedulerBreathability(evidence);
   const spans = Array.isArray(breathability?.spans) ? breathability.spans : [];
   const checkpoints = Array.isArray(breathability?.checkpoints) ? breathability.checkpoints : [];
@@ -15710,6 +15845,14 @@ function pipelineGraphSchedulerBreathabilityState(evidence) {
 }
 
 function pipelineGraphSchedulerBreathabilityLabel(evidence) {
+  if (evidence?.breathabilitySummary) {
+    const spans = evidence.breathabilitySummary.spanCount || 0;
+    const checkpoints = evidence.breathabilitySummary.checkpointCount || 0;
+    const state = pipelineGraphSchedulerBreathabilityState(evidence);
+    if (state === 'kit-backed-breathability') return `kit-backed breathability: ${spans} span${spans === 1 ? '' : 's'}, ${checkpoints} checkpoint${checkpoints === 1 ? '' : 's'}`;
+    if (state === 'scheduler-without-breathability') return 'scheduler profile lacks kit breathability metadata';
+    return 'no breathability evidence';
+  }
   const breathability = pipelineGraphSchedulerBreathability(evidence);
   const spans = Array.isArray(breathability?.spans) ? breathability.spans.length : 0;
   const checkpoints = Array.isArray(breathability?.checkpoints) ? breathability.checkpoints.length : 0;
@@ -15903,6 +16046,13 @@ function normalizePipelineGeneratedOutputNode(value) {
     : (artifact ? [artifact] : []);
   const artifactRole = value.artifactRole || pipelineArtifactRoleLabel(artifact);
   const status = ['pending', 'running', 'complete', 'failed'].includes(value.status) ? value.status : (artifact?.path ? 'complete' : 'pending');
+  const schedulerEvidence = pipelineRunSchedulerEvidenceReference({
+    schedulerEvidence: value.schedulerEvidence,
+    report: {
+      path: value.reportPath || null,
+      document: {},
+    },
+  });
   if (!id || !runId || !routeNodeId) return null;
   if (status === 'complete' && !artifact?.path) return null;
   return {
@@ -15930,7 +16080,7 @@ function normalizePipelineGeneratedOutputNode(value) {
     previewTruth: value.previewTruth || null,
     routeSnapshot: value.routeSnapshot && typeof value.routeSnapshot === 'object' ? value.routeSnapshot : null,
     graphSnapshot: value.graphSnapshot && typeof value.graphSnapshot === 'object' ? value.graphSnapshot : null,
-    schedulerEvidence: value.schedulerEvidence && typeof value.schedulerEvidence === 'object' ? value.schedulerEvidence : null,
+    schedulerEvidence,
     progress: Number.isFinite(value.progress) ? value.progress : null,
     progressEvent: value.progressEvent && typeof value.progressEvent === 'object' ? value.progressEvent : null,
     runTimeline: Array.isArray(value.runTimeline) ? value.runTimeline : [],
@@ -16554,7 +16704,7 @@ function pipelineGeneratedOutputGraphNode(record) {
   const previewTruth = pipelineRunUsesAdapterFixture(run) ? computedPreviewTruth : (record.previewTruth || computedPreviewTruth);
   const artifactRole = pipelineArtifactRoleLabel(artifact);
   const artifactTitle = artifact ? pipelineArtifactTitle(artifact) : 'Generated artifact';
-  const schedulerEvidence = record.schedulerEvidence || pipelineRunSchedulerEvidence(run);
+  const schedulerEvidence = record.schedulerEvidence || pipelineRunSchedulerEvidenceReference(run);
   return {
     id: record.id,
     kind: 'generated-output',
@@ -17050,10 +17200,10 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'generated-output') rows.push({ key: 'graph snapshot', value: node.graphSnapshot?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(node.schedulerEvidence) });
   if (node.kind === 'generated-output') rows.push({ key: 'scheduler verification', value: pipelineGraphSchedulerVerificationLabel(node.schedulerEvidence) });
-  if (node.kind === 'generated-output') rows.push({ key: 'scheduler profile', value: node.schedulerEvidence?.scheduler?.schema || 'missing' });
-  if (node.kind === 'generated-output') rows.push({ key: 'backpressure profile', value: node.schedulerEvidence?.backpressure?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'scheduler profile', value: node.schedulerEvidence?.scheduler?.schema || node.schedulerEvidence?.schedulerSchema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'backpressure profile', value: node.schedulerEvidence?.backpressure?.schema || node.schedulerEvidence?.backpressureSchema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'breathability', value: pipelineGraphSchedulerBreathabilityLabel(node.schedulerEvidence) });
-  if (node.kind === 'generated-output') rows.push({ key: 'breathability checkpoints', value: String(node.schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || 0) });
+  if (node.kind === 'generated-output') rows.push({ key: 'breathability checkpoints', value: String(node.schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || node.schedulerEvidence?.breathabilitySummary?.checkpointCount || 0) });
   if (node.kind === 'generated-output') rows.push({ key: 'graph relation', value: pipelineGeneratedOutputGraphRelation(node) });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loadable', value: node.loadable ? 'yes' : 'no; open artifact evidence instead' });
@@ -17516,7 +17666,7 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
   const sidecar = pipelineRunArtifact(run, 'sidecar');
   const artifactRole = pipelineArtifactRoleLabel(artifact);
   const loadable = pipelineArtifactIsLoadableSplat(artifact);
-  const schedulerEvidence = pipelineRunSchedulerEvidence(run);
+  const schedulerEvidence = pipelineRunSchedulerEvidenceReference(run);
   const now = new Date().toISOString();
   let completed = null;
   pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
@@ -17590,7 +17740,7 @@ function pipelineFailGeneratedOutputNode(outputNodeId, errorMessage, run = null)
       reportPath: run?.report?.path || record.reportPath || null,
       bundlePath: run?.bundle?.path || record.bundlePath || null,
       outputRoot: run?.bundle?.document?.outputRoot || record.outputRoot || null,
-      schedulerEvidence: pipelineRunSchedulerEvidence(run) || record.schedulerEvidence || null,
+      schedulerEvidence: pipelineRunSchedulerEvidenceReference(run) || record.schedulerEvidence || null,
       updatedAt: now,
       failedAt: now,
       error: errorMessage || run?.error || 'Pipeline execution failed',
@@ -18141,10 +18291,10 @@ function pipelineRunResultRows(result) {
     { key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(schedulerEvidence) },
     { key: 'requested route', value: result.schedulerProfile?.operatorLabel || result.schedulerProfile?.label || 'ordinary route' },
     { key: 'scheduler verification', value: pipelineGraphSchedulerVerificationLabel(schedulerEvidence) },
-    { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || 'missing' },
-    { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || 'missing' },
+    { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || schedulerEvidence?.schedulerSchema || 'missing' },
+    { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || schedulerEvidence?.backpressureSchema || 'missing' },
     { key: 'breathability', value: pipelineGraphSchedulerBreathabilityLabel(schedulerEvidence) },
-    { key: 'breathability checkpoints', value: String(schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || 0) },
+    { key: 'breathability checkpoints', value: String(schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || schedulerEvidence?.breathabilitySummary?.checkpointCount || 0) },
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'artifact role', value: artifactRole || 'none' },
