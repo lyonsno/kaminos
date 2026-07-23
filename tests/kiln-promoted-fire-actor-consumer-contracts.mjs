@@ -26,7 +26,7 @@ const mountPath = join(
 const mountUrl = pathToFileURL(mountPath).toString();
 const promotedEnginePath = join(root, 'kiln-promoted-fire-volume-core.js');
 const promotedEngineManifestPath = join(root, 'kiln-promoted-fire-engine.json');
-const PROMOTED_ENGINE_SHA256 = 'fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb';
+const PROMOTED_ENGINE_SHA256 = '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d';
 
 const promotedEngineSource = readFileSync(promotedEnginePath);
 assert.equal(
@@ -37,7 +37,7 @@ assert.equal(
 const promotedEngineManifest = JSON.parse(readFileSync(promotedEngineManifestPath, 'utf8'));
 assert.deepEqual(promotedEngineManifest, {
   schema: 'kaminos.kiln.promoted-fire-engine.v1',
-  sourceCommit: 'dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10',
+  sourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
   sourcePath: 'volume-core.js',
   consumerPath: 'kiln-promoted-fire-volume-core.js',
   sha256: PROMOTED_ENGINE_SHA256,

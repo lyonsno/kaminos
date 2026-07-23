@@ -1,0 +1,1243 @@
+{
+  "schema": "kaminos.fire-actor-live-parity-witness.v1",
+  "ok": true,
+  "requestedRoute": "http://127.0.0.1:18400/fire-actor-live-parity.html",
+  "effectiveRoute": "http://127.0.0.1:18400/fire-actor-live-parity.html",
+  "requested": {
+    "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+    "engine": {
+      "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+      "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+    },
+    "simStep": 120,
+    "arms": [
+      "splats",
+      "smoke",
+      "composite"
+    ]
+  },
+  "phase": "complete",
+  "failure": null,
+  "screenshotPaths": {
+    "splats": "artifacts/fire-actor-live-parity/live/splats.png",
+    "smoke": "artifacts/fire-actor-live-parity/live/smoke.png",
+    "composite": "artifacts/fire-actor-live-parity/live/composite.png"
+  },
+  "screenshots": {
+    "splats": {
+      "cockpit": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 705602,
+        "litPixels": 568989,
+        "sha256": "052c7b06eb2889c4878208bd2d2e079deb8627cd136e796a69c33dd6841005f9"
+      },
+      "kiln": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 705602,
+        "litPixels": 568989,
+        "sha256": "a925c328892a3dcbef37e87f4eea93a36ebffbc4d51270ed8e1b71104b000309"
+      },
+      "comparison": {
+        "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
+        "pixelCount": 2329600,
+        "meanAbsoluteChannelDelta": 0.0000074404761904761905,
+        "maxChannelDelta": 1,
+        "pixelTolerance": 12,
+        "pixelsOverTolerance": 0,
+        "pixelsOverToleranceRatio": 0
+      }
+    },
+    "smoke": {
+      "cockpit": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 1414439,
+        "litPixels": 1312349,
+        "sha256": "16b3ed30e6b56e39006ff343e8023e68706f396084e86b06d00f3de73985b62b"
+      },
+      "kiln": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 1414442,
+        "litPixels": 1312351,
+        "sha256": "4a95604c9a65799fff653deb878bffdc8651995a828ff1632c6945687c5e990a"
+      },
+      "comparison": {
+        "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
+        "pixelCount": 2329600,
+        "meanAbsoluteChannelDelta": 0.003794499771062271,
+        "maxChannelDelta": 9,
+        "pixelTolerance": 12,
+        "pixelsOverTolerance": 0,
+        "pixelsOverToleranceRatio": 0
+      }
+    },
+    "composite": {
+      "cockpit": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 1419693,
+        "litPixels": 1328234,
+        "sha256": "aeae925439655b9472ff3f820a0836f3196497d868ce8aec5f915af37352e3dd"
+      },
+      "kiln": {
+        "width": 1600,
+        "height": 1456,
+        "changedPixels": 1419693,
+        "litPixels": 1328246,
+        "sha256": "f97eac5bca19b55988e42d00e19f14364b946677655de97a172a380de47120b4"
+      },
+      "comparison": {
+        "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
+        "pixelCount": 2329600,
+        "meanAbsoluteChannelDelta": 0.0033050022893772895,
+        "maxChannelDelta": 10,
+        "pixelTolerance": 12,
+        "pixelsOverTolerance": 0,
+        "pixelsOverToleranceRatio": 0
+      }
+    }
+  },
+  "arms": {
+    "splats": {
+      "cockpit": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "cockpit",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.6499999999999997,
+            0.4200000000000003,
+            3.149999999999999
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "splats",
+          "smoke": "off",
+          "splats": "on",
+          "composition": "splat-only-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.6000000014901161,
+          "cpuFrameP95Ms": 0.6000000014901161,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 15.138816
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 8.323072
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 5.963776
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 2.424832
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 3.014656
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 45.809664
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 80.674816
+            }
+          }
+        }
+      },
+      "kiln": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "kiln",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.6499999999999997,
+            0.4200000000000003,
+            3.149999999999999
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "splats",
+          "smoke": "off",
+          "splats": "on",
+          "composition": "splat-only-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.19999999925494194,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 8.716288
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 0.65536
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 1.96608
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 0.065536
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 48.49664
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 39.518208
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 99.418112
+            }
+          }
+        }
+      }
+    },
+    "smoke": {
+      "cockpit": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "cockpit",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "smoke",
+          "smoke": "on",
+          "splats": "off",
+          "composition": "smoke-raymarch-only-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.6000000014901161,
+          "cpuFrameP95Ms": 0.6000000014901161,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 15.138816
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 8.323072
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 5.963776
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 2.424832
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 3.014656
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 45.809664
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 80.674816
+            }
+          }
+        }
+      },
+      "kiln": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "kiln",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "smoke",
+          "smoke": "on",
+          "splats": "off",
+          "composition": "smoke-raymarch-only-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.19999999925494194,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 8.716288
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 0.65536
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 1.96608
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 0.065536
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 48.49664
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 39.518208
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 99.418112
+            }
+          }
+        }
+      }
+    },
+    "composite": {
+      "cockpit": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "cockpit",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "composite",
+          "smoke": "on",
+          "splats": "on",
+          "composition": "smoke-raymarch-under-splats-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.6000000014901161,
+          "cpuFrameP95Ms": 0.6000000014901161,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 15.138816
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 8.323072
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 5.963776
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 2.424832
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 3.014656
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 45.809664
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 80.674816
+            }
+          }
+        }
+      },
+      "kiln": {
+        "schema": "kaminos.fire-actor-live-parity-receipt.v1",
+        "status": "effective",
+        "surface": "kiln",
+        "descriptorId": "fireparity-aae6035cece147e268cde720260f1d0f4bf2aaba8b328c8d1ccf1a915282a01f",
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
+        },
+        "engine": {
+          "sourceCommit": "a556596a6ea1102bcd5bc287bf4c6645ce8e39f3",
+          "sha256": "1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d"
+        },
+        "state": {
+          "requestedSimStep": 120,
+          "effectiveSimStep": 120,
+          "paused": true,
+          "gpuComplete": true,
+          "pauseAuthority": "renderer-internal-exact-sim-step-pause-gpu-complete-v0",
+          "controlsSignature": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+          "deterministicClock": {
+            "authority": "same-route-controls-fixed-step-replay",
+            "startNowMs": 1000,
+            "stepDeltaMs": 33.333333333333336
+          }
+        },
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "actor": {
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ],
+            "scale": 1
+          }
+        },
+        "viewport": {
+          "cssWidth": 800,
+          "cssHeight": 812,
+          "backingWidth": 400,
+          "backingHeight": 406,
+          "dpr": 2
+        },
+        "presentation": {
+          "arm": "composite",
+          "smoke": "on",
+          "splats": "on",
+          "composition": "smoke-raymarch-under-splats-v0"
+        },
+        "controls": {
+          "basin": 186,
+          "renderer": 3
+        },
+        "fallbackReason": null,
+        "timing": {
+          "timingEvidenceSource": "raf-and-queue-proxy",
+          "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+          "rafFps": 0,
+          "frameDeltaMs": 0,
+          "frameP95Ms": 0,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.19999999925494194,
+          "queueDoneMs": null,
+          "queueDoneP95Ms": null,
+          "queueProbePending": false,
+          "queueSamples": 0,
+          "queueTimingAvailable": false
+        },
+        "gpuStageTiming": {
+          "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+          "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+          "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "timestampFeature": "timestamp-query",
+          "timestampStatus": "available",
+          "reason": "timestamp-query-sampled",
+          "timeUnit": "ms",
+          "candidateCopyBytes": 0,
+          "boundarySplatCopyBytesThisFrame": 0,
+          "stages": {
+            "simulation": {
+              "status": "sampled",
+              "ms": 8.716288
+            },
+            "sidecar": {
+              "status": "sampled",
+              "ms": 0.65536
+            },
+            "compaction": {
+              "status": "sampled",
+              "ms": 1.96608
+            },
+            "candidateCopy": {
+              "status": "sampled",
+              "ms": 0,
+              "disposition": "removed-full-capacity-copy",
+              "candidateCopyBytes": 0
+            },
+            "indirectSetup": {
+              "status": "sampled",
+              "ms": 0.065536
+            },
+            "splatRaster": {
+              "status": "sampled",
+              "ms": 48.49664
+            },
+            "matchedRaymarchRaster": {
+              "status": "sampled",
+              "ms": 39.518208
+            },
+            "total": {
+              "status": "sampled",
+              "ms": 99.418112
+            }
+          }
+        }
+      }
+    }
+  },
+  "liveControlExercise": {
+    "initial": {
+      "cockpit": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      },
+      "kiln": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      }
+    },
+    "playing": {
+      "cockpit": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 121,
+        "paused": false
+      },
+      "kiln": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 121,
+        "paused": false
+      }
+    },
+    "paused": {
+      "cockpit": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 121,
+        "paused": true
+      },
+      "kiln": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 121,
+        "paused": true
+      }
+    },
+    "resettled": {
+      "cockpit": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      },
+      "kiln": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.649999999999999,
+            0.42000000000000015,
+            3.149999999999998
+          ],
+          "target": [
+            0,
+            0.08,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      }
+    },
+    "transferredCamera": {
+      "type": "PerspectiveCamera",
+      "fov": 40,
+      "near": 0.01,
+      "far": 100,
+      "position": [
+        1.4,
+        0.62,
+        3.25
+      ],
+      "target": [
+        0.02,
+        0.12,
+        0
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
+    },
+    "cameraTransfer": {
+      "cockpit": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.4,
+            0.6200000000000002,
+            3.25
+          ],
+          "target": [
+            0.01999999999999995,
+            0.12000000000000001,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      },
+      "kiln": {
+        "camera": {
+          "type": "PerspectiveCamera",
+          "fov": 40,
+          "near": 0.01,
+          "far": 100,
+          "position": [
+            1.4,
+            0.6200000000000002,
+            3.25
+          ],
+          "target": [
+            0.01999999999999995,
+            0.12000000000000001,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ]
+        },
+        "simStepCount": 120,
+        "paused": true
+      }
+    },
+    "restoredCamera": {
+      "type": "PerspectiveCamera",
+      "fov": 40,
+      "near": 0.01,
+      "far": 100,
+      "position": [
+        1.65,
+        0.42,
+        3.15
+      ],
+      "target": [
+        0,
+        0.08,
+        0
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
+    }
+  }
+}

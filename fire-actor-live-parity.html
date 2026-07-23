@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Promoted Fire Parity</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #101312; color: #e7e8e3; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #101312; }
+    header { min-height: 52px; display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid #343a36; background: #171a18; }
+    h1 { margin: 0; font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .identity { color: #aeb6ae; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .controls { min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 14px; border-bottom: 1px solid #343a36; background: #1c201d; }
+    button, input { height: 30px; border: 1px solid #495149; border-radius: 5px; background: #242925; color: #e7e8e3; font: inherit; }
+    button { min-width: 32px; padding: 0 10px; cursor: pointer; }
+    button:hover { border-color: #879487; background: #2b322c; }
+    button.active { border-color: #d4a747; background: #493c21; color: #ffe2a0; }
+    button:disabled { opacity: .48; cursor: wait; }
+    input { width: min(260px, 46vw); padding: 0 9px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .command { display: inline-flex; align-items: center; gap: 6px; }
+    .status { margin-left: auto; color: #aeb6ae; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .status[data-state="effective"] { color: #70d598; }
+    .status[data-state="failed"] { color: #f18e78; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: calc(100vh - 101px); min-height: 480px; }
+    section { position: relative; min-width: 0; background: #080a09; }
+    section + section { box-shadow: inset 1px 0 #343a36; }
+    .surface-label { position: absolute; z-index: 3; top: 8px; left: 8px; max-width: calc(100% - 16px); padding: 5px 7px; border: 1px solid #464e48; border-radius: 4px; background: rgba(16,19,18,.9); color: #d5d9d4; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    iframe { display: block; width: 100%; height: 100%; border: 0; background: #050706; }
+    details { position: absolute; z-index: 3; left: 8px; right: 8px; bottom: 8px; max-height: 38%; overflow: auto; border: 1px solid #3e4640; border-radius: 5px; background: rgba(13,16,14,.94); }
+    summary { padding: 6px 8px; cursor: pointer; color: #aeb6ae; font-size: 11px; }
+    pre { margin: 0; padding: 0 8px 8px; white-space: pre-wrap; overflow-wrap: anywhere; color: #b9c5ba; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    @media (max-width: 820px) {
+      main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; height: auto; min-height: calc(100vh - 130px); }
+      section { height: 52vh; border-right: 0; border-bottom: 1px solid #343a36; }
+      .status { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Promoted Fire Parity</h1>
+    <div class="identity">big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-8e84371fad44</div>
+  </header>
+  <div class="controls">
+    <input id="producer-origin" aria-label="Cockpit origin" value="http://127.0.0.1:18401">
+    <button id="load" class="command">Load</button>
+    <button data-arm="splats">Splats</button>
+    <button data-arm="smoke">Smoke</button>
+    <button data-arm="composite" class="active">Composite</button>
+    <button data-command="play" title="Play" aria-label="Play">&#9654;</button>
+    <button data-command="pause" title="Pause" aria-label="Pause">&#10074;&#10074;</button>
+    <button id="settle" class="command">Settle 120</button>
+    <button id="sync-camera" class="command">Sync cockpit camera</button>
+    <span id="status" class="status">unloaded</span>
+  </div>
+  <main>
+    <section>
+      <div class="surface-label">Cockpit producer</div>
+      <iframe id="cockpit" title="Kaminos cockpit producer"></iframe>
+      <details><summary>Cockpit receipt</summary><pre id="cockpit-receipt">none</pre></details>
+    </section>
+    <section>
+      <div class="surface-label">Wake Kiln consumer</div>
+      <iframe id="kiln" title="Wake Kiln consumer"></iframe>
+      <details><summary>Kiln receipt</summary><pre id="kiln-receipt">none</pre></details>
+    </section>
+  </main>
+  <script type="module">
+    const PACKAGE_PATH = 'artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json';
+    const frames = {
+      cockpit: document.getElementById('cockpit'),
+      kiln: document.getElementById('kiln'),
+    };
+    const receipts = {
+      cockpit: document.getElementById('cockpit-receipt'),
+      kiln: document.getElementById('kiln-receipt'),
+    };
+    const installed = new Set();
+    const pending = new Map();
+    const status = document.getElementById('status');
+    let requestSequence = 0;
+    let loadGeneration = 0;
+
+    function setStatus(message, state = 'working') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function command(surface, name, payload = undefined) {
+      const requestId = `parity-${++requestSequence}`;
+      return new Promise((resolve, reject) => {
+        pending.set(requestId, { resolve, reject });
+        frames[surface].contentWindow.postMessage({
+          type: 'kaminos-fire-parity-command',
+          requestId,
+          command: name,
+          payload,
+        }, '*');
+        setTimeout(() => {
+          if (!pending.has(requestId)) return;
+          pending.delete(requestId);
+          reject(new Error(`${surface} ${name} timed out`));
+        }, 120000);
+      });
+    }
+
+    function waitForSurface(surface, generation) {
+      if (installed.has(surface)) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const deadline = performance.now() + 120000;
+        const poll = () => {
+          if (generation !== loadGeneration) return reject(new Error('parity load superseded'));
+          if (installed.has(surface)) return resolve();
+          if (performance.now() > deadline) return reject(new Error(`${surface} did not install parity API`));
+          frames[surface].contentWindow?.postMessage({
+            type: 'kaminos-fire-parity-command',
+            requestId: `probe-${surface}-${generation}`,
+            command: 'ping',
+          }, '*');
+          setTimeout(poll, 250);
+        };
+        poll();
+      });
+    }
+
+    window.addEventListener('message', event => {
+      if (event.data?.type === 'kaminos-fire-parity-surface') {
+        installed.add(event.data.surface);
+        return;
+      }
+      if (event.data?.type !== 'kaminos-fire-parity-result') return;
+      if (event.data.surface) installed.add(event.data.surface);
+      const waiter = pending.get(event.data.requestId);
+      if (!waiter) return;
+      pending.delete(event.data.requestId);
+      if (event.data.ok) waiter.resolve(event.data.result);
+      else waiter.reject(new Error(`${event.data.surface}: ${event.data.error}`));
+    });
+
+    async function renderReceipts() {
+      const values = await Promise.all(['cockpit', 'kiln'].map(surface => command(surface, 'receipt')));
+      values.forEach((value, index) => {
+        receipts[index === 0 ? 'cockpit' : 'kiln'].textContent = JSON.stringify(value, null, 2);
+      });
+      return values;
+    }
+
+    async function settleAtExactStep() {
+      setStatus('settling both surfaces at simulation step 120');
+      await Promise.all(['cockpit', 'kiln'].map(surface => command(surface, 'pauseAtExactStep', 120)));
+      await renderReceipts();
+      setStatus('effective: exact step 120, GPU complete', 'effective');
+    }
+
+    async function load() {
+      const generation = ++loadGeneration;
+      installed.clear();
+      setStatus('loading exact promoted revision');
+      const producerOrigin = document.getElementById('producer-origin').value.replace(/\/$/, '');
+      localStorage.setItem('kaminos-fire-parity-producer-origin', producerOrigin);
+      const packageDocument = await fetch(`./${PACKAGE_PATH}`, { cache: 'no-store' }).then(response => {
+        if (!response.ok) throw new Error(`local package fetch failed: ${response.status}`);
+        return response.json();
+      });
+      const preset = packageDocument.settingsPreset.artifact;
+      const source = new URL(preset.preset.route, producerOrigin);
+      source.protocol = new URL(producerOrigin).protocol;
+      source.host = new URL(producerOrigin).host;
+      source.pathname = '/';
+      source.searchParams.set('promoted_fire_parity', String(generation));
+      frames.cockpit.src = source.toString();
+      frames.kiln.src = `./?promoted_fire_parity=${generation}`;
+      await Promise.all(['cockpit', 'kiln'].map(async surface => {
+        await waitForSurface(surface, generation);
+        await command(surface, 'begin', { arm: 'composite' });
+        await command(surface, 'pauseAtExactStep', 120);
+      }));
+      await renderReceipts();
+      setStatus('effective: exact step 120, GPU complete', 'effective');
+    }
+
+    document.getElementById('load').addEventListener('click', () => load().catch(error => setStatus(error.message, 'failed')));
+    document.getElementById('settle').addEventListener('click', () => settleAtExactStep().catch(error => setStatus(error.message, 'failed')));
+    document.getElementById('sync-camera').addEventListener('click', async () => {
+      try {
+        const source = await command('cockpit', 'state');
+        await command('kiln', 'applyCamera', source.camera);
+        setStatus('cockpit camera applied to Kiln', 'effective');
+      } catch (error) {
+        setStatus(error.message, 'failed');
+      }
+    });
+    document.querySelectorAll('[data-arm]').forEach(button => button.addEventListener('click', async () => {
+      try {
+        const arm = button.dataset.arm;
+        await Promise.all(['cockpit', 'kiln'].map(surface => command(surface, 'setArm', arm)));
+        document.querySelectorAll('[data-arm]').forEach(candidate => candidate.classList.toggle('active', candidate === button));
+        await renderReceipts();
+        setStatus(`effective arm: ${arm}`, 'effective');
+      } catch (error) {
+        setStatus(error.message, 'failed');
+      }
+    }));
+    document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', async () => {
+      try {
+        await Promise.all(['cockpit', 'kiln'].map(surface => command(surface, button.dataset.command)));
+        setStatus(button.dataset.command === 'play' ? 'both surfaces playing' : 'both surfaces paused', 'effective');
+      } catch (error) {
+        setStatus(error.message, 'failed');
+      }
+    }));
+
+    async function controlState() {
+      const values = await Promise.all(['cockpit', 'kiln'].map(surface => command(surface, 'state')));
+      return Object.fromEntries(values.map((value, index) => [index === 0 ? 'cockpit' : 'kiln', {
+        camera: value.camera,
+        simStepCount: value.engine?.simStepCount,
+        paused: value.engine?.selectiveHeadLiveCapturePaused === true,
+      }]));
+    }
+
+    window.kaminosFireActorParityWorkbench = {
+      command,
+      renderReceipts,
+      settleAtExactStep,
+      controlState,
+    };
+
+    const storedOrigin = localStorage.getItem('kaminos-fire-parity-producer-origin');
+    if (storedOrigin) document.getElementById('producer-origin').value = storedOrigin;
+    load().catch(error => setStatus(error.message, 'failed'));
+  </script>
+</body>
+</html>

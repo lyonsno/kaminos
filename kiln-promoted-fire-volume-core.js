@@ -396,6 +396,12 @@ const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS = Object.freeze({
     raymarchFireAuthority: 1,
     compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
   },
+  'smoke-raymarch-only-v0': {
+    raymarch: true,
+    splat: false,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
+  },
   'smoke-raymarch-under-splats-v0': {
     raymarch: true,
     splat: true,
@@ -539,6 +545,7 @@ function normalizeSelectiveHeadLiveRenderComposition(value) {
   if (normalized === 'raymarch-under-splats-v0' || normalized === 'hybrid') return 'full-raymarch-under-splats-diagnostic-v0';
   if (normalized === 'smoke-hybrid') return 'smoke-raymarch-under-splats-v0';
   if (normalized === 'splat-only') return 'splat-only-v0';
+  if (normalized === 'smoke-only') return 'smoke-raymarch-only-v0';
   if (normalized === 'raymarch-only') return 'raymarch-only-v0';
   return SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION;
 }
@@ -12056,12 +12063,15 @@ export function createKaminosVolumePrototype({
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    encodePressureProjection(encoder);
+    const finalTimestampWritten = encodePressureProjection(encoder, {
+      timestampWrites: options.finalTimestampWrites,
+    });
     state.simStepCount += 1;
     updateSimCostLedger();
+    return finalTimestampWritten;
   }
 
-  function encodePressureProjection(encoder) {
+  function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
@@ -12076,7 +12086,7 @@ export function createKaminosVolumePrototype({
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
       ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
@@ -12086,7 +12096,7 @@ export function createKaminosVolumePrototype({
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const workgroups = Math.ceil(gridSize / 4);
     const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = majorantFrontBindGroups[currentFluid]) => {
@@ -12119,7 +12129,10 @@ export function createKaminosVolumePrototype({
         bindGroups[currentFluid]
       );
       {
-        const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
+        const pass = encoder.beginComputePass({
+          label: 'kaminos tiered pressure projection pass',
+          ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+        });
         pass.setPipeline(pressureProjectTieredPipeline);
         pass.setBindGroup(0, bindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
@@ -12134,7 +12147,7 @@ export function createKaminosVolumePrototype({
       state.frontFieldWriteIndex = 1 - currentFront;
       state.frontFieldProjectionPassthrough = true;
       updateSimCostLedger();
-      return;
+      return true;
     }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
@@ -12147,7 +12160,10 @@ export function createKaminosVolumePrototype({
       pressureReadIndex = 1 - pressureReadIndex;
     }
     {
-      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      const pass = encoder.beginComputePass({
+        label: 'kaminos pressure projection pass',
+        ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      });
       pass.setPipeline(pressureProjectPipeline);
       pass.setBindGroup(0, bindGroups[currentFluid]);
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
@@ -12162,6 +12178,7 @@ export function createKaminosVolumePrototype({
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = true;
     updateSimCostLedger();
+    return true;
   }
 
   function encodeMajorant(encoder, options = {}) {
@@ -12911,7 +12928,10 @@ export function createKaminosVolumePrototype({
       0, state.boundarySplatInstanceConsumerEffective ? requestedInstanceCount : 1, 0, 0,
     ]));
     device.queue.writeBuffer(boundarySplatBilinearIndirectBuffer, 0, new Uint32Array([1, 0, 0, 0]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
@@ -13268,14 +13288,15 @@ export function createKaminosVolumePrototype({
       ensureFrameTexture();
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
-      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      encodeSim(encoder, {
-        timestampWrites: {
-          querySet,
-          beginningOfPassWriteIndex: 0,
-        },
+      const warmupEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 0 },
       });
-      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      const measuredEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 1 },
+      });
+      if (!warmupEndpointWritten || !measuredEndpointWritten) {
+        throw new Error('simulation-final-timestamp-unavailable');
+      }
       encodeBoundarySidecar(encoder, {
         timestampWrites: {
           querySet,
@@ -13283,9 +13304,13 @@ export function createKaminosVolumePrototype({
         },
       });
       const splatsEncoded = encodeBoundarySplats(encoder, {
-        finalizeTimestampWrites: {
+        compactTimestampWrites: {
           querySet,
           endOfPassWriteIndex: 3,
+        },
+        finalizeTimestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 4,
         },
       });
       if (!splatsEncoded) {
@@ -13294,7 +13319,6 @@ export function createKaminosVolumePrototype({
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 4,
           endOfPassWriteIndex: 5,
         },
       });
@@ -20890,13 +20914,14 @@ export function createKaminosVolumePrototype({
       raf = requestAnimationFrame(render);
       return receiptPromise;
     },
-    async stepSelectiveHeadLiveCaptureFrame() {
+    async stepSelectiveHeadLiveCaptureFrame(options = {}) {
       if (!state.active || !device) return { ok: false, reason: 'inactive' };
       if (!selectiveHeadLiveCapturePaused) return { ok: false, reason: 'capture-not-paused' };
       const beforeFrameCount = state.frameCount;
       const beforeSimStepCount = state.simStepCount;
       selectiveHeadLiveCapturePaused = false;
-      render(performance.now());
+      const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+      render(sampleNow);
       selectiveHeadLiveCapturePaused = true;
       state.selectiveHeadLiveCapturePaused = true;
       cancelAnimationFrame(raf);
@@ -20912,6 +20937,7 @@ export function createKaminosVolumePrototype({
         beforeSimStepCount,
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
+        sampleNowMs: sampleNow,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
         requestedRole: state.selectiveHeadLiveRole,
         roleAuthority: state.selectiveHeadLiveRoleAuthority,

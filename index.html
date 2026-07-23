@@ -1668,7 +1668,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="24" max="160" step="4" value="96">
+      <input type="range" id="volume-steps" min="24" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
@@ -2954,6 +2954,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
 import { createKaminosVolumePrototype as createPromotedFireVolumePrototype } from './kiln-promoted-fire-volume-core.js';
 import { createFireEpisodeHooks } from './fire-episode-hooks.mjs';
+import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import {
   beginKilnPromotedFireActorPreview,
   completeKilnPromotedFireActorPreview,
@@ -14680,7 +14681,7 @@ async function ensureKaminosVolumeRouteInitialized() {
 }
 
 const PROMOTED_KILN_FIRE_MOUNT_URL = './artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/consumers/wake-kiln-preview/mount.json';
-const PROMOTED_KILN_FIRE_ENGINE_SHA256 = 'fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb';
+const PROMOTED_KILN_FIRE_ENGINE_SHA256 = '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d';
 
 function setPromotedKilnFireStatus(message, status = 'idle') {
   const output = document.getElementById('promoted-kiln-fire-status');
@@ -14710,7 +14711,7 @@ async function verifyPromotedKilnFireEngine() {
     byte.toString(16).padStart(2, '0')
   )).join('');
   if (manifest.schema !== 'kaminos.kiln.promoted-fire-engine.v1'
-    || manifest.sourceCommit !== 'dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10'
+    || manifest.sourceCommit !== 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3'
     || manifest.sha256 !== PROMOTED_KILN_FIRE_ENGINE_SHA256
     || digest !== manifest.sha256) {
     throw new Error('Promoted fire engine identity mismatch');
@@ -14830,6 +14831,9 @@ async function beginPromotedKilnFirePreview() {
     }
     promotedKilnFireEngine.setControls(promotedKilnFireControls);
     promotedKilnFireEngine.setRaymarchSmokePresentationMode(application.presentation.raymarchSmoke);
+    if (new URLSearchParams(window.location.search).get('promoted_fire_parity') === '1') {
+      promotedKilnFireEngine.setSelectiveHeadLiveCapturePaused(true);
+    }
     await promotedKilnFireEngine.setActive(true);
     framePromotedKilnFireCamera();
 
@@ -14985,6 +14989,67 @@ window.kaminosPromotedFireActorPreview = {
   state: () => promotedKilnFireState,
   engineState: () => promotedKilnFireEngine?.debugState?.() || null,
 };
+
+function readPromotedFireParityCamera() {
+  return {
+    type: camera.type,
+    fov: camera.fov,
+    near: camera.near,
+    far: camera.far,
+    position: camera.position.toArray(),
+    target: controls.target.toArray(),
+    up: camera.up.toArray(),
+  };
+}
+
+async function applyPromotedFireParityCamera(spec) {
+  camera.fov = Number(spec.fov);
+  camera.near = Number(spec.near);
+  camera.far = Number(spec.far);
+  camera.position.fromArray(spec.position);
+  camera.up.fromArray(spec.up);
+  controls.target.fromArray(spec.target);
+  camera.updateProjectionMatrix();
+  controls.update();
+  window._kaminosDirty?.();
+  return readPromotedFireParityCamera();
+}
+
+window.kaminosFireActorParity = installFireActorLiveParitySurface({
+  surface: 'kiln',
+  prepareSurface: async () => {
+    document.getElementById('sidebar').hidden = true;
+    await new Promise(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+    window.dispatchEvent(new Event('resize'));
+  },
+  ensureEngine: async () => {
+    if (promotedKilnFireState?.status !== 'recording') await beginPromotedKilnFirePreview();
+    return promotedKilnFireEngine;
+  },
+  readEngine: () => promotedKilnFireEngine,
+  applyCamera: applyPromotedFireParityCamera,
+  readCamera: readPromotedFireParityCamera,
+  readActor: () => ({
+    transform: structuredClone(promotedKilnFireState?.application?.productTransform || { translate: [0, 0, 0], scale: 1 }),
+  }),
+  readFallbackReason: (debug, presentation) => {
+    const mount = promotedKilnFireState?.loaded?.mount;
+    if (!mount) return 'promoted-fire-mount-not-loaded';
+    if (debug.error) return debug.error;
+    if (debug.selectiveHeadLiveFallbackReason) return debug.selectiveHeadLiveFallbackReason;
+    if (debug.selectiveHeadLiveCompositionFallbackReason) return debug.selectiveHeadLiveCompositionFallbackReason;
+    if (debug.selectiveHeadLiveCompositionEffective !== presentation.composition) {
+      return `composition-mismatch:${debug.selectiveHeadLiveCompositionEffective}`;
+    }
+    if (debug.raymarchSmokePresentationModeFallbackReason) return debug.raymarchSmokePresentationModeFallbackReason;
+    if (debug.raymarchSmokePresentationModeEffective !== presentation.smoke) {
+      return `smoke-presentation-mismatch:${debug.raymarchSmokePresentationModeEffective}`;
+    }
+    if (presentation.splats === 'on' && debug.boundarySplatFallbackReason) return debug.boundarySplatFallbackReason;
+    if (debug.boundarySplatMode !== mount.representation.splatMode) return `splat-mode-mismatch:${debug.boundarySplatMode}`;
+    return null;
+  },
+});
 
 const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
   identity: 'kaminos.kiln-contention-fire-budget.v0',
