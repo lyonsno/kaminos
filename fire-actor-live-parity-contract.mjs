@@ -4,6 +4,7 @@ const REQUIRED_GPU_TIMING_STAGES = Object.freeze([
   'simulation',
   'sidecar',
   'compaction',
+  'finalize',
   'candidateCopy',
   'indirectSetup',
   'splatRaster',
@@ -142,11 +143,36 @@ export function validateFireActorLiveParityReceipt(receipt, descriptor) {
   if (!same(receipt.controls, descriptor.controls)) throw new Error('live parity control coverage mismatch');
   if (receipt.fallbackReason !== null) throw new Error(`live parity fallback is forbidden: ${receipt.fallbackReason}`);
   const gpuTiming = receipt.gpuStageTiming;
-  if (gpuTiming?.identity !== 'boundary-splat-stage-gpu-timestamp-profile-v0'
+  const presentationUsesSplats = receipt.presentation.splats === 'on';
+  const presentationUsesRaymarch = receipt.presentation.smoke === 'on';
+  const expectedSample = {
+    authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+    arm,
+    simStepCount: receipt.state.effectiveSimStep,
+    advanceSim: false,
+    presentation: receipt.presentation,
+  };
+  const expectedStageStatus = stage => {
+    if (stage === 'simulation') return 'not-run-frozen-state';
+    if (stage === 'candidateCopy') return 'removed';
+    if (['compaction', 'finalize', 'indirectSetup', 'splatRaster'].includes(stage)) {
+      return presentationUsesSplats ? 'sampled' : 'not-requested-by-presentation';
+    }
+    if (stage === 'matchedRaymarchRaster') {
+      return presentationUsesRaymarch ? 'sampled' : 'not-requested-by-presentation';
+    }
+    return 'sampled';
+  };
+  if (gpuTiming?.identity !== 'selective-head-live-arm-gpu-timestamp-profile-v0'
     || gpuTiming.timestampStatus !== 'available'
     || gpuTiming.reason !== 'timestamp-query-sampled'
-    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== 'sampled'
-      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms))) {
+    || !same(gpuTiming.sample, expectedSample)
+    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== expectedStageStatus(stage)
+      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms)
+      || gpuTiming.stages[stage].ms < 0)) {
+    if (gpuTiming && !same(gpuTiming.sample, expectedSample)) {
+      throw new Error('live parity GPU stage timing sample does not match the effective arm and step');
+    }
     throw new Error('live parity GPU stage timing is missing or unsampled');
   }
   return receipt;

@@ -13059,7 +13059,16 @@ export function createKaminosVolumePrototype({
       encoder,
       boundarySplatHdrTexture.createView(),
       boundarySplatHdrPipeline,
-      { loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 0 } },
+      {
+        loadOp: 'clear',
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        ...(options.timestampWrites?.querySet ? {
+          timestampWrites: {
+            querySet: options.timestampWrites.querySet,
+            beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex,
+          },
+        } : {}),
+      },
     );
     if (!accumulated) return false;
     const resolveBindGroup = device.createBindGroup({
@@ -13069,6 +13078,12 @@ export function createKaminosVolumePrototype({
     });
     const resolvePass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} pass`,
+      ...(options.timestampWrites?.querySet ? {
+        timestampWrites: {
+          querySet: options.timestampWrites.querySet,
+          endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
+        },
+      } : {}),
       colorAttachments: [{
         view: targetView,
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -13171,14 +13186,22 @@ export function createKaminosVolumePrototype({
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
     }
-    if (!encodeBoundarySplatOpticalAccumulation(encoder)) return false;
+    if (!encodeBoundarySplatOpticalAccumulation(encoder, options.timestampWrites?.querySet ? {
+      querySet: options.timestampWrites.querySet,
+      beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex,
+    } : {})) return false;
     if (fourArmHeldStateRuntimeState?.application?.residual?.enabled
       && !encodeFourArmHeldStateResidualMarch(encoder)) {
       boundarySplatPresentationModeFallbackReason = 'four-arm-positive-complement-residual-march-unavailable';
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
     }
-    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline)) return false;
+    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, options.timestampWrites?.querySet ? {
+      timestampWrites: {
+        querySet: options.timestampWrites.querySet,
+        endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
+      },
+    } : {})) return false;
     state.boundarySplatFrameCount += 1;
     state.volumeReconstructionStyle = `${state.boundarySplatRendererIdentity}+${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY}`;
     boundarySplatPresentationModeFallbackReason = null;
@@ -19717,6 +19740,7 @@ export function createKaminosVolumePrototype({
     const frameIndex = Math.max(0, Math.floor(Number(options.frameIndex) || 0));
     const advanceSim = options.advanceSim !== false;
     const presentToCanvas = options.presentToCanvas === true;
+    const collectGpuTiming = options.collectGpuTiming === true;
     const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
     const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
     const sampleNow = startNow + frameIndex * stepDeltaMs;
@@ -19734,6 +19758,43 @@ export function createKaminosVolumePrototype({
     const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
     const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
     const targetSplatResolvePipeline = presentToCanvas ? boundarySplatPresentationRenderPipeline : boundarySplatPresentationReadbackPipeline;
+    const composition = updateSelectiveHeadLiveCompositionState();
+    const timingPairs = {};
+    let nextTimestampIndex = 0;
+    const allocateTimingPair = name => {
+      timingPairs[name] = { start: nextTimestampIndex, end: nextTimestampIndex + 1 };
+      nextTimestampIndex += 2;
+      return timingPairs[name];
+    };
+    if (collectGpuTiming) {
+      allocateTimingPair('sidecar');
+      if (composition.definition.splat) {
+        allocateTimingPair('compaction');
+        allocateTimingPair('finalize');
+        allocateTimingPair('indirectSetup');
+      }
+      if (composition.definition.raymarch) allocateTimingPair('matchedRaymarchRaster');
+      if (composition.definition.splat) allocateTimingPair('splatRaster');
+    }
+    const timingQuerySet = collectGpuTiming ? device.createQuerySet({
+      type: 'timestamp',
+      count: nextTimestampIndex,
+    }) : null;
+    const timingResolveBuffer = collectGpuTiming ? device.createBuffer({
+      label: 'kaminos selective-head live arm timestamp resolve',
+      size: nextTimestampIndex * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    }) : null;
+    const timingReadbackBuffer = collectGpuTiming ? device.createBuffer({
+      label: 'kaminos selective-head live arm timestamp readback',
+      size: nextTimestampIndex * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    }) : null;
+    const destroyTimingResources = () => {
+      timingResolveBuffer?.destroy();
+      timingReadbackBuffer?.destroy();
+      timingQuerySet?.destroy?.();
+    };
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
     const beforeSimStepCount = state.simStepCount;
@@ -19744,16 +19805,83 @@ export function createKaminosVolumePrototype({
     const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
     const selectiveRender = selectiveHeadLiveRoleGroups('render');
     encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
-    encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
-    if (selectiveSplat) {
-      encodeBoundarySplats(encoder, {
+    encodeBoundarySidecar(encoder, {
+      readBindGroup: selectiveSidecar,
+      ...(timingQuerySet ? {
+        timestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.sidecar.start,
+          endOfPassWriteIndex: timingPairs.sidecar.end,
+        },
+      } : {}),
+    });
+    if (composition.definition.splat && selectiveSplat) {
+      const encoded = encodeBoundarySplats(encoder, {
         computeBindGroup: selectiveSplat,
         descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+        ...(timingQuerySet ? {
+          compactTimestampWrites: {
+            querySet: timingQuerySet,
+            beginningOfPassWriteIndex: timingPairs.compaction.start,
+            endOfPassWriteIndex: timingPairs.compaction.end,
+          },
+          finalizeTimestampWrites: {
+            querySet: timingQuerySet,
+            beginningOfPassWriteIndex: timingPairs.finalize.start,
+            endOfPassWriteIndex: timingPairs.finalize.end,
+          },
+          afterCandidateCopy: () => encodeBoundarySplatTimestampMarker(
+            encoder,
+            timingQuerySet,
+            timingPairs.indirectSetup.start,
+            'kaminos selective-head indirect setup start',
+          ),
+          afterIndirectSetup: () => encodeBoundarySplatTimestampMarker(
+            encoder,
+            timingQuerySet,
+            timingPairs.indirectSetup.end,
+            'kaminos selective-head indirect setup end',
+          ),
+        } : {}),
       });
-    } else {
-      encodeBoundarySplats(encoder);
+      if (!encoded) {
+        readback?.destroy();
+        destroyTimingResources();
+        await device.popErrorScope();
+        return { ok: false, reason: state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable' };
+      }
+    } else if (composition.definition.splat) {
+      const encoded = encodeBoundarySplats(encoder, timingQuerySet ? {
+        compactTimestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.compaction.start,
+          endOfPassWriteIndex: timingPairs.compaction.end,
+        },
+        finalizeTimestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.finalize.start,
+          endOfPassWriteIndex: timingPairs.finalize.end,
+        },
+        afterCandidateCopy: () => encodeBoundarySplatTimestampMarker(
+          encoder,
+          timingQuerySet,
+          timingPairs.indirectSetup.start,
+          'kaminos selective-head indirect setup start',
+        ),
+        afterIndirectSetup: () => encodeBoundarySplatTimestampMarker(
+          encoder,
+          timingQuerySet,
+          timingPairs.indirectSetup.end,
+          'kaminos selective-head indirect setup end',
+        ),
+      } : {});
+      if (!encoded) {
+        readback?.destroy();
+        destroyTimingResources();
+        await device.popErrorScope();
+        return { ok: false, reason: state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable' };
+      }
     }
-    const composition = updateSelectiveHeadLiveCompositionState();
     let raymarchEncoded = false;
     let raymarchApplied = false;
     let splatEncoded = false;
@@ -19764,7 +19892,16 @@ export function createKaminosVolumePrototype({
         targetView,
         `kaminos selective-head controlled ${presentToCanvas ? 'canvas' : 'readback'} ${composition.effective} raymarch`,
         targetRaymarchPipeline,
-        { bindGroup: selectiveRender },
+        {
+          bindGroup: selectiveRender,
+          ...(timingQuerySet ? {
+            timestampWrites: {
+              querySet: timingQuerySet,
+              beginningOfPassWriteIndex: timingPairs.matchedRaymarchRaster.start,
+              endOfPassWriteIndex: timingPairs.matchedRaymarchRaster.end,
+            },
+          } : {}),
+        },
       );
       raymarchEncoded = true;
       raymarchApplied = true;
@@ -19775,12 +19912,22 @@ export function createKaminosVolumePrototype({
         targetView,
         targetSplatPipeline,
         targetSplatResolvePipeline,
-        { loadOp: raymarchApplied ? 'load' : 'clear' },
+        {
+          loadOp: raymarchApplied ? 'load' : 'clear',
+          ...(timingQuerySet ? {
+            timestampWrites: {
+              querySet: timingQuerySet,
+              beginningOfPassWriteIndex: timingPairs.splatRaster.start,
+              endOfPassWriteIndex: timingPairs.splatRaster.end,
+            },
+          } : {}),
+        },
       );
       splatApplied = splatEncoded;
     }
     if (composition.definition.splat && !splatApplied) {
       readback?.destroy();
+      destroyTimingResources();
       await device.popErrorScope();
       return {
         ok: false,
@@ -19814,11 +19961,69 @@ export function createKaminosVolumePrototype({
         { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       );
     }
+    if (timingQuerySet) {
+      encoder.resolveQuerySet(timingQuerySet, 0, nextTimestampIndex, timingResolveBuffer, 0);
+      encoder.copyBufferToBuffer(timingResolveBuffer, 0, timingReadbackBuffer, 0, nextTimestampIndex * 8);
+    }
     device.queue.submit([encoder.finish()]);
     const validationError = await device.popErrorScope();
     if (validationError) {
       readback?.destroy();
+      destroyTimingResources();
       return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
+    }
+    let gpuStageTiming = null;
+    if (timingReadbackBuffer) {
+      await timingReadbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(timingReadbackBuffer.getMappedRange().slice(0));
+      timingReadbackBuffer.unmap();
+      const incomplete = Array.from(timestamps).some(value => value === 0n);
+      const nonmonotonic = Object.values(timingPairs).some(pair => timestamps[pair.end] < timestamps[pair.start]);
+      if (incomplete || nonmonotonic) {
+        destroyTimingResources();
+        readback?.destroy();
+        return {
+          ok: false,
+          reason: `${incomplete ? 'timestamp-query-incomplete' : 'timestamp-query-nonmonotonic'}:${Array.from(timestamps, value => value.toString()).join(',')}`,
+        };
+      }
+      const elapsedMs = name => Number(timestamps[timingPairs[name].end] - timestamps[timingPairs[name].start]) / 1_000_000;
+      const sampled = name => ({ status: 'sampled', ms: elapsedMs(name) });
+      const notRequested = { status: 'not-requested-by-presentation', ms: 0 };
+      const firstPair = Object.values(timingPairs)[0];
+      const lastPair = Object.values(timingPairs).at(-1);
+      gpuStageTiming = {
+        identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',
+        timestampStatus: 'available',
+        reason: 'timestamp-query-sampled',
+        sample: {
+          authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+          arm: options.presentationArm || null,
+          simStepCount: state.simStepCount,
+          advanceSim: false,
+          presentation: {
+            arm: options.presentationArm || null,
+            smoke: state.raymarchSmokePresentationModeEffective,
+            splats: composition.definition.splat ? 'on' : 'off',
+            composition: composition.effective,
+          },
+        },
+        stages: {
+          simulation: { status: 'not-run-frozen-state', ms: 0 },
+          sidecar: sampled('sidecar'),
+          compaction: timingPairs.compaction ? sampled('compaction') : notRequested,
+          finalize: timingPairs.finalize ? sampled('finalize') : notRequested,
+          candidateCopy: { status: 'removed', ms: 0 },
+          indirectSetup: timingPairs.indirectSetup ? sampled('indirectSetup') : notRequested,
+          splatRaster: timingPairs.splatRaster ? sampled('splatRaster') : notRequested,
+          matchedRaymarchRaster: timingPairs.matchedRaymarchRaster ? sampled('matchedRaymarchRaster') : notRequested,
+          total: {
+            status: 'sampled',
+            ms: Number(timestamps[lastPair.end] - timestamps[firstPair.start]) / 1_000_000,
+          },
+        },
+      };
+      destroyTimingResources();
     }
     let rgba = null;
     if (!presentToCanvas) {
@@ -19854,6 +20059,7 @@ export function createKaminosVolumePrototype({
       selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
       selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       selectiveHeadLivePassReceipt,
+      gpuStageTiming,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       fallbackReason: state.selectiveHeadLiveFallbackReason,

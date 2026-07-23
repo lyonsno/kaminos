@@ -47,13 +47,23 @@ const receipt = {
   controls: { basin: 186, renderer: 3 },
   fallbackReason: null,
   gpuStageTiming: {
-    identity: 'boundary-splat-stage-gpu-timestamp-profile-v0',
+    identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',
     timestampStatus: 'available',
     reason: 'timestamp-query-sampled',
+    sample: {
+      authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+      arm: 'composite',
+      simStepCount: 120,
+      advanceSim: false,
+      presentation: { arm: 'composite', smoke: 'on', splats: 'on', composition: 'smoke-raymarch-under-splats-v0' },
+    },
     stages: Object.fromEntries([
-      'simulation', 'sidecar', 'compaction', 'candidateCopy',
+      'simulation', 'sidecar', 'compaction', 'finalize', 'candidateCopy',
       'indirectSetup', 'splatRaster', 'matchedRaymarchRaster', 'total',
-    ].map(name => [name, { status: 'sampled', ms: name === 'candidateCopy' ? 0 : 1 }])),
+    ].map(name => [name, {
+      status: name === 'simulation' ? 'not-run-frozen-state' : (name === 'candidateCopy' ? 'removed' : 'sampled'),
+      ms: name === 'candidateCopy' || name === 'simulation' ? 0 : 1,
+    }])),
   },
 };
 assert.doesNotThrow(() => validateFireActorLiveParityReceipt(receipt, descriptor));
@@ -67,6 +77,9 @@ for (const [name, mutate, pattern] of [
   ['wrong arm', value => { value.presentation.arm = 'beauty'; }, /presentation arm/],
   ['missing GPU timing', value => { value.gpuStageTiming = null; }, /GPU stage timing/],
   ['unsampled GPU timing', value => { value.gpuStageTiming.stages.splatRaster.status = 'not-sampled'; }, /GPU stage timing/],
+  ['stale GPU timing step', value => { value.gpuStageTiming.sample.simStepCount = 119; }, /GPU stage timing sample/],
+  ['wrong GPU timing arm', value => { value.gpuStageTiming.sample.arm = 'smoke'; }, /GPU stage timing sample/],
+  ['advancing GPU timing sample', value => { value.gpuStageTiming.sample.advanceSim = true; }, /GPU stage timing sample/],
 ]) {
   const candidate = structuredClone(receipt);
   mutate(candidate);
@@ -95,10 +108,12 @@ assert.match(
 assert.match(index, /window\.kaminosFireActorParity\s*=/, 'cockpit exposes the shared live parity API');
 assert.match(index, /id="volume-steps"[^>]+step="1"/, 'cockpit ray-step slider must preserve caller-selected integer counts without rounding');
 assert.match(index, /verifyFireActorParityPackage/, 'cockpit parity verifies the canonical package without a machine-local preset dependency');
+assert.match(index, /verifyFireActorParityEngine/, 'cockpit parity hashes the engine module served by its live route');
 assert.match(browserContract, /pauseAtExactStep/, 'cockpit parity uses exact-step GPU-complete pause');
 assert.match(browserContract, /sampleDeterministicReplayFrame/, 'cockpit parity settles through the engine deterministic replay path');
 assert.match(browserContract, /setArm/, 'cockpit parity exposes live presentation arms');
 assert.match(browserContract, /captureSelectiveHeadLiveFrame[\s\S]*advanceSim:\s*false[\s\S]*presentToCanvas:\s*true/, 'arm switching presents the frozen state instead of changing receipts only');
+assert.match(browserContract, /captureSelectiveHeadLiveFrame[\s\S]*collectGpuTiming:\s*true/, 'each arm samples its own frozen presented frame GPU timing');
 assert.match(browserContract, /applyCamera/, 'cockpit parity accepts exact camera transfer');
 assert.match(browserContract, /kaminos-fire-parity-command/, 'cockpit parity accepts workbench postMessage commands');
 
