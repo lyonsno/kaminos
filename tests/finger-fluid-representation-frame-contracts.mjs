@@ -8,10 +8,10 @@ import {
 
 const root = new URL('..', import.meta.url).pathname;
 const webgpuCore = await import(`${root}/finger-fluid-webgpu-core.js`);
-const producerRevision = '3e3934f9e451823ae122c9fca5f4c04ec3e88694';
+const producerRevision = '95920668287205517bc2e22f4f224b0d7584f53e';
 const representationRoute = 'kaminos/fluid/representation-frame';
-const packageUrl = 'https://raw.githubusercontent.com/lyonsno/kaminos/b8abcdbe2c949b1723c8b3ade3d632740de7e1f3/artifacts/fluid/kaminos-fluid-webgpu-0.1.0.tgz';
-const packageIntegrity = 'sha512-8Y2LSlateWaOm1x2ulF8yYcKoqYHgbN3NyD2BNGTQyenSzELLsUdSG2dAsaEiN24InNtALeJSAeWGZagS0+RJw==';
+const packageUrl = 'https://raw.githubusercontent.com/lyonsno/kaminos/fc484561ac27dec84d4b95afa4ec74abd1c92232/artifacts/fluid/kaminos-fluid-webgpu-0.2.1.tgz';
+const packageIntegrity = 'sha512-3vp6/vZqTtEa0OdFnAN5NLuZqqNYXtlegSnIzdTzRmWFQ9dG9ltX9x9zRg632ctJsbHK8qOHSnZv9hvXnu/cxQ==';
 
 assert.equal(
   typeof webgpuCore.validateFingerFluidOpticalRepresentationFrame,
@@ -21,7 +21,7 @@ assert.equal(
 
 const packageLock = JSON.parse(readFileSync(`${root}/package-lock.json`, 'utf8'));
 const installedProducer = packageLock.packages['node_modules/@kaminos/fluid-webgpu'];
-assert.equal(installedProducer.version, '0.1.0');
+assert.equal(installedProducer.version, '0.2.1');
 assert.equal(installedProducer.resolved, packageUrl, 'the consumer must pin the immutable producer artifact');
 assert.equal(installedProducer.integrity, packageIntegrity, 'the installed producer bytes must match Big Papa\'s receipt');
 assert.deepEqual(KAMINOS_FLUID_PACKAGE_DESCRIPTOR, {
@@ -29,10 +29,10 @@ assert.deepEqual(KAMINOS_FLUID_PACKAGE_DESCRIPTOR, {
   sourceAuthority: 'live_runtime',
   fallbackStatus: 'none',
   packageName: '@kaminos/fluid-webgpu',
-  packageVersion: '0.1.0',
-  artifactRevision: '@kaminos/fluid-webgpu@0.1.0',
+  packageVersion: '0.2.1',
+  artifactRevision: '@kaminos/fluid-webgpu@0.2.1',
   runtimeRevision: producerRevision,
-  cacheKey: `@kaminos/fluid-webgpu@0.1.0:${producerRevision}`,
+  cacheKey: `@kaminos/fluid-webgpu@0.2.1:${producerRevision}`,
   runtimeRoute: 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1',
   representationRoutes: [representationRoute],
   outputRoutes: ['kaminos/fluid/terrain-feedback'],
@@ -99,7 +99,7 @@ const canonicalFrame = runtime.representation({
 });
 const expectedIdentity = {
   packageDescriptor: KAMINOS_FLUID_PACKAGE_DESCRIPTOR,
-  artifactRevision: '@kaminos/fluid-webgpu@0.1.0',
+  artifactRevision: '@kaminos/fluid-webgpu@0.2.1',
   producerRevision: runtime.identity.producerRevision,
   fluidEpoch: runtime.identity.fluidEpoch,
   terrainEpoch: runtime.identity.terrainEpoch,
@@ -111,7 +111,7 @@ const accepted = webgpuCore.validateFingerFluidOpticalRepresentationFrame(
 );
 assert.equal(accepted.schema, 'kaminos.fluid.representation-frame.v1');
 assert.deepEqual(accepted.route, { requested: representationRoute, effective: representationRoute });
-assert.equal(accepted.package.artifactRevision, '@kaminos/fluid-webgpu@0.1.0');
+assert.equal(accepted.package.artifactRevision, '@kaminos/fluid-webgpu@0.2.1');
 assert.equal(accepted.package.runtimeRevision, producerRevision);
 assert.equal(accepted.producerRevision, producerRevision);
 assert.equal(accepted.ownershipIdentity, 'macro-local-parcel-exclusive-v1');

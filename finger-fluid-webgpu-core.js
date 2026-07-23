@@ -116,7 +116,11 @@ export const KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid.represen
 export const KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE = 'kaminos/fluid/representation-frame';
 export const KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY = 'macro-local-parcel-exclusive-v1';
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.1.0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA = 'kaminos.finger-fluid.optical-representation-transition.v1';
+export const KAMINOS_FINGER_FLUID_OPTICAL_EXECUTION_SCHEMA = 'kaminos.finger-fluid.optical-execution.v1';
+export const KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE = 'webgpu-watershed-changing-frame-optics-v1';
+export const KAMINOS_FINGER_FLUID_OPTICAL_TIMING_ROUTE = 'webgpu-timestamp-query-optical-pass-v1';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.2.1';
 const KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
 
 function representationFrameFailure(message) {
@@ -432,6 +436,390 @@ export function validateFingerFluidOpticalRepresentationFrame(frame, expectedIde
     complete: true,
     expectedSampleCount,
     availableRepresentations: Object.freeze(availableRepresentations),
+  });
+}
+
+function representationFrameStringArray(value, label) {
+  if (!Array.isArray(value)) {
+    representationFrameFailure(`${label} is missing`);
+  }
+  return value.map((entry, index) => representationFrameString(entry, `${label}[${index}]`));
+}
+
+function sameStringArray(left, right) {
+  return left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function validateOpticalExecutionEvidence(execution, transitionIdentity) {
+  if (!execution || typeof execution !== 'object') {
+    representationFrameFailure('optical execution evidence is missing');
+  }
+  if (execution.schema !== KAMINOS_FINGER_FLUID_OPTICAL_EXECUTION_SCHEMA) {
+    representationFrameFailure(`optical execution schema is unsupported: ${execution.schema || 'missing'}`);
+  }
+  if (
+    !execution.route
+    || execution.route.requested !== KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE
+    || execution.route.effective !== KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE
+    || execution.route.requested !== execution.route.effective
+  ) {
+    representationFrameFailure(`optical execution route disagreement: ${JSON.stringify({
+      requested: execution.route?.requested ?? null,
+      effective: execution.route?.effective ?? null,
+    })}`);
+  }
+  if (execution.fallbackStatus !== 'none') {
+    representationFrameFailure(`optical execution fallback is not accepted: ${execution.fallbackStatus || 'missing'}`);
+  }
+  const requestedQuality = representationFrameString(
+    execution.quality?.requested,
+    'requested optical quality',
+  );
+  const effectiveQuality = representationFrameString(
+    execution.quality?.effective,
+    'effective optical quality',
+  );
+  let adaptationReason = execution.quality?.adaptationReason ?? null;
+  if (requestedQuality !== effectiveQuality) {
+    adaptationReason = representationFrameString(
+      adaptationReason,
+      'optical quality adaptation reason',
+    );
+  } else if (adaptationReason != null) {
+    adaptationReason = representationFrameString(
+      adaptationReason,
+      'optical quality adaptation reason',
+    );
+  }
+
+  const budget = execution.budget;
+  if (!budget || typeof budget !== 'object') {
+    representationFrameFailure('optical budget evidence is missing');
+  }
+  if (budget.measurementStatus !== 'measured' && budget.measurementStatus !== 'unmeasured') {
+    representationFrameFailure(`optical budget measurement status is unsupported: ${budget.measurementStatus || 'missing'}`);
+  }
+  const resolutionScale = representationFrameFinite(
+    budget.resolutionScale,
+    'optical budget resolution scale',
+    { positive: true },
+  );
+  if (resolutionScale > 1) {
+    representationFrameFailure(`optical budget resolution scale is invalid: ${resolutionScale}`);
+  }
+  const transitionId = `${KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA}:${JSON.stringify([
+    transitionIdentity.packageArtifactRevision,
+    transitionIdentity.packageRuntimeRevision,
+    transitionIdentity.producerRevision,
+    transitionIdentity.previousTerrainEpoch,
+    transitionIdentity.currentTerrainEpoch,
+    transitionIdentity.previousFluidEpoch,
+    transitionIdentity.remapFluidEpoch,
+    transitionIdentity.currentFluidEpoch,
+    transitionIdentity.remapReceiptId,
+    execution.route.requested,
+    execution.route.effective,
+    requestedQuality,
+    effectiveQuality,
+    resolutionScale,
+  ])}`;
+  let gpuTimeMs = null;
+  let activeSupportSamples = null;
+  let activePixelCount = null;
+  let measurementRoute = null;
+  let measurementFrameId = null;
+  if (budget.measurementStatus === 'measured') {
+    if (budget.measurementRoute !== KAMINOS_FINGER_FLUID_OPTICAL_TIMING_ROUTE) {
+      representationFrameFailure(`optical budget measurement route is unsupported: ${budget.measurementRoute || 'missing'}`);
+    }
+    measurementRoute = budget.measurementRoute;
+    measurementFrameId = representationFrameString(
+      budget.measurementFrameId,
+      'optical budget measurement frame id',
+    );
+    if (measurementFrameId !== transitionId) {
+      representationFrameFailure(`optical budget measurement frame id disagreement: ${JSON.stringify({
+        expected: transitionId,
+        observed: measurementFrameId,
+      })}`);
+    }
+    gpuTimeMs = representationFrameFinite(
+      budget.gpuTimeMs,
+      'optical budget GPU time',
+      { nonNegative: true },
+    );
+    for (const [value, label] of [
+      [budget.activeSupportSamples, 'optical budget active support samples'],
+      [budget.activePixelCount, 'optical budget active pixel count'],
+    ]) {
+      if (!Number.isInteger(value) || value < 0) {
+        representationFrameFailure(`${label} is invalid: ${value}`);
+      }
+    }
+    activeSupportSamples = budget.activeSupportSamples;
+    activePixelCount = budget.activePixelCount;
+  } else if (
+    budget.measurementRoute != null
+    || budget.measurementFrameId != null
+    || budget.gpuTimeMs != null
+    || budget.activeSupportSamples != null
+    || budget.activePixelCount != null
+  ) {
+    representationFrameFailure('unmeasured optical budget cannot publish measured values');
+  }
+
+  return {
+    transitionId,
+    route: Object.freeze({
+      requested: execution.route.requested,
+      effective: execution.route.effective,
+    }),
+    fallbackStatus: execution.fallbackStatus,
+    quality: Object.freeze({
+      requested: requestedQuality,
+      effective: effectiveQuality,
+      adaptationReason,
+    }),
+    budget: Object.freeze({
+      measurementStatus: budget.measurementStatus,
+      measurementRoute,
+      measurementFrameId,
+      gpuTimeMs,
+      activeSupportSamples,
+      activePixelCount,
+      resolutionScale,
+    }),
+  };
+}
+
+export function validateFingerFluidOpticalRepresentationTransition({
+  previousFrame,
+  currentFrame,
+  remapReceipt,
+  expectedPreviousIdentity,
+  expectedCurrentIdentity,
+  opticalExecution,
+} = {}) {
+  const previous = validateFingerFluidOpticalRepresentationFrame(
+    previousFrame,
+    expectedPreviousIdentity,
+  );
+  const current = validateFingerFluidOpticalRepresentationFrame(
+    currentFrame,
+    expectedCurrentIdentity,
+  );
+  if (
+    previous.package.artifactRevision !== current.package.artifactRevision
+    || previous.package.runtimeRevision !== current.package.runtimeRevision
+    || previous.producerRevision !== current.producerRevision
+  ) {
+    representationFrameFailure('changing-frame producer identity changed');
+  }
+  if (current.terrainEpoch !== previous.terrainEpoch + 1) {
+    representationFrameFailure(`changing-frame transition requires exact successor terrain epoch: ${JSON.stringify({
+      previous: previous.terrainEpoch,
+      current: current.terrainEpoch,
+    })}`);
+  }
+  if (current.fluidEpoch < previous.fluidEpoch) {
+    representationFrameFailure(`changing-frame fluid epoch regressed: ${JSON.stringify({
+      previous: previous.fluidEpoch,
+      current: current.fluidEpoch,
+    })}`);
+  }
+
+  if (!remapReceipt || typeof remapReceipt !== 'object') {
+    representationFrameFailure('terrain remap receipt is missing');
+  }
+  if (remapReceipt.schema !== 'kaminos.fluid.terrain-remap-receipt.v1') {
+    representationFrameFailure(`terrain remap receipt schema is unsupported: ${remapReceipt.schema || 'missing'}`);
+  }
+  const receiptId = representationFrameString(remapReceipt.receiptId, 'terrain remap receipt id');
+  if (remapReceipt.mode !== 'phase_morph') {
+    representationFrameFailure(`terrain remap receipt must be phase_morph: ${remapReceipt.mode || 'missing'}`);
+  }
+  if (remapReceipt.state !== 'committed') {
+    representationFrameFailure(`terrain remap receipt must be committed: ${remapReceipt.state || 'missing'}`);
+  }
+  const terrainId = representationFrameString(remapReceipt.terrainId, 'terrain remap terrain id');
+  const sourceId = representationFrameString(remapReceipt.sourceId, 'terrain remap source id');
+  const transformId = representationFrameString(remapReceipt.transformId, 'terrain remap transform id');
+  if (
+    remapReceipt.previousTerrainEpoch !== previous.terrainEpoch
+    || remapReceipt.terrainEpoch !== current.terrainEpoch
+  ) {
+    representationFrameFailure(`terrain remap epoch disagreement: ${JSON.stringify({
+      expectedPrevious: previous.terrainEpoch,
+      observedPrevious: remapReceipt.previousTerrainEpoch,
+      expectedCurrent: current.terrainEpoch,
+      observedCurrent: remapReceipt.terrainEpoch,
+    })}`);
+  }
+  if (
+    !Number.isInteger(remapReceipt.fluidEpoch)
+    || remapReceipt.fluidEpoch < previous.fluidEpoch
+    || remapReceipt.fluidEpoch > current.fluidEpoch
+  ) {
+    representationFrameFailure(`terrain remap fluid epoch is outside the accepted transition: ${remapReceipt.fluidEpoch}`);
+  }
+
+  const predecessorReceiptIds = representationFrameStringArray(
+    remapReceipt.predecessorReceiptIds,
+    'terrain remap predecessor receipt ids',
+  );
+  const receiptLineageIds = representationFrameStringArray(
+    remapReceipt.lineageIds,
+    'terrain remap lineage ids',
+  );
+  const previousReceiptIds = representationFrameStringArray(
+    previousFrame.conservationReceiptIds,
+    'previous frame conservation receipt ids',
+  );
+  const currentReceiptIds = representationFrameStringArray(
+    currentFrame.conservationReceiptIds,
+    'current frame conservation receipt ids',
+  );
+  const previousLineageIds = representationFrameStringArray(
+    previousFrame.lineageIds,
+    'previous frame lineage ids',
+  );
+  const currentLineageIds = representationFrameStringArray(
+    currentFrame.lineageIds,
+    'current frame lineage ids',
+  );
+  if (!sameStringArray(predecessorReceiptIds, previousReceiptIds)) {
+    representationFrameFailure('terrain remap predecessor receipt chain disagrees with the previous frame');
+  }
+  if (
+    currentReceiptIds.length < previousReceiptIds.length
+    || !sameStringArray(
+      currentReceiptIds.slice(0, previousReceiptIds.length),
+      previousReceiptIds,
+    )
+  ) {
+    representationFrameFailure('current frame lost the previous conservation receipt chain');
+  }
+  if (!currentReceiptIds.includes(receiptId)) {
+    representationFrameFailure('current frame is missing the terrain remap receipt');
+  }
+  for (const lineageId of new Set([...previousLineageIds, ...receiptLineageIds])) {
+    if (!currentLineageIds.includes(lineageId)) {
+      representationFrameFailure(`current frame lost terrain remap lineage: ${lineageId}`);
+    }
+  }
+
+  const displacedVolume = representationFrameFinite(
+    remapReceipt.displacedVolume,
+    'terrain remap displaced volume',
+  );
+  const supportWork = representationFrameFinite(
+    remapReceipt.supportWork,
+    'terrain remap support work',
+  );
+  const maximumBedDisplacement = representationFrameFinite(
+    remapReceipt.maximumBedDisplacement,
+    'terrain remap maximum bed displacement',
+    { nonNegative: true },
+  );
+  const maximumSupportSpeed = representationFrameFinite(
+    remapReceipt.maximumSupportSpeed,
+    'terrain remap maximum support speed',
+    { nonNegative: true },
+  );
+  const deltaSeconds = representationFrameFinite(
+    remapReceipt.deltaSeconds,
+    'terrain remap delta seconds',
+    { positive: true },
+  );
+  const motionSubstepEnvelope = representationFrameFinite(
+    remapReceipt.motionSubstepEnvelope,
+    'terrain remap motion substep envelope',
+    { positive: true },
+  );
+  if (deltaSeconds > motionSubstepEnvelope) {
+    representationFrameFailure('terrain remap delta exceeds its motion substep envelope');
+  }
+  const tolerance = representationFrameFinite(
+    remapReceipt.tolerance,
+    'terrain remap tolerance',
+    { nonNegative: true },
+  );
+  const volumeResidual = representationFrameFinite(
+    remapReceipt.residual?.volume,
+    'terrain remap volume residual',
+  );
+  if (Math.abs(volumeResidual) > tolerance) {
+    representationFrameFailure(`terrain remap volume residual exceeds tolerance: ${volumeResidual}`);
+  }
+  if (
+    !Array.isArray(remapReceipt.residual?.momentum)
+    || remapReceipt.residual.momentum.length !== 3
+  ) {
+    representationFrameFailure('terrain remap momentum residual is invalid');
+  }
+  for (const [index, residual] of remapReceipt.residual.momentum.entries()) {
+    representationFrameFinite(residual, `terrain remap momentum residual[${index}]`);
+    if (Math.abs(residual) > tolerance) {
+      representationFrameFailure(`terrain remap momentum residual exceeds tolerance: ${residual}`);
+    }
+  }
+  if (
+    !remapReceipt.residual?.materials
+    || typeof remapReceipt.residual.materials !== 'object'
+    || Array.isArray(remapReceipt.residual.materials)
+  ) {
+    representationFrameFailure('terrain remap material residuals are invalid');
+  }
+  for (const [material, residual] of Object.entries(remapReceipt.residual.materials)) {
+    representationFrameFinite(residual, `terrain remap material residual ${material}`);
+    if (Math.abs(residual) > tolerance) {
+      representationFrameFailure(`terrain remap material residual exceeds tolerance: ${material}`);
+    }
+  }
+
+  const execution = validateOpticalExecutionEvidence(opticalExecution, {
+    packageArtifactRevision: current.package.artifactRevision,
+    packageRuntimeRevision: current.package.runtimeRevision,
+    producerRevision: current.producerRevision,
+    previousTerrainEpoch: previous.terrainEpoch,
+    currentTerrainEpoch: current.terrainEpoch,
+    previousFluidEpoch: previous.fluidEpoch,
+    remapFluidEpoch: remapReceipt.fluidEpoch,
+    currentFluidEpoch: current.fluidEpoch,
+    remapReceiptId: receiptId,
+  });
+  return Object.freeze({
+    schema: KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA,
+    transitionId: execution.transitionId,
+    route: execution.route,
+    fallbackStatus: execution.fallbackStatus,
+    quality: execution.quality,
+    package: current.package,
+    epochs: Object.freeze({
+      previousTerrain: previous.terrainEpoch,
+      currentTerrain: current.terrainEpoch,
+      previousFluid: previous.fluidEpoch,
+      remapFluid: remapReceipt.fluidEpoch,
+      currentFluid: current.fluidEpoch,
+    }),
+    remap: Object.freeze({
+      receiptId,
+      mode: remapReceipt.mode,
+      state: remapReceipt.state,
+      terrainId,
+      sourceId,
+      transformId,
+      displacedVolume,
+      supportWork,
+      maximumBedDisplacement,
+      maximumSupportSpeed,
+      deltaSeconds,
+      motionSubstepEnvelope,
+    }),
+    conservationReceiptIds: Object.freeze([...currentReceiptIds]),
+    lineageIds: Object.freeze([...currentLineageIds]),
+    budget: execution.budget,
   });
 }
 
