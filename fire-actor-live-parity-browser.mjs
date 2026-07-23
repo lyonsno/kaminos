@@ -18,12 +18,14 @@ export function installFireActorLiveParitySurface({
   readActor = () => ({ transform: { translate: [0, 0, 0], scale: 1 } }),
   readFallbackReason,
   prepareSurface = async () => {},
+  runControlRebake,
 }) {
   const descriptorPromise = createFireActorLiveParityDescriptor();
   let arm = 'composite';
   let exactPauseReceipt = null;
   let deterministicClockReceipt = null;
   let gpuStageTimingReceipt = null;
+  let controlRebakeReceipt = null;
 
   async function engine() {
     const candidate = await ensureEngine();
@@ -120,6 +122,19 @@ export function installFireActorLiveParitySurface({
     return (await engine()).setSelectiveHeadLiveCapturePaused(true);
   }
 
+  async function rebake(request = {}) {
+    if (typeof runControlRebake !== 'function') {
+      throw new Error(`${surface} live parity control rebake is unavailable`);
+    }
+    const instance = await engine();
+    const result = await runControlRebake({ engine: instance, request: clone(request) });
+    if (result?.receipt?.status !== 'applied' || !(result.pixels instanceof Uint8ClampedArray)) {
+      throw new Error(`${surface} live parity control rebake returned an invalid result`);
+    }
+    controlRebakeReceipt = clone(result.receipt);
+    return result;
+  }
+
   async function receipt() {
     const descriptor = await descriptorPromise;
     const instance = readEngine();
@@ -174,6 +189,7 @@ export function installFireActorLiveParitySurface({
       exactPauseReceipt: clone(exactPauseReceipt),
       deterministicClockReceipt: clone(deterministicClockReceipt),
       gpuStageTimingReceipt: clone(gpuStageTimingReceipt),
+      controlRebakeReceipt: clone(controlRebakeReceipt),
       engine: clone(readEngine()?.debugState?.() || null),
       camera: readCamera(),
     };
@@ -188,6 +204,7 @@ export function installFireActorLiveParitySurface({
     applyCamera,
     play,
     pause,
+    rebake,
     receipt,
     state,
   };

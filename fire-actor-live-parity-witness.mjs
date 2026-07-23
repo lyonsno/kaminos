@@ -7,8 +7,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 
+import { FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS } from './fire-actor-live-parity-contract.mjs';
+
 const ARMS = ['splats', 'smoke', 'composite'];
 const EXPECTED_REVISION = 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95';
+const EXPECTED_MOUNT = 'firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7';
+const EXPECTED_PACKAGE = 'f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc';
+const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const HEX_64 = /^[a-f0-9]{64}$/;
 const EXPECTED_ENGINE = Object.freeze({
   sourceCommit: 'ef85ee89e63fe2276c951e7c401cd719d62bf3ce',
   sha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
@@ -157,13 +163,13 @@ function decodePng(png) {
   return { width, height, channels, pixels };
 }
 
-function regionPixels(image, bounds, viewport) {
+function regionPixels(image, bounds, viewport, verticalInset = 42) {
   const scaleX = image.width / viewport.width;
   const scaleY = image.height / viewport.height;
   const x0 = Math.max(0, Math.floor(bounds.left * scaleX));
-  const y0 = Math.max(0, Math.floor((bounds.top + 42) * scaleY));
+  const y0 = Math.max(0, Math.floor((bounds.top + verticalInset) * scaleY));
   const x1 = Math.min(image.width, Math.ceil(bounds.right * scaleX));
-  const y1 = Math.min(image.height, Math.ceil((bounds.bottom - 42) * scaleY));
+  const y1 = Math.min(image.height, Math.ceil((bounds.bottom - verticalInset) * scaleY));
   const baseOffset = (y0 * image.width + x0) * image.channels;
   const base = [image.pixels[baseOffset], image.pixels[baseOffset + 1], image.pixels[baseOffset + 2]];
   let changedPixels = 0, litPixels = 0;
@@ -284,6 +290,84 @@ function validateLiveControlExercise(exercise) {
   return true;
 }
 
+export function validateLiveRebakeExercise(exercise) {
+  const receipt = exercise?.result?.receipt;
+  if (receipt?.schema !== 'kaminos.fire-actor-control-rebake-receipt.v0' || receipt.status !== 'applied') {
+    throw new Error('Wake rebake receipt is missing or unapplied');
+  }
+  if (receipt.mountId !== EXPECTED_MOUNT || receipt.basinRevision !== EXPECTED_REVISION
+    || receipt.packageSha256 !== EXPECTED_PACKAGE) {
+    throw new Error('Wake rebake mount identity mismatch');
+  }
+  const source = receipt.source;
+  if (source?.requestedMode !== 'live' || source?.effectiveMode !== 'live' || source?.simStepCount !== 120
+    || !/^fireactor-live-[a-f0-9]{64}$/.test(source?.stateId || '')
+    || !HEX_64.test(source?.sourceStateIdentity || '')
+    || !HEX_64.test(source?.fluidSha256 || '') || !HEX_64.test(source?.frontSha256 || '')
+    || !source?.cameraIdentity || source.cameraRole !== 'capture-context-not-analytical-projection'
+    || source.routeIdentity !== EXPECTED_ROUTE || source.effectiveRoute !== EXPECTED_ROUTE
+    || !String(source.backend || '').startsWith('WebGPU:')
+    || !source.exportAuthority || !source.exportIdentity
+    || source.liveCaptureLease?.beforeRelease !== 120 || source.liveCaptureLease?.afterRelease !== 120) {
+    throw new Error('Wake rebake live source identity mismatch');
+  }
+  if (Object.keys(receipt.requestedControls || {}).length !== 14 || Object.keys(receipt.effectiveControls || {}).length !== 14) {
+    throw new Error('Wake rebake did not exercise exactly fourteen controls');
+  }
+  if (!same(receipt.requestedControls, FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS)
+    || !same(receipt.effectiveControls, FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS)) {
+    throw new Error('Wake rebake treatment controls mismatch');
+  }
+  if (receipt.boundary?.baseline?.identity !== '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216'
+    || receipt.boundary?.requested !== 'analytical-recomputed'
+    || receipt.boundary?.effective !== 'analytical-recomputed') {
+    throw new Error('Wake rebake boundary authority mismatch');
+  }
+  if (receipt.simulatorAdvanced !== false || receipt.fallbackReason !== null
+    || !same(receipt.passes?.requested, receipt.passes?.applied)
+    || receipt.passes?.encoded?.length !== 0) {
+    throw new Error('Wake rebake mutated simulation, fell back, or misreported passes');
+  }
+  if (!/^[a-f0-9]{64}$/.test(receipt.identities?.pixels || '')
+    || exercise.result.pixelByteLength !== receipt.output?.byteLength
+    || exercise.result.baselinePixelByteLength !== receipt.output?.byteLength) {
+    throw new Error('Wake rebake pixel identity or byte receipt mismatch');
+  }
+  const treatment = exercise.result.producerReceipts?.treatment;
+  if (!treatment || treatment.sourceStateIdentity !== source.sourceStateIdentity
+    || treatment.source?.stateId !== source.stateId
+    || treatment.source?.fluidSha256 !== source.fluidSha256
+    || treatment.source?.frontSha256 !== source.frontSha256
+    || treatment.source?.cameraIdentity !== source.cameraIdentity
+    || treatment.source?.simStepCount !== source.simStepCount
+    || treatment.source?.routeIdentity !== source.routeIdentity
+    || treatment.source?.effectiveRoute !== source.effectiveRoute
+    || treatment.source?.backend !== source.backend
+    || !same(treatment.effectiveControls, receipt.effectiveControls)
+    || treatment.stageBIdentity !== receipt.identities?.treatmentStageB
+    || treatment.depositionIdentity !== receipt.identities?.deposition
+    || treatment.pixelIdentity !== receipt.identities?.pixels) {
+    throw new Error('Wake rebake producer receipt mismatch');
+  }
+  if (receipt.projection?.identity !== 'fixed-stage-b-analytical-camera-v0'
+    || treatment.projection?.identity !== receipt.projection.identity) {
+    throw new Error('Wake rebake analytical projection identity mismatch');
+  }
+  if (exercise.result.rawPixelSha256 !== receipt.identities.pixels) {
+    throw new Error('Wake rebake raw pixel identity mismatch');
+  }
+  if (exercise.result.canvasPixelSha256 !== receipt.identities.pixels) {
+    throw new Error('Wake rebake canvas pixel identity mismatch');
+  }
+  if (exercise.beforeStep !== 120 || exercise.afterStep !== 120) {
+    throw new Error('Wake rebake advanced the live simulator');
+  }
+  if (!exercise.pixels || exercise.pixels.changedPixels <= 0 || exercise.pixels.litPixels <= 0) {
+    throw new Error('Wake rebake pixel witness is blank');
+  }
+  return true;
+}
+
 const projection = `(() => {
   const read = id => JSON.parse(document.getElementById(id).textContent);
   const bounds = id => {
@@ -312,12 +396,13 @@ export async function runLiveParityWitness(options = {}) {
   let browser = null, ws = null, failure = null;
   const arms = {}, screenshots = {}, screenshotPaths = {};
   let liveControlExercise = null;
+  let liveRebakeExercise = null;
 
   const writeReport = () => {
     mkdirSync(dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, JSON.stringify({
       schema: 'kaminos.fire-actor-live-parity-witness.v1',
-      ok: failure === null && ARMS.every(arm => arms[arm] && screenshots[arm]),
+      ok: failure === null && ARMS.every(arm => arms[arm] && screenshots[arm]) && Boolean(liveRebakeExercise),
       requestedRoute: route,
       effectiveRoute: arms.composite ? route : null,
       requested: { revision: EXPECTED_REVISION, engine: EXPECTED_ENGINE, simStep: 120, arms: ARMS },
@@ -327,6 +412,7 @@ export async function runLiveParityWitness(options = {}) {
       screenshots,
       arms,
       liveControlExercise,
+      liveRebakeExercise,
     }, null, 2));
   };
 
@@ -385,6 +471,40 @@ export async function runLiveParityWitness(options = {}) {
     await evaluate(ws, `Promise.all(['cockpit', 'kiln'].map(surface => window.kaminosFireActorParityWorkbench.command(surface, 'applyCamera', ${JSON.stringify(exactCamera)})))`);
     liveControlExercise = { initial, playing, paused, resettled, transferredCamera, cameraTransfer, restoredCamera: exactCamera };
     validateLiveControlExercise(liveControlExercise);
+
+    phase = 'live-rebake';
+    const beforeRebake = await evaluate(ws, `window.kaminosFireActorParityWorkbench.controlState()`);
+    await evaluate(ws, `window.kaminosFireActorParityWorkbench.rebakeTreatment()`);
+    await waitFor(
+      ws,
+      `document.getElementById('status')?.textContent === 'Wake rebake effective: 14 controls, live source, no simulation advance'`,
+      timeoutMs,
+      'Wake live control rebake',
+    );
+    const rebakeResult = await evaluate(ws, `window.kaminosFireActorParityWorkbench.rebakeReceipt()`);
+    const afterRebake = await evaluate(ws, `window.kaminosFireActorParityWorkbench.controlState()`);
+    const rebakeBounds = await evaluate(ws, `(() => {
+      const rect = document.getElementById('kiln-rebake-canvas').getBoundingClientRect();
+      return {
+        bounds: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        viewport: { width: innerWidth, height: innerHeight },
+      };
+    })()`);
+    const rebakeShot = await request(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+    if (!rebakeShot?.data) throw new Error('Wake rebake screenshot was empty');
+    const rebakePng = Buffer.from(rebakeShot.data, 'base64');
+    const rebakeImage = decodePng(rebakePng);
+    mkdirSync(outputRoot, { recursive: true });
+    writeFileSync(`${outputRoot}/rebake.png`, rebakePng);
+    screenshotPaths.rebake = `${requestedOutputRoot.replace(/\/$/, '')}/rebake.png`;
+    liveRebakeExercise = {
+      beforeStep: beforeRebake.kiln.simStepCount,
+      afterStep: afterRebake.kiln.simStepCount,
+      result: rebakeResult,
+      pixels: regionPixels(rebakeImage, rebakeBounds.bounds, rebakeBounds.viewport, 0).receipt,
+    };
+    validateLiveRebakeExercise(liveRebakeExercise);
+    await evaluate(ws, `document.getElementById('kiln-rebake-preview').hidden = true`);
 
     for (const arm of ARMS) {
       phase = `arm-${arm}`;

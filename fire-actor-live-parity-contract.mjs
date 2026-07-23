@@ -14,6 +14,23 @@ const REQUIRED_GPU_TIMING_STAGES = Object.freeze([
 
 export const FIRE_ACTOR_LIVE_PARITY_ARMS = Object.freeze(['splats', 'smoke', 'composite']);
 
+export const FIRE_ACTOR_LIVE_PARITY_REBAKE_CONTROLS = Object.freeze({
+  volume_reaction_boundary_fire_tip: 2,
+  volume_reaction_boundary_topology: 2.5,
+  volume_reaction_boundary_fire_erosion: 0.3,
+  volume_reaction_boundary_cut: 0.365,
+  volume_reaction_boundary_softness: 0.135,
+  volume_reaction_boundary_core_reject: 1,
+  volume_reaction_boundary_support_thermal: 0.98,
+  volume_reaction_boundary_support_reaction: 1,
+  volume_reaction_boundary_support_front: 0.66,
+  volume_reaction_boundary_support_interface: 0.78,
+  volume_reaction_boundary_fire_ridge: 1.52,
+  volume_reaction_boundary_fire_ridge_cut: 0.145,
+  volume_reaction_boundary_curl: 1.18,
+  volume_reaction_boundary_divergence: 0.22,
+});
+
 export const FIRE_ACTOR_LIVE_PARITY_IDENTITY = Object.freeze({
   basinHandle: 'big-raymarch-hero-flamebowl-cotangent-covariance',
   basinRevision: 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95',

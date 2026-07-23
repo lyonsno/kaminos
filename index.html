@@ -2962,6 +2962,11 @@ import {
   loadKilnPromotedFireActor,
 } from './kiln-promoted-fire-actor-consumer.mjs';
 import {
+  createFireActorControlRebakeAdapter,
+  createVolumeEngineStageBStateReader,
+  fireActorRebakeControlsFromVolumeControls,
+} from './volume-fire-actor-control-rebake-adapter.mjs';
+import {
   createForegroundKilnHeartbeatEpisode,
   firePresentationMismatchReasons,
   foregroundKilnStartAllowsPipeline,
@@ -15015,6 +15020,12 @@ async function applyPromotedFireParityCamera(spec) {
   return readPromotedFireParityCamera();
 }
 
+const PROMOTED_FIRE_REBAKE_BAKED_BOUNDARY = Object.freeze({
+  authority: 'baked',
+  identity: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+  integrationBaselineBoundarySidecarSha256: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+});
+
 window.kaminosFireActorParity = installFireActorLiveParitySurface({
   surface: 'kiln',
   prepareSurface: async () => {
@@ -15037,6 +15048,23 @@ window.kaminosFireActorParity = installFireActorLiveParitySurface({
   readActor: () => ({
     transform: structuredClone(promotedKilnFireState?.application?.productTransform || { translate: [0, 0, 0], scale: 1 }),
   }),
+  runControlRebake: async ({ engine, request }) => {
+    const mount = promotedKilnFireState?.loaded?.mount;
+    if (!mount || !promotedKilnFireControls) throw new Error('promoted fire mount is unavailable for control rebake');
+    const baselineControls = fireActorRebakeControlsFromVolumeControls(promotedKilnFireControls);
+    const adapter = createFireActorControlRebakeAdapter({
+      mount,
+      readLiveState: createVolumeEngineStageBStateReader(engine),
+      bakedBoundary: PROMOTED_FIRE_REBAKE_BAKED_BOUNDARY,
+    });
+    return adapter.rebake({
+      sourceMode: 'live',
+      baselineControls,
+      requestedControls: request.requestedControls,
+      width: Number(request.width || 256),
+      height: Number(request.height || 256),
+    });
+  },
   readFallbackReason: (debug, presentation) => {
     const mount = promotedKilnFireState?.loaded?.mount;
     if (!mount) return 'promoted-fire-mount-not-loaded';
