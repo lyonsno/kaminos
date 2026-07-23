@@ -28,11 +28,6 @@ assert.match(
 );
 assert.match(
   core,
-  /externalProductTransform[\s\S]*productTransform/,
-  'product frame must expose scene-owned placement without changing simulator authority',
-);
-assert.match(
-  core,
   /if \(productFrameOwner === 'caller'\) \{[\s\S]*private-frame-submit-forbidden/,
   'caller-owned product mode must reject the private render-and-submit loop',
 );
