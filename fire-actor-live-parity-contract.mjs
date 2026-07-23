@@ -17,8 +17,8 @@ export const FIRE_ACTOR_LIVE_PARITY_IDENTITY = Object.freeze({
   basinHandle: 'big-raymarch-hero-flamebowl-cotangent-covariance',
   basinRevision: 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95',
   packageSha256: 'f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc',
-  engineSourceCommit: 'aa2e6a985d165c643abc820e11360f0dce32aff1',
-  engineSha256: '2f7fb4490176cdfbe2d180d3a48519f4f45fda49f488a9412e99551a2dc157a2',
+  engineSourceCommit: 'a556596a6ea1102bcd5bc287bf4c6645ce8e39f3',
+  engineSha256: '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d',
 });
 
 const ARM_PRESENTATION = Object.freeze({
