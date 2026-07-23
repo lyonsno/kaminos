@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -23,6 +24,24 @@ const mountPath = join(
   'mount.json',
 );
 const mountUrl = pathToFileURL(mountPath).toString();
+const promotedEnginePath = join(root, 'kiln-promoted-fire-volume-core.js');
+const promotedEngineManifestPath = join(root, 'kiln-promoted-fire-engine.json');
+const PROMOTED_ENGINE_SHA256 = 'fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb';
+
+const promotedEngineSource = readFileSync(promotedEnginePath);
+assert.equal(
+  createHash('sha256').update(promotedEngineSource).digest('hex'),
+  PROMOTED_ENGINE_SHA256,
+  'Kiln must mount the exact promoted optical core instead of a locally merged renderer',
+);
+const promotedEngineManifest = JSON.parse(readFileSync(promotedEngineManifestPath, 'utf8'));
+assert.deepEqual(promotedEngineManifest, {
+  schema: 'kaminos.kiln.promoted-fire-engine.v1',
+  sourceCommit: 'dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10',
+  sourcePath: 'volume-core.js',
+  consumerPath: 'kiln-promoted-fire-volume-core.js',
+  sha256: PROMOTED_ENGINE_SHA256,
+});
 
 function fileFetch(input) {
   const url = new URL(input);
