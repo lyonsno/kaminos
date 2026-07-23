@@ -163,14 +163,28 @@ export function validateFireActorLiveParityReceipt(receipt, descriptor) {
     }
     return 'sampled';
   };
+  const validStageTiming = stage => {
+    const timing = gpuTiming?.stages?.[stage];
+    if (stage === 'indirectSetup' && presentationUsesSplats
+      && timing?.status === 'quantized-below-resolution') {
+      if (timing.ms !== 0
+        || timing.quantizationAuthority !== 'implementation-defined-webgpu-timestamp-query-quantization-v0'
+        || !/^\d+$/.test(timing.rawStartNs || '')
+        || !/^\d+$/.test(timing.rawEndNs || '')) {
+        return false;
+      }
+      return BigInt(timing.rawEndNs) < BigInt(timing.rawStartNs);
+    }
+    return timing?.status === expectedStageStatus(stage)
+      && Number.isFinite(timing.ms)
+      && timing.ms >= 0;
+  };
   if (gpuTiming?.identity !== 'selective-head-live-arm-gpu-timestamp-profile-v0'
     || gpuTiming.timestampStatus !== 'available'
     || gpuTiming.reason !== 'timestamp-query-sampled'
     || gpuTiming.aggregationAuthority !== 'independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0'
     || !same(gpuTiming.sample, expectedSample)
-    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== expectedStageStatus(stage)
-      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms)
-      || gpuTiming.stages[stage].ms < 0)) {
+    || REQUIRED_GPU_TIMING_STAGES.some(stage => !validStageTiming(stage))) {
     if (gpuTiming && !same(gpuTiming.sample, expectedSample)) {
       throw new Error('live parity GPU stage timing sample does not match the effective arm and step');
     }

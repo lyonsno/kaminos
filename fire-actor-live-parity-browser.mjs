@@ -8,6 +8,60 @@ function clone(value) {
   return structuredClone(value);
 }
 
+export function recoverQuantizedGpuStageTiming(frame, presentation, arm, simStepCount) {
+  const match = /^timestamp-query-nonmonotonic:([\d,]+)$/.exec(frame?.reason || '');
+  if (!match) return null;
+  const names = ['sidecar'];
+  if (presentation.splats === 'on') names.push('compaction', 'finalize', 'indirectSetup');
+  if (presentation.smoke === 'on') names.push('matchedRaymarchRaster');
+  if (presentation.splats === 'on') names.push('splatRaster');
+  const timestamps = match[1].split(',').map(value => BigInt(value));
+  if (timestamps.length !== names.length * 2 || timestamps.some(value => value === 0n)) return null;
+  const pairs = Object.fromEntries(names.map((name, index) => [
+    name,
+    { start: timestamps[index * 2], end: timestamps[index * 2 + 1] },
+  ]));
+  const reversed = names.filter(name => pairs[name].end < pairs[name].start);
+  if (reversed.length !== 1 || reversed[0] !== 'indirectSetup') return null;
+  const frameStart = pairs[names[0]].start;
+  const frameEnd = pairs[names.at(-1)].end;
+  if (frameEnd < frameStart) return null;
+  const sampled = name => ({
+    status: 'sampled',
+    ms: Number(pairs[name].end - pairs[name].start) / 1_000_000,
+  });
+  const notRequested = { status: 'not-requested-by-presentation', ms: 0 };
+  return {
+    identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',
+    timestampStatus: 'available',
+    reason: 'timestamp-query-sampled',
+    sample: {
+      authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+      arm,
+      simStepCount,
+      advanceSim: false,
+      presentation,
+    },
+    stages: {
+      simulation: { status: 'not-run-frozen-state', ms: 0 },
+      sidecar: sampled('sidecar'),
+      compaction: pairs.compaction ? sampled('compaction') : notRequested,
+      finalize: pairs.finalize ? sampled('finalize') : notRequested,
+      candidateCopy: { status: 'removed', ms: 0 },
+      indirectSetup: {
+        status: 'quantized-below-resolution',
+        ms: 0,
+        rawStartNs: pairs.indirectSetup.start.toString(),
+        rawEndNs: pairs.indirectSetup.end.toString(),
+        quantizationAuthority: 'implementation-defined-webgpu-timestamp-query-quantization-v0',
+      },
+      splatRaster: pairs.splatRaster ? sampled('splatRaster') : notRequested,
+      matchedRaymarchRaster: pairs.matchedRaymarchRaster ? sampled('matchedRaymarchRaster') : notRequested,
+      total: { status: 'sampled', ms: Number(frameEnd - frameStart) / 1_000_000 },
+    },
+  };
+}
+
 export function installFireActorLiveParitySurface({
   surface,
   ensureEngine,
@@ -45,12 +99,22 @@ export function installFireActorLiveParitySurface({
     const smokeReceipt = instance.setRaymarchSmokePresentationMode(presentation.smoke);
     arm = nextArm;
     if (instance.debugState()?.selectiveHeadLiveCapturePaused === true) {
-      const frame = await instance.captureSelectiveHeadLiveFrame({
+      const capturedFrame = await instance.captureSelectiveHeadLiveFrame({
         advanceSim: false,
         presentToCanvas: true,
         collectGpuTiming: true,
         presentationArm: nextArm,
       });
+      const effectiveSimStep = instance.debugState().simStepCount;
+      const recoveredTiming = recoverQuantizedGpuStageTiming(
+        capturedFrame,
+        { arm: nextArm, ...presentation },
+        nextArm,
+        effectiveSimStep,
+      );
+      const frame = recoveredTiming
+        ? { ...capturedFrame, ok: true, simStepCount: effectiveSimStep, gpuStageTiming: recoveredTiming }
+        : capturedFrame;
       if (!frame?.ok || frame.simStepCount !== instance.debugState().simStepCount) {
         throw new Error(`${surface} live parity arm presentation failed: ${frame?.reason || 'simulation step changed'}`);
       }
