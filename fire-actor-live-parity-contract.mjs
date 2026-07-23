@@ -1,5 +1,15 @@
 const DESCRIPTOR_SCHEMA = 'kaminos.fire-actor-live-parity-descriptor.v1';
 const RECEIPT_SCHEMA = 'kaminos.fire-actor-live-parity-receipt.v1';
+const REQUIRED_GPU_TIMING_STAGES = Object.freeze([
+  'simulation',
+  'sidecar',
+  'compaction',
+  'candidateCopy',
+  'indirectSetup',
+  'splatRaster',
+  'matchedRaymarchRaster',
+  'total',
+]);
 
 export const FIRE_ACTOR_LIVE_PARITY_ARMS = Object.freeze(['splats', 'smoke', 'composite']);
 
@@ -48,7 +58,7 @@ function parityBasis() {
       pauseAuthority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
       controlsSignature: 'vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c',
       deterministicClock: {
-        authority: 'parity-fixed-30hz-step-clock-v0',
+        authority: 'same-route-controls-fixed-step-replay',
         startNowMs: 1000,
         stepDeltaMs: 1000 / 30,
       },
@@ -131,6 +141,14 @@ export function validateFireActorLiveParityReceipt(receipt, descriptor) {
   }
   if (!same(receipt.controls, descriptor.controls)) throw new Error('live parity control coverage mismatch');
   if (receipt.fallbackReason !== null) throw new Error(`live parity fallback is forbidden: ${receipt.fallbackReason}`);
+  const gpuTiming = receipt.gpuStageTiming;
+  if (gpuTiming?.identity !== 'boundary-splat-stage-gpu-timestamp-profile-v0'
+    || gpuTiming.timestampStatus !== 'available'
+    || gpuTiming.reason !== 'timestamp-query-sampled'
+    || REQUIRED_GPU_TIMING_STAGES.some(stage => gpuTiming.stages?.[stage]?.status !== 'sampled'
+      || !Number.isFinite(gpuTiming.stages?.[stage]?.ms))) {
+    throw new Error('live parity GPU stage timing is missing or unsampled');
+  }
   return receipt;
 }
 

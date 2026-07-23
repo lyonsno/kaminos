@@ -22,6 +22,7 @@ export function installFireActorLiveParitySurface({
   let arm = 'composite';
   let exactPauseReceipt = null;
   let deterministicClockReceipt = null;
+  let gpuStageTimingReceipt = null;
 
   async function engine() {
     const candidate = await ensureEngine();
@@ -65,19 +66,34 @@ export function installFireActorLiveParitySurface({
     const requested = target ?? descriptor.state.targetSimStep;
     const instance = await engine();
     const before = instance.debugState();
-    if (before.simStepCount === 0) {
+    if (before.simStepCount !== requested || !deterministicClockReceipt) {
       instance.setSelectiveHeadLiveCapturePaused(true);
       const clock = descriptor.state.deterministicClock;
-      for (let step = 1; step <= requested; step += 1) {
-        const sampleNow = clock.startNowMs + (step - 1) * clock.stepDeltaMs;
-        const stepped = await instance.stepSelectiveHeadLiveCaptureFrame({ now: sampleNow });
-        if (!stepped?.ok || stepped.simStepCount !== step || stepped.sampleNowMs !== sampleNow) {
-          throw new Error(`deterministic parity step failed at ${step}: ${stepped?.reason || stepped?.simStepCount}`);
-        }
+      const timingSample = await instance.sampleFrame({
+        advanceSim: true,
+        includeRgba: false,
+        now: clock.startNowMs,
+      });
+      const timingProfile = timingSample?.boundarySplatGpuProfile;
+      if (timingProfile?.timestampStatus !== 'available'
+        || timingProfile.reason !== 'timestamp-query-sampled') {
+        throw new Error(`live GPU stage timing failed: ${timingProfile?.reason || timingSample?.reason || 'missing profile'}`);
       }
-      deterministicClockReceipt = clone(clock);
-    } else if (before.simStepCount !== requested || !deterministicClockReceipt) {
-      throw new Error(`deterministic parity settle requires a fresh step-zero engine: ${before.simStepCount}`);
+      gpuStageTimingReceipt = clone(timingProfile);
+      const replay = await instance.sampleDeterministicReplayFrame({
+        steps: requested,
+        startTimeMs: clock.startNowMs,
+        timeStepMs: clock.stepDeltaMs,
+        restoreControls: true,
+      });
+      if (!replay?.ok || replay.completedSteps !== requested || replay.authority !== clock.authority) {
+        throw new Error(`deterministic parity replay failed: ${replay?.reason || replay?.completedSteps}`);
+      }
+      deterministicClockReceipt = {
+        authority: replay.authority,
+        startNowMs: replay.startTimeMs,
+        stepDeltaMs: replay.timeStepMs,
+      };
     }
     const receipt = await instance.pauseSelectiveHeadLiveAtSimStep(requested);
     if (!receipt?.ok || receipt.paused !== true || receipt.gpuComplete !== true) {
@@ -90,6 +106,7 @@ export function installFireActorLiveParitySurface({
   async function play() {
     exactPauseReceipt = null;
     deterministicClockReceipt = null;
+    gpuStageTimingReceipt = null;
     return (await engine()).setSelectiveHeadLiveCapturePaused(false);
   }
 
@@ -136,6 +153,7 @@ export function installFireActorLiveParitySurface({
       controls: clone(descriptor.controls),
       fallbackReason,
       timing: clone(debug.timing || {}),
+      gpuStageTiming: clone(gpuStageTimingReceipt),
     };
     validateFireActorLiveParityReceipt(value, descriptor);
     return value;
@@ -149,6 +167,7 @@ export function installFireActorLiveParitySurface({
       arm,
       exactPauseReceipt: clone(exactPauseReceipt),
       deterministicClockReceipt: clone(deterministicClockReceipt),
+      gpuStageTimingReceipt: clone(gpuStageTimingReceipt),
       engine: clone(readEngine()?.debugState?.() || null),
       camera: readCamera(),
     };

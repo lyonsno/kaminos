@@ -13276,12 +13276,8 @@ export function createKaminosVolumePrototype({
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
       const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      encodeSim(encoder, {
-        timestampWrites: {
-          querySet,
-          beginningOfPassWriteIndex: 0,
-        },
-      });
+      writeTimestamp(0, 'kaminos boundary splat timestamp before simulation');
+      encodeSim(encoder);
       writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
       encodeBoundarySidecar(encoder, {
         timestampWrites: {

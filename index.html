@@ -17933,7 +17933,11 @@ async function initKaminosVolumeRoute() {
     },
     ensureEngine: async () => {
       await verifyFireActorParityPackage();
-      if (!volumePrototype.debugState().active) await volumePrototype.setActive(true);
+      while (!volumePrototype.debugState().active) {
+        const error = volumePrototype.debugState().error;
+        if (error) throw new Error(`cockpit route-owned activation failed: ${error}`);
+        await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
+      }
       return volumePrototype;
     },
     readEngine: () => volumePrototype,
