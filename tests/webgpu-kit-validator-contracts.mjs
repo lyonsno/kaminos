@@ -14,13 +14,13 @@ assert.ok(existsSync(packageLockPath), 'Kaminos pipeline tooling must lock npm d
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 assert.equal(
   packageJson.dependencies?.['@kaminos/webgpu-inference-kit'],
-  '0.1.34',
+  '0.1.35',
   'Kaminos validation must consume the exact kit revision used by the reviewed inline SHARP route',
 );
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, 'utf8'));
 const lockedKit = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
-assert.equal(lockedKit?.version, '0.1.34', 'WebGPU inference kit lockfile must pin the reviewed inline SHARP package version');
+assert.equal(lockedKit?.version, '0.1.35', 'WebGPU inference kit lockfile must pin the reviewed inline SHARP package version');
 assert.ok(lockedKit?.integrity, 'WebGPU inference kit lockfile must preserve published package integrity');
 
 for (const sourcePath of [witnessPath, wrapperPath]) {

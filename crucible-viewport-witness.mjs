@@ -144,7 +144,10 @@ function expectedSchedulerForProfile(profileId) {
     vitMicrodutyMode: 'dispatch-major',
     cpuChunkItems: 16384,
     spnFusionChunkItems: 524288,
-    decoderKernelChunkItems: 524288,
+    decoderKernelChunkItems: 262144,
+    decoderKernelMinChunkItems: 65536,
+    decoderKernelMaxChunkItems: 8388608,
+    decoderKernelTargetDurationMs: 8,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   };
@@ -1817,6 +1820,11 @@ try {
     }
     const decoderKernelTileFailures = validateDecoderKernelTileEvidence({
       expectedChunkItems: expectedScheduler.decoderKernelChunkItems,
+      expectedAdaptivePolicy: {
+        minChunkItems: expectedScheduler.decoderKernelMinChunkItems,
+        maxChunkItems: expectedScheduler.decoderKernelMaxChunkItems,
+        targetDurationMs: expectedScheduler.decoderKernelTargetDurationMs,
+      },
       boundaryAssertions: state.fullRoute.schedulerBoundaryAssertions,
       tileEvents: state.fullRoute.decoderKernelTileEvents,
     });

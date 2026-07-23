@@ -126,7 +126,10 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
-    decoderKernelChunkItems: 524288,
+    decoderKernelChunkItems: 262144,
+    decoderKernelMinChunkItems: 65536,
+    decoderKernelMaxChunkItems: 8388608,
+    decoderKernelTargetDurationMs: 8,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   },
@@ -146,7 +149,10 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 16,
     spnFusionChunkItems: 524288,
-    decoderKernelChunkItems: 524288,
+    decoderKernelChunkItems: 262144,
+    decoderKernelMinChunkItems: 65536,
+    decoderKernelMaxChunkItems: 8388608,
+    decoderKernelTargetDurationMs: 8,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   },
@@ -166,7 +172,10 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
-    decoderKernelChunkItems: 524288,
+    decoderKernelChunkItems: 262144,
+    decoderKernelMinChunkItems: 65536,
+    decoderKernelMaxChunkItems: 8388608,
+    decoderKernelTargetDurationMs: 8,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   },
@@ -301,6 +310,107 @@ for (const [mutate, expectedFailure] of [
     expectedChunkItems: 524288,
     boundaryAssertions: evidence.schedulerBoundaryAssertions,
     tileEvents: evidence.decoderKernelTileEvents,
+  }).includes(expectedFailure), expectedFailure);
+}
+
+const adaptiveDecoderKernelEvents = [
+  {
+    kind: 'decoder-kernel-range-observed',
+    phase: 'decoder.fusion.4.conv1',
+    boundary: 'gaussian-phase',
+    role: 'decoder-kernel-output-tile-observation',
+    rangeId: 'sharp:run:gaussian:0:decoder.fusion.4.conv1:0',
+    rangeIndex: 0,
+    rangeTotal: null,
+    outputStart: 0,
+    outputEnd: 262144,
+    outputCount: 262144,
+    totalOutputItems: 1048576,
+    observedDurationMs: 12,
+    timingAuthority: 'queue-work-done',
+    queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    actualRangeCount: null,
+  },
+  {
+    kind: 'decoder-kernel-range-observed',
+    phase: 'decoder.fusion.4.conv1',
+    boundary: 'gaussian-phase',
+    role: 'decoder-kernel-output-tile-observation',
+    rangeId: 'sharp:run:gaussian:0:decoder.fusion.4.conv1:1',
+    rangeIndex: 1,
+    rangeTotal: null,
+    outputStart: 262144,
+    outputEnd: 1048576,
+    outputCount: 786432,
+    totalOutputItems: 1048576,
+    observedDurationMs: 7,
+    timingAuthority: 'queue-work-done',
+    queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    actualRangeCount: 2,
+  },
+];
+const adaptiveDecoderAssertion = {
+  field: 'decoderKernelChunkItems',
+  requested: 262144,
+  effective: 262144,
+  status: 'verified',
+  adaptive: true,
+  adaptiveTargetDurationMs: 8,
+  adaptiveMinChunkItems: 65536,
+  adaptiveMaxChunkItems: 8388608,
+  observedBoundary: 'gaussian-phase',
+  observedCount: 2,
+  observedAdaptiveRangeCount: 2,
+  observedAdaptiveCompletionCount: 1,
+  observedAdaptiveFailureCount: 0,
+  observedAdaptiveTimingAuthorityCount: 2,
+  observedKernel: {
+    boundary: 'gaussian-phase',
+    phase: 'decoder.fusion.4.conv1',
+    tileTotal: 2,
+    totalOutputItems: 1048576,
+  },
+};
+assert.deepEqual(
+  JSON.parse(JSON.stringify(validateDecoderKernelTileEvidence({
+    expectedChunkItems: 262144,
+    expectedAdaptivePolicy: {
+      minChunkItems: 65536,
+      maxChunkItems: 8388608,
+      targetDurationMs: 8,
+    },
+    boundaryAssertions: [adaptiveDecoderAssertion],
+    tileEvents: adaptiveDecoderKernelEvents,
+  }))),
+  [],
+  'adaptive decoder evidence must preserve one terminal planner, exact coverage, and queue-completion authority',
+);
+for (const [mutate, expectedFailure] of [
+  [events => { events[1].actualRangeCount = null; }, 'adaptive-terminal-count-missing'],
+  [events => { events[1].outputStart = 300000; }, 'range-coverage-invalid'],
+  [events => { events[0].queueWorkAttribution = 'isolated-kernel-time'; }, 'adaptive-timing-authority-invalid'],
+  [events => {
+    events.push({
+      ...events[1],
+      role: 'decoder-kernel-output-tile-failed',
+      rangeId: 'sharp:run:gaussian:1:decoder.fusion.4.conv1:0',
+      rangeIndex: 0,
+      actualRangeCount: 1,
+      failure: { name: 'GPUValidationError', message: 'synthetic failure' },
+    });
+  }, 'adaptive-range-failure-observed'],
+]) {
+  const events = JSON.parse(JSON.stringify(adaptiveDecoderKernelEvents));
+  mutate(events);
+  assert.ok(validateDecoderKernelTileEvidence({
+    expectedChunkItems: 262144,
+    expectedAdaptivePolicy: {
+      minChunkItems: 65536,
+      maxChunkItems: 8388608,
+      targetDurationMs: 8,
+    },
+    boundaryAssertions: [adaptiveDecoderAssertion],
+    tileEvents: events,
   }).includes(expectedFailure), expectedFailure);
 }
 

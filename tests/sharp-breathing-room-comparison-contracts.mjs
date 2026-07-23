@@ -49,26 +49,51 @@ function schedulerVerification({
         label: label.startsWith('fusion-') ? 'decoder.fusions.1' : undefined,
     }))
     : [];
-  const decoderEvents = [0, 1].flatMap(tileIndex => [
+  const decoderRanges = [
+    { rangeIndex: 0, outputStart: 0, outputEnd: 262144, outputCount: 262144, actualRangeCount: null },
+    { rangeIndex: 1, outputStart: 262144, outputEnd: 1048576, outputCount: 786432, actualRangeCount: 2 },
+  ];
+  const decoderEvents = decoderRanges.flatMap(range => [...[
     'chunk-start',
     'queue-work-done-start',
     'queue-work-done-end',
     'js-yield-start',
     'js-yield-end',
   ].map((kind, kindIndex) => ({
-    tMs: 30 + tileIndex * 5 + kindIndex,
+    tMs: 30 + range.rangeIndex * 6 + kindIndex,
     phase: 'decoder.fusion.4.conv1',
     boundary: 'gaussian-phase',
     kind,
     role: 'decoder-kernel-output-tile',
-    configuredChunkItems: 524288,
-    tileIndex,
-    tileTotal: 2,
-    outputStart: tileIndex * 524288,
-    outputEnd: (tileIndex + 1) * 524288,
-    outputCount: 524288,
+    configuredChunkItems: 262144,
+    adaptive: true,
+    rangeId: `sharp:run:gaussian:0:decoder.fusion.4.conv1:${range.rangeIndex}`,
+    rangeIndex: range.rangeIndex,
+    rangeTotal: null,
+    tileIndex: range.rangeIndex,
+    tileTotal: null,
+    outputStart: range.outputStart,
+    outputEnd: range.outputEnd,
+    outputCount: range.outputCount,
     totalOutputItems: 1048576,
-  })));
+  })), {
+    tMs: 35 + range.rangeIndex * 6,
+    phase: 'decoder.fusion.4.conv1',
+    boundary: 'gaussian-phase',
+    kind: 'decoder-kernel-range-observed',
+    role: 'decoder-kernel-output-tile-observation',
+    rangeId: `sharp:run:gaussian:0:decoder.fusion.4.conv1:${range.rangeIndex}`,
+    rangeIndex: range.rangeIndex,
+    rangeTotal: null,
+    outputStart: range.outputStart,
+    outputEnd: range.outputEnd,
+    outputCount: range.outputCount,
+    totalOutputItems: 1048576,
+    observedDurationMs: range.rangeIndex === 0 ? 12 : 7,
+    timingAuthority: 'queue-work-done',
+    queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    actualRangeCount: range.actualRangeCount,
+  }]);
   const eventTrace = {
     schema: 'kaminos.webgpu-scheduler-event-trace.v0',
     clock: 'performance.now',
@@ -101,9 +126,17 @@ function schedulerVerification({
     },
     {
       field: 'decoderKernelChunkItems',
-      requested: 524288,
-      effective: 524288,
+      requested: 262144,
+      effective: 262144,
       status: 'verified',
+      adaptive: true,
+      adaptiveTargetDurationMs: 8,
+      adaptiveMinChunkItems: 65536,
+      adaptiveMaxChunkItems: 8388608,
+      observedAdaptiveRangeCount: 2,
+      observedAdaptiveCompletionCount: 1,
+      observedAdaptiveFailureCount: 0,
+      observedAdaptiveTimingAuthorityCount: 2,
       observedBoundary: 'gaussian-phase',
       observedCount: 2,
       expectedMinimumCount: 2,
@@ -127,14 +160,20 @@ function schedulerVerification({
         requestedScheduler: {
           mode: 'cooperative',
           phaseChunkSize: { spnPatch: 1 },
-          decoderKernelChunkItems: 524288,
+          decoderKernelChunkItems: 262144,
+          decoderKernelMinChunkItems: 65536,
+          decoderKernelMaxChunkItems: 8388608,
+          decoderKernelTargetDurationMs: 8,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
         },
         effectiveScheduler: {
           mode: 'cooperative',
           phaseChunkSize: { spnPatch: 1 },
-          decoderKernelChunkItems: 524288,
+          decoderKernelChunkItems: 262144,
+          decoderKernelMinChunkItems: 65536,
+          decoderKernelMaxChunkItems: 8388608,
+          decoderKernelTargetDurationMs: 8,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
           unsupportedFields: [],
@@ -273,7 +312,10 @@ assert.equal(profiles.profiles[1].scheduler.vitBlockChunkSize, 1);
 assert.equal(profiles.profiles[1].scheduler.vitMicroduty, true);
 assert.equal(profiles.profiles[1].scheduler.vitMicrodutyMode, 'dispatch-major');
 assert.equal(profiles.profiles[1].scheduler.spnFusionChunkItems, 524288);
-assert.equal(profiles.profiles[1].scheduler.decoderKernelChunkItems, 524288);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelChunkItems, 262144);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelMinChunkItems, 65536);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelMaxChunkItems, 8388608);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelTargetDurationMs, 8);
 assert.equal(profiles.profiles[1].scheduler.plyAssemblyMode, 'worker');
 assert.equal(profiles.profiles[1].scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(profiles.profiles[1].unsupportedFields, []);
@@ -288,7 +330,10 @@ assert.equal(friendlyProfile.scheduler.vitBlockChunkSize, 1);
 assert.equal(friendlyProfile.scheduler.vitMicroduty, true);
 assert.equal(friendlyProfile.scheduler.vitMicrodutyMode, 'dispatch-major');
 assert.equal(friendlyProfile.scheduler.spnFusionChunkItems, 524288);
-assert.equal(friendlyProfile.scheduler.decoderKernelChunkItems, 524288);
+assert.equal(friendlyProfile.scheduler.decoderKernelChunkItems, 262144);
+assert.equal(friendlyProfile.scheduler.decoderKernelMinChunkItems, 65536);
+assert.equal(friendlyProfile.scheduler.decoderKernelMaxChunkItems, 8388608);
+assert.equal(friendlyProfile.scheduler.decoderKernelTargetDurationMs, 8);
 assert.equal(friendlyProfile.scheduler.plyAssemblyMode, 'worker');
 assert.equal(friendlyProfile.scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(friendlyProfile.unsupportedFields, []);
@@ -380,24 +425,17 @@ assert.equal(missingDecoderProof.falseClosureChecks.decoderKernelProofMissing, t
 
 for (const [name, mutateReceipt, expectedFailure] of [
   ['missing events', receipt => {
-    receipt.eventTrace.events = receipt.eventTrace.events.filter(event => event.role !== 'decoder-kernel-output-tile');
+    receipt.eventTrace.events = receipt.eventTrace.events.filter(event => !String(event.role || '').startsWith('decoder-kernel-output-tile'));
   }, 'multi-range-events-missing'],
   ['one-tile-only events', receipt => {
-    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile')) {
-      event.phase = `single-kernel-${event.tileIndex}`;
-      event.tileIndex = 0;
-      event.tileTotal = 1;
-      event.outputStart = 0;
-      event.outputEnd = 8;
-      event.outputCount = 8;
-      event.totalOutputItems = 8;
-    }
+    receipt.eventTrace.events = receipt.eventTrace.events.filter(event => (
+      event.role !== 'decoder-kernel-output-tile-observation' || event.rangeIndex === 0
+    ));
   }, 'multi-range-events-missing'],
   ['configured chunk mismatch', receipt => {
-    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile')) {
-      event.configuredChunkItems = 1048576;
-    }
-  }, 'multi-range-events-missing'],
+    const assertion = receipt.boundaryAssertions.find(candidate => candidate.field === 'decoderKernelChunkItems');
+    assertion.effective = 1048576;
+  }, 'boundary-assertion-config-mismatch'],
   ['assertion event identity mismatch', receipt => {
     const assertion = receipt.boundaryAssertions.find(candidate => candidate.field === 'decoderKernelChunkItems');
     assertion.observedBoundary = 'monodepth-phase';
@@ -409,7 +447,7 @@ for (const [name, mutateReceipt, expectedFailure] of [
     };
   }, 'assertion-event-mismatch'],
   ['noncontiguous ranges', receipt => {
-    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile' && candidate.tileIndex === 1)) {
+    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile-observation' && candidate.rangeIndex === 1)) {
       event.outputStart = 500000;
     }
   }, 'range-coverage-invalid'],
