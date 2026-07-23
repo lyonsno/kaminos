@@ -19,7 +19,9 @@ export const KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT = 'wgsl-solver-own
 export const KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT = 'wgsl-descriptor-laminar-inlet-recycling-v0';
 export const KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT = 'wgsl-analytic-laminar-inlet-fixture-presentation-v0';
 export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-distinct-flux-cadenced-inlet-population-v0';
-export const KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT = 'wgsl-live-hand-round-inlet-uniform-v0';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT = 'wgsl-live-hand-round-inlet-uniform-v1';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT = 'gpu-dormant-pool-source-flux-release-v0';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT = 'new-release-fail-closed-emitted-material-persists-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -440,6 +442,32 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
     sourceRoute: source.route_identity || source.source_route || 'unknown',
     activeInletCount: emitters.filter(inlet => inlet.active).length,
     inlets: Object.freeze(emitters),
+  });
+}
+
+export function measureFingerFluidLiveInletReleasePlan(packet) {
+  const normalized = normalizeFingerFluidLiveInletPacket(packet);
+  const inlets = normalized.inlets.map(inlet => {
+    const physicalSourceFlux = inlet.active
+      ? Math.PI * inlet.radius * inlet.radius * inlet.maximumSpeed * 0.5
+      : 0;
+    const expectedParticleReleaseRate = physicalSourceFlux / LAMINAR_SOURCE_PARTICLE_VOLUME;
+    return Object.freeze({
+      id: inlet.id,
+      active: inlet.active,
+      physicalSourceFlux,
+      expectedParticleReleaseRate,
+      expectedParticlesPerReferenceFrame: expectedParticleReleaseRate / LAMINAR_SOURCE_REFERENCE_FPS,
+    });
+  });
+  return Object.freeze({
+    contract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
+    particleVolume: LAMINAR_SOURCE_PARTICLE_VOLUME,
+    referenceFps: LAMINAR_SOURCE_REFERENCE_FPS,
+    activeInletCount: normalized.activeInletCount,
+    expectedParticleReleaseRate: inlets.reduce((sum, inlet) => sum + inlet.expectedParticleReleaseRate, 0),
+    expectedParticlesPerReferenceFrame: inlets.reduce((sum, inlet) => sum + inlet.expectedParticlesPerReferenceFrame, 0),
+    inlets: Object.freeze(inlets),
   });
 }
 
@@ -2102,8 +2130,88 @@ fn live_inlet_source_index(index: u32) -> u32 {
   return 0u;
 }
 
+fn live_inlet_source_active_ordinal(sourceIndex: u32) -> u32 {
+  var activeOrdinal = 0u;
+  for (var candidateIndex = 0u; candidateIndex < ${LIVE_HAND_INLET_CAPACITY}u; candidateIndex = candidateIndex + 1u) {
+    if (liveInletPacket.inlets[candidateIndex].tangentActive.w > 0.5) {
+      if (candidateIndex == sourceIndex) { return activeOrdinal; }
+      activeOrdinal = activeOrdinal + 1u;
+    }
+  }
+  return 0u;
+}
+
+fn live_inlet_source_particle_count(sourceIndex: u32) -> u32 {
+  let activeCount = max(1u, live_inlet_active_count());
+  let activeOrdinal = live_inlet_source_active_ordinal(sourceIndex);
+  return (params.refinementControl.x + activeCount - 1u - activeOrdinal) / activeCount;
+}
+
 fn live_inlet_source_from_phase(phase: f32) -> u32 {
   return min(${LIVE_HAND_INLET_CAPACITY - 1}u, u32(floor(clamp(abs(phase), 0.0, 0.999999) * ${LIVE_HAND_INLET_CAPACITY}.0)));
+}
+
+fn live_inlet_lane_count(sourceParticleCount: u32, descriptor: LiveInletDescriptor) -> u32 {
+  let particleCrossSection = ${LAMINAR_SOURCE_AXIAL_SPACING ** 2};
+  let apertureArea = 3.141592653589793 * descriptor.originRadius.w * descriptor.originRadius.w;
+  let resolvedLaneCount = max(1u, u32(round(apertureArea / particleCrossSection)));
+  return min(max(1u, sourceParticleCount), resolvedLaneCount);
+}
+
+fn live_inlet_lane_coordinates(descriptor: LiveInletDescriptor, laneIndex: u32, laneCount: u32) -> vec2<f32> {
+  let radius = max(0.02, descriptor.originRadius.w);
+  let radial = radius * 0.82 * sqrt((f32(laneIndex) + 0.5) / f32(max(1u, laneCount)));
+  let angle = f32(laneIndex) * 2.39996322973;
+  return vec2<f32>(cos(angle) * radial, sin(angle) * radial);
+}
+
+fn live_inlet_profile_weight(descriptor: LiveInletDescriptor, localCoordinates: vec2<f32>) -> f32 {
+  let radius = max(0.02, descriptor.originRadius.w);
+  let normalizedRadius = length(localCoordinates) / radius;
+  return max(0.0, 1.0 - normalizedRadius * normalizedRadius);
+}
+
+fn live_inlet_release_phase(index: u32) -> vec4<f32> {
+  let activeCount = max(1u, live_inlet_active_count());
+  let sourceIndex = live_inlet_source_index(index);
+  let descriptor = liveInletPacket.inlets[sourceIndex];
+  let localOrdinal = index / activeCount;
+  let sourceParticleCount = max(1u, live_inlet_source_particle_count(sourceIndex));
+  let laneCount = live_inlet_lane_count(sourceParticleCount, descriptor);
+  let laneIndex = localOrdinal % laneCount;
+  let laneOrdinal = localOrdinal / laneCount;
+  let laneParticleCount = (sourceParticleCount - 1u - laneIndex) / laneCount + 1u;
+  let localCoordinates = live_inlet_lane_coordinates(descriptor, laneIndex, laneCount);
+  let profileWeight = live_inlet_profile_weight(descriptor, localCoordinates);
+  var laneSpeedSum = 0.0;
+  for (var candidateLane = 0u; candidateLane < laneCount; candidateLane = candidateLane + 1u) {
+    laneSpeedSum += live_inlet_profile_weight(
+      descriptor,
+      live_inlet_lane_coordinates(descriptor, candidateLane, laneCount),
+    );
+  }
+  let physicalSourceFlux = 3.141592653589793
+    * descriptor.originRadius.w
+    * descriptor.originRadius.w
+    * descriptor.axisSpeed.w
+    * 0.5;
+  let expectedReleaseRate = physicalSourceFlux / ${LAMINAR_SOURCE_PARTICLE_VOLUME};
+  let laneReleaseRate = expectedReleaseRate * profileWeight / max(laneSpeedSum, 0.000001);
+  let lanePhaseEvents = (f32(laneIndex) + 0.5) / f32(laneCount);
+  return vec4<f32>(f32(laneOrdinal), f32(laneParticleCount), laneReleaseRate, lanePhaseEvents);
+}
+
+fn live_inlet_release_due(frameIndex: u32, schedule: vec4<f32>) -> bool {
+  let laneOrdinal = u32(schedule.x);
+  let laneParticleCount = max(1u, u32(schedule.y));
+  let laneReleaseRate = schedule.z;
+  let lanePhaseEvents = schedule.w;
+  let previousEventCount = u32(floor(f32(frameIndex) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  let nextEventCount = u32(floor(f32(frameIndex + 1u) * laneReleaseRate / 60.0 + lanePhaseEvents));
+  if (nextEventCount <= previousEventCount) { return false; }
+  let priorOrdinal = previousEventCount % laneParticleCount;
+  let distanceToLane = (laneOrdinal + laneParticleCount - priorOrdinal) % laneParticleCount;
+  return previousEventCount + distanceToLane < nextEventCount;
 }
 
 fn live_inlet_sample(index: u32) -> LaminarInletSample {
@@ -2111,25 +2219,25 @@ fn live_inlet_sample(index: u32) -> LaminarInletSample {
   let sourceIndex = live_inlet_source_index(index);
   let descriptor = liveInletPacket.inlets[sourceIndex];
   let localOrdinal = index / activeCount;
-  let apertureOrdinal = localOrdinal / 8u;
-  let axialLayer = localOrdinal % 8u;
+  let sourceParticleCount = max(1u, live_inlet_source_particle_count(sourceIndex));
+  let laneCount = live_inlet_lane_count(sourceParticleCount, descriptor);
+  let laneIndex = localOrdinal % laneCount;
   let axis = normalize(descriptor.axisSpeed.xyz + vec3<f32>(0.000001, 0.000002, 0.000003));
   let tangent = normalize(descriptor.tangentActive.xyz + vec3<f32>(0.000003, 0.000001, 0.000002));
   let bitangent = normalize(cross(axis, tangent));
-  let radius = max(0.02, descriptor.originRadius.w);
-  let radial = radius * 0.82 * sqrt(fract((f32(apertureOrdinal) + 0.5) * 0.61803398875));
-  let angle = f32(apertureOrdinal) * 2.39996322973;
-  let localU = cos(angle) * radial;
-  let localV = sin(angle) * radial;
-  let profileWeight = max(0.0, 1.0 - (radial * radial) / (radius * radius));
-  let axialPosition = -0.26 * ((f32(axialLayer) + 0.5) / 8.0);
+  let localCoordinates = live_inlet_lane_coordinates(descriptor, laneIndex, laneCount);
+  let profileWeight = live_inlet_profile_weight(descriptor, localCoordinates);
+  let axialPosition = -0.26 + ${LAMINAR_SOURCE_AXIAL_SPACING} * 0.5;
   var sample: LaminarInletSample;
   sample.positionPhase = vec4<f32>(
-    descriptor.originRadius.xyz + tangent * localU + bitangent * localV + axis * axialPosition,
+    descriptor.originRadius.xyz
+      + tangent * localCoordinates.x
+      + bitangent * localCoordinates.y
+      + axis * axialPosition,
     (f32(sourceIndex) + 0.5) / ${LIVE_HAND_INLET_CAPACITY}.0,
   );
   sample.velocityCore = vec4<f32>(axis * descriptor.axisSpeed.w * profileWeight, descriptor.tangentActive.w);
-  sample.releaseSchedule = vec4<f32>(0.0);
+  sample.releaseSchedule = live_inlet_release_phase(index);
   return sample;
 }
 
@@ -2444,7 +2552,12 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     } else {
       inletSample = laminar_inlet_sample(index);
     }
-    if (!liveInletScene && !laminar_inlet_release_due(params.frameIndex, inletSample.releaseSchedule)) {
+    let releaseDue = select(
+      laminar_inlet_release_due(params.frameIndex, inletSample.releaseSchedule),
+      live_inlet_release_due(params.frameIndex, inletSample.releaseSchedule),
+      liveInletScene,
+    );
+    if (!releaseDue) {
       particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
       particle.delta = vec4<f32>(0.0);
       particles[index] = particle;
@@ -2469,31 +2582,21 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicAdd(&interfaceCounters[2], 1u);
   }
   let liveSource = liveInletPacket.inlets[live_inlet_source_from_phase(particle.velocity.w)];
-  let liveSourceActive = liveSource.tangentActive.w > 0.5;
   let liveAge = particle.position.w + params.dt;
   if (liveInletScene) { particle.position.w = liveAge; }
-  let recycleLiveInlet = liveInletScene && live_inlet_active_count() > 0u
-    && (liveAge > 1.65 || !liveSourceActive || distance(particle.position.xyz, liveSource.originRadius.xyz) > 2.4);
+  let recycleLiveInlet = liveInletScene
+    && (liveAge > 1.65 || distance(particle.position.xyz, liveSource.originRadius.xyz) > 2.4);
   let recycleLaminarInlet = !liveInletScene && laminarInletScene && particle.velocity.w >= 0.0 && particle.position.z > 2.35;
   let recyclePlaygroundSource = !laminarInletScene && particle.velocity.w < 0.15 && particle.position.z > -0.15;
   if (recycleLiveInlet) {
-    let inletSample = live_inlet_sample(index);
-    var state = materialTracers[index];
-    let resetPhase = inletSample.positionPhase.w;
-    state.concentrationDeltaRecipeSource.z = resetPhase;
-    state.concentrationDeltaRecipeSource.x = resetPhase;
-    state.concentrationDeltaRecipeSource.y = 0.0;
-    materialTracers[index] = state;
-    particle.position = vec4<f32>(inletSample.positionPhase.xyz, 0.0);
-    particle.predicted = vec4<f32>(inletSample.positionPhase.xyz, 0.0);
-    particle.velocity = vec4<f32>(inletSample.velocityCore.xyz, resetPhase);
+    particle.velocity = vec4<f32>(vec3<f32>(0.0), -abs(particle.velocity.w));
+    particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
     particle.delta = vec4<f32>(0.0);
     particles[index] = particle;
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
     clear_unsupported_sheet_state(index);
-    atomicAdd(&interfaceCounters[2], 1u);
     return;
   }
   if (recycleLaminarInlet) {
@@ -5957,13 +6060,14 @@ function createLaminarInletParticles(particleCount) {
   return data;
 }
 
-function createLiveHandInletParticles(particleCount, packet = null) {
+export function createFingerFluidLiveInletParticles(particleCount, packet = null) {
   const normalized = normalizeFingerFluidLiveInletPacket(packet);
   const active = normalized.inlets.filter(inlet => inlet.active);
+  const assignedInlets = active.length ? active : normalized.inlets;
   const data = new Float32Array(particleCount * PARTICLE_FLOATS);
   for (let index = 0; index < particleCount; index += 1) {
-    const inlet = active.length ? active[index % active.length] : normalized.inlets[index % LIVE_HAND_INLET_CAPACITY];
-    const localOrdinal = Math.floor(index / Math.max(1, active.length));
+    const inlet = assignedInlets[index % assignedInlets.length];
+    const localOrdinal = Math.floor(index / assignedInlets.length);
     const apertureOrdinal = Math.floor(localOrdinal / 8);
     const axialLayer = localOrdinal % 8;
     const radialSequence = ((apertureOrdinal + 0.5) * 0.61803398875) % 1;
@@ -5988,10 +6092,10 @@ function createLiveHandInletParticles(particleCount, packet = null) {
     const phase = (sourceIndex + 0.5) / LIVE_HAND_INLET_CAPACITY;
     const offset = index * PARTICLE_FLOATS;
     data.set(position, offset);
-    data[offset + 3] = active.length ? 0 : 1;
+    data[offset + 3] = 0;
     data.set(position, offset + 4);
     data.set(inlet.axis.map(value => value * inlet.maximumSpeed * profileWeight), offset + 8);
-    data[offset + 11] = active.length ? phase : -phase;
+    data[offset + 11] = -phase;
   }
   return data;
 }
@@ -6060,7 +6164,7 @@ export function createFingerFluidTruthSceneParticles(particleCount, scene = 'mul
   const effectiveScene = resolveFingerFluidTruthScene(scene);
   if (effectiveScene === 'multi_regime_playground') return createMultiRegimePlaygroundParticles(safeParticleCount);
   if (effectiveScene === 'laminar_inlets') return createLaminarInletParticles(safeParticleCount);
-  if (effectiveScene === 'live_hand_inlets') return createLiveHandInletParticles(safeParticleCount);
+  if (effectiveScene === 'live_hand_inlets') return createFingerFluidLiveInletParticles(safeParticleCount);
   if (effectiveScene === 'waterfall_resolution_oracle') {
     return createWaterfallOracleParticles(safeParticleCount, resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset));
   }
@@ -6456,11 +6560,12 @@ export async function createWebGPUFingerFluidSolver({
   const initialLiveInletPacket = packFingerFluidLiveInletPacket(liveInletPacket);
   let currentLiveInletPacket = initialLiveInletPacket.normalized;
   let liveInletActivated = currentLiveInletPacket.activeInletCount > 0;
+  let liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(liveInletPacket);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
   const baseParticleData = safeTruthScene === 'live_hand_inlets'
-    ? createLiveHandInletParticles(safeBaseParticleCount, liveInletPacket)
+    ? createFingerFluidLiveInletParticles(safeBaseParticleCount, liveInletPacket)
     : createFingerFluidTruthSceneParticles(safeBaseParticleCount, safeTruthScene, {
       waterfallOraclePreset: safeWaterfallOraclePreset,
     });
@@ -7075,25 +7180,18 @@ export async function createWebGPUFingerFluidSolver({
     }
     const packed = packFingerFluidLiveInletPacket(packet);
     currentLiveInletPacket = packed.normalized;
+    liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(packet);
     device.queue.writeBuffer(liveInletBuffer, 0, packed.data);
     const firstActivation = !liveInletActivated && currentLiveInletPacket.activeInletCount > 0;
-    if (firstActivation) {
-      const activatedParticles = createLiveHandInletParticles(safeParticleCount, packet);
-      device.queue.writeBuffer(particleBuffer, 0, activatedParticles);
-      device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
-      device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
-      device.queue.writeBuffer(
-        materialTracerBuffer,
-        0,
-        createInitialMaterialTracers(activatedParticles, safeParticleCount, safeBaseParticleCount),
-      );
-      liveInletActivated = true;
-    }
+    if (firstActivation) liveInletActivated = true;
     return {
       contract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
+      releaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
       packetId: currentLiveInletPacket.packetId,
       sourceRoute: currentLiveInletPacket.sourceRoute,
       activeInletCount: currentLiveInletPacket.activeInletCount,
+      expectedParticleReleaseRate: liveInletReleasePlan.expectedParticleReleaseRate,
+      expectedParticlesPerReferenceFrame: liveInletReleasePlan.expectedParticlesPerReferenceFrame,
       firstActivation,
     };
   }
@@ -7789,6 +7887,8 @@ export async function createWebGPUFingerFluidSolver({
       chemistryContract: KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT,
       laminarInletContract: KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT,
       liveInletContract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
+      liveInletReleaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
+      liveInletSourceAuthorityContract: KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT,
       liveInlets: safeTruthScene === 'live_hand_inlets' ? {
         requestedMode: 'live_hand_inlets',
         effectiveMode: 'live_hand_inlets',
@@ -7797,6 +7897,12 @@ export async function createWebGPUFingerFluidSolver({
         capacity: LIVE_HAND_INLET_CAPACITY,
         activeInletCount: currentLiveInletPacket.activeInletCount,
         activated: liveInletActivated,
+        sourceLifecycle: 'dormant_pool_progressive_gpu_release',
+        initialActiveParticleCount: 0,
+        initialDormantParticleCount: safeBaseParticleCount,
+        particleVolume: liveInletReleasePlan.particleVolume,
+        expectedParticleReleaseRate: liveInletReleasePlan.expectedParticleReleaseRate,
+        expectedParticlesPerReferenceFrame: liveInletReleasePlan.expectedParticlesPerReferenceFrame,
         inlets: currentLiveInletPacket.inlets.map(inlet => ({
           id: inlet.id,
           origin: [...inlet.origin],
