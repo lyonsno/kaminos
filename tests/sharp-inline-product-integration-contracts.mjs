@@ -23,7 +23,7 @@ assert.deepEqual(
     cpuChunkItems: 16384,
     routeTailYieldMs: 3,
     spnFusionChunkItems: 524288,
-    decoderKernelChunkItems: 1048576,
+    decoderKernelChunkItems: 524288,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   },

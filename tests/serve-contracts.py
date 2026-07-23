@@ -121,7 +121,7 @@ def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_e
     assert friendly_scheduler["cpuChunkItems"] == 16384
     assert friendly_scheduler["routeTailYieldMs"] == 3
     assert friendly_scheduler["spnFusionChunkItems"] == 524288
-    assert friendly_scheduler["decoderKernelChunkItems"] == 1048576
+    assert friendly_scheduler["decoderKernelChunkItems"] == 524288
     assert friendly_scheduler["plyAssemblyMode"] == "worker"
     assert friendly_scheduler["retirePostInferenceBuffers"] is True
     assert friendly["unsupportedFields"] == []
@@ -148,7 +148,7 @@ def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
     assert fixed_scheduler["waitForSubmittedWorkDone"] is True
     assert fixed_scheduler["cpuChunkItems"] == 16384
     assert fixed_scheduler["spnFusionChunkItems"] == 524288
-    assert fixed_scheduler["decoderKernelChunkItems"] == 1048576
+    assert fixed_scheduler["decoderKernelChunkItems"] == 524288
     assert fixed_scheduler["plyAssemblyMode"] == "worker"
     assert fixed_scheduler["retirePostInferenceBuffers"] is True
 
@@ -190,7 +190,7 @@ def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile(
     assert scheduler["vitMicroduty"] is True
     assert scheduler["vitMicrodutyMode"] == "dispatch-major"
     assert scheduler["spnFusionChunkItems"] == 524288
-    assert scheduler["decoderKernelChunkItems"] == 1048576
+    assert scheduler["decoderKernelChunkItems"] == 524288
     assert scheduler["plyAssemblyMode"] == "worker"
     assert scheduler["retirePostInferenceBuffers"] is True
 
