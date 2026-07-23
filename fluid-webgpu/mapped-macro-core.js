@@ -99,11 +99,65 @@ function normalizedDirection(values, offset) {
   ];
 }
 
+function sameDirtyRegions(left, right) {
+  return left.length === right.length
+    && left.every((region, index) => {
+      const candidate = right[index];
+      return region.x === candidate.x
+        && region.y === candidate.y
+        && region.width === candidate.width
+        && region.height === candidate.height;
+    });
+}
+
+function validateSameEpochTerrain(previousTerrainFrame, terrainFrame) {
+  const unchanged = terrainFrame.currentEpoch === previousTerrainFrame.currentEpoch
+    && terrainFrame.priorEpoch === previousTerrainFrame.priorEpoch
+    && terrainFrame.route.requested === previousTerrainFrame.route.requested
+    && terrainFrame.route.effective === previousTerrainFrame.route.effective
+    && terrainFrame.source.requested === previousTerrainFrame.source.requested
+    && terrainFrame.source.effective === previousTerrainFrame.source.effective
+    && terrainFrame.producer.id === previousTerrainFrame.producer.id
+    && terrainFrame.producer.revision === previousTerrainFrame.producer.revision
+    && terrainFrame.terrainId === previousTerrainFrame.terrainId
+    && terrainFrame.supportClass === previousTerrainFrame.supportClass
+    && terrainFrame.transformId === previousTerrainFrame.transformId
+    && terrainFrame.worldMetersPerUnit === previousTerrainFrame.worldMetersPerUnit
+    && sameVector(terrainFrame.gravity, previousTerrainFrame.gravity, 0)
+    && terrainFrame.motionClass === previousTerrainFrame.motionClass
+    && terrainFrame.shockId === previousTerrainFrame.shockId
+    && terrainFrame.motionSubstepEnvelope === previousTerrainFrame.motionSubstepEnvelope
+    && terrainFrame.complete === previousTerrainFrame.complete
+    && terrainFrame.grid.width === previousTerrainFrame.grid.width
+    && terrainFrame.grid.height === previousTerrainFrame.grid.height
+    && sameVector(terrainFrame.grid.spacing, previousTerrainFrame.grid.spacing, 0)
+    && sameVector(terrainFrame.grid.origin, previousTerrainFrame.grid.origin, 0)
+    && sameDirtyRegions(terrainFrame.dirtyRegions, previousTerrainFrame.dirtyRegions)
+    && [
+      'bedHeight',
+      'jacobian',
+      'gradient',
+      'tangentU',
+      'tangentV',
+      'normal',
+      'supportVelocity',
+      'valid',
+    ].every(field => sameVector(terrainFrame.fields[field], previousTerrainFrame.fields[field], 0));
+  invariant(
+    unchanged,
+    `same-epoch terrain frame ${terrainFrame.currentEpoch} changed; terrain changes require an exact successor remap`,
+  );
+}
+
 function validateSequentialTerrain(previousTerrainFrame, terrainFrame) {
   invariant(terrainFrame.currentEpoch > previousTerrainFrame.currentEpoch, 'terrain remap requires a newer epoch');
   invariant(
     terrainFrame.priorEpoch === previousTerrainFrame.currentEpoch,
     `terrain frame prior epoch ${terrainFrame.priorEpoch} does not match current terrain epoch ${previousTerrainFrame.currentEpoch}`,
+  );
+  invariant(
+    terrainFrame.currentEpoch === previousTerrainFrame.currentEpoch + 1,
+    `terrain remap requires exact successor epoch ${previousTerrainFrame.currentEpoch + 1}, received ${terrainFrame.currentEpoch}`,
   );
   invariant(terrainFrame.route.effective === previousTerrainFrame.route.effective, 'terrain route identity changed');
   invariant(terrainFrame.source.effective === previousTerrainFrame.source.effective, 'terrain source identity changed');
@@ -811,7 +865,7 @@ export function createMappedMacroRuntime(options = {}) {
         });
       } else {
         invariant(nextTerrain.currentEpoch === terrainFrame.currentEpoch, `runtime rejected stale terrain epoch ${nextTerrain.currentEpoch}`);
-        terrainFrame = nextTerrain;
+        validateSameEpochTerrain(terrainFrame, nextTerrain);
       }
       const result = advanceMappedMacroState(state, terrainFrame, stepOptions);
       state = result.state;

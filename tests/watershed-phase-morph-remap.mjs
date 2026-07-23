@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isDeepStrictEqual } from 'node:util';
 
 import * as contracts from '@kaminos/fluid-contracts';
 import * as fluid from '@kaminos/fluid-webgpu';
@@ -207,6 +208,89 @@ function snapshotIdentity(value) {
     lineageIds: value.feedback().lineageIds,
   };
 }
+
+function createAdmissionRuntime() {
+  const terrainFrame = makeTerrain();
+  return {
+    terrainFrame,
+    runtime: fluid.createKaminosFluidRuntime({
+      terrainFrame,
+      depth: new Float64Array(terrainFrame.expectedSampleCount).fill(0.1),
+      producerRevision: 'phase-remap-admission-test',
+    }),
+  };
+}
+
+const admissionFailures = [];
+{
+  const candidate = createAdmissionRuntime();
+  const beforeAdmission = snapshotIdentity(candidate.runtime);
+  let rejected = false;
+  try {
+    candidate.runtime.updateTerrain({
+      terrainFrame: phaseFrame(candidate.terrainFrame, {
+        priorEpoch: candidate.terrainFrame.currentEpoch,
+        currentEpoch: candidate.terrainFrame.currentEpoch + 2,
+      }),
+      deltaSeconds: 1 / 60,
+      maximumBedDisplacement: 0.02,
+      maximumSupportSpeed: 1,
+    });
+  } catch (error) {
+    rejected = /exact successor|sequential terrain epoch/i.test(String(error));
+  }
+  if (!rejected) admissionFailures.push('correct-prior skipped-current terrain epoch was accepted');
+  if (!isDeepStrictEqual(snapshotIdentity(candidate.runtime), beforeAdmission)) {
+    admissionFailures.push('skipped-current terrain epoch mutated runtime state');
+  }
+}
+{
+  const candidate = createAdmissionRuntime();
+  const beforeAdmission = snapshotIdentity(candidate.runtime);
+  let rejected = false;
+  try {
+    candidate.runtime.step({
+      terrainFrame: makeTerrain({
+        terrainId: 'same-epoch-substitute-hills',
+        priorEpoch: candidate.terrainFrame.priorEpoch,
+        currentEpoch: candidate.terrainFrame.currentEpoch,
+      }),
+      deltaSeconds: 1 / 240,
+    });
+  } catch (error) {
+    rejected = /same-epoch terrain.*changed|terrain identity changed/i.test(String(error));
+  }
+  if (!rejected) admissionFailures.push('changed same-epoch terrain was accepted through step');
+  if (!isDeepStrictEqual(snapshotIdentity(candidate.runtime), beforeAdmission)) {
+    admissionFailures.push('changed same-epoch terrain mutated runtime state');
+  }
+}
+{
+  const candidate = createAdmissionRuntime();
+  const beforeAdmission = snapshotIdentity(candidate.runtime);
+  let rejected = false;
+  try {
+    candidate.runtime.step({
+      terrainFrame: makeTerrain({
+        bed: new Array(candidate.terrainFrame.expectedSampleCount).fill(0.005),
+        priorEpoch: candidate.terrainFrame.priorEpoch,
+        currentEpoch: candidate.terrainFrame.currentEpoch,
+      }),
+      deltaSeconds: 1 / 240,
+    });
+  } catch (error) {
+    rejected = /same-epoch terrain.*changed/i.test(String(error));
+  }
+  if (!rejected) admissionFailures.push('changed same-epoch bed field was accepted through step');
+  if (!isDeepStrictEqual(snapshotIdentity(candidate.runtime), beforeAdmission)) {
+    admissionFailures.push('changed same-epoch bed field mutated runtime state');
+  }
+}
+assert.deepEqual(
+  admissionFailures,
+  [],
+  'terrain admission must reject skipped epochs and same-epoch substitution before mutation',
+);
 
 function assertRejectedWithoutMutation(makeRejectedFrame, options, pattern, label) {
   const beforeFailure = snapshotIdentity(runtime);
