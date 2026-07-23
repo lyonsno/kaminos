@@ -1,0 +1,534 @@
+{
+  "schema": "kaminos.kiln.promoted-fire-witness.v1",
+  "ok": true,
+  "requestedRoute": "http://127.0.0.1:18400/",
+  "effectiveRoute": "http://127.0.0.1:18400/",
+  "requested": {
+    "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+    "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17",
+    "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+    "engineSourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+    "engineSha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb",
+    "splatMode": "kernel_moment_covariance"
+  },
+  "settleMs": 7000,
+  "frameWaitMs": 60000,
+  "phase": "complete",
+  "failure": null,
+  "primaryOutputWritten": true,
+  "screenshotPath": "artifacts/kiln-promoted-fire-preview/live/promoted-fire.png",
+  "previewState": {
+    "status": "recording",
+    "engineIdentity": {
+      "schema": "kaminos.kiln.promoted-fire-engine.v1",
+      "sourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+      "sourcePath": "volume-core.js",
+      "consumerPath": "kiln-promoted-fire-volume-core.js",
+      "sha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb",
+      "effectiveSha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb"
+    },
+    "loaded": {
+      "status": "verified",
+      "mount": {
+        "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+        "policy": {
+          "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17"
+        },
+        "basin": {
+          "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+          "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+          "stableRef": "big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95"
+        },
+        "representation": {
+          "composition": "smoke-raymarch-under-splats-v0",
+          "rendererIdentity": "exact-basin-selective-head-live-v0",
+          "backend": "WebGPU:apple",
+          "splatMode": "kernel_moment_covariance",
+          "splatRadius": 0.98,
+          "splatSharpness": 12,
+          "sourceSidecar": "baked"
+        }
+      },
+      "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc",
+      "resources": {
+        "mountUrl": "http://127.0.0.1:18400/artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/consumers/wake-kiln-preview/mount.json",
+        "packageUrl": "http://127.0.0.1:18400/artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json",
+        "channelUrl": "http://127.0.0.1:18400/artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/current.json",
+        "settingsPresetUrl": "http://127.0.0.1:18400/artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/consumers/wake-kiln-preview/settings/presets/vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c.json"
+      }
+    },
+    "inferenceRan": false,
+    "routeRef": null,
+    "engineState": {
+      "active": true,
+      "frameCount": 151,
+      "simStepCount": 151,
+      "boundarySplatMode": "kernel_moment_covariance",
+      "boundarySplatRendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+      "boundarySplatFallbackReason": null,
+      "raymarchSmokePresentationModeEffective": "on",
+      "timing": {
+        "timingEvidenceSource": "raf-and-queue-proxy",
+        "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+        "rafFps": 14.771048744460897,
+        "frameDeltaMs": 49.5,
+        "frameP95Ms": 67.69999999999982,
+        "cpuFrameMs": 0.2000000011175871,
+        "cpuFrameP95Ms": 0.30000000074505806,
+        "queueDoneMs": 214.69999999925494,
+        "queueDoneP95Ms": 233.5,
+        "queueProbePending": false,
+        "queueSamples": 12,
+        "queueTimingAvailable": true
+      },
+      "gpuProfile": {
+        "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+        "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "timestampFeature": "timestamp-query",
+        "timestampStatus": "available",
+        "reason": "not-sampled-yet",
+        "timeUnit": "ms",
+        "candidateCopyBytes": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "stages": {
+          "simulation": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "sidecar": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "compaction": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "candidateCopy": {
+            "status": "not-sampled",
+            "ms": null,
+            "disposition": "removed-full-capacity-copy",
+            "candidateCopyBytes": 0
+          },
+          "indirectSetup": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "splatRaster": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "matchedRaymarchRaster": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "total": {
+            "status": "not-sampled",
+            "ms": null
+          }
+        }
+      },
+      "error": null
+    },
+    "canvasBounds": {
+      "left": 380,
+      "top": 0,
+      "right": 1440,
+      "bottom": 913
+    },
+    "viewport": {
+      "width": 1440,
+      "height": 913
+    },
+    "pixelWitness": {
+      "width": 2120,
+      "height": 1826,
+      "changedPixels": 1814474,
+      "litPixels": 1726101
+    }
+  },
+  "completionState": {
+    "status": "completed",
+    "actorEpisode": {
+      "schema": "kaminos.kiln.promoted-fire-actor-preview.v1",
+      "actorEpisodeSchema": "kaminos.fire-actor-episode.v1",
+      "status": "completed",
+      "episodeIdentity": "fireepisode-5923df189a39de37dc43916c58e28ae69f704f6455f35bfc7ee99811aa6c1289",
+      "episodeId": "wake-kiln-promoted-preview-bdad14fc-6e9a-4080-8a7c-797b09e3ba39",
+      "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+      "actorId": "wake-kiln-flamebowl-hero",
+      "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+      "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17",
+      "activation": {
+        "mode": "operator-preview",
+        "authority": "operator-selected-preview",
+        "inferenceRequired": false,
+        "routeRef": null
+      },
+      "requestedPresentation": {
+        "composition": "smoke-raymarch-under-splats-v0",
+        "rendererIdentity": "exact-basin-selective-head-live-v0",
+        "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17"
+      },
+      "rendererEpisodeIdentity": "foreground-kiln-fire-episode-hooks-v0",
+      "effectivePresentation": {
+        "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+        "episodeId": "wake-kiln-promoted-preview-bdad14fc-6e9a-4080-8a7c-797b09e3ba39",
+        "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17",
+        "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+        "composition": "smoke-raymarch-under-splats-v0",
+        "rendererIdentity": "exact-basin-selective-head-live-v0",
+        "fallbackReason": null,
+        "inferenceRan": false,
+        "routeRef": null
+      }
+    },
+    "rendererEpisode": {
+      "identity": "foreground-kiln-fire-episode-hooks-v0",
+      "evidenceSource": "foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0",
+      "authority": "renderer-simulator-hooks-for-wake-foreground-heartbeat",
+      "disclaimers": [
+        "not-gpu-exclusive-or-present-latency",
+        "not-displayed-frame-latency",
+        "not-sharp-backend-heartbeat"
+      ],
+      "firingId": "wake-kiln-promoted-preview-bdad14fc-6e9a-4080-8a7c-797b09e3ba39",
+      "generation": 1,
+      "phase": "completed",
+      "status": "completed",
+      "startedAtMs": 1371.6000000014901,
+      "updatedAtMs": 9160.900000000373,
+      "endedAtMs": 9160.900000000373,
+      "durationMs": 7789.299999998882,
+      "routeIdentity": {
+        "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+        "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+        "inferenceRequired": false,
+        "routeRef": null
+      },
+      "rawRafGapSamplesMs": [
+        0,
+        24.700000000000045,
+        8.799999999999955,
+        7.600000000000136,
+        59,
+        33.200000000000045,
+        25.09999999999991,
+        32.799999999999955,
+        33.299999999999955,
+        33.90000000000009,
+        30.09999999999991,
+        35.700000000000045,
+        25.100000000000136,
+        33.5,
+        33.59999999999991,
+        24.90000000000009,
+        33.19999999999982,
+        33.90000000000009,
+        30.5,
+        34.700000000000045,
+        32.200000000000045,
+        33.19999999999982,
+        38,
+        35.40000000000009,
+        41.90000000000009,
+        36.59999999999991,
+        31.5,
+        38.69999999999982,
+        39.20000000000027,
+        41.5,
+        39.69999999999982,
+        30.5,
+        42.30000000000018,
+        57,
+        43,
+        32.90000000000009,
+        42.29999999999973,
+        46.30000000000018,
+        41.09999999999991,
+        36.5,
+        67.69999999999982,
+        36.5,
+        46.30000000000018,
+        44.09999999999991,
+        40,
+        43.70000000000027,
+        43.59999999999991,
+        41.79999999999973,
+        31.300000000000182,
+        65.30000000000018,
+        34.899999999999636,
+        56.5,
+        29.40000000000009,
+        54.5,
+        34.30000000000018,
+        63.40000000000009,
+        38.29999999999973,
+        49.80000000000018,
+        28.90000000000009,
+        65.39999999999964,
+        37.600000000000364,
+        59.69999999999982,
+        44.09999999999991,
+        45.5,
+        45.5,
+        46,
+        51.09999999999991,
+        44.70000000000027,
+        44.79999999999973,
+        52.100000000000364,
+        50.69999999999982,
+        44.100000000000364,
+        50.899999999999636,
+        48.899999999999636,
+        45.600000000000364,
+        51.19999999999982,
+        75.80000000000018,
+        45,
+        58.100000000000364,
+        49.399999999999636,
+        51,
+        50,
+        75.89999999999964,
+        54.400000000000546,
+        48.30000000000018,
+        49.099999999999454,
+        53.80000000000018,
+        51.100000000000364,
+        48,
+        58.19999999999982,
+        51.599999999999454,
+        50.600000000000364,
+        48.80000000000018,
+        55.399999999999636,
+        52.69999999999982,
+        51.400000000000546,
+        51.19999999999982,
+        48.899999999999636,
+        78.5,
+        50,
+        53.900000000000546,
+        72.19999999999982,
+        57.100000000000364,
+        47.399999999999636,
+        52,
+        55.600000000000364,
+        48,
+        56.29999999999927,
+        45.30000000000018,
+        52.900000000000546,
+        49.19999999999982,
+        55.30000000000018,
+        53.399999999999636,
+        51.100000000000364,
+        49.69999999999982,
+        50.599999999999454,
+        52.600000000000364,
+        51.399999999999636,
+        51,
+        46.100000000000364,
+        48.69999999999982,
+        53.30000000000018,
+        49.19999999999982,
+        51.5,
+        50.30000000000018,
+        49.399999999999636,
+        48.70000000000073,
+        43.19999999999982,
+        50,
+        49.80000000000018,
+        75.09999999999945,
+        50.100000000000364,
+        49.899999999999636,
+        49.30000000000018,
+        49.69999999999982,
+        42.600000000000364,
+        53.5,
+        42.30000000000018,
+        50,
+        50,
+        50.899999999999636,
+        46,
+        48.69999999999982,
+        50.100000000000364,
+        50.5,
+        45.099999999999454,
+        72,
+        45.600000000000364,
+        48.79999999999927,
+        63.400000000001455,
+        49.5,
+        49.899999999999636,
+        49.100000000000364,
+        71.09999999999854,
+        50.80000000000109,
+        38.29999999999927,
+        52,
+        51.20000000000073,
+        47.100000000000364,
+        41,
+        74.5,
+        48.399999999999636,
+        43.100000000000364,
+        49.79999999999927,
+        58.29999999999927,
+        50.400000000001455
+      ],
+      "rafGapHistogramMs": [
+        {
+          "label": "0-16ms",
+          "minMs": 0,
+          "maxMs": 16,
+          "count": 3
+        },
+        {
+          "label": "16-33ms",
+          "minMs": 16,
+          "maxMs": 33,
+          "count": 14
+        },
+        {
+          "label": "33-50ms",
+          "minMs": 33,
+          "maxMs": 50,
+          "count": 83
+        },
+        {
+          "label": "50-100ms",
+          "minMs": 50,
+          "maxMs": 100,
+          "count": 66
+        },
+        {
+          "label": "100-250ms",
+          "minMs": 100,
+          "maxMs": 250,
+          "count": 0
+        },
+        {
+          "label": "250ms+",
+          "minMs": 250,
+          "maxMs": null,
+          "count": 0
+        }
+      ],
+      "sampleCount": 166,
+      "maxRafGapMs": 78.5,
+      "p95RafGapMs": 67.69999999999982,
+      "lastRafGapMs": 50.400000000001455,
+      "longGapThresholdMs": 50,
+      "longGapCount": 66,
+      "longGapStreakCurrent": 2,
+      "longGapStreakMax": 5,
+      "frameStartCount": 0,
+      "frameEndCount": 166,
+      "frameAdvanceCount": 166,
+      "simStepStartCount": 0,
+      "simStepEndCount": 166,
+      "simStepAdvanceCount": 166,
+      "cpuFrameMs": 0.2999999988824129,
+      "queueCompletionProxy": {
+        "evidenceSource": "webgpu-queue-onSubmittedWorkDone-proxy",
+        "disclaimer": "queue-completion-proxy-not-present-latency",
+        "prototypeSampleBaseline": 0,
+        "available": true,
+        "pending": false,
+        "samples": 13,
+        "lastDoneMs": 189.59999999962747,
+        "p95DoneMs": 233.5,
+        "error": null
+      },
+      "mohelIndicator": {
+        "uncappedRawGapSamples": true,
+        "sampleCount": 166,
+        "largeSampleSet": false,
+        "note": "Raw firing-window gap samples are intentionally uncapped; use this diagnostic if the window is too broad."
+      }
+    },
+    "runtimeReceipt": {
+      "schema": "kaminos.kiln.promoted-fire-runtime-receipt.v1",
+      "engine": {
+        "schema": "kaminos.kiln.promoted-fire-engine.v1",
+        "sourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+        "sourcePath": "volume-core.js",
+        "consumerPath": "kiln-promoted-fire-volume-core.js",
+        "sha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb",
+        "effectiveSha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb"
+      },
+      "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+      "policyId": "firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17",
+      "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+      "requestedSplatMode": "kernel_moment_covariance",
+      "effectiveSplatMode": "kernel_moment_covariance",
+      "effectiveSplatRendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+      "smokePresentation": "on",
+      "fallbackReason": null,
+      "timing": {
+        "timingEvidenceSource": "raf-and-queue-proxy",
+        "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+        "rafFps": 13.88888888888889,
+        "frameDeltaMs": 50.400000000001455,
+        "frameP95Ms": 72,
+        "cpuFrameMs": 0.2999999988824129,
+        "cpuFrameP95Ms": 0.30000000074505806,
+        "queueDoneMs": 189.59999999962747,
+        "queueDoneP95Ms": 233.5,
+        "queueProbePending": false,
+        "queueSamples": 13,
+        "queueTimingAvailable": true
+      },
+      "gpuProfile": {
+        "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
+        "rendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "timestampFeature": "timestamp-query",
+        "timestampStatus": "available",
+        "reason": "not-sampled-yet",
+        "timeUnit": "ms",
+        "candidateCopyBytes": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "stages": {
+          "simulation": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "sidecar": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "compaction": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "candidateCopy": {
+            "status": "not-sampled",
+            "ms": null,
+            "disposition": "removed-full-capacity-copy",
+            "candidateCopyBytes": 0
+          },
+          "indirectSetup": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "splatRaster": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "matchedRaymarchRaster": {
+            "status": "not-sampled",
+            "ms": null
+          },
+          "total": {
+            "status": "not-sampled",
+            "ms": null
+          }
+        }
+      },
+      "frameCount": 166,
+      "simStepCount": 166,
+      "inferenceRan": false,
+      "routeRef": null
+    },
+    "completedAt": "2026-07-23T01:44:59.497Z"
+  }
+}

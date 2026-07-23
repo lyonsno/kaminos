@@ -600,6 +600,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+#kaminos-promoted-fire-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
+#kaminos-promoted-fire-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -1316,8 +1318,24 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="off">raymarch</option>
           <option value="analytic">analytic splats</option>
           <option value="learned">learned attributes</option>
+          <option value="kernel_moment_covariance">flow kernel covariance</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Kernel strength</span>
+        <input type="range" id="volume-flow-kernel-strength" data-volume-settings-role="renderer" min="0" max="1" step="0.02" value="0">
+        <span class="slider-val" id="volume-flow-kernel-strength-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Feature scale</span>
+        <input type="range" id="volume-flow-kernel-radius" data-volume-settings-role="renderer" min="0.0025" max="0.12" step="0.0025" value="0.03">
+        <span class="slider-val" id="volume-flow-kernel-radius-val">0.0300</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Flow coherence</span>
+        <input type="range" id="volume-flow-kernel-coherence" data-volume-settings-role="renderer" min="0" max="2" step="0.05" value="1">
+        <span class="slider-val" id="volume-flow-kernel-coherence-val">1.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Composition</span>
@@ -2591,10 +2609,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="Paste a different image source">
       <div class="sharp-breathing-room-source-preview empty" id="sharp-breathing-room-source-preview">No image loaded yet.</div>
       <div class="kiln-route-bench-actions sharp-breathing-room-actions">
+        <button type="button" class="btn" id="promoted-kiln-fire-preview-button" onclick="beginPromotedKilnFirePreview()">Preview fire</button>
+        <button type="button" class="btn" id="promoted-kiln-fire-stop-button" onclick="endPromotedKilnFirePreview()" disabled>Stop preview</button>
         <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
         <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
         <button type="button" class="btn comparison" id="sharp-breathing-room-comparison-button" onclick="runSharpBreathingRoomComparison()">Run comparison</button>
       </div>
+      <div class="sharp-breathing-room-status" id="promoted-kiln-fire-status">Promoted fire idle.</div>
       <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
       <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
       <div class="sharp-breathing-room-comparison-summary" id="sharp-breathing-room-comparison-summary" hidden></div>
@@ -2931,6 +2952,14 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype as createPromotedFireVolumePrototype } from './kiln-promoted-fire-volume-core.js';
+import { createFireEpisodeHooks } from './fire-episode-hooks.mjs';
+import {
+  beginKilnPromotedFireActorPreview,
+  completeKilnPromotedFireActorPreview,
+  createKilnPromotedFireActorApplication,
+  loadKilnPromotedFireActor,
+} from './kiln-promoted-fire-actor-consumer.mjs';
 import {
   createForegroundKilnHeartbeatEpisode,
   firePresentationMismatchReasons,
@@ -3057,6 +3086,13 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let kaminosVolumeRouteInitPromise = null;
+let promotedKilnFireEngine = null;
+let promotedKilnFireControls = null;
+let promotedKilnFireEpisodeHooks = null;
+let promotedKilnFireRaf = null;
+let promotedKilnFireLastRafMs = null;
+let promotedKilnFireState = null;
+let promotedKilnFireWorkspaceWasHidden = true;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -12273,7 +12309,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
-const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
+const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned', 'kernel_moment_covariance']);
 const BOUNDARY_SPLAT_COMPOSITION_VALUES = new Set(['splat-only', 'hybrid-smoke']);
 const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
 const BOUNDARY_SPLAT_FIELD_LAYOUT_VALUES = new Set(['proof', 'field']);
@@ -12626,6 +12662,8 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
     ? 'learned attributes'
     : boundarySplatMode === 'analytic'
       ? 'analytic splats'
+      : boundarySplatMode === 'kernel_moment_covariance'
+        ? 'flow kernel covariance'
       : 'raymarch';
   const boundarySplatComposition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
   const boundarySplatCompositionLabel = document.getElementById('volume-boundary-splat-composition-val');
@@ -14640,6 +14678,313 @@ async function ensureKaminosVolumeRouteInitialized() {
   await kaminosVolumeRouteInitPromise;
   return volumePrototype;
 }
+
+const PROMOTED_KILN_FIRE_MOUNT_URL = './artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/consumers/wake-kiln-preview/mount.json';
+const PROMOTED_KILN_FIRE_ENGINE_SHA256 = 'fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb';
+
+function setPromotedKilnFireStatus(message, status = 'idle') {
+  const output = document.getElementById('promoted-kiln-fire-status');
+  if (output) {
+    output.textContent = message;
+    output.dataset.status = status;
+  }
+  const start = document.getElementById('promoted-kiln-fire-preview-button');
+  const stop = document.getElementById('promoted-kiln-fire-stop-button');
+  if (start) start.disabled = status === 'loading' || status === 'recording';
+  if (stop) stop.disabled = status !== 'recording';
+}
+
+async function verifyPromotedKilnFireEngine() {
+  const [manifestResponse, engineResponse] = await Promise.all([
+    fetch('./kiln-promoted-fire-engine.json', { cache: 'no-store' }),
+    fetch('./kiln-promoted-fire-volume-core.js', { cache: 'no-store' }),
+  ]);
+  if (!manifestResponse.ok || !engineResponse.ok) {
+    throw new Error(`Promoted fire engine fetch failed: manifest ${manifestResponse.status}, source ${engineResponse.status}`);
+  }
+  const [manifest, sourceBytes] = await Promise.all([
+    manifestResponse.json(),
+    engineResponse.arrayBuffer(),
+  ]);
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', sourceBytes)), byte => (
+    byte.toString(16).padStart(2, '0')
+  )).join('');
+  if (manifest.schema !== 'kaminos.kiln.promoted-fire-engine.v1'
+    || manifest.sourceCommit !== 'dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10'
+    || manifest.sha256 !== PROMOTED_KILN_FIRE_ENGINE_SHA256
+    || digest !== manifest.sha256) {
+    throw new Error('Promoted fire engine identity mismatch');
+  }
+  return { ...manifest, effectiveSha256: digest };
+}
+
+function applyPromotedKilnFireApplication(application, loaded) {
+  const missingControls = [];
+  for (const control of [...application.domControls, ...application.rendererControls]) {
+    const element = document.getElementById(control.id);
+    if (!element) {
+      missingControls.push(control.id);
+      continue;
+    }
+    if (element.type === 'checkbox') element.checked = Boolean(control.value);
+    else element.value = String(control.value);
+  }
+  if (missingControls.length) {
+    throw new Error(`Promoted fire controls are not mounted: ${missingControls.join(', ')}`);
+  }
+  updateVolumeControlLabels();
+  const rendererControls = Object.fromEntries(application.rendererControls.map(control => [control.id, Number(control.value)]));
+  const controls = {
+    ...readVolumeControls(),
+    resolution: application.runtimeControls['volume-resolution'],
+    raySteps: application.runtimeControls['volume-steps'],
+    adaptiveRays: application.runtimeControls['volume-adaptive-rays'],
+    renderScale: application.runtimeControls['volume-render-scale'],
+    boundarySplatMode: loaded.mount.representation.splatMode,
+    boundarySplatComposition: 'hybrid-smoke',
+    flowKernelStrength: rendererControls['volume-flow-kernel-strength'],
+    flowKernelRadius: rendererControls['volume-flow-kernel-radius'],
+    flowKernelCoherence: rendererControls['volume-flow-kernel-coherence'],
+  };
+  document.getElementById('volume-flow-kernel-strength-val').textContent = controls.flowKernelStrength.toFixed(2);
+  document.getElementById('volume-flow-kernel-radius-val').textContent = controls.flowKernelRadius.toFixed(4);
+  document.getElementById('volume-flow-kernel-coherence-val').textContent = controls.flowKernelCoherence.toFixed(2);
+  return controls;
+}
+
+function promotedKilnFireFallbackReason(engineState, mount) {
+  if (engineState.error) return engineState.error;
+  if (engineState.boundarySplatFallbackReason) return engineState.boundarySplatFallbackReason;
+  if (engineState.boundarySplatPresentationModeFallbackReason) return engineState.boundarySplatPresentationModeFallbackReason;
+  if (engineState.raymarchSmokePresentationModeFallbackReason) return engineState.raymarchSmokePresentationModeFallbackReason;
+  if (engineState.boundarySplatMode !== mount.representation.splatMode) {
+    return `splat-mode-mismatch:${engineState.boundarySplatMode}`;
+  }
+  if (engineState.raymarchSmokePresentationModeEffective !== 'on') {
+    return `smoke-presentation-mismatch:${engineState.raymarchSmokePresentationModeEffective}`;
+  }
+  return null;
+}
+
+function samplePromotedKilnFireEpisode(now) {
+  if (!promotedKilnFireEpisodeHooks) return;
+  const engineState = promotedKilnFireEngine?.debugState?.() || {};
+  const rafGapMs = promotedKilnFireLastRafMs === null ? null : now - promotedKilnFireLastRafMs;
+  promotedKilnFireLastRafMs = now;
+  promotedKilnFireEpisodeHooks.recordFrame({ rafGapMs, cpuFrameMs: engineState.timing?.cpuFrameMs });
+  promotedKilnFireEpisodeHooks.recordQueueProxy({
+    completionSequence: engineState.timing?.queueSamples || 0,
+    available: engineState.timing?.queueTimingAvailable === true,
+    pending: engineState.timing?.queueProbePending === true,
+    lastDoneMs: engineState.timing?.queueDoneMs,
+  });
+  promotedKilnFireRaf = requestAnimationFrame(samplePromotedKilnFireEpisode);
+}
+
+function framePromotedKilnFireCamera() {
+  camera.position.set(1.65, 0.42, 3.15);
+  controls.target.set(0, 0.08, 0);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+async function waitForPromotedKilnFireHostScene() {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    if (camera?.position && camera?.quaternion && camera?.projectionMatrix && controls) return;
+    await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
+  }
+  throw new Error('Promoted fire host scene did not initialize its camera and controls');
+}
+
+async function beginPromotedKilnFirePreview() {
+  if (promotedKilnFireState?.status === 'recording') return promotedKilnFireState;
+  setPromotedKilnFireStatus('Loading promoted Flamebowl revision...', 'loading');
+  try {
+    await waitForPromotedKilnFireHostScene();
+    const [engineIdentity, loaded] = await Promise.all([
+      verifyPromotedKilnFireEngine(),
+      loadKilnPromotedFireActor({ mountUrl: PROMOTED_KILN_FIRE_MOUNT_URL }),
+    ]);
+    const application = createKilnPromotedFireActorApplication(loaded);
+    promotedKilnFireControls = applyPromotedKilnFireApplication(application, loaded);
+    const crucibleWorkspace = document.getElementById('crucible-viewport-workspace');
+    promotedKilnFireWorkspaceWasHidden = crucibleWorkspace?.hidden !== false;
+    if (crucibleWorkspace) {
+      crucibleWorkspace.hidden = true;
+      syncCrucibleViewportChrome(crucibleWorkspace);
+    }
+    if (volumePrototype?.debugState?.().active === true) await volumePrototype.setActive(false);
+    volumeBridge?.forceHidden?.('promoted-fire-preview');
+    if (!promotedKilnFireEngine) {
+      promotedKilnFireEngine = createPromotedFireVolumePrototype({
+        THREE,
+        viewport: document.getElementById('viewport'),
+        camera,
+        controls,
+        getControls: () => ({ ...promotedKilnFireControls }),
+        onStatus: status => {
+          if (promotedKilnFireState) promotedKilnFireState.lastRendererStatus = structuredClone(status);
+        },
+      });
+      promotedKilnFireEngine.canvasElement().id = 'kaminos-promoted-fire-canvas';
+    }
+    promotedKilnFireEngine.setControls(promotedKilnFireControls);
+    promotedKilnFireEngine.setRaymarchSmokePresentationMode(application.presentation.raymarchSmoke);
+    await promotedKilnFireEngine.setActive(true);
+    framePromotedKilnFireCamera();
+
+    const episodeId = `wake-kiln-promoted-preview-${crypto.randomUUID()}`;
+    promotedKilnFireEpisodeHooks = createFireEpisodeHooks({
+      readCounters: () => {
+        const state = promotedKilnFireEngine.debugState();
+        return { frameCount: state.frameCount, simStepCount: state.simStepCount };
+      },
+      readQueueProxy: () => {
+        const timing = promotedKilnFireEngine.debugState().timing || {};
+        return { completionSequence: timing.queueSamples || 0 };
+      },
+      readRouteIdentity: () => ({
+        mountId: loaded.mount.mountId,
+        basinRevision: loaded.mount.basin.revision,
+        inferenceRequired: false,
+        routeRef: null,
+      }),
+    });
+    const rendererEpisode = promotedKilnFireEpisodeHooks.begin({ firingId: episodeId });
+    const actorEpisode = await beginKilnPromotedFireActorPreview({ loaded, episodeId, rendererEpisode });
+    promotedKilnFireLastRafMs = null;
+    promotedKilnFireRaf = requestAnimationFrame(samplePromotedKilnFireEpisode);
+    promotedKilnFireState = {
+      schema: 'kaminos.kiln.promoted-fire-preview-runtime.v1',
+      status: 'recording',
+      engineIdentity,
+      loaded,
+      application,
+      actorEpisode,
+      rendererEpisode,
+      inferenceRan: false,
+      routeRef: null,
+      crucibleWorkspaceWasHidden: promotedKilnFireWorkspaceWasHidden,
+      startedAt: new Date().toISOString(),
+      lastRendererStatus: null,
+    };
+    window.__kaminosPromotedFireActorPreview = promotedKilnFireState;
+    setPromotedKilnFireStatus(`Previewing ${loaded.mount.basin.handle}@${loaded.mount.basin.revision.slice(0, 18)}...`, 'recording');
+    return promotedKilnFireState;
+  } catch (error) {
+    await promotedKilnFireEngine?.setActive?.(false);
+    const crucibleWorkspace = document.getElementById('crucible-viewport-workspace');
+    if (crucibleWorkspace && promotedKilnFireWorkspaceWasHidden === false) {
+      crucibleWorkspace.hidden = false;
+      syncCrucibleViewportChrome(crucibleWorkspace);
+    }
+    promotedKilnFireState = {
+      schema: 'kaminos.kiln.promoted-fire-preview-runtime.v1',
+      status: 'failed',
+      failurePhase: 'begin',
+      error: error.message || String(error),
+    };
+    window.__kaminosPromotedFireActorPreview = promotedKilnFireState;
+    setPromotedKilnFireStatus(`Promoted fire failed: ${promotedKilnFireState.error}`, 'failed');
+    throw error;
+  }
+}
+
+async function endPromotedKilnFirePreview(status = 'completed') {
+  if (promotedKilnFireState?.status !== 'recording') return promotedKilnFireState;
+  if (promotedKilnFireRaf !== null) cancelAnimationFrame(promotedKilnFireRaf);
+  promotedKilnFireRaf = null;
+  const engineState = promotedKilnFireEngine.debugState();
+  const rendererEpisode = promotedKilnFireEpisodeHooks.end({
+    firingId: promotedKilnFireState.actorEpisode.episodeId,
+    status,
+  });
+  const fallbackReason = promotedKilnFireFallbackReason(engineState, promotedKilnFireState.loaded.mount);
+  try {
+    const actorEpisode = await completeKilnPromotedFireActorPreview({
+      loaded: promotedKilnFireState.loaded,
+      preview: promotedKilnFireState.actorEpisode,
+      rendererEpisode,
+      effectivePresentation: {
+        mountId: promotedKilnFireState.loaded.mount.mountId,
+        episodeId: promotedKilnFireState.actorEpisode.episodeId,
+        policyId: promotedKilnFireState.loaded.mount.policy.policyId,
+        basinRevision: promotedKilnFireState.loaded.mount.basin.revision,
+        composition: promotedKilnFireState.loaded.mount.representation.composition,
+        rendererIdentity: promotedKilnFireState.loaded.mount.representation.rendererIdentity,
+        fallbackReason,
+        inferenceRan: false,
+        routeRef: null,
+      },
+    });
+    await promotedKilnFireEngine.setActive(false);
+    const crucibleWorkspace = document.getElementById('crucible-viewport-workspace');
+    if (crucibleWorkspace && promotedKilnFireWorkspaceWasHidden === false) {
+      crucibleWorkspace.hidden = false;
+      syncCrucibleViewportChrome(crucibleWorkspace);
+    }
+    promotedKilnFireState = {
+      ...promotedKilnFireState,
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      actorEpisode,
+      rendererEpisode,
+      runtimeReceipt: {
+        schema: 'kaminos.kiln.promoted-fire-runtime-receipt.v1',
+        engine: promotedKilnFireState.engineIdentity,
+        mountId: promotedKilnFireState.loaded.mount.mountId,
+        policyId: promotedKilnFireState.loaded.mount.policy.policyId,
+        basinRevision: promotedKilnFireState.loaded.mount.basin.revision,
+        requestedSplatMode: promotedKilnFireState.loaded.mount.representation.splatMode,
+        effectiveSplatMode: engineState.boundarySplatMode,
+        effectiveSplatRendererIdentity: engineState.boundarySplatRendererIdentity,
+        smokePresentation: engineState.raymarchSmokePresentationModeEffective,
+        fallbackReason,
+        timing: structuredClone(engineState.timing),
+        gpuProfile: structuredClone(engineState.boundarySplatGpuProfile),
+        frameCount: engineState.frameCount,
+        simStepCount: engineState.simStepCount,
+        inferenceRan: false,
+        routeRef: null,
+      },
+    };
+    window.__kaminosPromotedFireActorPreview = promotedKilnFireState;
+    setPromotedKilnFireStatus('Promoted fire preview completed.', 'completed');
+    return promotedKilnFireState;
+  } catch (error) {
+    await promotedKilnFireEngine.setActive(false);
+    const crucibleWorkspace = document.getElementById('crucible-viewport-workspace');
+    if (crucibleWorkspace && promotedKilnFireWorkspaceWasHidden === false) {
+      crucibleWorkspace.hidden = false;
+      syncCrucibleViewportChrome(crucibleWorkspace);
+    }
+    promotedKilnFireState = {
+      ...promotedKilnFireState,
+      status: 'failed',
+      failurePhase: 'complete',
+      error: error.message || String(error),
+      rendererEpisode,
+      runtimeReceipt: {
+        engine: promotedKilnFireState.engineIdentity,
+        fallbackReason,
+        timing: structuredClone(engineState.timing),
+        gpuProfile: structuredClone(engineState.boundarySplatGpuProfile),
+      },
+    };
+    window.__kaminosPromotedFireActorPreview = promotedKilnFireState;
+    setPromotedKilnFireStatus(`Promoted fire evidence failed: ${promotedKilnFireState.error}`, 'failed');
+    throw error;
+  }
+}
+
+window.beginPromotedKilnFirePreview = beginPromotedKilnFirePreview;
+window.endPromotedKilnFirePreview = endPromotedKilnFirePreview;
+window.kaminosPromotedFireActorPreview = {
+  begin: beginPromotedKilnFirePreview,
+  end: endPromotedKilnFirePreview,
+  state: () => promotedKilnFireState,
+  engineState: () => promotedKilnFireEngine?.debugState?.() || null,
+};
 
 const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
   identity: 'kaminos.kiln-contention-fire-budget.v0',
