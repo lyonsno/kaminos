@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import vm from 'node:vm';
 
 import { createSchedulerVerificationReceipt } from '../lib/scheduler-verification-receipt.mjs';
+import {
+  decoderKernelTileEventsFromSchedulerEvents,
+  validateDecoderKernelTileEvidence,
+} from '../lib/decoder-kernel-tiling-evidence.mjs';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
@@ -179,11 +183,6 @@ const spnFusionValidationSource = witness.match(
 );
 assert.ok(spnFusionValidationSource, 'witness must expose a testable SPN fusion tile authority gate');
 const validateSpnFusionTileEvidence = vm.runInNewContext(`(${spnFusionValidationSource[0]})`);
-const decoderKernelValidationSource = witness.match(
-  /function validateDecoderKernelTileEvidence\([\s\S]*?\n}/,
-);
-assert.ok(decoderKernelValidationSource, 'witness must expose a testable decoder kernel tiling authority gate');
-const validateDecoderKernelTileEvidence = vm.runInNewContext(`(${decoderKernelValidationSource[0]})`);
 const spnFusionTileEvents = [
   { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', role: 'spn-fusion-output-chunk', block: 'upsample0.layer-1.output-chunk-0', parentBlock: 'upsample0.layer-1', outputChunkIndex: 0, outputChunkCount: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
   { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', chunkRole: 'spn-fusion-output-chunk', block: 'upsample0.layer-1', parentBlock: 'upsample0', outputChunkIndex: 1, outputChunkCount: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
@@ -281,7 +280,8 @@ const validDecoderKernelEvidence = {
 assert.deepEqual(
   JSON.parse(JSON.stringify(validateDecoderKernelTileEvidence({
     expectedChunkItems: 524288,
-    fullRoute: validDecoderKernelEvidence,
+    boundaryAssertions: validDecoderKernelEvidence.schedulerBoundaryAssertions,
+    tileEvents: validDecoderKernelEvidence.decoderKernelTileEvents,
   }))),
   [],
   'one exact multi-tile decoder kernel and its verified assertion must admit the Friendly witness',
@@ -297,7 +297,8 @@ for (const [mutate, expectedFailure] of [
   mutate(evidence);
   assert.ok(validateDecoderKernelTileEvidence({
     expectedChunkItems: 524288,
-    fullRoute: evidence,
+    boundaryAssertions: evidence.schedulerBoundaryAssertions,
+    tileEvents: evidence.decoderKernelTileEvents,
   }).includes(expectedFailure), expectedFailure);
 }
 
@@ -576,7 +577,9 @@ const projectorSource = witness.match(
   /function projectFriendlyFiringEvidence\([\s\S]*?\n}\n(?=\ntry \{)/,
 );
 assert.ok(projectorSource, 'witness must expose a testable Node-side firing evidence projector');
-const projectFriendlyFiringEvidence = vm.runInNewContext(`(${projectorSource[0]})`);
+const projectFriendlyFiringEvidence = vm.runInNewContext(`(${projectorSource[0]})`, {
+  decoderKernelTileEventsFromSchedulerEvents,
+});
 const presentationValidatorSource = witness.match(
   /function validateRequestedFirePresentation\([\s\S]*?\n}\n(?=\nfunction correlateForegroundGapsWithHostEvents)/,
 );

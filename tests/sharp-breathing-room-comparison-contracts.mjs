@@ -378,6 +378,51 @@ assert.equal(missingDecoderProof.status, 'invalid');
 assert.ok(missingDecoderProof.downgrades.includes('cooperative-decoder-kernel-proof-missing'));
 assert.equal(missingDecoderProof.falseClosureChecks.decoderKernelProofMissing, true);
 
+for (const [name, mutateReceipt, expectedFailure] of [
+  ['missing events', receipt => {
+    receipt.eventTrace.events = receipt.eventTrace.events.filter(event => event.role !== 'decoder-kernel-output-tile');
+  }, 'multi-range-events-missing'],
+  ['one-tile-only events', receipt => {
+    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile')) {
+      event.phase = `single-kernel-${event.tileIndex}`;
+      event.tileIndex = 0;
+      event.tileTotal = 1;
+      event.outputStart = 0;
+      event.outputEnd = 8;
+      event.outputCount = 8;
+      event.totalOutputItems = 8;
+    }
+  }, 'multi-range-events-missing'],
+  ['configured chunk mismatch', receipt => {
+    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile')) {
+      event.configuredChunkItems = 1048576;
+    }
+  }, 'multi-range-events-missing'],
+  ['noncontiguous ranges', receipt => {
+    for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile' && candidate.tileIndex === 1)) {
+      event.outputStart = 500000;
+    }
+  }, 'range-coverage-invalid'],
+]) {
+  const receipt = JSON.parse(JSON.stringify(schedulerVerification()));
+  mutateReceipt(receipt);
+  const comparison = createSharpBreathingRoomComparison({
+    runs: [
+      routeRun({ profileId: 'baseline-default', schedulerMode: 'default' }),
+      routeRun({ profileId: 'cooperative-spn-gaussian', schedulerMode: 'cooperative', scheduler: receipt }),
+    ],
+  });
+  assert.equal(comparison.status, 'invalid', `${name} must invalidate the comparison`);
+  assert.ok(
+    comparison.downgrades.includes('cooperative-decoder-kernel-proof-missing'),
+    `${name} must preserve the decoder proof downgrade`,
+  );
+  assert.ok(
+    comparison.schedulerComparison.cooperative.decoderKernelTileFailures.includes(expectedFailure),
+    `${name} must report ${expectedFailure}`,
+  );
+}
+
 const proxyOnly = createSharpBreathingRoomComparison({
   runs: [
     routeRun({ profileId: 'baseline-default', schedulerMode: 'default' }),
