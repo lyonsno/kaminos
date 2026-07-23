@@ -1,0 +1,17 @@
+{
+  "simulation": {
+    "gridResolution": 128
+  },
+  "smoke": {
+    "renderScale": 0.25,
+    "raySteps": 130,
+    "adaptiveRays": 0.5,
+    "enabled": true
+  },
+  "splats": {
+    "enabled": true
+  },
+  "scheduling": {
+    "flameContinuity": "live-every-frame"
+  }
+}

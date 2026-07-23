@@ -79,10 +79,18 @@ function normalizeVector(value, label, { positive = false } = {}) {
 }
 
 function normalizeTransform(value = {}) {
+  const rotation = normalizeVector(value.rotation, 'fire actor transform rotation');
+  const scale = normalizeVector(value.scale, 'fire actor transform scale', { positive: true });
+  if (rotation.some(entry => entry !== 0)) {
+    throw new Error('fire actor mount v1 supports world-up placement only; rotation must be [0, 0, 0]');
+  }
+  if (scale.some(entry => entry !== scale[0])) {
+    throw new Error('fire actor mount v1 requires uniform scale');
+  }
   const transform = {
     position: normalizeVector(value.position, 'fire actor transform position'),
-    rotation: normalizeVector(value.rotation, 'fire actor transform rotation'),
-    scale: normalizeVector(value.scale, 'fire actor transform scale', { positive: true }),
+    rotation,
+    scale,
   };
   return transform;
 }
@@ -246,8 +254,7 @@ function createFireActorMount({ basinMount, packageDocument, actorId, consumer, 
       },
       transform: {
         translate: [...normalizedTransform.position],
-        rotation: [...normalizedTransform.rotation],
-        scale: [...normalizedTransform.scale],
+        scale: normalizedTransform.scale[0],
       },
     },
     sourcePackage: structuredClone(validatedBasinMount.sourcePackage),
@@ -259,6 +266,7 @@ function createFireActorMount({ basinMount, packageDocument, actorId, consumer, 
       operatorPreviewRequiresInference: false,
       routeEpisodeRequiresExplicitRouteRef: true,
       runtimeEffectivePresentationRequired: true,
+      placementContract: 'world-up-translate-uniform-scale-v1',
     },
   };
 }
