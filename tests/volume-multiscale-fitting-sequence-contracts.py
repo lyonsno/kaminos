@@ -51,6 +51,8 @@ def main() -> None:
         "soft-frozen-covariance",
         "soft-full",
         "soft-optics-exclusive-geometry",
+        "restricted-medium-raymarch-reference",
+        "restricted-cell-ewa-control",
     ):
         assert token in source, f"sequence evidence contract omitted {token}"
     assert 'id="auto"' not in source, "automatic orbit remains coupled to fitting playback"
@@ -94,6 +96,53 @@ def main() -> None:
     assert restricted.conservation["conserved"] is True
     assert restricted.conservation["sourceCellVolume"] == 1.0
     assert restricted.conservation["targetCellVolume"] == 8.0
+
+    homogeneous_coefficients = np.zeros((native_ids.size, 8), dtype=np.float64)
+    homogeneous_coefficients[:, 0] = 0.25
+    homogeneous = module.restrict_selected_optical_medium(
+        native_ids,
+        -1.0 + (cells + 0.5) * 0.5,
+        homogeneous_coefficients,
+        source_grid=grid,
+        target_grid=2,
+        population="ridge",
+    )
+    homogeneous_camera = {
+        "width": 1,
+        "height": 1,
+        "cameraPose": {
+            "position": [0.0, 0.0, 3.0],
+            "target": [0.0, 0.0, 0.0],
+            "projectionMatrix": [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+        },
+    }
+    homogeneous_raymarch, homogeneous_transmittance, homogeneous_receipt = module.render_restricted_medium(
+        homogeneous,
+        homogeneous_camera,
+        width=1,
+        samples_per_cell=4,
+    )
+    assert np.allclose(homogeneous_raymarch[0, 0], [1.0, 0.0, 0.0], atol=1e-12)
+    assert np.allclose(homogeneous_transmittance, 1.0)
+    assert homogeneous_receipt["identity"] == "restricted-voxel-native-step-raymarch-v1"
+    assert homogeneous_receipt["nativeStepScale"] == 1.0
+    assert homogeneous_receipt["gaussianPathScaleApplied"] is False
+    try:
+        module.render_restricted_medium(
+            homogeneous,
+            homogeneous_camera,
+            width=1,
+            samples_per_cell=0,
+        )
+    except module.SequenceFailure as exc:
+        assert "samples_per_cell must be positive" in str(exc)
+    else:
+        raise AssertionError("non-positive raymarch sampling produced false reference evidence")
 
     oracle = module.restricted_medium_oracle_state(restricted)
     assert oracle.iteration == -1

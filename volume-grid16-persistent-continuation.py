@@ -562,7 +562,7 @@ def temporal_toggle_html(surfaces: dict[str, dict[str, Any]], report_name: str) 
     encoded = json.dumps(surfaces, separators=(",", ":")).replace("</", "<\\/")
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Grid16 dual-target temporal witness</title><style>
 :root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#080a0c;color:#eef2f4;font:14px system-ui,sans-serif}}header{{padding:12px 16px;background:#12171b;border-bottom:1px solid #2b343b}}header strong{{display:block;font-size:16px}}header p{{margin:5px 0 0;color:#b9c2c8}}a{{color:#ffb45f}}main{{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);min-height:calc(100vh - 82px)}}aside{{padding:14px;border-right:1px solid #2b343b;background:#0e1215}}.controls{{display:grid;gap:8px}}.button-row{{display:flex;flex-wrap:wrap;gap:6px}}button{{border:1px solid #3b464d;background:#182027;color:#eef2f4;border-radius:5px;padding:8px 10px;cursor:pointer}}button.active{{background:#8b4e16;border-color:#ffad5b}}#scope{{margin-top:12px;padding:10px;background:#17130d;border:1px solid #5e421f;color:#ffd9ad}}#scope.load-error{{background:#2a0d0d;border-color:#b83d36;color:#ffd2cf}}#stage{{display:grid;place-items:center;min-width:0;background:#000;overflow:hidden}}#viewport-image{{display:block;width:min(100%,900px);height:min(calc(100vh - 100px),960px);object-fit:contain;image-rendering:auto}}.hint{{color:#97a4ab;font-size:12px;line-height:1.4}}@media(max-width:800px){{main{{grid-template-columns:1fr}}aside{{border-right:0;border-bottom:1px solid #2b343b}}#viewport-image{{height:auto}}}}</style></head><body>
-<header><strong>State 118→120 dual-target temporal witness</strong><p>Matched-display Raymarch is downsampled from the authenticated full-flame target; native exact pixels remain a separate surface. Neither is a ridge-only score target. Grid16 cell-event EWA remains the matched ridge-only mechanistic control. · <a href="{report_name}">report</a></p></header>
+<header><strong>State 118→120 same-object Grid16 temporal witness</strong><p>Raymarch of the physically restricted Grid16 target is the reference. Grid16 dot-matrix EWA is a control; authenticated Grid96 full-flame Raymarch is product context. · <a href="{report_name}">report</a></p></header>
 <main><aside><div class="controls"><div><b>State</b><div class="button-row"><button type="button" data-state="118">118</button><button type="button" data-state="120">120</button><button type="button" id="blink">Blink states</button></div></div><div><b>Surface</b><div class="button-row">{surface_buttons}</div></div></div><div id="scope"></div><p class="hint">Space toggles state. B starts/stops blinking. Number keys select surfaces. Camera, crop, exposure, zoom, and viewport stay fixed while the image changes in place.</p></aside><section id="stage"><img id="viewport-image" alt="Temporal comparison"></section></main>
 <script>const surfaces={encoded};const surfaceIds=Object.keys(surfaces);const query=new URLSearchParams(location.search);let state=['118','120'].includes(query.get('state'))?query.get('state'):'118';let surface=surfaceIds.includes(query.get('surface'))?query.get('surface'):surfaceIds[0];let timer=null;const image=document.querySelector('#viewport-image');const scope=document.querySelector('#scope');const blink=document.querySelector('#blink');function syncUrl(){{const url=new URL(location.href);url.searchParams.set('surface',surface);url.searchParams.set('state',state);history.replaceState(null,'',url);}}function render(){{const entry=surfaces[surface];scope.classList.remove('load-error');image.src=entry.states[state];image.alt=`${{entry.label}}, state ${{state}}`;scope.textContent=`${{entry.label}} · ${{entry.scope}}`;document.querySelectorAll('[data-state]').forEach(button=>button.classList.toggle('active',button.dataset.state===state));document.querySelectorAll('[data-surface]').forEach(button=>button.classList.toggle('active',button.dataset.surface===surface));syncUrl();}}image.addEventListener('error',()=>{{scope.classList.add('load-error');scope.textContent=`IMAGE LOAD FAILED · ${{surface}} · state ${{state}} · ${{image.getAttribute('src')}}`;}});function toggleState(){{state=state==='118'?'120':'118';render();}}function stopBlink(){{if(timer!==null){{clearInterval(timer);timer=null;blink.classList.remove('active');blink.textContent='Blink states';}}}}document.querySelectorAll('[data-state]').forEach(button=>button.addEventListener('click',()=>{{stopBlink();state=button.dataset.state;render();}}));document.querySelectorAll('[data-surface]').forEach(button=>button.addEventListener('click',()=>{{surface=button.dataset.surface;render();}}));blink.addEventListener('click',()=>{{if(timer!==null){{stopBlink();return;}}timer=setInterval(toggleState,450);blink.classList.add('active');blink.textContent='Stop blinking';}});addEventListener('keydown',event=>{{if(event.code==='Space'){{event.preventDefault();stopBlink();toggleState();}}else if(event.key.toLowerCase()==='b'){{blink.click();}}else if(/^[1-9]$/.test(event.key)){{const next=surfaceIds[Number(event.key)-1];if(next){{surface=next;render();}}}}}});render();</script></body></html>"""
 
@@ -656,6 +656,18 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
     mode_module = load_module(mode_path, "grid16_persistent_mode_renderer")
     camera = target_state.get("target") or {}
     FITTER.require(camera.get("cameraPose") and int(camera.get("width", 0)) > 0, "target held camera is missing")
+    source_raymarch_reference, _, source_raymarch_receipt = FITTER.render_restricted_medium(
+        source_medium,
+        camera,
+        width=args.render_width,
+        samples_per_cell=args.samples_per_cell,
+    )
+    target_raymarch_reference, _, target_raymarch_receipt = FITTER.render_restricted_medium(
+        target_medium,
+        camera,
+        width=args.render_width,
+        samples_per_cell=args.samples_per_cell,
+    )
     source_target, source_target_receipt = FITTER.render_modes(
         mode_module,
         FITTER.restricted_medium_oracle_state(source_medium),
@@ -691,8 +703,18 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         image_rows.append({"image": path.name, "label": label})
         return artifact
 
-    source_target_artifact = write_image("state118-restricted-target", "State118 restricted-cell target", source_target)
-    target_target_artifact = write_image("state120-restricted-target", "State120 restricted-cell target", target_target)
+    source_raymarch_artifact = write_image(
+        "state118-grid16-restricted-raymarch-reference",
+        "State118 Grid16 restricted-medium Raymarch reference",
+        source_raymarch_reference,
+    )
+    target_raymarch_artifact = write_image(
+        "state120-grid16-restricted-raymarch-reference",
+        "State120 Grid16 restricted-medium Raymarch reference",
+        target_raymarch_reference,
+    )
+    source_target_artifact = write_image("state118-grid16-cell-event-control", "State118 Grid16 cell-event EWA control", source_target)
+    target_target_artifact = write_image("state120-grid16-cell-event-control", "State120 Grid16 cell-event EWA control", target_target)
     seed_artifact = write_image("state118-seed-reconstruction", "State118 persistent seed (iteration 1)", seed_render)
     exact_target_artifacts: dict[str, dict[str, Any]] = {}
     for state_id, state_label in ((source_state_id, "118"), (target_state_id, "120")):
@@ -728,7 +750,7 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             path_scale=args.path_scale,
         )
         artifact = write_image(f"state120-{arm}", f"State120 {arm}", rendered)
-        residual = target_target - rendered
+        residual = target_raymarch_reference - rendered
         scale = max(float(np.percentile(np.abs(residual), 99.5)), 1e-8)
         residual_preview = np.clip(0.5 + residual / (2.0 * scale), 0.0, 1.0)
         residual_path = args.output_dir / f"state120-{arm}-signed-residual.png"
@@ -741,8 +763,14 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
                 "sha256": FITTER.sha256_file(residual_path),
                 "signedPreviewScale": scale,
             },
-            "targetMetrics": FITTER.image_metrics(rendered, target_target),
-            "temporalMetrics": temporal_metrics(rendered, seed_render, target_target, source_target),
+            "targetMetrics": FITTER.image_metrics(rendered, target_raymarch_reference),
+            "matchedControlMetrics": FITTER.image_metrics(rendered, target_target),
+            "temporalMetrics": temporal_metrics(
+                rendered,
+                seed_render,
+                target_raymarch_reference,
+                source_raymarch_reference,
+            ),
             "placement": {
                 "meanSeedDisplacement": float(np.mean(np.linalg.norm(state.positions - seed_state.positions, axis=1))),
                 "maximumSeedDisplacement": float(np.max(np.linalg.norm(state.positions - seed_state.positions, axis=1))),
@@ -760,16 +788,24 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     surfaces = {
+        "grid16-raymarch-reference": {
+            "label": "Grid16 restricted-medium Raymarch reference",
+            "scope": "ridge-only same-object ground truth consumed by the fitter; native-step optical recurrence",
+            "states": {
+                "118": Path(source_raymarch_artifact["path"]).name,
+                "120": Path(target_raymarch_artifact["path"]).name,
+            },
+        },
         "exact-raymarch": {
-            "label": "Exact full-flame Raymarch (matched display)",
-            "scope": "product-motion context downsampled to the Grid16 witness pixel grid; full ridge+non-ridge shared transmittance; not a ridge-only score target",
+            "label": "Grid96 full-flame Raymarch context (matched display)",
+            "scope": "product context only; full ridge+non-ridge shared transmittance; not the Grid16 reconstruction reference",
             "states": {
                 "118": exact_target_artifacts[source_state_id]["displayName"],
                 "120": exact_target_artifacts[target_state_id]["displayName"],
             },
         },
         "exact-raymarch-native": {
-            "label": "Exact full-flame Raymarch (native)",
+            "label": "Grid96 full-flame Raymarch context (native)",
             "scope": (
                 f"untouched authenticated {exact_targets[source_state_id]['width']}x{exact_targets[source_state_id]['height']} "
                 "product-motion context; not pixel-grid matched to the Grid16 witness and not a ridge-only score target"
@@ -781,7 +817,7 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         },
         "grid16-cell-event-control": {
             "label": "Grid16 cell-event EWA control",
-            "scope": "ridge-only matched-renderer mechanistic control",
+            "scope": "ridge-only dot-matrix mechanistic control; not ground truth",
             "states": {
                 "118": Path(source_target_artifact["path"]).name,
                 "120": Path(target_target_artifact["path"]).name,
@@ -815,7 +851,7 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         "identity": CONTINUATION_IDENTITY,
         "status": "complete",
         "failurePhase": None,
-        "authority": "dual-target-exact-raymarch-context-plus-grid16-matched-control-v0",
+        "authority": "grid16-restricted-raymarch-reference-with-ewa-control-and-grid96-context-v0",
         "requested": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
         "effective": {
             "sourceStateId": source_state_id,
@@ -839,6 +875,9 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "sourceSequenceSha256": FITTER.sha256_file(source_sequence_path),
             "targetSequenceSha256": FITTER.sha256_file(target_sequence_path),
             "modeModuleSha256": FITTER.sha256_file(mode_path),
+            "fitterImplementationSha256": FITTER.sha256_file(
+                Path(__file__).with_name("volume-multiscale-fitting-sequence.py")
+            ),
             "continuationImplementationSha256": FITTER.sha256_file(Path(__file__)),
         },
         "velocity": {
@@ -847,13 +886,17 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "meanModeDisplacement": float(np.mean(np.linalg.norm(mode_velocity * dt_seconds, axis=1))),
             "maximumModeDisplacement": float(np.max(np.linalg.norm(mode_velocity * dt_seconds, axis=1))),
         },
-        "targetTemporalLinearMae": float(np.mean(np.abs(target_target - source_target))),
-        "targetTemporalLinearMaeAuthority": "deprecated-alias-of-matchedGrid16ControlTemporalLinearMae",
+        "targetTemporalLinearMae": float(np.mean(np.abs(target_raymarch_reference - source_raymarch_reference))),
+        "targetTemporalLinearMaeAuthority": "grid16-restricted-medium-raymarch-reference",
+        "restrictedGrid16RaymarchTemporalLinearMae": float(
+            np.mean(np.abs(target_raymarch_reference - source_raymarch_reference))
+        ),
         "matchedGrid16ControlTemporalLinearMae": float(np.mean(np.abs(target_target - source_target))),
         "temporalAuthority": {
-            "primaryVisualContext": "exact-full-flame-raymarch-state118-120",
+            "primaryVisualReference": "ridge-only-grid16-restricted-medium-raymarch-state118-120",
+            "productVisualContext": "exact-full-flame-grid96-raymarch-state118-120",
             "matchedMechanisticControl": "ridge-only-grid16-cell-event-ewa-state118-120",
-            "numericTreatmentScoringTarget": "ridge-only-grid16-cell-event-ewa-state120",
+            "numericTreatmentScoringTarget": "ridge-only-grid16-restricted-medium-raymarch-state120",
             "crossPopulationExactRaymarchScoringPermitted": False,
             "reason": "the exact Raymarch target contains ridge plus non-ridge under shared transmittance while the fixed 48-mode treatment reconstructs ridge only",
         },
@@ -873,11 +916,19 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         },
         "renders": {
             "exactRaymarchFullFlameContext": exact_target_artifacts,
-            "sourceTarget": source_target_artifact,
-            "targetTarget": target_target_artifact,
+            "restrictedGrid16RaymarchReference": {
+                "source": source_raymarch_artifact,
+                "target": target_raymarch_artifact,
+                "sourceReceipt": source_raymarch_receipt,
+                "targetReceipt": target_raymarch_receipt,
+            },
+            "grid16CellEventEwaControl": {
+                "source": source_target_artifact,
+                "target": target_target_artifact,
+                "sourceReceipt": source_target_receipt,
+                "targetReceipt": target_target_receipt,
+            },
             "sourceSeed": seed_artifact,
-            "sourceTargetReceipt": source_target_receipt,
-            "targetTargetReceipt": target_target_receipt,
             "sourceSeedReceipt": seed_render_receipt,
             "arms": arm_rows,
         },
@@ -892,7 +943,9 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "fixedCountTemporalContinuationAuthority": True,
             "exactRaymarchProductMotionVisualContext": True,
             "exactRaymarchRidgeOnlyNumericScoring": False,
-            "grid16CellEventTargetIsRaymarch": False,
+            "restrictedGrid16RaymarchRidgeOnlyNumericScoring": True,
+            "grid16ReferenceIsRestrictedMediumRaymarch": True,
+            "grid16CellEventEwaIsGroundTruth": False,
             "fullVolumeAuthority": False,
             "productionEligibilityClaimed": False,
             "visualClosureClaimed": False,
@@ -917,6 +970,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--covariance-relative-limit", type=float, default=0.25)
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--depth-bins", type=int, default=96)
+    parser.add_argument("--samples-per-cell", type=int, default=4)
     parser.add_argument("--path-scale", type=float, default=FITTER.DEFAULT_PATH_SCALE)
     return parser.parse_args()
 

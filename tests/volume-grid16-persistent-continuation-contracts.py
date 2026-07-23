@@ -142,6 +142,11 @@ def exact_target_manifest(temporary: Path, fitter) -> Path:
 
 def main() -> None:
     assert SCRIPT_PATH.is_file(), "persistent Grid16 continuation implementation is missing"
+    implementation = SCRIPT_PATH.read_text()
+    assert '"grid16ReferenceIsRestrictedMediumRaymarch": True' in implementation
+    assert '"grid16CellEventTargetIsRaymarch": True' not in implementation
+    assert '"grid16CellEventEwaControl"' in implementation
+    assert '"fitterImplementationSha256"' in implementation
     fitter = load(FITTER_PATH, "grid16_sequence_fitter_contract")
     continuation = load(SCRIPT_PATH, "grid16_persistent_continuation_contract")
     native_ids, coefficients, velocities, source, target, seed = fixture(fitter)
@@ -305,10 +310,10 @@ def main() -> None:
         manifest_path = exact_target_manifest(temporary, fitter)
         viewer = continuation.temporal_toggle_html(
             {
-                "exact-raymarch": {
-                    "label": "Exact full-flame Raymarch",
-                    "scope": "product-motion-context",
-                    "states": {"118": "exact-118.png", "120": "exact-120.png"},
+                "grid16-raymarch-reference": {
+                    "label": "Grid16 restricted-medium Raymarch reference",
+                    "scope": "same-object-ground-truth",
+                    "states": {"118": "grid16-raymarch-118.png", "120": "grid16-raymarch-120.png"},
                 },
                 "grid16-control": {
                     "label": "Grid16 cell-event EWA control",
@@ -325,15 +330,15 @@ def main() -> None:
         )
         assert 'id="viewport-image"' in viewer
         assert 'data-state="118"' in viewer and 'data-state="120"' in viewer
-        assert 'data-surface="exact-raymarch"' in viewer
+        assert 'data-surface="grid16-raymarch-reference"' in viewer
         assert 'data-surface="grid16-control"' in viewer
         assert 'id="blink"' in viewer
         assert "setInterval" in viewer
         assert "URLSearchParams" in viewer
         assert "history.replaceState" in viewer
         assert "IMAGE LOAD FAILED" in viewer
-        assert "downsampled from the authenticated full-flame target" in viewer
-        assert "Neither is a ridge-only score target" in viewer
+        assert "Raymarch of the physically restricted Grid16 target is the reference" in viewer
+        assert "dot-matrix EWA is a control" in viewer
 
         payload = json.loads(manifest_path.read_text())
         payload["route"]["fallbackReason"] = "silent-fallback"

@@ -37,6 +37,7 @@ COEFFICIENT_ORDER = (
 )
 LUMA = np.asarray((0.2126, 0.7152, 0.0722), dtype=np.float64)
 DEFAULT_PATH_SCALE = 3.8845837491755066
+RESTRICTED_VOXEL_NATIVE_STEP_SCALE = 1.0
 
 
 class SequenceFailure(RuntimeError):
@@ -509,8 +510,8 @@ def render_restricted_medium(
     *,
     width: int,
     samples_per_cell: int,
-    path_scale: float,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    require(samples_per_cell > 0, "samples_per_cell must be positive")
     resized, position, forward, right, up = camera_basis(camera, width)
     height = int(resized["height"])
     projection = np.asarray(camera["cameraPose"]["projectionMatrix"], dtype=np.float64).reshape(4, 4, order="F")
@@ -548,20 +549,27 @@ def render_restricted_medium(
         values = np.zeros((flat_directions.shape[0], 8), dtype=np.float64)
         selected_cells = cells[valid]
         values[valid] = grid_values[selected_cells[:, 0], selected_cells[:, 1], selected_cells[:, 2]]
-        segment_scale = np.where(hit, path_length / sample_count / fine_step_world * path_scale, 0.0)
+        segment_scale = np.where(
+            hit,
+            path_length / sample_count / fine_step_world * RESTRICTED_VOXEL_NATIVE_STEP_SCALE,
+            0.0,
+        )
         emission = (values[:, :3] + values[:, 4:7]) * segment_scale[:, None]
         optical_depth = (values[:, 3] + values[:, 7]) * segment_scale
         alpha = -np.expm1(-optical_depth)
-        source_scale = np.divide(alpha, optical_depth, out=np.zeros_like(alpha), where=optical_depth > 1e-8)
+        source_scale = np.divide(alpha, optical_depth, out=np.ones_like(alpha), where=optical_depth > 1e-8)
         color += transmittance[:, None] * emission * source_scale[:, None]
         transmittance *= np.exp(-optical_depth)
     return color.reshape((height, width, 3)), transmittance.reshape((height, width)), {
-        "identity": "restricted-voxel-shared-transmittance-raymarch-v0",
+        "identity": "restricted-voxel-native-step-raymarch-v1",
         "width": width,
         "height": height,
         "samplesPerCell": samples_per_cell,
         "sampleCount": sample_count,
-        "pathScale": path_scale,
+        "nativeStepScale": RESTRICTED_VOXEL_NATIVE_STEP_SCALE,
+        "nativeStepAuthority": "full-grid-capture-coefficients-already-include-one-native-ray-step-v0",
+        "integrationScaleIdentity": "world-distance-in-source-cell-widths-v0",
+        "gaussianPathScaleApplied": False,
         "hitPixelCount": int(np.count_nonzero(hit)),
     }
 
@@ -667,7 +675,7 @@ def sequence_viewer_html(payload: dict[str, Any]) -> str:
 html,body{{margin:0;height:100%;background:#090b0d;color:#dce4ea;font:13px system-ui,sans-serif}}body{{display:grid;grid-template-rows:auto 1fr}}header{{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#11161b;border-bottom:1px solid #26313a}}button,input{{accent-color:#ff8a32}}#step{{flex:1}}main{{display:grid;grid-template-columns:minmax(420px,1.25fr) minmax(360px,1fr);min-height:0}}#orbit{{width:100%;height:100%;display:block;background:#020304}}#images{{display:grid;grid-template-rows:repeat(3,1fr);min-height:0;border-left:1px solid #26313a}}figure{{position:relative;margin:0;min-height:0;background:#000;border-bottom:1px solid #26313a}}figure img{{width:100%;height:100%;object-fit:contain}}figure.load-error::after{{content:'image failed to load';position:absolute;inset:0;display:grid;place-items:center;color:#ff796f;background:#190907}}figcaption{{position:absolute;z-index:1;left:8px;top:6px;padding:3px 6px;background:#000a;border-radius:4px}}#readout{{font:11px ui-monospace,monospace;color:#9eb0bd;min-width:220px}}#orbit-help{{color:#82919c;white-space:nowrap}}
 </style></head><body>
 <header><button id=\"play\">Play fit</button><input id=\"step\" type=\"range\" min=\"0\" value=\"0\"><span id=\"orbit-help\">drag left panel to orbit</span><span id=\"readout\"></span></header>
-<main><canvas id=\"orbit\"></canvas><section id=\"images\"><figure><figcaption>restricted target</figcaption><img id=\"target\"></figure><figure><figcaption>reconstruction</figcaption><img id=\"reconstruction\"></figure><figure><figcaption>signed residual</figcaption><img id=\"residual\"></figure></section></main>
+<main><canvas id=\"orbit\"></canvas><section id=\"images\"><figure><figcaption>restricted-medium Raymarch reference</figcaption><img id=\"target\"></figure><figure><figcaption>reconstruction</figcaption><img id=\"reconstruction\"></figure><figure><figcaption>signed residual</figcaption><img id=\"residual\"></figure></section></main>
 <script>const data={encoded};const frames=data.frames;const slider=document.querySelector('#step');slider.max=frames.length-1;let index=0,playing=false,yaw=.55,pitch=.15,last=performance.now(),drag=false,px=0,py=0;const canvas=document.querySelector('#orbit'),ctx=canvas.getContext('2d');
 const assetUrl=path=>new URL(String(path).split('/').pop(),location.href).href;for(const role of ['target','reconstruction','residual']){{const img=document.querySelector('#'+role);img.onerror=()=>img.closest('figure').classList.add('load-error');img.onload=()=>img.closest('figure').classList.remove('load-error')}}
 function fit(){{const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=Math.max(1,r.width*d);canvas.height=Math.max(1,r.height*d);ctx.setTransform(d,0,0,d,0,0)}}new ResizeObserver(fit).observe(canvas);fit();
@@ -798,8 +806,21 @@ def main() -> int:
         mode_module = load_module(mode_path, "multiscale_optical_mode_renderer")
         camera = state.get("target") or {}
         require(camera.get("cameraPose") and int(camera.get("width", 0)) > 0, "source held camera is missing")
-        phase = "restricted-cell-oracle-render"
-        target_linear, target_render = render_modes(
+        phase = "restricted-medium-raymarch-reference-render"
+        target_linear, _, target_render = render_restricted_medium(
+            medium,
+            camera,
+            width=args.render_width,
+            samples_per_cell=args.samples_per_cell,
+        )
+        target_render.update({
+            "comparisonContract": "same-restricted-optical-medium-raymarch-versus-fitted-events-v0",
+            "restrictedCellCount": int(medium.coarse_cell_ids.size),
+        })
+        target_path = args.output_dir / "target-restricted-medium-raymarch.png"
+        target_artifact = visual_artifact(target_path, target_linear, mode_module)
+        phase = "restricted-cell-ewa-control-render"
+        control_linear, control_render = render_modes(
             mode_module,
             restricted_medium_oracle_state(medium),
             args.population,
@@ -808,13 +829,13 @@ def main() -> int:
             depth_bins=args.depth_bins,
             path_scale=args.path_scale,
         )
-        target_render.update({
-            "identity": "restricted-cell-ewa-shared-transmittance-oracle-v0",
-            "comparisonContract": "same-renderer-same-coefficients-cell-events-versus-fitted-events-v0",
+        control_render.update({
+            "identity": "restricted-cell-ewa-control-v0",
+            "comparisonContract": "same-renderer-same-coefficients-cell-events-versus-fitted-events-control-v0",
             "restrictedCellEventCount": int(medium.coarse_cell_ids.size),
         })
-        target_path = args.output_dir / "target-restricted-cell-oracle.png"
-        target_artifact = visual_artifact(target_path, target_linear, mode_module)
+        control_path = args.output_dir / "control-restricted-cell-ewa.png"
+        control_artifact = visual_artifact(control_path, control_linear, mode_module)
         frame_rows: list[dict[str, Any]] = []
         phase = "sequence-render"
         for mode_state in captured:
@@ -843,6 +864,7 @@ def main() -> int:
                 "maximumPositionDelta": mode_state.maximum_position_delta,
                 "coefficientMass": np.sum(mode_state.coefficients, axis=0, dtype=np.float64),
                 "metrics": image_metrics(reconstruction, target_linear),
+                "controlMetrics": image_metrics(reconstruction, control_linear),
                 "target": target_artifact,
                 "reconstruction": reconstruction_artifact,
                 "residual": {
@@ -941,6 +963,16 @@ def main() -> int:
                 "worldSpaceSourceAndPrimitives": True,
                 "heldCameraTargetReconstructionResidual": True,
                 "orbitRenderAuthority": "diagnostic-world-space-geometry-only-v0",
+            },
+            "reference": {
+                "identity": "restricted-medium-raymarch-reference",
+                "artifact": target_artifact,
+                "renderReceipt": target_render,
+            },
+            "control": {
+                "identity": "restricted-cell-ewa-control",
+                "artifact": control_artifact,
+                "renderReceipt": control_render,
             },
             "targetRender": target_render,
             "worldCenter": world_center,
