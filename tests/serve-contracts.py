@@ -618,6 +618,59 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
 
 
+def test_runtime_config_enforces_optional_sharp_revision_contract():
+    previous_expected = os.environ.get("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
+    previous_revision_resolver = serve._sharp_inline_revision
+    previous_module_path = serve.SHARP_INLINE_MODULE_PATH
+    previous_weights_path = serve.SHARP_INLINE_WEIGHTS_PATH
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        module_path = root / "sharp-inline.js"
+        weights_path = root / "weights.bin"
+        module_path.write_text("export const ok = true;\n")
+        weights_path.write_bytes(b"weights")
+        serve.SHARP_INLINE_MODULE_PATH = module_path
+        serve.SHARP_INLINE_WEIGHTS_PATH = weights_path
+        try:
+            os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"] = "expected-revision"
+
+            serve._sharp_inline_revision = lambda: "stale-revision"
+            stale = serve.runtime_config()["sharpInline"]
+            assert stale["registered"] is False
+            assert stale["expectedRevision"] == "expected-revision"
+            assert stale["revision"] == "stale-revision"
+            assert stale["revisionMatchesExpectation"] is False
+            assert stale["revisionContractStatus"] == "mismatch"
+
+            serve._sharp_inline_revision = lambda: None
+            missing = serve.runtime_config()["sharpInline"]
+            assert missing["registered"] is False
+            assert missing["revisionMatchesExpectation"] is False
+            assert missing["revisionContractStatus"] == "missing"
+
+            serve._sharp_inline_revision = lambda: "expected-revision"
+            matched = serve.runtime_config()["sharpInline"]
+            assert matched["registered"] is True
+            assert matched["revisionMatchesExpectation"] is True
+            assert matched["revisionContractStatus"] == "matched"
+
+            os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
+            serve._sharp_inline_revision = lambda: "development-revision"
+            unpinned = serve.runtime_config()["sharpInline"]
+            assert unpinned["registered"] is True
+            assert unpinned["expectedRevision"] is None
+            assert unpinned["revisionMatchesExpectation"] is None
+            assert unpinned["revisionContractStatus"] == "unpinned"
+        finally:
+            serve._sharp_inline_revision = previous_revision_resolver
+            serve.SHARP_INLINE_MODULE_PATH = previous_module_path
+            serve.SHARP_INLINE_WEIGHTS_PATH = previous_weights_path
+            if previous_expected is None:
+                os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION", None)
+            else:
+                os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"] = previous_expected
+
+
 def test_pipeline_manifest_endpoint_payload_is_route_identified():
     payload = serve.pipeline_manifest_payload()
 
@@ -866,6 +919,7 @@ if __name__ == "__main__":
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
+    test_runtime_config_enforces_optional_sharp_revision_contract()
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()

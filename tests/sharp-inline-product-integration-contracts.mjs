@@ -57,6 +57,11 @@ assert.match(
 );
 assert.match(
   page,
+  /revisionContractStatus[\s\S]{0,500}expectedRevision[\s\S]{0,500}mount\.revision/,
+  'a rejected SHARP mount must expose expected and effective source identity instead of a generic registration error',
+);
+assert.match(
+  page,
   /const gpuContext = volumePrototype\.foregroundGpuContext\(\)[\s\S]{0,5000}inline\.run\(sourceBlob, \{[\s\S]{0,500}gpuContext,[\s\S]{0,500}weightsUrl:[\s\S]{0,500}scheduler,/,
   'the inline route must inject the product volume device, queue, weights URL, and requested scheduler',
 );

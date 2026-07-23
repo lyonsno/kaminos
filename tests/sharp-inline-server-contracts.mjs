@@ -20,12 +20,17 @@ assert.match(
 );
 assert.match(
   serve,
-  /"sharpInline": \{[\s\S]{0,1000}"registered":[\s\S]{0,500}"moduleUrl": "\/sharp-inline\/sharp-inline\.js"[\s\S]{0,500}"weightsUrl": "\/sharp-inline\/weights\.bin"/,
+  /"sharpInline": \{[\s\S]{0,1000}"registered":[\s\S]{0,1000}"moduleUrl": "\/sharp-inline\/sharp-inline\.js"[\s\S]{0,500}"weightsUrl": "\/sharp-inline\/weights\.bin"/,
   'runtime config must expose requested/effective inline registration and stable browser URLs',
 );
 assert.match(
   serve,
-  /def _sharp_inline_revision\(\):[\s\S]{0,1200}git[\s\S]{0,300}rev-parse[\s\S]{0,300}HEAD[\s\S]{0,1200}sharp_revision = _sharp_inline_revision\(\)[\s\S]{0,1200}"revision": sharp_revision/,
+  /KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION[\s\S]{0,3000}"expectedRevision":[\s\S]{0,500}"revisionMatchesExpectation":[\s\S]{0,500}"revisionContractStatus":/,
+  'runtime config must expose and enforce an optional exact SHARP source revision contract',
+);
+assert.match(
+  serve,
+  /def _sharp_inline_revision\(\):[\s\S]{0,1200}git[\s\S]{0,300}rev-parse[\s\S]{0,300}HEAD[\s\S]{0,1200}sharp_revision = _sharp_inline_revision\(\)[\s\S]{0,2400}"revision": sharp_revision/,
   'runtime config must expose the effective SHARP source revision rather than only its checkout path',
 );
 assert.match(

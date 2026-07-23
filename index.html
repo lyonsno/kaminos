@@ -13206,7 +13206,10 @@ async function loadSharpInlineProductRuntime() {
     const runtimeConfig = await response.json();
     const mount = runtimeConfig.sharpInline;
     if (!mount?.registered || !mount.moduleExists || !mount.weightsExists || !mount.revision) {
-      throw new Error('SHARP inline runtime is not registered with a source revision, reviewed module, and weights');
+      const sourceIdentity = mount
+        ? `revision contract ${mount.revisionContractStatus || 'unknown'}; expected ${mount.expectedRevision || 'unpinned'}; effective ${mount.revision || 'missing'}`
+        : 'runtime mount missing';
+      throw new Error(`SHARP inline runtime is not registered with a reviewed source, module, and weights (${sourceIdentity})`);
     }
     if (!mount.moduleUrl || !mount.weightsUrl) {
       throw new Error('SHARP inline runtime mount omitted its effective module or weights URL');

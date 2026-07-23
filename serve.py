@@ -48,6 +48,7 @@ KAMINOS_SHARP_WEBGPU_REPO = Path(os.environ.get(
     "KAMINOS_SHARP_WEBGPU_REPO",
     os.path.expanduser("~/dev/sharp-webgpu"),
 )).expanduser().resolve()
+KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION_ENV = "KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"
 SHARP_INLINE_MODULE_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "sharp-inline.js"
 SHARP_INLINE_ASSETS_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "assets"
 KAMINOS_SHARP_WEBGPU_WEIGHTS = Path(os.environ.get(
@@ -334,19 +335,49 @@ def runtime_config():
         or ""
     ).strip()
     sharp_revision = _sharp_inline_revision()
+    expected_sharp_revision = os.environ.get(
+        KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION_ENV,
+        "",
+    ).strip() or None
+    revision_matches_expectation = (
+        None
+        if expected_sharp_revision is None
+        else bool(sharp_revision and sharp_revision == expected_sharp_revision)
+    )
+    if expected_sharp_revision is None:
+        revision_contract_status = "unpinned"
+    elif not sharp_revision:
+        revision_contract_status = "missing"
+    elif revision_matches_expectation:
+        revision_contract_status = "matched"
+    else:
+        revision_contract_status = "mismatch"
+    revision_contract_allows_registration = (
+        expected_sharp_revision is None or revision_matches_expectation is True
+    )
+    module_exists = SHARP_INLINE_MODULE_PATH.is_file()
+    weights_exist = SHARP_INLINE_WEIGHTS_PATH.is_file()
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
         "sharpInline": {
-            "registered": bool(sharp_revision) and SHARP_INLINE_MODULE_PATH.is_file() and SHARP_INLINE_WEIGHTS_PATH.is_file(),
+            "registered": (
+                bool(sharp_revision)
+                and revision_contract_allows_registration
+                and module_exists
+                and weights_exist
+            ),
             "repo": str(KAMINOS_SHARP_WEBGPU_REPO),
+            "expectedRevision": expected_sharp_revision,
             "revision": sharp_revision,
             "revisionStatus": "resolved" if sharp_revision else "missing",
+            "revisionMatchesExpectation": revision_matches_expectation,
+            "revisionContractStatus": revision_contract_status,
             "modulePath": str(SHARP_INLINE_MODULE_PATH),
-            "moduleExists": SHARP_INLINE_MODULE_PATH.is_file(),
+            "moduleExists": module_exists,
             "moduleUrl": "/sharp-inline/sharp-inline.js",
             "weightsPath": str(SHARP_INLINE_WEIGHTS_PATH),
-            "weightsExists": SHARP_INLINE_WEIGHTS_PATH.is_file(),
+            "weightsExists": weights_exist,
             "weightsUrl": "/sharp-inline/weights.bin",
         },
     }
