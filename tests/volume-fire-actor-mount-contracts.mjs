@@ -182,6 +182,49 @@ try {
   assert.equal(completed.inferenceRan, false);
   assert.equal(completed.effectivePresentation.fallbackReason, null);
 
+  for (const activation of [
+    {
+      mode: 'consumer-route',
+      authority: 'sharp-route-authority',
+      inferenceRequired: true,
+      routeRef: 'sharp://route/illicit',
+    },
+    {
+      ...episode.activation,
+      authority: 'sharp-route-authority',
+    },
+  ]) {
+    assert.throws(
+      () => completeFireActorEpisode({
+        mount: first.mount,
+        episode: { ...structuredClone(episode), activation },
+        effectivePresentation: {
+          mountId: first.mount.mountId,
+          episodeId: episode.episodeId,
+          policyId: first.mount.policy.policyId,
+          basinRevision: revision,
+          composition: first.mount.representation.composition,
+          rendererIdentity: first.mount.representation.rendererIdentity,
+          fallbackReason: null,
+        },
+      }),
+      /episode identity mismatch|operator preview authority/,
+      'completion must reject activation drift after episode begin',
+    );
+  }
+  assert.throws(
+    () => beginFireActorEpisode({
+      mount: first.mount,
+      episodeId: 'preview-with-route-authority-label',
+      activation: {
+        mode: 'operator-preview',
+        authority: 'sharp-route-authority',
+        inferenceRequired: false,
+      },
+    }),
+    /operator preview authority must be operator-selected-preview/,
+  );
+
   assert.throws(
     () => completeFireActorEpisode({
       mount: first.mount,
