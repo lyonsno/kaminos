@@ -16,8 +16,8 @@ export const MAPPED_MACRO_SOLVER_ROUTE = 'kaminos/fluid/mapped-orthogonal-height
 export const MAPPED_MACRO_METHOD = 'orthogonal-heightfield-hydrostatic-reconstruction-hll-v1';
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
 
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.1.0';
-const KAMINOS_FLUID_PRODUCER_REVISION = '3e3934f9e451823ae122c9fca5f4c04ec3e88694';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.2.0';
+const KAMINOS_FLUID_PRODUCER_REVISION = 'a5662f6268a17dbeb35991f8c37ceef834be9629';
 
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
   schema: KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA,

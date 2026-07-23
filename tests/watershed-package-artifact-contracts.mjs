@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = new URL('..', import.meta.url).pathname;
-const producerRevision = '3e3934f9e451823ae122c9fca5f4c04ec3e88694';
+const producerRevision = 'a5662f6268a17dbeb35991f8c37ceef834be9629';
 const packageModule = await import('@kaminos/fluid-webgpu');
 
 assert.equal(
@@ -19,10 +19,10 @@ assert.deepEqual(packageModule.KAMINOS_FLUID_PACKAGE_DESCRIPTOR, {
   sourceAuthority: 'live_runtime',
   fallbackStatus: 'none',
   packageName: '@kaminos/fluid-webgpu',
-  packageVersion: '0.1.0',
-  artifactRevision: '@kaminos/fluid-webgpu@0.1.0',
+  packageVersion: '0.2.0',
+  artifactRevision: '@kaminos/fluid-webgpu@0.2.0',
   runtimeRevision: producerRevision,
-  cacheKey: `@kaminos/fluid-webgpu@0.1.0:${producerRevision}`,
+  cacheKey: `@kaminos/fluid-webgpu@0.2.0:${producerRevision}`,
   runtimeRoute: 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1',
   representationRoutes: ['kaminos/fluid/representation-frame'],
   outputRoutes: ['kaminos/fluid/terrain-feedback'],
@@ -53,7 +53,7 @@ try {
   ], { cwd: root, encoding: 'utf8' }))[0];
   const tarball = join(packageRoot, packResult.filename);
   assert.equal(packResult.name, '@kaminos/fluid-webgpu');
-  assert.equal(packResult.version, '0.1.0');
+  assert.equal(packResult.version, '0.2.0');
   assert.match(packResult.integrity, /^sha512-/);
   assert.equal(packResult.bundled.includes('@kaminos/fluid-contracts'), true, 'the installable artifact bundles its private contract dependency');
   assert.equal(packResult.manifest.schema, 'kaminos.fluid.package-artifact-manifest.v1');
@@ -63,7 +63,7 @@ try {
   assert.equal(manifest.status, 'complete');
   assert.equal(Object.hasOwn(manifest, 'requestedRepoRoot'), false, 'portable artifact evidence does not embed an ephemeral checkout path');
   assert.equal(Object.hasOwn(manifest, 'effectiveRepoRoot'), false, 'portable artifact evidence does not present a stale build checkout as a live route');
-  assert.equal(manifest.artifactRevision, '@kaminos/fluid-webgpu@0.1.0');
+  assert.equal(manifest.artifactRevision, '@kaminos/fluid-webgpu@0.2.0');
   assert.equal(manifest.artifact.filename, packResult.filename);
   assert.equal(manifest.artifact.integrity, packResult.integrity);
   assert.equal(manifest.runtimeRevision, producerRevision);
@@ -80,14 +80,65 @@ try {
   }, null, 2));
   execFileSync('npm', ['install', '--ignore-scripts'], { cwd: consumerRoot, stdio: 'pipe' });
   const installedPackage = JSON.parse(readFileSync(join(consumerRoot, 'node_modules/@kaminos/fluid-webgpu/package.json'), 'utf8'));
-  assert.equal(installedPackage.version, '0.1.0');
+  assert.equal(installedPackage.version, '0.2.0');
   const installedModule = await import(pathToFileURL(join(consumerRoot, 'node_modules/@kaminos/fluid-webgpu/mapped-macro-core.js')));
+  const installedContracts = await import(pathToFileURL(join(
+    consumerRoot,
+    'node_modules/@kaminos/fluid-webgpu/node_modules/@kaminos/fluid-contracts/index.js',
+  )));
   assert.equal(installedModule.KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRevision, producerRevision);
   assert.equal(typeof installedModule.createKaminosFluidRuntime, 'function');
+  const terrainFrame = (priorEpoch, currentEpoch, motionClass, bedHeight, supportSpeed = 0) => (
+    installedContracts.createTerrainFluidFrame({
+      requestedRoute: 'test/clean-install-hill-frame',
+      effectiveRoute: 'test/clean-install-hill-frame',
+      producerId: 'clean-install-hill',
+      producerRevision: `clean-install-hill-${currentEpoch}`,
+      requestedSourceId: 'clean-install-live-hill',
+      effectiveSourceId: 'clean-install-live-hill',
+      worldMetersPerUnit: 1,
+      gravity: [0, -9.81, 0],
+      terrainId: 'clean-install-hills',
+      supportClass: 'heightfield',
+      transformId: 'clean-install-chart-v1',
+      priorEpoch,
+      currentEpoch,
+      motionClass,
+      grid: { width: 1, height: 1, spacing: [0.25, 0.25], origin: [0, 0, 0] },
+      fields: {
+        bedHeight: new Float64Array([bedHeight]),
+        jacobian: new Float64Array([1]),
+        gradient: new Float64Array(2),
+        tangentU: new Float64Array([1, 0, 0]),
+        tangentV: new Float64Array([0, 0, 1]),
+        normal: new Float64Array([0, 1, 0]),
+        supportVelocity: new Float64Array([0, supportSpeed, 0]),
+        valid: new Uint8Array([1]),
+      },
+      dirtyRegions: [{ x: 0, y: 0, width: 1, height: 1 }],
+      motionSubstepEnvelope: motionClass === 'phase_morph' ? 1 / 60 : null,
+      complete: true,
+    })
+  );
+  const initialTerrain = terrainFrame(0, 1, 'stable', 0);
+  const installedRuntime = installedModule.createKaminosFluidRuntime({
+    terrainFrame: initialTerrain,
+    depth: new Float64Array([0.1]),
+    producerRevision,
+  });
+  const installedRemapReceipt = installedRuntime.updateTerrain({
+    terrainFrame: terrainFrame(1, 2, 'phase_morph', 0.01, 0.6),
+    deltaSeconds: 1 / 60,
+    maximumBedDisplacement: 0.02,
+    maximumSupportSpeed: 1,
+  });
+  assert.equal(installedRemapReceipt.schema, 'kaminos.fluid.terrain-remap-receipt.v1');
+  assert.equal(installedRemapReceipt.state, 'committed');
+  assert.equal(installedRuntime.identity.terrainEpoch, 2);
 
   const lock = JSON.parse(readFileSync(join(consumerRoot, 'package-lock.json'), 'utf8'));
   const lockEntry = lock.packages['node_modules/@kaminos/fluid-webgpu'];
-  assert.equal(lockEntry.version, '0.1.0');
+  assert.equal(lockEntry.version, '0.2.0');
   assert.match(lockEntry.integrity, /^sha512-/);
   assert.ok(lockEntry.resolved, 'clean-checkout evidence records the resolved artifact');
 
