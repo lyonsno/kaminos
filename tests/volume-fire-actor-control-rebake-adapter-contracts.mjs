@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import * as fireActor from '../volume-fire-actor-mount.mjs';
 
@@ -25,6 +26,12 @@ assert.equal(
   'promoted FireActor does not expose the reusable control/rebake adapter factory',
 );
 assert.deepEqual(fireActor.FIRE_ACTOR_REBAKE_CONTROL_IDS, controlIds);
+
+function sha256(values) {
+  return createHash('sha256')
+    .update(new Uint8Array(values.buffer, values.byteOffset, values.byteLength))
+    .digest('hex');
+}
 
 function tinyState(mode = 'frozen') {
   const grid = 7;
@@ -65,8 +72,8 @@ function tinyState(mode = 'frozen') {
     source: {
       mode,
       stateId: `${mode}-fixture-state-120`,
-      fluidSha256: 'a'.repeat(64),
-      frontSha256: 'b'.repeat(64),
+      fluidSha256: sha256(fluid),
+      frontSha256: sha256(front),
       cameraIdentity: 'fire-actor-live-parity-camera-v1',
       simStepCount: 120,
       routeIdentity: 'kaminos-volume-live-v0',
@@ -190,6 +197,52 @@ await assert.rejects(
     requestedControls: Object.fromEntries(Object.entries(requestedControls).slice(1)),
   }),
   /fire-actor-rebake-controls-incomplete/,
+);
+const mutatedFrozenState = tinyState('frozen');
+mutatedFrozenState.fluid[0] += 0.5;
+await assert.rejects(
+  adapter.rebake({
+    sourceMode: 'frozen',
+    state: mutatedFrozenState,
+    requestedControls,
+  }),
+  /fire-actor-rebake-field-hash-mismatch:fluid/,
+  'frozen field bytes must not retain a stale declared source identity',
+);
+const mutatedFrozenFront = tinyState('frozen');
+mutatedFrozenFront.front[0] += 0.5;
+await assert.rejects(
+  adapter.rebake({
+    sourceMode: 'frozen',
+    state: mutatedFrozenFront,
+    requestedControls,
+  }),
+  /fire-actor-rebake-field-hash-mismatch:front/,
+  'frozen front bytes must not retain a stale declared source identity',
+);
+assert.throws(
+  () => fireActor.fireActorRebakeControlsFromVolumeControls({ reactionBoundaryFireTip: 1.23 }),
+  /fire-actor-rebake-volume-controls-incomplete/,
+  'partial live controls must not be padded with analytical defaults',
+);
+assert.deepEqual(
+  fireActor.fireActorRebakeControlsFromVolumeControls({
+    reactionBoundaryFireTip: requestedControls.volume_reaction_boundary_fire_tip,
+    reactionBoundaryTopology: requestedControls.volume_reaction_boundary_topology,
+    reactionBoundaryFireErosion: requestedControls.volume_reaction_boundary_fire_erosion,
+    reactionBoundaryCut: requestedControls.volume_reaction_boundary_cut,
+    reactionBoundarySoftness: requestedControls.volume_reaction_boundary_softness,
+    reactionBoundaryCoreReject: requestedControls.volume_reaction_boundary_core_reject,
+    reactionBoundarySupportThermal: requestedControls.volume_reaction_boundary_support_thermal,
+    reactionBoundarySupportReaction: requestedControls.volume_reaction_boundary_support_reaction,
+    reactionBoundarySupportFront: requestedControls.volume_reaction_boundary_support_front,
+    reactionBoundarySupportInterface: requestedControls.volume_reaction_boundary_support_interface,
+    reactionBoundaryFireRidge: requestedControls.volume_reaction_boundary_fire_ridge,
+    reactionBoundaryFireRidgeCut: requestedControls.volume_reaction_boundary_fire_ridge_cut,
+    reactionBoundaryCurl: requestedControls.volume_reaction_boundary_curl,
+    reactionBoundaryDivergence: requestedControls.volume_reaction_boundary_divergence,
+  }),
+  requestedControls,
 );
 assert.throws(
   () => fireActor.createFireActorControlRebakeAdapter({
