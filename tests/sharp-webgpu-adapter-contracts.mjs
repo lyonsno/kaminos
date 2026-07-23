@@ -509,7 +509,7 @@ try {
   assert.equal(failureReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(failureReport.breathingRoom.requestedScheduler.vitBlockChunkSize, 1);
   assert.equal(failureReport.breathingRoom.requestedScheduler.vitMicroduty, true);
-  assert.equal(failureReport.breathingRoom.requestedScheduler.vitMicrodutyMode, 'dispatch-major');
+  assert.equal(failureReport.breathingRoom.requestedScheduler.vitMicrodutyMode, 'four-stage');
   assert.equal(failureReport.breathingRoom.requestedScheduler.spnFusionChunkItems, 524288);
   assert.equal(failureReport.breathingRoom.effectiveScheduler, null);
   assert.equal(failureReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
@@ -519,7 +519,7 @@ try {
   assert.equal(failureReport.pipelineScheduler.schedulerMode.effective, 'friendly');
   assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitBlockChunkSize, 1);
   assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitMicroduty, true);
-  assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitMicrodutyMode, 'dispatch-major');
+  assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitMicrodutyMode, 'four-stage');
   assert.equal(failureReport.pipelineScheduler.requestedScheduler.spnFusionChunkItems, 524288);
   assert.equal(failureReport.pipelineScheduler.effectiveScheduler, null);
   assert.equal(failureReport.schedulerVerification.status, 'unsupported');
