@@ -3,11 +3,17 @@ import {
   defaultStageBControls,
   normalizeStageBControls,
   rebakeAnalyticalStageB,
+  STAGE_B_ANALYTICAL_PROJECTION,
 } from './volume-stage-b-analytical-rebake.mjs';
 
-export const FIRE_ACTOR_CONTROL_REBAKE_SCHEMA = 'kaminos.fire-actor-control-rebake-adapter.v0';
-export const FIRE_ACTOR_CONTROL_REBAKE_RECEIPT_SCHEMA = 'kaminos.fire-actor-control-rebake-receipt.v0';
+export const FIRE_ACTOR_CONTROL_REBAKE_SCHEMA = 'kaminos.fire-actor-control-rebake-adapter.v1';
+export const FIRE_ACTOR_CONTROL_REBAKE_RECEIPT_SCHEMA = 'kaminos.fire-actor-control-rebake-receipt.v1';
+export const FIRE_ACTOR_STAGE_B_CAPTURE_LEASE_SCHEMA = 'kaminos.fire-actor-stage-b-capture-lease.v1';
+export const FIRE_ACTOR_FULL_GRID_EXPORT_SCHEMA = 'kaminos.volume.full-field-export.v0';
+export const FIRE_ACTOR_FULL_GRID_EXPORT_AUTHORITY = 'debug-full-grid-webgpu-copy-buffer-readback';
+export const FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY = 'full-grid-fluid-front-boundary-sidecars-v0';
 export const FIRE_ACTOR_REBAKE_CONTROL_IDS = MANDATORY_STAGE_B_CONTROLS;
+export { STAGE_B_ANALYTICAL_PROJECTION };
 
 const FIRE_ACTOR_MOUNT_SCHEMA = 'kaminos.fire-actor-mount.v1';
 const HEX_64 = /^[0-9a-f]{64}$/;
@@ -90,8 +96,16 @@ function validateState(state, requestedMode) {
   if (state?.source?.mode !== requestedMode) {
     throw new Error(`fire-actor-rebake-source-mode-mismatch:requested=${requestedMode}:effective=${state?.source?.mode || 'missing'}`);
   }
-  if (!Number.isInteger(state.source?.simStepCount) || !state.source?.routeIdentity || !state.source?.backend) {
+  if (!Number.isInteger(state.source?.simStepCount)
+    || !state.source?.routeIdentity
+    || !state.source?.backend) {
     throw new Error('fire-actor-rebake-source-identity-incomplete');
+  }
+  if (state.source.exportAuthority !== FIRE_ACTOR_FULL_GRID_EXPORT_AUTHORITY) {
+    throw new Error(`fire-actor-rebake-source-export-authority-mismatch:${state.source.exportAuthority || 'missing'}`);
+  }
+  if (state.source.exportIdentity !== FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY) {
+    throw new Error(`fire-actor-rebake-source-export-identity-mismatch:${state.source.exportIdentity || 'missing'}`);
   }
   return state;
 }
@@ -179,6 +193,15 @@ async function readExportField(engine, session, kind, expectedFloatCount) {
   while (startFloat < expectedFloatCount) {
     const chunk = engine.readDebugFullFieldExportChunk({ sessionId: session.sessionId, kind, startFloat });
     if (chunk?.ok !== true) throw new Error(`fire-actor-rebake-source-read-failed:${kind}:${chunk?.reason || 'unknown'}`);
+    if (chunk.schema !== FIRE_ACTOR_FULL_GRID_EXPORT_SCHEMA) {
+      throw new Error(`fire-actor-rebake-source-chunk-schema-mismatch:${kind}:${chunk.schema || 'missing'}`);
+    }
+    if (chunk.identity !== FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY) {
+      throw new Error(`fire-actor-rebake-source-chunk-identity-mismatch:${kind}:${chunk.identity || 'missing'}`);
+    }
+    if (chunk.dtype !== 'float32') {
+      throw new Error(`fire-actor-rebake-source-chunk-dtype-mismatch:${kind}:${chunk.dtype || 'missing'}`);
+    }
     if (chunk.kind !== kind || chunk.startFloat !== startFloat || chunk.floatCount <= 0) {
       throw new Error(`fire-actor-rebake-source-chunk-invalid:${kind}:${startFloat}`);
     }
@@ -222,10 +245,20 @@ export function createVolumeEngineStageBStateReader(engine) {
     const wasPaused = before.selectiveHeadLiveCapturePaused === true;
     if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(true);
     let session = null;
+    let acquired = false;
     try {
       session = await engine.beginDebugFullFieldExport();
       if (session?.ok !== true || session.status !== 'captured' || session.completeFieldCoverage !== true) {
         throw new Error(`fire-actor-rebake-source-capture-failed:${session?.failurePhase || 'capture'}:${session?.reason || 'unknown'}`);
+      }
+      if (session.schema !== FIRE_ACTOR_FULL_GRID_EXPORT_SCHEMA) {
+        throw new Error(`fire-actor-rebake-source-export-schema-mismatch:${session.schema || 'missing'}`);
+      }
+      if (session.authority !== FIRE_ACTOR_FULL_GRID_EXPORT_AUTHORITY) {
+        throw new Error(`fire-actor-rebake-source-export-authority-mismatch:${session.authority || 'missing'}`);
+      }
+      if (session.identity !== FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY) {
+        throw new Error(`fire-actor-rebake-source-export-identity-mismatch:${session.identity || 'missing'}`);
       }
       const fluid = await readExportField(engine, session, 'fluid', session.fluid.floatCount);
       const front = await readExportField(engine, session, 'front', session.front.floatCount);
@@ -243,6 +276,7 @@ export function createVolumeEngineStageBStateReader(engine) {
         fluidSha256,
         frontSha256,
         cameraIdentity,
+        captureCameraIdentity: cameraIdentity,
         simStepCount: before.simStepCount,
         routeIdentity: session.routeIdentity,
         effectiveRoute: session.effectiveRoute,
@@ -250,7 +284,7 @@ export function createVolumeEngineStageBStateReader(engine) {
         exportAuthority: session.authority,
         exportIdentity: session.identity,
       };
-      return {
+      const state = {
         grid: session.grid,
         fluid,
         front,
@@ -259,11 +293,93 @@ export function createVolumeEngineStageBStateReader(engine) {
           stateId: `fireactor-live-${await sha256Json(sourceBasis)}`,
         },
       };
+      let released = false;
+      const verifyHeldState = () => {
+        if (released) throw new Error('fire-actor-rebake-source-lease-already-released');
+        const held = engine.debugState();
+        const heldCameraIdentity = String(held.cameraSignature || '');
+        if (held.simStepCount !== before.simStepCount) {
+          throw new Error(`fire-actor-rebake-source-advanced-during-lease:${before.simStepCount}:${held.simStepCount}`);
+        }
+        if (heldCameraIdentity !== cameraIdentity) {
+          throw new Error(`fire-actor-rebake-source-camera-drift-during-lease:${cameraIdentity}:${heldCameraIdentity || 'missing'}`);
+        }
+        if (held.selectiveHeadLiveCapturePaused !== true) {
+          throw new Error('fire-actor-rebake-source-pause-lost-during-lease');
+        }
+        return {
+          captureSimStepCount: before.simStepCount,
+          preReleaseSimStepCount: held.simStepCount,
+          captureCameraIdentity: cameraIdentity,
+          preReleaseCameraIdentity: heldCameraIdentity,
+          advancedDuringLease: false,
+        };
+      };
+      const release = () => {
+        let held = null;
+        let heldError = null;
+        try {
+          held = verifyHeldState();
+        } catch (error) {
+          heldError = error;
+        }
+        let releaseError = null;
+        try {
+          engine.releaseDebugFullFieldExport({ sessionId: session.sessionId });
+        } catch (error) {
+          releaseError = error;
+        } finally {
+          if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(false);
+          released = true;
+        }
+        const after = engine.debugState();
+        const postReleaseCameraIdentity = String(after.cameraSignature || '');
+        const restoredPauseState = after.selectiveHeadLiveCapturePaused === true;
+        if (restoredPauseState !== wasPaused) {
+          throw new Error(`fire-actor-rebake-source-pause-restore-failed:${wasPaused}:${restoredPauseState}`);
+        }
+        if (heldError) throw heldError;
+        if (wasPaused && after.simStepCount !== before.simStepCount) {
+          throw new Error(`fire-actor-rebake-source-advanced-after-release-while-paused:${before.simStepCount}:${after.simStepCount}`);
+        }
+        if (releaseError) throw releaseError;
+        return {
+          ...held,
+          postReleaseSimStepCount: after.simStepCount,
+          postReleaseCameraIdentity,
+          priorPauseState: wasPaused,
+          restoredPauseState,
+          advancedAfterRelease: after.simStepCount !== held.preReleaseSimStepCount,
+        };
+      };
+      acquired = true;
+      return Object.freeze({
+        schema: FIRE_ACTOR_STAGE_B_CAPTURE_LEASE_SCHEMA,
+        state,
+        priorPauseState: wasPaused,
+        verifyHeldState,
+        release,
+      });
     } finally {
-      if (session?.sessionId) engine.releaseDebugFullFieldExport({ sessionId: session.sessionId });
-      if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(false);
+      if (!acquired) {
+        try {
+          if (session?.sessionId) engine.releaseDebugFullFieldExport({ sessionId: session.sessionId });
+        } finally {
+          if (!wasPaused) engine.setSelectiveHeadLiveCapturePaused(false);
+        }
+      }
     }
   };
+}
+
+function validateLiveCaptureLease(lease) {
+  if (lease?.schema !== FIRE_ACTOR_STAGE_B_CAPTURE_LEASE_SCHEMA
+    || !lease.state
+    || typeof lease.verifyHeldState !== 'function'
+    || typeof lease.release !== 'function') {
+    throw new Error('fire-actor-rebake-live-source-lease-invalid');
+  }
+  return lease;
 }
 
 export function validateFireActorControlRebakeReceipt(receipt, { mount, requestedControls, sourceMode } = {}) {
@@ -290,6 +406,18 @@ export function validateFireActorControlRebakeReceipt(receipt, { mount, requeste
   }
   if (receipt.fallbackReason !== null || receipt.simulatorAdvanced !== false) {
     throw new Error('fire-actor-rebake-receipt-fallback-or-state-advance');
+  }
+  if (receipt.source?.advancedDuringLease !== false
+    || receipt.source?.captureCameraIdentity !== receipt.source?.cameraIdentity
+    || receipt.source?.cameraRole !== 'capture-state-binding-only-not-pixel-projection'
+    || receipt.source?.exportAuthority !== FIRE_ACTOR_FULL_GRID_EXPORT_AUTHORITY
+    || receipt.source?.exportIdentity !== FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY) {
+    throw new Error('fire-actor-rebake-receipt-source-lease-mismatch');
+  }
+  if (receipt.projection?.requested !== STAGE_B_ANALYTICAL_PROJECTION.requested
+    || receipt.projection?.effective !== STAGE_B_ANALYTICAL_PROJECTION.effective
+    || !HEX_64.test(String(receipt.projection?.identity || ''))) {
+    throw new Error('fire-actor-rebake-receipt-projection-mismatch');
   }
   if (JSON.stringify(receipt.passes?.requested) !== JSON.stringify(receipt.passes?.applied)) {
     throw new Error('fire-actor-rebake-receipt-pass-mismatch');
@@ -320,32 +448,77 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
       const effective = normalizeStageBControls(requested);
       const effectiveBaseline = normalizeStageBControls(baselineRequested);
       let sourceState = state;
+      let liveLease = null;
+      let releasedState = null;
+      let baseline = null;
+      let treatment = null;
+      let workError = null;
       if (sourceMode === 'live') {
         if (state !== undefined) throw new Error('fire-actor-rebake-live-source-state-substitution-forbidden');
         if (typeof readLiveState !== 'function') throw new Error('fire-actor-rebake-live-source-reader-missing');
-        sourceState = await readLiveState();
+        liveLease = validateLiveCaptureLease(await readLiveState());
+        sourceState = liveLease.state;
       }
-      validateState(sourceState, sourceMode);
-      if (sourceMode === 'frozen') await verifyFrozenStateHashes(sourceState);
-      const beforeSimStep = sourceState.source.simStepCount;
-      const baseline = await rebakeAnalyticalStageB({
-        state: sourceState,
-        controls: baselineRequested,
-        width,
-        height,
-      });
-      const treatment = await rebakeAnalyticalStageB({
-        state: sourceState,
-        controls: requested,
-        width,
-        height,
-      });
+      try {
+        validateState(sourceState, sourceMode);
+        if (sourceMode === 'frozen') await verifyFrozenStateHashes(sourceState);
+        baseline = await rebakeAnalyticalStageB({
+          state: sourceState,
+          controls: baselineRequested,
+          width,
+          height,
+        });
+        treatment = await rebakeAnalyticalStageB({
+          state: sourceState,
+          controls: requested,
+          width,
+          height,
+        });
+      } catch (error) {
+        workError = error;
+      }
+      let releaseError = null;
+      if (liveLease) {
+        try {
+          releasedState = liveLease.release();
+        } catch (error) {
+          releaseError = error;
+        }
+      }
+      if (workError && releaseError) {
+        throw new AggregateError([workError, releaseError], 'fire-actor-rebake-work-and-release-failed');
+      }
+      if (releaseError) throw releaseError;
+      if (workError) throw workError;
       if (baseline.receipt.sourceStateIdentity !== treatment.receipt.sourceStateIdentity) {
         throw new Error('fire-actor-rebake-source-state-drift');
+      }
+      if (baseline.receipt.projection?.identity !== treatment.receipt.projection?.identity) {
+        throw new Error('fire-actor-rebake-projection-drift');
+      }
+      for (const producer of [baseline, treatment]) {
+        if (producer.receipt.source?.exportAuthority !== FIRE_ACTOR_FULL_GRID_EXPORT_AUTHORITY
+          || producer.receipt.source?.exportIdentity !== FIRE_ACTOR_FULL_GRID_EXPORT_IDENTITY
+          || producer.receipt.source.exportAuthority !== sourceState.source.exportAuthority
+          || producer.receipt.source.exportIdentity !== sourceState.source.exportIdentity) {
+          throw new Error('fire-actor-rebake-export-authority-drift');
+        }
       }
       if (treatment.receipt.fallback !== null || treatment.receipt.postLoadMutation !== 'analytical-rebake-only') {
         throw new Error('fire-actor-rebake-producer-authority-mismatch');
       }
+      const sourceTiming = releasedState || {
+        captureSimStepCount: sourceState.source.simStepCount,
+        preReleaseSimStepCount: sourceState.source.simStepCount,
+        postReleaseSimStepCount: sourceState.source.simStepCount,
+        captureCameraIdentity: sourceState.source.cameraIdentity,
+        preReleaseCameraIdentity: sourceState.source.cameraIdentity,
+        postReleaseCameraIdentity: sourceState.source.cameraIdentity,
+        priorPauseState: null,
+        restoredPauseState: null,
+        advancedDuringLease: false,
+        advancedAfterRelease: false,
+      };
       const appliedPasses = [...treatment.receipt.appliedPasses];
       const receipt = {
         schema: FIRE_ACTOR_CONTROL_REBAKE_RECEIPT_SCHEMA,
@@ -368,11 +541,25 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
           fluidSha256: sourceState.source.fluidSha256,
           frontSha256: sourceState.source.frontSha256,
           cameraIdentity: sourceState.source.cameraIdentity,
+          captureCameraIdentity: sourceTiming.captureCameraIdentity,
+          cameraRole: 'capture-state-binding-only-not-pixel-projection',
           simStepCount: sourceState.source.simStepCount,
+          captureSimStepCount: sourceTiming.captureSimStepCount,
+          preReleaseSimStepCount: sourceTiming.preReleaseSimStepCount,
+          postReleaseSimStepCount: sourceTiming.postReleaseSimStepCount,
+          preReleaseCameraIdentity: sourceTiming.preReleaseCameraIdentity,
+          postReleaseCameraIdentity: sourceTiming.postReleaseCameraIdentity,
+          priorPauseState: sourceTiming.priorPauseState,
+          restoredPauseState: sourceTiming.restoredPauseState,
+          advancedDuringLease: sourceTiming.advancedDuringLease,
+          advancedAfterRelease: sourceTiming.advancedAfterRelease,
           routeIdentity: sourceState.source.routeIdentity,
           effectiveRoute: sourceState.source.effectiveRoute || sourceState.source.routeIdentity,
           backend: sourceState.source.backend,
+          exportAuthority: sourceState.source.exportAuthority,
+          exportIdentity: sourceState.source.exportIdentity,
         },
+        projection: clone(treatment.receipt.projection),
         boundary: {
           baseline: clone(baselineBoundary),
           requested: 'analytical-recomputed',
@@ -384,6 +571,7 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
           treatmentStageB: treatment.receipt.stageBIdentity,
           deposition: treatment.receipt.depositionIdentity,
           pixels: treatment.receipt.pixelIdentity,
+          projection: treatment.receipt.projection.identity,
         },
         passes: {
           authority: 'cpu-analytical-recompute-no-gpu-command-encoding-v0',
@@ -391,7 +579,7 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
           encoded: [],
           applied: appliedPasses,
         },
-        simulatorAdvanced: sourceState.source.simStepCount !== beforeSimStep,
+        simulatorAdvanced: sourceTiming.advancedDuringLease,
         fallbackReason: null,
         output: clone(treatment.receipt.output),
       };
