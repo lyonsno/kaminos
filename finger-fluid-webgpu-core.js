@@ -112,115 +112,325 @@ export const KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL = 'https://pol
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 export const KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT = 'deterministic-binary-volume-weighted-sheet-refinement-v0';
-export const KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid-representation-frame.v1';
-export const KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE = 'kaminos-fluid-representation-frame-v1';
-export const KAMINOS_FLUID_SIMULATION_RESIDENCY_AUTHORITY = 'simulation-physical-event-hysteresis-v1';
+export const KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid.representation-frame.v1';
+export const KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE = 'kaminos/fluid/representation-frame';
+export const KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY = 'macro-local-parcel-exclusive-v1';
+export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.1.0';
+const KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
+
+function representationFrameFailure(message) {
+  throw new Error(`Fluid representation frame ${message}`);
+}
+
+function representationFrameString(value, label) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    representationFrameFailure(`${label} is missing`);
+  }
+  return value;
+}
+
+function representationFrameFinite(value, label, { positive = false, nonNegative = false } = {}) {
+  if (
+    !Number.isFinite(value)
+    || (positive && value <= 0)
+    || (nonNegative && value < 0)
+  ) {
+    representationFrameFailure(`${label} is invalid: ${value}`);
+  }
+  return value;
+}
+
+function representationFrameTypedArray(value, length, label, { nonNegative = false } = {}) {
+  if (!ArrayBuffer.isView(value) || value instanceof DataView || value.length !== length) {
+    representationFrameFailure(`${label} sample count is invalid`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    representationFrameFinite(value[index], `${label}[${index}]`, { nonNegative });
+  }
+}
+
+function representationFrameGrid(value, label) {
+  if (!value || typeof value !== 'object') {
+    representationFrameFailure(`${label} is missing`);
+  }
+  if (
+    !Number.isInteger(value.width)
+    || value.width <= 0
+    || !Number.isInteger(value.height)
+    || value.height <= 0
+  ) {
+    representationFrameFailure(`${label} dimensions are invalid`);
+  }
+  if (
+    !Array.isArray(value.spacing)
+    || value.spacing.length !== 2
+    || !value.spacing.every(component => Number.isFinite(component) && component > 0)
+    || !Array.isArray(value.origin)
+    || value.origin.length !== 3
+    || !value.origin.every(Number.isFinite)
+  ) {
+    representationFrameFailure(`${label} metric is invalid`);
+  }
+  return value;
+}
 
 export function validateFingerFluidOpticalRepresentationFrame(frame, expectedIdentity = {}) {
   if (!frame || typeof frame !== 'object') {
     throw new TypeError('Fluid representation frame is missing');
   }
+  const packageDescriptor = expectedIdentity?.packageDescriptor;
   if (
     !expectedIdentity
     || typeof expectedIdentity !== 'object'
-    || typeof expectedIdentity.sourceRevision !== 'string'
-    || expectedIdentity.sourceRevision.trim().length === 0
+    || typeof expectedIdentity.artifactRevision !== 'string'
+    || expectedIdentity.artifactRevision.trim().length === 0
+    || typeof expectedIdentity.producerRevision !== 'string'
+    || expectedIdentity.producerRevision.trim().length === 0
     || !Number.isInteger(expectedIdentity.fluidEpoch)
     || expectedIdentity.fluidEpoch < 0
     || !Number.isInteger(expectedIdentity.terrainEpoch)
     || expectedIdentity.terrainEpoch < 0
+    || !packageDescriptor
+    || typeof packageDescriptor !== 'object'
   ) {
     throw new Error('Expected fluid representation frame identity is incomplete');
   }
-  if (frame.schema !== KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA) {
-    throw new Error(`Fluid representation frame schema is unsupported: ${frame.schema || 'missing'}`);
+  if (packageDescriptor.schema !== KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA) {
+    representationFrameFailure(`package descriptor schema is unsupported: ${packageDescriptor.schema || 'missing'}`);
   }
-  if (
-    frame.requestedRoute !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
-    || frame.effectiveRoute !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
-    || frame.requestedRoute !== frame.effectiveRoute
-  ) {
-    throw new Error(`Fluid representation frame route disagreement: ${JSON.stringify({
-      requestedRoute: frame.requestedRoute || null,
-      effectiveRoute: frame.effectiveRoute || null,
+  if (packageDescriptor.sourceAuthority !== 'live_runtime') {
+    representationFrameFailure(`package source authority is unsupported: ${packageDescriptor.sourceAuthority || 'missing'}`);
+  }
+  if (packageDescriptor.fallbackStatus !== 'none') {
+    representationFrameFailure(`package fallback is not accepted: ${packageDescriptor.fallbackStatus || 'missing'}`);
+  }
+  if (packageDescriptor.packageName !== '@kaminos/fluid-webgpu') {
+    representationFrameFailure(`package identity is unsupported: ${packageDescriptor.packageName || 'missing'}`);
+  }
+  representationFrameString(packageDescriptor.packageVersion, 'package version');
+  if (packageDescriptor.packageVersion !== KAMINOS_FLUID_PACKAGE_VERSION) {
+    representationFrameFailure(`package version is unsupported: ${packageDescriptor.packageVersion}`);
+  }
+  representationFrameString(packageDescriptor.artifactRevision, 'package artifact revision');
+  representationFrameString(packageDescriptor.runtimeRevision, 'package runtime revision');
+  representationFrameString(packageDescriptor.runtimeRoute, 'package runtime route');
+  if (packageDescriptor.runtimeRoute !== KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE) {
+    representationFrameFailure(`package runtime route is unsupported: ${packageDescriptor.runtimeRoute}`);
+  }
+  if (packageDescriptor.artifactRevision !== expectedIdentity.artifactRevision) {
+    representationFrameFailure(`package artifact revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.artifactRevision,
+      observed: packageDescriptor.artifactRevision,
     })}`);
   }
-  if (!Object.hasOwn(frame, 'fallbackReason') || frame.fallbackReason !== null) {
-    throw new Error(`Fluid representation frame fallback is not accepted: ${frame.fallbackReason || 'missing'}`);
-  }
-  if (typeof frame.sourceRevision !== 'string' || frame.sourceRevision.trim().length === 0) {
-    throw new Error('Fluid representation frame source revision is missing');
+  if (packageDescriptor.runtimeRevision !== expectedIdentity.producerRevision) {
+    representationFrameFailure(`package runtime revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.producerRevision,
+      observed: packageDescriptor.runtimeRevision,
+    })}`);
   }
   if (
-    frame.sourceRevision !== expectedIdentity.sourceRevision
+    !Array.isArray(packageDescriptor.representationRoutes)
+    || !packageDescriptor.representationRoutes.includes(KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE)
   ) {
-    throw new Error(`Fluid representation frame source revision disagreement: ${JSON.stringify({
-      expected: expectedIdentity.sourceRevision,
-      observed: frame.sourceRevision,
+    representationFrameFailure('package does not publish the canonical representation route');
+  }
+  if (frame.schema !== KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA) {
+    representationFrameFailure(`schema is unsupported: ${frame.schema || 'missing'}`);
+  }
+  if (
+    !frame.route
+    || typeof frame.route !== 'object'
+    || frame.route.requested !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
+    || frame.route.effective !== KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE
+    || frame.route.requested !== frame.route.effective
+  ) {
+    representationFrameFailure(`route disagreement: ${JSON.stringify({
+      requested: frame.route?.requested || null,
+      effective: frame.route?.effective || null,
+    })}`);
+  }
+  for (const forbidden of ['camera', 'view', 'projection', 'viewport', 'screenSpaceDemand']) {
+    if (Object.hasOwn(frame, forbidden)) {
+      representationFrameFailure(`contains camera-owned state: ${forbidden}`);
+    }
+  }
+  representationFrameString(frame.producerRevision, 'producer revision');
+  if (frame.producerRevision !== expectedIdentity.producerRevision) {
+    representationFrameFailure(`producer revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.producerRevision,
+      observed: frame.producerRevision,
     })}`);
   }
   if (!Number.isInteger(frame.fluidEpoch) || frame.fluidEpoch < 0) {
-    throw new Error(`Fluid representation frame fluid epoch is invalid: ${frame.fluidEpoch}`);
+    representationFrameFailure(`fluid epoch is invalid: ${frame.fluidEpoch}`);
   }
   if (frame.fluidEpoch !== expectedIdentity.fluidEpoch) {
-    throw new Error(`Stale or substituted fluid epoch: ${JSON.stringify({
+    representationFrameFailure(`fluid epoch disagreement: ${JSON.stringify({
       expected: expectedIdentity.fluidEpoch,
       observed: frame.fluidEpoch,
     })}`);
   }
   if (!Number.isInteger(frame.terrainEpoch) || frame.terrainEpoch < 0) {
-    throw new Error(`Fluid representation frame terrain epoch is invalid: ${frame.terrainEpoch}`);
+    representationFrameFailure(`terrain epoch is invalid: ${frame.terrainEpoch}`);
   }
   if (frame.terrainEpoch !== expectedIdentity.terrainEpoch) {
-    throw new Error(`Stale or substituted terrain epoch: ${JSON.stringify({
+    representationFrameFailure(`terrain epoch disagreement: ${JSON.stringify({
       expected: expectedIdentity.terrainEpoch,
       observed: frame.terrainEpoch,
     })}`);
   }
-  if (!Number.isFinite(frame.physicalMetersPerWorldUnit) || frame.physicalMetersPerWorldUnit <= 0) {
-    throw new Error(`Fluid representation frame physical scale is invalid: ${frame.physicalMetersPerWorldUnit}`);
+  if (frame.complete !== true) {
+    representationFrameFailure('is incomplete');
   }
-  if (frame.cameraIndependent !== true) {
-    throw new Error('Fluid representation frame must be camera independent');
-  }
-  if (frame.residencyAuthority !== KAMINOS_FLUID_SIMULATION_RESIDENCY_AUTHORITY) {
-    throw new Error(`Fluid representation frame residency authority is invalid: ${frame.residencyAuthority || 'missing'}`);
-  }
-  if (frame.completeness !== 'complete') {
-    throw new Error(`Fluid representation frame is not complete: ${frame.completeness || 'missing'}`);
-  }
-  if (!Number.isFinite(frame.confidence) || frame.confidence < 0 || frame.confidence > 1) {
-    throw new Error(`Fluid representation frame confidence is invalid: ${frame.confidence}`);
+  if (frame.ownershipIdentity !== KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY) {
+    representationFrameFailure(`ownership identity is invalid: ${frame.ownershipIdentity || 'missing'}`);
   }
 
-  const representations = frame.representations;
-  if (!representations || typeof representations !== 'object') {
-    throw new Error('Fluid representation frame representations are missing');
+  const outputGrid = representationFrameGrid(frame.grid, 'output grid');
+  const grid = representationFrameGrid(frame.macro?.grid, 'macro grid');
+  const expectedSampleCount = outputGrid.width * outputGrid.height;
+  if (frame.expectedSampleCount !== expectedSampleCount) {
+    representationFrameFailure(`expected sample count mismatch: ${frame.expectedSampleCount}`);
   }
-  const availableRepresentations = [];
-  for (const name of ['macro', 'local', 'parcel']) {
-    const representation = representations[name];
-    if (!representation || representation.available !== true) continue;
-    if (typeof representation.source !== 'string' || representation.source.trim().length === 0) {
-      throw new Error(`Fluid representation frame ${name} representation source is missing`);
-    }
-    availableRepresentations.push(name);
+  if (
+    grid.width !== outputGrid.width
+    || grid.height !== outputGrid.height
+    || grid.spacing.some((component, index) => component !== outputGrid.spacing[index])
+    || grid.origin.some((component, index) => component !== outputGrid.origin[index])
+  ) {
+    representationFrameFailure('macro and output grid disagreement');
   }
-  if (availableRepresentations.length === 0) {
-    throw new Error('Fluid representation frame has no available representation');
+  representationFrameString(frame.macro.method, 'macro method');
+  representationFrameTypedArray(
+    frame.macro.mappedDepth,
+    expectedSampleCount,
+    'macro.mappedDepth',
+    { nonNegative: true },
+  );
+  representationFrameTypedArray(
+    frame.macro.mappedMomentumU,
+    expectedSampleCount,
+    'macro.mappedMomentumU',
+  );
+  representationFrameTypedArray(
+    frame.macro.mappedMomentumV,
+    expectedSampleCount,
+    'macro.mappedMomentumV',
+  );
+  if (
+    !frame.macro.materialMasses
+    || typeof frame.macro.materialMasses !== 'object'
+    || Array.isArray(frame.macro.materialMasses)
+  ) {
+    representationFrameFailure('macro material masses are missing');
   }
+  const materialKeys = Object.keys(frame.macro.materialMasses).sort();
+  for (const key of materialKeys) {
+    representationFrameString(key, 'macro material key');
+    representationFrameTypedArray(
+      frame.macro.materialMasses[key],
+      expectedSampleCount,
+      `macro.materialMasses.${key}`,
+      { nonNegative: true },
+    );
+  }
+
+  if (!frame.local || !Number.isInteger(frame.local.count) || frame.local.count < 0) {
+    representationFrameFailure('local representation count is invalid');
+  }
+  representationFrameFinite(frame.local.supportScale, 'local support scale', { nonNegative: true });
+  if (frame.local.count > 0 && frame.local.sourceBuffer == null) {
+    representationFrameFailure('local representation source buffer is missing');
+  }
+  if (!frame.parcels || !Number.isInteger(frame.parcels.count) || frame.parcels.count < 0) {
+    representationFrameFailure('parcel representation count is invalid');
+  }
+  if (frame.parcels.count > 0 && frame.parcels.sourceBuffer == null) {
+    representationFrameFailure('parcel representation source buffer is missing');
+  }
+  if (!Array.isArray(frame.dirtyRegions)) {
+    representationFrameFailure('dirty regions are missing');
+  }
+
+  const physicalMaterial = frame.physicalMaterial;
+  if (!physicalMaterial || typeof physicalMaterial !== 'object') {
+    representationFrameFailure('physical material descriptor is missing');
+  }
+  representationFrameFinite(
+    physicalMaterial.densityKgM3,
+    'physical material density',
+    { positive: true },
+  );
+  const dynamicViscosityPaS = physicalMaterial.dynamicViscosityPaS == null
+    ? null
+    : representationFrameFinite(
+      physicalMaterial.dynamicViscosityPaS,
+      'physical material dynamic viscosity',
+      { nonNegative: true },
+    );
+  if (
+    !physicalMaterial.absorptionPerMeter
+    || typeof physicalMaterial.absorptionPerMeter.length !== 'number'
+    || physicalMaterial.absorptionPerMeter.length !== 3
+  ) {
+    representationFrameFailure('physical material absorption is invalid');
+  }
+  const absorptionPerMeter = Array.from(physicalMaterial.absorptionPerMeter, (value, index) => (
+    representationFrameFinite(value, `physical material absorption[${index}]`, { nonNegative: true })
+  ));
+
+  const availableRepresentations = ['macro'];
+  if (frame.local.count > 0) {
+    availableRepresentations.push('local');
+  }
+  if (frame.parcels.count > 0) {
+    availableRepresentations.push('parcel');
+  }
+  const route = Object.freeze({
+    requested: frame.route.requested,
+    effective: frame.route.effective,
+  });
+  const packageIdentity = Object.freeze({
+    name: packageDescriptor.packageName,
+    version: packageDescriptor.packageVersion,
+    artifactRevision: packageDescriptor.artifactRevision,
+    runtimeRevision: packageDescriptor.runtimeRevision,
+    sourceAuthority: packageDescriptor.sourceAuthority,
+    fallbackStatus: packageDescriptor.fallbackStatus,
+  });
+  const macro = Object.freeze({
+    method: frame.macro.method,
+    width: grid.width,
+    height: grid.height,
+    expectedSampleCount,
+    materialKeys: Object.freeze(materialKeys),
+  });
+  const material = Object.freeze({
+    densityKgM3: physicalMaterial.densityKgM3,
+    dynamicViscosityPaS,
+    absorptionPerMeter: Object.freeze(absorptionPerMeter),
+  });
 
   return Object.freeze({
     schema: frame.schema,
-    requestedRoute: frame.requestedRoute,
-    effectiveRoute: frame.effectiveRoute,
-    sourceRevision: frame.sourceRevision,
+    route,
+    package: packageIdentity,
+    producerRevision: frame.producerRevision,
     fluidEpoch: frame.fluidEpoch,
     terrainEpoch: frame.terrainEpoch,
-    physicalMetersPerWorldUnit: frame.physicalMetersPerWorldUnit,
-    confidence: frame.confidence,
-    cameraIndependent: true,
-    residencyAuthority: frame.residencyAuthority,
+    ownershipIdentity: frame.ownershipIdentity,
+    macro,
+    local: Object.freeze({
+      count: frame.local.count,
+      supportScale: frame.local.supportScale,
+    }),
+    parcels: Object.freeze({ count: frame.parcels.count }),
+    physicalMaterial: material,
+    dirtyRegionCount: frame.dirtyRegions.length,
+    complete: true,
+    expectedSampleCount,
     availableRepresentations: Object.freeze(availableRepresentations),
   });
 }

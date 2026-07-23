@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@kaminos/fluid-webgpu": "https://raw.githubusercontent.com/lyonsno/kaminos/b8abcdbe2c949b1723c8b3ade3d632740de7e1f3/artifacts/fluid/kaminos-fluid-webgpu-0.1.0.tgz",
     "@kaminos/webgpu-inference-kit": "^0.1.6"
   }
 }
