@@ -140,6 +140,7 @@ function expectedSchedulerForProfile(profileId) {
     vitMicrodutyMode: 'dispatch-major',
     cpuChunkItems: 16384,
     spnFusionChunkItems: 524288,
+    decoderKernelChunkItems: 1048576,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   };
