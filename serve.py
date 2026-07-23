@@ -4,6 +4,7 @@
 import http.server
 import json
 import math
+import mimetypes
 import os
 import queue
 import re
@@ -47,6 +48,7 @@ KAMINOS_SHARP_WEBGPU_REPO = Path(os.environ.get(
     os.path.expanduser("~/dev/sharp-webgpu"),
 )).expanduser().resolve()
 SHARP_INLINE_MODULE_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "sharp-inline.js"
+SHARP_INLINE_ASSETS_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "assets"
 KAMINOS_SHARP_WEBGPU_WEIGHTS = Path(os.environ.get(
     "KAMINOS_SHARP_WEBGPU_WEIGHTS",
     str(KAMINOS_SHARP_WEBGPU_REPO / "public" / "weights.bin"),
@@ -1446,6 +1448,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         elif request_path == "/sharp-inline/weights.bin":
             target = SHARP_INLINE_WEIGHTS_PATH
             content_type = "application/octet-stream"
+        elif request_path.startswith("/sharp-inline/assets/"):
+            asset_name = request_path.removeprefix("/sharp-inline/assets/")
+            if not asset_name or "/" in asset_name or "\\" in asset_name:
+                self.send_error(404, "Unknown SHARP inline asset")
+                return
+            target = (SHARP_INLINE_ASSETS_PATH / asset_name).resolve()
+            if target.parent != SHARP_INLINE_ASSETS_PATH.resolve():
+                self.send_error(404, "Unknown SHARP inline asset")
+                return
+            content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         else:
             self.send_error(404, "Unknown SHARP inline asset")
             return

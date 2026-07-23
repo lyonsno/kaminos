@@ -35,8 +35,13 @@ assert.match(
 );
 assert.match(
   serve,
-  /def handle_sharp_inline_file\(self, request_path\):[\s\S]{0,1600}request_path == "\/sharp-inline\/sharp-inline\.js"[\s\S]{0,600}request_path == "\/sharp-inline\/weights\.bin"[\s\S]{0,600}self\.send_error\(404/,
-  'the inline asset handler must allow only the exact module and weights paths',
+  /SHARP_INLINE_ASSETS_PATH[\s\S]{0,300}dist-inline[\s\S]{0,100}assets/,
+  'the server must resolve emitted inline chunks from the selected SHARP worktree',
+);
+assert.match(
+  serve,
+  /def handle_sharp_inline_file\(self, request_path\):[\s\S]{0,2200}request_path == "\/sharp-inline\/sharp-inline\.js"[\s\S]{0,600}request_path == "\/sharp-inline\/weights\.bin"[\s\S]{0,1000}request_path\.startswith\("\/sharp-inline\/assets\/"\)[\s\S]{0,1000}self\.send_error\(404/,
+  'the inline asset handler must allow the exact module and weights plus bounded emitted chunks',
 );
 assert.match(
   serve,
