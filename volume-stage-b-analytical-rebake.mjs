@@ -37,6 +37,22 @@ const TAP_OFFSETS = Object.freeze([-1, -0.5, 0, 0.5, 1]);
 const TAP_WEIGHTS = Object.freeze([0.075, 0.225, 0.4, 0.225, 0.075]);
 const HEX_64 = /^[0-9a-f]{64}$/;
 
+export const STAGE_B_ANALYTICAL_PROJECTION = Object.freeze({
+  schema: 'kaminos.volume.stage-b-analytical-projection.v1',
+  requested: 'stage-b-fixed-analytical-projection-v1',
+  effective: 'stage-b-fixed-analytical-projection-v1',
+  coordinateSpace: 'normalized-volume-world-v0',
+  position: Object.freeze([0, 0.6, 3]),
+  target: Object.freeze([0, 0, 0]),
+  verticalFovDegrees: 40,
+  depthPartition: Object.freeze({
+    identity: 'camera-linear-depth-1.8-to-4.3-v0',
+    near: 1.8,
+    far: 4.3,
+    layers: OPTICAL_LAYERS,
+  }),
+});
+
 export const PRODUCTION_STAGE_B_FIXED = Object.freeze({
   identity: 'state120-integration-c5367d2a-boundary-fixed-v0',
   authority: Object.freeze({
@@ -58,16 +74,6 @@ export const PRODUCTION_STAGE_B_FIXED = Object.freeze({
   sootYellowing: 0.44,
   thermalWarmth: 0.16,
   fireLuma: 5,
-});
-
-export const STAGE_B_ANALYTICAL_PROJECTION = Object.freeze({
-  identity: 'fixed-stage-b-analytical-camera-v0',
-  authority: 'fixed-cpu-analytical-projection-not-live-capture-camera-v0',
-  type: 'PerspectiveCamera',
-  position: Object.freeze([0, 0.6, 3]),
-  target: Object.freeze([0, 0, 0]),
-  up: Object.freeze([0, 1, 0]),
-  fov: 40,
 });
 
 function clamp(value, low, high) {
@@ -214,8 +220,10 @@ function velocityDifferentials(fluid, x, y, z, grid) {
 function fixedCameraProject(x, y, z, grid, width, height) {
   const world = [((x + 0.5) / grid) * 2 - 1, ((y + 0.5) / grid) * 2 - 1, ((z + 0.5) / grid) * 2 - 1];
   const position = STAGE_B_ANALYTICAL_PROJECTION.position;
-  const forwardLength = Math.hypot(0, -0.6, -3);
-  const forward = [0, -0.6 / forwardLength, -3 / forwardLength];
+  const target = STAGE_B_ANALYTICAL_PROJECTION.target;
+  const forwardDelta = target.map((value, index) => value - position[index]);
+  const forwardLength = Math.hypot(...forwardDelta);
+  const forward = forwardDelta.map(value => value / forwardLength);
   const right = [1, 0, 0];
   const up = [0, -forward[2], forward[1]];
   const delta = world.map((value, index) => value - position[index]);
@@ -223,14 +231,19 @@ function fixedCameraProject(x, y, z, grid, width, height) {
   const cameraY = delta[0] * up[0] + delta[1] * up[1] + delta[2] * up[2];
   const cameraDepth = delta[0] * forward[0] + delta[1] * forward[1] + delta[2] * forward[2];
   if (cameraDepth <= 0.01) return null;
-  const tanHalfFov = Math.tan((40 * Math.PI / 180) * 0.5);
+  const tanHalfFov = Math.tan((STAGE_B_ANALYTICAL_PROJECTION.verticalFovDegrees * Math.PI / 180) * 0.5);
   const ndcX = cameraX / (cameraDepth * tanHalfFov * (width / height));
   const ndcY = cameraY / (cameraDepth * tanHalfFov);
   if (ndcX < -1.1 || ndcX > 1.1 || ndcY < -1.1 || ndcY > 1.1) return null;
   return {
     pixelX: (ndcX * 0.5 + 0.5) * width,
     pixelY: (1 - (ndcY * 0.5 + 0.5)) * height,
-    depth: clamp((cameraDepth - 1.8) / 2.5, 0, 0.999999),
+    depth: clamp(
+      (cameraDepth - STAGE_B_ANALYTICAL_PROJECTION.depthPartition.near)
+        / (STAGE_B_ANALYTICAL_PROJECTION.depthPartition.far - STAGE_B_ANALYTICAL_PROJECTION.depthPartition.near),
+      0,
+      0.999999,
+    ),
     cameraDepth,
   };
 }
@@ -498,8 +511,28 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
   const pixelIdentity = await hashBytes(pixels);
   const controlsIdentity = await hashJson(effectiveControls);
   const fixedProductionControlsIdentity = await hashJson(PRODUCTION_STAGE_B_FIXED);
-  const projectionIdentity = await hashJson(STAGE_B_ANALYTICAL_PROJECTION);
-  const stageBIdentity = await hashJson({ sourceStateIdentity, controlsIdentity, fixedProductionControlsIdentity, projectionIdentity, candidateIdentity, coefficientIdentity, covarianceIdentity, depositionIdentity, pixelIdentity });
+  const projection = {
+    ...STAGE_B_ANALYTICAL_PROJECTION,
+    position: [...STAGE_B_ANALYTICAL_PROJECTION.position],
+    target: [...STAGE_B_ANALYTICAL_PROJECTION.target],
+    depthPartition: { ...STAGE_B_ANALYTICAL_PROJECTION.depthPartition },
+    outputWidth: width,
+    outputHeight: height,
+    aspect: width / height,
+  };
+  const projectionIdentity = await hashJson(projection);
+  projection.identity = projectionIdentity;
+  const stageBIdentity = await hashJson({
+    sourceStateIdentity,
+    controlsIdentity,
+    fixedProductionControlsIdentity,
+    projectionIdentity,
+    candidateIdentity,
+    coefficientIdentity,
+    covarianceIdentity,
+    depositionIdentity,
+    pixelIdentity,
+  });
   const receipt = {
     schema: 'kaminos.volume.stage-b-analytical-rebake-receipt.v0',
     status: 'effective',
@@ -508,10 +541,9 @@ export async function rebakeAnalyticalStageB({ state, controls = {}, width = 320
     controlsIdentity,
     fixedProductionControls: PRODUCTION_STAGE_B_FIXED,
     fixedProductionControlsIdentity,
-    projection: STAGE_B_ANALYTICAL_PROJECTION,
-    projectionIdentity,
     sourceStateIdentity,
     source: { ...state.source, grid },
+    projection,
     stageBIdentity,
     candidateIdentity,
     coefficientIdentity,

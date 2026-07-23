@@ -31,19 +31,19 @@
         "height": 1456,
         "changedPixels": 705602,
         "litPixels": 568989,
-        "sha256": "62388d292bd9d84a8460acd559ee2347b984033e5f42945375c807913b9c25d1"
+        "sha256": "33dd31f4979bd21b4577587d221414503ab9f7e4ded5f1dffac82c6455bf1eb1"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
         "changedPixels": 705602,
         "litPixels": 568989,
-        "sha256": "2145bfb5739e8efcda2b875a7730bfe11c482bc6910082d3d4f84ca34526d93b"
+        "sha256": "5fd7feb13e89628dd8daae86b81bfaf234ba642e8bb33a27f5248879122de0f8"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.00000243246336996337,
+        "meanAbsoluteChannelDelta": 0.000006438873626373626,
         "maxChannelDelta": 1,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
@@ -54,22 +54,22 @@
       "cockpit": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1413955,
-        "litPixels": 1312367,
-        "sha256": "5d692dae99cc39760dc3ab9501fbf1bba06261c75d04b4d0778e7dff0b1ff125"
+        "changedPixels": 1414493,
+        "litPixels": 1312833,
+        "sha256": "01204c614d2785337556681a2aa7347e83e83ce262e703aa8903676fa08204eb"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1413938,
-        "litPixels": 1312370,
-        "sha256": "738557306d8a48dd79787c6207f3e1b4fd350608b6369ad325f4a31b428cf051"
+        "changedPixels": 1414484,
+        "litPixels": 1312839,
+        "sha256": "b2697cfc8007921267fd020856f2956fff4025cdf2e40fe4446f92c524f5a2e1"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.0040343120421245425,
-        "maxChannelDelta": 10,
+        "meanAbsoluteChannelDelta": 0.0042324862637362634,
+        "maxChannelDelta": 9,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
         "pixelsOverToleranceRatio": 0
@@ -79,21 +79,21 @@
       "cockpit": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1419375,
-        "litPixels": 1327456,
-        "sha256": "9c3ddee568081fb3908538ba105a9d0747ab2a97b4ebe7213dad7c8e560c2dba"
+        "changedPixels": 1419314,
+        "litPixels": 1327984,
+        "sha256": "c75947f47275c54da9fac9866c23ec3a371896b13abdea12af93ae3f238278e6"
       },
       "kiln": {
         "width": 1600,
         "height": 1456,
-        "changedPixels": 1419377,
-        "litPixels": 1327444,
-        "sha256": "d431816d738fb3282af6086f891129beca5ce8e55173ce2862e4c2732fff846c"
+        "changedPixels": 1419313,
+        "litPixels": 1327989,
+        "sha256": "997da461a56a31958b1f9d8650f3da193c2aba0271fe31f4237ed58cd62f5214"
       },
       "comparison": {
         "authority": "same-screenshot-equal-viewport-direct-rgb-comparison-v0",
         "pixelCount": 2329600,
-        "meanAbsoluteChannelDelta": 0.0035342261904761905,
+        "meanAbsoluteChannelDelta": 0.003923277243589743,
         "maxChannelDelta": 10,
         "pixelTolerance": 12,
         "pixelsOverTolerance": 0,
@@ -182,11 +182,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.92896174863388,
-          "frameDeltaMs": 91.5,
-          "frameP95Ms": 91.5,
-          "cpuFrameMs": 0.4000000022351742,
-          "cpuFrameP95Ms": 0.5999999977648258,
+          "rafFps": 10.822510822510653,
+          "frameDeltaMs": 92.40000000000146,
+          "frameP95Ms": 92.40000000000146,
+          "cpuFrameMs": 0.30000000074505806,
+          "cpuFrameP95Ms": 0.6999999992549419,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -216,11 +216,11 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.65536
+              "ms": 5.308416
             },
             "compaction": {
               "status": "sampled",
-              "ms": 1.769472
+              "ms": 2.62144
             },
             "finalize": {
               "status": "sampled",
@@ -231,12 +231,15 @@
               "ms": 0
             },
             "indirectSetup": {
-              "status": "sampled",
-              "ms": 0.065536
+              "status": "quantized-below-resolution",
+              "ms": 0,
+              "rawStartNs": "25023639388160",
+              "rawEndNs": "25023639322624",
+              "quantizationAuthority": "implementation-defined-webgpu-timestamp-query-quantization-v0"
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 3.801088
+              "ms": 7.798784
             },
             "matchedRaymarchRaster": {
               "status": "not-requested-by-presentation",
@@ -244,7 +247,7 @@
             },
             "total": {
               "status": "sampled",
-              "ms": 8.454144
+              "ms": 15.859712
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -329,11 +332,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.9170305676856,
-          "frameDeltaMs": 91.59999999999991,
-          "frameP95Ms": 91.59999999999991,
-          "cpuFrameMs": 0.09999999776482582,
-          "cpuFrameP95Ms": 0.3999999985098839,
+          "rafFps": 10.81081081081081,
+          "frameDeltaMs": 92.5,
+          "frameP95Ms": 92.5,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.6000000014901161,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -363,11 +366,11 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.98304
+              "ms": 1.572864
             },
             "compaction": {
               "status": "sampled",
-              "ms": 1.376256
+              "ms": 2.031616
             },
             "finalize": {
               "status": "sampled",
@@ -379,11 +382,11 @@
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 0
+              "ms": 0.065536
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 2.883584
+              "ms": 8.192
             },
             "matchedRaymarchRaster": {
               "status": "not-requested-by-presentation",
@@ -391,7 +394,7 @@
             },
             "total": {
               "status": "sampled",
-              "ms": 5.636096
+              "ms": 12.12416
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -478,11 +481,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.92896174863388,
-          "frameDeltaMs": 91.5,
-          "frameP95Ms": 91.5,
-          "cpuFrameMs": 0.4000000022351742,
-          "cpuFrameP95Ms": 0.5999999977648258,
+          "rafFps": 10.822510822510653,
+          "frameDeltaMs": 92.40000000000146,
+          "frameP95Ms": 92.40000000000146,
+          "cpuFrameMs": 0.30000000074505806,
+          "cpuFrameP95Ms": 0.6999999992549419,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -512,7 +515,7 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 1.835008
+              "ms": 2.031616
             },
             "compaction": {
               "status": "not-requested-by-presentation",
@@ -536,11 +539,11 @@
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 44.761088
+              "ms": 104.660992
             },
             "total": {
               "status": "sampled",
-              "ms": 52.166656
+              "ms": 110.559232
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -625,11 +628,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.9170305676856,
-          "frameDeltaMs": 91.59999999999991,
-          "frameP95Ms": 91.59999999999991,
-          "cpuFrameMs": 0.09999999776482582,
-          "cpuFrameP95Ms": 0.3999999985098839,
+          "rafFps": 10.81081081081081,
+          "frameDeltaMs": 92.5,
+          "frameP95Ms": 92.5,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.6000000014901161,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -659,7 +662,7 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.524288
+              "ms": 0.720896
             },
             "compaction": {
               "status": "not-requested-by-presentation",
@@ -683,11 +686,11 @@
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 80.412672
+              "ms": 87.16288
             },
             "total": {
               "status": "sampled",
-              "ms": 86.50752
+              "ms": 92.209152
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -774,11 +777,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.92896174863388,
-          "frameDeltaMs": 91.5,
-          "frameP95Ms": 91.5,
-          "cpuFrameMs": 0.4000000022351742,
-          "cpuFrameP95Ms": 0.5999999977648258,
+          "rafFps": 10.822510822510653,
+          "frameDeltaMs": 92.40000000000146,
+          "frameP95Ms": 92.40000000000146,
+          "cpuFrameMs": 0.30000000074505806,
+          "cpuFrameP95Ms": 0.6999999992549419,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -808,11 +811,11 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 1.245184
+              "ms": 1.376256
             },
             "compaction": {
               "status": "sampled",
-              "ms": 39.452672
+              "ms": 84.934656
             },
             "finalize": {
               "status": "sampled",
@@ -828,15 +831,15 @@
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 35.848192
+              "ms": 2.424832
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 38.469632
+              "ms": 46.268416
             },
             "total": {
               "status": "sampled",
-              "ms": 82.837504
+              "ms": 87.687168
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -921,11 +924,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 10.9170305676856,
-          "frameDeltaMs": 91.59999999999991,
-          "frameP95Ms": 91.59999999999991,
-          "cpuFrameMs": 0.09999999776482582,
-          "cpuFrameP95Ms": 0.3999999985098839,
+          "rafFps": 10.81081081081081,
+          "frameDeltaMs": 92.5,
+          "frameP95Ms": 92.5,
+          "cpuFrameMs": 0.19999999925494194,
+          "cpuFrameP95Ms": 0.6000000014901161,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -955,15 +958,15 @@
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 39.780352
+              "ms": 46.20288
             },
             "compaction": {
               "status": "sampled",
-              "ms": 0.720896
+              "ms": 37.748736
             },
             "finalize": {
               "status": "sampled",
-              "ms": 38.404096
+              "ms": 0
             },
             "candidateCopy": {
               "status": "removed",
@@ -975,15 +978,15 @@
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 4.849664
+              "ms": 2.29376
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 84.148224
+              "ms": 82.24768
             },
             "total": {
               "status": "sampled",
-              "ms": 84.803584
+              "ms": 86.704128
             }
           },
           "aggregationAuthority": "independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0"
@@ -1025,9 +1028,9 @@
           "near": 0.01,
           "far": 100,
           "position": [
-            1.649999999999999,
-            0.42000000000000015,
-            3.149999999999998
+            1.65,
+            0.4200000000000003,
+            3.1499999999999995
           ],
           "target": [
             0,
@@ -1067,7 +1070,7 @@
             0
           ]
         },
-        "simStepCount": 124,
+        "simStepCount": 125,
         "paused": false
       },
       "kiln": {
@@ -1092,7 +1095,7 @@
             0
           ]
         },
-        "simStepCount": 124,
+        "simStepCount": 125,
         "paused": false
       }
     },
@@ -1119,7 +1122,7 @@
             0
           ]
         },
-        "simStepCount": 124,
+        "simStepCount": 125,
         "paused": true
       },
       "kiln": {
@@ -1144,7 +1147,7 @@
             0
           ]
         },
-        "simStepCount": 124,
+        "simStepCount": 125,
         "paused": true
       }
     },
@@ -1300,7 +1303,7 @@
     "afterStep": 120,
     "result": {
       "receipt": {
-        "schema": "kaminos.fire-actor-control-rebake-receipt.v0",
+        "schema": "kaminos.fire-actor-control-rebake-receipt.v1",
         "status": "applied",
         "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
         "actorId": "wake-kiln-flamebowl-hero",
@@ -1375,23 +1378,55 @@
         "source": {
           "requestedMode": "live",
           "effectiveMode": "live",
-          "stateId": "fireactor-live-0a01b9b5b366daf5233acb300a863bad3f2c5fc6d3d9626364bd834257dc6174",
-          "sourceStateIdentity": "428c187f06bf6efd317a0ef1570921502dc018ed844d0538cd3dae15ed009e3a",
+          "stateId": "fireactor-live-b670db4a0ce85d3f3528092f8b80143a526c973b7acccc517bf26544dbe8285b",
+          "sourceStateIdentity": "eff87b7b5f043f80e7c1c818a40e8942e863e09d0db4a8b34eda22afd54fdf43",
           "fluidSha256": "0e6eaec80e57543ca9c6cc8fadd71f90955d19a4addc8afb2a2a873ff5d932f4",
           "frontSha256": "e0e931704da1139a18371a96c076d5857cb526914ffe609035528a1f94c5330b",
           "cameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
-          "cameraRole": "capture-context-not-analytical-projection",
+          "captureCameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+          "cameraRole": "capture-state-binding-only-not-pixel-projection",
           "simStepCount": 120,
+          "captureSimStepCount": 120,
+          "preReleaseSimStepCount": 120,
+          "postReleaseSimStepCount": 120,
+          "preReleaseCameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+          "postReleaseCameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+          "priorPauseState": true,
+          "restoredPauseState": true,
+          "advancedDuringLease": false,
+          "advancedAfterRelease": false,
           "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
           "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
           "backend": "WebGPU:apple",
           "exportAuthority": "debug-full-grid-webgpu-copy-buffer-readback",
-          "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0",
-          "liveCaptureLease": {
-            "beforeRelease": 120,
-            "afterRelease": 120,
-            "restoredPaused": true
-          }
+          "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0"
+        },
+        "projection": {
+          "schema": "kaminos.volume.stage-b-analytical-projection.v1",
+          "requested": "stage-b-fixed-analytical-projection-v1",
+          "effective": "stage-b-fixed-analytical-projection-v1",
+          "coordinateSpace": "normalized-volume-world-v0",
+          "position": [
+            0,
+            0.6,
+            3
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "verticalFovDegrees": 40,
+          "depthPartition": {
+            "identity": "camera-linear-depth-1.8-to-4.3-v0",
+            "near": 1.8,
+            "far": 4.3,
+            "layers": 16
+          },
+          "outputWidth": 256,
+          "outputHeight": 256,
+          "aspect": 1,
+          "identity": "a9e96a220207acd01c4443a08873546c00d24d8b20823ac4f78ed95bb66b0da1"
         },
         "boundary": {
           "baseline": {
@@ -1522,10 +1557,11 @@
           }
         },
         "identities": {
-          "baselineStageB": "a50941a0534c0de66fad27d06171c4140c242df97232b0329d29f72f09c05889",
-          "treatmentStageB": "273b3fb0496fd909ac0a733e100f1b5f3f9c2c482b7ffce0bd81c8d638cee3ab",
+          "baselineStageB": "7bcab7802c2cb92c84ac8bf256bd0de0d1753e39cc3c46155e151a13865ef88a",
+          "treatmentStageB": "0b56a48875665ab1d88a76f4eac84fd4c359da8af6bde77211fd3447389ce930",
           "deposition": "788e2e744c79ec9e4b8f63fddc0cc234573669d86a40ff83d001190539e5ccee",
-          "pixels": "d51d6f28c569a085eb96833382ffc0cf601e8d82a5a1a28643eb80aff57903fb"
+          "pixels": "d51d6f28c569a085eb96833382ffc0cf601e8d82a5a1a28643eb80aff57903fb",
+          "projection": "a9e96a220207acd01c4443a08873546c00d24d8b20823ac4f78ed95bb66b0da1"
         },
         "passes": {
           "authority": "cpu-analytical-recompute-no-gpu-command-encoding-v0",
@@ -1553,27 +1589,6 @@
         },
         "simulatorAdvanced": false,
         "fallbackReason": null,
-        "projection": {
-          "identity": "fixed-stage-b-analytical-camera-v0",
-          "authority": "fixed-cpu-analytical-projection-not-live-capture-camera-v0",
-          "type": "PerspectiveCamera",
-          "position": [
-            0,
-            0.6,
-            3
-          ],
-          "target": [
-            0,
-            0,
-            0
-          ],
-          "up": [
-            0,
-            1,
-            0
-          ],
-          "fov": 40
-        },
         "output": {
           "width": 256,
           "height": 256,
@@ -1640,10 +1655,27 @@
             "fireLuma": 5
           },
           "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
+          "sourceStateIdentity": "eff87b7b5f043f80e7c1c818a40e8942e863e09d0db4a8b34eda22afd54fdf43",
+          "source": {
+            "mode": "live",
+            "grid": 128,
+            "fluidSha256": "0e6eaec80e57543ca9c6cc8fadd71f90955d19a4addc8afb2a2a873ff5d932f4",
+            "frontSha256": "e0e931704da1139a18371a96c076d5857cb526914ffe609035528a1f94c5330b",
+            "cameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+            "captureCameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+            "simStepCount": 120,
+            "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+            "backend": "WebGPU:apple",
+            "exportAuthority": "debug-full-grid-webgpu-copy-buffer-readback",
+            "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0",
+            "stateId": "fireactor-live-b670db4a0ce85d3f3528092f8b80143a526c973b7acccc517bf26544dbe8285b"
+          },
           "projection": {
-            "identity": "fixed-stage-b-analytical-camera-v0",
-            "authority": "fixed-cpu-analytical-projection-not-live-capture-camera-v0",
-            "type": "PerspectiveCamera",
+            "schema": "kaminos.volume.stage-b-analytical-projection.v1",
+            "requested": "stage-b-fixed-analytical-projection-v1",
+            "effective": "stage-b-fixed-analytical-projection-v1",
+            "coordinateSpace": "normalized-volume-world-v0",
             "position": [
               0,
               0.6,
@@ -1654,30 +1686,19 @@
               0,
               0
             ],
-            "up": [
-              0,
-              1,
-              0
-            ],
-            "fov": 40
+            "verticalFovDegrees": 40,
+            "depthPartition": {
+              "identity": "camera-linear-depth-1.8-to-4.3-v0",
+              "near": 1.8,
+              "far": 4.3,
+              "layers": 16
+            },
+            "outputWidth": 256,
+            "outputHeight": 256,
+            "aspect": 1,
+            "identity": "a9e96a220207acd01c4443a08873546c00d24d8b20823ac4f78ed95bb66b0da1"
           },
-          "projectionIdentity": "e7c75239e78d32b3da459b4cac6c345d68905169fe432ca77bb7c6250e3d5c7a",
-          "sourceStateIdentity": "428c187f06bf6efd317a0ef1570921502dc018ed844d0538cd3dae15ed009e3a",
-          "source": {
-            "mode": "live",
-            "grid": 128,
-            "fluidSha256": "0e6eaec80e57543ca9c6cc8fadd71f90955d19a4addc8afb2a2a873ff5d932f4",
-            "frontSha256": "e0e931704da1139a18371a96c076d5857cb526914ffe609035528a1f94c5330b",
-            "cameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
-            "simStepCount": 120,
-            "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
-            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
-            "backend": "WebGPU:apple",
-            "exportAuthority": "debug-full-grid-webgpu-copy-buffer-readback",
-            "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0",
-            "stateId": "fireactor-live-0a01b9b5b366daf5233acb300a863bad3f2c5fc6d3d9626364bd834257dc6174"
-          },
-          "stageBIdentity": "a50941a0534c0de66fad27d06171c4140c242df97232b0329d29f72f09c05889",
+          "stageBIdentity": "7bcab7802c2cb92c84ac8bf256bd0de0d1753e39cc3c46155e151a13865ef88a",
           "candidateIdentity": "d86a47a49672c57b378664f3d49c1fccd2e6161f42d68e73ea426a2fe64616b2",
           "coefficientIdentity": "15169a7c804824b3239d06ac86d6776330686bb7fdb8f9f911a745f5e995636e",
           "covarianceIdentity": "465083d39b69ebb28f0c2c88ec8588045829853ffa4978e0a125a0a0cbcea124",
@@ -1788,7 +1809,7 @@
           "fallback": null,
           "postLoadMutation": "analytical-rebake-only",
           "simulatorAdvanced": false,
-          "elapsedMs": 1072
+          "elapsedMs": 1119.9000000022352
         },
         "treatment": {
           "schema": "kaminos.volume.stage-b-analytical-rebake-receipt.v0",
@@ -1849,10 +1870,27 @@
             "fireLuma": 5
           },
           "fixedProductionControlsIdentity": "1bccbd10f211311ed4992471e77c74ef154ed0350e4152131013ba3884bdbe71",
+          "sourceStateIdentity": "eff87b7b5f043f80e7c1c818a40e8942e863e09d0db4a8b34eda22afd54fdf43",
+          "source": {
+            "mode": "live",
+            "grid": 128,
+            "fluidSha256": "0e6eaec80e57543ca9c6cc8fadd71f90955d19a4addc8afb2a2a873ff5d932f4",
+            "frontSha256": "e0e931704da1139a18371a96c076d5857cb526914ffe609035528a1f94c5330b",
+            "cameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+            "captureCameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+            "simStepCount": 120,
+            "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+            "backend": "WebGPU:apple",
+            "exportAuthority": "debug-full-grid-webgpu-copy-buffer-readback",
+            "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0",
+            "stateId": "fireactor-live-b670db4a0ce85d3f3528092f8b80143a526c973b7acccc517bf26544dbe8285b"
+          },
           "projection": {
-            "identity": "fixed-stage-b-analytical-camera-v0",
-            "authority": "fixed-cpu-analytical-projection-not-live-capture-camera-v0",
-            "type": "PerspectiveCamera",
+            "schema": "kaminos.volume.stage-b-analytical-projection.v1",
+            "requested": "stage-b-fixed-analytical-projection-v1",
+            "effective": "stage-b-fixed-analytical-projection-v1",
+            "coordinateSpace": "normalized-volume-world-v0",
             "position": [
               0,
               0.6,
@@ -1863,30 +1901,19 @@
               0,
               0
             ],
-            "up": [
-              0,
-              1,
-              0
-            ],
-            "fov": 40
+            "verticalFovDegrees": 40,
+            "depthPartition": {
+              "identity": "camera-linear-depth-1.8-to-4.3-v0",
+              "near": 1.8,
+              "far": 4.3,
+              "layers": 16
+            },
+            "outputWidth": 256,
+            "outputHeight": 256,
+            "aspect": 1,
+            "identity": "a9e96a220207acd01c4443a08873546c00d24d8b20823ac4f78ed95bb66b0da1"
           },
-          "projectionIdentity": "e7c75239e78d32b3da459b4cac6c345d68905169fe432ca77bb7c6250e3d5c7a",
-          "sourceStateIdentity": "428c187f06bf6efd317a0ef1570921502dc018ed844d0538cd3dae15ed009e3a",
-          "source": {
-            "mode": "live",
-            "grid": 128,
-            "fluidSha256": "0e6eaec80e57543ca9c6cc8fadd71f90955d19a4addc8afb2a2a873ff5d932f4",
-            "frontSha256": "e0e931704da1139a18371a96c076d5857cb526914ffe609035528a1f94c5330b",
-            "cameraIdentity": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
-            "simStepCount": 120,
-            "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
-            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
-            "backend": "WebGPU:apple",
-            "exportAuthority": "debug-full-grid-webgpu-copy-buffer-readback",
-            "exportIdentity": "full-grid-fluid-front-boundary-sidecars-v0",
-            "stateId": "fireactor-live-0a01b9b5b366daf5233acb300a863bad3f2c5fc6d3d9626364bd834257dc6174"
-          },
-          "stageBIdentity": "273b3fb0496fd909ac0a733e100f1b5f3f9c2c482b7ffce0bd81c8d638cee3ab",
+          "stageBIdentity": "0b56a48875665ab1d88a76f4eac84fd4c359da8af6bde77211fd3447389ce930",
           "candidateIdentity": "871762a614484603414a3add6ee9c3ae45e89de6ebf95f5e82f083aee60d007f",
           "coefficientIdentity": "39213fa2552b64f5739b1856f87160142153cd030fd453d1fe5f5e9b68e40105",
           "covarianceIdentity": "fb68847e7dbaf4db5ca68658b71bd913b6d941ab963626466965e390035fa38f",
@@ -1997,8 +2024,18 @@
           "fallback": null,
           "postLoadMutation": "analytical-rebake-only",
           "simulatorAdvanced": false,
-          "elapsedMs": 923.7000000029802
+          "elapsedMs": 1003.7999999970198
         }
+      },
+      "engineBefore": {
+        "simStepCount": 120,
+        "cameraSignature": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+        "paused": true
+      },
+      "engineAfter": {
+        "simStepCount": 120,
+        "cameraSignature": "1.6500|0.4200|3.1500|-0.0463|0.2387|0.0114|0.9699|2.7887,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0001,-1.0000,0.0000,0.0000,-0.0100,0.0000",
+        "paused": true
       },
       "pixelByteLength": 262144,
       "baselinePixelByteLength": 262144,

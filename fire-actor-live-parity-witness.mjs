@@ -298,7 +298,7 @@ function validateLiveControlExercise(exercise) {
 
 export function validateLiveRebakeExercise(exercise) {
   const receipt = exercise?.result?.receipt;
-  if (receipt?.schema !== 'kaminos.fire-actor-control-rebake-receipt.v0' || receipt.status !== 'applied') {
+  if (receipt?.schema !== 'kaminos.fire-actor-control-rebake-receipt.v1' || receipt.status !== 'applied') {
     throw new Error('Wake rebake receipt is missing or unapplied');
   }
   if (receipt.mountId !== EXPECTED_MOUNT || receipt.basinRevision !== EXPECTED_REVISION
@@ -310,12 +310,17 @@ export function validateLiveRebakeExercise(exercise) {
     || !/^fireactor-live-[a-f0-9]{64}$/.test(source?.stateId || '')
     || !HEX_64.test(source?.sourceStateIdentity || '')
     || !HEX_64.test(source?.fluidSha256 || '') || !HEX_64.test(source?.frontSha256 || '')
-    || !source?.cameraIdentity || source.cameraRole !== 'capture-context-not-analytical-projection'
+    || !source?.cameraIdentity || source.captureCameraIdentity !== source.cameraIdentity
+    || source.cameraRole !== 'capture-state-binding-only-not-pixel-projection'
     || source.routeIdentity !== EXPECTED_ROUTE || source.effectiveRoute !== EXPECTED_ROUTE
     || !String(source.backend || '').startsWith('WebGPU:')
     || source.exportAuthority !== EXPECTED_EXPORT_AUTHORITY
     || source.exportIdentity !== EXPECTED_EXPORT_IDENTITY
-    || source.liveCaptureLease?.beforeRelease !== 120 || source.liveCaptureLease?.afterRelease !== 120) {
+    || source.captureSimStepCount !== 120 || source.preReleaseSimStepCount !== 120
+    || source.postReleaseSimStepCount !== 120 || source.advancedDuringLease !== false
+    || source.preReleaseCameraIdentity !== source.cameraIdentity
+    || source.postReleaseCameraIdentity !== source.cameraIdentity
+    || source.priorPauseState !== true || source.restoredPauseState !== true) {
     throw new Error('Wake rebake live source identity mismatch');
   }
   const engineBefore = exercise.result.engineBefore;
@@ -371,6 +376,7 @@ export function validateLiveRebakeExercise(exercise) {
     fluidSha256: treatment.source.fluidSha256,
     frontSha256: treatment.source.frontSha256,
     cameraIdentity: treatment.source.cameraIdentity,
+    captureCameraIdentity: treatment.source.captureCameraIdentity,
     simStepCount: treatment.source.simStepCount,
     routeIdentity: treatment.source.routeIdentity,
     effectiveRoute: treatment.source.effectiveRoute,
@@ -395,7 +401,7 @@ export function validateLiveRebakeExercise(exercise) {
     sourceStateIdentity: treatment.sourceStateIdentity,
     controlsIdentity: treatment.controlsIdentity,
     fixedProductionControlsIdentity: treatment.fixedProductionControlsIdentity,
-    projectionIdentity: treatment.projectionIdentity,
+    projectionIdentity: treatment.projection.identity,
     candidateIdentity: treatment.candidateIdentity,
     coefficientIdentity: treatment.coefficientIdentity,
     covarianceIdentity: treatment.covarianceIdentity,
@@ -405,8 +411,10 @@ export function validateLiveRebakeExercise(exercise) {
   if (treatment.stageBIdentity !== expectedStageBIdentity) {
     throw new Error('Wake rebake Stage B identity is internally inconsistent');
   }
-  if (receipt.projection?.identity !== 'fixed-stage-b-analytical-camera-v0'
-    || treatment.projection?.identity !== receipt.projection.identity) {
+  if (receipt.projection?.requested !== 'stage-b-fixed-analytical-projection-v1'
+    || receipt.projection?.effective !== 'stage-b-fixed-analytical-projection-v1'
+    || treatment.projection?.identity !== receipt.projection.identity
+    || receipt.identities?.projection !== receipt.projection.identity) {
     throw new Error('Wake rebake analytical projection identity mismatch');
   }
   if (exercise.result.rawPixelSha256 !== receipt.identities.pixels) {

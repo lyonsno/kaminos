@@ -11,6 +11,7 @@ const {
   createFireActorLiveParityDescriptor,
   validateFireActorLiveParityReceipt,
 } = await import('../fire-actor-live-parity-contract.mjs');
+const { recoverQuantizedGpuStageTiming } = await import('../fire-actor-live-parity-browser.mjs');
 
 assert.deepEqual(FIRE_ACTOR_LIVE_PARITY_ARMS, ['splats', 'smoke', 'composite']);
 const descriptor = await createFireActorLiveParityDescriptor();
@@ -69,6 +70,43 @@ const receipt = {
 };
 assert.doesNotThrow(() => validateFireActorLiveParityReceipt(receipt, descriptor));
 
+const quantizedIndirectSetupReceipt = structuredClone(receipt);
+quantizedIndirectSetupReceipt.gpuStageTiming.stages.indirectSetup = {
+  status: 'quantized-below-resolution',
+  ms: 0,
+  rawStartNs: '24063383240704',
+  rawEndNs: '24063383175168',
+  quantizationAuthority: 'implementation-defined-webgpu-timestamp-query-quantization-v0',
+};
+assert.doesNotThrow(
+  () => validateFireActorLiveParityReceipt(quantizedIndirectSetupReceipt, descriptor),
+  'a sub-resolution copy interval remains explicit without invalidating real pass timing',
+);
+const recoveredTiming = recoverQuantizedGpuStageTiming(
+  { reason: 'timestamp-query-nonmonotonic:1000000,1200000,1300000,1500000,1500000,1500000,1490000,1480000,1600000,2000000' },
+  { arm: 'splats', smoke: 'off', splats: 'on', composition: 'splat-only-v0' },
+  'splats',
+  120,
+);
+assert.deepEqual(recoveredTiming.stages.indirectSetup, {
+  status: 'quantized-below-resolution',
+  ms: 0,
+  rawStartNs: '1490000',
+  rawEndNs: '1480000',
+  quantizationAuthority: 'implementation-defined-webgpu-timestamp-query-quantization-v0',
+});
+assert.equal(recoveredTiming.stages.total.ms, 1);
+assert.equal(
+  recoverQuantizedGpuStageTiming(
+    { reason: 'timestamp-query-nonmonotonic:1000000,900000,1300000,1500000,1500000,1500000,1490000,1480000,1600000,2000000' },
+    { arm: 'splats', smoke: 'off', splats: 'on', composition: 'splat-only-v0' },
+    'splats',
+    120,
+  ),
+  null,
+  'a reversed real pass remains a hard timing failure',
+);
+
 for (const [name, mutate, pattern] of [
   ['wrong step', value => { value.state.effectiveSimStep = 121; }, /simulation step/],
   ['not paused', value => { value.state.paused = false; }, /GPU-complete pause/],
@@ -82,6 +120,10 @@ for (const [name, mutate, pattern] of [
   ['wrong GPU timing arm', value => { value.gpuStageTiming.sample.arm = 'smoke'; }, /GPU stage timing sample/],
   ['advancing GPU timing sample', value => { value.gpuStageTiming.sample.advanceSim = true; }, /GPU stage timing sample/],
   ['missing timing aggregation authority', value => { delete value.gpuStageTiming.aggregationAuthority; }, /GPU stage timing/],
+  ['unattributed quantized interval', value => {
+    value.gpuStageTiming.stages.indirectSetup = structuredClone(quantizedIndirectSetupReceipt.gpuStageTiming.stages.indirectSetup);
+    delete value.gpuStageTiming.stages.indirectSetup.quantizationAuthority;
+  }, /GPU stage timing/],
 ]) {
   const candidate = structuredClone(receipt);
   mutate(candidate);
@@ -115,6 +157,7 @@ assert.match(browserContract, /sampleDeterministicReplayFrame/, 'Kiln parity set
 assert.match(browserContract, /setArm/, 'Kiln parity exposes live presentation arms');
 assert.match(browserContract, /captureSelectiveHeadLiveFrame[\s\S]*advanceSim:\s*false[\s\S]*presentToCanvas:\s*true/, 'arm switching presents the frozen state instead of changing receipts only');
 assert.match(browserContract, /captureSelectiveHeadLiveFrame[\s\S]*collectGpuTiming:\s*true/, 'each arm samples its own frozen presented frame GPU timing');
+assert.match(browserContract, /implementation-defined-webgpu-timestamp-query-quantization-v0/, 'sub-resolution copy timing remains explicit instead of being silently clamped');
 assert.match(browserContract, /applyCamera/, 'Kiln parity accepts exact camera transfer');
 assert.match(browserContract, /kaminos-fire-parity-command/, 'Kiln parity accepts workbench postMessage commands');
 
