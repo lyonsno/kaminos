@@ -220,6 +220,7 @@
 
     const ROUTE = 'kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0';
     const SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
+    const REGISTRATION_HASH = 'a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9';
     const BASE = './artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0';
     const SOURCES = {
       rest: './artifacts/motion-ready-719024/creature.glb',
@@ -296,6 +297,7 @@
       requestedRoute: ROUTE,
       effectiveRoute: null,
       sourceHash: SOURCE_HASH,
+      registrationHash: REGISTRATION_HASH,
       currentPose,
       loadedPoses: [],
     };
@@ -396,7 +398,10 @@
         if (!reportResponse.ok) throw new Error(`report load failed: ${reportResponse.status}`);
         report = await reportResponse.json();
         if (report.effectiveRoute !== ROUTE) throw new Error(`effective route mismatch: ${report.effectiveRoute}`);
-        if (!report.source?.sha256?.endsWith(SOURCE_HASH)) throw new Error(`source hash mismatch: ${report.source?.sha256}`);
+        if (report.source?.sha256 !== `sha256:${SOURCE_HASH}`) throw new Error(`source hash mismatch: ${report.source?.sha256}`);
+        if (report.registration?.sha256 !== `sha256:${REGISTRATION_HASH}`) {
+          throw new Error(`registration hash mismatch: ${report.registration?.sha256}`);
+        }
 
         for (const [pose, gltf] of glbs) {
           const root = gltf.scene;
@@ -416,8 +421,7 @@
         showPose(initialPose);
 
         identity.dataset.state = 'loaded';
-        const registrationHash = report.registration.sha256.replace('sha256:', '');
-        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${registrationHash.slice(0, 16)}... | 148,118 vertices | amplitude 0.24`;
+        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${REGISTRATION_HASH.slice(0, 16)}... | 148,118 vertices | amplitude 0.24`;
         Object.assign(window.__LIRM_INSPECTOR_STATE__, {
           status: 'loaded',
           effectiveRoute: report.effectiveRoute,

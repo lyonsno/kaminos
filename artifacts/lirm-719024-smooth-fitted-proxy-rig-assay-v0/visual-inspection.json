@@ -5,6 +5,7 @@
   "requestedRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
   "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
   "sourceSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "registrationSha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9",
   "inspector": "lirm-smooth-fitted-proxy-rig-inspector.html",
   "inspectedArtifacts": [
     "creature.glb",
