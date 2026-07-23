@@ -17,7 +17,7 @@ const descriptor = await createFireActorLiveParityDescriptor();
 assert.equal(descriptor.schema, 'kaminos.fire-actor-live-parity-descriptor.v1');
 assert.match(descriptor.descriptorId, /^fireparity-[a-f0-9]{64}$/);
 assert.equal(descriptor.basin.revision, 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95');
-assert.equal(descriptor.engine.sha256, '1914f9cb502b65e2360848b2e04b61ac47c3cf6738298db00a278efab974db41');
+assert.equal(descriptor.engine.sha256, '2f7fb4490176cdfbe2d180d3a48519f4f45fda49f488a9412e99551a2dc157a2');
 assert.equal(descriptor.state.targetSimStep, 120);
 assert.equal(descriptor.state.pauseAuthority, 'renderer-internal-exact-sim-step-pause-gpu-complete-v0');
 assert.deepEqual(descriptor.camera.position, [1.65, 0.42, 3.15]);
