@@ -272,6 +272,7 @@ const validDecoderKernelEvidence = {
     requested: 524288,
     effective: 524288,
     status: 'verified',
+    observedBoundary: 'gaussian-phase',
     observedCount: 2,
     observedKernel: { boundary: 'gaussian-phase', phase: 'decoder.fusion.4.conv1', tileTotal: 2, totalOutputItems: 1048576 },
   }],
@@ -290,6 +291,7 @@ for (const [mutate, expectedFailure] of [
   [evidence => { evidence.schedulerBoundaryAssertions = []; }, 'boundary-assertion-missing'],
   [evidence => { evidence.schedulerBoundaryAssertions[0].status = 'unverified'; }, 'boundary-assertion-unverified'],
   [evidence => { evidence.schedulerBoundaryAssertions[0].effective = 1048576; }, 'boundary-assertion-config-mismatch'],
+  [evidence => { evidence.schedulerBoundaryAssertions[0].observedKernel.phase = 'claimed-other-kernel'; }, 'assertion-event-mismatch'],
   [evidence => { evidence.decoderKernelTileEvents = evidence.decoderKernelTileEvents.slice(0, 1); }, 'multi-range-events-missing'],
   [evidence => { evidence.decoderKernelTileEvents[1].outputStart = 500000; }, 'range-coverage-invalid'],
 ]) {

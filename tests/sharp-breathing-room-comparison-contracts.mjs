@@ -398,6 +398,16 @@ for (const [name, mutateReceipt, expectedFailure] of [
       event.configuredChunkItems = 1048576;
     }
   }, 'multi-range-events-missing'],
+  ['assertion event identity mismatch', receipt => {
+    const assertion = receipt.boundaryAssertions.find(candidate => candidate.field === 'decoderKernelChunkItems');
+    assertion.observedBoundary = 'monodepth-phase';
+    assertion.observedKernel = {
+      boundary: 'gaussian-phase',
+      phase: 'claimed-other-kernel',
+      tileTotal: 2,
+      totalOutputItems: 1048576,
+    };
+  }, 'assertion-event-mismatch'],
   ['noncontiguous ranges', receipt => {
     for (const event of receipt.eventTrace.events.filter(candidate => candidate.role === 'decoder-kernel-output-tile' && candidate.tileIndex === 1)) {
       event.outputStart = 500000;
