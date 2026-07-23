@@ -5,6 +5,9 @@
   "dependencies": {
     "@kaminos/fluid-contracts": "0.1.0"
   },
+  "bundleDependencies": [
+    "@kaminos/fluid-contracts"
+  ],
   "exports": {
     ".": "./mapped-macro-core.js",
     "./mapped-macro-core": "./mapped-macro-core.js"

@@ -12,6 +12,24 @@ import {
 export const MAPPED_MACRO_STATE_SCHEMA = 'kaminos.fluid.mapped-macro-state.v1';
 export const MAPPED_MACRO_SOLVER_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
 export const MAPPED_MACRO_METHOD = 'orthogonal-heightfield-hydrostatic-reconstruction-hll-v1';
+export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
+
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.1.0';
+const KAMINOS_FLUID_PRODUCER_REVISION = '3e3934f9e451823ae122c9fca5f4c04ec3e88694';
+
+export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
+  schema: KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA,
+  sourceAuthority: 'live_runtime',
+  fallbackStatus: 'none',
+  packageName: '@kaminos/fluid-webgpu',
+  packageVersion: KAMINOS_FLUID_PACKAGE_VERSION,
+  artifactRevision: `@kaminos/fluid-webgpu@${KAMINOS_FLUID_PACKAGE_VERSION}`,
+  runtimeRevision: KAMINOS_FLUID_PRODUCER_REVISION,
+  cacheKey: `@kaminos/fluid-webgpu@${KAMINOS_FLUID_PACKAGE_VERSION}:${KAMINOS_FLUID_PRODUCER_REVISION}`,
+  runtimeRoute: MAPPED_MACRO_SOLVER_ROUTE,
+  representationRoutes: Object.freeze(['kaminos/fluid/representation-frame']),
+  outputRoutes: Object.freeze(['kaminos/fluid/terrain-feedback']),
+});
 
 const DEFAULT_GRAVITY = 9.81;
 const DEFAULT_DRY_TOLERANCE = 1e-8;
@@ -667,3 +685,5 @@ export function createMappedMacroRuntime(options = {}) {
   };
   return api;
 }
+
+export const createKaminosFluidRuntime = createMappedMacroRuntime;
