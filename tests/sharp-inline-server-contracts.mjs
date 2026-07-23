@@ -58,6 +58,52 @@ assert.match(
   /"schema": "kaminos\.sharp-inline-run-report-receipt\.v0"[\s\S]{0,800}"readUrl"/,
   'the inline report endpoint must return its effective durable read identity',
 );
+for (const action of ['start', 'chunk', 'finish', 'abort']) {
+  assert.ok(
+    serve.includes(`parsed.path == "/api/sharp-inline-run-report/${action}"`),
+    `the server must expose the ${action} phase of nonblocking SHARP report persistence`,
+  );
+}
+assert.match(
+  serve,
+  /"status": "receiving"[\s\S]{0,1800}write_sharp_inline_report_state\(run_dir, state\)/,
+  'report start must durably write receiving state before accepting trace chunks',
+);
+assert.match(
+  serve,
+  /"mediaType": "application\/x-ndjson"[\s\S]{0,8000}expectedStart[\s\S]{0,2200}receivedCount/,
+  'trace chunks must append exact-count NDJSON with contiguous start validation',
+);
+assert.match(
+  serve,
+  /receivedCount[\s\S]{0,1500}expectedCount[\s\S]{0,2200}sharp-inline-report\.json/,
+  'report finish must reject partial collections before writing the compact final report',
+);
+assert.doesNotMatch(
+  serve,
+  /"schema": "kaminos\.sharp-inline-run-report-receipt\.v0"[\s\S]{0,900}"document": document/,
+  'the report receipt must not echo the complete document back to the renderer',
+);
+assert.match(
+  serve,
+  /durable_size > committed_bytes[\s\S]{0,1200}stream\.truncate\(committed_bytes\)[\s\S]{0,1800}"committedBytes"/,
+  'chunk retries must reconcile any uncommitted crash tail before appending',
+);
+assert.match(
+  serve,
+  /_inspect_ndjson_file\(trace_path\)[\s\S]{0,1800}"rows"[\s\S]{0,1000}"sha256"/,
+  'finish must inspect the durable NDJSON bytes and exact row count before completion',
+);
+assert.match(
+  serve,
+  /state\.get\("status"\) == "complete"[\s\S]{0,300}_sharp_inline_complete_receipt/,
+  'finish and late abort handling must preserve already-complete session truth',
+);
+assert.match(
+  serve,
+  /"\.ndjson": "application\/x-ndjson"/,
+  'trace artifact read URLs must serve first-class NDJSON media',
+);
 assert.match(
   serve,
   /def ingest_splat_asset\(filename, content\):[\s\S]{0,1800}entry\["sha256"\] = _sha256_file\(target\)[\s\S]{0,500}entry\["bytes"\] = target\.stat\(\)\.st_size[\s\S]{0,500}entry\["status"\] = "real"/,

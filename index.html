@@ -2944,6 +2944,10 @@ import {
   kilnRouteBenchReceiveProgressEvent,
 } from './lib/kiln-progress-presentation.mjs';
 import {
+  compactSharpInlineReportDocument,
+  persistSharpInlineReportSession,
+} from './lib/sharp-inline-trace-transport.mjs';
+import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
   createExpectedHybridKilnFirePresentation,
   waitForHybridKilnFirePresentation,
@@ -13409,22 +13413,13 @@ async function persistSharpInlineSplat(sharpResult, firingId) {
   return result.entry;
 }
 
-async function persistSharpInlineRunReport({ document, firingId } = {}) {
-  const response = await fetch('/api/sharp-inline-run-report', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pipelineId: 'sharp-image-to-splat-live-v0',
-      firingId,
-      document,
-    }),
+async function persistSharpInlineRunReport({ document, firingId, traceCollections } = {}) {
+  return persistSharpInlineReportSession({
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId,
+    document,
+    traceCollections,
   });
-  const reportReceipt = await response.json().catch(() => ({}));
-  if (!response.ok || reportReceipt.error || !reportReceipt.path || !reportReceipt.outputRoot || !reportReceipt.readUrl) {
-    const failurePath = reportReceipt.failureReportPath ? ` Failure report: ${reportReceipt.failureReportPath}` : '';
-    throw new Error(`${reportReceipt.error || `SHARP inline report write failed: ${response.status}`}${failurePath}`);
-  }
-  return reportReceipt;
 }
 
 async function runSharpInlineProductRoute({ source, profileId, firingId, pipeline, generator, onProgress } = {}) {
@@ -13605,6 +13600,29 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       adapterReport,
       sharpRunDebug: sharpResult.runDebug,
     });
+    const reportTransport = compactSharpInlineReportDocument({
+      schema: 'kaminos.sharp-inline-pipeline-report.v0',
+      status: 'real',
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      requestedPipelineId: 'sharp-image-to-splat-live-v0',
+      effectiveRouteConfig: {
+        routeId: 'sharp-image-to-splat-live-v0',
+        routeAuthority: 'same-browser-product-realm-shared-device',
+      },
+      authoritativeTrace: persistedEvidence.authoritativeTrace,
+      durationMs: sharpResult.runDebug?.elapsedMs || null,
+      pipelineScheduler: persistedEvidence.pipelineScheduler,
+      stages: [{
+        id: 'run-sharp-image-to-splat',
+        status: 'real',
+        durationMs: sharpResult.runDebug?.elapsedMs || null,
+        effectiveRoute: {
+          adapterReport: persistedEvidence.adapterReport,
+          pipelineScheduler: persistedEvidence.pipelineScheduler,
+        },
+      }],
+      artifacts: { splat: artifact },
+    });
     const rawResult = {
       schema: 'kaminos.pipeline-run-result.v0',
       ok: true,
@@ -13615,29 +13633,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       source,
       report: {
         path: null,
-        document: {
-          schema: 'kaminos.sharp-inline-pipeline-report.v0',
-          status: 'real',
-          pipelineId: 'sharp-image-to-splat-live-v0',
-          requestedPipelineId: 'sharp-image-to-splat-live-v0',
-          effectiveRouteConfig: {
-            routeId: 'sharp-image-to-splat-live-v0',
-            routeAuthority: 'same-browser-product-realm-shared-device',
-          },
-          authoritativeTrace: persistedEvidence.authoritativeTrace,
-          durationMs: sharpResult.runDebug?.elapsedMs || null,
-          pipelineScheduler: persistedEvidence.pipelineScheduler,
-          stages: [{
-            id: 'run-sharp-image-to-splat',
-            status: 'real',
-            durationMs: sharpResult.runDebug?.elapsedMs || null,
-            effectiveRoute: {
-              adapterReport: persistedEvidence.adapterReport,
-              pipelineScheduler: persistedEvidence.pipelineScheduler,
-            },
-          }],
-          artifacts: { splat: artifact },
-        },
+        document: reportTransport.document,
       },
       bundle: {
         path: null,
@@ -13651,6 +13647,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     const reportReceipt = await persistSharpInlineRunReport({
       document: rawResult.report.document,
       firingId,
+      traceCollections: reportTransport.collections,
     });
     rawResult.report.path = reportReceipt.path;
     rawResult.report.readUrl = reportReceipt.readUrl;
@@ -15566,11 +15563,39 @@ function sharpBreathingRoomRunDurationMs(result) {
 }
 
 function sharpBreathingRoomSchedulerEventDurationMs(result) {
+  const summary = sharpBreathingRoomSchedulerEventSummary(result);
+  if (
+    summary?.count >= 2
+    && Number.isFinite(summary.firstTMs)
+    && Number.isFinite(summary.lastTMs)
+  ) {
+    return Math.round(summary.lastTMs - summary.firstTMs);
+  }
   const times = sharpBreathingRoomSchedulerEvents(result)
     .map(event => finiteKilnEvidenceNumber(event?.tMs))
     .filter(value => value !== null);
   if (times.length < 2) return null;
   return Math.round(Math.max(...times) - Math.min(...times));
+}
+
+function sharpBreathingRoomSchedulerEventSummary(result) {
+  const evidence = pipelineRunSchedulerEvidence(result);
+  const adapterReport = sharpBreathingRoomAdapterReport(result);
+  const authoritativeTelemetry = result?.report?.document?.authoritativeTrace?.sharpRunDebug?.schedulerTelemetry;
+  const candidates = [
+    authoritativeTelemetry?.eventSummary,
+    evidence?.schedulerVerification?.eventSummary,
+    evidence?.eventSummary,
+    evidence?.scheduler?.schedulerVerification?.eventSummary,
+    adapterReport?.pipelineScheduler?.schedulerVerification?.eventSummary,
+    adapterReport?.breathingRoom?.schedulerVerification?.eventSummary,
+    adapterReport?.breathingRoom?.telemetry?.eventSummary,
+  ];
+  return candidates.find(candidate => (
+    candidate?.schema === 'kaminos.scheduler-event-summary.v0'
+    && Number.isSafeInteger(candidate.count)
+    && candidate.count >= 0
+  )) || null;
 }
 
 function sharpBreathingRoomSchedulerEvents(result) {
@@ -15596,7 +15621,9 @@ function sharpBreathingRoomSchedulerEvents(result) {
 }
 
 function sharpBreathingRoomSpnFusionBlocks(result) {
-  const blocks = [];
+  const blocks = [
+    ...(sharpBreathingRoomSchedulerEventSummary(result)?.spnFusionBlocks || []),
+  ];
   for (const event of sharpBreathingRoomSchedulerEvents(result)) {
     const block = event.details?.block || event.block || event.label || event.name || null;
     const phaseText = [
@@ -15626,7 +15653,9 @@ function sharpBreathingRoomSpnFusionCoverage(result) {
 }
 
 function sharpBreathingRoomMonodepthPhaseLabels(result) {
-  const labels = [];
+  const labels = [
+    ...(sharpBreathingRoomSchedulerEventSummary(result)?.monodepthPhaseLabels || []),
+  ];
   for (const event of sharpBreathingRoomSchedulerEvents(result)) {
     const boundary = event.boundary || event.phase || null;
     const label = (boundary === 'monodepth-phase' && SHARP_MONODEPTH_PHASE_LABELS.includes(event.phase)
@@ -15701,7 +15730,8 @@ function sharpBreathingRoomComparisonRunEvidence(run, step = {}) {
       || schedulerEvidence?.verificationState
       || adapterReport?.breathingRoom?.status
       || null,
-    schedulerEventCount: sharpBreathingRoomSchedulerEvents(run).length,
+    schedulerEventCount: sharpBreathingRoomSchedulerEventSummary(run)?.count
+      ?? sharpBreathingRoomSchedulerEvents(run).length,
     spnFusionBlocks: coverage.observedBlocks,
     requiredSpnFusionBlocks: coverage.requiredBlocks,
     missingSpnFusionBlocks: coverage.missingSpnFusionBlocks,
@@ -19062,6 +19092,10 @@ function pipelineRunFailureSummary(result) {
 
 function kilnRouteBenchBackgroundHeartbeat(result) {
   const report = result?.report?.document || {};
+  const authoritativeHeartbeat = report?.authoritativeTrace?.backgroundHeartbeat || null;
+  if (authoritativeHeartbeat?.schema === 'sharp-webgpu.background-heartbeat.v0') {
+    return authoritativeHeartbeat;
+  }
   for (const stage of report.stages || []) {
     const heartbeat = stage?.effectiveRoute?.adapterReport?.backgroundHeartbeat || null;
     if (heartbeat?.schema === 'sharp-webgpu.background-heartbeat.v0') return heartbeat;
@@ -19071,13 +19105,23 @@ function kilnRouteBenchBackgroundHeartbeat(result) {
 
 function kilnRouteBenchHeartbeatSummary(result) {
   const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(result);
-  const gap = backgroundHeartbeat?.worstFrameGaps?.[0] || null;
+  const gap = backgroundHeartbeat?.worstFrameGaps?.[0]
+    || backgroundHeartbeat?.worstFrameGapSummary
+    || null;
   if (!gap || !Number.isFinite(gap.durationMs)) return '';
   const roundedMs = Math.max(1, Math.round(gap.durationMs));
   const event = gap.overlappedEvents?.[0] || null;
   if (gap.overlapClassification === 'scheduler-event-overlap' && event) {
     const place = [event.stage, event.step, event.boundary || event.phase].filter(Boolean).join(' / ');
     return `The longest pause while the model was working was ${roundedMs} ms during ${place || 'a named model step'}.`;
+  }
+  if (
+    gap.overlapClassification === 'scheduler-event-overlap'
+    && Number.isSafeInteger(gap.overlappedEventCount)
+    && gap.overlappedEventCount > 0
+  ) {
+    const noun = gap.overlappedEventCount === 1 ? 'event' : 'events';
+    return `The longest pause while the model was working was ${roundedMs} ms and overlapped ${gap.overlappedEventCount} named scheduler ${noun}; detailed event rows are stored in the trace artifact.`;
   }
   const window = backgroundHeartbeat.inferenceWindow || {};
   const nearEnd = Number.isFinite(window.startMs) && Number.isFinite(window.durationMs)

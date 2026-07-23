@@ -8,6 +8,7 @@ import mimetypes
 import os
 import queue
 import re
+import secrets
 import signal
 import subprocess
 import sys
@@ -130,6 +131,7 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
+SHARP_INLINE_REPORT_LOCK = threading.Lock()
 PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 SHARP_SCHEDULER_PROFILES = {
@@ -1336,6 +1338,83 @@ def record_job_output_event(event):
         JOB_OUTPUT_EVENTS.append(event)
 
 
+def _safe_sharp_inline_name(value):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value)).strip("-") or "firing"
+
+
+def _utc_timestamp():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _atomic_write_json(path, document):
+    temporary_path = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")
+    with temporary_path.open("w", encoding="utf-8") as stream:
+        json.dump(document, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary_path.replace(path)
+
+
+def write_sharp_inline_report_state(run_dir, state):
+    _atomic_write_json(run_dir / "sharp-inline-report-state.json", state)
+
+
+def load_sharp_inline_report_state(session_id):
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", session_id):
+        raise ValueError("Invalid SHARP inline report sessionId")
+    pipeline_runs_root = KAMINOS_PIPELINE_RUNS_DIR.resolve()
+    run_dir = (pipeline_runs_root / session_id).resolve()
+    if run_dir.parent != pipeline_runs_root:
+        raise ValueError("SHARP inline report session escaped pipeline-runs")
+    state_path = run_dir / "sharp-inline-report-state.json"
+    if not state_path.is_file():
+        raise ValueError(f"Unknown SHARP inline report session: {session_id}")
+    try:
+        state = json.loads(state_path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Unreadable SHARP inline report state: {error}") from error
+    if state.get("sessionId") != session_id:
+        raise ValueError("SHARP inline report state session identity mismatch")
+    return run_dir, state
+
+
+def _pipeline_run_read_url(path):
+    relative_path = path.resolve().relative_to(KAMINOS_PIPELINE_RUNS_DIR.resolve())
+    return f"/api/read?root=pipeline-runs&path={urlencode({'path': str(relative_path)})[5:]}"
+
+
+def _inspect_ndjson_file(path):
+    import hashlib
+    digest = hashlib.sha256()
+    byte_count = 0
+    row_count = 0
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            byte_count += len(chunk)
+            row_count += chunk.count(b"\n")
+            digest.update(chunk)
+    return {
+        "bytes": byte_count,
+        "rows": row_count,
+        "sha256": digest.hexdigest(),
+    }
+
+
+def _sharp_inline_complete_receipt(run_dir, state):
+    report_path = run_dir / "sharp-inline-report.json"
+    return {
+        "schema": "kaminos.sharp-inline-run-report-receipt.v0",
+        "status": "complete",
+        "sessionId": state["sessionId"],
+        "path": str(report_path),
+        "outputRoot": str(run_dir),
+        "readUrl": _pipeline_run_read_url(report_path),
+        "writtenAt": state.get("completedAt"),
+        "traceArtifacts": state.get("traceArtifacts") or {},
+    }
+
+
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -1385,6 +1464,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/sharp-inline-run-report":
             self.handle_sharp_inline_run_report()
+        elif parsed.path == "/api/sharp-inline-run-report/start":
+            self.handle_sharp_inline_run_report_start()
+        elif parsed.path == "/api/sharp-inline-run-report/chunk":
+            self.handle_sharp_inline_run_report_chunk()
+        elif parsed.path == "/api/sharp-inline-run-report/finish":
+            self.handle_sharp_inline_run_report_finish()
+        elif parsed.path == "/api/sharp-inline-run-report/abort":
+            self.handle_sharp_inline_run_report_abort()
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
@@ -1397,14 +1484,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_sharp_inline_run_report(self):
         try:
-            length = int(self.headers.get("Content-Length", 0))
-        except ValueError:
-            self.send_json({"error": "Invalid Content-Length"}, 400)
-            return
-        try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError as error:
-            self.send_json({"error": f"Invalid JSON: {error}"}, 400)
+            payload = self.read_json_body()
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
             return
         document = payload.get("document") if isinstance(payload, dict) else None
         if not isinstance(document, dict):
@@ -1456,8 +1538,337 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "path": str(report_path),
             "outputRoot": str(run_dir),
             "readUrl": f"/api/read?root=pipeline-runs&path={urlencode({'path': str(relative_path)})[5:]}",
-            "document": document,
         })
+
+    def handle_sharp_inline_run_report_start(self):
+        try:
+            payload = self.read_json_body()
+            document = payload.get("document")
+            if not isinstance(document, dict):
+                raise ValueError("SHARP inline report document must be a JSON object")
+            raw_collections = payload.get("collections")
+            if not isinstance(raw_collections, list):
+                raise ValueError("SHARP inline report collections must be an array")
+            collections = {}
+            for raw_collection in raw_collections:
+                if not isinstance(raw_collection, dict):
+                    raise ValueError("SHARP inline report collection entries must be objects")
+                collection_id = str(raw_collection.get("id") or "")
+                if not re.fullmatch(r"[A-Za-z0-9_.-]+", collection_id):
+                    raise ValueError(f"Invalid SHARP inline collection id: {collection_id!r}")
+                if collection_id in collections:
+                    raise ValueError(f"Duplicate SHARP inline collection id: {collection_id}")
+                expected_count = raw_collection.get("expectedCount")
+                if (
+                    not isinstance(expected_count, int)
+                    or isinstance(expected_count, bool)
+                    or expected_count < 0
+                ):
+                    raise ValueError(f"Invalid expectedCount for {collection_id}")
+                if raw_collection.get("retention") != "uncapped":
+                    raise ValueError(f"Collection {collection_id} must declare uncapped retention")
+                collections[collection_id] = {
+                    "jsonPointer": raw_collection.get("jsonPointer"),
+                    "expectedCount": expected_count,
+                    "receivedCount": 0,
+                    "committedBytes": 0,
+                    "retention": "uncapped",
+                    "mediaType": "application/x-ndjson",
+                    "relativePath": f"traces/{collection_id}.ndjson",
+                }
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+
+        pipeline_id = str(payload.get("pipelineId") or "sharp-image-to-splat-live-v0")
+        firing_id = _safe_sharp_inline_name(payload.get("firingId") or "firing")
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        session_id = (
+            f"{stamp}-{time.time_ns()}-{os.getpid()}-{secrets.token_hex(6)}-{firing_id}"
+        )
+        run_dir = (KAMINOS_PIPELINE_RUNS_DIR / session_id).resolve()
+        state = {
+            "schema": "kaminos.sharp-inline-report-state.v0",
+            "status": "receiving",
+            "phase": "report-session-start",
+            "sessionId": session_id,
+            "pipelineId": pipeline_id,
+            "firingId": payload.get("firingId"),
+            "outputRoot": str(run_dir),
+            "reportPath": str(run_dir / "sharp-inline-report.json"),
+            "startedAt": _utc_timestamp(),
+            "document": document,
+            "collections": collections,
+        }
+        try:
+            with SHARP_INLINE_REPORT_LOCK:
+                run_dir.mkdir(parents=True, exist_ok=False)
+                (run_dir / "traces").mkdir()
+                for collection in collections.values():
+                    (run_dir / collection["relativePath"]).touch(exist_ok=False)
+                write_sharp_inline_report_state(run_dir, state)
+        except Exception as error:
+            failure_receipt = {}
+            try:
+                if run_dir.is_dir():
+                    failure_path = run_dir / "sharp-inline-report-failure.json"
+                    _atomic_write_json(failure_path, {
+                        "schema": "kaminos.sharp-inline-pipeline-report-failure.v0",
+                        "status": "failed",
+                        "phase": "report-session-start",
+                        "pipelineId": pipeline_id,
+                        "firingId": payload.get("firingId"),
+                        "sessionId": session_id,
+                        "error": str(error),
+                        "lastTrustworthyCounts": {
+                            collection_id: 0 for collection_id in collections
+                        },
+                        "failedAt": _utc_timestamp(),
+                    })
+                    failure_receipt = {
+                        "failureReportPath": str(failure_path),
+                        "failureReadUrl": _pipeline_run_read_url(failure_path),
+                    }
+            except Exception:
+                failure_receipt = {}
+            self.send_json({
+                "error": f"SHARP inline report start failed: {error}",
+                **failure_receipt,
+            }, 500)
+            return
+        self.send_json({
+            "schema": "kaminos.sharp-inline-run-report-session.v0",
+            "status": "receiving",
+            "sessionId": session_id,
+            "outputRoot": str(run_dir),
+            "statePath": str(run_dir / "sharp-inline-report-state.json"),
+        })
+
+    def handle_sharp_inline_run_report_chunk(self):
+        try:
+            payload = self.read_json_body()
+            session_id = str(payload.get("sessionId") or "")
+            collection_id = str(payload.get("collectionId") or "")
+            expected_start = payload.get("expectedStart")
+            rows = payload.get("rows")
+            if not isinstance(expected_start, int) or isinstance(expected_start, bool):
+                raise ValueError("SHARP inline trace expectedStart must be an integer")
+            if not isinstance(rows, list):
+                raise ValueError("SHARP inline trace rows must be an array")
+            with SHARP_INLINE_REPORT_LOCK:
+                run_dir, state = load_sharp_inline_report_state(session_id)
+                if state.get("status") != "receiving":
+                    raise ValueError(f"SHARP inline report session is {state.get('status')}")
+                collection = state.get("collections", {}).get(collection_id)
+                if not isinstance(collection, dict):
+                    raise ValueError(f"Unknown SHARP inline collection: {collection_id}")
+                received_count = collection.get("receivedCount")
+                expected_count = collection.get("expectedCount")
+                committed_bytes = collection.get("committedBytes", 0)
+                if expected_start != received_count:
+                    raise ValueError(
+                        f"Non-contiguous SHARP inline chunk for {collection_id}: "
+                        f"expectedStart {expected_start}, receivedCount {received_count}"
+                    )
+                if received_count + len(rows) > expected_count:
+                    raise ValueError(
+                        f"SHARP inline chunk exceeds expectedCount for {collection_id}"
+                    )
+                trace_path = (run_dir / collection["relativePath"]).resolve()
+                if not trace_path.is_relative_to(run_dir):
+                    raise ValueError("SHARP inline trace path escaped its run directory")
+                durable_size = trace_path.stat().st_size
+                if durable_size < committed_bytes:
+                    raise RuntimeError(
+                        f"SHARP inline trace {collection_id} is shorter than committedBytes: "
+                        f"{durable_size} < {committed_bytes}"
+                    )
+                if durable_size > committed_bytes:
+                    with trace_path.open("r+b") as stream:
+                        stream.truncate(committed_bytes)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                chunk_bytes = "".join(
+                    f"{json.dumps(row, separators=(',', ':'))}\n" for row in rows
+                ).encode("utf-8")
+                with trace_path.open("ab") as stream:
+                    stream.write(chunk_bytes)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                collection["receivedCount"] = received_count + len(rows)
+                collection["committedBytes"] = committed_bytes + len(chunk_bytes)
+                state["phase"] = "trace-chunk-upload"
+                state["updatedAt"] = _utc_timestamp()
+                write_sharp_inline_report_state(run_dir, state)
+                durable_count = collection["receivedCount"]
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 409)
+            return
+        except Exception as error:
+            self.send_json({"error": f"SHARP inline trace chunk failed: {error}"}, 500)
+            return
+        self.send_json({
+            "schema": "kaminos.sharp-inline-run-report-chunk-receipt.v0",
+            "status": "receiving",
+            "sessionId": session_id,
+            "collectionId": collection_id,
+            "receivedCount": durable_count,
+        })
+
+    def handle_sharp_inline_run_report_finish(self):
+        try:
+            payload = self.read_json_body()
+            session_id = str(payload.get("sessionId") or "")
+            with SHARP_INLINE_REPORT_LOCK:
+                run_dir, state = load_sharp_inline_report_state(session_id)
+                if state.get("status") == "complete":
+                    receipt = _sharp_inline_complete_receipt(run_dir, state)
+                elif state.get("status") != "receiving":
+                    raise ValueError(f"SHARP inline report session is {state.get('status')}")
+                else:
+                    incomplete = [
+                        collection_id
+                        for collection_id, collection in state.get("collections", {}).items()
+                        if collection.get("receivedCount") != collection.get("expectedCount")
+                    ]
+                    if incomplete:
+                        raise ValueError(
+                            "SHARP inline report collections are incomplete: " + ", ".join(incomplete)
+                        )
+                    report_path = run_dir / "sharp-inline-report.json"
+                    written_at = _utc_timestamp()
+                    trace_artifacts = {}
+                    for collection_id, collection in state.get("collections", {}).items():
+                        trace_path = run_dir / collection["relativePath"]
+                        trace_inspection = _inspect_ndjson_file(trace_path)
+                        if trace_inspection["bytes"] != collection.get("committedBytes"):
+                            raise RuntimeError(
+                                f"SHARP inline trace byte count mismatch for {collection_id}: "
+                                f"{trace_inspection['bytes']} != {collection.get('committedBytes')}"
+                            )
+                        if trace_inspection["rows"] != collection.get("expectedCount"):
+                            raise RuntimeError(
+                                f"SHARP inline trace row count mismatch for {collection_id}: "
+                                f"{trace_inspection['rows']} != {collection.get('expectedCount')}"
+                            )
+                        trace_artifacts[collection_id] = {
+                            "schema": "kaminos.sharp-inline-trace-artifact.v0",
+                            "path": str(trace_path),
+                            "readUrl": _pipeline_run_read_url(trace_path),
+                            "mediaType": "application/x-ndjson",
+                            "jsonPointer": collection.get("jsonPointer"),
+                            "count": trace_inspection["rows"],
+                            "bytes": trace_inspection["bytes"],
+                            "sha256": trace_inspection["sha256"],
+                            "retention": "uncapped",
+                        }
+                    document = {
+                        **state["document"],
+                        "pipelineId": state["document"].get("pipelineId") or state["pipelineId"],
+                        "outputRoot": str(run_dir),
+                        "reportPath": str(report_path),
+                        "writtenAt": written_at,
+                        "traceArtifacts": trace_artifacts,
+                    }
+                    _atomic_write_json(report_path, document)
+                    state.update({
+                        "status": "complete",
+                        "phase": "report-session-finish",
+                        "completedAt": written_at,
+                        "traceArtifacts": trace_artifacts,
+                    })
+                    write_sharp_inline_report_state(run_dir, state)
+                    receipt = _sharp_inline_complete_receipt(run_dir, state)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 409)
+            return
+        except Exception as error:
+            self.send_json({"error": f"SHARP inline report finish failed: {error}"}, 500)
+            return
+        self.send_json(receipt)
+
+    def handle_sharp_inline_run_report_abort(self):
+        try:
+            payload = self.read_json_body()
+            session_id = str(payload.get("sessionId") or "")
+            with SHARP_INLINE_REPORT_LOCK:
+                run_dir, state = load_sharp_inline_report_state(session_id)
+                if state.get("status") == "complete":
+                    receipt = _sharp_inline_complete_receipt(run_dir, state)
+                    self.send_json(receipt)
+                    return
+                if state.get("status") == "failed":
+                    failure_path = Path(state.get("failureReportPath") or "")
+                    self.send_json({
+                        "schema": "kaminos.sharp-inline-run-report-abort-receipt.v0",
+                        "status": "failed",
+                        "sessionId": session_id,
+                        "failureReportPath": str(failure_path),
+                        "failureReadUrl": _pipeline_run_read_url(failure_path),
+                    })
+                    return
+                failure_path = run_dir / "sharp-inline-report-failure.json"
+                failed_at = _utc_timestamp()
+                durable_counts = {
+                    collection_id: collection.get("receivedCount")
+                    for collection_id, collection in state.get("collections", {}).items()
+                }
+                client_counts = payload.get("lastTrustworthyCounts")
+                count_mismatches = {
+                    collection_id: {
+                        "clientClaimed": client_counts.get(collection_id),
+                        "durable": durable_count,
+                    }
+                    for collection_id, durable_count in durable_counts.items()
+                    if isinstance(client_counts, dict)
+                    and client_counts.get(collection_id) != durable_count
+                }
+                failure_document = {
+                    "schema": "kaminos.sharp-inline-pipeline-report-failure.v0",
+                    "status": "failed",
+                    "phase": payload.get("phase") or "report-session-abort",
+                    "pipelineId": state.get("pipelineId"),
+                    "firingId": state.get("firingId"),
+                    "sessionId": session_id,
+                    "error": payload.get("error") or "SHARP inline report session aborted",
+                    "lastTrustworthyCounts": durable_counts,
+                    "clientClaimedCounts": client_counts if isinstance(client_counts, dict) else None,
+                    "countMismatches": count_mismatches,
+                    "failedAt": failed_at,
+                    "statePath": str(run_dir / "sharp-inline-report-state.json"),
+                }
+                _atomic_write_json(failure_path, failure_document)
+                state.update({
+                    "status": "failed",
+                    "phase": failure_document["phase"],
+                    "error": failure_document["error"],
+                    "failedAt": failed_at,
+                    "failureReportPath": str(failure_path),
+                })
+                write_sharp_inline_report_state(run_dir, state)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        except Exception as error:
+            self.send_json({"error": f"SHARP inline report abort failed: {error}"}, 500)
+            return
+        self.send_json({
+            "schema": "kaminos.sharp-inline-run-report-abort-receipt.v0",
+            "status": "failed",
+            "sessionId": session_id,
+            "failureReportPath": str(failure_path),
+            "failureReadUrl": _pipeline_run_read_url(failure_path),
+        })
+
+    def read_json_body(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError as error:
+            raise ValueError("Invalid Content-Length") from error
+        try:
+            return json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid JSON: {error}") from error
 
     def handle_sharp_inline_file(self, request_path):
         if request_path == "/sharp-inline/sharp-inline.js":
@@ -1940,18 +2351,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".ndjson"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                 ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
+                ".ndjson": "application/x-ndjson",
             }
+            body = target.read_bytes()
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
-
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(target.read_bytes())
+            self.wfile.write(body)
             return
 
         # For text/json, return as JSON-wrapped text

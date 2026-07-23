@@ -245,8 +245,43 @@ assert.match(
 );
 assert.match(
   page,
-  /fetch\('\/api\/sharp-inline-run-report'[\s\S]{0,1800}document[\s\S]{0,1800}reportReceipt\.path[\s\S]{0,800}reportReceipt\.outputRoot/,
-  'the complete inline run envelope must be durably written and rebound to its effective pipeline-runs identity',
+  /async function persistSharpInlineRunReport\(\{ document, firingId, traceCollections \}[\s\S]{0,600}persistSharpInlineReportSession\(\{[\s\S]{0,400}document,[\s\S]{0,300}traceCollections/,
+  'the compact inline envelope and uncapped trace collections must enter the report-session transport',
+);
+assert.match(
+  page,
+  /const reportReceipt = await persistSharpInlineRunReport\(\{[\s\S]{0,400}traceCollections: reportTransport\.collections[\s\S]{0,400}rawResult\.report\.path = reportReceipt\.path[\s\S]{0,400}rawResult\.bundle\.document\.outputRoot = reportReceipt\.outputRoot/,
+  'the finished report session must rebind the remembered run to its effective pipeline-runs identity',
+);
+assert.match(
+  page,
+  /from '\.\/lib\/sharp-inline-trace-transport\.mjs'/,
+  'the product route must use the independently testable nonblocking trace transport',
+);
+assert.match(
+  page,
+  /persistSharpInlineReportSession\(\{[\s\S]{0,1200}traceCollections/,
+  'the product route must persist uncapped trace collections through a report session',
+);
+assert.match(
+  page,
+  /function sharpBreathingRoomSchedulerEventSummary\([\s\S]{0,1600}eventSummary/,
+  'the live comparison UI must resolve compact scheduler summary evidence after trace externalization',
+);
+assert.match(
+  page,
+  /function sharpBreathingRoomSpnFusionBlocks\([\s\S]{0,1800}sharpBreathingRoomSchedulerEventSummary/,
+  'SPN comparison evidence must fall back to the compact summary instead of reporting empty coverage',
+);
+assert.match(
+  page,
+  /schedulerEventCount:\s*sharpBreathingRoomSchedulerEventSummary\(run\)\?\.count[\s\S]{0,120}sharpBreathingRoomSchedulerEvents\(run\)\.length/,
+  'the comparison card must preserve the exact scheduler event count after trace externalization',
+);
+assert.doesNotMatch(
+  page,
+  /body:\s*JSON\.stringify\(\{\s*pipelineId:[\s\S]{0,500}document/,
+  'the renderer must not stringify the complete report document into one request body',
 );
 assert.match(
   page,
