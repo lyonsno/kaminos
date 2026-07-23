@@ -4,13 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
 from pathlib import Path
+import shutil
+import struct
 import sys
 import traceback
 from typing import Any
+import zlib
 
 import numpy as np
 
@@ -286,6 +290,180 @@ def load_json(path: Path, label: str) -> dict[str, Any]:
     return payload
 
 
+def authenticate_exact_raymarch_targets(
+    manifest_path: Path,
+    state_ids: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    manifest_path = manifest_path.expanduser().resolve()
+    manifest = load_json(manifest_path, "exact Raymarch motion manifest")
+    FITTER.require(manifest.get("schema") == FITTER.EXPECTED_SOURCE_SCHEMA, "exact Raymarch manifest schema drifted")
+    FITTER.require(manifest.get("status") == "complete", "exact Raymarch manifest is incomplete")
+    FITTER.require(
+        manifest.get("authority") == "single-browser-multi-state-exact-bilinear-motion-v0",
+        "exact Raymarch manifest authority drifted",
+    )
+    route = manifest.get("route") or {}
+    FITTER.require(route.get("effective") == FITTER.EXPECTED_ROUTE, "exact Raymarch effective route drifted")
+    FITTER.require(route.get("backend") == "WebGPU:apple", "exact Raymarch backend drifted")
+    FITTER.require(route.get("fallbackReason") is None, "exact Raymarch route used a fallback")
+    states = {str(state.get("id")): state for state in manifest.get("states", []) if isinstance(state, dict)}
+    authenticated: dict[str, dict[str, Any]] = {}
+    held_camera_sha: str | None = None
+    held_dimensions: tuple[int, int] | None = None
+    for state_id in state_ids:
+        state = states.get(state_id)
+        FITTER.require(isinstance(state, dict), f"exact Raymarch state is missing: {state_id}")
+        replay = state.get("replay") or {}
+        expected_step = int(state_id.rsplit("-", 1)[-1])
+        FITTER.require(int(replay.get("completedSteps", -1)) == expected_step, f"{state_id} replay step drifted")
+        FITTER.require(replay.get("effectiveRoute") == FITTER.EXPECTED_ROUTE, f"{state_id} replay route drifted")
+        FITTER.require(replay.get("backend") == "WebGPU:apple", f"{state_id} replay backend drifted")
+        FITTER.require(int(replay.get("grid", 0)) == 96, f"{state_id} replay grid drifted")
+        target = state.get("target") or {}
+        FITTER.require(
+            target.get("identity") == "ridge-plus-non-ridge-contributions-under-shared-transmittance-v0",
+            f"{state_id} exact Raymarch target identity drifted",
+        )
+        FITTER.require(
+            target.get("mode") == "shared-transmittance-contribution-sum",
+            f"{state_id} exact Raymarch appearance mode drifted",
+        )
+        appearance = target.get("appearanceReceipt") or {}
+        passes = appearance.get("passes") or {}
+        FITTER.require(appearance.get("effectiveMode") == target.get("mode"), f"{state_id} appearance mode was not applied")
+        FITTER.require(appearance.get("fallbackReason") is None, f"{state_id} appearance used a fallback")
+        FITTER.require(passes.get("raymarchApplied") is True, f"{state_id} exact target did not apply Raymarch")
+        FITTER.require(passes.get("splatsApplied") is False, f"{state_id} exact target is contaminated by splats")
+        smoke = target.get("smokeReceipt") or {}
+        FITTER.require(smoke.get("effectiveMode") == "off", f"{state_id} exact target smoke presentation drifted")
+        FITTER.require(smoke.get("fallbackReason") is None, f"{state_id} smoke presentation used a fallback")
+        target_path = Path(str(target.get("path", ""))).expanduser()
+        if not target_path.is_absolute():
+            target_path = manifest_path.parent / target_path
+        target_path = target_path.resolve()
+        FITTER.require(target_path.is_file(), f"{state_id} exact target is missing: {target_path}")
+        FITTER.require(target_path.stat().st_size == int(target.get("bytes", -1)), f"{state_id} exact target byte length drifted")
+        target_sha = FITTER.sha256_file(target_path)
+        FITTER.require(target_sha == target.get("sha256"), f"{state_id} exact target hash drifted")
+        declared_dimensions = (int(target.get("width", 0)), int(target.get("height", 0)))
+        FITTER.require(all(value > 0 for value in declared_dimensions), f"{state_id} exact target dimensions are invalid")
+        decoded_rgba = read_png_rgba8(target_path)
+        actual_dimensions = (int(decoded_rgba.shape[1]), int(decoded_rgba.shape[0]))
+        FITTER.require(actual_dimensions == declared_dimensions, f"{state_id} exact target dimensions drifted")
+        pixel_sha = hashlib.sha256(np.ascontiguousarray(decoded_rgba).tobytes()).hexdigest()
+        FITTER.require(pixel_sha == target.get("targetPixelSha256"), f"{state_id} exact target pixel hash drifted")
+        FITTER.require(int(target.get("litPixels", 0)) > 0, f"{state_id} exact target is blank")
+        FITTER.require(int(target.get("effectiveRaySteps", 0)) > 0, f"{state_id} exact Raymarch step count is missing")
+        camera_sha = str(target.get("cameraPoseSha256", ""))
+        FITTER.require(bool(camera_sha), f"{state_id} exact target camera identity is missing")
+        held_camera_sha = held_camera_sha or camera_sha
+        FITTER.require(camera_sha == held_camera_sha, "exact Raymarch targets do not share one held camera")
+        held_dimensions = held_dimensions or declared_dimensions
+        FITTER.require(declared_dimensions == held_dimensions, "exact Raymarch targets do not share one native pixel grid")
+        authenticated[state_id] = {
+            "stateId": state_id,
+            "step": int(replay.get("completedSteps", 0)),
+            "path": str(target_path),
+            "bytes": target_path.stat().st_size,
+            "sha256": target_sha,
+            "targetPixelSha256": pixel_sha,
+            "width": declared_dimensions[0],
+            "height": declared_dimensions[1],
+            "litPixels": int(target["litPixels"]),
+            "effectiveRaySteps": int(target["effectiveRaySteps"]),
+            "cameraPoseSha256": camera_sha,
+            "effectiveRoute": replay["effectiveRoute"],
+            "backend": replay["backend"],
+            "targetIdentity": target["identity"],
+            "scope": "full-flame-product-motion-context",
+            "populationComparableToGrid16Ridge": False,
+        }
+    return authenticated
+
+
+def read_png_rgba8(path: Path) -> np.ndarray:
+    payload = path.read_bytes()
+    FITTER.require(payload.startswith(b"\x89PNG\r\n\x1a\n"), f"exact target is not PNG: {path}")
+    offset = 8
+    width = height = bit_depth = color_type = interlace = 0
+    compressed = bytearray()
+    while offset < len(payload):
+        FITTER.require(offset + 12 <= len(payload), f"exact target PNG is truncated: {path}")
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        kind = payload[offset + 4 : offset + 8]
+        data = payload[offset + 8 : offset + 8 + length]
+        FITTER.require(len(data) == length, f"exact target PNG chunk is truncated: {path}")
+        offset += 12 + length
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack(">IIBBBBB", data)
+            FITTER.require(compression == 0 and filtering == 0, f"exact target PNG encoding is unsupported: {path}")
+        elif kind == b"IDAT":
+            compressed.extend(data)
+        elif kind == b"IEND":
+            break
+    FITTER.require(width > 0 and height > 0 and bit_depth == 8, f"exact target PNG dimensions or depth are unsupported: {path}")
+    FITTER.require(color_type in (2, 6) and interlace == 0, f"exact target PNG color/interlace is unsupported: {path}")
+    channels = 3 if color_type == 2 else 4
+    stride = width * channels
+    raw = zlib.decompress(bytes(compressed))
+    FITTER.require(len(raw) == height * (stride + 1), f"exact target PNG scanline length drifted: {path}")
+    rows = np.empty((height, stride), dtype=np.uint8)
+    previous = np.zeros(stride, dtype=np.uint8)
+    cursor = 0
+    for row_index in range(height):
+        filter_kind = raw[cursor]
+        encoded = np.frombuffer(raw, dtype=np.uint8, count=stride, offset=cursor + 1).copy()
+        cursor += stride + 1
+        decoded = np.empty(stride, dtype=np.uint8)
+        for byte_index in range(stride):
+            left = int(decoded[byte_index - channels]) if byte_index >= channels else 0
+            above = int(previous[byte_index])
+            upper_left = int(previous[byte_index - channels]) if byte_index >= channels else 0
+            value = int(encoded[byte_index])
+            if filter_kind == 1:
+                value += left
+            elif filter_kind == 2:
+                value += above
+            elif filter_kind == 3:
+                value += (left + above) // 2
+            elif filter_kind == 4:
+                predictor = left + above - upper_left
+                distances = (abs(predictor - left), abs(predictor - above), abs(predictor - upper_left))
+                value += (left, above, upper_left)[int(np.argmin(distances))]
+            else:
+                FITTER.require(filter_kind == 0, f"exact target PNG filter is unsupported: {filter_kind}")
+            decoded[byte_index] = value & 0xFF
+        rows[row_index] = decoded
+        previous = decoded
+    pixels = rows.reshape(height, width, channels)
+    if channels == 3:
+        alpha = np.full((height, width, 1), 255, dtype=np.uint8)
+        pixels = np.concatenate((pixels, alpha), axis=2)
+    return pixels
+
+
+def read_png_rgb8(path: Path) -> np.ndarray:
+    return read_png_rgba8(path)[:, :, :3].astype(np.float64) / 255.0
+
+
+def resize_bilinear_rgb(image: np.ndarray, width: int, height: int) -> np.ndarray:
+    source = np.asarray(image, dtype=np.float64)
+    FITTER.require(source.ndim == 3 and source.shape[2] == 3, "display reference must be RGB")
+    FITTER.require(width > 0 and height > 0, "display reference dimensions are invalid")
+    source_height, source_width, _ = source.shape
+    x = np.clip((np.arange(width) + 0.5) * source_width / width - 0.5, 0.0, source_width - 1.0)
+    y = np.clip((np.arange(height) + 0.5) * source_height / height - 0.5, 0.0, source_height - 1.0)
+    x0 = np.floor(x).astype(np.int64)
+    y0 = np.floor(y).astype(np.int64)
+    x1 = np.minimum(x0 + 1, source_width - 1)
+    y1 = np.minimum(y0 + 1, source_height - 1)
+    x_weight = (x - x0)[None, :, None]
+    y_weight = (y - y0)[:, None, None]
+    top = source[y0[:, None], x0[None, :]] * (1.0 - x_weight) + source[y0[:, None], x1[None, :]] * x_weight
+    bottom = source[y1[:, None], x0[None, :]] * (1.0 - x_weight) + source[y1[:, None], x1[None, :]] * x_weight
+    return top * (1.0 - y_weight) + bottom * y_weight
+
+
 def load_sequence_state(path: Path, iteration: int) -> tuple[dict[str, Any], Any]:
     sequence = load_json(path, "fitting sequence")
     FITTER.require(sequence.get("schema") == FITTER.SEQUENCE_SCHEMA, "fitting sequence schema drifted")
@@ -372,13 +550,21 @@ def ownership_churn(seed: Any, candidate: Any) -> dict[str, float | int]:
     }
 
 
-def contact_sheet_html(rows: list[dict[str, Any]], report_name: str) -> str:
-    figures = "".join(
-        f'<figure><a href="{row["image"]}"><img src="{row["image"]}"></a><figcaption>{row["label"]}</figcaption></figure>'
-        for row in rows
+def temporal_toggle_html(surfaces: dict[str, dict[str, Any]], report_name: str) -> str:
+    FITTER.require(bool(surfaces), "temporal viewer has no surfaces")
+    for surface_id, surface in surfaces.items():
+        states = surface.get("states") or {}
+        FITTER.require(set(states) == {"118", "120"}, f"temporal viewer surface is missing a state pair: {surface_id}")
+    surface_buttons = "".join(
+        f'<button type="button" data-surface="{surface_id}">{surface["label"]}</button>'
+        for surface_id, surface in surfaces.items()
     )
-    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Grid16 persistent continuation</title><style>
-body{{margin:0;background:#090b0d;color:#e8edf0;font:14px system-ui,sans-serif}}header{{padding:12px 16px;background:#12171b;position:sticky;top:0;z-index:2}}main{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:8px}}figure{{margin:0;background:#000;border:1px solid #2b343b}}img{{display:block;width:100%;height:auto}}figcaption{{padding:8px;background:#11171b}}a{{color:#ffb45f}}@media(max-width:900px){{main{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}</style></head><body><header>Exact state118→120 fixed-count persistence witness · <a href="{report_name}">report</a></header><main>{figures}</main></body></html>"""
+    encoded = json.dumps(surfaces, separators=(",", ":")).replace("</", "<\\/")
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Grid16 dual-target temporal witness</title><style>
+:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#080a0c;color:#eef2f4;font:14px system-ui,sans-serif}}header{{padding:12px 16px;background:#12171b;border-bottom:1px solid #2b343b}}header strong{{display:block;font-size:16px}}header p{{margin:5px 0 0;color:#b9c2c8}}a{{color:#ffb45f}}main{{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);min-height:calc(100vh - 82px)}}aside{{padding:14px;border-right:1px solid #2b343b;background:#0e1215}}.controls{{display:grid;gap:8px}}.button-row{{display:flex;flex-wrap:wrap;gap:6px}}button{{border:1px solid #3b464d;background:#182027;color:#eef2f4;border-radius:5px;padding:8px 10px;cursor:pointer}}button.active{{background:#8b4e16;border-color:#ffad5b}}#scope{{margin-top:12px;padding:10px;background:#17130d;border:1px solid #5e421f;color:#ffd9ad}}#scope.load-error{{background:#2a0d0d;border-color:#b83d36;color:#ffd2cf}}#stage{{display:grid;place-items:center;min-width:0;background:#000;overflow:hidden}}#viewport-image{{display:block;width:min(100%,900px);height:min(calc(100vh - 100px),960px);object-fit:contain;image-rendering:auto}}.hint{{color:#97a4ab;font-size:12px;line-height:1.4}}@media(max-width:800px){{main{{grid-template-columns:1fr}}aside{{border-right:0;border-bottom:1px solid #2b343b}}#viewport-image{{height:auto}}}}</style></head><body>
+<header><strong>State 118→120 dual-target temporal witness</strong><p>Matched-display Raymarch is downsampled from the authenticated full-flame target; native exact pixels remain a separate surface. Neither is a ridge-only score target. Grid16 cell-event EWA remains the matched ridge-only mechanistic control. · <a href="{report_name}">report</a></p></header>
+<main><aside><div class="controls"><div><b>State</b><div class="button-row"><button type="button" data-state="118">118</button><button type="button" data-state="120">120</button><button type="button" id="blink">Blink states</button></div></div><div><b>Surface</b><div class="button-row">{surface_buttons}</div></div></div><div id="scope"></div><p class="hint">Space toggles state. B starts/stops blinking. Number keys select surfaces. Camera, crop, exposure, zoom, and viewport stay fixed while the image changes in place.</p></aside><section id="stage"><img id="viewport-image" alt="Temporal comparison"></section></main>
+<script>const surfaces={encoded};const surfaceIds=Object.keys(surfaces);const query=new URLSearchParams(location.search);let state=['118','120'].includes(query.get('state'))?query.get('state'):'118';let surface=surfaceIds.includes(query.get('surface'))?query.get('surface'):surfaceIds[0];let timer=null;const image=document.querySelector('#viewport-image');const scope=document.querySelector('#scope');const blink=document.querySelector('#blink');function syncUrl(){{const url=new URL(location.href);url.searchParams.set('surface',surface);url.searchParams.set('state',state);history.replaceState(null,'',url);}}function render(){{const entry=surfaces[surface];scope.classList.remove('load-error');image.src=entry.states[state];image.alt=`${{entry.label}}, state ${{state}}`;scope.textContent=`${{entry.label}} · ${{entry.scope}}`;document.querySelectorAll('[data-state]').forEach(button=>button.classList.toggle('active',button.dataset.state===state));document.querySelectorAll('[data-surface]').forEach(button=>button.classList.toggle('active',button.dataset.surface===surface));syncUrl();}}image.addEventListener('error',()=>{{scope.classList.add('load-error');scope.textContent=`IMAGE LOAD FAILED · ${{surface}} · state ${{state}} · ${{image.getAttribute('src')}}`;}});function toggleState(){{state=state==='118'?'120':'118';render();}}function stopBlink(){{if(timer!==null){{clearInterval(timer);timer=null;blink.classList.remove('active');blink.textContent='Blink states';}}}}document.querySelectorAll('[data-state]').forEach(button=>button.addEventListener('click',()=>{{stopBlink();state=button.dataset.state;render();}}));document.querySelectorAll('[data-surface]').forEach(button=>button.addEventListener('click',()=>{{surface=button.dataset.surface;render();}}));blink.addEventListener('click',()=>{{if(timer!==null){{stopBlink();return;}}timer=setInterval(toggleState,450);blink.classList.add('active');blink.textContent='Stop blinking';}});addEventListener('keydown',event=>{{if(event.code==='Space'){{event.preventDefault();stopBlink();toggleState();}}else if(event.key.toLowerCase()==='b'){{blink.click();}}else if(/^[1-9]$/.test(event.key)){{const next=surfaceIds[Number(event.key)-1];if(next){{surface=next;render();}}}}}});render();</script></body></html>"""
 
 
 def run_assay(args: argparse.Namespace) -> dict[str, Any]:
@@ -396,6 +582,10 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         source = sequence.get("source") or {}
         FITTER.require(Path(source.get("manifestPath", "")).resolve() == motion_manifest_path, "sequence source manifest path drifted")
         FITTER.require(source.get("manifestSha256") == FITTER.sha256_file(motion_manifest_path), "sequence source manifest hash drifted")
+    exact_targets = authenticate_exact_raymarch_targets(
+        motion_manifest_path,
+        (source_state_id, target_state_id),
+    )
 
     source_manifest, source_state, source_ids, source_positions, source_coefficients, source_velocities = load_motion_state(
         motion_manifest_path,
@@ -504,6 +694,28 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
     source_target_artifact = write_image("state118-restricted-target", "State118 restricted-cell target", source_target)
     target_target_artifact = write_image("state120-restricted-target", "State120 restricted-cell target", target_target)
     seed_artifact = write_image("state118-seed-reconstruction", "State118 persistent seed (iteration 1)", seed_render)
+    exact_target_artifacts: dict[str, dict[str, Any]] = {}
+    for state_id, state_label in ((source_state_id, "118"), (target_state_id, "120")):
+        source_path = Path(exact_targets[state_id]["path"])
+        native_path = args.output_dir / f"state{state_label}-exact-full-raymarch-native.png"
+        shutil.copyfile(source_path, native_path)
+        FITTER.require(FITTER.sha256_file(native_path) == exact_targets[state_id]["sha256"], f"state{state_label} exact target copy drifted")
+        display_path = args.output_dir / f"state{state_label}-exact-full-raymarch-display.png"
+        exact_rgb = read_png_rgb8(native_path)
+        display_rgb = resize_bilinear_rgb(exact_rgb, source_target.shape[1], source_target.shape[0])
+        FITTER.write_png(display_path, display_rgb)
+        exact_target_artifacts[state_id] = {
+            **exact_targets[state_id],
+            "sourcePath": str(source_path),
+            "nativePath": str(native_path),
+            "nativeName": native_path.name,
+            "displayPath": str(display_path),
+            "displayName": display_path.name,
+            "displaySha256": FITTER.sha256_file(display_path),
+            "displayWidth": int(source_target.shape[1]),
+            "displayHeight": int(source_target.shape[0]),
+            "displayResizeIdentity": "tone-mapped-rgb8-center-aligned-bilinear-v0",
+        }
     arm_rows: dict[str, Any] = {}
     for arm, state in continuation_states.items():
         rendered, render_receipt = FITTER.render_modes(
@@ -547,14 +759,63 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "continuationReceipt": continuation_receipts.get(arm),
         }
 
+    surfaces = {
+        "exact-raymarch": {
+            "label": "Exact full-flame Raymarch (matched display)",
+            "scope": "product-motion context downsampled to the Grid16 witness pixel grid; full ridge+non-ridge shared transmittance; not a ridge-only score target",
+            "states": {
+                "118": exact_target_artifacts[source_state_id]["displayName"],
+                "120": exact_target_artifacts[target_state_id]["displayName"],
+            },
+        },
+        "exact-raymarch-native": {
+            "label": "Exact full-flame Raymarch (native)",
+            "scope": (
+                f"untouched authenticated {exact_targets[source_state_id]['width']}x{exact_targets[source_state_id]['height']} "
+                "product-motion context; not pixel-grid matched to the Grid16 witness and not a ridge-only score target"
+            ),
+            "states": {
+                "118": exact_target_artifacts[source_state_id]["nativeName"],
+                "120": exact_target_artifacts[target_state_id]["nativeName"],
+            },
+        },
+        "grid16-cell-event-control": {
+            "label": "Grid16 cell-event EWA control",
+            "scope": "ridge-only matched-renderer mechanistic control",
+            "states": {
+                "118": Path(source_target_artifact["path"]).name,
+                "120": Path(target_target_artifact["path"]).name,
+            },
+        },
+        "persistent-frozen": {
+            "label": "Persistent frozen",
+            "scope": "ridge-only reconstruction",
+            "states": {"118": Path(seed_artifact["path"]).name, "120": Path(arm_rows["frozen"]["artifact"]["path"]).name},
+        },
+        "persistent-advected": {
+            "label": "Persistent advected",
+            "scope": "ridge-only reconstruction",
+            "states": {"118": Path(seed_artifact["path"]).name, "120": Path(arm_rows["advected"]["artifact"]["path"]).name},
+        },
+        "persistent-bounded": {
+            "label": "Persistent advected + bounded correction",
+            "scope": "ridge-only reconstruction",
+            "states": {"118": Path(seed_artifact["path"]).name, "120": Path(arm_rows["advected-bounded-exclusive"]["artifact"]["path"]).name},
+        },
+        "cold-control": {
+            "label": "Cold independent refit",
+            "scope": "ridge-only negative control",
+            "states": {"118": Path(seed_artifact["path"]).name, "120": Path(arm_rows["cold-control"]["artifact"]["path"]).name},
+        },
+    }
     viewer_path = args.output_dir / "index.html"
-    viewer_path.write_text(contact_sheet_html(image_rows, "report.json"))
+    viewer_path.write_text(temporal_toggle_html(surfaces, "report.json"))
     report = {
         "schema": CONTINUATION_SCHEMA,
         "identity": CONTINUATION_IDENTITY,
         "status": "complete",
         "failurePhase": None,
-        "authority": "exact-adjacent-state118-120-fixed-count-grid16-temporal-falsifier-v0",
+        "authority": "dual-target-exact-raymarch-context-plus-grid16-matched-control-v0",
         "requested": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
         "effective": {
             "sourceStateId": source_state_id,
@@ -587,7 +848,31 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "maximumModeDisplacement": float(np.max(np.linalg.norm(mode_velocity * dt_seconds, axis=1))),
         },
         "targetTemporalLinearMae": float(np.mean(np.abs(target_target - source_target))),
+        "targetTemporalLinearMaeAuthority": "deprecated-alias-of-matchedGrid16ControlTemporalLinearMae",
+        "matchedGrid16ControlTemporalLinearMae": float(np.mean(np.abs(target_target - source_target))),
+        "temporalAuthority": {
+            "primaryVisualContext": "exact-full-flame-raymarch-state118-120",
+            "matchedMechanisticControl": "ridge-only-grid16-cell-event-ewa-state118-120",
+            "numericTreatmentScoringTarget": "ridge-only-grid16-cell-event-ewa-state120",
+            "crossPopulationExactRaymarchScoringPermitted": False,
+            "reason": "the exact Raymarch target contains ridge plus non-ridge under shared transmittance while the fixed 48-mode treatment reconstructs ridge only",
+        },
+        "visualComparison": {
+            "treatmentWidth": int(source_target.shape[1]),
+            "treatmentHeight": int(source_target.shape[0]),
+            "exactNativeDimensions": {
+                "118": [int(exact_targets[source_state_id]["width"]), int(exact_targets[source_state_id]["height"])],
+                "120": [int(exact_targets[target_state_id]["width"]), int(exact_targets[target_state_id]["height"])],
+            },
+            "exactDisplayWidth": int(source_target.shape[1]),
+            "exactDisplayHeight": int(source_target.shape[0]),
+            "pixelGridMatched": True,
+            "exactDisplayResizeIdentity": "tone-mapped-rgb8-center-aligned-bilinear-v0",
+            "nativeExactPreservedSeparately": True,
+            "heldCameraPoseSha256": exact_targets[source_state_id]["cameraPoseSha256"],
+        },
         "renders": {
+            "exactRaymarchFullFlameContext": exact_target_artifacts,
             "sourceTarget": source_target_artifact,
             "targetTarget": target_target_artifact,
             "sourceSeed": seed_artifact,
@@ -599,10 +884,15 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         "artifacts": {
             "viewer": str(viewer_path),
             "viewerSha256": FITTER.sha256_file(viewer_path),
-            "imageCount": len(image_rows),
+            "imageCount": len(image_rows) + 2 * len(exact_target_artifacts),
+            "viewerIdentity": "same-viewport-state-surface-toggle-v0",
+            "surfaces": surfaces,
         },
         "claimBoundary": {
             "fixedCountTemporalContinuationAuthority": True,
+            "exactRaymarchProductMotionVisualContext": True,
+            "exactRaymarchRidgeOnlyNumericScoring": False,
+            "grid16CellEventTargetIsRaymarch": False,
             "fullVolumeAuthority": False,
             "productionEligibilityClaimed": False,
             "visualClosureClaimed": False,

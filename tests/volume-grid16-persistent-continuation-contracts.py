@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -82,6 +83,63 @@ def fixture(fitter):
     return native_ids, source_coefficients, velocities, source, target, sequence[-1]
 
 
+def exact_target_manifest(temporary: Path, fitter) -> Path:
+    states = []
+    for step in (118, 120):
+        image_path = temporary / f"exact-{step}.png"
+        image = np.random.default_rng(step).random((24, 32, 3))
+        fitter.write_png(image_path, image)
+        rgb = np.clip(np.round(image * 255.0), 0.0, 255.0).astype(np.uint8)
+        rgba = np.concatenate((rgb, np.full((24, 32, 1), 255, dtype=np.uint8)), axis=2)
+        states.append(
+            {
+                "id": f"coefficient-state-{step}",
+                "replay": {
+                    "completedSteps": step,
+                    "grid": 96,
+                    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+                    "backend": "WebGPU:apple",
+                },
+                "target": {
+                    "identity": "ridge-plus-non-ridge-contributions-under-shared-transmittance-v0",
+                    "mode": "shared-transmittance-contribution-sum",
+                    "path": str(image_path),
+                    "bytes": image_path.stat().st_size,
+                    "sha256": hashlib.sha256(image_path.read_bytes()).hexdigest(),
+                    "targetPixelSha256": hashlib.sha256(np.ascontiguousarray(rgba).tobytes()).hexdigest(),
+                    "width": 32,
+                    "height": 24,
+                    "litPixels": 10,
+                    "effectiveRaySteps": 160,
+                    "cameraPoseSha256": "held-camera",
+                    "appearanceReceipt": {
+                        "effectiveMode": "shared-transmittance-contribution-sum",
+                        "fallbackReason": None,
+                        "passes": {"raymarchApplied": True, "splatsApplied": False},
+                    },
+                    "smokeReceipt": {"effectiveMode": "off", "fallbackReason": None},
+                },
+            }
+        )
+    manifest_path = temporary / "motion-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema": "kaminos.volume.layer-coefficient-bilinear-motion-manifest.v0",
+                "status": "complete",
+                "authority": "single-browser-multi-state-exact-bilinear-motion-v0",
+                "route": {
+                    "effective": "native-3d-compute-fluid-raymarch-v0",
+                    "backend": "WebGPU:apple",
+                    "fallbackReason": None,
+                },
+                "states": states,
+            }
+        )
+    )
+    return manifest_path
+
+
 def main() -> None:
     assert SCRIPT_PATH.is_file(), "persistent Grid16 continuation implementation is missing"
     fitter = load(FITTER_PATH, "grid16_sequence_fitter_contract")
@@ -152,6 +210,143 @@ def main() -> None:
     opposed_delta = -target_delta
     assert continuation.signed_delta_alignment(aligned_delta, target_delta) > 0.999
     assert continuation.signed_delta_alignment(opposed_delta, target_delta) < -0.999
+
+    with tempfile.TemporaryDirectory() as temporary_name:
+        temporary = Path(temporary_name)
+        tiny_path = temporary / "tiny.png"
+        tiny = np.random.default_rng(7).random((32, 32, 3))
+        fitter.write_png(tiny_path, tiny)
+        decoded = continuation.read_png_rgb8(tiny_path)
+        assert decoded.shape == tiny.shape
+        assert np.allclose(decoded, np.round(tiny * 255.0) / 255.0)
+        resized = continuation.resize_bilinear_rgb(decoded, 9, 12)
+        assert resized.shape == (12, 9, 3)
+        assert np.all(np.isfinite(resized)) and np.min(resized) >= 0.0 and np.max(resized) <= 1.0
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        targets = continuation.authenticate_exact_raymarch_targets(
+            manifest_path,
+            ("coefficient-state-118", "coefficient-state-120"),
+        )
+        assert tuple(targets) == ("coefficient-state-118", "coefficient-state-120")
+        assert targets["coefficient-state-118"]["scope"] == "full-flame-product-motion-context"
+        assert targets["coefficient-state-118"]["populationComparableToGrid16Ridge"] is False
+        assert targets["coefficient-state-120"]["cameraPoseSha256"] == "held-camera"
+
+        payload = json.loads(manifest_path.read_text())
+        payload["states"][0]["target"]["litPixels"] = 0
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "blank" in str(exc)
+        else:
+            raise AssertionError("blank exact target falsely authenticated")
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        payload = json.loads(manifest_path.read_text())
+        payload["states"][0]["target"]["sha256"] = "0" * 64
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "hash drifted" in str(exc)
+        else:
+            raise AssertionError("hash-drifted exact target falsely authenticated")
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        payload = json.loads(manifest_path.read_text())
+        payload["states"][0]["target"]["targetPixelSha256"] = "0" * 64
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "pixel hash drifted" in str(exc)
+        else:
+            raise AssertionError("pixel-hash-drifted exact target falsely authenticated")
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        payload = json.loads(manifest_path.read_text())
+        payload["states"][0]["target"]["width"] = 33
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "dimensions drifted" in str(exc)
+        else:
+            raise AssertionError("dimension-drifted exact target falsely authenticated")
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        payload = json.loads(manifest_path.read_text())
+        payload["states"][0]["replay"]["completedSteps"] = 117
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "replay step drifted" in str(exc)
+        else:
+            raise AssertionError("step-drifted exact target falsely authenticated")
+
+        manifest_path = exact_target_manifest(temporary, fitter)
+        viewer = continuation.temporal_toggle_html(
+            {
+                "exact-raymarch": {
+                    "label": "Exact full-flame Raymarch",
+                    "scope": "product-motion-context",
+                    "states": {"118": "exact-118.png", "120": "exact-120.png"},
+                },
+                "grid16-control": {
+                    "label": "Grid16 cell-event EWA control",
+                    "scope": "ridge-only-mechanistic-control",
+                    "states": {"118": "control-118.png", "120": "control-120.png"},
+                },
+                "bounded-treatment": {
+                    "label": "Persistent bounded treatment",
+                    "scope": "ridge-only-reconstruction",
+                    "states": {"118": "seed-118.png", "120": "bounded-120.png"},
+                },
+            },
+            "report.json",
+        )
+        assert 'id="viewport-image"' in viewer
+        assert 'data-state="118"' in viewer and 'data-state="120"' in viewer
+        assert 'data-surface="exact-raymarch"' in viewer
+        assert 'data-surface="grid16-control"' in viewer
+        assert 'id="blink"' in viewer
+        assert "setInterval" in viewer
+        assert "URLSearchParams" in viewer
+        assert "history.replaceState" in viewer
+        assert "IMAGE LOAD FAILED" in viewer
+        assert "downsampled from the authenticated full-flame target" in viewer
+        assert "Neither is a ridge-only score target" in viewer
+
+        payload = json.loads(manifest_path.read_text())
+        payload["route"]["fallbackReason"] = "silent-fallback"
+        manifest_path.write_text(json.dumps(payload))
+        try:
+            continuation.authenticate_exact_raymarch_targets(
+                manifest_path,
+                ("coefficient-state-118", "coefficient-state-120"),
+            )
+        except continuation.FITTER.SequenceFailure as exc:
+            assert "fallback" in str(exc)
+        else:
+            raise AssertionError("fallback exact-target route falsely authenticated")
 
     try:
         continuation.continue_optical_modes(arm="cold-refit", **common)
