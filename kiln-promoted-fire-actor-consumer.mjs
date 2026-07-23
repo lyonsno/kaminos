@@ -306,9 +306,20 @@ export async function completeKilnPromotedFireActorPreview({
   if (effectivePresentation.inferenceRan !== false || effectivePresentation.routeRef !== null) {
     throw new Error('promoted fire preview cannot carry inference or route evidence');
   }
+  const trustedEffectivePresentation = {
+    mountId: mount.mountId,
+    episodeId: preview.episodeId,
+    policyId: mount.policy.policyId,
+    basinRevision: mount.basin.revision,
+    composition: mount.representation.composition,
+    rendererIdentity: mount.representation.rendererIdentity,
+    fallbackReason: null,
+    inferenceRan: false,
+    routeRef: null,
+  };
   return {
     ...structuredClone(preview),
     status: 'completed',
-    effectivePresentation: structuredClone(effectivePresentation),
+    effectivePresentation: trustedEffectivePresentation,
   };
 }

@@ -121,10 +121,22 @@ const completed = await completeKilnPromotedFireActorPreview({
     fallbackReason: null,
     inferenceRan: false,
     routeRef: null,
+    rendererMutation: 'claimed',
   },
 });
 assert.equal(completed.status, 'completed');
 assert.equal(completed.effectivePresentation.inferenceRan, false);
+assert.deepEqual(Object.keys(completed.effectivePresentation).sort(), [
+  'basinRevision',
+  'composition',
+  'episodeId',
+  'fallbackReason',
+  'inferenceRan',
+  'mountId',
+  'policyId',
+  'rendererIdentity',
+  'routeRef',
+], 'browser completion must not preserve unvalidated effective-presentation claims');
 
 const tamperedMount = JSON.parse(readFileSync(mountPath, 'utf8'));
 tamperedMount.policy.requested.smoke.renderScale = 0.5;

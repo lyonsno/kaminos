@@ -1,0 +1,7 @@
+{
+  "schema": "kaminos.kiln.promoted-fire-engine.v1",
+  "sourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+  "sourcePath": "volume-core.js",
+  "consumerPath": "kiln-promoted-fire-volume-core.js",
+  "sha256": "fa872e98323fa436a67c83cee340da0b978bb1046d8c7fd495391dc01985acbb"
+}
