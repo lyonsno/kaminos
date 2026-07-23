@@ -84,13 +84,13 @@ assert.match(
 assert.match(volumeCore, /stepSelectiveHeadLiveCaptureFrame\(options\s*=\s*\{\}\)[\s\S]*?render\(sampleNow\)/, 'deterministic parity stepping supplies an explicit simulation clock');
 assert.match(
   volumeCore,
-  /writeTimestamp\(0, 'kaminos boundary splat timestamp before simulation'\);[\s\S]*?encodeSim\(encoder\);[\s\S]*?writeTimestamp\(1, 'kaminos boundary splat timestamp after simulation'\)/,
-  'GPU profile brackets simulation with explicit timestamp markers',
+  /encodeSim\(encoder,\s*\{[\s\S]*?finalTimestampWrites:[\s\S]*?endOfPassWriteIndex:\s*0[\s\S]*?encodeSim\(encoder,\s*\{[\s\S]*?finalTimestampWrites:[\s\S]*?endOfPassWriteIndex:\s*1/,
+  'GPU profile measures simulation between two complete real simulation endpoints',
 );
 assert.match(
   volumeCore,
-  /writeTimestamp\(4, 'kaminos boundary splat timestamp before splat raster'\);[\s\S]*?encodeBoundarySplatDraw\([\s\S]*?endOfPassWriteIndex:\s*5/,
-  'GPU profile brackets splat raster without an implicit beginning timestamp',
+  /compactTimestampWrites:[\s\S]*?endOfPassWriteIndex:\s*3[\s\S]*?finalizeTimestampWrites:[\s\S]*?endOfPassWriteIndex:\s*4[\s\S]*?encodeBoundarySplatDraw\([\s\S]*?endOfPassWriteIndex:\s*5/,
+  'GPU profile uses real compaction, finalize, and raster pass endpoints',
 );
 assert.match(index, /window\.kaminosFireActorParity\s*=/, 'cockpit exposes the shared live parity API');
 assert.match(index, /id="volume-steps"[^>]+step="1"/, 'cockpit ray-step slider must preserve caller-selected integer counts without rounding');

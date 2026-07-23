@@ -12063,12 +12063,15 @@ export function createKaminosVolumePrototype({
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    encodePressureProjection(encoder);
+    const finalTimestampWritten = encodePressureProjection(encoder, {
+      timestampWrites: options.finalTimestampWrites,
+    });
     state.simStepCount += 1;
     updateSimCostLedger();
+    return finalTimestampWritten;
   }
 
-  function encodePressureProjection(encoder) {
+  function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
@@ -12083,7 +12086,7 @@ export function createKaminosVolumePrototype({
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
       ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
@@ -12093,7 +12096,7 @@ export function createKaminosVolumePrototype({
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const workgroups = Math.ceil(gridSize / 4);
     const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = majorantFrontBindGroups[currentFluid]) => {
@@ -12126,7 +12129,10 @@ export function createKaminosVolumePrototype({
         bindGroups[currentFluid]
       );
       {
-        const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
+        const pass = encoder.beginComputePass({
+          label: 'kaminos tiered pressure projection pass',
+          ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+        });
         pass.setPipeline(pressureProjectTieredPipeline);
         pass.setBindGroup(0, bindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
@@ -12141,7 +12147,7 @@ export function createKaminosVolumePrototype({
       state.frontFieldWriteIndex = 1 - currentFront;
       state.frontFieldProjectionPassthrough = true;
       updateSimCostLedger();
-      return;
+      return true;
     }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
@@ -12154,7 +12160,10 @@ export function createKaminosVolumePrototype({
       pressureReadIndex = 1 - pressureReadIndex;
     }
     {
-      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      const pass = encoder.beginComputePass({
+        label: 'kaminos pressure projection pass',
+        ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      });
       pass.setPipeline(pressureProjectPipeline);
       pass.setBindGroup(0, bindGroups[currentFluid]);
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
@@ -12169,6 +12178,7 @@ export function createKaminosVolumePrototype({
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = true;
     updateSimCostLedger();
+    return true;
   }
 
   function encodeMajorant(encoder, options = {}) {
@@ -12918,7 +12928,10 @@ export function createKaminosVolumePrototype({
       0, state.boundarySplatInstanceConsumerEffective ? requestedInstanceCount : 1, 0, 0,
     ]));
     device.queue.writeBuffer(boundarySplatBilinearIndirectBuffer, 0, new Uint32Array([1, 0, 0, 0]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
@@ -13275,10 +13288,15 @@ export function createKaminosVolumePrototype({
       ensureFrameTexture();
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
-      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      writeTimestamp(0, 'kaminos boundary splat timestamp before simulation');
-      encodeSim(encoder);
-      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      const warmupEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 0 },
+      });
+      const measuredEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 1 },
+      });
+      if (!warmupEndpointWritten || !measuredEndpointWritten) {
+        throw new Error('simulation-final-timestamp-unavailable');
+      }
       encodeBoundarySidecar(encoder, {
         timestampWrites: {
           querySet,
@@ -13286,15 +13304,18 @@ export function createKaminosVolumePrototype({
         },
       });
       const splatsEncoded = encodeBoundarySplats(encoder, {
-        finalizeTimestampWrites: {
+        compactTimestampWrites: {
           querySet,
           endOfPassWriteIndex: 3,
+        },
+        finalizeTimestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 4,
         },
       });
       if (!splatsEncoded) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
       }
-      writeTimestamp(4, 'kaminos boundary splat timestamp before splat raster');
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
