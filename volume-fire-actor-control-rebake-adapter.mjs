@@ -96,6 +96,25 @@ function validateState(state, requestedMode) {
   return state;
 }
 
+async function verifyFrozenStateHashes(state) {
+  const actualFluidSha256 = await sha256Bytes(new Uint8Array(
+    state.fluid.buffer,
+    state.fluid.byteOffset,
+    state.fluid.byteLength,
+  ));
+  if (actualFluidSha256 !== state.source.fluidSha256) {
+    throw new Error(`fire-actor-rebake-field-hash-mismatch:fluid:declared=${state.source.fluidSha256}:actual=${actualFluidSha256}`);
+  }
+  const actualFrontSha256 = await sha256Bytes(new Uint8Array(
+    state.front.buffer,
+    state.front.byteOffset,
+    state.front.byteLength,
+  ));
+  if (actualFrontSha256 !== state.source.frontSha256) {
+    throw new Error(`fire-actor-rebake-field-hash-mismatch:front:declared=${state.source.frontSha256}:actual=${actualFrontSha256}`);
+  }
+}
+
 function scalarDelta(before, after, key) {
   const beforeValue = Number(before[key]);
   const afterValue = Number(after[key]);
@@ -177,11 +196,14 @@ async function readExportField(engine, session, kind, expectedFloatCount) {
 }
 
 export function fireActorRebakeControlsFromVolumeControls(controls = {}) {
-  const defaults = defaultStageBControls();
-  return Object.fromEntries(MANDATORY_STAGE_B_CONTROLS.map(control => {
+  const missing = MANDATORY_STAGE_B_CONTROLS.filter(control => {
     const volumeKey = VOLUME_CONTROL_KEYS[control];
-    return [control, controls[volumeKey] ?? defaults[control]];
-  }));
+    return !Object.hasOwn(controls, volumeKey) || !Number.isFinite(Number(controls[volumeKey]));
+  });
+  if (missing.length) {
+    throw new Error(`fire-actor-rebake-volume-controls-incomplete:shape=volume-debug-controls-camel-v0:missing=${missing.join(',')}`);
+  }
+  return Object.fromEntries(MANDATORY_STAGE_B_CONTROLS.map(control => [control, controls[VOLUME_CONTROL_KEYS[control]]]));
 }
 
 export function createVolumeEngineStageBStateReader(engine) {
@@ -304,6 +326,7 @@ export function createFireActorControlRebakeAdapter({ mount, readLiveState, bake
         sourceState = await readLiveState();
       }
       validateState(sourceState, sourceMode);
+      if (sourceMode === 'frozen') await verifyFrozenStateHashes(sourceState);
       const beforeSimStep = sourceState.source.simStepCount;
       const baseline = await rebakeAnalyticalStageB({
         state: sourceState,
