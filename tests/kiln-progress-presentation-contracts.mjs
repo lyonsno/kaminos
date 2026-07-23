@@ -36,10 +36,33 @@ assert.deepEqual(
   kilnRouteBenchProgressPresentation(received, 14_250),
   {
     fillPercent: 64,
-    label: '64% projected | vit block microphase | work 287 | 4s since update',
+    label: '64% projected | vit block microphase | 4s since update',
     percent: 64,
     projected: true,
   },
+);
+assert.equal(
+  kilnRouteBenchProgressPresentation({
+    progress: 0.81,
+    progressAuthority: 'stage-weighted-work-projection',
+    phase: 'gaussian-phase',
+    work: { tileIndex: 2, tileTotal: 8 },
+    exactWork: { completed: 1572864, total: 4194304, unit: 'output-item', authority: 'scheduler-range' },
+    receivedAtMs: 20_000,
+  }, 20_000).label,
+  '81% projected | gaussian phase | tile 3/8 | updated now',
+  'decoder telemetry must expose the current tile denominator instead of a bare work ordinal',
+);
+assert.equal(
+  kilnRouteBenchProgressPresentation({
+    progress: 0.64,
+    progressAuthority: 'stage-weighted-work-projection',
+    phase: 'spn-fusion',
+    exactWork: { completed: 524288, total: 1048576, unit: 'output-item', authority: 'scheduler-range' },
+    receivedAtMs: 30_000,
+  }, 30_000).label,
+  '64% projected | spn fusion | 524288/1048576 output items | updated now',
+  'exact scheduler ranges must retain their denominator when no tile ordinal exists',
 );
 
 const unknownAuthority = kilnRouteBenchProgressPresentation({

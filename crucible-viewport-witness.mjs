@@ -216,6 +216,70 @@ function validateSpnFusionTileEvidence({ expectedChunkItems, fullRoute }) {
   return [...new Set(failures)];
 }
 
+function validateDecoderKernelTileEvidence({ expectedChunkItems, fullRoute }) {
+  if (!Number.isInteger(expectedChunkItems) || expectedChunkItems <= 0) return [];
+  const failures = [];
+  const assertion = (fullRoute?.schedulerBoundaryAssertions || []).find(candidate =>
+    candidate?.field === 'decoderKernelChunkItems'
+  );
+  if (!assertion) {
+    failures.push('boundary-assertion-missing');
+  } else {
+    if (assertion.status !== 'verified') failures.push('boundary-assertion-unverified');
+    if (assertion.requested !== expectedChunkItems || assertion.effective !== expectedChunkItems) {
+      failures.push('boundary-assertion-config-mismatch');
+    }
+    if (!Number.isInteger(assertion.observedCount) || assertion.observedCount < 2
+      || !Number.isInteger(assertion.observedKernel?.tileTotal) || assertion.observedKernel.tileTotal < 2) {
+      failures.push('boundary-assertion-multi-range-count-missing');
+    }
+  }
+
+  const events = (fullRoute?.decoderKernelTileEvents || []).filter(event =>
+    (event?.boundary === 'monodepth-phase' || event?.boundary === 'gaussian-phase')
+    && event?.role === 'decoder-kernel-output-tile'
+    && event.configuredChunkItems === expectedChunkItems
+    && Number.isInteger(event.tileIndex)
+    && Number.isInteger(event.tileTotal)
+    && event.tileTotal > 1
+    && Number.isInteger(event.outputStart)
+    && Number.isInteger(event.outputEnd)
+    && Number.isInteger(event.outputCount)
+    && Number.isInteger(event.totalOutputItems)
+  );
+  if (events.length < 2) {
+    failures.push('multi-range-events-missing');
+    return [...new Set(failures)];
+  }
+
+  const groups = new Map();
+  for (const event of events) {
+    const key = `${event.boundary}\u0000${event.phase}\u0000${event.tileTotal}\u0000${event.totalOutputItems}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(event);
+  }
+  const completeGroup = [...groups.values()].some(group => {
+    const ordered = [...group].sort((a, b) => a.tileIndex - b.tileIndex);
+    const tileTotal = ordered[0]?.tileTotal;
+    const totalOutputItems = ordered[0]?.totalOutputItems;
+    if (ordered.length !== tileTotal || tileTotal < 2) return false;
+    let cursor = 0;
+    for (let tileIndex = 0; tileIndex < ordered.length; tileIndex += 1) {
+      const event = ordered[tileIndex];
+      if (event.tileIndex !== tileIndex
+        || event.tileTotal !== tileTotal
+        || event.totalOutputItems !== totalOutputItems
+        || event.outputStart !== cursor
+        || event.outputEnd - event.outputStart !== event.outputCount
+        || event.outputCount > expectedChunkItems) return false;
+      cursor = event.outputEnd;
+    }
+    return cursor === totalOutputItems;
+  });
+  if (!completeGroup) failures.push('range-coverage-invalid');
+  return [...new Set(failures)];
+}
+
 function validatedReplayCastReport(document, reportPath) {
   if (document?.schema !== 'kaminos.pipeline-witness.v0') {
     throw new Error('Replay cast report must use kaminos.pipeline-witness.v0');
@@ -968,6 +1032,22 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
       outputCount: event.outputCount,
       totalOutputItems: event.totalOutputItems,
     }));
+  const decoderKernelTileEvents = schedulerEvents
+    .filter(event => event?.kind === 'chunk-start'
+      && (event?.boundary === 'monodepth-phase' || event?.boundary === 'gaussian-phase')
+      && event?.role === 'decoder-kernel-output-tile')
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      role: event.role,
+      configuredChunkItems: event.configuredChunkItems,
+      tileIndex: event.tileIndex,
+      tileTotal: event.tileTotal,
+      outputStart: event.outputStart,
+      outputEnd: event.outputEnd,
+      outputCount: event.outputCount,
+      totalOutputItems: event.totalOutputItems,
+    }));
   const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
   const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
   const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
@@ -1047,6 +1127,7 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
     schedulerBoundaryAssertions,
     spnFusionTileEvents,
+    decoderKernelTileEvents,
     routeTailCheckpointEvents: {
       total: routeTailEvents.length,
       prep: prepEvents.length,
@@ -1808,6 +1889,15 @@ try {
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (spnFusionTileFailures.length) {
       throw new Error(`Friendly firing did not prove SPN fusion output tiling: ${spnFusionTileFailures.join(', ')}`);
+    }
+    const decoderKernelTileFailures = validateDecoderKernelTileEvidence({
+      expectedChunkItems: expectedScheduler.decoderKernelChunkItems,
+      fullRoute: state.fullRoute,
+    });
+    state.fullRoute.decoderKernelTileFailures = decoderKernelTileFailures;
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
+    if (decoderKernelTileFailures.length) {
+      throw new Error(`Friendly firing did not prove decoder kernel output tiling: ${decoderKernelTileFailures.join(', ')}`);
     }
     if (state.fullRoute.routeTailCheckpointEvents?.prep < 6 || state.fullRoute.routeTailCheckpointEvents?.gaussian < 1) {
       throw new Error(`Friendly firing is missing prep or Gaussian route-tail checkpoints: ${JSON.stringify(state.fullRoute.routeTailCheckpointEvents)}`);

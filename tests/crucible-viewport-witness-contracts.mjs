@@ -179,6 +179,11 @@ const spnFusionValidationSource = witness.match(
 );
 assert.ok(spnFusionValidationSource, 'witness must expose a testable SPN fusion tile authority gate');
 const validateSpnFusionTileEvidence = vm.runInNewContext(`(${spnFusionValidationSource[0]})`);
+const decoderKernelValidationSource = witness.match(
+  /function validateDecoderKernelTileEvidence\([\s\S]*?\n}/,
+);
+assert.ok(decoderKernelValidationSource, 'witness must expose a testable decoder kernel tiling authority gate');
+const validateDecoderKernelTileEvidence = vm.runInNewContext(`(${decoderKernelValidationSource[0]})`);
 const spnFusionTileEvents = [
   { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', role: 'spn-fusion-output-chunk', block: 'upsample0.layer-1.output-chunk-0', parentBlock: 'upsample0.layer-1', outputChunkIndex: 0, outputChunkCount: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
   { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', chunkRole: 'spn-fusion-output-chunk', block: 'upsample0.layer-1', parentBlock: 'upsample0', outputChunkIndex: 1, outputChunkCount: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
@@ -253,6 +258,44 @@ for (const [mutate, expectedFailure] of [
   mutate(evidence);
   assert.ok(validateSpnFusionTileEvidence({
     profileId: 'cooperative-spn-fusion-tiles-524288',
+    expectedChunkItems: 524288,
+    fullRoute: evidence,
+  }).includes(expectedFailure), expectedFailure);
+}
+
+const decoderKernelTileEvents = [
+  { phase: 'decoder.fusion.4.conv1', boundary: 'gaussian-phase', role: 'decoder-kernel-output-tile', configuredChunkItems: 524288, tileIndex: 0, tileTotal: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
+  { phase: 'decoder.fusion.4.conv1', boundary: 'gaussian-phase', role: 'decoder-kernel-output-tile', configuredChunkItems: 524288, tileIndex: 1, tileTotal: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
+];
+const validDecoderKernelEvidence = {
+  schedulerBoundaryAssertions: [{
+    field: 'decoderKernelChunkItems',
+    requested: 524288,
+    effective: 524288,
+    status: 'verified',
+    observedCount: 2,
+    observedKernel: { boundary: 'gaussian-phase', phase: 'decoder.fusion.4.conv1', tileTotal: 2, totalOutputItems: 1048576 },
+  }],
+  decoderKernelTileEvents,
+};
+assert.deepEqual(
+  JSON.parse(JSON.stringify(validateDecoderKernelTileEvidence({
+    expectedChunkItems: 524288,
+    fullRoute: validDecoderKernelEvidence,
+  }))),
+  [],
+  'one exact multi-tile decoder kernel and its verified assertion must admit the Friendly witness',
+);
+for (const [mutate, expectedFailure] of [
+  [evidence => { evidence.schedulerBoundaryAssertions = []; }, 'boundary-assertion-missing'],
+  [evidence => { evidence.schedulerBoundaryAssertions[0].status = 'unverified'; }, 'boundary-assertion-unverified'],
+  [evidence => { evidence.schedulerBoundaryAssertions[0].effective = 1048576; }, 'boundary-assertion-config-mismatch'],
+  [evidence => { evidence.decoderKernelTileEvents = evidence.decoderKernelTileEvents.slice(0, 1); }, 'multi-range-events-missing'],
+  [evidence => { evidence.decoderKernelTileEvents[1].outputStart = 500000; }, 'range-coverage-invalid'],
+]) {
+  const evidence = JSON.parse(JSON.stringify(validDecoderKernelEvidence));
+  mutate(evidence);
+  assert.ok(validateDecoderKernelTileEvidence({
     expectedChunkItems: 524288,
     fullRoute: evidence,
   }).includes(expectedFailure), expectedFailure);

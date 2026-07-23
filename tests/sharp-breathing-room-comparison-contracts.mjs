@@ -47,8 +47,28 @@ function schedulerVerification({
         index,
         source: 'mock',
         label: label.startsWith('fusion-') ? 'decoder.fusions.1' : undefined,
-      }))
+    }))
     : [];
+  const decoderEvents = [0, 1].flatMap(tileIndex => [
+    'chunk-start',
+    'queue-work-done-start',
+    'queue-work-done-end',
+    'js-yield-start',
+    'js-yield-end',
+  ].map((kind, kindIndex) => ({
+    tMs: 30 + tileIndex * 5 + kindIndex,
+    phase: 'decoder.fusion.4.conv1',
+    boundary: 'gaussian-phase',
+    kind,
+    role: 'decoder-kernel-output-tile',
+    configuredChunkItems: 524288,
+    tileIndex,
+    tileTotal: 2,
+    outputStart: tileIndex * 524288,
+    outputEnd: (tileIndex + 1) * 524288,
+    outputCount: 524288,
+    totalOutputItems: 1048576,
+  })));
   const eventTrace = {
     schema: 'kaminos.webgpu-scheduler-event-trace.v0',
     clock: 'performance.now',
@@ -62,6 +82,7 @@ function schedulerVerification({
           { tMs: 6, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-end', index: 0, yieldMs: 2, source: 'mock' },
           ...lowresEvents,
           ...monodepthEvents,
+          ...decoderEvents,
         ]
       : [],
   };
@@ -76,6 +97,19 @@ function schedulerVerification({
       expectedMinimumCount: 1,
       observedQueueWaitCount: 1,
       observedYieldCount: 1,
+      unsupportedReason: null,
+    },
+    {
+      field: 'decoderKernelChunkItems',
+      requested: 524288,
+      effective: 524288,
+      status: 'verified',
+      observedBoundary: 'gaussian-phase',
+      observedCount: 2,
+      expectedMinimumCount: 2,
+      observedQueueWaitCount: 2,
+      observedYieldCount: 2,
+      observedKernel: { boundary: 'gaussian-phase', phase: 'decoder.fusion.4.conv1', tileTotal: 2, totalOutputItems: 1048576 },
       unsupportedReason: null,
     },
   ] : [];
@@ -93,12 +127,14 @@ function schedulerVerification({
         requestedScheduler: {
           mode: 'cooperative',
           phaseChunkSize: { spnPatch: 1 },
+          decoderKernelChunkItems: 524288,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
         },
         effectiveScheduler: {
           mode: 'cooperative',
           phaseChunkSize: { spnPatch: 1 },
+          decoderKernelChunkItems: 524288,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
           unsupportedFields: [],
@@ -323,6 +359,24 @@ const missingProof = createSharpBreathingRoomComparison({
 assert.equal(missingProof.status, 'invalid');
 assert.ok(missingProof.downgrades.includes('cooperative-verified-without-boundary-proof'));
 assert.equal(missingProof.falseClosureChecks.verifiedWithoutObservedBoundary, true);
+
+const missingDecoderProofReceipt = schedulerVerification();
+missingDecoderProofReceipt.boundaryAssertions = missingDecoderProofReceipt.boundaryAssertions.filter(
+  assertion => assertion.field !== 'decoderKernelChunkItems',
+);
+const missingDecoderProof = createSharpBreathingRoomComparison({
+  runs: [
+    routeRun({ profileId: 'baseline-default', schedulerMode: 'default' }),
+    routeRun({
+      profileId: 'cooperative-spn-gaussian',
+      schedulerMode: 'cooperative',
+      scheduler: missingDecoderProofReceipt,
+    }),
+  ],
+});
+assert.equal(missingDecoderProof.status, 'invalid');
+assert.ok(missingDecoderProof.downgrades.includes('cooperative-decoder-kernel-proof-missing'));
+assert.equal(missingDecoderProof.falseClosureChecks.decoderKernelProofMissing, true);
 
 const proxyOnly = createSharpBreathingRoomComparison({
   runs: [
