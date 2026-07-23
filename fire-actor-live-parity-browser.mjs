@@ -59,7 +59,10 @@ export function installFireActorLiveParitySurface({
         || frame.gpuStageTiming?.sample?.simStepCount !== frame.simStepCount) {
         throw new Error(`${surface} live parity arm GPU timing failed: ${frame.gpuStageTiming?.reason || 'sample identity mismatch'}`);
       }
-      gpuStageTimingReceipt = clone(frame.gpuStageTiming);
+      gpuStageTimingReceipt = {
+        ...clone(frame.gpuStageTiming),
+        aggregationAuthority: 'independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0',
+      };
     }
     return { ...presentation, compositionReceipt, smokeReceipt };
   }

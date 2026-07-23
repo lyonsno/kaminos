@@ -17,7 +17,7 @@ const descriptor = await createFireActorLiveParityDescriptor();
 assert.equal(descriptor.schema, 'kaminos.fire-actor-live-parity-descriptor.v1');
 assert.match(descriptor.descriptorId, /^fireparity-[a-f0-9]{64}$/);
 assert.equal(descriptor.basin.revision, 'basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95');
-assert.equal(descriptor.engine.sha256, '1c934fc7cc2b1aea2c3b4410e97e97f701045b188a2ef19236a1345c49cba63d');
+assert.equal(descriptor.engine.sha256, 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab');
 assert.equal(descriptor.state.targetSimStep, 120);
 assert.equal(descriptor.state.pauseAuthority, 'renderer-internal-exact-sim-step-pause-gpu-complete-v0');
 assert.deepEqual(descriptor.camera.position, [1.65, 0.42, 3.15]);
@@ -50,6 +50,7 @@ const receipt = {
     identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',
     timestampStatus: 'available',
     reason: 'timestamp-query-sampled',
+    aggregationAuthority: 'independent-pass-intervals-may-overlap-total-is-envelope-not-sum-v0',
     sample: {
       authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
       arm: 'composite',
@@ -80,6 +81,7 @@ for (const [name, mutate, pattern] of [
   ['stale GPU timing step', value => { value.gpuStageTiming.sample.simStepCount = 119; }, /GPU stage timing sample/],
   ['wrong GPU timing arm', value => { value.gpuStageTiming.sample.arm = 'smoke'; }, /GPU stage timing sample/],
   ['advancing GPU timing sample', value => { value.gpuStageTiming.sample.advanceSim = true; }, /GPU stage timing sample/],
+  ['missing timing aggregation authority', value => { delete value.gpuStageTiming.aggregationAuthority; }, /GPU stage timing/],
 ]) {
   const candidate = structuredClone(receipt);
   mutate(candidate);

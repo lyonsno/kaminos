@@ -17880,6 +17880,26 @@ async function initKaminosVolumeRoute() {
     return readFireActorParityCamera();
   };
   let fireActorParityPackageVerification = null;
+  let fireActorParityEngineVerification = null;
+  const verifyFireActorParityEngine = async () => {
+    if (fireActorParityEngineVerification) return fireActorParityEngineVerification;
+    fireActorParityEngineVerification = (async () => {
+      const response = await fetch('./volume-core.js', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`cockpit live parity engine fetch failed: ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => (
+        byte.toString(16).padStart(2, '0')
+      )).join('');
+      if (digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSha256) {
+        throw new Error(`cockpit live parity engine identity mismatch:${digest}`);
+      }
+      return {
+        sourceCommit: FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSourceCommit,
+        sha256: digest,
+      };
+    })();
+    return fireActorParityEngineVerification;
+  };
   const verifyFireActorParityPackage = async () => {
     if (fireActorParityPackageVerification) return fireActorParityPackageVerification;
     fireActorParityPackageVerification = (async () => {
@@ -17932,7 +17952,7 @@ async function initKaminosVolumeRoute() {
       window.dispatchEvent(new Event('resize'));
     },
     ensureEngine: async () => {
-      await verifyFireActorParityPackage();
+      await Promise.all([verifyFireActorParityPackage(), verifyFireActorParityEngine()]);
       while (!volumePrototype.debugState().active) {
         const error = volumePrototype.debugState().error;
         if (error) throw new Error(`cockpit route-owned activation failed: ${error}`);
@@ -17941,6 +17961,7 @@ async function initKaminosVolumeRoute() {
       return volumePrototype;
     },
     readEngine: () => volumePrototype,
+    readEngineIdentity: verifyFireActorParityEngine,
     applyCamera: applyFireActorParityCamera,
     readCamera: readFireActorParityCamera,
     readFallbackReason: (debug, presentation) => {
