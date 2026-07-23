@@ -176,11 +176,22 @@ try {
       composition: first.mount.representation.composition,
       rendererIdentity: first.mount.representation.rendererIdentity,
       fallbackReason: null,
+      routeRef: 'sharp://route/forged-effective',
+      rendererMutation: 'claimed',
     },
   });
   assert.equal(completed.status, 'completed');
   assert.equal(completed.inferenceRan, false);
   assert.equal(completed.effectivePresentation.fallbackReason, null);
+  assert.deepEqual(Object.keys(completed.effectivePresentation).sort(), [
+    'basinRevision',
+    'composition',
+    'episodeId',
+    'fallbackReason',
+    'mountId',
+    'policyId',
+    'rendererIdentity',
+  ], 'completed evidence must not preserve unvalidated effective-presentation claims');
 
   for (const activation of [
     {

@@ -433,6 +433,15 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
   if (effectivePresentation.fallbackReason) {
     throw new Error(`fire actor effective presentation fallback: ${effectivePresentation.fallbackReason}`);
   }
+  const trustedEffectivePresentation = {
+    mountId: actorMount.mountId,
+    episodeId: episode.episodeId,
+    policyId: actorMount.policy.policyId,
+    basinRevision: actorMount.basin.revision,
+    composition: actorMount.representation.composition,
+    rendererIdentity: actorMount.representation.rendererIdentity,
+    fallbackReason: null,
+  };
   return {
     schema: FIRE_ACTOR_EPISODE_SCHEMA,
     status: 'completed',
@@ -445,7 +454,7 @@ export function completeFireActorEpisode({ mount, episode, effectivePresentation
     activation,
     requestedPresentation,
     inferenceRan: activation.inferenceRequired,
-    effectivePresentation: structuredClone(effectivePresentation),
+    effectivePresentation: trustedEffectivePresentation,
   };
 }
 
