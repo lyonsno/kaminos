@@ -1,0 +1,165 @@
+{
+  "schema": "kaminos.lirm-smooth-fitted-proxy-rig-assay.v0",
+  "status": "assay-complete-uninspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+  "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+  "requestedConfig": {
+    "sampleCount": 192,
+    "amplitude": 0.31,
+    "parameterization": "monotonic-axial-z"
+  },
+  "effectiveConfig": {
+    "sampleCount": 192,
+    "amplitude": 0.31,
+    "parameterization": "monotonic-axial-z",
+    "presets": [
+      "c-bend",
+      "s-bend",
+      "asymmetric"
+    ],
+    "legacyControl": "s-bend"
+  },
+  "source": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/motion-ready-719024/creature.glb",
+    "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e"
+  },
+  "registration": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
+    "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
+  },
+  "outputInventory": {
+    "smooth-c-bend": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-c-bend.glb",
+      "bytes": 8934192,
+      "sha256": "sha256:d6b91bca828ac104f2ba6072e0066ff56967f0b08ea02c60bb768cdcd54787af"
+    },
+    "smooth-s-bend": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-s-bend.glb",
+      "bytes": 8934188,
+      "sha256": "sha256:0863b03c1e938300ea8d4e68494828692c44903fbb34017249c7accc04058dbb"
+    },
+    "legacy-s-bend": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/legacy-s-bend.glb",
+      "bytes": 8934192,
+      "sha256": "sha256:9a9d58af5b95e1c3e3bc818a449eb247309821a1ebfd472ab0ed149738c4ac71"
+    },
+    "smooth-asymmetric": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0/smooth-asymmetric.glb",
+      "bytes": 8934188,
+      "sha256": "sha256:a6e96e0fea7270eb04cf1ba7affe4e3b2ba35979aa2c132cb6c2983b8f4e4d43"
+    }
+  },
+  "results": {
+    "c-bend": {
+      "smooth": {
+        "maxDisplacement": 0.3820021926099376,
+        "edgeRatio": {
+          "p001": 0.4413991764319308,
+          "p01": 0.6707136835959837,
+          "median": 1.0000000000000009,
+          "p99": 1.4378082111496808,
+          "p999": 1.737282791830533,
+          "min": 0.08117992971991096,
+          "max": 2.1074921208452118
+        },
+        "flippedTriangles": 4,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      },
+      "hard": {
+        "maxDisplacement": 0.37327055588731933,
+        "edgeRatio": {
+          "p001": 0.432363065407476,
+          "p01": 0.9999999999999701,
+          "median": 1,
+          "p99": 2.81728536111045,
+          "p999": 9.673589179893591,
+          "min": 0.044976519207571196,
+          "max": 33.64975459506004
+        },
+        "flippedTriangles": 2907,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      }
+    },
+    "s-bend": {
+      "smooth": {
+        "maxDisplacement": 0.39495356600865755,
+        "edgeRatio": {
+          "p001": 0.20228924953337232,
+          "p01": 0.4380274103069969,
+          "median": 1.0000000000000022,
+          "p99": 2.1617817108349335,
+          "p999": 2.6681501837178994,
+          "min": 0.017157729625853567,
+          "max": 3.4439523451731113
+        },
+        "flippedTriangles": 5418,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      },
+      "hard": {
+        "maxDisplacement": 0.3643138251017149,
+        "edgeRatio": {
+          "p001": 0.5956420778604886,
+          "p01": 0.9999999999999797,
+          "median": 1.0000000000000002,
+          "p99": 5.937842641528609,
+          "p999": 20.301577094423582,
+          "min": 0.08031449632427,
+          "max": 96.37998544667145
+        },
+        "flippedTriangles": 3559,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      }
+    },
+    "asymmetric": {
+      "smooth": {
+        "maxDisplacement": 0.33622984788316634,
+        "edgeRatio": {
+          "p001": 0.2419231253468382,
+          "p01": 0.44743878239618246,
+          "median": 1.0000000000000024,
+          "p99": 1.6755264849906404,
+          "p999": 2.066343487503899,
+          "min": 0.03979727456473007,
+          "max": 2.49537711946327
+        },
+        "flippedTriangles": 3556,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      },
+      "hard": {
+        "maxDisplacement": 0.4410953007453884,
+        "edgeRatio": {
+          "p001": 0.6952775546776669,
+          "p01": 0.9999999999999812,
+          "median": 1,
+          "p99": 6.513741870159511,
+          "p999": 20.04750394179518,
+          "min": 0.04722656642386897,
+          "max": 81.86566287887631
+        },
+        "flippedTriangles": 3850,
+        "degenerateTriangles": 0,
+        "triangleCount": 188385
+      }
+    }
+  },
+  "timing": {
+    "startedAt": "2026-07-23T01:54:57.225Z",
+    "finishedAt": "2026-07-23T01:54:58.954Z",
+    "durationSeconds": 1.729
+  },
+  "lastTrustworthyEvidence": "exact textured GLB variants and deformation metrics written; visual inspection pending",
+  "binding": {
+    "smoothParameterization": "monotonic-axial-z",
+    "smoothSampleCount": 192,
+    "legacyParameterization": "nearest-hard-segment",
+    "vertexCount": 148118,
+    "indexCount": 565155
+  },
+  "maxRestError": 3.3306690738754696e-16
+}

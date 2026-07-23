@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos.visual-inspection.lirm-smooth-fitted-proxy-rig.v0",
+  "status": "agent-inspected-happy-with-bounded-residual",
+  "inspectedAt": "2026-07-23T02:30:00Z",
+  "requestedRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+  "effectiveRoute": "kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0",
+  "sourceSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "inspector": "lirm-smooth-fitted-proxy-rig-inspector.html",
+  "inspectedArtifacts": [
+    "creature.glb",
+    "smooth-c-bend.glb",
+    "smooth-s-bend.glb",
+    "smooth-asymmetric.glb",
+    "legacy-s-bend.glb"
+  ],
+  "witnesses": [
+    "witness-rest-side.png",
+    "witness-s-side.png",
+    "witness-s-opposite.png",
+    "witness-s-low.png",
+    "witness-legacy-three-quarter.png"
+  ],
+  "observations": {
+    "rest": "Exact textured source cast loads with coherent framing, lighting, and material identity.",
+    "smooth": "C, S, and asymmetric poses preserve the whole-body silhouette, belly continuity, dorsal plates, texture, and attached radial detail across three-quarter, side, opposite-side, and low-angle inspection.",
+    "comparison": "The segmented S control shows visible torso and plate-boundary scarring under the same route while the continuous fitted-curve result remains visually continuous.",
+    "residual": "The strong S pose produces visible local stretch through the lower neck and anterior belly plates. It remains a bounded stress-assay residual rather than a global tear or piecewise binder scar.",
+    "limbs": "Attached limbs survive this whole-body deformation visually. Independent limb articulation, joint discovery, and locomotion transfer remain unproven by this assay."
+  },
+  "classification": {
+    "operatorInspection": "happy",
+    "productionClaim": "credible whole-body low-frequency deformation substrate",
+    "excludedClaims": [
+      "production-complete creature rig",
+      "independent limb articulation",
+      "motion transposition",
+      "contact-conditioned locomotion"
+    ]
+  }
+}

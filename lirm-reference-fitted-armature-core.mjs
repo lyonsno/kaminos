@@ -314,6 +314,358 @@ export function deformFittedProxyRigBinding({ binding, pose }) {
   return output;
 }
 
+function lerpPoint(a, b, mix) {
+  return add(a, mul(sub(b, a), mix));
+}
+
+function extrapolateEndpoint(endpoint, neighbor) {
+  return add(endpoint, sub(endpoint, neighbor));
+}
+
+function catmullKnot(previous, next, knot) {
+  return knot + Math.sqrt(Math.max(length3(sub(next, previous)), 1e-12));
+}
+
+function catmullBlend(a, b, ta, tb, t) {
+  const span = Math.max(tb - ta, 1e-12);
+  return add(mul(a, (tb - t) / span), mul(b, (t - ta) / span));
+}
+
+function evaluateCentripetalCatmullRom(points, segment, mix) {
+  const p1 = points[segment];
+  const p2 = points[segment + 1];
+  const p0 = segment > 0 ? points[segment - 1] : extrapolateEndpoint(p1, p2);
+  const p3 = segment + 2 < points.length ? points[segment + 2] : extrapolateEndpoint(p2, p1);
+  const t0 = 0;
+  const t1 = catmullKnot(p0, p1, t0);
+  const t2 = catmullKnot(p1, p2, t1);
+  const t3 = catmullKnot(p2, p3, t2);
+  const t = t1 + (t2 - t1) * mix;
+  const a1 = catmullBlend(p0, p1, t0, t1, t);
+  const a2 = catmullBlend(p1, p2, t1, t2, t);
+  const a3 = catmullBlend(p2, p3, t2, t3, t);
+  const b1 = catmullBlend(a1, a2, t0, t2, t);
+  const b2 = catmullBlend(a2, a3, t1, t3, t);
+  return catmullBlend(b1, b2, t1, t2, t);
+}
+
+function rotateByMinimalTangentChange(vector, fromTangent, toTangent) {
+  const cosine = clamp(dot(fromTangent, toTangent), -1, 1);
+  const axisVector = cross(fromTangent, toTangent);
+  const sine = length3(axisVector);
+  if (sine < 1e-10) {
+    if (cosine > 0) return { ...vector };
+    const fallback = proxySegmentFrame(v3(), fromTangent).normal;
+    return sub(mul(fallback, 2 * dot(fallback, vector)), vector);
+  }
+  const axis = mul(axisVector, 1 / sine);
+  return add(
+    add(mul(vector, cosine), mul(cross(axis, vector), sine)),
+    mul(axis, dot(axis, vector) * (1 - cosine)),
+  );
+}
+
+function orthonormalCurveFrame(tangent, lateralCandidate) {
+  const exactTangent = normalize(tangent);
+  let lateral = sub(lateralCandidate, mul(exactTangent, dot(lateralCandidate, exactTangent)));
+  if (length3(lateral) < 1e-8) lateral = proxySegmentFrame(v3(), exactTangent).lateral;
+  lateral = normalize(lateral);
+  const normal = normalize(cross(exactTangent, lateral));
+  return { tangent: exactTangent, lateral, normal };
+}
+
+export function createSmoothFittedProxyRigCurve({ stationPositions, sampleCount = 192 } = {}) {
+  if (!Array.isArray(stationPositions) || stationPositions.length < 3
+      || !stationPositions.every(point => [point?.x, point?.y, point?.z].every(Number.isFinite))) {
+    throw new Error('smooth fitted curve requires at least three finite station positions');
+  }
+  if (!Number.isInteger(sampleCount) || sampleCount < 32 || sampleCount > 4096) {
+    throw new Error('smooth fitted curve sampleCount must be an integer in [32, 4096]');
+  }
+  const samples = Array.from({ length: sampleCount }, (_, index) => {
+    if (index === sampleCount - 1) return { ...stationPositions.at(-1) };
+    const progress = index / (sampleCount - 1) * (stationPositions.length - 1);
+    const segment = Math.min(stationPositions.length - 2, Math.floor(progress));
+    return evaluateCentripetalCatmullRom(stationPositions, segment, progress - segment);
+  });
+  const cumulative = new Float64Array(sampleCount);
+  for (let index = 1; index < sampleCount; index += 1) {
+    cumulative[index] = cumulative[index - 1] + length3(sub(samples[index], samples[index - 1]));
+  }
+  const totalLength = cumulative.at(-1);
+  if (!(totalLength > 1e-8)) throw new Error('smooth fitted curve collapsed to zero length');
+  const arcCoordinates = Float64Array.from(cumulative, value => value / totalLength);
+  arcCoordinates[0] = 0;
+  arcCoordinates[arcCoordinates.length - 1] = 1;
+  const tangents = samples.map((sample, index) => {
+    const previous = samples[Math.max(0, index - 1)];
+    const next = samples[Math.min(samples.length - 1, index + 1)];
+    return normalize(sub(next, previous));
+  });
+  const frames = new Array(sampleCount);
+  frames[0] = orthonormalCurveFrame(tangents[0], proxySegmentFrame(samples[0], samples[1]).lateral);
+  for (let index = 1; index < sampleCount; index += 1) {
+    const transported = rotateByMinimalTangentChange(
+      frames[index - 1].lateral,
+      frames[index - 1].tangent,
+      tangents[index],
+    );
+    frames[index] = orthonormalCurveFrame(tangents[index], transported);
+  }
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-proxy-rig-curve.v0',
+    sampleCount,
+    samples,
+    frames,
+    arcCoordinates,
+    totalLength,
+  };
+}
+
+function smoothCurveInterval(curve, arcCoordinate) {
+  const target = clamp(arcCoordinate, 0, 1);
+  let low = 0;
+  let high = curve.arcCoordinates.length - 1;
+  while (high - low > 1) {
+    const middle = (low + high) >> 1;
+    if (curve.arcCoordinates[middle] <= target) low = middle;
+    else high = middle;
+  }
+  const start = curve.arcCoordinates[low];
+  const end = curve.arcCoordinates[high];
+  return { index: low, mix: clamp((target - start) / Math.max(end - start, 1e-12), 0, 1) };
+}
+
+function evaluateSmoothCurveFrame(curve, arcCoordinate) {
+  const { index, mix } = smoothCurveInterval(curve, arcCoordinate);
+  const center = lerpPoint(curve.samples[index], curve.samples[index + 1], mix);
+  const tangent = normalize(lerpPoint(curve.frames[index].tangent, curve.frames[index + 1].tangent, mix));
+  const lateralCandidate = normalize(lerpPoint(curve.frames[index].lateral, curve.frames[index + 1].lateral, mix));
+  return { center, ...orthonormalCurveFrame(tangent, lateralCandidate) };
+}
+
+function monotonicAxialArcCoordinate(curve, axialPosition) {
+  for (let index = 1; index < curve.samples.length; index += 1) {
+    if (curve.samples[index].z > curve.samples[index - 1].z + 1e-8) {
+      throw new Error('smooth fitted curve is not monotonic along the registered axial Z direction');
+    }
+  }
+  if (axialPosition >= curve.samples[0].z) return 0;
+  if (axialPosition <= curve.samples.at(-1).z) return 1;
+  let low = 0;
+  let high = curve.samples.length - 1;
+  while (high - low > 1) {
+    const middle = (low + high) >> 1;
+    if (curve.samples[middle].z >= axialPosition) low = middle;
+    else high = middle;
+  }
+  const start = curve.samples[low].z;
+  const end = curve.samples[high].z;
+  const mix = clamp((start - axialPosition) / Math.max(start - end, 1e-12), 0, 1);
+  return curve.arcCoordinates[low]
+    + (curve.arcCoordinates[high] - curve.arcCoordinates[low]) * mix;
+}
+
+export function createSmoothFittedProxyRigBinding({
+  positions,
+  registration,
+  sampleCount = 192,
+  parameterization = 'monotonic-axial-z',
+} = {}) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0' || registration.manualControlCount !== 0) {
+    throw new Error('smooth proxy rig binding requires an automatic fitted registration');
+  }
+  const restPositions = packedProxyPositions(positions);
+  const vertexCount = restPositions.length / 3;
+  const restCurve = createSmoothFittedProxyRigCurve({
+    stationPositions: registration.stations.map(station => station.position),
+    sampleCount,
+  });
+  if (!['monotonic-axial-z', 'nearest-curve'].includes(parameterization)) {
+    throw new Error(`unknown smooth proxy rig parameterization: ${parameterization}`);
+  }
+  const arcCoordinates = new Float64Array(vertexCount);
+  const localCoordinates = new Float64Array(vertexCount * 3);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const point = v3(restPositions[vertex * 3], restPositions[vertex * 3 + 1], restPositions[vertex * 3 + 2]);
+    let bestArc = monotonicAxialArcCoordinate(restCurve, point.z);
+    if (parameterization === 'nearest-curve') {
+      let bestDistanceSquared = Infinity;
+      for (let segment = 0; segment < restCurve.samples.length - 1; segment += 1) {
+        const a = restCurve.samples[segment];
+        const b = restCurve.samples[segment + 1];
+        const ab = sub(b, a);
+        const mix = clamp(dot(sub(point, a), ab) / Math.max(dot(ab, ab), 1e-12), 0, 1);
+        const anchor = lerpPoint(a, b, mix);
+        const residual = sub(point, anchor);
+        const distanceSquared = dot(residual, residual);
+        if (distanceSquared < bestDistanceSquared) {
+          bestDistanceSquared = distanceSquared;
+          bestArc = restCurve.arcCoordinates[segment]
+            + (restCurve.arcCoordinates[segment + 1] - restCurve.arcCoordinates[segment]) * mix;
+        }
+      }
+    }
+    const frame = evaluateSmoothCurveFrame(restCurve, bestArc);
+    const residual = sub(point, frame.center);
+    arcCoordinates[vertex] = bestArc;
+    localCoordinates[vertex * 3] = dot(residual, frame.lateral);
+    localCoordinates[vertex * 3 + 1] = dot(residual, frame.normal);
+    localCoordinates[vertex * 3 + 2] = dot(residual, frame.tangent);
+  }
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0',
+    registration,
+    vertexCount,
+    sampleCount,
+    parameterization,
+    manualControlCount: 0,
+    restPositions,
+    restCurve,
+    arcCoordinates,
+    localCoordinates,
+  };
+}
+
+function rotateAroundAxis(vector, axis, angle) {
+  const exactAxis = normalize(axis);
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  return add(
+    add(mul(vector, cosine), mul(cross(exactAxis, vector), sine)),
+    mul(exactAxis, dot(exactAxis, vector) * (1 - cosine)),
+  );
+}
+
+function proceduralSegmentAngles(preset, t, maximumAngle) {
+  if (preset === 'c-bend') return { yaw: maximumAngle * (t * 2 - 1), pitch: 0 };
+  if (preset === 's-bend') return { yaw: maximumAngle * Math.sin(Math.PI * 2 * t), pitch: 0 };
+  if (preset === 'asymmetric') {
+    return {
+      yaw: maximumAngle * (0.68 * Math.sin(Math.PI * 2 * (t - 0.11)) + 0.24 * (t * 2 - 1)),
+      pitch: maximumAngle * 0.24 * Math.sin(Math.PI * t),
+    };
+  }
+  throw new Error(`unknown smooth fitted proxy rig pose preset: ${preset}`);
+}
+
+function createAngleIntegratedStationPose(restPositions, stationParameters, preset, amplitude) {
+  const baseFrame = proxySegmentFrame(restPositions[0], restPositions.at(-1));
+  const maximumAngle = amplitude * 2;
+  const transformedSegments = restPositions.slice(0, -1).map((point, index) => {
+    const restSegment = sub(restPositions[index + 1], point);
+    const t = (stationParameters[index] + stationParameters[index + 1]) * 0.5;
+    const angles = proceduralSegmentAngles(preset, t, maximumAngle);
+    const yawed = rotateAroundAxis(restSegment, baseFrame.normal, angles.yaw);
+    return rotateAroundAxis(yawed, baseFrame.lateral, angles.pitch);
+  });
+  const output = new Array(restPositions.length);
+  const middle = Math.floor((restPositions.length - 1) / 2);
+  output[middle] = { ...restPositions[middle] };
+  for (let index = middle + 1; index < output.length; index += 1) {
+    output[index] = add(output[index - 1], transformedSegments[index - 1]);
+  }
+  for (let index = middle - 1; index >= 0; index -= 1) {
+    output[index] = sub(output[index + 1], transformedSegments[index]);
+  }
+  return output;
+}
+
+function preserveStationChainLengths(restPositions, targetPositions) {
+  const output = targetPositions.map(point => ({ ...point }));
+  const middle = Math.floor((output.length - 1) / 2);
+  for (let index = middle - 1; index >= 0; index -= 1) {
+    const restLength = length3(sub(restPositions[index], restPositions[index + 1]));
+    let direction = sub(targetPositions[index], output[index + 1]);
+    if (length3(direction) < 1e-9) direction = sub(restPositions[index], restPositions[index + 1]);
+    output[index] = add(output[index + 1], mul(normalize(direction), restLength));
+  }
+  for (let index = middle + 1; index < output.length; index += 1) {
+    const restLength = length3(sub(restPositions[index], restPositions[index - 1]));
+    let direction = sub(targetPositions[index], output[index - 1]);
+    if (length3(direction) < 1e-9) direction = sub(restPositions[index], restPositions[index - 1]);
+    output[index] = add(output[index - 1], mul(normalize(direction), restLength));
+  }
+  return output;
+}
+
+export function createSmoothFittedProxyRigPose({
+  registration,
+  preset = 'rest',
+  amplitude = 0.28,
+  stationOffsets = null,
+} = {}) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0') {
+    throw new Error('smooth proxy rig pose requires fitted registration');
+  }
+  if (!['rest', 'c-bend', 's-bend', 'asymmetric'].includes(preset)) {
+    throw new Error(`unknown smooth fitted proxy rig pose preset: ${preset}`);
+  }
+  if (!Number.isFinite(amplitude) || amplitude < 0 || amplitude > 0.45) {
+    throw new Error('smooth proxy rig pose amplitude must be finite in [0, 0.45]');
+  }
+  if (stationOffsets !== null && (!Array.isArray(stationOffsets)
+      || stationOffsets.length !== registration.stationCount
+      || !stationOffsets.every(point => [point?.x, point?.y, point?.z].every(Number.isFinite)))) {
+    throw new Error('smooth proxy rig stationOffsets must match the fitted station count');
+  }
+  const restPositions = registration.stations.map(station => station.position);
+  if (preset === 'rest' && stationOffsets === null) {
+    return {
+      schema: 'kaminos.lirm-smooth-fitted-proxy-rig-pose.v0',
+      sourceCandidateId: registration.sourceCandidateId,
+      preset,
+      amplitude: 0,
+      stationPositions: restPositions.map(point => ({ ...point })),
+    };
+  }
+  const proceduralPositions = preset === 'rest'
+    ? restPositions.map(point => ({ ...point }))
+    : createAngleIntegratedStationPose(
+      restPositions,
+      registration.stations.map(station => station.t),
+      preset,
+      amplitude,
+    );
+  const targetPositions = proceduralPositions.map((point, index) => add(point, stationOffsets?.[index] ?? v3()));
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-proxy-rig-pose.v0',
+    sourceCandidateId: registration.sourceCandidateId,
+    preset,
+    amplitude,
+    stationPositions: preserveStationChainLengths(restPositions, targetPositions),
+  };
+}
+
+export function deformSmoothFittedProxyRigBinding({ binding, pose } = {}) {
+  if (binding?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0') {
+    throw new Error('smooth proxy rig deformation requires smooth fitted binding');
+  }
+  if (pose?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-pose.v0'
+      || pose.stationPositions?.length !== binding.registration.stationCount) {
+    throw new Error('smooth proxy rig deformation pose does not match registration');
+  }
+  const poseCurve = createSmoothFittedProxyRigCurve({
+    stationPositions: pose.stationPositions,
+    sampleCount: binding.sampleCount,
+  });
+  const output = new Float64Array(binding.vertexCount * 3);
+  for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
+    const frame = evaluateSmoothCurveFrame(poseCurve, binding.arcCoordinates[vertex]);
+    const point = add(
+      add(
+        add(frame.center, mul(frame.lateral, binding.localCoordinates[vertex * 3])),
+        mul(frame.normal, binding.localCoordinates[vertex * 3 + 1]),
+      ),
+      mul(frame.tangent, binding.localCoordinates[vertex * 3 + 2]),
+    );
+    output[vertex * 3] = point.x;
+    output[vertex * 3 + 1] = point.y;
+    output[vertex * 3 + 2] = point.z;
+  }
+  return output;
+}
+
 export const FITTED_PROXY_RIG_PROOF_ROUTE = 'kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0';
 
 function packedPositionsToTriangles(positions) {
@@ -327,6 +679,202 @@ function packedPositionsToTriangles(positions) {
     ]);
   }
   return triangles;
+}
+
+const MECHANISM_WITNESS_COLUMNS = [
+  'rest-cast',
+  'rest-proxy-xray',
+  'posed-proxy-xray',
+  'posed-displacement-heat',
+];
+
+const MECHANISM_SEGMENT_COLORS = [
+  [70, 121, 214], [54, 153, 211], [46, 176, 184], [59, 190, 143],
+  [102, 197, 102], [160, 198, 73], [213, 188, 57], [238, 155, 55],
+  [235, 111, 65], [215, 75, 91], [181, 65, 133], [137, 72, 169],
+];
+
+function blendWitnessPixel(pixels, width, height, x, y, color, alpha = 1) {
+  const px = Math.round(x); const py = Math.round(y);
+  if (px < 0 || px >= width || py < 0 || py >= height) return;
+  const index = (py * width + px) * 3;
+  for (let channel = 0; channel < 3; channel += 1) {
+    pixels[index + channel] = Math.round(pixels[index + channel] * (1 - alpha) + color[channel] * alpha);
+  }
+}
+
+function drawWitnessDisc(pixels, width, height, x, y, radius, color, alpha = 1) {
+  const extent = Math.ceil(radius);
+  for (let dy = -extent; dy <= extent; dy += 1) {
+    for (let dx = -extent; dx <= extent; dx += 1) {
+      if (dx * dx + dy * dy <= radius * radius) blendWitnessPixel(pixels, width, height, x + dx, y + dy, color, alpha);
+    }
+  }
+}
+
+function drawWitnessLine(pixels, width, height, a, b, color, thickness = 1, alpha = 1) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 1.5));
+  for (let step = 0; step <= steps; step += 1) {
+    const mix = step / steps;
+    drawWitnessDisc(
+      pixels, width, height,
+      a.x + (b.x - a.x) * mix,
+      a.y + (b.y - a.y) * mix,
+      thickness,
+      color,
+      alpha,
+    );
+  }
+}
+
+function stationPoseFrame(stationPositions, index) {
+  const previous = stationPositions[Math.max(0, index - 1)];
+  const next = stationPositions[Math.min(stationPositions.length - 1, index + 1)];
+  return proxySegmentFrame(previous, next);
+}
+
+function drawProxyRigXray({ render, registration, pose }) {
+  const stationPositions = pose.stationPositions;
+  const projectedStations = stationPositions.map(point => projectPoint(point, render.frame, render.camera, render.width, render.height));
+  for (let index = 0; index < projectedStations.length - 1; index += 1) {
+    drawWitnessLine(render.pixels, render.width, render.height, projectedStations[index], projectedStations[index + 1], [255, 196, 54], 1.35, 0.96);
+  }
+  for (let index = 0; index < stationPositions.length; index += 1) {
+    const center = stationPositions[index];
+    const radius = registration.stations[index].radius;
+    const frame = stationPoseFrame(stationPositions, index);
+    const rings = [
+      [frame.lateral, radius.x, frame.normal, radius.y],
+      [frame.lateral, radius.x, frame.tangent, radius.z],
+      [frame.normal, radius.y, frame.tangent, radius.z],
+    ];
+    for (const [axisA, radiusA, axisB, radiusB] of rings) {
+      let previous = null;
+      for (let sample = 0; sample <= 40; sample += 1) {
+        const angle = sample / 40 * Math.PI * 2;
+        const point = add(add(center, mul(axisA, Math.cos(angle) * radiusA)), mul(axisB, Math.sin(angle) * radiusB));
+        const projected = projectPoint(point, render.frame, render.camera, render.width, render.height);
+        if (previous) drawWitnessLine(render.pixels, render.width, render.height, previous, projected, [56, 225, 214], 0.65, 0.56);
+        previous = projected;
+      }
+    }
+    const endpointColor = index === 0
+      ? [69, 143, 255]
+      : index === stationPositions.length - 1 ? [255, 91, 90] : [255, 211, 73];
+    drawWitnessDisc(render.pixels, render.width, render.height, projectedStations[index].x, projectedStations[index].y, 2.7, [12, 17, 22], 1);
+    drawWitnessDisc(render.pixels, render.width, render.height, projectedStations[index].x, projectedStations[index].y, 1.75, endpointColor, 1);
+  }
+  return render;
+}
+
+function copyWitnessPanel(target, targetWidth, source, offsetX, offsetY) {
+  for (let y = 0; y < source.height; y += 1) {
+    const sourceStart = y * source.width * 3;
+    const targetStart = ((offsetY + y) * targetWidth + offsetX) * 3;
+    target.set(source.pixels.subarray(sourceStart, sourceStart + source.width * 3), targetStart);
+  }
+}
+
+export function createFittedProxyRigMechanismWitness({
+  restTriangles,
+  posedTriangles,
+  registration,
+  restPose,
+  posedPose,
+  binding,
+  posedPositions,
+  width = 240,
+  height = 196,
+  cameraIds = ['az045', 'az090'],
+} = {}) {
+  if (!Array.isArray(restTriangles) || restTriangles.length === 0 || restTriangles.length !== posedTriangles?.length) {
+    throw new Error('mechanism witness requires matching nonempty rest and posed triangle soups');
+  }
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0'
+      || restPose?.stationPositions?.length !== registration.stationCount
+      || posedPose?.stationPositions?.length !== registration.stationCount) {
+    throw new Error('mechanism witness requires matching fitted registration and station poses');
+  }
+  if (binding?.schema !== 'kaminos.lirm-fitted-proxy-rig-binding.v0'
+      || posedPositions?.length !== binding.restPositions?.length
+      || binding.vertexCount !== restTriangles.length * 3) {
+    throw new Error('mechanism witness requires the exact fitted cast binding and posed positions');
+  }
+  if (!Number.isInteger(width) || width < 48 || !Number.isInteger(height) || height < 48) {
+    throw new Error('mechanism witness panel dimensions must be integers >= 48');
+  }
+  const cameras = cameraIds.map(id => {
+    const camera = REFERENCE_FIT_CAMERAS.find(candidate => candidate.id === id);
+    if (!camera) throw new Error(`unknown mechanism witness camera: ${id}`);
+    return camera;
+  });
+  if (new Set(cameraIds).size !== cameraIds.length || cameras.length === 0) throw new Error('mechanism witness requires distinct cameras');
+
+  let maxDisplacement = 0;
+  const displacement = new Float64Array(binding.vertexCount);
+  for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    displacement[vertex] = Math.hypot(
+      posedPositions[offset] - binding.restPositions[offset],
+      posedPositions[offset + 1] - binding.restPositions[offset + 1],
+      posedPositions[offset + 2] - binding.restPositions[offset + 2],
+    );
+    maxDisplacement = Math.max(maxDisplacement, displacement[vertex]);
+  }
+  if (maxDisplacement <= 0) throw new Error('mechanism witness requires material posed displacement');
+
+  const gap = 8; const header = 9;
+  const outWidth = width * MECHANISM_WITNESS_COLUMNS.length + gap * (MECHANISM_WITNESS_COLUMNS.length + 1);
+  const outHeight = (height + header) * cameras.length + gap * (cameras.length + 1);
+  const pixels = new Uint8Array(outWidth * outHeight * 3).fill(13);
+  const columnColors = [[133, 145, 153], [48, 210, 202], [81, 197, 145], [241, 145, 51]];
+  cameras.forEach((camera, row) => {
+    const rowY = gap + row * (height + header + gap);
+    const panelY = rowY + header;
+    const restClay = rasterizeFlatShadedTriangleSoup({
+      triangles: restTriangles, camera, width, height,
+      colorForTriangle: () => [126, 139, 148],
+    });
+    const restProxy = rasterizeFlatShadedTriangleSoup({
+      triangles: restTriangles, camera, width, height,
+      colorForTriangle: triangle => MECHANISM_SEGMENT_COLORS[binding.segmentIndices[triangle * 3] % MECHANISM_SEGMENT_COLORS.length],
+    });
+    drawProxyRigXray({ render: restProxy, registration, pose: restPose });
+    const posedProxy = rasterizeFlatShadedTriangleSoup({
+      triangles: posedTriangles, camera, width, height,
+      colorForTriangle: triangle => MECHANISM_SEGMENT_COLORS[binding.segmentIndices[triangle * 3] % MECHANISM_SEGMENT_COLORS.length],
+    });
+    drawProxyRigXray({ render: posedProxy, registration, pose: posedPose });
+    const heat = rasterizeFlatShadedTriangleSoup({
+      triangles: posedTriangles, camera, width, height,
+      colorForTriangle: triangle => {
+        const vertex = triangle * 3;
+        const value = clamp((displacement[vertex] + displacement[vertex + 1] + displacement[vertex + 2]) / (3 * maxDisplacement), 0, 1);
+        return [
+          Math.round(41 + value * 211),
+          Math.round(86 + value * 82),
+          Math.round(186 - value * 150),
+        ];
+      },
+    });
+    const panels = [restClay, restProxy, posedProxy, heat];
+    panels.forEach((panel, column) => {
+      const x = gap + column * (width + gap);
+      for (let y = rowY; y < rowY + header - 2; y += 1) {
+        for (let px = x; px < x + width; px += 1) pixels.set(columnColors[column], (y * outWidth + px) * 3);
+      }
+      copyWitnessPanel(pixels, outWidth, panel, x, panelY);
+    });
+  });
+  return {
+    width: outWidth,
+    height: outHeight,
+    bytes: encodeRgbPng(outWidth, outHeight, pixels),
+    columns: [...MECHANISM_WITNESS_COLUMNS],
+    cameraIds: [...cameraIds],
+    stationCount: registration.stationCount,
+    maxDisplacement,
+  };
 }
 
 function createProxyRigWitnessSheet({ restById, posedById, width, height }) {
@@ -421,7 +969,7 @@ export async function runFittedProxyRigProof({
     donor: { path: donorPath ? resolve(donorPath) : null, sha256: null, triangleCount: null },
     timing: { startedAt: new Date(startedAtMs).toISOString(), finishedAt: null, durationSeconds: null },
     lastTrustworthyEvidence: 'invocation recorded; source packet not yet admitted',
-    outputInventory: { registration: null, primaryWitness: null },
+    outputInventory: { registration: null, primaryWitness: null, depthWitness: null, mechanismWitness: null },
   };
   await writeJsonAtomic(reportPath, report);
   let activePhase = 'source-packet-admission';
@@ -503,10 +1051,21 @@ export async function runFittedProxyRigProof({
     }
     const witness = createProxyRigWitnessSheet({ restById, posedById, width, height });
     const depthWitness = createProxyRigDepthWitnessSheet({ restById, posedById, width, height });
+    const mechanismWitness = createFittedProxyRigMechanismWitness({
+      restTriangles: donor.triangles,
+      posedTriangles,
+      registration,
+      restPose,
+      posedPose: pose,
+      binding,
+      posedPositions: posedPacked,
+    });
     const witnessPath = resolve(outputRoot, 'deformation-witness.png');
     const depthWitnessPath = resolve(outputRoot, 'deformation-depth-witness.png');
+    const mechanismWitnessPath = resolve(outputRoot, 'mechanism-witness.png');
     await writeFile(witnessPath, witness.bytes);
     await writeFile(depthWitnessPath, depthWitness.bytes);
+    await writeFile(mechanismWitnessPath, mechanismWitness.bytes);
     const registrationPath = resolve(outputRoot, 'registration.json');
     await writeJsonAtomic(registrationPath, registration);
     const registrationBytes = await readFile(registrationPath);
@@ -552,6 +1111,15 @@ export async function runFittedProxyRigProof({
         sha256: `sha256:${createHash('sha256').update(depthWitness.bytes).digest('hex')}`,
         columns: ['rest-depth', 'posed-depth', 'depth-change'],
         cameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
+      },
+      mechanismWitness: {
+        path: mechanismWitnessPath,
+        bytes: mechanismWitness.bytes.length,
+        sha256: `sha256:${createHash('sha256').update(mechanismWitness.bytes).digest('hex')}`,
+        columns: mechanismWitness.columns,
+        cameraIds: mechanismWitness.cameraIds,
+        stationCount: mechanismWitness.stationCount,
+        maxDisplacement: mechanismWitness.maxDisplacement,
       },
     };
     report.lastTrustworthyEvidence = 'exact rest reconstruction and finite active deformation witnessed across all eight canonical cameras; visual inspection pending';
@@ -600,6 +1168,7 @@ export async function recordFittedProxyRigProofVisualInspection({
     report.outputInventory?.registration,
     report.outputInventory?.primaryWitness,
     report.outputInventory?.depthWitness,
+    report.outputInventory?.mechanismWitness,
   ]) {
     if (!item?.path || !existsSync(item.path)) throw new Error(`missing proxy rig visual artifact: ${item?.path ?? 'unknown'}`);
     const bytes = await readFile(item.path);
@@ -615,8 +1184,8 @@ export async function recordFittedProxyRigProofVisualInspection({
   };
   report.status = disposition === 'accepted' ? 'proof-passed-inspected' : 'proof-visual-rejected';
   report.lastTrustworthyEvidence = disposition === 'accepted'
-    ? 'eight-view silhouette and depth deformation witnesses visually inspected and accepted'
-    : 'eight-view silhouette and depth deformation witnesses visually inspected and rejected';
+    ? 'silhouette, depth, and mechanism-bearing deformation witnesses visually inspected and accepted'
+    : 'silhouette, depth, and mechanism-bearing deformation witnesses visually inspected and rejected';
   await writeJsonAtomic(exactPath, report);
   return report;
 }
@@ -913,6 +1482,44 @@ function rasterizeTriangleSoup({ triangles, camera, width, height }) {
     normalizedDepth[index] = mask[index] ? clamp((depth[index] - exact.near) / (exact.far - exact.near), 0, 1) : 1;
   }
   return { cameraId: exact.id, width, height, mask, depth: normalizedDepth };
+}
+
+function rasterizeFlatShadedTriangleSoup({ triangles, camera, width, height, colorForTriangle }) {
+  const exact = canonicalCamera(camera);
+  const frame = cameraFrame(exact);
+  const depth = new Float64Array(width * height).fill(Infinity);
+  const pixels = new Uint8Array(width * height * 3);
+  for (let index = 0; index < width * height; index += 1) pixels.set([18, 22, 27], index * 3);
+  const light = normalize(v3(-0.42, 0.78, 0.47));
+  for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
+    const triangle = triangles[triangleIndex];
+    const [a, b, c] = triangle.map(point => projectPoint(point, frame, exact, width, height));
+    const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (Math.abs(area) < 1e-9) continue;
+    const normal = normalize(cross(sub(triangle[1], triangle[0]), sub(triangle[2], triangle[0])));
+    const shade = 0.28 + 0.72 * Math.abs(dot(normal, light));
+    const base = colorForTriangle?.(triangleIndex, triangle) ?? [126, 139, 148];
+    const color = base.map(value => clamp(Math.round(value * shade), 0, 255));
+    const minX = clamp(Math.floor(Math.min(a.x, b.x, c.x)), 0, width - 1);
+    const maxX = clamp(Math.ceil(Math.max(a.x, b.x, c.x)), 0, width - 1);
+    const minY = clamp(Math.floor(Math.min(a.y, b.y, c.y)), 0, height - 1);
+    const maxY = clamp(Math.ceil(Math.max(a.y, b.y, c.y)), 0, height - 1);
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const px = x + 0.5; const py = y + 0.5;
+        const w0 = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area;
+        const w1 = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area;
+        const w2 = 1 - w0 - w1;
+        if (w0 < -1e-7 || w1 < -1e-7 || w2 < -1e-7) continue;
+        const z = w0 * a.depth + w1 * b.depth + w2 * c.depth;
+        const pixelIndex = y * width + x;
+        if (z >= depth[pixelIndex]) continue;
+        depth[pixelIndex] = z;
+        pixels.set(color, pixelIndex * 3);
+      }
+    }
+  }
+  return { cameraId: exact.id, camera: exact, frame, width, height, pixels, depth };
 }
 
 function parameterObject(parameters, parameterSpecs) {

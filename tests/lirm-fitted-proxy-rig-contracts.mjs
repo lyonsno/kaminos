@@ -14,6 +14,11 @@ for (const name of [
   'createFittedProxyRigBinding',
   'createFittedProxyRigPose',
   'deformFittedProxyRigBinding',
+  'createSmoothFittedProxyRigCurve',
+  'createSmoothFittedProxyRigBinding',
+  'createSmoothFittedProxyRigPose',
+  'deformSmoothFittedProxyRigBinding',
+  'createFittedProxyRigMechanismWitness',
   'runFittedProxyRigProof',
   'recordFittedProxyRigProofVisualInspection',
 ]) {
@@ -190,6 +195,141 @@ assert.equal(active.length, positions.length * 3);
 assert.ok([...active].every(Number.isFinite));
 assert.ok(active.some((value, index) => Math.abs(value - rest[index]) > 0.02), 'active cage pose must move the bound cast materially');
 
+const smoothRestCurve = fitted.createSmoothFittedProxyRigCurve({
+  stationPositions: registration.stations.map(station => station.position),
+  sampleCount: 192,
+});
+assert.equal(smoothRestCurve.schema, 'kaminos.lirm-smooth-fitted-proxy-rig-curve.v0');
+assert.equal(smoothRestCurve.samples.length, 192);
+assert.equal(smoothRestCurve.arcCoordinates[0], 0);
+assert.equal(smoothRestCurve.arcCoordinates.at(-1), 1);
+for (let index = 1; index < smoothRestCurve.frames.length; index += 1) {
+  const previous = smoothRestCurve.frames[index - 1];
+  const current = smoothRestCurve.frames[index];
+  const lateralDot = previous.lateral.x * current.lateral.x
+    + previous.lateral.y * current.lateral.y
+    + previous.lateral.z * current.lateral.z;
+  assert.ok(lateralDot > 0.96, `rotation-minimizing frame flipped at sample ${index}: ${lateralDot}`);
+}
+
+const smoothFixturePositions = [];
+const smoothFixtureNeighborhoods = [];
+for (let station = 1; station < registration.stations.length - 1; station += 1) {
+  const targetArc = registration.stations[station].t;
+  let nearest = 1;
+  for (let index = 2; index < smoothRestCurve.arcCoordinates.length - 1; index += 1) {
+    if (Math.abs(smoothRestCurve.arcCoordinates[index] - targetArc)
+        < Math.abs(smoothRestCurve.arcCoordinates[nearest] - targetArc)) nearest = index;
+  }
+  const neighborhood = [];
+  for (const index of [nearest - 3, nearest - 1, nearest + 1, nearest + 3]) {
+    const sample = smoothRestCurve.samples[index];
+    const frame = smoothRestCurve.frames[index];
+    neighborhood.push(smoothFixturePositions.length);
+    smoothFixturePositions.push({
+      x: sample.x + frame.lateral.x * 0.11 + frame.normal.x * 0.06,
+      y: sample.y + frame.lateral.y * 0.11 + frame.normal.y * 0.06,
+      z: sample.z + frame.lateral.z * 0.11 + frame.normal.z * 0.06,
+    });
+  }
+  smoothFixtureNeighborhoods.push(neighborhood);
+}
+
+const smoothBinding = fitted.createSmoothFittedProxyRigBinding({
+  positions: smoothFixturePositions,
+  registration,
+  sampleCount: 192,
+});
+assert.equal(smoothBinding.schema, 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0');
+assert.equal(smoothBinding.vertexCount, smoothFixturePositions.length);
+assert.equal(smoothBinding.arcCoordinates.length, smoothFixturePositions.length);
+assert.ok([...smoothBinding.arcCoordinates].every(value => value >= 0 && value <= 1));
+
+const smoothRestPose = fitted.createSmoothFittedProxyRigPose({ registration, preset: 'rest' });
+const smoothRest = fitted.deformSmoothFittedProxyRigBinding({ binding: smoothBinding, pose: smoothRestPose });
+let smoothMaxRestError = 0;
+for (let index = 0; index < smoothFixturePositions.length; index += 1) {
+  smoothMaxRestError = Math.max(
+    smoothMaxRestError,
+    Math.abs(smoothRest[index * 3] - smoothFixturePositions[index].x),
+    Math.abs(smoothRest[index * 3 + 1] - smoothFixturePositions[index].y),
+    Math.abs(smoothRest[index * 3 + 2] - smoothFixturePositions[index].z),
+  );
+}
+assert.ok(smoothMaxRestError < 1e-10, `smooth zero pose must reconstruct exactly, got ${smoothMaxRestError}`);
+
+for (const preset of ['c-bend', 's-bend', 'asymmetric']) {
+  const smoothPose = fitted.createSmoothFittedProxyRigPose({ registration, preset, amplitude: 0.31 });
+  assert.equal(smoothPose.stationPositions.length, registration.stationCount);
+  for (let index = 1; index < smoothPose.stationPositions.length; index += 1) {
+    const restA = registration.stations[index - 1].position;
+    const restB = registration.stations[index].position;
+    const posedA = smoothPose.stationPositions[index - 1];
+    const posedB = smoothPose.stationPositions[index];
+    const restLength = Math.hypot(restB.x - restA.x, restB.y - restA.y, restB.z - restA.z);
+    const posedLength = Math.hypot(posedB.x - posedA.x, posedB.y - posedA.y, posedB.z - posedA.z);
+    assert.ok(Math.abs(posedLength - restLength) < 1e-9, `${preset} changed station-chain length at ${index}`);
+  }
+  const smoothActive = fitted.deformSmoothFittedProxyRigBinding({ binding: smoothBinding, pose: smoothPose });
+  assert.ok([...smoothActive].every(Number.isFinite), `${preset} produced non-finite geometry`);
+  for (const neighborhood of smoothFixtureNeighborhoods) {
+    const edgeStrains = [];
+    for (let edge = 0; edge < neighborhood.length - 1; edge += 1) {
+      const left = neighborhood[edge];
+      const right = neighborhood[edge + 1];
+      const restDistance = Math.hypot(
+        smoothRest[right * 3] - smoothRest[left * 3],
+        smoothRest[right * 3 + 1] - smoothRest[left * 3 + 1],
+        smoothRest[right * 3 + 2] - smoothRest[left * 3 + 2],
+      );
+      const posedDistance = Math.hypot(
+        smoothActive[right * 3] - smoothActive[left * 3],
+        smoothActive[right * 3 + 1] - smoothActive[left * 3 + 1],
+        smoothActive[right * 3 + 2] - smoothActive[left * 3 + 2],
+      );
+      edgeStrains.push(posedDistance / restDistance);
+    }
+    const minStrain = Math.min(...edgeStrains);
+    const maxStrain = Math.max(...edgeStrains);
+    assert.ok(minStrain > 0.45 && maxStrain < 1.7, `${preset} produced unbounded local strain ${minStrain}..${maxStrain}`);
+    assert.ok(maxStrain / minStrain < 1.5, `${preset} produced a strain discontinuity at a former station boundary: ${edgeStrains}`);
+  }
+}
+
+const packedTriangles = packed => {
+  const triangles = [];
+  for (let index = 0; index < packed.length; index += 9) {
+    triangles.push([
+      { x: packed[index], y: packed[index + 1], z: packed[index + 2] },
+      { x: packed[index + 3], y: packed[index + 4], z: packed[index + 5] },
+      { x: packed[index + 6], y: packed[index + 7], z: packed[index + 8] },
+    ]);
+  }
+  return triangles;
+};
+const mechanismWitness = fitted.createFittedProxyRigMechanismWitness({
+  restTriangles: packedTriangles(rest),
+  posedTriangles: packedTriangles(active),
+  registration,
+  restPose,
+  posedPose: activePose,
+  binding,
+  posedPositions: active,
+  width: 80,
+  height: 64,
+  cameraIds: ['az045'],
+});
+assert.deepEqual(mechanismWitness.columns, [
+  'rest-cast',
+  'rest-proxy-xray',
+  'posed-proxy-xray',
+  'posed-displacement-heat',
+]);
+assert.deepEqual(mechanismWitness.cameraIds, ['az045']);
+assert.ok(mechanismWitness.bytes.length > 1024, 'mechanism witness must be a nonempty PNG');
+assert.equal(mechanismWitness.bytes[0], 0x89);
+assert.equal(mechanismWitness.bytes.toString('ascii', 1, 4), 'PNG');
+
 const failureDir = await mkdtemp(join(tmpdir(), 'kaminos-fitted-proxy-rig-failure-'));
 const packetPath = join(failureDir, 'packet.json');
 const fitReportPath = join(failureDir, 'fit-report.json');
@@ -243,4 +383,5 @@ console.log(JSON.stringify({
   stationCount: registration.stationCount,
   vertexCount: binding.vertexCount,
   maxRestError,
+  smoothMaxRestError,
 }, null, 2));

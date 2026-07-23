@@ -1,0 +1,159 @@
+{
+  "schema": "kaminos.lirm-fitted-proxy-rig-proof.v0",
+  "status": "proof-passed-inspected",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
+  "effectiveRoute": "kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0",
+  "expectedDonorSha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+  "expectedFitReportSha256": "sha256:911058ad565378d202588dacb641478809827f0a70266c4a81b705548ac8ef23",
+  "requestedConfig": {
+    "phase": 0.21,
+    "amplitude": 0.12,
+    "width": 96,
+    "height": 78
+  },
+  "effectiveConfig": {
+    "phase": 0.21,
+    "amplitude": 0.12,
+    "width": 96,
+    "height": 78
+  },
+  "sourcePacket": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-speciation-armature-witness-v0/control-packets/lirm-armature-03/packet.json",
+    "sha256": "sha256:438dc7cdd1839d1f1d993312fbe5e41976329d1f96542d9eb3e097e743e63d8f",
+    "candidateId": "lirm-armature-03",
+    "primitiveCount": 30
+  },
+  "fitReport": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-proof-v0/fit-diagonal/report.json",
+    "sha256": "sha256:911058ad565378d202588dacb641478809827f0a70266c4a81b705548ac8ef23",
+    "status": "assay-passed-inspected",
+    "armatureProgramId": "kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0"
+  },
+  "donor": {
+    "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/motion-ready-719024/creature.glb",
+    "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "triangleCount": 188385
+  },
+  "timing": {
+    "startedAt": "2026-07-23T01:01:10.710Z",
+    "finishedAt": "2026-07-23T01:01:12.104Z",
+    "durationSeconds": 1.394
+  },
+  "lastTrustworthyEvidence": "silhouette, depth, and mechanism-bearing deformation witnesses visually inspected and accepted",
+  "outputInventory": {
+    "registration": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
+      "bytes": 5099,
+      "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
+    },
+    "primaryWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/deformation-witness.png",
+      "bytes": 32114,
+      "sha256": "sha256:2dd438ecdb6acd2f185204ccaeafab46ac8699ddf0cbb8adeba11ce634c4a89a",
+      "columns": [
+        "rest-cast",
+        "posed-cast",
+        "rest-posed-overlay"
+      ],
+      "cameraIds": [
+        "az000",
+        "az045",
+        "az090",
+        "az135",
+        "az180",
+        "az225",
+        "az270",
+        "az315"
+      ]
+    },
+    "depthWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/deformation-depth-witness.png",
+      "bytes": 61510,
+      "sha256": "sha256:6c6727f86154f521de88e49ec873d9d5e6593ac744806aeb415dbedce4e11e13",
+      "columns": [
+        "rest-depth",
+        "posed-depth",
+        "depth-change"
+      ],
+      "cameraIds": [
+        "az000",
+        "az045",
+        "az090",
+        "az135",
+        "az180",
+        "az225",
+        "az270",
+        "az315"
+      ]
+    },
+    "mechanismWitness": {
+      "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/mechanism-witness.png",
+      "bytes": 131089,
+      "sha256": "sha256:d62a60cff4e903c9ecaa92700f115e99cd6261b8d99b17cdfe5f40880ef721ad",
+      "columns": [
+        "rest-cast",
+        "rest-proxy-xray",
+        "posed-proxy-xray",
+        "posed-displacement-heat"
+      ],
+      "cameraIds": [
+        "az045",
+        "az090"
+      ],
+      "stationCount": 13,
+      "maxDisplacement": 0.2697291525889004
+    }
+  },
+  "registration": {
+    "schema": "kaminos.lirm-fitted-proxy-rig-registration.v0",
+    "fitMode": "semantic-sdf-held-out-multiview-v0",
+    "stationCount": 13,
+    "manualControlCount": 0,
+    "headDirection": "-Z"
+  },
+  "binding": {
+    "kind": "nearest-rest-centerline-segment-with-local-frame",
+    "vertexCount": 565155,
+    "maxInfluenceStations": 2,
+    "manualControlCount": 0
+  },
+  "metrics": {
+    "zeroPoseMaxError": 2.220446049250313e-16,
+    "activePoseMaxDisplacement": 0.26972915258890034,
+    "activePoseMeanDisplacement": 0.07679960048788963,
+    "topologyPreserved": true,
+    "finite": true
+  },
+  "visualInspection": {
+    "disposition": "accepted",
+    "visibleDelta": "Across oblique and side views, the shaded exact cast remains coherent while thirteen ordered station bands, proxy-volume rings, and the head-to-tail chain visibly follow the body from rest into the posed geometry; the displacement panel localizes the strongest motion to the expected trunk bend.",
+    "limitations": [
+      "This is a static analytical pose witness, not temporal motion or terrain-contact evidence.",
+      "Proxy volumes are intentionally rendered as x-ray wireframes and do not claim anatomical segmentation.",
+      "The witness demonstrates one exact cast and one fitted low-frequency crawler family."
+    ],
+    "artifacts": [
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
+        "bytes": 5099,
+        "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
+      },
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/deformation-witness.png",
+        "bytes": 32114,
+        "sha256": "sha256:2dd438ecdb6acd2f185204ccaeafab46ac8699ddf0cbb8adeba11ce634c4a89a"
+      },
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/deformation-depth-witness.png",
+        "bytes": 61510,
+        "sha256": "sha256:6c6727f86154f521de88e49ec873d9d5e6593ac744806aeb415dbedce4e11e13"
+      },
+      {
+        "path": "/private/tmp/kaminos-molten-low-frequency-proxy-rig-recovery-0722/artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/mechanism-witness.png",
+        "bytes": 131089,
+        "sha256": "sha256:d62a60cff4e903c9ecaa92700f115e99cd6261b8d99b17cdfe5f40880ef721ad"
+      }
+    ]
+  }
+}

@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>719024 Smooth Fitted-Curve Inspector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #111311;
+      color: #eceee9;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body, #app {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body { background: #111311; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    canvas:active { cursor: grabbing; }
+
+    .toolbar {
+      position: fixed;
+      inset: 14px 14px auto 14px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      padding: 9px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      background: rgba(19, 22, 19, 0.9);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(10px);
+    }
+
+    .title {
+      min-width: 190px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .title span {
+      margin-left: 7px;
+      color: #91a493;
+      font-weight: 500;
+    }
+
+    .segmented {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      background: #080a08;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    button {
+      height: 30px;
+      border: 0;
+      padding: 0 11px;
+      color: #aeb7ad;
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+
+    button:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+    button[aria-pressed="true"] { color: #0e130e; background: #b7d39d; }
+
+    .toolbar-spacer { flex: 1; }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 9px;
+      color: #aeb7ad;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .toggle input { accent-color: #b7d39d; }
+
+    .metric-strip {
+      position: fixed;
+      z-index: 2;
+      left: 14px;
+      bottom: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(96px, auto));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(19, 22, 19, 0.88);
+      backdrop-filter: blur(10px);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 9px 12px 8px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .metric:last-child { border-right: 0; }
+
+    .metric-label {
+      color: #7f8c7f;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .metric-value {
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .identity {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 2;
+      max-width: min(510px, calc(100vw - 28px));
+      padding: 9px 11px;
+      border-left: 3px solid #4caa7f;
+      background: rgba(19, 22, 19, 0.88);
+      color: #95a095;
+      font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      backdrop-filter: blur(10px);
+    }
+
+    .identity strong { color: #dce3d9; }
+    .identity[data-state="error"] { border-left-color: #ef695f; }
+    .identity[data-state="loading"] { border-left-color: #d8ad53; }
+
+    .diagnostic button[aria-pressed="true"] { background: #da9b4d; }
+
+    @media (max-width: 860px) {
+      .toolbar { flex-wrap: wrap; }
+      .title { width: 100%; }
+      .toolbar-spacer { display: none; }
+      .metric-strip { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .identity { display: none; }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="toolbar" aria-label="Deformation inspector controls">
+    <div class="title">719024 <span>continuous fitted curve</span></div>
+    <div class="segmented" id="pose-controls" role="group" aria-label="Pose">
+      <button type="button" data-pose="rest">Rest</button>
+      <button type="button" data-pose="c">C bend</button>
+      <button type="button" data-pose="s">S bend</button>
+      <button type="button" data-pose="asym">Asymmetric</button>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <label class="toggle"><input id="wireframe" type="checkbox" /> Wireframe</label>
+    <div class="segmented diagnostic" role="group" aria-label="Diagnostic control">
+      <button type="button" data-pose="legacy">Segmented control</button>
+    </div>
+  </div>
+
+  <div class="metric-strip" aria-live="polite">
+    <div class="metric"><div class="metric-label">Pose</div><div class="metric-value" id="metric-pose">-</div></div>
+    <div class="metric"><div class="metric-label">Flipped</div><div class="metric-value" id="metric-flips">-</div></div>
+    <div class="metric"><div class="metric-label">Edge p99</div><div class="metric-value" id="metric-p99">-</div></div>
+    <div class="metric"><div class="metric-label">Max edge</div><div class="metric-value" id="metric-max">-</div></div>
+  </div>
+
+  <div class="identity" id="identity" data-state="loading">
+    <strong>loading</strong><br />Exact route and source identity pending.
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const app = document.querySelector('#app');
+    const identity = document.querySelector('#identity');
+    const wireframeInput = document.querySelector('#wireframe');
+    const poseButtons = [...document.querySelectorAll('[data-pose]')];
+    const metricPose = document.querySelector('#metric-pose');
+    const metricFlips = document.querySelector('#metric-flips');
+    const metricP99 = document.querySelector('#metric-p99');
+    const metricMax = document.querySelector('#metric-max');
+
+    const ROUTE = 'kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0';
+    const SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
+    const BASE = './artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0';
+    const SOURCES = {
+      rest: './artifacts/motion-ready-719024/creature.glb',
+      c: `${BASE}/smooth-c-bend.glb`,
+      s: `${BASE}/smooth-s-bend.glb`,
+      asym: `${BASE}/smooth-asymmetric.glb`,
+      legacy: `${BASE}/legacy-s-bend.glb`,
+    };
+    const LABELS = {
+      rest: 'Rest',
+      c: 'C bend',
+      s: 'S bend',
+      asym: 'Asymmetric',
+      legacy: 'Segmented control',
+    };
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setAnimationLoop(render);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    app.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x191c19);
+    scene.fog = new THREE.Fog(0x191c19, 4.5, 11);
+
+    const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.01, 100);
+    camera.position.set(3.2, 2.05, 3.4);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.065;
+    controls.target.set(0, 0.4, 0);
+    controls.minDistance = 1.2;
+    controls.maxDistance = 12;
+    controls.update();
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const hemi = new THREE.HemisphereLight(0xdce9f1, 0x3e372d, 1.7);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffecd1, 4.2);
+    key.position.set(-3, 5, 4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x8fb6d9, 2.2);
+    rim.position.set(4, 2.5, -4);
+    scene.add(rim);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(40, 40),
+      new THREE.MeshStandardMaterial({ color: 0x313630, roughness: 0.78, metalness: 0.03 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.01;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const loader = new GLTFLoader();
+    const objects = new Map();
+    let report = null;
+    let currentPose = 'rest';
+    let framed = false;
+
+    window.__LIRM_INSPECTOR_STATE__ = {
+      status: 'loading',
+      requestedRoute: ROUTE,
+      effectiveRoute: null,
+      sourceHash: SOURCE_HASH,
+      currentPose,
+      loadedPoses: [],
+    };
+
+    function loadGLB(url) {
+      return new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+    }
+
+    function styleObject(root) {
+      root.traverse((node) => {
+        if (!node.isMesh) return;
+        node.castShadow = true;
+        node.receiveShadow = true;
+        if (Array.isArray(node.material)) {
+          node.material = node.material.map((material) => material.clone());
+        } else if (node.material) {
+          node.material = node.material.clone();
+        }
+      });
+    }
+
+    function setWireframe(enabled) {
+      for (const root of objects.values()) {
+        root.traverse((node) => {
+          if (!node.isMesh || !node.material) return;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          for (const material of materials) material.wireframe = enabled;
+        });
+      }
+    }
+
+    function metricsFor(pose) {
+      if (!report || pose === 'rest') return null;
+      const key = pose === 'c' ? 'c-bend' : pose === 's' || pose === 'legacy' ? 's-bend' : 'asymmetric';
+      return report.results?.[key]?.[pose === 'legacy' ? 'hard' : 'smooth'] ?? null;
+    }
+
+    function updateMetrics(pose) {
+      const metrics = metricsFor(pose);
+      metricPose.textContent = LABELS[pose];
+      metricFlips.textContent = metrics ? `${metrics.flippedTriangles.toLocaleString()} / ${metrics.triangleCount.toLocaleString()}` : 'baseline';
+      metricP99.textContent = metrics ? `${metrics.edgeRatio.p99.toFixed(3)}x` : '1.000x';
+      metricMax.textContent = metrics ? `${metrics.edgeRatio.max.toFixed(3)}x` : '1.000x';
+    }
+
+    function showPose(pose) {
+      if (!objects.has(pose)) return;
+      currentPose = pose;
+      for (const [name, root] of objects) root.visible = name === pose;
+      for (const button of poseButtons) button.setAttribute('aria-pressed', String(button.dataset.pose === pose));
+      updateMetrics(pose);
+      window.__LIRM_INSPECTOR_STATE__.currentPose = pose;
+      const params = new URLSearchParams(location.search);
+      params.set('pose', pose);
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+    }
+
+    function frameObjects() {
+      const union = new THREE.Box3();
+      for (const root of objects.values()) union.union(new THREE.Box3().setFromObject(root));
+      const sphere = union.getBoundingSphere(new THREE.Sphere());
+      const center = sphere.center;
+      for (const root of objects.values()) root.position.sub(center);
+      floor.position.y = union.min.y - center.y - 0.04;
+      const distance = sphere.radius / Math.sin(THREE.MathUtils.degToRad(camera.fov * 0.5));
+      const view = new URLSearchParams(location.search).get('view') ?? 'three-quarter';
+      const directions = {
+        'three-quarter': new THREE.Vector3(0.82, 0.45, 0.92),
+        side: new THREE.Vector3(1, 0.22, 0),
+        opposite: new THREE.Vector3(-1, 0.22, 0),
+        front: new THREE.Vector3(0, 0.18, 1),
+        rear: new THREE.Vector3(0, 0.18, -1),
+        low: new THREE.Vector3(0.9, -0.18, 0.25),
+        top: new THREE.Vector3(0.25, 1, 0.18),
+      };
+      camera.position.copy(directions[view] ?? directions['three-quarter']).normalize().multiplyScalar(distance * 1.26);
+      camera.near = Math.max(0.005, distance / 100);
+      camera.far = distance * 12;
+      camera.updateProjectionMatrix();
+      controls.target.set(0, 0, 0);
+      controls.minDistance = sphere.radius * 0.72;
+      controls.maxDistance = sphere.radius * 8;
+      controls.update();
+      framed = true;
+    }
+
+    function render() {
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    async function boot() {
+      try {
+        const [reportResponse, ...glbs] = await Promise.all([
+          fetch(`${BASE}/report.json`, { cache: 'no-store' }),
+          ...Object.entries(SOURCES).map(async ([pose, url]) => [pose, await loadGLB(url)]),
+        ]);
+        if (!reportResponse.ok) throw new Error(`report load failed: ${reportResponse.status}`);
+        report = await reportResponse.json();
+        if (report.effectiveRoute !== ROUTE) throw new Error(`effective route mismatch: ${report.effectiveRoute}`);
+        if (!report.source?.sha256?.endsWith(SOURCE_HASH)) throw new Error(`source hash mismatch: ${report.source?.sha256}`);
+
+        for (const [pose, gltf] of glbs) {
+          const root = gltf.scene;
+          root.name = `pose-${pose}`;
+          styleObject(root);
+          root.visible = false;
+          objects.set(pose, root);
+          scene.add(root);
+        }
+        frameObjects();
+
+        const params = new URLSearchParams(location.search);
+        const requestedPose = params.get('pose');
+        const initialPose = objects.has(requestedPose) ? requestedPose : 'rest';
+        wireframeInput.checked = params.get('wire') === '1';
+        setWireframe(wireframeInput.checked);
+        showPose(initialPose);
+
+        identity.dataset.state = 'loaded';
+        const registrationHash = report.registration.sha256.replace('sha256:', '');
+        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${registrationHash.slice(0, 16)}... | 148,118 vertices | amplitude 0.24`;
+        Object.assign(window.__LIRM_INSPECTOR_STATE__, {
+          status: 'loaded',
+          effectiveRoute: report.effectiveRoute,
+          loadedPoses: [...objects.keys()],
+          currentPose: initialPose,
+          framed,
+        });
+        document.documentElement.dataset.inspectorStatus = 'loaded';
+      } catch (error) {
+        console.error(error);
+        identity.dataset.state = 'error';
+        identity.innerHTML = `<strong>load failed</strong><br>${error.message}`;
+        window.__LIRM_INSPECTOR_STATE__.status = 'error';
+        window.__LIRM_INSPECTOR_STATE__.error = error.message;
+        document.documentElement.dataset.inspectorStatus = 'error';
+      }
+    }
+
+    for (const button of poseButtons) button.addEventListener('click', () => showPose(button.dataset.pose));
+    wireframeInput.addEventListener('change', () => {
+      setWireframe(wireframeInput.checked);
+      const params = new URLSearchParams(location.search);
+      if (wireframeInput.checked) params.set('wire', '1'); else params.delete('wire');
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+    });
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    boot();
+  </script>
+</body>
+</html>
