@@ -85,6 +85,480 @@ export function validateAxialCrawlerRegistration(registration) {
   };
 }
 
+const ORACLE_CONTACT_ORDER = Object.freeze([
+  Object.freeze({ id: 'front-left', phaseOffset: 0 }),
+  Object.freeze({ id: 'front-right', phaseOffset: 0.5 }),
+  Object.freeze({ id: 'rear-left', phaseOffset: 0.5 }),
+  Object.freeze({ id: 'rear-right', phaseOffset: 0 }),
+]);
+
+function oracleContactId(label, kind) {
+  const normalized = String(label || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  const axial = /\bfront\b/.test(normalized)
+    ? 'front'
+    : /\b(?:rear|back)\b/.test(normalized) ? 'rear' : null;
+  const side = /\bleft\b/.test(normalized)
+    ? 'left'
+    : /\bright\b/.test(normalized) ? 'right' : null;
+  if (!axial || !side) throw new Error(`cannot resolve ${kind} label ${label}`);
+  return `${axial}-${side}`;
+}
+
+export function createOracleMotionControlPlan(stencil, expected = {}) {
+  if (stencil?.schema !== 'kaminos.oracle-mechanical-stencil.v0') {
+    throw new Error('oracle motion control plan requires an oracle mechanical stencil');
+  }
+  if (stencil.authoring?.authority !== 'operator-authored-rest-space-semantics') {
+    throw new Error('oracle motion control plan requires operator-authored authority');
+  }
+  if (expected.castId && stencil.cast?.id !== expected.castId) throw new Error('oracle motion control cast id mismatch');
+  if (expected.castHash && stencil.cast?.sha256 !== expected.castHash) throw new Error('oracle motion control cast hash mismatch');
+  if (expected.registrationHash && stencil.cast?.registrationSha256 !== expected.registrationHash) {
+    throw new Error('oracle motion control registration hash mismatch');
+  }
+  const bodyAxes = stencil.regions?.filter(region => region.kind === 'body-axis') || [];
+  if (bodyAxes.length !== 1) throw new Error('oracle motion control plan requires exactly one body axis');
+  const appendages = new Map();
+  const contacts = new Map();
+  for (const region of stencil.regions) {
+    if (region.kind !== 'appendage-chain' && region.kind !== 'contact-patch') continue;
+    const collection = region.kind === 'appendage-chain' ? appendages : contacts;
+    const contactId = oracleContactId(region.label, region.kind === 'appendage-chain' ? 'appendage' : 'contact');
+    if (collection.has(contactId)) throw new Error(`duplicate ${region.kind} semantics for ${contactId}`);
+    collection.set(contactId, region);
+  }
+  const resolvedContacts = {};
+  for (const spec of ORACLE_CONTACT_ORDER) {
+    const appendage = appendages.get(spec.id);
+    const contact = contacts.get(spec.id);
+    if (!appendage || !contact) throw new Error(`oracle motion control plan is missing ${spec.id} appendage or contact semantics`);
+    resolvedContacts[spec.id] = {
+      id: spec.id,
+      phaseOffset: spec.phaseOffset,
+      appendageRegionId: appendage.id,
+      contactRegionId: contact.id,
+      operatorLabels: {
+        appendage: appendage.label,
+        contact: contact.label,
+      },
+    };
+  }
+  if (appendages.size !== ORACLE_CONTACT_ORDER.length || contacts.size !== ORACLE_CONTACT_ORDER.length) {
+    throw new Error('oracle motion control plan requires exactly four unambiguous appendages and contacts');
+  }
+  const bodyAxis = bodyAxes[0];
+  return {
+    schema: 'kaminos.motion-ready-719024.oracle-motion-control-plan.v0',
+    authority: 'consumer-derived-from-operator-stencil',
+    cast: { ...stencil.cast },
+    stencilStatus: stencil.authoring.status,
+    authoringSessionId: stencil.authoring.sessionId,
+    bodyAxis: {
+      sourceRegionId: bodyAxis.id,
+      points: bodyAxis.points.map(point => [...point]),
+      radii: [...bodyAxis.radii],
+    },
+    preservation: {
+      authority: 'consumer-inferred-from-operator-body-axis',
+      mode: 'body-axis-envelope-v0',
+      sourceRegionId: bodyAxis.id,
+    },
+    contacts: resolvedContacts,
+  };
+}
+
+export function createOracleCrawlerContactAtlas(plan, binding, restPositions) {
+  if (plan?.schema !== 'kaminos.motion-ready-719024.oracle-motion-control-plan.v0') {
+    throw new Error('oracle motion control plan is required');
+  }
+  if (binding?.schema !== 'kaminos.oracle-mechanical-stencil-binding.v0') {
+    throw new Error('oracle stencil binding is required');
+  }
+  if (!ArrayBuffer.isView(restPositions) || restPositions.length !== binding.vertexCount * 3) {
+    throw new Error('oracle contact atlas rest positions must match stencil binding');
+  }
+  const patches = ORACLE_CONTACT_ORDER.map(spec => {
+    const contact = plan.contacts[spec.id];
+    const contactRegion = binding.regions.find(region => region.id === contact.contactRegionId);
+    const appendageRegion = binding.regions.find(region => region.id === contact.appendageRegionId);
+    if (!contactRegion?.vertexIndices?.length || !appendageRegion?.vertexIndices?.length) {
+      throw new Error(`oracle contact atlas has no bound vertices for ${spec.id}`);
+    }
+    const rawWeights = contactRegion.weights.map(weight => Math.max(0, Number(weight) || 0));
+    const weightSum = rawWeights.reduce((sum, weight) => sum + weight, 0);
+    if (weightSum <= EPSILON) throw new Error(`oracle contact atlas has zero contact weight for ${spec.id}`);
+    const weights = rawWeights.map(weight => weight / weightSum);
+    const restCentroid = [0, 0, 0];
+    contactRegion.vertexIndices.forEach((vertex, index) => {
+      const offset = vertex * 3;
+      restCentroid[0] += restPositions[offset] * weights[index];
+      restCentroid[1] += restPositions[offset + 1] * weights[index];
+      restCentroid[2] += restPositions[offset + 2] * weights[index];
+    });
+    return {
+      id: spec.id,
+      axialRegion: spec.id.startsWith('front-') ? 'front' : 'rear',
+      side: spec.id.endsWith('-left') ? 'left' : 'right',
+      phaseOffset: contact.phaseOffset,
+      restCentroid,
+      vertexIndices: [...contactRegion.vertexIndices],
+      weights,
+      influenceVertexIndices: [...appendageRegion.vertexIndices],
+      influenceWeights: appendageRegion.weights.map(weight => clamp(Number(weight) || 0, 0, 1)),
+      operatorContactRegionId: contact.contactRegionId,
+      operatorAppendageRegionId: contact.appendageRegionId,
+      operatorLabels: { ...contact.operatorLabels },
+      derivation: {
+        authority: 'derived-from-operator-semantic-stencil',
+        stencilStatus: plan.stencilStatus,
+        authoringSessionId: plan.authoringSessionId,
+      },
+    };
+  });
+  return {
+    schema: 'kaminos.creature-contact-atlas.v0',
+    version: 0,
+    castId: plan.cast.id,
+    castHash: plan.cast.sha256,
+    registrationHash: plan.cast.registrationSha256,
+    motionClass: 'elongated-crawler',
+    authority: 'derived-from-operator-semantic-stencil',
+    atlasHash: binding.stencilHash,
+    vertexCount: binding.vertexCount,
+    contactPlaneY: patches.reduce((sum, patch) => sum + patch.restCentroid[1], 0) / patches.length,
+    patches,
+  };
+}
+
+function proxyStationFrame(a, b) {
+  const tangent = normalize3([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [0, 0, -1]);
+  const reference = Math.abs(tangent[1]) > 0.92 ? [1, 0, 0] : [0, 1, 0];
+  const lateral = normalize3(cross3(reference, tangent), [1, 0, 0]);
+  const normal = normalize3(cross3(tangent, lateral), [0, 1, 0]);
+  return { tangent, lateral, normal };
+}
+
+function dot3(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+export function validateFittedProxyRigRegistration(registration, expected = {}) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0') {
+    throw new Error('fitted proxy rig registration schema mismatch');
+  }
+  if (registration.manualControlCount !== 0) throw new Error('fitted proxy rig must remain automatic');
+  if (registration.headDirection !== '-Z') throw new Error('fitted proxy rig head direction must be -Z');
+  for (const field of ['donorSha256', 'sourcePacketSha256', 'armatureProgramId']) {
+    if (expected[field] && registration[field] !== expected[field]) {
+      throw new Error(`fitted proxy rig ${field} mismatch`);
+    }
+  }
+  if (!Array.isArray(registration.stations) || registration.stations.length < 3) {
+    throw new Error('fitted proxy rig requires at least three stations');
+  }
+  const stations = registration.stations.map((station, index) => {
+    const t = Number(station.t);
+    const position = requireVector3(
+      Array.isArray(station.position)
+        ? station.position
+        : [station.position?.x, station.position?.y, station.position?.z],
+      `fitted proxy station ${station.id || index}`,
+    );
+    if (!Number.isFinite(t) || t < 0 || t > 1 || (index > 0 && t <= Number(registration.stations[index - 1].t))) {
+      throw new Error('fitted proxy station t values must increase from zero to one');
+    }
+    return { ...station, t, localPosition: position };
+  });
+  if (Math.abs(stations[0].t) > EPSILON || Math.abs(stations.at(-1).t - 1) > EPSILON) {
+    throw new Error('fitted proxy station range must span zero to one');
+  }
+  if (Number(registration.stationCount) !== stations.length) throw new Error('fitted proxy station count mismatch');
+  return { ...registration, stations };
+}
+
+export function createFittedProxyRigGeometryBinding(
+  originalPositions,
+  originalNormals,
+  registrationInput,
+) {
+  if (!ArrayBuffer.isView(originalPositions) || originalPositions.length % 3 !== 0) {
+    throw new Error('fitted proxy positions must be a packed numeric vec3 buffer');
+  }
+  if (!ArrayBuffer.isView(originalNormals) || originalNormals.length !== originalPositions.length) {
+    throw new Error('fitted proxy normals must match the packed position buffer');
+  }
+  const registration = registrationInput?.stations?.[0]?.localPosition
+    ? registrationInput
+    : validateFittedProxyRigRegistration(registrationInput);
+  const vertexCount = originalPositions.length / 3;
+  const segmentIndices = new Uint16Array(vertexCount);
+  const segmentMix = new Float32Array(vertexCount);
+  const localCoordinates = new Float32Array(originalPositions.length);
+  const localNormals = new Float32Array(originalNormals.length);
+  for (let vertex = 0; vertex < vertexCount; vertex++) {
+    const offset = vertex * 3;
+    const point = [originalPositions[offset], originalPositions[offset + 1], originalPositions[offset + 2]];
+    let bestSegment = 0;
+    let bestMix = 0;
+    let bestDistance = Infinity;
+    for (let segment = 0; segment < registration.stations.length - 1; segment++) {
+      const a = registration.stations[segment].localPosition;
+      const b = registration.stations[segment + 1].localPosition;
+      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const ap = [point[0] - a[0], point[1] - a[1], point[2] - a[2]];
+      const segmentMixValue = clamp(dot3(ap, ab) / Math.max(dot3(ab, ab), EPSILON), 0, 1);
+      const anchor = [
+        a[0] + ab[0] * segmentMixValue,
+        a[1] + ab[1] * segmentMixValue,
+        a[2] + ab[2] * segmentMixValue,
+      ];
+      const distance = length3([point[0] - anchor[0], point[1] - anchor[1], point[2] - anchor[2]]);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestSegment = segment;
+        bestMix = segmentMixValue;
+      }
+    }
+    const a = registration.stations[bestSegment].localPosition;
+    const b = registration.stations[bestSegment + 1].localPosition;
+    const frame = proxyStationFrame(a, b);
+    const anchor = [
+      mix(a[0], b[0], bestMix),
+      mix(a[1], b[1], bestMix),
+      mix(a[2], b[2], bestMix),
+    ];
+    const residual = [point[0] - anchor[0], point[1] - anchor[1], point[2] - anchor[2]];
+    const normal = [originalNormals[offset], originalNormals[offset + 1], originalNormals[offset + 2]];
+    segmentIndices[vertex] = bestSegment;
+    segmentMix[vertex] = bestMix;
+    localCoordinates[offset] = dot3(residual, frame.lateral);
+    localCoordinates[offset + 1] = dot3(residual, frame.normal);
+    localCoordinates[offset + 2] = dot3(residual, frame.tangent);
+    localNormals[offset] = dot3(normal, frame.lateral);
+    localNormals[offset + 1] = dot3(normal, frame.normal);
+    localNormals[offset + 2] = dot3(normal, frame.tangent);
+  }
+  return {
+    schema: 'kaminos.motion-ready-719024.fitted-proxy-rig-binding.v0',
+    registration,
+    vertexCount,
+    originalPositions,
+    originalNormals,
+    segmentIndices,
+    segmentMix,
+    localCoordinates,
+    localNormals,
+  };
+}
+
+export function createFittedProxyRigPoseFromAxialState(
+  proxyRegistrationInput,
+  axialRegistrationInput,
+  stateInput,
+) {
+  const proxyRegistration = proxyRegistrationInput?.stations?.[0]?.localPosition
+    ? proxyRegistrationInput
+    : validateFittedProxyRigRegistration(proxyRegistrationInput);
+  const axialRegistration = axialRegistrationInput?.axialSpan
+    ? axialRegistrationInput
+    : validateAxialCrawlerRegistration(axialRegistrationInput);
+  const state = stateInput?.deformationMode ? stateInput : createAxialSquirmState(stateInput);
+  return {
+    schema: 'kaminos.motion-ready-719024.fitted-proxy-rig-pose.v0',
+    sourceCandidateId: proxyRegistration.sourceCandidateId,
+    phase: state.phase,
+    stationPositions: proxyRegistration.stations.map(station => (
+      deformAxialPoint(station.localPosition, axialRegistration, state)
+    )),
+  };
+}
+
+export function deformFittedProxyRigGeometryBinding(
+  binding,
+  pose,
+  outputPositions,
+  outputNormals,
+) {
+  if (binding?.schema !== 'kaminos.motion-ready-719024.fitted-proxy-rig-binding.v0') {
+    throw new Error('fitted proxy rig geometry binding is required');
+  }
+  if (pose?.schema !== 'kaminos.motion-ready-719024.fitted-proxy-rig-pose.v0'
+      || pose.stationPositions?.length !== binding.registration.stations.length) {
+    throw new Error('fitted proxy rig pose does not match binding');
+  }
+  if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== binding.originalPositions.length) {
+    throw new Error('fitted proxy output positions must match binding');
+  }
+  if (!ArrayBuffer.isView(outputNormals) || outputNormals.length !== binding.originalNormals.length) {
+    throw new Error('fitted proxy output normals must match binding');
+  }
+  const segmentFrames = Array.from(
+    { length: pose.stationPositions.length - 1 },
+    (_, segment) => proxyStationFrame(
+      pose.stationPositions[segment],
+      pose.stationPositions[segment + 1],
+    ),
+  );
+  for (let vertex = 0; vertex < binding.vertexCount; vertex++) {
+    const offset = vertex * 3;
+    const segment = binding.segmentIndices[vertex];
+    const segmentMixValue = binding.segmentMix[vertex];
+    const a = pose.stationPositions[segment];
+    const b = pose.stationPositions[segment + 1];
+    const frame = segmentFrames[segment];
+    const anchorX = mix(a[0], b[0], segmentMixValue);
+    const anchorY = mix(a[1], b[1], segmentMixValue);
+    const anchorZ = mix(a[2], b[2], segmentMixValue);
+    const lateral = binding.localCoordinates[offset];
+    const normal = binding.localCoordinates[offset + 1];
+    const tangent = binding.localCoordinates[offset + 2];
+    outputPositions[offset] = anchorX + frame.lateral[0] * lateral + frame.normal[0] * normal + frame.tangent[0] * tangent;
+    outputPositions[offset + 1] = anchorY + frame.lateral[1] * lateral + frame.normal[1] * normal + frame.tangent[1] * tangent;
+    outputPositions[offset + 2] = anchorZ + frame.lateral[2] * lateral + frame.normal[2] * normal + frame.tangent[2] * tangent;
+    const normalX = frame.lateral[0] * binding.localNormals[offset]
+      + frame.normal[0] * binding.localNormals[offset + 1]
+      + frame.tangent[0] * binding.localNormals[offset + 2];
+    const normalY = frame.lateral[1] * binding.localNormals[offset]
+      + frame.normal[1] * binding.localNormals[offset + 1]
+      + frame.tangent[1] * binding.localNormals[offset + 2];
+    const normalZ = frame.lateral[2] * binding.localNormals[offset]
+      + frame.normal[2] * binding.localNormals[offset + 1]
+      + frame.tangent[2] * binding.localNormals[offset + 2];
+    const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
+    outputNormals[offset] = normalX / normalLength;
+    outputNormals[offset + 1] = normalY / normalLength;
+    outputNormals[offset + 2] = normalZ / normalLength;
+  }
+  return {
+    schema: 'kaminos.motion-ready-719024.fitted-proxy-rig-deformation.v0',
+    sourceCandidateId: binding.registration.sourceCandidateId,
+    vertexCount: binding.vertexCount,
+    stationCount: pose.stationPositions.length,
+  };
+}
+
+export function applyOracleBodyPreservationEnvelope(
+  plan,
+  oracleBinding,
+  proxyBinding,
+  outputPositions,
+  outputNormals,
+) {
+  if (plan?.schema !== 'kaminos.motion-ready-719024.oracle-motion-control-plan.v0') {
+    throw new Error('oracle motion control plan is required');
+  }
+  if (oracleBinding?.schema !== 'kaminos.oracle-mechanical-stencil-binding.v0') {
+    throw new Error('oracle stencil binding is required');
+  }
+  if (proxyBinding?.schema !== 'kaminos.motion-ready-719024.fitted-proxy-rig-binding.v0') {
+    throw new Error('fitted proxy rig geometry binding is required');
+  }
+  if (oracleBinding.vertexCount !== proxyBinding.vertexCount) {
+    throw new Error('oracle and fitted proxy bindings must describe the same geometry');
+  }
+  if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== proxyBinding.originalPositions.length) {
+    throw new Error('oracle preservation output positions must match proxy binding');
+  }
+  if (!ArrayBuffer.isView(outputNormals) || outputNormals.length !== proxyBinding.originalNormals.length) {
+    throw new Error('oracle preservation output normals must match proxy binding');
+  }
+  const bodyRegion = oracleBinding.regions.find(region => region.id === plan.preservation.sourceRegionId);
+  if (!bodyRegion) throw new Error('oracle stencil binding is missing inferred preservation source');
+  const bodyWeights = new Float32Array(proxyBinding.vertexCount);
+  bodyRegion.vertexIndices.forEach((vertex, index) => {
+    bodyWeights[vertex] = Math.max(bodyWeights[vertex], clamp(Number(bodyRegion.weights[index]) || 0, 0, 1));
+  });
+  let fittedVertexCount = 0;
+  let totalWeight = 0;
+  for (let vertex = 0; vertex < proxyBinding.vertexCount; vertex++) {
+    const offset = vertex * 3;
+    const weight = bodyWeights[vertex];
+    totalWeight += weight;
+    if (weight > 0) fittedVertexCount++;
+    for (let axis = 0; axis < 3; axis++) {
+      const component = offset + axis;
+      outputPositions[component] = mix(
+        proxyBinding.originalPositions[component],
+        outputPositions[component],
+        weight,
+      );
+      outputNormals[component] = mix(
+        proxyBinding.originalNormals[component],
+        outputNormals[component],
+        weight,
+      );
+    }
+    const normalLength = Math.hypot(
+      outputNormals[offset],
+      outputNormals[offset + 1],
+      outputNormals[offset + 2],
+    ) || 1;
+    outputNormals[offset] /= normalLength;
+    outputNormals[offset + 1] /= normalLength;
+    outputNormals[offset + 2] /= normalLength;
+  }
+  return {
+    schema: 'kaminos.motion-ready-719024.oracle-body-preservation-envelope.v0',
+    authority: plan.preservation.authority,
+    sourceRegionId: plan.preservation.sourceRegionId,
+    vertexCount: proxyBinding.vertexCount,
+    fittedVertexCount,
+    meanFittedWeight: totalWeight / proxyBinding.vertexCount,
+  };
+}
+
+export function applyOracleContactDeformation(plan, binding, kinematics, outputPositions) {
+  if (plan?.schema !== 'kaminos.motion-ready-719024.oracle-motion-control-plan.v0') {
+    throw new Error('oracle motion control plan is required');
+  }
+  if (binding?.schema !== 'kaminos.oracle-mechanical-stencil-binding.v0') {
+    throw new Error('oracle stencil binding is required');
+  }
+  if (kinematics?.schema !== 'kaminos.crawler-contact-kinematics.v0') {
+    throw new Error('crawler contact kinematics are required');
+  }
+  if (!ArrayBuffer.isView(outputPositions) || outputPositions.length !== binding.vertexCount * 3) {
+    throw new Error('oracle contact output must match stencil binding vertex count');
+  }
+  const bodyRegion = binding.regions.find(region => region.id === plan.preservation.sourceRegionId);
+  if (!bodyRegion) throw new Error('oracle stencil binding is missing inferred preservation source');
+  const bodyWeights = new Float32Array(binding.vertexCount);
+  bodyRegion.vertexIndices.forEach((vertex, index) => { bodyWeights[vertex] = bodyRegion.weights[index]; });
+  const affectedVertices = new Set();
+  for (const [id, contact] of Object.entries(plan.contacts)) {
+    const motion = kinematics.patches.find(patch => patch.id === id);
+    if (!motion) throw new Error(`contact kinematics missing operator semantic ${id}`);
+    const offset = requireVector3(motion.localOffset, `${id} oracle contact offset`);
+    const chainRegion = binding.regions.find(region => region.id === contact.appendageRegionId);
+    const contactRegion = binding.regions.find(region => region.id === contact.contactRegionId);
+    if (!chainRegion || !contactRegion) throw new Error(`oracle stencil binding is missing ${id} regions`);
+    const weights = new Map();
+    chainRegion.vertexIndices.forEach((vertex, index) => {
+      const preservedChainWeight = chainRegion.weights[index] * (1 - bodyWeights[vertex] * 0.85);
+      weights.set(vertex, Math.max(weights.get(vertex) || 0, preservedChainWeight));
+    });
+    contactRegion.vertexIndices.forEach((vertex, index) => {
+      weights.set(vertex, Math.max(weights.get(vertex) || 0, contactRegion.weights[index]));
+    });
+    for (const [vertex, weight] of weights) {
+      const vectorOffset = vertex * 3;
+      outputPositions[vectorOffset] += offset[0] * weight;
+      outputPositions[vectorOffset + 1] += offset[1] * weight;
+      outputPositions[vectorOffset + 2] += offset[2] * weight;
+      if (weight > 0) affectedVertices.add(vertex);
+    }
+  }
+  return {
+    schema: 'kaminos.motion-ready-719024.oracle-contact-deformation.v0',
+    authority: plan.authority,
+    preservationAuthority: plan.preservation.authority,
+    stencilStatus: plan.stencilStatus,
+    contactCount: Object.keys(plan.contacts).length,
+    affectedVertexCount: affectedVertices.size,
+    coupling: Number(kinematics.coupling) || 0,
+  };
+}
+
 export function createAxialSquirmState(options = {}) {
   const terrainSupportProfile = Array.isArray(options.terrainSupportProfile)
     ? options.terrainSupportProfile.map(sample => ({

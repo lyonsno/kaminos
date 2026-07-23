@@ -13,6 +13,10 @@ assert.match(witness, /--expected-cast-id/, 'witness exposes expected cast ident
 assert.match(witness, /--expected-cast-hash/, 'witness exposes expected cast hash for false-closure probes');
 assert.match(witness, /--expected-registration-hash/, 'witness exposes expected registration hash for false-closure probes');
 assert.match(witness, /--expected-contact-carriers-hash/, 'witness exposes expected contact carrier hash for false-closure probes');
+assert.match(witness, /--expected-oracle-stencil-hash/, 'witness exposes expected operator stencil hash for false-closure probes');
+assert.match(witness, /--expected-oracle-stencil-semantic-hash/, 'witness exposes expected operator stencil semantic hash for false-closure probes');
+assert.match(witness, /--expected-proxy-registration-hash/, 'witness exposes expected fitted proxy hash for false-closure probes');
+assert.match(witness, /--body-deformation/, 'witness records an explicit body deformation lane');
 assert.match(witness, /--expected-hill-source/, 'witness exposes expected Hill source identity for false-closure probes');
 assert.match(witness, /requestedIdentity/, 'witness records requested identity');
 assert.match(witness, /effectiveIdentity/, 'witness records effective identity');
@@ -36,6 +40,16 @@ assert.match(identityContract, /minimumSupportMargin/, 'live evidence binds nonn
 assert.match(browserWitness, /contact-atlas\.json/, 'browser witness loads the persisted exact-cast contact atlas');
 assert.match(browserWitness, /contactAtlasHash/, 'browser witness reports the effective contact-atlas byte identity');
 assert.match(browserWitness, /contact-carriers\.json/, 'browser witness loads the persisted exact-cast contact carriers');
+assert.match(browserWitness, /oracle-stencil-noah-0722\.json/, 'browser witness loads the exact operator-authored stencil');
+assert.match(browserWitness, /fitted-proxy-rig-registration\.json/, 'browser witness loads the reviewed fitted proxy registration');
+assert.match(browserWitness, /body_deformation/, 'browser witness exposes the baseline versus fitted-proxy body mode');
+assert.match(browserWitness, /createOracleMotionControlPlan/, 'browser witness resolves operator labels into explicit motion semantics');
+assert.match(browserWitness, /createOracleCrawlerContactAtlas/, 'browser witness derives active locomotion contacts from operator semantics');
+assert.match(browserWitness, /createFittedProxyRigGeometryBinding/, 'browser witness binds the exact cast to the fitted proxy stations');
+assert.match(browserWitness, /applyOracleContactDeformation/, 'browser witness applies operator-authored appendage and contact semantics');
+assert.match(browserWitness, /oracleStencilHash/, 'browser debug state reports the effective stencil byte identity');
+assert.match(browserWitness, /proxyRegistrationHash/, 'browser debug state reports the effective proxy registration byte identity');
+assert.match(browserWitness, /preservationAuthority/, 'browser debug state exposes inferred trunk-preservation authority');
 assert.match(browserWitness, /contactCarriersHash/, 'browser witness reports the effective contact-carrier byte identity');
 assert.match(browserWitness, /id="contact-coupling"/, 'browser witness exposes the contact coupling A\/B control');
 assert.match(browserWitness, /stepCrawlerContactLocomotion\(/, 'browser witness governs rail progress through contact state');
@@ -58,7 +72,11 @@ const expected = {
   registrationHash: 'registration-hash',
   contactAtlasHash: 'contact-atlas-hash',
   contactCarriersHash: 'contact-carriers-hash',
-  contactDeformationMode: 'carrier',
+  oracleStencilHash: 'oracle-stencil-hash',
+  oracleStencilSemanticHash: 'oracle-stencil-semantic-hash',
+  proxyRegistrationHash: 'proxy-registration-hash',
+  bodyDeformationMode: 'oracle-proxy',
+  contactDeformationMode: 'oracle',
   cameraMode: 'overview',
   contactCoupling: 1,
   hillSource: 'hill-source',
@@ -74,12 +92,26 @@ const validDebug = {
     contactAtlasSchema: 'kaminos.creature-contact-atlas.v0',
     contactAtlasAuthority: 'exact-cast-consumer-derived-contact-v0',
     contactPatchIds: ['front-left', 'front-right', 'rear-left', 'rear-right'],
+    activeContactAtlasHash: expected.oracleStencilSemanticHash,
+    activeContactAtlasAuthority: 'derived-from-operator-semantic-stencil',
+    activeContactPlaneY: -0.18,
+    activeContactPatchIds: ['front-left', 'front-right', 'rear-left', 'rear-right'],
     contactCarriersHash: expected.contactCarriersHash,
     contactCarriersSchema: 'kaminos.creature-contact-carriers.v0',
     contactCarriersAuthority: 'exact-cast-consumer-derived-topology-v0',
+    oracleStencilHash: expected.oracleStencilHash,
+    oracleStencilSchema: 'kaminos.oracle-mechanical-stencil.v0',
+    oracleStencilAuthority: 'operator-authored-rest-space-semantics',
+    oracleStencilStatus: 'draft',
+    preservationAuthority: 'consumer-inferred-from-operator-body-axis',
+    proxyRegistrationHash: expected.proxyRegistrationHash,
+    proxyRegistrationSchema: 'kaminos.lirm-fitted-proxy-rig-registration.v0',
+    proxySourceCandidateId: 'lirm-armature-03',
+    proxyStationCount: 13,
+    bodyDeformationMode: expected.bodyDeformationMode,
     contactDeformationMode: expected.contactDeformationMode,
     cameraMode: expected.cameraMode,
-    deformationMode: 'axial-parallel-transport-wave-v1',
+    deformationMode: 'oracle-proxy-cage-with-operator-contacts-v0',
     hillSourceRef: expected.hillSource,
     hillAuthority: 'live_simulation',
     hillIdentityProjection: 'public-surface-identifiers-v0',
@@ -107,6 +139,35 @@ const validDebug = {
   motion: { contactCoupling: expected.contactCoupling },
 };
 assert.doesNotThrow(() => assertMotionReady719024EffectiveIdentity(validDebug, expected));
+const baselineExpected = {
+  ...expected,
+  bodyDeformationMode: 'axial',
+  contactDeformationMode: 'carrier',
+};
+const baselineDebug = {
+  effective: {
+    ...validDebug.effective,
+    activeContactAtlasHash: expected.contactAtlasHash,
+    activeContactAtlasAuthority: 'exact-cast-consumer-derived-contact-v0',
+    oracleStencilHash: null,
+    oracleStencilSchema: null,
+    oracleStencilAuthority: null,
+    oracleStencilStatus: null,
+    preservationAuthority: null,
+    proxyRegistrationHash: null,
+    proxyRegistrationSchema: null,
+    proxySourceCandidateId: null,
+    proxyStationCount: null,
+    bodyDeformationMode: 'axial',
+    contactDeformationMode: 'carrier',
+    deformationMode: 'axial-parallel-transport-wave-v1',
+  },
+  motion: validDebug.motion,
+};
+assert.doesNotThrow(
+  () => assertMotionReady719024EffectiveIdentity(baselineDebug, baselineExpected),
+  'frozen axial baseline identity must not require operator-stencil or fitted-proxy evidence',
+);
 assert.throws(
   () => assertMotionReady719024EffectiveIdentity({
     effective: { ...validDebug.effective, locomotionRailSchema: 'stale.pre-rail.v0' },

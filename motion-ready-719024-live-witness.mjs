@@ -24,8 +24,13 @@ function boundedNumber(value, fallback, minimum, maximum, name) {
 }
 
 const contactCoupling = boundedNumber(args.get('--contact-coupling'), 1, 0, 1, '--contact-coupling');
-const contactDeformationMode = args.get('--contact-deformation') || 'carrier';
-if (!['carrier', 'weighted'].includes(contactDeformationMode)) throw new Error('--contact-deformation must be carrier or weighted');
+const bodyDeformationMode = args.get('--body-deformation') || 'oracle-proxy';
+if (!['axial', 'oracle-proxy'].includes(bodyDeformationMode)) throw new Error('--body-deformation must be axial or oracle-proxy');
+const contactDeformationMode = args.get('--contact-deformation') || (bodyDeformationMode === 'oracle-proxy' ? 'oracle' : 'carrier');
+if (!['carrier', 'weighted', 'oracle'].includes(contactDeformationMode)) throw new Error('--contact-deformation must be carrier, weighted, or oracle');
+if (contactDeformationMode === 'oracle' && bodyDeformationMode !== 'oracle-proxy') {
+  throw new Error('--contact-deformation oracle requires --body-deformation oracle-proxy');
+}
 const cameraMode = args.get('--camera-mode') || 'overview';
 if (!['overview', 'contact-profile'].includes(cameraMode)) throw new Error('--camera-mode must be overview or contact-profile');
 
@@ -35,6 +40,10 @@ const EXPECTED = Object.freeze({
   registrationHash: args.get('--expected-registration-hash') || 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   contactAtlasHash: args.get('--expected-contact-atlas-hash') || 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
   contactCarriersHash: args.get('--expected-contact-carriers-hash') || '06d2402a3ae546a65adeff0e6e6f929c701e39f9cff6a494afaa74d7baa6bd3a',
+  oracleStencilHash: args.get('--expected-oracle-stencil-hash') || '2440993b8a812eef99f4f6ebbae268297b967122e3fc806d324bc64d41008116',
+  oracleStencilSemanticHash: args.get('--expected-oracle-stencil-semantic-hash') || 'bcd29e67bc46a9758be87f1e152e614292ae20c49b0e57460e87af241972d30b',
+  proxyRegistrationHash: args.get('--expected-proxy-registration-hash') || 'a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9',
+  bodyDeformationMode,
   contactDeformationMode,
   cameraMode,
   contactCoupling,
@@ -44,6 +53,7 @@ const EXPECTED = Object.freeze({
 });
 const requestedUrl = new URL(args.get('--url') || 'http://127.0.0.1:18124/motion-ready-719024-witness.html');
 requestedUrl.searchParams.set('contact_coupling', String(contactCoupling));
+requestedUrl.searchParams.set('body_deformation', bodyDeformationMode);
 requestedUrl.searchParams.set('contact_deformation', contactDeformationMode);
 requestedUrl.searchParams.set('camera_mode', cameraMode);
 const url = requestedUrl.href;
@@ -91,6 +101,7 @@ let browserVersion = null;
 let effectiveIdentity = null;
 let chromeProcess = null;
 let lastTrustworthyEvidence = { phase: 'initializing' };
+let evidenceFrames = [];
 
 function positiveInt(value, fallback, name) {
   if (value == null || value === '') return fallback;
@@ -387,6 +398,12 @@ try {
   phase = 'composing-filmstrip';
   const filmstrip = await composeFilmstrip(ws, capturedFrames);
   const frames = capturedFrames.map(({ screenshotDataUrl, ...frame }) => frame);
+  evidenceFrames = frames;
+  lastTrustworthyEvidence = {
+    phase: 'composing-filmstrip',
+    frameCount: frames.length,
+    lastDebugState: frames.at(-1)?.debug || null,
+  };
   const last = frames.at(-1).debug;
   assert.equal(last.completed, false, 'settle sample should precede completion status edge');
   assert.ok(last.motion.routeProgress > 0.999, 'settle frame did not reach route destination');
@@ -432,6 +449,7 @@ try {
   writeReport({
     ok: false,
     error: error?.stack || String(error),
+    frames: evidenceFrames,
   });
   if (chromeProcess?.exitCode == null && chromeProcess?.signalCode == null) chromeProcess.kill('SIGTERM');
   throw error;

@@ -13,6 +13,8 @@ const scratch = await mkdtemp(join(tmpdir(), 'kaminos-motion-ready-719024-failur
 const originalRegistration = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/registration.json'));
 const originalContactAtlas = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/contact-atlas.json'));
 const originalContactCarriers = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/contact-carriers.json'));
+const originalOracleStencil = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/oracle-stencil-noah-0722.json'));
+const originalProxyRegistration = await readFile(join(repoRoot, 'artifacts/motion-ready-719024/fitted-proxy-rig-registration.json'));
 
 function contentType(path) {
   return ({
@@ -45,6 +47,16 @@ const server = createServer(async (request, response) => {
     if (requestUrl.pathname === '/tampered-contact-carriers.json') {
       response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
       response.end(Buffer.concat([originalContactCarriers, Buffer.from(' ')]));
+      return;
+    }
+    if (requestUrl.pathname === '/tampered-oracle-stencil.json') {
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(Buffer.concat([originalOracleStencil, Buffer.from(' ')]));
+      return;
+    }
+    if (requestUrl.pathname === '/tampered-proxy-registration.json') {
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(Buffer.concat([originalProxyRegistration, Buffer.from(' ')]));
       return;
     }
     const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '') || 'motion-ready-719024-witness.html';
@@ -95,6 +107,31 @@ async function runFailure(name, commandArgs, parentTimeoutMs = 10_000) {
   return report;
 }
 
+async function runSuccess(name, commandArgs, parentTimeoutMs = 30_000) {
+  const outDir = join(scratch, name);
+  const reportPath = join(outDir, 'report.json');
+  const child = spawn(process.execPath, [runner, '--out-dir', outDir, ...commandArgs], {
+    cwd: repoRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', chunk => { stdout += chunk; });
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  let killedByParent = false;
+  const timer = setTimeout(() => {
+    killedByParent = true;
+    child.kill('SIGKILL');
+  }, parentTimeoutMs);
+  const result = await new Promise(resolveExit => child.once('exit', (code, signal) => resolveExit({ code, signal })));
+  clearTimeout(timer);
+  assert.equal(killedByParent, false, `${name} witness exceeded its bounded success window\n${stdout}\n${stderr}`);
+  assert.equal(result.code, 0, `${name} witness failed\n${stdout}\n${stderr}`);
+  const report = JSON.parse(await readFile(reportPath, 'utf8'));
+  assert.equal(report.ok, true, `${name} must leave a durable positive receipt`);
+  return report;
+}
+
 try {
   const inertChrome = join(scratch, 'inert-chrome.sh');
   await writeFile(inertChrome, '#!/bin/sh\nexec sleep 30\n');
@@ -115,7 +152,7 @@ try {
     '--witness-timeout-ms', '700',
   ]);
   assert.equal(blankReport.phase, 'loading-witness');
-  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1&contact_deformation=carrier&camera_mode=overview`);
+  assert.equal(blankReport.effectiveUrl, `http://127.0.0.1:${serverPort}/blank.html?contact_coupling=1&body_deformation=oracle-proxy&contact_deformation=oracle&camera_mode=overview`);
   assert.equal(blankReport.lastTrustworthyEvidence?.status, 'blank fixture');
 
   const tamperedReport = await runFailure('tampered-registration', [
@@ -147,6 +184,45 @@ try {
   ], 12_000);
   assert.equal(tamperedContactCarriersReport.phase, 'loading-witness');
   assert.match(tamperedContactCarriersReport.error, /contact carriers effective-byte identity mismatch/);
+
+  const tamperedOracleStencilReport = await runFailure('tampered-oracle-stencil', [
+    '--chrome', chrome,
+    '--url', `http://127.0.0.1:${serverPort}/motion-ready-719024-witness.html?oracle_stencil_url=/tampered-oracle-stencil.json`,
+    '--debug-port', String(21_000 + (process.pid % 300)),
+    '--cdp-timeout-ms', '5000',
+    '--witness-timeout-ms', '7000',
+  ], 12_000);
+  assert.equal(tamperedOracleStencilReport.phase, 'loading-witness');
+  assert.match(tamperedOracleStencilReport.error, /oracle stencil effective-byte identity mismatch/);
+
+  const tamperedProxyRegistrationReport = await runFailure('tampered-proxy-registration', [
+    '--chrome', chrome,
+    '--url', `http://127.0.0.1:${serverPort}/motion-ready-719024-witness.html?proxy_registration_url=/tampered-proxy-registration.json`,
+    '--debug-port', String(21_400 + (process.pid % 300)),
+    '--cdp-timeout-ms', '5000',
+    '--witness-timeout-ms', '7000',
+  ], 12_000);
+  assert.equal(tamperedProxyRegistrationReport.phase, 'loading-witness');
+  assert.match(tamperedProxyRegistrationReport.error, /proxy registration effective-byte identity mismatch/);
+
+  const isolatedBaselineReport = await runSuccess('isolated-axial-baseline', [
+    '--chrome', chrome,
+    '--url', `http://127.0.0.1:${serverPort}/motion-ready-719024-witness.html?oracle_stencil_url=/missing-oracle-stencil.json&proxy_registration_url=/tampered-proxy-registration.json`,
+    '--body-deformation', 'axial',
+    '--contact-deformation', 'carrier',
+    '--debug-port', String(21_800 + (process.pid % 300)),
+    '--cdp-timeout-ms', '5000',
+    '--witness-timeout-ms', '7000',
+  ]);
+  assert.equal(isolatedBaselineReport.effectiveIdentity.bodyDeformationMode, 'axial');
+  assert.equal(isolatedBaselineReport.effectiveIdentity.deformationMode, 'axial-parallel-transport-wave-v1');
+  assert.equal(isolatedBaselineReport.effectiveIdentity.oracleStencilHash, null);
+  assert.equal(isolatedBaselineReport.effectiveIdentity.proxyRegistrationHash, null);
+  assert.equal(isolatedBaselineReport.finalDebugState.requested.oracleStencilPath, null);
+  assert.equal(isolatedBaselineReport.finalDebugState.requested.proxyRegistrationPath, null);
+  assert.equal(isolatedBaselineReport.finalDebugState.requested.composedSourceLoading, 'not-requested-for-baseline');
+  assert.equal(isolatedBaselineReport.finalDebugState.effective.assetEvidence.oracleStencil, null);
+  assert.equal(isolatedBaselineReport.finalDebugState.effective.assetEvidence.proxyRegistration, null);
 } finally {
   await new Promise(resolveClose => server.close(resolveClose));
   await rm(scratch, { recursive: true, force: true });

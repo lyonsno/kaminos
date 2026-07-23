@@ -57,12 +57,14 @@ for (const required of [
   './artifacts/motion-ready-719024/receipt.json',
   './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
-  'axial-parallel-transport-wave-v1',
   'window.kaminosMotionReady719024DebugState',
 ]) {
   assert.ok(page.includes(required), `witness must bind ${required}`);
 }
 
+assert.match(page, /MOTION_READY_719024_DEFORMATION_MODE/, 'witness must retain the frozen axial baseline identity');
+assert.match(page, /oracle-proxy-cage-with-operator-contacts-v0/, 'witness must expose the composed operator-stencil deformation identity');
+assert.match(page, /\['axial', 'oracle-proxy'\]/, 'body deformation routing must keep both the baseline and composed lanes selectable');
 assert.ok(page.includes('WebGPURenderer'), 'witness must use the Kaminos WebGPU renderer');
 assert.ok(page.includes('requestAnimationFrame'), 'witness must animate the exact cast');
 assert.ok(page.includes('consoleFailures'), 'witness state must expose console failure evidence');

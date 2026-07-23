@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.oracle-mechanical-stencil.v0",
+  "cast": {
+    "id": "motion-ready-719024",
+    "sha256": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "registrationSha256": "cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6"
+  },
+  "authoring": {
+    "authority": "operator-authored-rest-space-semantics",
+    "source": "exact-cast-rest-space-surface",
+    "coordinateSpace": "asset-local",
+    "sessionId": "noah-oracle-stencil-0722",
+    "status": "draft"
+  },
+  "regions": [
+    {
+      "id": "body-axis",
+      "kind": "body-axis",
+      "label": "Head to tail",
+      "points": [
+        [
+          -0.06841793252484396,
+          0.1116089383178871,
+          -0.410278791159976
+        ],
+        [
+          -0.029772972865638403,
+          -0.013823955807540145,
+          0.41811658692611814
+        ]
+      ],
+      "radii": [
+        0.32,
+        0.32
+      ]
+    },
+    {
+      "id": "appendage-chain-appendage-2-1",
+      "kind": "appendage-chain",
+      "label": "bAck left leg",
+      "points": [
+        [
+          -0.14873818343702983,
+          0.015994642020671357,
+          0.24095799345617702
+        ],
+        [
+          -0.16737145566985245,
+          -0.0908500388831408,
+          0.3054697672024866
+        ],
+        [
+          -0.15226637424327705,
+          -0.16528651369564784,
+          0.25719999002026966
+        ]
+      ],
+      "radii": [
+        0.04,
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "id": "appendage-chain-appendage-2-2",
+      "kind": "appendage-chain",
+      "label": "Front left leg",
+      "points": [
+        [
+          -0.10661164809356571,
+          -0.02382858549082245,
+          -0.17769889139099126
+        ],
+        [
+          -0.1347417530891195,
+          -0.12464191944525416,
+          -0.17069385378908614
+        ],
+        [
+          -0.16110695796577112,
+          -0.15129287233815547,
+          -0.2305410111526518
+        ]
+      ],
+      "radii": [
+        0.04,
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "id": "appendage-chain-appendage-3-3",
+      "kind": "appendage-chain",
+      "label": "Front right leg",
+      "points": [
+        [
+          0.10723752139091336,
+          -0.022711763994655354,
+          -0.21118981136345827
+        ],
+        [
+          0.15086710216439791,
+          -0.1273284165567814,
+          -0.20262904170319695
+        ],
+        [
+          0.14071847408622729,
+          -0.1795903110716981,
+          -0.28369844699938185
+        ]
+      ],
+      "radii": [
+        0.04,
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "id": "appendage-chain-appendage-4-4",
+      "kind": "appendage-chain",
+      "label": "Back right leg",
+      "points": [
+        [
+          0.10632320089587366,
+          0.04187223848859056,
+          0.20633067111940817
+        ],
+        [
+          0.18449257011842102,
+          -0.08269277400415476,
+          0.24276477508763739
+        ],
+        [
+          0.14367621874486503,
+          -0.17365485748492437,
+          0.2219142366110145
+        ]
+      ],
+      "radii": [
+        0.04,
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "id": "contact-patch-contact-1-1",
+      "kind": "contact-patch",
+      "label": "front left foot",
+      "points": [
+        [
+          -0.16293756812196625,
+          -0.17727721216594838,
+          -0.22193638097369525
+        ]
+      ],
+      "radii": [
+        0.04
+      ]
+    },
+    {
+      "id": "contact-patch-contact-2-2",
+      "kind": "contact-patch",
+      "label": "Back left foot",
+      "points": [
+        [
+          -0.15297990738379763,
+          -0.17390789348023128,
+          0.24621403529246091
+        ]
+      ],
+      "radii": [
+        0.04
+      ]
+    },
+    {
+      "id": "contact-patch-contact-3-3",
+      "kind": "contact-patch",
+      "label": "Front right foot",
+      "points": [
+        [
+          0.1232424194311803,
+          -0.17671419411825834,
+          -0.2768512026607761
+        ]
+      ],
+      "radii": [
+        0.04
+      ]
+    },
+    {
+      "id": "contact-patch-contact-4-4",
+      "kind": "contact-patch",
+      "label": "Back right foot",
+      "points": [
+        [
+          0.11649211982866015,
+          -0.18013848529834042,
+          0.19264188141951544
+        ]
+      ],
+      "radii": [
+        0.04
+      ]
+    }
+  ]
+}

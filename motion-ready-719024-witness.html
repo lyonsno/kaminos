@@ -45,7 +45,7 @@
   <div id="status">Loading exact cast and source-owned terrain...</div>
   <div id="evidence">
     <span class="key">cast</span><span class="value">motion-ready-719024</span>
-    <span class="key">deformation</span><span class="value">axial-parallel-transport-wave-v1</span>
+    <span class="key">deformation</span><span class="value" id="deformation-mode">pending</span>
     <span class="key">hill source</span><span class="value" id="source-ref">pending</span>
     <span class="key">route</span><span class="value" id="route-id">pending</span>
     <span class="key">motion</span><span class="value" id="motion-state">pending</span>
@@ -77,12 +77,19 @@ import {
   compileCreatureScaleLocomotionRail,
   applyCrawlerContactCarrierDeformation,
   applyCrawlerContactPatchDeformation,
+  applyOracleBodyPreservationEnvelope,
+  applyOracleContactDeformation,
   createAxialGeometryBinding,
   createAxialSquirmState,
   createAxialTerrainRouteTransitionEvaluator,
   createCrawlerContactKinematics,
   createCrawlerContactLocomotionState,
+  createFittedProxyRigGeometryBinding,
+  createFittedProxyRigPoseFromAxialState,
+  createOracleCrawlerContactAtlas,
+  createOracleMotionControlPlan,
   deformAxialGeometryBinding,
+  deformFittedProxyRigGeometryBinding,
   sampleCrawlerContactPatches,
   sampleHillTerrainSurface,
   sampleCreatureScaleLocomotionRail,
@@ -92,7 +99,12 @@ import {
   validateAxialCrawlerRegistration,
   validateCrawlerContactAtlas,
   validateCrawlerContactCarriers,
+  validateFittedProxyRigRegistration,
 } from './motion-ready-719024-core.js';
+import {
+  deriveOracleStencilBinding,
+  validateOracleStencilDocument,
+} from './motion-ready-719024-stencil.js';
 
 const routeParameters = new URLSearchParams(location.search);
 const PATHS = Object.freeze({
@@ -100,6 +112,8 @@ const PATHS = Object.freeze({
   registration: routeParameters.get('registration_url') || './artifacts/motion-ready-719024/registration.json',
   contactAtlas: routeParameters.get('contact_atlas_url') || './artifacts/motion-ready-719024/contact-atlas.json',
   contactCarriers: routeParameters.get('contact_carriers_url') || './artifacts/motion-ready-719024/contact-carriers.json',
+  oracleStencil: routeParameters.get('oracle_stencil_url') || './artifacts/motion-ready-719024/oracle-stencil-noah-0722.json',
+  proxyRegistration: routeParameters.get('proxy_registration_url') || './artifacts/motion-ready-719024/fitted-proxy-rig-registration.json',
   receipt: './artifacts/motion-ready-719024/receipt.json',
   hillPacket: './artifacts/motion-ready-719024/hill/motion-affordance-packet.json',
   hillData: './artifacts/motion-ready-719024/hill/motion-affordance-data.json',
@@ -109,6 +123,11 @@ const EXPECTED = Object.freeze({
   registrationHash: 'cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   contactAtlasHash: 'e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78',
   contactCarriersHash: '06d2402a3ae546a65adeff0e6e6f929c701e39f9cff6a494afaa74d7baa6bd3a',
+  oracleStencilHash: '2440993b8a812eef99f4f6ebbae268297b967122e3fc806d324bc64d41008116',
+  proxyRegistrationHash: 'a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9',
+  proxyDonorHash: 'sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e',
+  proxyPacketHash: 'sha256:438dc7cdd1839d1f1d993312fbe5e41976329d1f96542d9eb3e097e743e63d8f',
+  proxyArmatureProgramId: 'kaminos.lirm-preserved-proxy-armature.lirm-armature-03.v0',
   hillSourceRef: 'lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348',
 });
 const TIMING = Object.freeze({ leadIn: 1.15, travel: 10.4, settle: 3.2 });
@@ -121,15 +140,24 @@ const statusElement = document.getElementById('status');
 const sourceRefElement = document.getElementById('source-ref');
 const routeIdElement = document.getElementById('route-id');
 const motionStateElement = document.getElementById('motion-state');
+const deformationModeElement = document.getElementById('deformation-mode');
 const progressElement = document.querySelector('#progress > div');
 const pauseButton = document.getElementById('pause');
 const trackInput = document.getElementById('track');
 const contactCouplingInput = document.getElementById('contact-coupling');
 const contactCouplingValue = document.getElementById('contact-coupling-value');
 const requestedContactCoupling = THREE.MathUtils.clamp(Number(routeParameters.get('contact_coupling') ?? 1), 0, 1);
-const requestedContactDeformation = routeParameters.get('contact_deformation') || 'carrier';
-if (!['carrier', 'weighted'].includes(requestedContactDeformation)) {
-  throw new Error('contact_deformation must be carrier or weighted');
+const requestedBodyDeformation = routeParameters.get('body_deformation') || 'oracle-proxy';
+if (!['axial', 'oracle-proxy'].includes(requestedBodyDeformation)) {
+  throw new Error('body_deformation must be axial or oracle-proxy');
+}
+const requestedContactDeformation = routeParameters.get('contact_deformation')
+  || (requestedBodyDeformation === 'oracle-proxy' ? 'oracle' : 'carrier');
+if (!['carrier', 'weighted', 'oracle'].includes(requestedContactDeformation)) {
+  throw new Error('contact_deformation must be carrier, weighted, or oracle');
+}
+if (requestedContactDeformation === 'oracle' && requestedBodyDeformation !== 'oracle-proxy') {
+  throw new Error('oracle contact deformation requires oracle-proxy body deformation');
 }
 const requestedCameraMode = routeParameters.get('camera_mode') || 'overview';
 if (!['overview', 'contact-profile'].includes(requestedCameraMode)) {
@@ -194,9 +222,16 @@ const state = {
   routeSample: null,
   terrainSupport: null,
   registration: null,
+  proxyRegistration: null,
+  oracleStencil: null,
+  oraclePlan: null,
   contactAtlas: null,
+  activeContactAtlas: null,
+  activeContactPlaneY: null,
   contactCarriers: null,
+  bodyDeformationMode: requestedBodyDeformation,
   contactDeformationMode: requestedContactDeformation,
+  bodyDeformationEvidence: null,
   cameraMode: requestedCameraMode,
   contactDeformationEvidence: null,
   contactKinematics: null,
@@ -318,11 +353,14 @@ function createRouteLine(points) {
   scene.add(line);
 }
 
-function prepareCreature(gltf, registration) {
+async function prepareCreature(gltf, registration) {
   const root = gltf.scene;
   root.name = 'motion-ready-719024-creature';
+  const deformableChildren = [];
   root.traverse(child => {
-    if (!child.isMesh || !child.geometry?.attributes?.position) return;
+    if (child.isMesh && child.geometry?.attributes?.position) deformableChildren.push(child);
+  });
+  for (const child of deformableChildren) {
     child.geometry = child.geometry.clone();
     const position = child.geometry.attributes.position;
     const original = new Float32Array(position.array.length);
@@ -337,6 +375,36 @@ function prepareCreature(gltf, registration) {
       registration,
       { segments: 128 },
     );
+    if (state.bodyDeformationMode === 'oracle-proxy') {
+      child.userData.proxyBinding = createFittedProxyRigGeometryBinding(
+        original,
+        originalNormals,
+        state.proxyRegistration,
+      );
+      child.userData.oracleBinding = await deriveOracleStencilBinding(
+        state.oracleStencil,
+        original,
+        {
+          castId: MOTION_READY_719024_CAST_ID,
+          castHash: EXPECTED.castHash,
+          registrationHash: EXPECTED.registrationHash,
+        },
+      );
+      state.activeContactAtlas = validateCrawlerContactAtlas(
+        createOracleCrawlerContactAtlas(
+          state.oraclePlan,
+          child.userData.oracleBinding,
+          original,
+        ),
+        {
+          castId: MOTION_READY_719024_CAST_ID,
+          castHash: EXPECTED.castHash,
+          registrationHash: EXPECTED.registrationHash,
+          vertexCount: state.receipt.mesh.vertices,
+        },
+      );
+      state.activeContactPlaneY = state.activeContactAtlas.contactPlaneY;
+    }
     if (child.userData.axialBinding.vertexCount !== state.contactAtlas.vertexCount) {
       throw new Error('contact atlas vertex count does not match effective creature geometry');
     }
@@ -350,7 +418,7 @@ function prepareCreature(gltf, registration) {
       child.material.roughness = Math.max(0.52, Number(child.material.roughness) || 0.52);
     }
     state.deformableMeshes.push(child);
-  });
+  }
   if (state.deformableMeshes.length !== 1) throw new Error(`expected one deformable mesh, found ${state.deformableMeshes.length}`);
   root.scale.setScalar(1.14);
   root.userData = {
@@ -358,7 +426,8 @@ function prepareCreature(gltf, registration) {
     castId: MOTION_READY_719024_CAST_ID,
     castHash: EXPECTED.castHash,
     registrationHash: EXPECTED.registrationHash,
-    deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
+    deformationMode: state.bodyDeformationMode,
+    contactDeformationMode: state.contactDeformationMode,
   };
   scene.add(root);
   state.creatureRoot = root;
@@ -370,24 +439,57 @@ function applyCreatureDeformation() {
   for (const mesh of state.deformableMeshes) {
     const position = mesh.geometry.attributes.position;
     const normal = mesh.geometry.attributes.normal;
-    deformAxialGeometryBinding(
-      mesh.userData.axialBinding,
-      state.controller,
-      position.array,
-      normal.array,
-    );
-    state.contactDeformationEvidence = state.contactDeformationMode === 'carrier'
-      ? applyCrawlerContactCarrierDeformation(
+    if (state.bodyDeformationMode === 'oracle-proxy') {
+      const proxyPose = createFittedProxyRigPoseFromAxialState(
+        state.proxyRegistration,
+        state.registration,
+        state.controller,
+      );
+      const fittedProxyEvidence = deformFittedProxyRigGeometryBinding(
+        mesh.userData.proxyBinding,
+        proxyPose,
+        position.array,
+        normal.array,
+      );
+      const preservationEvidence = applyOracleBodyPreservationEnvelope(
+        state.oraclePlan,
+        mesh.userData.oracleBinding,
+        mesh.userData.proxyBinding,
+        position.array,
+        normal.array,
+      );
+      state.bodyDeformationEvidence = {
+        schema: 'kaminos.motion-ready-719024.oracle-proxy-body-composition.v0',
+        fittedProxy: fittedProxyEvidence,
+        preservation: preservationEvidence,
+      };
+    } else {
+      state.bodyDeformationEvidence = deformAxialGeometryBinding(
+        mesh.userData.axialBinding,
+        state.controller,
+        position.array,
+        normal.array,
+      );
+    }
+    state.contactDeformationEvidence = state.contactDeformationMode === 'oracle'
+      ? applyOracleContactDeformation(
+        state.oraclePlan,
+        mesh.userData.oracleBinding,
+        state.contactKinematics,
+        position.array,
+      )
+      : state.contactDeformationMode === 'carrier'
+        ? applyCrawlerContactCarrierDeformation(
         state.contactAtlas,
         state.contactCarriers,
         state.contactKinematics,
         position.array,
       )
-      : applyCrawlerContactPatchDeformation(
-        state.contactAtlas,
-        state.contactKinematics,
-        position.array,
-      );
+        : applyCrawlerContactPatchDeformation(
+          state.activeContactAtlas,
+          state.contactKinematics,
+          position.array,
+        );
     position.needsUpdate = true;
     normal.needsUpdate = true;
   }
@@ -400,7 +502,7 @@ function applyCreatureDeformation() {
 
 function createContactMarkers() {
   const geometry = new THREE.SphereGeometry(0.027, 12, 8);
-  for (const patch of state.contactAtlas.patches) {
+  for (const patch of state.activeContactAtlas.patches) {
     const marker = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x71b9e6 }));
     marker.name = `motion-ready-719024-contact-${patch.id}`;
     marker.renderOrder = 3;
@@ -433,12 +535,12 @@ function resetPlayback() {
   state.previousDesiredDistance = 0;
   state.previousFrameSeconds = null;
   state.controller = createAxialSquirmState();
-  state.contactKinematics = createCrawlerContactKinematics(state.contactAtlas, 0, {
+  state.contactKinematics = createCrawlerContactKinematics(state.activeContactAtlas, 0, {
     coupling: state.contactCoupling,
     scale: state.creatureRoot?.scale.y || 1.14,
   });
   state.contactSamples = null;
-  state.contactLocomotion = createCrawlerContactLocomotionState(state.contactAtlas);
+  state.contactLocomotion = createCrawlerContactLocomotionState(state.activeContactAtlas);
   state.contactPhase = 0;
   state.completed = false;
   state.paused = false;
@@ -502,11 +604,11 @@ function updateActor(nowSeconds) {
     routePosition.x,
     terrainSurface.height
       + state.controller.terrainSupportRootLift
-      - state.registration.contactPlaneY * state.creatureRoot.scale.y,
+      - state.activeContactPlaneY * state.creatureRoot.scale.y,
     routePosition.z,
   );
   state.contactPhase = desiredDistance / 0.42 * Math.PI * 2;
-  state.contactKinematics = createCrawlerContactKinematics(state.contactAtlas, state.contactPhase, {
+  state.contactKinematics = createCrawlerContactKinematics(state.activeContactAtlas, state.contactPhase, {
     coupling: state.contactCoupling,
     scale: state.creatureRoot.scale.y,
     supportOffsets: new Map(state.contactLocomotion.patches.map(patch => [patch.id, patch.supportOffset])),
@@ -514,7 +616,7 @@ function updateActor(nowSeconds) {
   applyCreatureDeformation();
   const deformablePosition = state.deformableMeshes[0].geometry.attributes.position.array;
   state.contactSamples = sampleCrawlerContactPatches(
-    state.contactAtlas,
+    state.activeContactAtlas,
     deformablePosition,
     state.source,
     {
@@ -581,10 +683,22 @@ async function loadGltfWithEvidence(path) {
 }
 
 async function initialize() {
-  const [registrationAsset, contactAtlasAsset, contactCarriersAsset, receipt, packet, data, creatureAsset] = await Promise.all([
+  const [
+    registrationAsset,
+    contactAtlasAsset,
+    contactCarriersAsset,
+    oracleStencilAsset,
+    proxyRegistrationAsset,
+    receipt,
+    packet,
+    data,
+    creatureAsset,
+  ] = await Promise.all([
     loadJsonWithEvidence(PATHS.registration),
     loadJsonWithEvidence(PATHS.contactAtlas),
     loadJsonWithEvidence(PATHS.contactCarriers),
+    requestedBodyDeformation === 'oracle-proxy' ? loadJsonWithEvidence(PATHS.oracleStencil) : Promise.resolve(null),
+    requestedBodyDeformation === 'oracle-proxy' ? loadJsonWithEvidence(PATHS.proxyRegistration) : Promise.resolve(null),
     loadJson(PATHS.receipt),
     loadJson(PATHS.hillPacket),
     loadJson(PATHS.hillData),
@@ -598,6 +712,25 @@ async function initialize() {
   if (contactAtlasAsset.sha256 !== EXPECTED.contactAtlasHash) throw new Error(`contact atlas effective-byte identity mismatch: ${contactAtlasAsset.sha256}`);
   if (contactCarriersAsset.sha256 !== EXPECTED.contactCarriersHash) throw new Error(`contact carriers effective-byte identity mismatch: ${contactCarriersAsset.sha256}`);
   state.registration = validateAxialCrawlerRegistration(registrationAsset.value);
+  if (requestedBodyDeformation === 'oracle-proxy') {
+    if (oracleStencilAsset.sha256 !== EXPECTED.oracleStencilHash) throw new Error(`oracle stencil effective-byte identity mismatch: ${oracleStencilAsset.sha256}`);
+    if (proxyRegistrationAsset.sha256 !== EXPECTED.proxyRegistrationHash) throw new Error(`proxy registration effective-byte identity mismatch: ${proxyRegistrationAsset.sha256}`);
+    state.oracleStencil = validateOracleStencilDocument(oracleStencilAsset.value, {
+      castId: MOTION_READY_719024_CAST_ID,
+      castHash: EXPECTED.castHash,
+      registrationHash: EXPECTED.registrationHash,
+    });
+    state.oraclePlan = createOracleMotionControlPlan(state.oracleStencil, {
+      castId: MOTION_READY_719024_CAST_ID,
+      castHash: EXPECTED.castHash,
+      registrationHash: EXPECTED.registrationHash,
+    });
+    state.proxyRegistration = validateFittedProxyRigRegistration(proxyRegistrationAsset.value, {
+      donorSha256: EXPECTED.proxyDonorHash,
+      sourcePacketSha256: EXPECTED.proxyPacketHash,
+      armatureProgramId: EXPECTED.proxyArmatureProgramId,
+    });
+  }
   state.contactAtlas = validateCrawlerContactAtlas(contactAtlasAsset.value, {
     castId: MOTION_READY_719024_CAST_ID,
     castHash: EXPECTED.castHash,
@@ -605,6 +738,8 @@ async function initialize() {
     atlasHash: EXPECTED.contactAtlasHash,
     vertexCount: receipt.mesh.vertices,
   });
+  state.activeContactAtlas = state.contactAtlas;
+  state.activeContactPlaneY = state.registration.contactPlaneY;
   state.contactCarriers = validateCrawlerContactCarriers(contactCarriersAsset.value, {
     castId: MOTION_READY_719024_CAST_ID,
     castHash: EXPECTED.castHash,
@@ -618,6 +753,12 @@ async function initialize() {
     registration: { path: registrationAsset.path, byteLength: registrationAsset.byteLength, sha256: registrationAsset.sha256 },
     contactAtlas: { path: contactAtlasAsset.path, byteLength: contactAtlasAsset.byteLength, sha256: contactAtlasAsset.sha256 },
     contactCarriers: { path: contactCarriersAsset.path, byteLength: contactCarriersAsset.byteLength, sha256: contactCarriersAsset.sha256 },
+    oracleStencil: oracleStencilAsset
+      ? { path: oracleStencilAsset.path, byteLength: oracleStencilAsset.byteLength, sha256: oracleStencilAsset.sha256 }
+      : null,
+    proxyRegistration: proxyRegistrationAsset
+      ? { path: proxyRegistrationAsset.path, byteLength: proxyRegistrationAsset.byteLength, sha256: proxyRegistrationAsset.sha256 }
+      : null,
   };
   state.source = decodeHillMotionAffordancePacket({ packet, data });
   if (state.source.sourceRef !== EXPECTED.hillSourceRef) throw new Error(`unexpected Hill source ${state.source.sourceRef}`);
@@ -670,17 +811,18 @@ async function initialize() {
   state.routePlan.fixture = strictRouteFixture;
   createTerrain(state.source);
   createRouteLine(state.locomotionRail.samples.map(sample => sample.position));
-  prepareCreature(creatureAsset.value, state.registration);
+  await prepareCreature(creatureAsset.value, state.registration);
   createContactMarkers();
 
   const startSample = sampleCreatureScaleLocomotionRail(state.locomotionRail, 0);
   const startPosition = new THREE.Vector3(...startSample.position);
-  state.creatureRoot.position.set(startPosition.x, startPosition.y - state.registration.contactPlaneY * state.creatureRoot.scale.y, startPosition.z);
+  state.creatureRoot.position.set(startPosition.x, startPosition.y - state.activeContactPlaneY * state.creatureRoot.scale.y, startPosition.z);
   controls.target.copy(state.creatureRoot.position).add(new THREE.Vector3(0, 0.25, 0));
   camera.position.copy(controls.target).add(new THREE.Vector3(-3.2, 2.55, 4.2));
   controls.update();
 
   sourceRefElement.textContent = state.source.sourceRef;
+  deformationModeElement.textContent = `${state.bodyDeformationMode} / ${state.contactDeformationMode}`;
   routeIdElement.textContent = `${state.locomotionRail.id} / ${state.locomotionRail.samples.length} admitted samples`;
   state.loaded = true;
   state.ok = true;
@@ -715,6 +857,10 @@ window.kaminosMotionReady719024DebugState = () => ({
     registrationPath: PATHS.registration,
     contactAtlasPath: PATHS.contactAtlas,
     contactCarriersPath: PATHS.contactCarriers,
+    oracleStencilPath: requestedBodyDeformation === 'oracle-proxy' ? PATHS.oracleStencil : null,
+    proxyRegistrationPath: requestedBodyDeformation === 'oracle-proxy' ? PATHS.proxyRegistration : null,
+    composedSourceLoading: requestedBodyDeformation === 'oracle-proxy' ? 'required-and-loaded' : 'not-requested-for-baseline',
+    bodyDeformationMode: requestedBodyDeformation,
     contactDeformationMode: requestedContactDeformation,
     cameraMode: requestedCameraMode,
     contactCoupling: requestedContactCoupling,
@@ -725,17 +871,41 @@ window.kaminosMotionReady719024DebugState = () => ({
     castId: state.receipt?.castId || null,
     castHash: state.assetEvidence?.creature?.sha256 || null,
     registrationHash: state.assetEvidence?.registration?.sha256 || null,
+    oracleStencilHash: state.assetEvidence?.oracleStencil?.sha256 || null,
+    oracleStencilSchema: state.oracleStencil?.schema || null,
+    oracleStencilAuthority: state.oracleStencil?.authoring?.authority || null,
+    oracleStencilStatus: state.oracleStencil?.authoring?.status || null,
+    oracleStencilSessionId: state.oracleStencil?.authoring?.sessionId || null,
+    oracleContactIds: state.oraclePlan ? Object.keys(state.oraclePlan.contacts) : [],
+    preservationAuthority: state.oraclePlan?.preservation?.authority || null,
+    proxyRegistrationHash: state.assetEvidence?.proxyRegistration?.sha256 || null,
+    proxyRegistrationSchema: state.proxyRegistration?.schema || null,
+    proxySourceCandidateId: state.proxyRegistration?.sourceCandidateId || null,
+    proxyStationCount: state.proxyRegistration?.stationCount || null,
     contactAtlasHash: state.assetEvidence?.contactAtlas?.sha256 || null,
     contactAtlasSchema: state.contactAtlas?.schema || null,
     contactAtlasAuthority: state.contactAtlas?.authority || null,
     contactPatchIds: state.contactAtlas?.patches?.map(patch => patch.id) || [],
+    activeContactAtlasHash: state.activeContactAtlas?.atlasHash || null,
+    activeContactAtlasAuthority: state.activeContactAtlas?.authority || null,
+    activeContactPlaneY: state.activeContactPlaneY,
+    activeContactPatchIds: state.activeContactAtlas?.patches?.map(patch => patch.id) || [],
+    activeContactPatches: state.activeContactAtlas?.patches?.map(patch => ({
+      id: patch.id,
+      restCentroid: patch.restCentroid,
+      operatorContactRegionId: patch.operatorContactRegionId || null,
+      operatorAppendageRegionId: patch.operatorAppendageRegionId || null,
+    })) || [],
     contactCarriersHash: state.assetEvidence?.contactCarriers?.sha256 || null,
     contactCarriersSchema: state.contactCarriers?.schema || null,
     contactCarriersAuthority: state.contactCarriers?.authority || null,
     contactDeformationMode: state.contactDeformationMode,
+    bodyDeformationMode: state.bodyDeformationMode,
     cameraMode: state.cameraMode,
     assetEvidence: state.assetEvidence,
-    deformationMode: MOTION_READY_719024_DEFORMATION_MODE,
+    deformationMode: state.bodyDeformationMode === 'axial'
+      ? MOTION_READY_719024_DEFORMATION_MODE
+      : 'oracle-proxy-cage-with-operator-contacts-v0',
     hillSourceRef: state.source?.sourceRef || null,
     hillAuthority: state.source?.authority || null,
     hillIdentityProjection: state.source?.identityProjection || null,
@@ -768,6 +938,7 @@ window.kaminosMotionReady719024DebugState = () => ({
     contactSamples: state.contactSamples,
     contactLocomotion: state.contactLocomotion,
     contactDeformation: state.contactDeformationEvidence,
+    bodyDeformation: state.bodyDeformationEvidence,
     root: state.creatureRoot ? state.creatureRoot.position.toArray() : null,
   },
   performance: { ...state.performance },
