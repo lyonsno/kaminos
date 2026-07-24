@@ -15,6 +15,10 @@ export const MAPPED_MACRO_STATE_SCHEMA = 'kaminos.fluid.mapped-macro-state.v1';
 export const MAPPED_MACRO_SOLVER_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
 export const MAPPED_MACRO_METHOD = 'orthogonal-heightfield-hydrostatic-reconstruction-hll-v1';
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
+export const PORTABLE_MACRO_SOURCE_CAPABILITY = 'kaminos.fluid.portable-macro-source.v1';
+export const PORTABLE_MACRO_SOURCE_ROUTE = 'kaminos/fluid/portable-macro-source';
+export const PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA = 'kaminos.fluid.portable-macro-source-handle.v1';
+export const PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-macro-source-snapshot.v1';
 
 const KAMINOS_FLUID_PACKAGE_VERSION = '0.2.1';
 const KAMINOS_FLUID_PRODUCER_REVISION = '95920668287205517bc2e22f4f224b0d7584f53e';
@@ -30,6 +34,7 @@ export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
   cacheKey: `@kaminos/fluid-webgpu@${KAMINOS_FLUID_PACKAGE_VERSION}:${KAMINOS_FLUID_PRODUCER_REVISION}`,
   runtimeRoute: MAPPED_MACRO_SOLVER_ROUTE,
   representationRoutes: Object.freeze(['kaminos/fluid/representation-frame']),
+  sourceRoutes: Object.freeze([PORTABLE_MACRO_SOURCE_ROUTE]),
   outputRoutes: Object.freeze(['kaminos/fluid/terrain-feedback']),
 });
 
@@ -45,6 +50,96 @@ function finite(value, label) {
   const number = Number(value);
   invariant(Number.isFinite(number), `${label} must be finite`);
   return number;
+}
+
+function nonEmptyString(value, label) {
+  invariant(typeof value === 'string' && value.length > 0, `${label} must be a non-empty string`);
+  return value;
+}
+
+function integer(value, label) {
+  const number = finite(value, label);
+  invariant(Number.isInteger(number), `${label} must be an integer`);
+  return number;
+}
+
+function freezeRecord(value) {
+  if (value == null || typeof value !== 'object' || ArrayBuffer.isView(value) || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeRecord(child);
+  return Object.freeze(value);
+}
+
+function portableSourceError(error, {
+  phase,
+  sourceHandleId = null,
+  lastTrustworthyEvidence,
+} = {}) {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  Object.defineProperty(failure, 'report', {
+    configurable: false,
+    enumerable: true,
+    writable: false,
+    value: Object.freeze({
+      schema: 'kaminos.fluid.portable-macro-source-failure.v1',
+      status: 'failed',
+      phase,
+      sourceHandleId: typeof sourceHandleId === 'string' && sourceHandleId.length > 0 ? sourceHandleId : null,
+      lastTrustworthyEvidence,
+      message: failure.message,
+    }),
+  });
+  return failure;
+}
+
+function validateExactPortableRoute(route) {
+  invariant(route && typeof route === 'object', 'portable source route identity is required');
+  nonEmptyString(route.requested, 'requested portable source route');
+  nonEmptyString(route.effective, 'effective portable source route');
+  invariant(
+    route.requested === PORTABLE_MACRO_SOURCE_ROUTE,
+    `requested portable source route mismatch: expected ${PORTABLE_MACRO_SOURCE_ROUTE}, received ${route.requested}`,
+  );
+  invariant(
+    route.effective === route.requested,
+    `effective portable source route mismatch: requested ${route.requested}, received ${route.effective}`,
+  );
+  return route;
+}
+
+function validatePortableCapability(requested, effective) {
+  nonEmptyString(requested, 'requested portable source capability');
+  nonEmptyString(effective, 'effective portable source capability');
+  invariant(requested === PORTABLE_MACRO_SOURCE_CAPABILITY, `unsupported portable source capability: ${requested}`);
+  invariant(effective === requested, `effective portable source capability mismatch: requested ${requested}, received ${effective}`);
+}
+
+function validatePhysicalMaterial(material) {
+  invariant(material && typeof material === 'object', 'physical material descriptor is required');
+  invariant(finite(material.densityKgM3, 'physicalMaterial.densityKgM3') > 0, 'physicalMaterial.densityKgM3 must be positive');
+  if (material.dynamicViscosityPaS != null) {
+    invariant(finite(material.dynamicViscosityPaS, 'physicalMaterial.dynamicViscosityPaS') >= 0, 'physicalMaterial.dynamicViscosityPaS must be non-negative');
+  }
+  invariant(
+    Array.isArray(material.absorptionPerMeter) && material.absorptionPerMeter.length === 3,
+    'physicalMaterial.absorptionPerMeter must contain 3 values',
+  );
+  for (let index = 0; index < 3; index += 1) {
+    invariant(
+      finite(material.absorptionPerMeter[index], `physicalMaterial.absorptionPerMeter[${index}]`) >= 0,
+      `physicalMaterial.absorptionPerMeter[${index}] must be non-negative`,
+    );
+  }
+  return material;
+}
+
+function portableTypedArray(values, length, label, { nonNegative = false } = {}) {
+  invariant(ArrayBuffer.isView(values) && !(values instanceof DataView), `${label} must be a typed array`);
+  invariant(values.length === length, `${label} length ${values.length} does not match expected ${length}`);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = finite(values[index], `${label}[${index}]`);
+    if (nonNegative) invariant(value >= 0, `${label}[${index}] must be non-negative`);
+  }
+  return values;
 }
 
 function length3(values, offset) {
@@ -818,6 +913,237 @@ export function createMacroFluidRepresentationFrame(state, terrainFrame, options
   });
 }
 
+function validatePortableMacroSourceDescriptor(descriptor) {
+  invariant(descriptor?.schema === PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA, `portable source handle schema mismatch: ${descriptor?.schema}`);
+  validateExactPortableRoute(descriptor.route);
+  validatePortableCapability(descriptor.requestedCapability, descriptor.effectiveCapability);
+  invariant(descriptor.capability === descriptor.effectiveCapability, 'portable source descriptor capability identity mismatch');
+  nonEmptyString(descriptor.sourceHandleId, 'sourceHandleId');
+  invariant(descriptor.sourceAuthority === 'live_runtime', `unsupported portable source authority: ${descriptor.sourceAuthority}`);
+  invariant(descriptor.fallbackStatus === 'none', `portable source fallback is forbidden: ${descriptor.fallbackStatus}`);
+  invariant(descriptor.ownershipIdentity === REPRESENTATION_OWNERSHIP_IDENTITY, 'portable source ownership identity mismatch');
+  invariant(
+    descriptor.representationRoute?.requested === 'kaminos/fluid/representation-frame'
+      && descriptor.representationRoute?.effective === descriptor.representationRoute.requested,
+    'portable source representation route mismatch',
+  );
+  invariant(descriptor.producer?.runtimeRoute === MAPPED_MACRO_SOLVER_ROUTE, 'portable source runtime route mismatch');
+  invariant(descriptor.producer?.method === MAPPED_MACRO_METHOD, 'portable source method mismatch');
+  nonEmptyString(descriptor.producer?.revision, 'portable source producer revision');
+  const support = descriptor.supportGeometry;
+  invariant(support && typeof support === 'object', 'portable source support geometry descriptor is required');
+  nonEmptyString(support.topologyId, 'supportGeometry.topologyId');
+  nonEmptyString(support.terrainId, 'supportGeometry.terrainId');
+  nonEmptyString(support.supportClass, 'supportGeometry.supportClass');
+  nonEmptyString(support.transformId, 'supportGeometry.transformId');
+  invariant(support.worldMetersPerUnit === 1, 'portable source support geometry must use physical SI meters');
+  invariant(Number.isInteger(support.sampleCount) && support.sampleCount > 0, 'supportGeometry.sampleCount must be positive');
+  invariant(support.coordinateSpace === 'world_meters', 'portable source support geometry must publish world-meter coordinates');
+  invariant(
+    support.mapping === 'orthogonal-heightfield-evaluation-v1',
+    `unsupported portable source support mapping: ${support.mapping}`,
+  );
+  invariant(descriptor.lifetime?.releasePolicy === 'explicit-release-v1', 'portable source lifetime requires explicit release');
+  integer(descriptor.lifetime?.retainedTerrainEpoch, 'lifetime.retainedTerrainEpoch');
+  integer(descriptor.lifetime?.retainedFluidEpoch, 'lifetime.retainedFluidEpoch');
+  validatePhysicalMaterial(descriptor.physicalMaterial);
+  for (const forbidden of ['camera', 'view', 'projection', 'viewport', 'screenSpaceDemand', 'opticalResidency']) {
+    invariant(!(forbidden in descriptor), `portable source descriptor contains camera-owned state: ${forbidden}`);
+  }
+  return descriptor;
+}
+
+export function validatePortableMacroSourceSnapshot(snapshot, expectations = {}) {
+  invariant(
+    snapshot?.schema === PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA,
+    `portable source snapshot schema mismatch: ${snapshot?.schema}`,
+  );
+  validateExactPortableRoute(snapshot.route);
+  validatePortableCapability(snapshot.requestedCapability, snapshot.effectiveCapability);
+  invariant(snapshot.capability === snapshot.effectiveCapability, 'portable source snapshot capability identity mismatch');
+  nonEmptyString(snapshot.sourceHandleId, 'sourceHandleId');
+  if (expectations.expectedSourceHandleId != null) {
+    invariant(
+      snapshot.sourceHandleId === expectations.expectedSourceHandleId,
+      `portable source handle mismatch: expected ${expectations.expectedSourceHandleId}, received ${snapshot.sourceHandleId}`,
+    );
+  }
+  const terrainEpoch = integer(snapshot.terrainEpoch, 'terrainEpoch');
+  const fluidEpoch = integer(snapshot.fluidEpoch, 'fluidEpoch');
+  invariant(terrainEpoch >= 0, 'terrainEpoch must be non-negative');
+  invariant(fluidEpoch >= 0, 'fluidEpoch must be non-negative');
+  if (expectations.minimumTerrainEpoch != null) {
+    invariant(terrainEpoch >= expectations.minimumTerrainEpoch, `portable source has stale terrain epoch ${terrainEpoch}; minimum ${expectations.minimumTerrainEpoch}`);
+  }
+  if (expectations.minimumFluidEpoch != null) {
+    invariant(fluidEpoch >= expectations.minimumFluidEpoch, `portable source has stale fluid epoch ${fluidEpoch}; minimum ${expectations.minimumFluidEpoch}`);
+  }
+  invariant(snapshot.ownershipIdentity === REPRESENTATION_OWNERSHIP_IDENTITY, 'portable source ownership identity mismatch');
+  invariant(
+    snapshot.representationRoute?.requested === 'kaminos/fluid/representation-frame'
+      && snapshot.representationRoute?.effective === snapshot.representationRoute.requested,
+    'portable source representation route mismatch',
+  );
+  const support = snapshot.supportGeometry;
+  invariant(support && typeof support === 'object', 'portable source support geometry is required');
+  nonEmptyString(support.geometryId, 'supportGeometry.geometryId');
+  nonEmptyString(support.topologyId, 'supportGeometry.topologyId');
+  nonEmptyString(support.terrainId, 'supportGeometry.terrainId');
+  nonEmptyString(support.supportClass, 'supportGeometry.supportClass');
+  nonEmptyString(support.transformId, 'supportGeometry.transformId');
+  invariant(support.coordinateSpace === 'world_meters', 'portable source support geometry must publish world-meter coordinates');
+  invariant(support.worldMetersPerUnit === 1, 'portable source support geometry must use physical SI meters');
+  invariant(support.mapping === 'orthogonal-heightfield-evaluation-v1', `unsupported support geometry mapping: ${support.mapping}`);
+  const width = integer(support.grid?.width, 'supportGeometry.grid.width');
+  const height = integer(support.grid?.height, 'supportGeometry.grid.height');
+  invariant(width > 0 && height > 0, 'supportGeometry grid dimensions must be positive');
+  invariant(
+    Array.isArray(support.grid.spacing) && support.grid.spacing.length === 2
+      && support.grid.spacing.every(value => Number.isFinite(value) && value > 0),
+    'supportGeometry.grid.spacing must contain two positive finite values',
+  );
+  invariant(
+    Array.isArray(support.grid.origin) && support.grid.origin.length === 3
+      && support.grid.origin.every(Number.isFinite),
+    'supportGeometry.grid.origin must contain three finite values',
+  );
+  const sampleCount = width * height;
+  invariant(support.sampleCount === sampleCount, 'supportGeometry sample count mismatch');
+  portableTypedArray(support.worldPosition, sampleCount * 3, 'supportGeometry.worldPosition');
+  portableTypedArray(support.tangentU, sampleCount * 3, 'supportGeometry.tangentU');
+  portableTypedArray(support.tangentV, sampleCount * 3, 'supportGeometry.tangentV');
+  portableTypedArray(support.normal, sampleCount * 3, 'supportGeometry.normal');
+  portableTypedArray(support.jacobian, sampleCount, 'supportGeometry.jacobian', { nonNegative: true });
+  portableTypedArray(support.supportVelocity, sampleCount * 3, 'supportGeometry.supportVelocity');
+  for (let index = 0; index < sampleCount; index += 1) {
+    invariant(support.jacobian[index] > 0, `supportGeometry.jacobian[${index}] must be positive`);
+  }
+  invariant(snapshot.macro?.method === MAPPED_MACRO_METHOD, `portable macro method mismatch: ${snapshot.macro?.method}`);
+  portableTypedArray(snapshot.macro?.mappedDepth, sampleCount, 'macro.mappedDepth', { nonNegative: true });
+  portableTypedArray(snapshot.macro?.mappedMomentumU, sampleCount, 'macro.mappedMomentumU');
+  portableTypedArray(snapshot.macro?.mappedMomentumV, sampleCount, 'macro.mappedMomentumV');
+  invariant(snapshot.macro?.materialMasses && typeof snapshot.macro.materialMasses === 'object', 'macro.materialMasses must be an object');
+  for (const [key, values] of Object.entries(snapshot.macro.materialMasses)) {
+    portableTypedArray(values, sampleCount, `macro.materialMasses.${key}`, { nonNegative: true });
+  }
+  invariant(
+    Number.isFinite(snapshot.confidence) && snapshot.confidence >= 0 && snapshot.confidence <= 1,
+    'portable source confidence must be in [0, 1]',
+  );
+  invariant(Array.isArray(snapshot.dirtyRegions), 'portable source dirtyRegions must be an array');
+  invariant(snapshot.complete === true, 'portable source snapshot is incomplete');
+  validatePhysicalMaterial(snapshot.physicalMaterial);
+  for (const forbidden of ['camera', 'view', 'projection', 'viewport', 'screenSpaceDemand', 'opticalResidency']) {
+    invariant(!(forbidden in snapshot), `portable source snapshot contains camera-owned state: ${forbidden}`);
+  }
+  return snapshot;
+}
+
+export function validatePortableMacroSourceHandle(handle) {
+  invariant(handle && typeof handle === 'object', 'portable source handle is required');
+  invariant(Object.isFrozen(handle), 'portable source handle must be immutable');
+  invariant(handle.descriptor && typeof handle.descriptor === 'object', 'portable source descriptor is required');
+  invariant(Object.isFrozen(handle.descriptor), 'portable source descriptor must be immutable');
+  validatePortableMacroSourceDescriptor(handle.descriptor);
+  invariant(typeof handle.read === 'function', 'portable source handle requires a read function');
+  invariant(typeof handle.release === 'function', 'portable source handle requires a release function');
+  return handle;
+}
+
+function supportWorldPositions(terrainFrame) {
+  validateReferenceMetric(terrainFrame);
+  const { width, height, spacing, origin } = terrainFrame.grid;
+  const positions = new Float64Array(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const offset = index * 3;
+      const normalDirection = normalizedDirection(terrainFrame.fields.normal, offset);
+      const coordinateU = x * spacing[0];
+      const coordinateV = y * spacing[1];
+      const bedHeight = terrainFrame.fields.bedHeight[index];
+      for (let component = 0; component < 3; component += 1) {
+        positions[offset + component] = origin[component]
+          + coordinateU * terrainFrame.fields.tangentU[offset + component]
+          + coordinateV * terrainFrame.fields.tangentV[offset + component]
+          + bedHeight * normalDirection[component];
+      }
+    }
+  }
+  return positions;
+}
+
+function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
+  validateState(state, terrainFrame);
+  validatePortableMacroSourceDescriptor(descriptor);
+  const sampleCount = terrainFrame.grid.width * terrainFrame.grid.height;
+  const snapshot = {
+    schema: PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA,
+    route: { ...descriptor.route },
+    requestedCapability: descriptor.requestedCapability,
+    effectiveCapability: descriptor.effectiveCapability,
+    capability: descriptor.capability,
+    sourceHandleId: descriptor.sourceHandleId,
+    sourceAuthority: descriptor.sourceAuthority,
+    fallbackStatus: descriptor.fallbackStatus,
+    representationRoute: { ...descriptor.representationRoute },
+    producer: { ...descriptor.producer },
+    ownershipIdentity: REPRESENTATION_OWNERSHIP_IDENTITY,
+    terrainEpoch: terrainFrame.currentEpoch,
+    fluidEpoch: state.fluidEpoch,
+    source: {
+      requested: terrainFrame.source.requested,
+      effective: terrainFrame.source.effective,
+      producerId: terrainFrame.producer.id,
+      producerRevision: terrainFrame.producer.revision,
+    },
+    supportGeometry: {
+      geometryId: `${terrainFrame.transformId}:terrain-${terrainFrame.currentEpoch}`,
+      topologyId: descriptor.supportGeometry.topologyId,
+      terrainId: terrainFrame.terrainId,
+      supportClass: terrainFrame.supportClass,
+      transformId: terrainFrame.transformId,
+      coordinateSpace: 'world_meters',
+      worldMetersPerUnit: terrainFrame.worldMetersPerUnit,
+      mapping: 'orthogonal-heightfield-evaluation-v1',
+      sampleCount,
+      grid: {
+        width: terrainFrame.grid.width,
+        height: terrainFrame.grid.height,
+        spacing: [...terrainFrame.grid.spacing],
+        origin: [...terrainFrame.grid.origin],
+      },
+      worldPosition: supportWorldPositions(terrainFrame),
+      tangentU: Float64Array.from(terrainFrame.fields.tangentU),
+      tangentV: Float64Array.from(terrainFrame.fields.tangentV),
+      normal: Float64Array.from(terrainFrame.fields.normal),
+      jacobian: Float64Array.from(terrainFrame.fields.jacobian),
+      supportVelocity: Float64Array.from(terrainFrame.fields.supportVelocity),
+    },
+    macro: {
+      method: MAPPED_MACRO_METHOD,
+      mappedDepth: Float64Array.from(state.mappedDepth),
+      mappedMomentumU: Float64Array.from(state.mappedMomentumU),
+      mappedMomentumV: Float64Array.from(state.mappedMomentumV),
+      materialMasses: Object.fromEntries(
+        Object.entries(state.materialMasses).map(([key, values]) => [key, Float64Array.from(values)]),
+      ),
+    },
+    physicalMaterial: {
+      ...descriptor.physicalMaterial,
+      absorptionPerMeter: [...descriptor.physicalMaterial.absorptionPerMeter],
+    },
+    confidence: 1,
+    dirtyRegions: terrainFrame.dirtyRegions.map(region => ({ ...region })),
+    complete: true,
+  };
+  return validatePortableMacroSourceSnapshot(snapshot, {
+    expectedSourceHandleId: descriptor.sourceHandleId,
+    minimumTerrainEpoch: descriptor.lifetime.retainedTerrainEpoch,
+    minimumFluidEpoch: descriptor.lifetime.retainedFluidEpoch,
+  });
+}
+
 export function createMappedMacroRuntime(options = {}) {
   let terrainFrame = validateTerrainFluidFrame(options.terrainFrame);
   let state = createMappedMacroState(options);
@@ -825,6 +1151,7 @@ export function createMappedMacroRuntime(options = {}) {
   invariant(typeof producerRevision === 'string' && producerRevision.length > 0, 'producerRevision must be a non-empty string');
   const receiptIds = [];
   const lineageIds = [];
+  const portableSourceHandles = new Map();
 
   function updateTerrain(updateOptions = {}) {
     const nextTerrain = validateTerrainFluidFrame(updateOptions.terrainFrame);
@@ -895,6 +1222,123 @@ export function createMappedMacroRuntime(options = {}) {
         conservationReceiptIds: frameOptions.conservationReceiptIds ?? receiptIds,
         lineageIds: frameOptions.lineageIds ?? lineageIds,
       });
+    },
+    retainPortableMacroSource(sourceOptions = {}) {
+      const sourceHandleId = sourceOptions.sourceHandleId;
+      try {
+        for (const forbidden of ['camera', 'view', 'projection', 'viewport', 'screenSpaceDemand', 'opticalResidency']) {
+          invariant(!(forbidden in sourceOptions), `portable source retain contains camera-owned state: ${forbidden}`);
+        }
+        nonEmptyString(sourceHandleId, 'sourceHandleId');
+        const route = {
+          requested: sourceOptions.requestedRoute ?? PORTABLE_MACRO_SOURCE_ROUTE,
+          effective: sourceOptions.effectiveRoute ?? sourceOptions.requestedRoute ?? PORTABLE_MACRO_SOURCE_ROUTE,
+        };
+        validateExactPortableRoute(route);
+        const requestedCapability = sourceOptions.requestedCapability ?? PORTABLE_MACRO_SOURCE_CAPABILITY;
+        const effectiveCapability = sourceOptions.effectiveCapability ?? requestedCapability;
+        validatePortableCapability(requestedCapability, effectiveCapability);
+        invariant(!portableSourceHandles.has(sourceHandleId), `portable source handle ${sourceHandleId} is already retained`);
+        validateState(state, terrainFrame);
+        const physicalMaterial = validatePhysicalMaterial(sourceOptions.physicalMaterial ?? {
+          densityKgM3: 997,
+          dynamicViscosityPaS: 0.00089,
+          absorptionPerMeter: [0.05, 0.02, 0.01],
+        });
+        const descriptor = freezeRecord({
+          schema: PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA,
+          route,
+          requestedCapability,
+          effectiveCapability,
+          capability: effectiveCapability,
+          sourceHandleId,
+          sourceAuthority: 'live_runtime',
+          fallbackStatus: 'none',
+          representationRoute: {
+            requested: 'kaminos/fluid/representation-frame',
+            effective: 'kaminos/fluid/representation-frame',
+          },
+          producer: {
+            revision: producerRevision,
+            runtimeRoute: MAPPED_MACRO_SOLVER_ROUTE,
+            method: MAPPED_MACRO_METHOD,
+          },
+          ownershipIdentity: REPRESENTATION_OWNERSHIP_IDENTITY,
+          supportGeometry: {
+            topologyId: `${terrainFrame.terrainId}:${terrainFrame.transformId}:${terrainFrame.grid.width}x${terrainFrame.grid.height}`,
+            terrainId: terrainFrame.terrainId,
+            supportClass: terrainFrame.supportClass,
+            transformId: terrainFrame.transformId,
+            coordinateSpace: 'world_meters',
+            worldMetersPerUnit: terrainFrame.worldMetersPerUnit,
+            mapping: 'orthogonal-heightfield-evaluation-v1',
+            sampleCount: terrainFrame.grid.width * terrainFrame.grid.height,
+          },
+          physicalMaterial: {
+            ...physicalMaterial,
+            absorptionPerMeter: [...physicalMaterial.absorptionPerMeter],
+          },
+          lifetime: {
+            releasePolicy: 'explicit-release-v1',
+            retainedTerrainEpoch: terrainFrame.currentEpoch,
+            retainedFluidEpoch: state.fluidEpoch,
+          },
+        });
+        validatePortableMacroSourceDescriptor(descriptor);
+        let released = false;
+        let readGeneration = 0;
+        const handle = {
+          descriptor,
+          get status() {
+            return {
+              state: released ? 'released' : 'retained',
+              readGeneration,
+            };
+          },
+          read(readOptions = {}) {
+            try {
+              invariant(!released, `portable source handle ${sourceHandleId} has been released`);
+              if (readOptions.minimumTerrainEpoch != null) {
+                invariant(
+                  terrainFrame.currentEpoch >= readOptions.minimumTerrainEpoch,
+                  `portable source has stale terrain epoch ${terrainFrame.currentEpoch}; minimum ${readOptions.minimumTerrainEpoch}`,
+                );
+              }
+              if (readOptions.minimumFluidEpoch != null) {
+                invariant(
+                  state.fluidEpoch >= readOptions.minimumFluidEpoch,
+                  `portable source has stale fluid epoch ${state.fluidEpoch}; minimum ${readOptions.minimumFluidEpoch}`,
+                );
+              }
+              const snapshot = createPortableMacroSourceSnapshot(state, terrainFrame, descriptor);
+              readGeneration += 1;
+              return snapshot;
+            } catch (error) {
+              throw portableSourceError(error, {
+                phase: 'read-live-source',
+                sourceHandleId,
+                lastTrustworthyEvidence: released ? 'source-handle-released' : 'descriptor-validated',
+              });
+            }
+          },
+          release() {
+            if (released) return false;
+            released = true;
+            portableSourceHandles.delete(sourceHandleId);
+            return true;
+          },
+        };
+        Object.freeze(handle);
+        portableSourceHandles.set(sourceHandleId, handle);
+        return validatePortableMacroSourceHandle(handle);
+      } catch (error) {
+        if (error?.report) throw error;
+        throw portableSourceError(error, {
+          phase: 'retain-source',
+          sourceHandleId,
+          lastTrustworthyEvidence: 'runtime-identity-validated',
+        });
+      }
     },
   };
   return api;

@@ -25,6 +25,7 @@ assert.deepEqual(packageModule.KAMINOS_FLUID_PACKAGE_DESCRIPTOR, {
   cacheKey: `@kaminos/fluid-webgpu@0.2.1:${producerRevision}`,
   runtimeRoute: 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1',
   representationRoutes: ['kaminos/fluid/representation-frame'],
+  sourceRoutes: ['kaminos/fluid/portable-macro-source'],
   outputRoutes: ['kaminos/fluid/terrain-feedback'],
 }, 'the package descriptor carries executable identity without pretending to know its enclosing tarball SRI');
 assert.equal(
