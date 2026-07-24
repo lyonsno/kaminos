@@ -1,384 +1,123 @@
 {
-  "schema": "crucible-viewport-witness.v0",
-  "url": "http://127.0.0.1:18402/",
-  "screenshot": null,
-  "reportPath": "artifacts/wake-sharp-fire-actor-product/live/report.json",
+  "schema": "kaminos.wake-sharp-fire-actor-product-stall.v1",
+  "ok": false,
+  "status": "stopped-explicit-product-stall",
+  "phase": "middle-captured/awaiting-end-or-terminal",
   "primaryOutputWritten": false,
-  "inFlightScreenshot": null,
-  "inFlightCapture": {
-    "requested": true,
-    "status": "settling-effective-hybrid",
-    "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png",
-    "phaseCaptures": [],
-    "captureTargets": [
-      {
-        "phase": "beginning",
-        "minimumProgress": 0,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png"
-      },
-      {
-        "phase": "middle",
-        "minimumProgress": 0.45,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/middle.png"
-      },
-      {
-        "phase": "end",
-        "minimumProgress": 0.85,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/end.png"
-      }
-    ],
-    "settleMs": 3000,
-    "maxObservationGapMs": 50,
-    "observerEffect": "CDP viewport capture may perturb foreground cadence; this visual run must not close performance acceptance.",
-    "settleMonitor": {
-      "schema": "kaminos.in-flight-hybrid-settle-monitor.v0",
-      "sampleRetention": "uncapped",
-      "active": true,
-      "settleMs": 3000,
-      "maxObservationGapMs": 50,
-      "eligibleSinceMs": null,
-      "settledForMs": 0,
-      "ready": false,
-      "resetCount": 0,
-      "lastObservedAtMs": null,
-      "latest": null,
-      "sampleCount": 0,
-      "samples": [],
-      "mohelIndicator": {
-        "uncappedSettleSamples": true,
-        "sampleCount": 0,
-        "note": "RAF settle samples are intentionally uncapped until visual capture finishes."
-      }
-    },
-    "settledForMs": 136.29999999701977,
-    "settleSampleCount": 28241,
-    "settleResetCount": 334,
-    "nextCaptureTarget": {
-      "phase": "beginning",
-      "minimumProgress": 0,
-      "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png"
-    },
-    "lastRouteState": {
-      "status": "running",
-      "message": "Friendly: SHARP is extracting image features (patch 6/35, block 10/24, norm2 fc1). 61%",
-      "runningProfileId": "cooperative-spn-gaussian",
-      "progress": 0.6057449653686278,
-      "firePhase": "burning",
-      "firingId": "firing-mryh01td-fqsvu6",
-      "expectedFirePresentation": null,
-      "effectiveFirePresentation": null,
-      "effectiveFlameContinuity": null,
-      "roomPosture": "firing",
-      "settleMonitor": {
-        "schema": "kaminos.in-flight-hybrid-settle-monitor.v0",
-        "sampleRetention": "uncapped",
-        "active": true,
-        "settleMs": 3000,
-        "maxObservationGapMs": 50,
-        "eligibleSinceMs": 421679.90000000596,
-        "settledForMs": 136.29999999701977,
-        "ready": false,
-        "resetCount": 334,
-        "lastObservedAtMs": 421816.200000003,
-        "latest": {
-          "trigger": "raf",
-          "atMs": 421816.200000003,
-          "firingId": "firing-mryh01td-fqsvu6",
-          "firePhase": "burning",
-          "presentationSource": "live-volume-prototype-debug-state",
-          "admissible": true,
-          "status": "settling-effective-hybrid",
-          "observationGapMs": 9.900000005960464,
-          "resetReason": null,
-          "presentationFailures": [],
-          "productEpisodeFailures": [],
-          "fireActorProductEpisode": {
-            "status": "recording",
-            "firingId": "firing-mryh01td-fqsvu6",
-            "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
-            "actorId": "wake-kiln-flamebowl-hero",
-            "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
-            "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
-          },
-          "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
-          "candidateCount": null,
-          "candidateCapacity": null,
-          "candidateOverflow": null,
-          "candidateCopyBytes": null,
-          "fallbackReason": null
-        },
-        "sampleCount": 28241
-      }
-    }
+  "terminalOutputWritten": false,
+  "failure": {
+    "kind": "product-stall",
+    "message": "Beginning and middle captures were written 16 seconds apart, then no end, terminal, or canonical report progress occurred for about 26 minutes while the Chrome process continued to accrue CPU time.",
+    "lastTrustworthyPhase": "middle-captured/awaiting-end-or-terminal",
+    "automaticRerunAuthorized": false
   },
-  "phase": "installing-in-flight-hybrid-settle-monitor",
-  "startedAt": "2026-07-24T04:58:55.110Z",
-  "finishedAt": "2026-07-24T05:05:59.371Z",
-  "requestedInvocation": {
+  "invocation": {
     "url": "http://127.0.0.1:18402/",
-    "screenshot": "artifacts/wake-sharp-fire-actor-product/live/terminal.png",
-    "reportPath": "artifacts/wake-sharp-fire-actor-product/live/report.json",
-    "fireFriendly": true,
-    "replayCastReportPath": null,
-    "schedulerProfileId": "cooperative-spn-gaussian",
     "sourceAssetId": "image-inbox:21_img.png",
-    "firePresentation": "full-volume",
-    "flameContinuity": "live-every-frame",
-    "captureInFlight": true,
-    "inFlightCaptureTargets": [
-      {
-        "phase": "beginning",
-        "minimumProgress": 0,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png"
-      },
-      {
-        "phase": "middle",
-        "minimumProgress": 0.45,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/middle.png"
-      },
-      {
-        "phase": "end",
-        "minimumProgress": 0.85,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/end.png"
-      }
-    ],
-    "requireFrameStageLedger": true
+    "requestedRouteId": "sharp-image-to-splat-live-v0",
+    "requestedSchedulerProfileId": "cooperative-spn-gaussian",
+    "requestedFirePresentation": "full-volume",
+    "requestedFlameContinuity": "live-every-frame",
+    "productDeadline": null,
+    "productDeadlineAuthority": "uncapped-until-route-terminal",
+    "witnessCommit": "3e018a00c9ba788714ca83d446791a1e24feff8f",
+    "witnessPid": 6293,
+    "chromePid": 6306
   },
   "effectiveIdentity": {
+    "consumerCommit": "3e018a00c9ba788714ca83d446791a1e24feff8f",
+    "sharpSourceCommit": "637f45fe4150e34a36fd2200f08319a964bdbaee",
+    "routeId": "sharp-image-to-splat-live-v0",
     "sourceAssetId": "image-inbox:21_img.png",
-    "workroomSourceAssetId": "image-inbox:21_img.png",
-    "source": {
-      "authority": "workroom-source-selection",
-      "assetId": "image-inbox:21_img.png"
-    },
-    "requestedPipelineId": null,
-    "effectiveRouteId": "sharp-image-to-splat-live-v0",
-    "scheduler": null,
-    "fireBudget": null,
-    "output": null
-  },
-  "ok": false,
-  "error": "Runtime.evaluate timed out",
-  "lastTrustworthyEvidence": {
-    "workroom": {
-      "requestedSelectors": {
-        "workspace": {
-          "id": "crucible-viewport-workspace",
-          "data": "data-crucible-workroom"
-        },
-        "heat": {
-          "attribute": "data-crucible-heat-state"
-        },
-        "routeStatus": {
-          "attribute": "data-crucible-route-status"
-        },
-        "roomPosture": {
-          "attribute": "data-crucible-room-posture"
-        },
-        "stage": {
-          "id": "crucible-worktable-stage"
-        }
-      },
-      "activeTab": "generate",
-      "workspaceHidden": false,
-      "workroom": "active",
-      "heatState": "idle",
-      "routeStatus": "idle",
-      "roomPosture": "bench",
-      "consoleState": "expanded",
-      "pointerEvents": "auto",
-      "stageRect": {
-        "width": 1080,
-        "height": 639.3623657226562
-      },
-      "sourceThumbHidden": false,
-      "sourceOptionCount": 14,
-      "selectedSourceId": "image-inbox:17_img.png",
-      "selectedFirePresentation": "full-volume",
-      "selectedFlameContinuity": "bounded-history-holdover",
-      "fireButtonDisabled": false,
-      "fireButtonLabel": "Fire image",
-      "castButtonDisabled": true,
-      "castButtonLabel": "No cast to view",
-      "effectiveState": {
-        "schema": "kaminos.crucible-viewport-debug.v0",
-        "source": {
-          "kind": "image-asset",
-          "label": "17 Img",
-          "source": "/api/read?root=image-inbox&path=17_img.png",
-          "assetId": "image-inbox:17_img.png",
-          "stage": "working",
-          "rootId": "image-inbox",
-          "path": "17_img.png",
-          "renderability": {
-            "schema": "kaminos.image-preview.v0",
-            "status": "image",
-            "previewState": "direct-read",
-            "reason": "Local image asset served through /api/read for graph input."
-          }
-        },
-        "requestedRouteId": "sharp-image-to-splat-live-v0",
-        "effectiveRouteId": "sharp-image-to-splat-live-v0",
-        "effectivePipelineId": "sharp-image-to-splat-live-v0",
-        "selectedProfileId": "cooperative-spn-gaussian",
-        "flameContinuityRequested": "bounded-history-holdover",
-        "flameContinuityEffective": "live-every-frame",
-        "flameContinuityEffectiveReason": "no-active-firing",
-        "runningProfileId": null,
-        "routeStatus": "idle",
-        "heatState": "idle",
-        "roomPosture": "bench",
-        "consoleState": "expanded",
-        "castScreenPoint": null,
-        "lastCast": null,
-        "castTargetSceneObjectId": null
-      },
-      "castHasTarget": false,
-      "title": "Unnamed crucible",
-      "source": "17 Img - /api/read?root=image-inbox&path=17_img.png",
-      "firing": "No firing started.",
-      "cast": "No cast on the tray.",
-      "receipt": "No firing receipt yet.",
-      "webgpuInferenceKit": {
-        "sourceLockedVersion": "0.1.35",
-        "requestedVersion": "0.1.35",
-        "manifestUrl": "http://127.0.0.1:18402/node_modules/@kaminos/webgpu-inference-kit/package.json",
-        "effectiveVersion": "0.1.35",
-        "fetchStatus": 200,
-        "status": "matched"
-      },
-      "sourceSelectionExercise": {
-        "attempted": true,
-        "requestedAssetId": "image-inbox:21_img.png",
-        "beforeAssetId": "image-inbox:17_img.png",
-        "effectiveAssetId": "image-inbox:21_img.png",
-        "effectiveRouteId": "sharp-image-to-splat-live-v0",
-        "effectivePipelineId": "sharp-image-to-splat-live-v0"
-      }
-    },
-    "webgpuInferenceKit": {
-      "sourceLockedVersion": "0.1.35",
-      "requestedVersion": "0.1.35",
-      "manifestUrl": "http://127.0.0.1:18402/node_modules/@kaminos/webgpu-inference-kit/package.json",
-      "effectiveVersion": "0.1.35",
-      "fetchStatus": 200,
-      "status": "matched"
-    },
-    "sourceSelectionExercise": {
-      "attempted": true,
-      "requestedAssetId": "image-inbox:21_img.png",
-      "beforeAssetId": "image-inbox:17_img.png",
-      "effectiveAssetId": "image-inbox:21_img.png",
-      "effectiveRouteId": "sharp-image-to-splat-live-v0",
-      "effectivePipelineId": "sharp-image-to-splat-live-v0"
-    },
-    "inFlightCapture": {
-      "requested": true,
-      "status": "settling-effective-hybrid",
-      "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png",
-      "phaseCaptures": [],
-      "captureTargets": [
-        {
-          "phase": "beginning",
-          "minimumProgress": 0,
-          "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png"
-        },
-        {
-          "phase": "middle",
-          "minimumProgress": 0.45,
-          "path": "artifacts/wake-sharp-fire-actor-product/live/middle.png"
-        },
-        {
-          "phase": "end",
-          "minimumProgress": 0.85,
-          "path": "artifacts/wake-sharp-fire-actor-product/live/end.png"
-        }
-      ],
-      "settleMs": 3000,
-      "maxObservationGapMs": 50,
-      "observerEffect": "CDP viewport capture may perturb foreground cadence; this visual run must not close performance acceptance.",
-      "settleMonitor": {
-        "schema": "kaminos.in-flight-hybrid-settle-monitor.v0",
-        "sampleRetention": "uncapped",
-        "active": true,
-        "settleMs": 3000,
-        "maxObservationGapMs": 50,
-        "eligibleSinceMs": null,
-        "settledForMs": 0,
-        "ready": false,
-        "resetCount": 0,
-        "lastObservedAtMs": null,
-        "latest": null,
-        "sampleCount": 0,
-        "samples": [],
-        "mohelIndicator": {
-          "uncappedSettleSamples": true,
-          "sampleCount": 0,
-          "note": "RAF settle samples are intentionally uncapped until visual capture finishes."
-        }
-      },
-      "settledForMs": 136.29999999701977,
-      "settleSampleCount": 28241,
-      "settleResetCount": 334,
-      "nextCaptureTarget": {
-        "phase": "beginning",
-        "minimumProgress": 0,
-        "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png"
-      },
-      "lastRouteState": {
-        "status": "running",
-        "message": "Friendly: SHARP is extracting image features (patch 6/35, block 10/24, norm2 fc1). 61%",
-        "runningProfileId": "cooperative-spn-gaussian",
-        "progress": 0.6057449653686278,
-        "firePhase": "burning",
-        "firingId": "firing-mryh01td-fqsvu6",
-        "expectedFirePresentation": null,
-        "effectiveFirePresentation": null,
-        "effectiveFlameContinuity": null,
-        "roomPosture": "firing",
-        "settleMonitor": {
-          "schema": "kaminos.in-flight-hybrid-settle-monitor.v0",
-          "sampleRetention": "uncapped",
-          "active": true,
-          "settleMs": 3000,
-          "maxObservationGapMs": 50,
-          "eligibleSinceMs": 421679.90000000596,
-          "settledForMs": 136.29999999701977,
-          "ready": false,
-          "resetCount": 334,
-          "lastObservedAtMs": 421816.200000003,
-          "latest": {
-            "trigger": "raf",
-            "atMs": 421816.200000003,
-            "firingId": "firing-mryh01td-fqsvu6",
-            "firePhase": "burning",
-            "presentationSource": "live-volume-prototype-debug-state",
-            "admissible": true,
-            "status": "settling-effective-hybrid",
-            "observationGapMs": 9.900000005960464,
-            "resetReason": null,
-            "presentationFailures": [],
-            "productEpisodeFailures": [],
-            "fireActorProductEpisode": {
-              "status": "recording",
-              "firingId": "firing-mryh01td-fqsvu6",
-              "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
-              "actorId": "wake-kiln-flamebowl-hero",
-              "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
-              "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc"
-            },
-            "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
-            "candidateCount": null,
-            "candidateCapacity": null,
-            "candidateOverflow": null,
-            "candidateCopyBytes": null,
-            "fallbackReason": null
-          },
-          "sampleCount": 28241
-        }
-      }
+    "fireActor": {
+      "mountSchema": "kaminos.fire-actor-mount.v1",
+      "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
+      "actorId": "wake-kiln-flamebowl-hero",
+      "basinHandle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+      "basinRevision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+      "packageSchema": "kaminos.volume.basin-promotion-package.v1",
+      "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc",
+      "carrierSchema": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
+      "carrierSha256": "9654565c662782d22a3d2d3917cbec139715eeafccff3c1b4050d6f80797ba6d",
+      "engineSha256": "ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab"
     }
   },
-  "runtimeExceptions": [],
-  "stderrTail": "E1:chrome/updater/updater.cc:419] UpdaterMain (--crash-handler) returned 0.\n[13437:7500051:0724/010008.749791:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n[13437:7500051:0724/010141.846640:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\nTrying to load the allocator multiple times. This is *not* supported.\nWARNING: All log messages before absl::InitializeLog() is called are written to STDERR\nI0000 00:00:1784869315.754422 7534857 environment.cc:558] Selected adapter: Apple M4 Max, arch=metal-3, vendor=apple, backend=Metal, adapterType=Integrated GPU\nI0000 00:00:1784869319.156854 7534937 environment.cc:558] Selected adapter: Apple M4 Max, arch=metal-3, vendor=apple, backend=Metal, adapterType=Integrated GPU\n[13437:7500051:0724/010449.593346:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n"
+  "timeline": {
+    "processObservedStartApprox": "2026-07-24T05:38:03Z",
+    "processObservedStartAuthority": "derived from witness elapsed time 25:41 at 2026-07-24T06:03:44Z",
+    "beginningWrittenAt": "2026-07-24T05:38:13Z",
+    "middleWrittenAt": "2026-07-24T05:38:29Z",
+    "phaseCaptureDeltaMs": 16000,
+    "livenessSampleA": {
+      "observedAt": "2026-07-24T06:03:44Z",
+      "witnessElapsed": "25:41",
+      "witnessCpu": "0:00.76",
+      "chromeCpu": "6:35.58"
+    },
+    "livenessSampleB": {
+      "observedAt": "2026-07-24T06:04:14Z",
+      "witnessCpu": "0:00.77",
+      "chromeCpu": "6:38.53",
+      "chromeSampleCpuPercent": 29.8
+    },
+    "terminationConfirmedAt": "2026-07-24T06:07:28Z",
+    "termination": {
+      "authority": "Pyro Integration peer explicit stop",
+      "signal": "SIGTERM",
+      "terminatedPids": [
+        6293,
+        6306
+      ],
+      "exitCode": 143
+    }
+  },
+  "artifacts": {
+    "beginning": {
+      "path": "artifacts/wake-sharp-fire-actor-product/live/beginning.png",
+      "bytes": 1000258,
+      "sha256": "419ada251daac77bd4a88eeee62186e6b859c84b708548986fa5a2ea62093d0f",
+      "visibleRouteProgress": 0.28,
+      "inspected": true
+    },
+    "middle": {
+      "path": "artifacts/wake-sharp-fire-actor-product/live/middle.png",
+      "bytes": 1473594,
+      "sha256": "835a513b7bef5023e4092150c981d6df66b09c7b6dd5987b9d613547bc5deeb9",
+      "visibleRouteProgress": 0.46,
+      "inspected": true
+    },
+    "end": {
+      "path": "artifacts/wake-sharp-fire-actor-product/live/end.png",
+      "present": false
+    },
+    "terminal": {
+      "path": "artifacts/wake-sharp-fire-actor-product/live/terminal.png",
+      "present": false
+    },
+    "ply": {
+      "present": false
+    }
+  },
+  "stalePriorReport": {
+    "path": "artifacts/wake-sharp-fire-actor-product/live/report.json",
+    "schema": "crucible-viewport-witness.v0",
+    "firingId": "firing-mryh01td-fqsvu6",
+    "finishedAt": "2026-07-24T05:05:59.371Z",
+    "bytes": 15045,
+    "sha256": "e5f1c0577a5ba09420f31ce898da80da39e36d73f4639a0c7ffaea8f79177e3e",
+    "disposition": "Superseded in place by this stall report; it belonged to the prior witness run and did not advance during the stopped firing."
+  },
+  "observationBoundary": {
+    "browserProbeAfterStall": false,
+    "fallbackObserved": false,
+    "competingGpuWorkObserved": false,
+    "runtimeExceptionObserved": false,
+    "note": "Only process and already-written artifact liveness were inspected after the stall disposition. No browser probe or competing GPU work was launched."
+  },
+  "visualInspection": {
+    "beginning": "Promoted Flame Bowl FireActor visible with SHARP at 28%; live fire and smoke are coherent but oversized and strongly exposure-clipped.",
+    "middle": "Same actor remains visible with SHARP at 46%; fire and smoke evolved materially while the product route advanced.",
+    "acceptance": "The two captures prove live beginning-to-middle composition only. They do not prove end-state, PLY, terminal presentation, or product completion."
+  },
+  "recordedAt": "2026-07-24T06:07:28Z"
 }
