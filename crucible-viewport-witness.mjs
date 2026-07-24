@@ -148,6 +148,7 @@ function expectedSchedulerForProfile(profileId) {
     decoderKernelMinChunkItems: 65536,
     decoderKernelMaxChunkItems: 8388608,
     decoderKernelTargetDurationMs: 12,
+    decoderKernelAdjustmentGain: 0.375,
     plyAssemblyMode: 'worker',
     retirePostInferenceBuffers: true,
   };
