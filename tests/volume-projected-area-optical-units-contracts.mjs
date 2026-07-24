@@ -77,6 +77,37 @@ assert.match(
 const regularDepositor = body('boundarySplatOpticalFs', 'boundarySplatBilinearOpticalFs');
 const bilinearDepositor = core.match(/fn boundarySplatBilinearOpticalFs\b[^]*?(?=\n}\n`;)/)?.[0];
 assert.ok(bilinearDepositor, 'missing source body: boundarySplatBilinearOpticalFs');
+const gaussianVertex = body('boundarySplatVs', 'boundarySplatBilinearTapOffset');
+assert.match(
+  gaussianVertex,
+  /let persistentCohort = boundarySplatCamera\.instanceInfo\.w > 0\.5;/,
+  'Gaussian deposition does not distinguish authenticated persistent-cohort rows',
+);
+assert.match(
+  gaussianVertex,
+  /if \(persistentCohort\) \{\s*ridgeOptical = splat\.colorOpacity;\s*nonRidgeOptical = splat\.ridgeNonRidgeOptical;\s*\}/,
+  'Gaussian deposition does not preserve the persistent cohort coefficient packing',
+);
+assert.match(
+  gaussianVertex,
+  /out\.unionEnabled = select\(boundarySplatCamera\.unionControls\.x, 1\.0, persistentCohort\);/,
+  'Gaussian covariance mode still controls persistent-cohort optical authority',
+);
+assert.match(
+  gaussianVertex,
+  /let gaussianMinorRadius = select\(splat\.shape\.y, splat\.shape\.x, persistentCohort\);/,
+  'persistent-cohort Gaussian deposition leaks bilinear footprint scale into its round radius',
+);
+assert.match(
+  gaussianVertex,
+  /axisY \* corner\.y \* gaussianMinorRadius \* boundarySplatCamera\.controls\.x/,
+  'persistent-cohort Gaussian deposition does not apply the round minor radius',
+);
+assert.match(
+  core,
+  /normalizationMechanism:\s*gaussianDeposition\s*\?\s*physicalOpticalUnits\s*\?\s*'per-splat-projected-gaussian-integral-divider-v0'\s*:\s*'legacy-unnormalized-gaussian-diagnostic-v0'/,
+  'kernel receipt does not distinguish projected Gaussian normalization from the legacy diagnostic',
+);
 for (const [label, depositor] of [
   ['Gaussian', regularDepositor],
   ['bilinear', bilinearDepositor],
@@ -172,6 +203,16 @@ assert.match(
   core,
   /sampleBoundarySplatOpticalUnitProbe,/,
   'projected-area optical-unit probe is not exposed through the renderer API',
+);
+assert.match(
+  core,
+  /fullSupportSourceCandidateCount:\s*state\.boundarySplatInstanceCount/,
+  'frozen canvas receipt does not report the source population used by its current draw',
+);
+assert.match(
+  core,
+  /fullSupportRasterDepositCount:\s*state\.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY[^]*?state\.boundarySplatInstanceCount/,
+  'frozen canvas receipt does not derive raster deposits from the current effective deposition path',
 );
 
 console.log('volume projected-area optical units contracts: passed');

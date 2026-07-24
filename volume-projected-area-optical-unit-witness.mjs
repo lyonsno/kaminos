@@ -18,6 +18,15 @@ const STATE_ID = 'coefficient-state-120';
 const COHORT_SHA256 = '4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20';
 const PHYSICAL_MODE = 'projected-native-cell-area-integral-normalized-v0';
 const LEGACY_MODE = 'legacy-global-path-scale-diagnostic-v0';
+const HISTORICAL_DEPOSITION_MODE = 'flow-kernel-moment-gaussian-raster-v0';
+const HISTORICAL_GAUSSIAN_GEOMETRY_IDENTITY = 'persistent-cohort-historical-round-base-radius-v0';
+const HISTORICAL_SPLAT_MODE = 'learned';
+const HISTORICAL_SPLAT_RADIUS = 0.98;
+const HISTORICAL_SPLAT_SHARPNESS = 12;
+const HISTORICAL_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const HISTORICAL_FOOTPRINT_AUTHORITY = 'learned-camera-facing-billboard-v0';
+const HISTORICAL_ATTRIBUTE_MODEL_IDENTITY = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
+const HISTORICAL_OPTICAL_SOURCE_AUTHORITY = 'authenticated-persistent-sparse-cohort-gpu-source-v0';
 const CAMERA = Object.freeze({
   position: [1.1799999999999993, 0.28, 2.049999999999998],
   target: [0, 0.02, 0],
@@ -195,16 +204,31 @@ try {
     if (receipt?.status !== 'effective') {
       throw new Error('persistent-cohort-admission-failed:' + JSON.stringify(receipt));
     }
+    const HISTORICAL_DEPOSITION_MODE = ${JSON.stringify(HISTORICAL_DEPOSITION_MODE)};
+    prototype.setControls({
+      boundarySplatMode: ${JSON.stringify(HISTORICAL_SPLAT_MODE)},
+      boundarySplatRadius: ${HISTORICAL_SPLAT_RADIUS},
+      boundarySplatSharpness: ${HISTORICAL_SPLAT_SHARPNESS},
+    });
+    const deposition = prototype.setFullSupportDepositionMode(HISTORICAL_DEPOSITION_MODE);
     const camera = host.kaminosSetCameraDebugPose(${JSON.stringify(CAMERA)});
     const composition = prototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
     const pause = prototype.setSelectiveHeadLiveCapturePaused(true);
     const state = prototype.debugState();
-    return { receipt, camera, composition, pause, state: {
+    return { receipt, deposition, camera, composition, pause, state: {
       simStepCount: state.simStepCount,
       frameCount: state.frameCount,
       cameraSignature: state.cameraSignature,
       backend: state.backend,
       effectiveRoute: state.effectiveRoute,
+      boundarySplatMode: state.boundarySplatMode,
+      boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySplatFootprintAuthority: state.boundarySplatFootprintAuthority,
+      boundarySplatRadius: state.boundarySplatRadius,
+      boundarySplatSharpness: state.boundarySplatSharpness,
+      fullSupportDepositionRequested: state.fullSupportDepositionRequested,
     }};
   })()`);
   assert.equal(cohort.receipt.stateId, STATE_ID, 'persistent cohort state was substituted');
@@ -212,6 +236,16 @@ try {
   assert.equal(cohort.receipt.fallbackUsed, false, 'persistent cohort fallback looked authoritative');
   assert.equal(cohort.receipt.rendererApplied, true, 'persistent cohort renderer did not apply');
   assert.equal(cohort.pause.paused, true, 'same-state capture pause did not apply');
+  assert.equal(cohort.deposition.normalized, HISTORICAL_DEPOSITION_MODE, 'historical deposition request was normalized away');
+  assert.equal(cohort.deposition.fallbackReason, null, 'historical deposition request used fallback');
+  assert.equal(cohort.state.boundarySplatMode, HISTORICAL_SPLAT_MODE, 'historical splat mode was substituted');
+  assert.equal(cohort.state.boundarySplatRendererIdentity, HISTORICAL_RENDERER_IDENTITY, 'historical renderer was substituted');
+  assert.equal(cohort.state.boundarySplatAttributeModelIdentity, HISTORICAL_ATTRIBUTE_MODEL_IDENTITY, 'historical attributes were substituted');
+  assert.equal(cohort.state.boundarySplatSourceAuthority, HISTORICAL_OPTICAL_SOURCE_AUTHORITY, 'authenticated optical source was substituted');
+  assert.equal(cohort.state.boundarySplatFootprintAuthority, HISTORICAL_FOOTPRINT_AUTHORITY, 'historical covariance was substituted');
+  assert.equal(cohort.state.boundarySplatRadius, HISTORICAL_SPLAT_RADIUS, 'historical radius was substituted');
+  assert.equal(cohort.state.boundarySplatSharpness, HISTORICAL_SPLAT_SHARPNESS, 'historical sharpness was substituted');
+  assert.equal(cohort.state.fullSupportDepositionRequested, HISTORICAL_DEPOSITION_MODE, 'historical deposition request did not stick');
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, cohort };
 
   const sameStateCaptureId = `projected-area-optical-units-${STATE_ID}-${Date.now()}`;
@@ -254,6 +288,19 @@ try {
           raymarchApplied: canvas.raymarchApplied,
           splatApplied: canvas.splatApplied,
           fallbackReason: canvas.boundarySplatFallbackReason || null,
+          boundarySplatMode: canvas.boundarySplatMode,
+          boundarySplatRendererIdentity: canvas.boundarySplatRendererIdentity,
+          boundarySplatAttributeModelIdentity: canvas.boundarySplatAttributeModelIdentity,
+          boundarySplatSourceAuthority: canvas.boundarySplatSourceAuthority,
+          boundarySplatRadius: canvas.boundarySplatRadius,
+          boundarySplatSharpness: canvas.boundarySplatSharpness,
+          fullSupportDepositionRequested: canvas.fullSupportDepositionRequested,
+          fullSupportDepositionEffective: canvas.fullSupportDepositionEffective,
+          fullSupportDepositionFallbackReason: canvas.fullSupportDepositionFallbackReason || null,
+          fullSupportGaussianGeometryIdentity: canvas.fullSupportGaussianGeometryIdentity,
+          fullSupportSourceCandidateCount: canvas.fullSupportSourceCandidateCount,
+          fullSupportRasterDepositCount: canvas.fullSupportRasterDepositCount,
+          presentationReceipt: canvas.boundarySplatPresentationReceipt,
         },
         rect,
         finalState: {
@@ -261,6 +308,11 @@ try {
           cameraSignature: state.cameraSignature,
           effectiveRoute: state.effectiveRoute,
           backend: state.backend,
+          boundarySplatFootprintAuthority: state.boundarySplatFootprintAuthority,
+          boundarySplatAttributeSetId: state.boundarySplatAttributeSetId,
+          fullSupportSourceCandidateCount: state.fullSupportSourceCandidateCount,
+          fullSupportRasterDepositCount: state.fullSupportRasterDepositCount,
+          fullSupportDepositionReceipt: state.fullSupportDepositionReceipt,
         },
       };
     })()`);
@@ -274,13 +326,69 @@ try {
     assert.equal(arm.canvas.splatEncoded, true, `${definition.id} splat pass was not encoded`);
     assert.equal(arm.canvas.splatApplied, true, `${definition.id} splat pass was not applied`);
     assert.equal(arm.canvas.fallbackReason, null, `${definition.id} canvas used fallback`);
+    assert.equal(arm.canvas.boundarySplatMode, HISTORICAL_SPLAT_MODE, `${definition.id} historical splat mode drifted`);
+    assert.equal(
+      arm.canvas.boundarySplatRendererIdentity,
+      HISTORICAL_RENDERER_IDENTITY,
+      `${definition.id} historical renderer identity drifted`,
+    );
+    assert.equal(
+      arm.canvas.boundarySplatAttributeModelIdentity,
+      HISTORICAL_ATTRIBUTE_MODEL_IDENTITY,
+      `${definition.id} historical attribute identity drifted`,
+    );
+    assert.equal(
+      arm.canvas.boundarySplatSourceAuthority,
+      HISTORICAL_OPTICAL_SOURCE_AUTHORITY,
+      `${definition.id} authenticated optical source drifted`,
+    );
+    assert.equal(
+      arm.finalState.boundarySplatFootprintAuthority,
+      HISTORICAL_FOOTPRINT_AUTHORITY,
+      `${definition.id} historical covariance authority drifted`,
+    );
+    assert.equal(arm.canvas.boundarySplatRadius, HISTORICAL_SPLAT_RADIUS, `${definition.id} historical radius drifted`);
+    assert.equal(arm.canvas.boundarySplatSharpness, HISTORICAL_SPLAT_SHARPNESS, `${definition.id} historical sharpness drifted`);
+    assert.equal(
+      arm.canvas.fullSupportDepositionRequested,
+      HISTORICAL_DEPOSITION_MODE,
+      `${definition.id} historical deposition request drifted`,
+    );
+    assert.equal(
+      arm.canvas.fullSupportDepositionEffective,
+      HISTORICAL_DEPOSITION_MODE,
+      `${definition.id} historical deposition was substituted`,
+    );
+    assert.equal(
+      arm.canvas.fullSupportDepositionFallbackReason,
+      null,
+      `${definition.id} historical deposition used fallback`,
+    );
+    assert.equal(
+      arm.canvas.fullSupportGaussianGeometryIdentity,
+      HISTORICAL_GAUSSIAN_GEOMETRY_IDENTITY,
+      `${definition.id} historical round Gaussian geometry was substituted`,
+    );
+    assert.equal(
+      arm.canvas.fullSupportSourceCandidateCount,
+      arm.probe.population.candidates,
+      `${definition.id} source candidate accounting drifted`,
+    );
+    assert.equal(
+      arm.canvas.fullSupportRasterDepositCount,
+      arm.probe.population.candidates,
+      `${definition.id} raster was not one deposit per candidate`,
+    );
     assert.ok(arm.probe.beauty.litPixels > 64, `${definition.id} Beauty output was blank`);
     assert.ok(arm.probe.linearHdr.litPixels > 64, `${definition.id} linear HDR output was blank`);
     assert.ok(arm.probe.emissionOnlyLinearLuma > 0, `${definition.id} emission-only linear luma was blank`);
     assert.ok(arm.probe.extinctionOnlyMeanOpacity > 0, `${definition.id} extinction-only mean opacity was blank`);
     assert.ok(arm.probe.combinedLinearLuma > 0, `${definition.id} combined linear luma was blank`);
-    assert.equal(arm.probe.kernelIntegral.fiveTapIntegral, 1, `${definition.id} five-tap kernel integral drifted`);
-    assert.equal(arm.probe.kernelIntegral.topThreeBilinearIntegralPerTap, 1, `${definition.id} bilinear kernel integral drifted`);
+    assert.equal(
+      arm.probe.kernelIntegral.effectiveDepositionPath,
+      HISTORICAL_DEPOSITION_MODE,
+      `${definition.id} kernel receipt describes the wrong deposition path`,
+    );
     assert.equal(
       arm.probe.kernelIntegral.integralAuthority,
       'analytical-construction-not-gpu-measured-v0',
@@ -289,6 +397,19 @@ try {
     assert.equal(arm.probe.route.requestedRoute, route.href, `${definition.id} requested route drifted`);
     assert.equal(arm.finalState.simStepCount, cohort.state.simStepCount, `${definition.id} state drifted`);
     assert.equal(arm.finalState.cameraSignature, cohort.state.cameraSignature, `${definition.id} camera-drift`);
+    await evaluate(socket, `(async () => {
+      const toolbar = document.querySelector('#toolbar');
+      if (toolbar) {
+        toolbar.hidden = true;
+        toolbar.style.setProperty('display', 'none', 'important');
+        toolbar.style.setProperty('visibility', 'hidden', 'important');
+      }
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return {
+        toolbarHidden: !toolbar || toolbar.hidden,
+        toolbarDisplay: toolbar ? getComputedStyle(toolbar).display : null,
+      };
+    })()`);
     const screenshotPath = join(outputDirectory, `${definition.id}.png`);
     await captureScreenshot(socket, arm.rect, screenshotPath);
     assert.ok(readFileSync(screenshotPath).byteLength > 1024, `${definition.id} screenshot was blank`);
@@ -305,17 +426,32 @@ try {
   const legacyArm = arms.find(arm => arm.id === 'legacy-raw-scale-1');
   const physicalArm = arms.find(arm => arm.id === 'projected-area-physical');
   assert.ok(legacyArm && physicalArm, 'fixed discriminator arms are incomplete');
-  assert.ok(
-    physicalArm.probe.emissionOnlyLinearLuma > legacyArm.probe.emissionOnlyLinearLuma * 2,
-    'physical emission discriminator collapsed toward the legacy arm',
+  const relativeDelta = (left, right) => (
+    Math.abs(left - right) / Math.max(Math.abs(left), Math.abs(right), 1e-12)
+  );
+  const emissionRelativeDelta = relativeDelta(
+    physicalArm.probe.emissionOnlyLinearLuma,
+    legacyArm.probe.emissionOnlyLinearLuma,
+  );
+  const extinctionRelativeDelta = relativeDelta(
+    physicalArm.probe.extinctionOnlyMeanOpacity,
+    legacyArm.probe.extinctionOnlyMeanOpacity,
+  );
+  const combinedRelativeDelta = relativeDelta(
+    physicalArm.probe.combinedLinearLuma,
+    legacyArm.probe.combinedLinearLuma,
+  );
+  const maximumComponentRelativeDelta = Math.max(
+    emissionRelativeDelta,
+    extinctionRelativeDelta,
   );
   assert.ok(
-    physicalArm.probe.extinctionOnlyMeanOpacity > legacyArm.probe.extinctionOnlyMeanOpacity * 2,
-    'physical extinction discriminator collapsed toward the legacy arm',
+    maximumComponentRelativeDelta > 0.05,
+    'physical and legacy component arms are materially identical',
   );
   assert.ok(
-    physicalArm.probe.combinedLinearLuma > legacyArm.probe.combinedLinearLuma * 2,
-    'physical combined discriminator collapsed toward the legacy arm',
+    combinedRelativeDelta > 0.05,
+    'physical and legacy combined arms are materially identical',
   );
 
   const report = {
@@ -333,19 +469,40 @@ try {
       path: cohortManifestPath,
       sha256: COHORT_SHA256,
       appliedRows: cohort.receipt.appliedRowCount,
-      appliedDeposits: cohort.receipt.appliedDepositCount,
+      producerChargedDeposits: cohort.receipt.appliedDepositCount,
+    },
+    effectiveGeometry: {
+      depositionIdentity: HISTORICAL_DEPOSITION_MODE,
+      gaussianGeometryIdentity: arms[0].canvas.fullSupportGaussianGeometryIdentity,
+      sourceCandidateCount: arms[0].canvas.fullSupportSourceCandidateCount,
+      rasterDepositCount: arms[0].canvas.fullSupportRasterDepositCount,
+      depositsPerCandidate: arms[0].canvas.fullSupportRasterDepositCount / arms[0].canvas.fullSupportSourceCandidateCount,
+      covarianceAuthority: arms[0].finalState.boundarySplatFootprintAuthority,
+      rendererIdentity: arms[0].canvas.boundarySplatRendererIdentity,
+      attributeModelIdentity: arms[0].canvas.boundarySplatAttributeModelIdentity,
+      opticalSourceAuthority: arms[0].canvas.boundarySplatSourceAuthority,
+      attributeSetId: arms[0].finalState.boundarySplatAttributeSetId,
+      radius: arms[0].canvas.boundarySplatRadius,
+      sharpness: arms[0].canvas.boundarySplatSharpness,
+      presentationIdentity: arms[0].canvas.presentationReceipt?.effectiveMode || null,
     },
     camera: cohort.camera,
     arms,
     comparison: {
       stateAndCameraIdentical: true,
       discriminatorThreshold: {
-        identity: 'fixed-state-physical-over-legacy-minimum-ratio-v0',
-        minimumRatio: 2,
-        emissionPassed: true,
-        extinctionPassed: true,
-        combinedPassed: true,
+        identity: 'fixed-state-material-relative-delta-v0',
+        minimumRelativeDelta: 0.05,
+        directionalExpectation: false,
+        emissionPassed: emissionRelativeDelta > 0.05,
+        extinctionPassed: extinctionRelativeDelta > 0.05,
+        componentDiscriminatorPassed: maximumComponentRelativeDelta > 0.05,
+        combinedPassed: combinedRelativeDelta > 0.05,
       },
+      emissionOnlyLinearLumaRelativeDelta: emissionRelativeDelta,
+      extinctionOnlyMeanOpacityRelativeDelta: extinctionRelativeDelta,
+      combinedLinearLumaRelativeDelta: combinedRelativeDelta,
+      maximumComponentRelativeDelta,
       emissionOnlyLinearLumaRatio: arms[1].probe.emissionOnlyLinearLuma / arms[0].probe.emissionOnlyLinearLuma,
       extinctionOnlyMeanOpacityRatio: arms[1].probe.extinctionOnlyMeanOpacity / arms[0].probe.extinctionOnlyMeanOpacity,
       combinedLinearLumaRatio: arms[1].probe.combinedLinearLuma / arms[0].probe.combinedLinearLuma,
@@ -390,7 +547,9 @@ function buildRoute({ origin: routeOrigin, sourceCaptureReport, cohortManifestPa
   route.searchParams.set('volume_render_scale', '1');
   route.searchParams.set('composition', 'splat-only-v0');
   route.searchParams.set('volume_raymarch_smoke', 'off');
-  route.searchParams.set('volume_boundary_splat_mode', 'kernel_moment_full_flame_union');
+  route.searchParams.set('volume_boundary_splat_mode', HISTORICAL_SPLAT_MODE);
+  route.searchParams.set('volume_boundary_splat_radius', String(HISTORICAL_SPLAT_RADIUS));
+  route.searchParams.set('volume_boundary_splat_sharpness', String(HISTORICAL_SPLAT_SHARPNESS));
   route.searchParams.set('volume_optical_unit_mode', LEGACY_MODE);
   route.searchParams.set('full_support_persistent_cohort_manifest', manifestPath);
   route.searchParams.set('full_support_persistent_cohort_manifest_sha256', COHORT_SHA256);

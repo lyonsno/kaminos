@@ -140,6 +140,8 @@ const BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH = 1;
 const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = 10;
 const FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY = 'flow-tangent-five-tap-bilinear-v0';
 const FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
+const FULL_SUPPORT_PERSISTENT_COHORT_HISTORICAL_GAUSSIAN_GEOMETRY_IDENTITY =
+  'persistent-cohort-historical-round-base-radius-v0';
 const FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY = 'per-splat-self-extinction-additive-rgb-v0';
 const FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE = 20;
 const PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE = 15;
@@ -6988,14 +6990,19 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   let covarianceAxisY = select(bitangent, kernelBitangent, kernelMomentCovariance);
   let axisX = select(boundarySplatCamera.cameraRight.xyz, covarianceAxisX, worldCovariance);
   let axisY = select(boundarySplatCamera.cameraUp.xyz, covarianceAxisY, worldCovariance);
+  let persistentCohort = boundarySplatCamera.instanceInfo.w > 0.5;
+  let gaussianMinorRadius = select(splat.shape.y, splat.shape.x, persistentCohort);
   let offset = axisX * corner.x * splat.shape.x * boundarySplatCamera.controls.x * instanceScale
-    + axisY * corner.y * splat.shape.y * boundarySplatCamera.controls.x * instanceScale;
+    + axisY * corner.y * gaussianMinorRadius * boundarySplatCamera.controls.x * instanceScale;
   let centerClip = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition, 1.0);
   out.position = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition + offset, 1.0);
   out.colorOpacity = splat.colorOpacity;
   var ridgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.x, splat.ridgeNonRidgeOptical.y);
   var nonRidgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.z, splat.ridgeNonRidgeOptical.w);
-  if (boundarySplatCamera.unionControls.z > 1.5) {
+  if (persistentCohort) {
+    ridgeOptical = splat.colorOpacity;
+    nonRidgeOptical = splat.ridgeNonRidgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 1.5) {
     let nativeCellIndex = u32(splat.nativeCellMembership.x);
     let completeOptical = boundarySplatLiveUnionCoefficients[nativeCellIndex];
     let ridgeWeight = clamp(splat.positionSupport.w, 0.0, 1.0);
@@ -7012,12 +7019,12 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   }
   out.ridgeOptical = ridgeOptical;
   out.nonRidgeOptical = nonRidgeOptical;
-  out.unionEnabled = boundarySplatCamera.unionControls.x;
+  out.unionEnabled = select(boundarySplatCamera.unionControls.x, 1.0, persistentCohort);
   out.depositionWeight = 1.0;
   out.depthBin = boundarySplatCameraLinearDepthBin(transformedPosition);
   let physicalOpticalUnits = boundarySplatCamera.opticalUnitControls.w > 0.5;
   let opticalAxisOffsetX = axisX * splat.shape.x * boundarySplatCamera.controls.x * instanceScale;
-  let opticalAxisOffsetY = axisY * splat.shape.y * boundarySplatCamera.controls.x * instanceScale;
+  let opticalAxisOffsetY = axisY * gaussianMinorRadius * boundarySplatCamera.controls.x * instanceScale;
   out.opticalUnitScale = select(
     1.0,
     boundarySplatProjectedNativeCellAreaScale(transformedPosition),
@@ -11395,6 +11402,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.fullSupportDepositionEffective = bilinearRequested && bilinearAvailable
         ? FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
         : FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
+      state.fullSupportGaussianGeometryIdentity =
+        state.fullSupportDepositionEffective === FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY
+          ? persistentCohortRequested
+            ? FULL_SUPPORT_PERSISTENT_COHORT_HISTORICAL_GAUSSIAN_GEOMETRY_IDENTITY
+            : 'source-authored-gaussian-covariance-v0'
+          : null;
       state.fullSupportDepositionFallbackReason = bilinearRequested && !bilinearAvailable
         ? (state.boundarySplatInstanceConsumerEffective
             ? 'bilinear-deposition-not-admitted-for-full-support-instance-consumer'
@@ -18995,22 +19008,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       minimumRetainedIntegral = Math.min(minimumRetainedIntegral, retainedIntegral);
       maximumRetainedIntegral = Math.max(maximumRetainedIntegral, retainedIntegral);
     }
+    const gaussianDeposition = state.fullSupportDepositionEffective === FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
+    const physicalOpticalUnits =
+      effectiveBoundarySplatOpticalUnitMode === BOUNDARY_SPLAT_PHYSICAL_OPTICAL_UNITS_IDENTITY;
     return {
-      identity: BOUNDARY_SPLAT_OPTICAL_KERNEL_NORMALIZATION_IDENTITY,
+      identity: physicalOpticalUnits
+        ? BOUNDARY_SPLAT_OPTICAL_KERNEL_NORMALIZATION_IDENTITY
+        : 'legacy-unnormalized-kernel-diagnostic-v0',
       effectiveDepositionPath: state.fullSupportDepositionEffective,
-      effectiveKernelIntegral: 1,
+      effectiveKernelIntegral: gaussianDeposition ? null : 1,
+      effectiveKernelIntegralRepresentation: gaussianDeposition
+        ? 'per-splat-projected-analytical-v0'
+        : 'scalar-unity-v0',
       integralAuthority: 'analytical-construction-not-gpu-measured-v0',
-      normalizationMechanism: 'five-tap-unity-sum-top-three-renormalized-bilinear-v0',
-      projectedKernelIntegralDividerApplied: false,
-      analyticalUnclippedIntegral: 1,
-      fiveTapIntegral: 1,
-      topThreeBilinearIntegralPerTap: 1,
+      normalizationMechanism: gaussianDeposition
+        ? physicalOpticalUnits
+          ? 'per-splat-projected-gaussian-integral-divider-v0'
+          : 'legacy-unnormalized-gaussian-diagnostic-v0'
+        : 'five-tap-unity-sum-top-three-renormalized-bilinear-v0',
+      projectedKernelIntegralDividerApplied: gaussianDeposition && physicalOpticalUnits,
+      analyticalUnclippedIntegral: gaussianDeposition ? null : 1,
+      fiveTapIntegral: gaussianDeposition ? null : 1,
+      topThreeBilinearIntegralPerTap: gaussianDeposition ? null : 1,
       retainedIntegralMean: retainedIntegralSum / rowCount,
       retainedIntegralMinimum: minimumRetainedIntegral,
       retainedIntegralMaximum: maximumRetainedIntegral,
       retainedIntegralSum,
       candidateCount: rowCount,
-      clippingAuthority: 'exported-retained-quadrature-weight-v0',
+      clippingAuthority: gaussianDeposition
+        ? 'gaussian-fragment-unit-disc-v0'
+        : 'exported-retained-quadrature-weight-v0',
+      producerRetainedIntegralDisposition: gaussianDeposition
+        ? 'cohort-provenance-not-effective-raster-integral-v0'
+        : 'effective-bilinear-clipping-provenance-v0',
     };
   }
 
@@ -20872,8 +20902,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fullSupportDepositionRequested: state.fullSupportDepositionRequested,
         fullSupportDepositionEffective: state.fullSupportDepositionEffective,
         fullSupportDepositionFallbackReason: state.fullSupportDepositionFallbackReason,
-        fullSupportSourceCandidateCount: state.fullSupportSourceCandidateCount,
-        fullSupportRasterDepositCount: state.fullSupportRasterDepositCount,
+        fullSupportGaussianGeometryIdentity: state.fullSupportGaussianGeometryIdentity,
+        fullSupportSourceCandidateCount: state.boundarySplatInstanceCount,
+        fullSupportRasterDepositCount:
+          state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
+            && Number.isInteger(state.boundarySplatInstanceCount)
+            ? state.boundarySplatInstanceCount * (
+                persistentSparseCohortGpuState
+                  ? PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE
+                  : FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE
+              )
+            : state.boundarySplatInstanceCount,
         fullSupportTransportIdentity: state.fullSupportTransportIdentity,
         flowKernelIdentity: state.flowKernelIdentity,
         flowKernelRequested: state.flowKernelRequested,
