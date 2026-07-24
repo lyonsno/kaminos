@@ -27,24 +27,24 @@ for (const [label, resolve] of [
   assert.match(resolve, /let rawSigma = accumulated\.a;/, `${label} resolve must preserve raw extinction`);
   assert.match(
     resolve,
-    /let sourceColor = select\(vec3<f32>\(0\.0\), accumulated\.rgb \/ max\(rawSigma, 1e-6\), rawSigma > 1e-6\);/,
-    `${label} resolve must divide raw emission by raw extinction`,
+    /let scaledEmission = accumulated\.rgb \* opticalPathScale\.requestedEffective\.y;/,
+    `${label} diagnostic scale must apply symmetrically to emission`,
   );
   assert.match(
     resolve,
     /let opticalDepth = rawSigma \* opticalPathScale\.requestedEffective\.y;/,
-    `${label} resolve must apply the effective path scale only to optical depth`,
+    `${label} diagnostic scale must apply symmetrically to extinction`,
   );
   assert.match(resolve, /let binAlpha = 1\.0 - exp\(-opticalDepth\);/, `${label} resolve must use exponential attenuation`);
   assert.match(
     resolve,
-    /color = sourceColor \* binAlpha \+ color \* \(1\.0 - binAlpha\);/,
-    `${label} resolve must composite the unscaled source function`,
+    /let sourceScale = select\(1\.0, binAlpha \/ opticalDepth, opticalDepth > 1e-6\);/,
+    `${label} resolve must preserve the low-extinction emission limit`,
   );
-  assert.doesNotMatch(
+  assert.match(
     resolve,
-    /accumulated\.rgb \/ max\(opticalDepth/,
-    `${label} resolve cannot divide emission by scaled optical depth`,
+    /color = scaledEmission \* sourceScale \+ color \* \(1\.0 - binAlpha\);/,
+    `${label} resolve must use homogeneous emission/extinction transfer`,
   );
 }
 
@@ -56,7 +56,7 @@ assert.match(
 assert.match(
   core,
   /function setOpticalPathScale\(value\)[^]*?optical-path-scale-invalid:[^]*?requestedOpticalPathScale[^]*?effectiveOpticalPathScale/,
-  'runtime setter must fail loud and publish requested/effective scale',
+  'diagnostic runtime setter must fail loud and publish requested/effective scale',
 );
 assert.match(core, /setOpticalPathScale,/, 'runtime API must expose the optical path scale setter');
 assert.match(
@@ -66,8 +66,8 @@ assert.match(
 );
 assert.match(
   core,
-  /opticalPathScale:\s*\{\s*requested:\s*requestedOpticalPathScale,\s*effective:\s*effectiveOpticalPathScale,/,
-  'live presentation receipt must expose requested/effective optical path scale',
+  /opticalPathScale:\s*\{\s*requested:\s*requestedOpticalPathScale,\s*effective:\s*effectiveOpticalPathScale,[^]*?physicalAuthority:\s*false/,
+  'live presentation receipt must expose the path scale as nonphysical diagnostic state',
 );
 assert.match(
   core,
@@ -88,7 +88,9 @@ assert.match(
 const gaussianDepositor = body('boundarySplatOpticalFs', 'boundarySplatBilinearOpticalFs');
 const bilinearDepositor = core.match(/fn boundarySplatBilinearOpticalFs\b[^]*?(?=\n}\n`;)/)?.[0];
 assert.ok(bilinearDepositor, 'missing source body: boundarySplatBilinearOpticalFs');
-assert.doesNotMatch(gaussianDepositor, /opticalPathScale/, 'Gaussian deposition must remain raw-coefficient deposition');
-assert.doesNotMatch(bilinearDepositor, /opticalPathScale/, 'bilinear deposition must remain raw-coefficient deposition');
+assert.doesNotMatch(gaussianDepositor, /opticalPathScale/, 'Gaussian deposition cannot consume the diagnostic global path scale');
+assert.doesNotMatch(bilinearDepositor, /opticalPathScale/, 'bilinear deposition cannot consume the diagnostic global path scale');
+assert.match(gaussianDepositor, /in\.opticalUnitScale/, 'Gaussian deposition must consume physical projected-area units');
+assert.match(bilinearDepositor, /in\.opticalUnitScale/, 'bilinear deposition must consume physical projected-area units');
 
 console.log('volume optical path scale contracts: passed');

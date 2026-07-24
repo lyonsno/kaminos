@@ -17930,6 +17930,9 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  const requestedOpticalUnitMode = params.get('volume_optical_unit_mode')
+    || 'projected-native-cell-area-integral-normalized-v0';
+  window.__kaminosOpticalUnitModeReceipt = volumePrototype.setBoundarySplatOpticalUnitMode?.(requestedOpticalUnitMode) || null;
   const requestedOpticalPathScale = params.has('volume_optical_path_scale')
     ? params.get('volume_optical_path_scale')
     : 1;

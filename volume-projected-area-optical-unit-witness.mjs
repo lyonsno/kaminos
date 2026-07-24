@@ -1,0 +1,502 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { createHash, randomInt } from 'node:crypto';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+
+const SCHEMA = 'kaminos.volume.projected-area-optical-unit-witness.v0';
+const STATE_ID = 'coefficient-state-120';
+const COHORT_SHA256 = '4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20';
+const PHYSICAL_MODE = 'projected-native-cell-area-integral-normalized-v0';
+const LEGACY_MODE = 'legacy-global-path-scale-diagnostic-v0';
+const CAMERA = Object.freeze({
+  position: [1.1799999999999993, 0.28, 2.049999999999998],
+  target: [0, 0.02, 0],
+});
+
+class CdpSocket {
+  constructor(url, callTimeoutMs) {
+    this.url = url;
+    this.callTimeoutMs = callTimeoutMs;
+    this.socket = null;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.browserEvents = [];
+  }
+
+  open() {
+    return new Promise((resolveOpen, rejectOpen) => {
+      this.socket = new WebSocket(this.url);
+      this.socket.addEventListener('open', resolveOpen, { once: true });
+      this.socket.addEventListener('error', rejectOpen, { once: true });
+      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
+      this.socket.addEventListener('message', event => {
+        const message = JSON.parse(event.data);
+        if (!message.id) {
+          if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
+            this.browserEvents.push(message);
+          }
+          return;
+        }
+        const pending = this.pending.get(message.id);
+        if (!pending) return;
+        this.pending.delete(message.id);
+        clearTimeout(pending.timer);
+        if (message.error) pending.reject(new Error(message.error.message));
+        else pending.resolve(message.result);
+      });
+    });
+  }
+
+  call(method, params = {}) {
+    return new Promise((resolveCall, rejectCall) => {
+      const id = this.nextId++;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        rejectCall(new Error(`CDP call timed out: ${method}`));
+      }, this.callTimeoutMs);
+      this.pending.set(id, { resolve: resolveCall, reject: rejectCall, timer });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  rejectPending(error) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  close() {
+    this.socket?.close();
+  }
+}
+
+const args = parseArgs(process.argv.slice(2));
+const repoRoot = resolve(String(args.get('--repo-root') || import.meta.dirname));
+const origin = String(args.get('--origin') || 'http://127.0.0.1:18823');
+const cohortManifestPath = resolve(String(
+  args.get('--cohort-manifest')
+    || '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-persistent-sparse-cohort-r1/cohort-manifest.json',
+));
+const sourceCaptureReportPath = resolve(String(
+  args.get('--source-capture-report')
+    || '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/capture-report.json',
+));
+const outputDirectory = resolve(String(
+  args.get('--output')
+    || '/tmp/kaminos-projected-area-optical-unit-witness',
+));
+const reportPath = join(outputDirectory, 'report.json');
+const timeoutMs = Number(args.get('--timeout-ms') || 900_000);
+const debugPort = Number(args.get('--debug-port') || randomInt(42_000, 62_000));
+const browserProfilePath = `/tmp/kaminos-projected-area-optical-unit-witness-${process.pid}-${Date.now()}`;
+const mountSlug = `projected-area-optical-unit-witness-${process.pid}`;
+const mountRoot = join(repoRoot, 'scratch', mountSlug);
+const cohortMount = join(mountRoot, 'cohort');
+
+mkdirSync(outputDirectory, { recursive: true });
+mkdirSync(mountRoot, { recursive: true });
+
+let failurePhase = 'input-admission';
+let browser = null;
+let socket = null;
+let lastTrustworthyEvidence = {
+  schema: SCHEMA,
+  stateId: STATE_ID,
+  cohortManifestPath,
+  sourceCaptureReportPath,
+};
+const startedAt = new Date().toISOString();
+
+try {
+  assert.equal(existsSync(cohortManifestPath), true, 'cohort manifest is missing');
+  assert.equal(existsSync(sourceCaptureReportPath), true, 'source capture report is missing');
+  const cohortSha256 = sha256File(cohortManifestPath);
+  assert.equal(cohortSha256, COHORT_SHA256, 'cohort manifest checksum drifted');
+  ensureMount(cohortMount, dirname(cohortManifestPath));
+
+  const route = buildRoute({
+    origin,
+    sourceCaptureReport: readJson(sourceCaptureReportPath),
+    cohortManifestPath: `/scratch/${mountSlug}/cohort/${cohortManifestPath.split('/').pop()}`,
+  });
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
+    requestedRoute: route.href,
+    effectiveRoute: null,
+    cohortSha256,
+  };
+
+  failurePhase = 'browser-launch';
+  browser = spawn(chromeExecutable(), [
+    '--headless=new',
+    '--enable-unsafe-webgpu',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${browserProfilePath}`,
+    '--window-size=1400,1100',
+    '--no-first-run',
+    '--no-default-browser-check',
+    'about:blank',
+  ], { stdio: 'ignore' });
+
+  const target = await waitForTarget(debugPort, timeoutMs, browser);
+  socket = new CdpSocket(target.webSocketDebuggerUrl, timeoutMs);
+  await socket.open();
+  await socket.call('Page.enable');
+  await socket.call('Runtime.enable');
+  await socket.call('Log.enable');
+  await socket.call('Emulation.setDeviceMetricsOverride', {
+    width: 1400,
+    height: 1100,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await socket.call('Page.navigate', { url: route.href });
+
+  failurePhase = 'runtime-admission';
+  const runtime = await waitForValue(socket, timeoutMs, `(() => {
+    const host = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = host.__kaminosVolumePrototype;
+    const state = prototype?.debugState?.();
+    if (!state?.active || !String(state.backend || '').startsWith('WebGPU')) return null;
+    return {
+      href: location.href,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: state.simGrid,
+      prototypeIdentity: state.prototypeIdentity,
+    };
+  })()`);
+  assert.equal(runtime.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'effective renderer route was substituted');
+  assert.match(runtime.backend, /^WebGPU:/, 'effective backend was substituted');
+  assert.equal(runtime.grid, 160, 'native grid was substituted');
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, effectiveRoute: runtime.effectiveRoute, runtime };
+
+  failurePhase = 'cohort-admission';
+  const cohort = await evaluate(socket, `(async () => {
+    const host = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = host.__kaminosVolumePrototype;
+    if (!prototype?.sampleBoundarySplatOpticalUnitProbe) throw new Error('projected-area-optical-unit-probe-api-missing');
+    const receipt = await host.__kaminosBootstrapPersistentSparseCohort();
+    if (receipt?.status !== 'effective') {
+      throw new Error('persistent-cohort-admission-failed:' + JSON.stringify(receipt));
+    }
+    const camera = host.kaminosSetCameraDebugPose(${JSON.stringify(CAMERA)});
+    const composition = prototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
+    const pause = prototype.setSelectiveHeadLiveCapturePaused(true);
+    const state = prototype.debugState();
+    return { receipt, camera, composition, pause, state: {
+      simStepCount: state.simStepCount,
+      frameCount: state.frameCount,
+      cameraSignature: state.cameraSignature,
+      backend: state.backend,
+      effectiveRoute: state.effectiveRoute,
+    }};
+  })()`);
+  assert.equal(cohort.receipt.stateId, STATE_ID, 'persistent cohort state was substituted');
+  assert.equal(cohort.receipt.effectiveManifestSha256, COHORT_SHA256, 'persistent cohort checksum was substituted');
+  assert.equal(cohort.receipt.fallbackUsed, false, 'persistent cohort fallback looked authoritative');
+  assert.equal(cohort.receipt.rendererApplied, true, 'persistent cohort renderer did not apply');
+  assert.equal(cohort.pause.paused, true, 'same-state capture pause did not apply');
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, cohort };
+
+  const sameStateCaptureId = `projected-area-optical-units-${STATE_ID}-${Date.now()}`;
+  assert.ok(sameStateCaptureId, 'same-state-capture-id is missing');
+  const fixedNow = 1_234_567;
+  const armDefinitions = [
+    { id: 'legacy-raw-scale-1', opticalUnitMode: LEGACY_MODE, opticalPathScale: 1 },
+    { id: 'projected-area-physical', opticalUnitMode: PHYSICAL_MODE, opticalPathScale: 1 },
+  ];
+  const arms = [];
+  for (const definition of armDefinitions) {
+    failurePhase = `capture-${definition.id}`;
+    const arm = await evaluate(socket, `(async () => {
+      const host = document.querySelector('#basin')?.contentWindow || window;
+      const prototype = host.__kaminosVolumePrototype;
+      const probe = await prototype.sampleBoundarySplatOpticalUnitProbe(${JSON.stringify({
+        opticalUnitMode: definition.opticalUnitMode,
+        opticalPathScale: definition.opticalPathScale,
+        sameStateCaptureId,
+        now: fixedNow,
+        requestedRoute: route.href,
+      })});
+      const canvas = await prototype.renderFrozenScaleToCanvas({
+        boundarySplatComposition: 'splat-only-v0',
+        sameStateCaptureId: ${JSON.stringify(sameStateCaptureId)},
+        baseFrameCount: probe.baseFrameCount,
+        baseSimStepCount: probe.baseSimStepCount,
+        now: ${fixedNow},
+        includeRgba: false,
+      });
+      const state = prototype.debugState();
+      const rect = prototype.canvasElement().getBoundingClientRect().toJSON();
+      return {
+        probe,
+        canvas: {
+          ok: canvas.ok,
+          reason: canvas.reason || null,
+          raymarchEncoded: canvas.raymarchEncoded,
+          splatEncoded: canvas.splatEncoded,
+          raymarchApplied: canvas.raymarchApplied,
+          splatApplied: canvas.splatApplied,
+          fallbackReason: canvas.boundarySplatFallbackReason || null,
+        },
+        rect,
+        finalState: {
+          simStepCount: state.simStepCount,
+          cameraSignature: state.cameraSignature,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        },
+      };
+    })()`);
+    assert.equal(arm.probe.status, 'captured', `${definition.id} probe did not capture`);
+    assert.equal(arm.probe.sourceStateId, STATE_ID, `${definition.id} source state drifted`);
+    assert.equal(arm.probe.sameStateCaptureId, sameStateCaptureId, `${definition.id} same-state identity drifted`);
+    assert.equal(arm.probe.requestedOpticalUnitMode, definition.opticalUnitMode, `${definition.id} request drifted`);
+    assert.equal(arm.probe.effectiveOpticalUnitMode, definition.opticalUnitMode, `${definition.id} mode was substituted`);
+    assert.equal(arm.probe.fallbackUsed, false, `${definition.id} used fallback`);
+    assert.equal(arm.canvas.ok, true, `${definition.id} canvas render failed: ${arm.canvas.reason}`);
+    assert.equal(arm.canvas.splatEncoded, true, `${definition.id} splat pass was not encoded`);
+    assert.equal(arm.canvas.splatApplied, true, `${definition.id} splat pass was not applied`);
+    assert.equal(arm.canvas.fallbackReason, null, `${definition.id} canvas used fallback`);
+    assert.ok(arm.probe.beauty.litPixels > 64, `${definition.id} Beauty output was blank`);
+    assert.ok(arm.probe.linearHdr.litPixels > 64, `${definition.id} linear HDR output was blank`);
+    assert.ok(arm.probe.emissionOnlyLinearLuma > 0, `${definition.id} emission-only linear luma was blank`);
+    assert.ok(arm.probe.extinctionOnlyMeanOpacity > 0, `${definition.id} extinction-only mean opacity was blank`);
+    assert.ok(arm.probe.combinedLinearLuma > 0, `${definition.id} combined linear luma was blank`);
+    assert.equal(arm.probe.kernelIntegral.fiveTapIntegral, 1, `${definition.id} five-tap kernel integral drifted`);
+    assert.equal(arm.probe.kernelIntegral.topThreeBilinearIntegralPerTap, 1, `${definition.id} bilinear kernel integral drifted`);
+    assert.equal(
+      arm.probe.kernelIntegral.integralAuthority,
+      'analytical-construction-not-gpu-measured-v0',
+      `${definition.id} kernel normalization authority was overstated`,
+    );
+    assert.equal(arm.probe.route.requestedRoute, route.href, `${definition.id} requested route drifted`);
+    assert.equal(arm.finalState.simStepCount, cohort.state.simStepCount, `${definition.id} state drifted`);
+    assert.equal(arm.finalState.cameraSignature, cohort.state.cameraSignature, `${definition.id} camera-drift`);
+    const screenshotPath = join(outputDirectory, `${definition.id}.png`);
+    await captureScreenshot(socket, arm.rect, screenshotPath);
+    assert.ok(readFileSync(screenshotPath).byteLength > 1024, `${definition.id} screenshot was blank`);
+    arms.push({ id: definition.id, screenshotPath, ...arm });
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, arms };
+  }
+
+  failurePhase = 'same-state-comparison';
+  assert.equal(arms[0].probe.capturedSimStepCount, arms[1].probe.capturedSimStepCount, 'same-state arms drifted');
+  assert.equal(arms[0].probe.cameraSignature, arms[1].probe.cameraSignature, 'same-camera arms drifted');
+  assert.equal(arms[0].probe.population.candidates, arms[1].probe.population.candidates, 'candidate population drifted');
+  assert.equal(arms[0].probe.depositionPayload.width, arms[1].probe.depositionPayload.width, 'render width drifted');
+  assert.equal(arms[0].probe.depositionPayload.height, arms[1].probe.depositionPayload.height, 'render height drifted');
+  const legacyArm = arms.find(arm => arm.id === 'legacy-raw-scale-1');
+  const physicalArm = arms.find(arm => arm.id === 'projected-area-physical');
+  assert.ok(legacyArm && physicalArm, 'fixed discriminator arms are incomplete');
+  assert.ok(
+    physicalArm.probe.emissionOnlyLinearLuma > legacyArm.probe.emissionOnlyLinearLuma * 2,
+    'physical emission discriminator collapsed toward the legacy arm',
+  );
+  assert.ok(
+    physicalArm.probe.extinctionOnlyMeanOpacity > legacyArm.probe.extinctionOnlyMeanOpacity * 2,
+    'physical extinction discriminator collapsed toward the legacy arm',
+  );
+  assert.ok(
+    physicalArm.probe.combinedLinearLuma > legacyArm.probe.combinedLinearLuma * 2,
+    'physical combined discriminator collapsed toward the legacy arm',
+  );
+
+  const report = {
+    schema: SCHEMA,
+    status: 'passed',
+    failurePhase: null,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    requestedRoute: route.href,
+    effectiveRoute: runtime.effectiveRoute,
+    backend: runtime.backend,
+    stateId: STATE_ID,
+    sameStateCaptureId,
+    cohortManifest: {
+      path: cohortManifestPath,
+      sha256: COHORT_SHA256,
+      appliedRows: cohort.receipt.appliedRowCount,
+      appliedDeposits: cohort.receipt.appliedDepositCount,
+    },
+    camera: cohort.camera,
+    arms,
+    comparison: {
+      stateAndCameraIdentical: true,
+      discriminatorThreshold: {
+        identity: 'fixed-state-physical-over-legacy-minimum-ratio-v0',
+        minimumRatio: 2,
+        emissionPassed: true,
+        extinctionPassed: true,
+        combinedPassed: true,
+      },
+      emissionOnlyLinearLumaRatio: arms[1].probe.emissionOnlyLinearLuma / arms[0].probe.emissionOnlyLinearLuma,
+      extinctionOnlyMeanOpacityRatio: arms[1].probe.extinctionOnlyMeanOpacity / arms[0].probe.extinctionOnlyMeanOpacity,
+      combinedLinearLumaRatio: arms[1].probe.combinedLinearLuma / arms[0].probe.combinedLinearLuma,
+    },
+    browserEvents: socket.browserEvents,
+  };
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(JSON.stringify({ ok: true, reportPath, arms: report.arms.map(arm => ({
+    id: arm.id,
+    screenshotPath: arm.screenshotPath,
+    emissionOnlyLinearLuma: arm.probe.emissionOnlyLinearLuma,
+    extinctionOnlyMeanOpacity: arm.probe.extinctionOnlyMeanOpacity,
+    combinedLinearLuma: arm.probe.combinedLinearLuma,
+    kernelIntegral: arm.probe.kernelIntegral,
+  })) }, null, 2));
+} catch (error) {
+  const report = {
+    schema: SCHEMA,
+    status: 'failed',
+    failurePhase,
+    reason: error?.message || String(error),
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    lastTrustworthyEvidence,
+    browserExitCode: browser?.exitCode ?? null,
+    browserEvents: socket?.browserEvents || [],
+  };
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.error(JSON.stringify(report, null, 2));
+  process.exitCode = 1;
+} finally {
+  socket?.close();
+  if (browser && browser.exitCode === null) browser.kill('SIGTERM');
+}
+
+function buildRoute({ origin: routeOrigin, sourceCaptureReport, cohortManifestPath: manifestPath }) {
+  const source = new URL(sourceCaptureReport.requestedRoute);
+  const route = new URL(source.pathname, routeOrigin);
+  for (const [key, value] of source.searchParams.entries()) route.searchParams.set(key, value);
+  route.searchParams.set('kaminos_volume_smoke', '1');
+  route.searchParams.set('volume_resolution', '160');
+  route.searchParams.set('volume_render_scale', '1');
+  route.searchParams.set('composition', 'splat-only-v0');
+  route.searchParams.set('volume_raymarch_smoke', 'off');
+  route.searchParams.set('volume_boundary_splat_mode', 'kernel_moment_full_flame_union');
+  route.searchParams.set('volume_optical_unit_mode', LEGACY_MODE);
+  route.searchParams.set('full_support_persistent_cohort_manifest', manifestPath);
+  route.searchParams.set('full_support_persistent_cohort_manifest_sha256', COHORT_SHA256);
+  route.searchParams.set('full_support_persistent_cohort_state', STATE_ID);
+  return route;
+}
+
+async function captureScreenshot(cdp, rect, path) {
+  const clip = {
+    x: Math.max(0, Number(rect.x) || 0),
+    y: Math.max(0, Number(rect.y) || 0),
+    width: Math.max(1, Number(rect.width) || 1),
+    height: Math.max(1, Number(rect.height) || 1),
+    scale: 1,
+  };
+  const screenshot = await cdp.call('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+    clip,
+  });
+  writeFileSync(path, Buffer.from(screenshot.data, 'base64'));
+}
+
+async function evaluate(cdp, expression) {
+  const result = await cdp.call('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.exception?.description
+      || result.exceptionDetails.text
+      || 'browser evaluation failed');
+  }
+  return result.result?.value;
+}
+
+async function waitForValue(cdp, waitMs, expression) {
+  const started = performance.now();
+  while (performance.now() - started < waitMs) {
+    const value = await evaluate(cdp, expression);
+    if (value !== null && value !== undefined && value !== false) return value;
+    await delay(100);
+  }
+  throw new Error(`timed out waiting for browser value: ${expression.slice(0, 120)}`);
+}
+
+async function waitForTarget(port, waitMs, child) {
+  const started = performance.now();
+  while (performance.now() - started < waitMs) {
+    if (child.exitCode !== null) throw new Error(`Chrome exited before CDP admission: ${child.exitCode}`);
+    try {
+      const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then(response => response.json());
+      const target = targets.find(candidate => candidate.type === 'page');
+      if (target?.webSocketDebuggerUrl) return target;
+    } catch {}
+    await delay(100);
+  }
+  throw new Error('timed out waiting for Chrome CDP target');
+}
+
+function chromeExecutable() {
+  const candidates = [
+    process.env.CHROME_BIN,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+  ].filter(Boolean);
+  const executable = candidates.find(existsSync);
+  if (!executable) throw new Error('Chrome executable is missing');
+  return executable;
+}
+
+function ensureMount(path, target) {
+  const resolvedTarget = resolve(target);
+  if (existsSync(path)) {
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink() && resolve(dirname(path), readlinkSync(path)) === resolvedTarget) return;
+    throw new Error(`mount path already exists with different custody: ${path}`);
+  }
+  symlinkSync(resolvedTarget, path, 'dir');
+}
+
+function parseArgs(argv) {
+  const values = new Map();
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!key.startsWith('--')) continue;
+    const next = argv[index + 1];
+    if (!next || next.startsWith('--')) values.set(key, true);
+    else {
+      values.set(key, next);
+      index += 1;
+    }
+  }
+  return values;
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function sha256File(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function delay(ms) {
+  return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
