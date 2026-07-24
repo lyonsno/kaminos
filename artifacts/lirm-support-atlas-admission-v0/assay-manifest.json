@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.support-atlas-admission-manifest.v0",
+  "assayId": "two-cast-support-atlas-admission-v0",
+  "routeIdentity": {
+    "requested": "trellis2mlx_fast",
+    "effective": "trellis2mlx_fast",
+    "jobId": "9c153ba6b424",
+    "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9c153ba6b424/receipt.json",
+    "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png --output /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+    "durationSeconds": 79.5,
+    "backendIdentity": "not-emitted-by-route-receipt"
+  },
+  "casts": [
+    {
+      "id": "motion-ready-719024",
+      "role": "accepted-control",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/motion-ready-719024/creature.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/motion-ready-719024/source.png",
+      "registrationPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/motion-ready-719024/registration.json",
+      "acceptedAtlasPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-719024-smooth-fitted-phase-exercise-v0/admitted-contact-atlas.json",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/control-719024"
+    },
+    {
+      "id": "heavy-seed720201-default",
+      "role": "pressure-default",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/default",
+      "registration": {
+        "mode": "axis-aligned-crawler-frame-v0",
+        "localForwardAxis": [0, 0, -1],
+        "localRightAxis": [1, 0, 0],
+        "localUpAxis": [0, 1, 0],
+        "axialAnchorInsetFraction": 0.03
+      }
+    },
+    {
+      "id": "heavy-seed720201-front-recentered",
+      "role": "pressure-one-bounded-edit",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/front-recentered",
+      "registration": {
+        "mode": "axis-aligned-crawler-frame-v0",
+        "localForwardAxis": [0, 0, -1],
+        "localRightAxis": [1, 0, 0],
+        "localUpAxis": [0, 1, 0],
+        "axialAnchorInsetFraction": 0.03
+      },
+      "derivationOptions": {
+        "frontAxialCenterT": 0.62
+      },
+      "authoredEdits": [
+        {
+          "kind": "paired-front-support-axial-center",
+          "from": 0.75,
+          "to": 0.62,
+          "evidence": "Both default front support centroids sat at the posterior edge of the nominal front axial window; the shared measured centroid maps to t approximately 0.62."
+        }
+      ]
+    }
+  ]
+}

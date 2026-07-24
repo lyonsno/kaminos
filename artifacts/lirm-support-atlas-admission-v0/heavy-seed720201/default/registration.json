@@ -1,0 +1,52 @@
+{
+  "schema": "kaminos.axial-crawler-registration.v0",
+  "asset": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb",
+  "source": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+  "bounds": {
+    "min": [
+      -0.21004584431648254,
+      -0.2042078673839569,
+      -0.501121461391449
+    ],
+    "max": [
+      0.20987094938755035,
+      0.20206424593925476,
+      0.49950191378593445
+    ]
+  },
+  "contactPlaneY": -0.2042078673839569,
+  "fitMode": "authored-axis-aligned-bounds-v0",
+  "localForwardAxis": [
+    0,
+    0,
+    -1
+  ],
+  "localRightAxis": [
+    1,
+    0,
+    0
+  ],
+  "localUpAxis": [
+    0,
+    1,
+    0
+  ],
+  "headAnchor": [
+    0,
+    -0.0010718107223510742,
+    -0.47110276013612745
+  ],
+  "tailAnchor": [
+    0,
+    -0.0010718107223510742,
+    0.4694832125306129
+  ],
+  "deformationHint": {
+    "mode": "axial-bend-with-attached-radial-detail",
+    "stationWeightAxis": "Z",
+    "preserveCrossSectionAxes": [
+      "X",
+      "Y"
+    ]
+  }
+}

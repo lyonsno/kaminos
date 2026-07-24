@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.support-atlas-control-comparison.v0",
+  "exactMembershipMatch": true,
+  "patches": [
+    {
+      "id": "front-left",
+      "expectedId": "front-left",
+      "contactCountMatch": true,
+      "influenceCountMatch": true,
+      "contactMembershipMatch": true,
+      "influenceMembershipMatch": true
+    },
+    {
+      "id": "front-right",
+      "expectedId": "front-right",
+      "contactCountMatch": true,
+      "influenceCountMatch": true,
+      "contactMembershipMatch": true,
+      "influenceMembershipMatch": true
+    },
+    {
+      "id": "rear-left",
+      "expectedId": "rear-left",
+      "contactCountMatch": true,
+      "influenceCountMatch": true,
+      "contactMembershipMatch": true,
+      "influenceMembershipMatch": true
+    },
+    {
+      "id": "rear-right",
+      "expectedId": "rear-right",
+      "contactCountMatch": true,
+      "influenceCountMatch": true,
+      "contactMembershipMatch": true,
+      "influenceMembershipMatch": true
+    }
+  ]
+}

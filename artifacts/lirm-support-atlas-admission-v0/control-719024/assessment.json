@@ -1,0 +1,115 @@
+{
+  "schema": "kaminos.support-atlas-admission-assessment.v0",
+  "classification": "admit",
+  "rejectionReasons": [],
+  "patchDiagnostics": [
+    {
+      "id": "front-left",
+      "contactVertexCount": 421,
+      "influenceVertexCount": 7147,
+      "rigidCoreVertexCount": 3241,
+      "restCentroid": [
+        0.1142975193693916,
+        -0.2000159620884761,
+        -0.23612038592969437
+      ],
+      "normalizedBottomOffset": 0.016497808188385747,
+      "axialCenterError": 0.0011918999252067857,
+      "sideOffset": 0.1142975193693916
+    },
+    {
+      "id": "front-right",
+      "contactVertexCount": 273,
+      "influenceVertexCount": 4910,
+      "rigidCoreVertexCount": 2359,
+      "restCentroid": [
+        -0.11613919222966221,
+        -0.20065944087811022,
+        -0.2383655946660829
+      ],
+      "normalizedBottomOffset": 0.01495170909418304,
+      "axialCenterError": 0.0035804198575350114,
+      "sideOffset": 0.11613919222966221
+    },
+    {
+      "id": "rear-left",
+      "contactVertexCount": 356,
+      "influenceVertexCount": 6967,
+      "rigidCoreVertexCount": 2796,
+      "restCentroid": [
+        0.10798414237797249,
+        -0.20199911560067957,
+        0.25819538705302086
+      ],
+      "normalizedBottomOffset": 0.011732846392790063,
+      "axialCenterError": 0.024675943673426466,
+      "sideOffset": 0.10798414237797249
+    },
+    {
+      "id": "rear-right",
+      "contactVertexCount": 246,
+      "influenceVertexCount": 5099,
+      "rigidCoreVertexCount": 2044,
+      "restCentroid": [
+        -0.10961439899676227,
+        -0.2009377833910105,
+        0.25976974910836886
+      ],
+      "normalizedBottomOffset": 0.014282930085448429,
+      "axialCenterError": 0.02635079692379668,
+      "sideOffset": 0.10961439899676227
+    }
+  ],
+  "rigidCoreWeight": 0.5,
+  "authoredInformation": {
+    "bodyFrame": {
+      "localForwardAxis": [
+        0,
+        0,
+        -1
+      ],
+      "localRightAxis": [
+        1,
+        0,
+        0
+      ],
+      "localUpAxis": [
+        0,
+        1,
+        0
+      ],
+      "headAnchor": [
+        0,
+        0,
+        -0.47
+      ],
+      "tailAnchor": [
+        0,
+        0,
+        0.47
+      ]
+    },
+    "supportRoles": [
+      {
+        "id": "front-left",
+        "axialRegion": "front",
+        "side": "left"
+      },
+      {
+        "id": "front-right",
+        "axialRegion": "front",
+        "side": "right"
+      },
+      {
+        "id": "rear-left",
+        "axialRegion": "rear",
+        "side": "left"
+      },
+      {
+        "id": "rear-right",
+        "axialRegion": "rear",
+        "side": "right"
+      }
+    ]
+  }
+}

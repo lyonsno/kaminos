@@ -1,0 +1,353 @@
+{
+  "schema": "kaminos.support-atlas-admission-assay-report.v0",
+  "assayId": "two-cast-support-atlas-admission-v0",
+  "status": "complete",
+  "routeIdentity": {
+    "requested": "trellis2mlx_fast",
+    "effective": "trellis2mlx_fast",
+    "jobId": "9c153ba6b424",
+    "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9c153ba6b424/receipt.json",
+    "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png --output /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+    "durationSeconds": 79.5,
+    "backendIdentity": "not-emitted-by-route-receipt"
+  },
+  "manifestPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/assay-manifest.json",
+  "reportPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/assay-report.json",
+  "casts": [
+    {
+      "id": "motion-ready-719024",
+      "role": "accepted-control",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/motion-ready-719024/creature.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/motion-ready-719024/source.png",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/control-719024",
+      "geometry": {
+        "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+        "bytes": 8934204,
+        "vertexCount": 148118,
+        "triangleCount": 188385,
+        "primitiveCount": 1,
+        "bounds": {
+          "min": [
+            -0.18455950915813446,
+            -0.2068822681903839,
+            -0.4996844232082367
+          ],
+          "max": [
+            0.18466870486736298,
+            0.2093127816915512,
+            0.5002209544181824
+          ]
+        }
+      },
+      "registrationHash": "31265a2ca88a551eb7c3fb731598708973c81a622cb158660a154de3b5dab58e",
+      "derivationOptions": {},
+      "authoredEdits": [],
+      "classification": "admit",
+      "rejectionReasons": [],
+      "patchDiagnostics": [
+        {
+          "id": "front-left",
+          "contactVertexCount": 421,
+          "influenceVertexCount": 7147,
+          "rigidCoreVertexCount": 3241,
+          "restCentroid": [
+            0.1142975193693916,
+            -0.2000159620884761,
+            -0.23612038592969437
+          ],
+          "normalizedBottomOffset": 0.016497808188385747,
+          "axialCenterError": 0.0011918999252067857,
+          "sideOffset": 0.1142975193693916
+        },
+        {
+          "id": "front-right",
+          "contactVertexCount": 273,
+          "influenceVertexCount": 4910,
+          "rigidCoreVertexCount": 2359,
+          "restCentroid": [
+            -0.11613919222966221,
+            -0.20065944087811022,
+            -0.2383655946660829
+          ],
+          "normalizedBottomOffset": 0.01495170909418304,
+          "axialCenterError": 0.0035804198575350114,
+          "sideOffset": 0.11613919222966221
+        },
+        {
+          "id": "rear-left",
+          "contactVertexCount": 356,
+          "influenceVertexCount": 6967,
+          "rigidCoreVertexCount": 2796,
+          "restCentroid": [
+            0.10798414237797249,
+            -0.20199911560067957,
+            0.25819538705302086
+          ],
+          "normalizedBottomOffset": 0.011732846392790063,
+          "axialCenterError": 0.024675943673426466,
+          "sideOffset": 0.10798414237797249
+        },
+        {
+          "id": "rear-right",
+          "contactVertexCount": 246,
+          "influenceVertexCount": 5099,
+          "rigidCoreVertexCount": 2044,
+          "restCentroid": [
+            -0.10961439899676227,
+            -0.2009377833910105,
+            0.25976974910836886
+          ],
+          "normalizedBottomOffset": 0.014282930085448429,
+          "axialCenterError": 0.02635079692379668,
+          "sideOffset": 0.10961439899676227
+        }
+      ],
+      "controlComparison": {
+        "schema": "kaminos.support-atlas-control-comparison.v0",
+        "exactMembershipMatch": true,
+        "patches": [
+          {
+            "id": "front-left",
+            "expectedId": "front-left",
+            "contactCountMatch": true,
+            "influenceCountMatch": true,
+            "contactMembershipMatch": true,
+            "influenceMembershipMatch": true
+          },
+          {
+            "id": "front-right",
+            "expectedId": "front-right",
+            "contactCountMatch": true,
+            "influenceCountMatch": true,
+            "contactMembershipMatch": true,
+            "influenceMembershipMatch": true
+          },
+          {
+            "id": "rear-left",
+            "expectedId": "rear-left",
+            "contactCountMatch": true,
+            "influenceCountMatch": true,
+            "contactMembershipMatch": true,
+            "influenceMembershipMatch": true
+          },
+          {
+            "id": "rear-right",
+            "expectedId": "rear-right",
+            "contactCountMatch": true,
+            "influenceCountMatch": true,
+            "contactMembershipMatch": true,
+            "influenceMembershipMatch": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "heavy-seed720201-default",
+      "role": "pressure-default",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/default",
+      "geometry": {
+        "sha256": "sha256:bf85508eb353f742611369c839dfb67d23aa19ef7bdffbd63f015c6274f04c68",
+        "bytes": 8764052,
+        "vertexCount": 146805,
+        "triangleCount": 178214,
+        "primitiveCount": 1,
+        "bounds": {
+          "min": [
+            -0.21004584431648254,
+            -0.2042078673839569,
+            -0.501121461391449
+          ],
+          "max": [
+            0.20987094938755035,
+            0.20206424593925476,
+            0.49950191378593445
+          ]
+        }
+      },
+      "registrationHash": "27fef310a27045d1799778c94149b32f3c57ae84fbac785bb7d5338f508a480c",
+      "derivationOptions": {},
+      "authoredEdits": [],
+      "classification": "needs-edit",
+      "rejectionReasons": [
+        {
+          "severity": "needs-edit",
+          "code": "contact-near-axial-window-edge",
+          "message": "front-left support cluster sits near the edge of its authored axial window",
+          "normalizedAxialCenterError": 0.12836189732381367
+        },
+        {
+          "severity": "needs-edit",
+          "code": "contact-near-axial-window-edge",
+          "message": "front-right support cluster sits near the edge of its authored axial window",
+          "normalizedAxialCenterError": 0.1287369877496702
+        }
+      ],
+      "patchDiagnostics": [
+        {
+          "id": "front-left",
+          "contactVertexCount": 297,
+          "influenceVertexCount": 9367,
+          "rigidCoreVertexCount": 4421,
+          "restCentroid": [
+            0.11406135180281471,
+            -0.19943269781191325,
+            -0.11522086692177479
+          ],
+          "normalizedBottomOffset": 0.011753623779352903,
+          "axialCenterError": 0.12836189732381367,
+          "sideOffset": 0.11406135180281471
+        },
+        {
+          "id": "front-right",
+          "contactVertexCount": 182,
+          "influenceVertexCount": 6982,
+          "rigidCoreVertexCount": 3256,
+          "restCentroid": [
+            -0.10727716736741122,
+            -0.19951138555348574,
+            -0.11486806212873255
+          ],
+          "normalizedBottomOffset": 0.01155994141969291,
+          "axialCenterError": 0.1287369877496702,
+          "sideOffset": 0.10727716736741122
+        },
+        {
+          "id": "rear-left",
+          "contactVertexCount": 436,
+          "influenceVertexCount": 5959,
+          "rigidCoreVertexCount": 1607,
+          "restCentroid": [
+            0.10068032594927417,
+            -0.19864001155856573,
+            0.23010137692572344
+          ],
+          "normalizedBottomOffset": 0.013704745274903101,
+          "axialCenterError": 0.0045028764634841,
+          "sideOffset": 0.10068032594927417
+        },
+        {
+          "id": "rear-right",
+          "contactVertexCount": 307,
+          "influenceVertexCount": 4367,
+          "rigidCoreVertexCount": 1286,
+          "restCentroid": [
+            -0.09351547842645096,
+            -0.1984608244721198,
+            0.21044214213030332
+          ],
+          "normalizedBottomOffset": 0.014145797172312999,
+          "axialCenterError": 0.02540392683709582,
+          "sideOffset": 0.09351547842645096
+        }
+      ],
+      "controlComparison": null
+    },
+    {
+      "id": "heavy-seed720201-front-recentered",
+      "role": "pressure-one-bounded-edit",
+      "glbPath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/trellis-fast/output.glb",
+      "sourceImagePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-accepted-parent-sibling-assay-v0/outputs/heavy-seed720201/output.png",
+      "outputDir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-support-atlas-admission-v0/heavy-seed720201/front-recentered",
+      "geometry": {
+        "sha256": "sha256:bf85508eb353f742611369c839dfb67d23aa19ef7bdffbd63f015c6274f04c68",
+        "bytes": 8764052,
+        "vertexCount": 146805,
+        "triangleCount": 178214,
+        "primitiveCount": 1,
+        "bounds": {
+          "min": [
+            -0.21004584431648254,
+            -0.2042078673839569,
+            -0.501121461391449
+          ],
+          "max": [
+            0.20987094938755035,
+            0.20206424593925476,
+            0.49950191378593445
+          ]
+        }
+      },
+      "registrationHash": "27fef310a27045d1799778c94149b32f3c57ae84fbac785bb7d5338f508a480c",
+      "derivationOptions": {
+        "frontAxialCenterT": 0.62
+      },
+      "authoredEdits": [
+        {
+          "kind": "paired-front-support-axial-center",
+          "from": 0.75,
+          "to": 0.62,
+          "evidence": "Both default front support centroids sat at the posterior edge of the nominal front axial window; the shared measured centroid maps to t approximately 0.62."
+        }
+      ],
+      "classification": "admit",
+      "rejectionReasons": [],
+      "patchDiagnostics": [
+        {
+          "id": "front-left",
+          "contactVertexCount": 435,
+          "influenceVertexCount": 9463,
+          "rigidCoreVertexCount": 4219,
+          "restCentroid": [
+            0.11046592886934338,
+            -0.19909216480693606,
+            -0.10533137388698675
+          ],
+          "normalizedBottomOffset": 0.012591813243531747,
+          "axialCenterError": 0.008876080314178154,
+          "sideOffset": 0.11046592886934338
+        },
+        {
+          "id": "front-right",
+          "contactVertexCount": 280,
+          "influenceVertexCount": 7064,
+          "rigidCoreVertexCount": 3284,
+          "restCentroid": [
+            -0.10758409808788989,
+            -0.1991653862276248,
+            -0.10356658333579877
+          ],
+          "normalizedBottomOffset": 0.012411585710586372,
+          "axialCenterError": 0.01075234745240101,
+          "sideOffset": 0.10758409808788989
+        },
+        {
+          "id": "rear-left",
+          "contactVertexCount": 436,
+          "influenceVertexCount": 5959,
+          "rigidCoreVertexCount": 1607,
+          "restCentroid": [
+            0.10068032594927417,
+            -0.19864001155856573,
+            0.23010137692572344
+          ],
+          "normalizedBottomOffset": 0.013704745274903101,
+          "axialCenterError": 0.0045028764634841,
+          "sideOffset": 0.10068032594927417
+        },
+        {
+          "id": "rear-right",
+          "contactVertexCount": 307,
+          "influenceVertexCount": 4367,
+          "rigidCoreVertexCount": 1286,
+          "restCentroid": [
+            -0.09351547842645096,
+            -0.1984608244721198,
+            0.21044214213030332
+          ],
+          "normalizedBottomOffset": 0.014145797172312999,
+          "axialCenterError": 0.02540392683709582,
+          "sideOffset": 0.09351547842645096
+        }
+      ],
+      "controlComparison": null
+    }
+  ],
+  "classificationSummary": {
+    "motion-ready-719024": "admit",
+    "heavy-seed720201-default": "needs-edit",
+    "heavy-seed720201-front-recentered": "admit"
+  },
+  "lastTrustworthyEvidence": "all-casts-assessed"
+}
