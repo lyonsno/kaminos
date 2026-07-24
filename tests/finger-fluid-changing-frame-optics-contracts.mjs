@@ -126,7 +126,7 @@ const currentFrame = runtime.representation();
 
 const previousIdentity = {
   packageDescriptor: KAMINOS_FLUID_PACKAGE_DESCRIPTOR,
-  artifactRevision: '@kaminos/fluid-webgpu@0.2.1',
+  artifactRevision: '@kaminos/fluid-webgpu@0.3.0',
   producerRevision: KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRevision,
   fluidEpoch: previousFrame.fluidEpoch,
   terrainEpoch: previousFrame.terrainEpoch,
@@ -174,7 +174,8 @@ assert.equal(
 assert.equal(publishedReceipt.kaminosPackageVersion, '0.2.1');
 assert.equal(
   publishedReceipt.kaminosRuntimeRevision,
-  KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRevision,
+  '95920668287205517bc2e22f4f224b0d7584f53e',
+  'the immutable v2 browser receipt retains the runtime revision it actually exercised',
 );
 assert.deepEqual(publishedReceipt.browser.pageAndConsoleErrors, []);
 assert.deepEqual(publishedReceipt.canonicalReceiptCapture.pageAndConsoleErrors, []);

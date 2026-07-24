@@ -116,11 +116,18 @@ export const KAMINOS_FLUID_REPRESENTATION_FRAME_SCHEMA = 'kaminos.fluid.represen
 export const KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE = 'kaminos/fluid/representation-frame';
 export const KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY = 'macro-local-parcel-exclusive-v1';
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
+export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_CAPABILITY = 'kaminos.fluid.portable-macro-source.v1';
+export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE = 'kaminos/fluid/portable-macro-source';
+export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA = 'kaminos.fluid.portable-macro-source-handle.v1';
+export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-macro-source-snapshot.v1';
+export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_SCHEMA = 'kaminos.finger-fluid.portable-macro-geometry-provider.v1';
+export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_ROUTE = 'kaminos/finger-fluid/portable-macro-geometry-provider';
+export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_UPLOAD_SCHEMA = 'kaminos.finger-fluid.portable-macro-upload-snapshot.v1';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA = 'kaminos.finger-fluid.optical-representation-transition.v1';
 export const KAMINOS_FINGER_FLUID_OPTICAL_EXECUTION_SCHEMA = 'kaminos.finger-fluid.optical-execution.v1';
 export const KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE = 'webgpu-watershed-changing-frame-optics-v1';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TIMING_ROUTE = 'webgpu-timestamp-query-optical-pass-v1';
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.2.1';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.3.0';
 const KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
 
 function representationFrameFailure(message) {
@@ -177,6 +184,684 @@ function representationFrameGrid(value, label) {
     representationFrameFailure(`${label} metric is invalid`);
   }
   return value;
+}
+
+function portableGeometryFailure(message) {
+  throw new Error(`Portable fluid support geometry ${message}`);
+}
+
+function portableGeometryReportedFailure(error, {
+  phase,
+  sourceHandleId,
+  lastTrustworthyEvidence,
+}) {
+  if (error?.report) return error;
+  const failure = error instanceof Error ? error : new Error(String(error));
+  Object.defineProperty(failure, 'report', {
+    configurable: false,
+    enumerable: true,
+    writable: false,
+    value: Object.freeze({
+      schema: 'kaminos.finger-fluid.portable-macro-geometry-failure.v1',
+      status: 'failed',
+      phase,
+      sourceHandleId,
+      lastTrustworthyEvidence,
+      message: failure.message,
+    }),
+  });
+  return failure;
+}
+
+function portableGeometryVectorField(value, sampleCount, label, { requireUnit = false } = {}) {
+  representationFrameTypedArray(value, sampleCount * 3, label);
+  const copy = Float64Array.from(value);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const offset = index * 3;
+    const length = Math.hypot(copy[offset], copy[offset + 1], copy[offset + 2]);
+    if (!Number.isFinite(length) || length <= 1e-8) {
+      portableGeometryFailure(`${label} contains a degenerate vector at sample ${index}`);
+    }
+    if (requireUnit && Math.abs(length - 1) > 1e-5) {
+      portableGeometryFailure(`${label} must be unit length at sample ${index}`);
+    }
+  }
+  return copy;
+}
+
+function validatePortablePackageIdentity(expectedIdentity) {
+  const packageDescriptor = expectedIdentity?.packageDescriptor;
+  if (
+    !expectedIdentity
+    || typeof expectedIdentity !== 'object'
+    || typeof expectedIdentity.artifactRevision !== 'string'
+    || expectedIdentity.artifactRevision.trim().length === 0
+    || typeof expectedIdentity.producerRevision !== 'string'
+    || expectedIdentity.producerRevision.trim().length === 0
+    || !Number.isInteger(expectedIdentity.fluidEpoch)
+    || expectedIdentity.fluidEpoch < 0
+    || !Number.isInteger(expectedIdentity.terrainEpoch)
+    || expectedIdentity.terrainEpoch < 0
+    || !expectedIdentity.source
+    || typeof expectedIdentity.source !== 'object'
+    || !packageDescriptor
+    || typeof packageDescriptor !== 'object'
+  ) {
+    portableGeometryFailure('expected producer identity is incomplete');
+  }
+  for (const label of ['requested', 'effective', 'producerId', 'producerRevision']) {
+    representationFrameString(expectedIdentity.source[label], `portable expected source ${label}`);
+  }
+  if (expectedIdentity.source.requested !== expectedIdentity.source.effective) {
+    portableGeometryFailure('expected terrain source route disagreement');
+  }
+  if (packageDescriptor.schema !== KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA) {
+    portableGeometryFailure(`package schema is unsupported: ${packageDescriptor.schema || 'missing'}`);
+  }
+  if (packageDescriptor.sourceAuthority !== 'live_runtime') {
+    portableGeometryFailure(`package source authority is unsupported: ${packageDescriptor.sourceAuthority || 'missing'}`);
+  }
+  if (packageDescriptor.fallbackStatus !== 'none') {
+    portableGeometryFailure(`package fallback is not accepted: ${packageDescriptor.fallbackStatus || 'missing'}`);
+  }
+  if (packageDescriptor.packageName !== '@kaminos/fluid-webgpu') {
+    portableGeometryFailure(`package identity is unsupported: ${packageDescriptor.packageName || 'missing'}`);
+  }
+  representationFrameString(packageDescriptor.packageVersion, 'portable package version');
+  if (packageDescriptor.packageVersion !== KAMINOS_FLUID_PACKAGE_VERSION) {
+    portableGeometryFailure(`package version is unsupported: ${packageDescriptor.packageVersion}`);
+  }
+  representationFrameString(packageDescriptor.artifactRevision, 'portable package artifact revision');
+  representationFrameString(packageDescriptor.runtimeRevision, 'portable package runtime revision');
+  representationFrameString(packageDescriptor.runtimeRoute, 'portable package runtime route');
+  if (packageDescriptor.runtimeRoute !== KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE) {
+    portableGeometryFailure(`package runtime route is unsupported: ${packageDescriptor.runtimeRoute}`);
+  }
+  if (packageDescriptor.artifactRevision !== expectedIdentity.artifactRevision) {
+    portableGeometryFailure(`package artifact revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.artifactRevision,
+      observed: packageDescriptor.artifactRevision,
+    })}`);
+  }
+  if (packageDescriptor.runtimeRevision !== expectedIdentity.producerRevision) {
+    portableGeometryFailure(`package runtime revision disagreement: ${JSON.stringify({
+      expected: expectedIdentity.producerRevision,
+      observed: packageDescriptor.runtimeRevision,
+    })}`);
+  }
+  if (
+    !Array.isArray(packageDescriptor.representationRoutes)
+    || !packageDescriptor.representationRoutes.includes(KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE)
+  ) {
+    portableGeometryFailure('package does not publish the canonical representation capability');
+  }
+  return packageDescriptor;
+}
+
+function validatePortableExactRoute(route, expectedRoute, label) {
+  if (
+    !route
+    || route.requested !== expectedRoute
+    || route.effective !== expectedRoute
+    || route.requested !== route.effective
+  ) {
+    portableGeometryFailure(`${label} route disagreement`);
+  }
+  return route;
+}
+
+function validatePortableNoCameraState(value, label, seen = new Set()) {
+  if (
+    value == null
+    || typeof value !== 'object'
+    || ArrayBuffer.isView(value)
+    || value instanceof ArrayBuffer
+    || seen.has(value)
+  ) {
+    return;
+  }
+  seen.add(value);
+  const forbiddenKeys = new Set([
+    'camera',
+    'view',
+    'projection',
+    'viewport',
+    'screenSpaceDemand',
+    'opticalResidency',
+  ]);
+  for (const [key, child] of Object.entries(value)) {
+    if (forbiddenKeys.has(key)) {
+      portableGeometryFailure(`${label} contains camera-owned state: ${key}`);
+    }
+    validatePortableNoCameraState(child, `${label}.${key}`, seen);
+  }
+}
+
+function validatePortableRecursivelyFrozen(value, label, seen = new Set()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return;
+  if (!Object.isFrozen(value)) {
+    portableGeometryFailure(`${label} must be recursively frozen`);
+  }
+  seen.add(value);
+  for (const child of Object.values(value)) {
+    validatePortableRecursivelyFrozen(child, label, seen);
+  }
+}
+
+function validatePortablePhysicalMaterial(physicalMaterial, label = 'physical material') {
+  if (!physicalMaterial || typeof physicalMaterial !== 'object') {
+    portableGeometryFailure(`${label} is missing`);
+  }
+  representationFrameFinite(physicalMaterial.densityKgM3, `${label} density`, { positive: true });
+  if (!physicalMaterial.absorptionPerMeter || physicalMaterial.absorptionPerMeter.length !== 3) {
+    portableGeometryFailure(`${label} absorption is invalid`);
+  }
+  return {
+    densityKgM3: physicalMaterial.densityKgM3,
+    dynamicViscosityPaS: physicalMaterial.dynamicViscosityPaS == null
+      ? null
+      : representationFrameFinite(
+        physicalMaterial.dynamicViscosityPaS,
+        `${label} dynamic viscosity`,
+        { nonNegative: true },
+      ),
+    absorptionPerMeter: Array.from(physicalMaterial.absorptionPerMeter, (value, index) => (
+      representationFrameFinite(value, `${label} absorption[${index}]`, { nonNegative: true })
+    )),
+  };
+}
+
+function validatePortableMacroSourceHandleForOptics(
+  sourceHandle,
+  expectedIdentity,
+  packageDescriptor,
+  diagnostics,
+) {
+  diagnostics.phase = 'validate-source-descriptor';
+  if (
+    !Array.isArray(packageDescriptor.sourceRoutes)
+    || !packageDescriptor.sourceRoutes.includes(KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE)
+  ) {
+    portableGeometryFailure('package does not publish the canonical portable source route');
+  }
+
+  if (!sourceHandle || typeof sourceHandle !== 'object' || !Object.isFrozen(sourceHandle)) {
+    portableGeometryFailure('macro source handle must be immutable');
+  }
+  const descriptor = sourceHandle.descriptor;
+  if (!descriptor || typeof descriptor !== 'object' || !Object.isFrozen(descriptor)) {
+    portableGeometryFailure('macro source descriptor must be immutable');
+  }
+  validatePortableRecursivelyFrozen(descriptor, 'macro source descriptor');
+  if (descriptor.schema !== KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA) {
+    portableGeometryFailure(`macro source handle schema is unsupported: ${descriptor.schema || 'missing'}`);
+  }
+  validatePortableExactRoute(
+    descriptor.route,
+    KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE,
+    'macro source descriptor',
+  );
+  if (
+    descriptor.requestedCapability !== KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_CAPABILITY
+    || descriptor.effectiveCapability !== descriptor.requestedCapability
+    || descriptor.capability !== descriptor.effectiveCapability
+  ) {
+    portableGeometryFailure('macro source capability disagreement');
+  }
+  representationFrameString(descriptor.sourceHandleId, 'portable macro source handle id');
+  diagnostics.sourceHandleId = descriptor.sourceHandleId;
+  if (descriptor.sourceAuthority !== 'live_runtime') {
+    portableGeometryFailure(`macro source authority is unsupported: ${descriptor.sourceAuthority || 'missing'}`);
+  }
+  if (descriptor.fallbackStatus !== 'none') {
+    portableGeometryFailure(`macro source fallback is not accepted: ${descriptor.fallbackStatus || 'missing'}`);
+  }
+  if (descriptor.ownershipIdentity !== KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY) {
+    portableGeometryFailure('macro source ownership identity disagreement');
+  }
+  validatePortableExactRoute(
+    descriptor.representationRoute,
+    KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE,
+    'macro source representation',
+  );
+  representationFrameString(descriptor.producer?.revision, 'portable macro source producer revision');
+  representationFrameString(descriptor.producer?.runtimeRoute, 'portable macro source runtime route');
+  representationFrameString(descriptor.producer?.method, 'portable macro source method');
+  if (descriptor.producer.revision !== expectedIdentity.producerRevision) {
+    portableGeometryFailure('macro source producer revision disagreement');
+  }
+  if (descriptor.producer.runtimeRoute !== packageDescriptor.runtimeRoute) {
+    portableGeometryFailure('macro source and package runtime route disagreement');
+  }
+  const supportDescriptor = descriptor.supportGeometry;
+  if (!supportDescriptor || typeof supportDescriptor !== 'object') {
+    portableGeometryFailure('macro source support descriptor is missing');
+  }
+  for (const label of ['topologyId', 'terrainId', 'supportClass', 'transformId']) {
+    representationFrameString(supportDescriptor[label], `portable macro support ${label}`);
+  }
+  if (
+    supportDescriptor.coordinateSpace !== 'world_meters'
+    || supportDescriptor.worldMetersPerUnit !== 1
+    || supportDescriptor.mapping !== 'explicit-world-position-buffer-v1'
+    || supportDescriptor.positionSource !== 'terrain-fluid-frame.fields.worldPosition'
+    || !Number.isInteger(supportDescriptor.sampleCount)
+    || supportDescriptor.sampleCount <= 0
+  ) {
+    portableGeometryFailure('macro source support descriptor is unsupported or incomplete');
+  }
+  if (
+    descriptor.lifetime?.releasePolicy !== 'explicit-release-v1'
+    || !Number.isInteger(descriptor.lifetime.retainedTerrainEpoch)
+    || !Number.isInteger(descriptor.lifetime.retainedFluidEpoch)
+    || descriptor.lifetime.retainedTerrainEpoch < 0
+    || descriptor.lifetime.retainedFluidEpoch < 0
+    || descriptor.lifetime.retainedTerrainEpoch > expectedIdentity.terrainEpoch
+    || descriptor.lifetime.retainedFluidEpoch > expectedIdentity.fluidEpoch
+  ) {
+    portableGeometryFailure('macro source lifetime is invalid');
+  }
+  validatePortablePhysicalMaterial(descriptor.physicalMaterial, 'macro source descriptor material');
+  validatePortableNoCameraState(descriptor, 'macro source descriptor');
+  if (typeof sourceHandle.read !== 'function' || typeof sourceHandle.release !== 'function') {
+    portableGeometryFailure('macro source handle is incomplete');
+  }
+
+  diagnostics.phase = 'read-live-source';
+  diagnostics.lastTrustworthyEvidence = 'source-descriptor-validated';
+  const snapshot = sourceHandle.read({
+    minimumTerrainEpoch: expectedIdentity.terrainEpoch,
+    minimumFluidEpoch: expectedIdentity.fluidEpoch,
+  });
+  diagnostics.phase = 'validate-source-snapshot';
+  diagnostics.lastTrustworthyEvidence = 'source-snapshot-read';
+  if (!snapshot || typeof snapshot !== 'object') {
+    portableGeometryFailure('macro source read returned no snapshot');
+  }
+  if (snapshot.schema !== KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA) {
+    portableGeometryFailure(`macro source snapshot schema is unsupported: ${snapshot.schema || 'missing'}`);
+  }
+  validatePortableExactRoute(
+    snapshot.route,
+    KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE,
+    'macro source snapshot',
+  );
+  if (
+    snapshot.requestedCapability !== KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_CAPABILITY
+    || snapshot.effectiveCapability !== snapshot.requestedCapability
+    || snapshot.capability !== snapshot.effectiveCapability
+  ) {
+    portableGeometryFailure('macro source snapshot capability disagreement');
+  }
+  if (snapshot.sourceHandleId !== descriptor.sourceHandleId) {
+    portableGeometryFailure('macro source snapshot handle identity disagreement');
+  }
+  if (snapshot.sourceAuthority !== 'live_runtime' || snapshot.fallbackStatus !== 'none') {
+    portableGeometryFailure('macro source snapshot authority or fallback is invalid');
+  }
+  validatePortableExactRoute(
+    snapshot.representationRoute,
+    KAMINOS_FLUID_REPRESENTATION_FRAME_ROUTE,
+    'macro source snapshot representation',
+  );
+  if (
+    snapshot.ownershipIdentity !== descriptor.ownershipIdentity
+    || snapshot.producer?.revision !== descriptor.producer.revision
+    || snapshot.producer?.runtimeRoute !== descriptor.producer.runtimeRoute
+    || snapshot.producer?.method !== descriptor.producer.method
+  ) {
+    portableGeometryFailure('macro source snapshot producer identity disagreement');
+  }
+  if (!snapshot.source || typeof snapshot.source !== 'object') {
+    portableGeometryFailure('macro source snapshot terrain source identity is missing');
+  }
+  for (const label of ['requested', 'effective', 'producerId', 'producerRevision']) {
+    representationFrameString(snapshot.source[label], `portable snapshot source ${label}`);
+  }
+  if (
+    snapshot.source.requested !== expectedIdentity.source.requested
+    || snapshot.source.effective !== expectedIdentity.source.effective
+    || snapshot.source.requested !== snapshot.source.effective
+  ) {
+    portableGeometryFailure('macro source snapshot source route disagreement');
+  }
+  if (
+    snapshot.source.producerId !== expectedIdentity.source.producerId
+    || snapshot.source.producerRevision !== expectedIdentity.source.producerRevision
+  ) {
+    portableGeometryFailure('macro source snapshot source producer disagreement');
+  }
+  const terrainSource = Object.freeze({
+    requested: snapshot.source.requested,
+    effective: snapshot.source.effective,
+    producerId: snapshot.source.producerId,
+    producerRevision: snapshot.source.producerRevision,
+  });
+  if (
+    snapshot.terrainEpoch !== expectedIdentity.terrainEpoch
+    || snapshot.fluidEpoch !== expectedIdentity.fluidEpoch
+  ) {
+    portableGeometryFailure('macro source snapshot epoch disagreement');
+  }
+  if (snapshot.complete !== true) {
+    portableGeometryFailure('macro source snapshot is incomplete');
+  }
+  if (
+    !Number.isFinite(snapshot.confidence)
+    || snapshot.confidence < 0
+    || snapshot.confidence > 1
+  ) {
+    portableGeometryFailure('macro source snapshot confidence is invalid');
+  }
+  if (!Array.isArray(snapshot.dirtyRegions)) {
+    portableGeometryFailure('macro source snapshot dirty regions are missing');
+  }
+  validatePortableNoCameraState(snapshot, 'macro source snapshot');
+
+  diagnostics.phase = 'validate-support-geometry';
+  diagnostics.lastTrustworthyEvidence = 'source-snapshot-identity-validated';
+  const support = snapshot.supportGeometry;
+  if (!support || typeof support !== 'object') {
+    portableGeometryFailure('macro source support geometry is missing');
+  }
+  for (const label of ['geometryId', 'topologyId', 'terrainId', 'supportClass', 'transformId']) {
+    representationFrameString(support[label], `portable macro support ${label}`);
+  }
+  if (
+    support.topologyId !== supportDescriptor.topologyId
+    || support.terrainId !== supportDescriptor.terrainId
+    || support.supportClass !== supportDescriptor.supportClass
+    || support.transformId !== supportDescriptor.transformId
+    || support.coordinateSpace !== supportDescriptor.coordinateSpace
+    || support.worldMetersPerUnit !== supportDescriptor.worldMetersPerUnit
+    || support.mapping !== supportDescriptor.mapping
+    || support.positionSource !== supportDescriptor.positionSource
+  ) {
+    portableGeometryFailure('macro source support descriptor disagreement');
+  }
+  const grid = representationFrameGrid(support.grid, 'portable macro source grid');
+  const sampleCount = grid.width * grid.height;
+  if (support.sampleCount !== sampleCount || support.sampleCount !== supportDescriptor.sampleCount) {
+    portableGeometryFailure('macro source support sample count disagreement');
+  }
+  const dirtyRegions = snapshot.dirtyRegions.map((region, index) => {
+    if (
+      !region
+      || !Number.isInteger(region.x)
+      || !Number.isInteger(region.y)
+      || !Number.isInteger(region.width)
+      || !Number.isInteger(region.height)
+      || region.x < 0
+      || region.y < 0
+      || region.width <= 0
+      || region.height <= 0
+      || region.x + region.width > grid.width
+      || region.y + region.height > grid.height
+    ) {
+      portableGeometryFailure(`macro source dirty region ${index} is invalid`);
+    }
+    return Object.freeze({
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
+    });
+  });
+  representationFrameTypedArray(support.worldPosition, sampleCount * 3, 'portable macro world position');
+  const tangentU = portableGeometryVectorField(support.tangentU, sampleCount, 'tangent U');
+  const tangentV = portableGeometryVectorField(support.tangentV, sampleCount, 'tangent V');
+  const normal = portableGeometryVectorField(support.normal, sampleCount, 'normal', { requireUnit: true });
+  representationFrameTypedArray(support.jacobian, sampleCount, 'portable macro jacobian');
+  const jacobian = Float64Array.from(support.jacobian);
+  for (let index = 0; index < sampleCount; index += 1) {
+    if (jacobian[index] <= 0) {
+      portableGeometryFailure(`jacobian is nonpositive at sample ${index}`);
+    }
+  }
+  representationFrameTypedArray(
+    support.supportVelocity,
+    sampleCount * 3,
+    'portable macro support velocity',
+  );
+  const supportVelocity = Float64Array.from(support.supportVelocity);
+
+  diagnostics.phase = 'validate-macro-fields';
+  diagnostics.lastTrustworthyEvidence = 'support-geometry-validated';
+  if (snapshot.macro?.method !== descriptor.producer.method) {
+    portableGeometryFailure('macro source method disagreement');
+  }
+  representationFrameTypedArray(snapshot.macro.mappedDepth, sampleCount, 'portable mapped depth', { nonNegative: true });
+  representationFrameTypedArray(snapshot.macro.mappedMomentumU, sampleCount, 'portable mapped momentum U');
+  representationFrameTypedArray(snapshot.macro.mappedMomentumV, sampleCount, 'portable mapped momentum V');
+  if (!snapshot.macro.materialMasses || typeof snapshot.macro.materialMasses !== 'object') {
+    portableGeometryFailure('portable macro material masses are missing');
+  }
+  const materialMasses = {};
+  for (const [key, values] of Object.entries(snapshot.macro.materialMasses)) {
+    representationFrameString(key, 'portable material mass channel');
+    representationFrameTypedArray(values, sampleCount, `portable material mass ${key}`, { nonNegative: true });
+    materialMasses[key] = Float64Array.from(values);
+  }
+  const physicalMaterial = validatePortablePhysicalMaterial(
+    snapshot.physicalMaterial,
+    'macro source snapshot material',
+  );
+  diagnostics.phase = 'construct-provider';
+  diagnostics.lastTrustworthyEvidence = 'macro-source-snapshot-validated';
+
+  return {
+    representation: {
+      grid,
+      sampleCount,
+      mappedDepth: Float64Array.from(snapshot.macro.mappedDepth),
+      mappedMomentumU: Float64Array.from(snapshot.macro.mappedMomentumU),
+      mappedMomentumV: Float64Array.from(snapshot.macro.mappedMomentumV),
+      materialMasses,
+      method: snapshot.macro.method,
+      physicalMaterial,
+    },
+    geometrySource: {
+      grid,
+      sampleCount,
+      supportPosition: Float64Array.from(support.worldPosition),
+      tangentU,
+      tangentV,
+      normal,
+      jacobian,
+      supportVelocity,
+      worldMetersPerUnit: support.worldMetersPerUnit,
+      sourceHandle: {
+        id: descriptor.sourceHandleId,
+        revision: descriptor.producer.revision,
+        lifetime: descriptor.lifetime.releasePolicy,
+      },
+    },
+    metadata: {
+      identity: support.geometryId,
+      transformIdentity: support.transformId,
+      terrainId: support.terrainId,
+      producerId: terrainSource.producerId,
+      producerRevision: terrainSource.producerRevision,
+      runtimeProducerRevision: descriptor.producer.revision,
+      ownershipIdentity: descriptor.ownershipIdentity,
+      capability: descriptor.capability,
+    },
+    source: Object.freeze({
+      schema: descriptor.schema,
+      route: Object.freeze({
+        requested: descriptor.route.requested,
+        effective: descriptor.route.effective,
+      }),
+      capability: descriptor.capability,
+      handleId: descriptor.sourceHandleId,
+      sourceAuthority: descriptor.sourceAuthority,
+      fallbackStatus: descriptor.fallbackStatus,
+      releasePolicy: descriptor.lifetime.releasePolicy,
+      retainedTerrainEpoch: descriptor.lifetime.retainedTerrainEpoch,
+      retainedFluidEpoch: descriptor.lifetime.retainedFluidEpoch,
+      terrain: terrainSource,
+    }),
+    confidence: snapshot.confidence,
+    dirtyRegions: Object.freeze(dirtyRegions),
+  };
+}
+
+function createFingerFluidPortableMacroGeometryProviderInternal({
+  sourceHandle,
+  expectedIdentity,
+} = {}, diagnostics) {
+  const packageDescriptor = validatePortablePackageIdentity(expectedIdentity);
+  diagnostics.phase = 'validate-source-descriptor';
+  diagnostics.lastTrustworthyEvidence = 'package-identity-validated';
+  if (sourceHandle == null) {
+    portableGeometryFailure('canonical retained source handle is required');
+  }
+  const retainedSource = validatePortableMacroSourceHandleForOptics(
+    sourceHandle,
+    expectedIdentity,
+    packageDescriptor,
+    diagnostics,
+  );
+  const {
+    representation,
+    geometrySource,
+    metadata,
+    source,
+    confidence,
+    dirtyRegions,
+  } = retainedSource;
+  const route = Object.freeze({
+    requested: KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_ROUTE,
+    effective: KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_ROUTE,
+  });
+  const packageIdentity = Object.freeze({
+    name: packageDescriptor.packageName,
+    version: packageDescriptor.packageVersion,
+    artifactRevision: packageDescriptor.artifactRevision,
+    runtimeRevision: packageDescriptor.runtimeRevision,
+    runtimeRoute: packageDescriptor.runtimeRoute,
+    sourceAuthority: packageDescriptor.sourceAuthority,
+    fallbackStatus: packageDescriptor.fallbackStatus,
+  });
+  const geometry = Object.freeze({
+    identity: metadata.identity,
+    transformIdentity: metadata.transformIdentity,
+    terrainId: metadata.terrainId,
+    producerId: metadata.producerId,
+    producerRevision: metadata.producerRevision,
+    runtimeProducerRevision: metadata.runtimeProducerRevision,
+    sourceHandleId: geometrySource.sourceHandle.id,
+    sourceHandleRevision: geometrySource.sourceHandle.revision,
+    sourceHandleLifetime: geometrySource.sourceHandle.lifetime,
+    width: geometrySource.grid.width,
+    height: geometrySource.grid.height,
+    spacing: Object.freeze([...geometrySource.grid.spacing]),
+    origin: Object.freeze([...geometrySource.grid.origin]),
+    worldMetersPerUnit: geometrySource.worldMetersPerUnit,
+  });
+  const physicalMaterial = Object.freeze({
+    densityKgM3: representation.physicalMaterial.densityKgM3,
+    dynamicViscosityPaS: representation.physicalMaterial.dynamicViscosityPaS,
+    absorptionPerMeter: Object.freeze([...representation.physicalMaterial.absorptionPerMeter]),
+  });
+
+  function sampleSurface(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= representation.sampleCount) {
+      portableGeometryFailure(`sample index is out of range: ${index}`);
+    }
+    const offset = index * 3;
+    const mappedDepth = representation.mappedDepth[index];
+    const sampleJacobian = geometrySource.jacobian[index];
+    const physicalDepthMeters = mappedDepth / sampleJacobian;
+    const worldDepth = physicalDepthMeters / geometrySource.worldMetersPerUnit;
+    const support = Array.from(geometrySource.supportPosition.subarray(offset, offset + 3));
+    const sampleNormal = Array.from(geometrySource.normal.subarray(offset, offset + 3));
+    const surface = support.map((component, componentIndex) => (
+      component + sampleNormal[componentIndex] * worldDepth
+    ));
+    return {
+      index,
+      wet: mappedDepth > 0,
+      mappedDepth,
+      physicalDepthMeters,
+      supportPosition: support,
+      surfacePosition: surface,
+      normal: sampleNormal,
+      tangentU: Array.from(geometrySource.tangentU.subarray(offset, offset + 3)),
+      tangentV: Array.from(geometrySource.tangentV.subarray(offset, offset + 3)),
+      jacobian: sampleJacobian,
+      supportVelocity: Array.from(geometrySource.supportVelocity.subarray(offset, offset + 3)),
+      mappedMomentum: [
+        representation.mappedMomentumU[index],
+        representation.mappedMomentumV[index],
+      ],
+      materialMasses: Object.fromEntries(Object.entries(representation.materialMasses).map(
+        ([key, values]) => [key, values[index]],
+      )),
+    };
+  }
+
+  function createUploadSnapshot() {
+    return {
+      schema: KAMINOS_FINGER_FLUID_PORTABLE_MACRO_UPLOAD_SCHEMA,
+      geometryIdentity: geometry.identity,
+      terrainId: geometry.terrainId,
+      sourceHandleId: geometry.sourceHandleId,
+      source: source.terrain,
+      producerRevision: expectedIdentity.producerRevision,
+      fluidEpoch: expectedIdentity.fluidEpoch,
+      terrainEpoch: expectedIdentity.terrainEpoch,
+      sampleCount: representation.sampleCount,
+      mappedDepth: Float64Array.from(representation.mappedDepth),
+      mappedMomentumU: Float64Array.from(representation.mappedMomentumU),
+      mappedMomentumV: Float64Array.from(representation.mappedMomentumV),
+      materialMasses: Object.fromEntries(Object.entries(representation.materialMasses).map(
+        ([key, values]) => [key, Float64Array.from(values)],
+      )),
+      supportPosition: Float64Array.from(geometrySource.supportPosition),
+      tangentU: Float64Array.from(geometrySource.tangentU),
+      tangentV: Float64Array.from(geometrySource.tangentV),
+      normal: Float64Array.from(geometrySource.normal),
+      jacobian: Float64Array.from(geometrySource.jacobian),
+      supportVelocity: Float64Array.from(geometrySource.supportVelocity),
+      confidence,
+      dirtyRegions,
+    };
+  }
+
+  return Object.freeze({
+    schema: KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_SCHEMA,
+    route,
+    source,
+    capability: metadata.capability,
+    hostIndependent: true,
+    package: packageIdentity,
+    producerRevision: expectedIdentity.producerRevision,
+    fluidEpoch: expectedIdentity.fluidEpoch,
+    terrainEpoch: expectedIdentity.terrainEpoch,
+    ownershipIdentity: metadata.ownershipIdentity,
+    method: representation.method,
+    geometry,
+    physicalMaterial,
+    confidence,
+    dirtyRegions,
+    sampleCount: representation.sampleCount,
+    sampleSurface,
+    createUploadSnapshot,
+  });
+}
+
+export function createFingerFluidPortableMacroGeometryProvider(options = {}) {
+  const diagnostics = {
+    phase: 'validate-package-identity',
+    sourceHandleId: null,
+    lastTrustworthyEvidence: 'no-provider-input-validated',
+  };
+  try {
+    return createFingerFluidPortableMacroGeometryProviderInternal(options, diagnostics);
+  } catch (error) {
+    throw portableGeometryReportedFailure(error, diagnostics);
+  }
 }
 
 export function validateFingerFluidOpticalRepresentationFrame(frame, expectedIdentity = {}) {
