@@ -58,6 +58,11 @@ export {
 } from './cooperative-execution.js';
 
 export {
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+  runWebGpuCooperativeAdapterConformance,
+} from './cooperative-adapter-conformance.js';
+
+export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
   requestBrowserWebGpuDevice,

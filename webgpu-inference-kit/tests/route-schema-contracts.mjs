@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   WEBGPU_INFERENCE_KIT_VERSION,
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
   WEBGPU_ROUTE_DEFINITION_SCHEMA,
   WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
   WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
@@ -15,7 +16,7 @@ import {
 
 const contract = createWebGpuRouteSchemaContract();
 
-assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.36');
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.37');
 assert.equal(WEBGPU_ROUTE_DEFINITION_SCHEMA, 'kaminos.webgpu-route-definition.v0');
 assert.equal(WEBGPU_ROUTE_REQUEST_SCHEMA, 'kaminos.webgpu-route-request.v0');
 assert.equal(WEBGPU_ROUTE_RESULT_SCHEMA, 'kaminos.webgpu-route-result.v0');
@@ -35,6 +36,10 @@ assert.equal(contract.runtimeProfileSchema, WEBGPU_RUNTIME_PROFILE_SCHEMA);
 assert.equal(contract.evidenceClassificationSchema, WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA);
 assert.equal(contract.schedulerSchema, WEBGPU_ROUTE_SCHEDULER_SCHEMA);
 assert.equal(contract.backpressureSchema, WEBGPU_ROUTE_BACKPRESSURE_SCHEMA);
+assert.equal(
+  contract.cooperativeAdapterConformanceSchema,
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+);
 assert.deepEqual(contract.authoritativeReceiptStatuses, ['real']);
 assert.deepEqual(contract.nonAuthoritativeReceiptStatuses, ['fallback', 'partial', 'cached']);
 assert.equal(createWebGpuRouteSchemaContract({ kitVersion: 'consumer-override' }).kitVersion, 'consumer-override');

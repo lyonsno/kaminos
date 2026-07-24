@@ -10,6 +10,9 @@ import {
   WEBGPU_ROUTE_REQUEST_SCHEMA,
   WEBGPU_ROUTE_RESULT_SCHEMA,
 } from './route-boundary.js';
+import {
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+} from './cooperative-adapter-conformance.js';
 import { WEBGPU_INFERENCE_KIT_VERSION } from './kernel-profile.js';
 
 export function createWebGpuRouteSchemaContract(input = {}) {
@@ -24,6 +27,8 @@ export function createWebGpuRouteSchemaContract(input = {}) {
     evidenceClassificationSchema: WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
     schedulerSchema: WEBGPU_ROUTE_SCHEDULER_SCHEMA,
     backpressureSchema: WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+    cooperativeAdapterConformanceSchema:
+      WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
     authoritativeReceiptStatuses: ['real'],
     nonAuthoritativeReceiptStatuses: ['fallback', 'partial', 'cached'],
   };

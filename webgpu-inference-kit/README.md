@@ -141,6 +141,62 @@ The first SF3D manifest should expose these model-owned duty families:
 
 The model adapter remains the authority for buffer lifetimes, bind groups, dispatch geometry, numerical equivalence, and lawful split points. The manifest makes those boundaries reusable by the scheduler, progress UI, cancellation path, and terminal report without embedding SF3D or SHARP internals in the runtime.
 
+## Prove An Adapter Before Browser Smoke
+
+Run the same adapter orchestration against deterministic Kaminos runtime
+surfaces before paying for a model download or browser firing:
+
+```js
+import {
+  runWebGpuCooperativeAdapterConformance,
+} from "@kaminos/webgpu-inference-kit";
+
+const conformance = await runWebGpuCooperativeAdapterConformance({
+  conformanceId: "sf3d:cooperative-adapter:v0",
+  adapterIdentity: {
+    adapterId: "sf3d.browser-webgpu.v0",
+    routeId: boundaries.routeId,
+    packageName: "@kaminos/sf3d-webgpu",
+    packageVersion: "0.1.0",
+    sourceRevision: import.meta.env.VITE_GIT_COMMIT,
+  },
+  manifest: boundaries,
+  initialResources: ["dino.weights", "decoder.weights"],
+  expectedFinalResources: [
+    "dino.weights",
+    "decoder.weights",
+    "scene.glb",
+  ],
+  runAdapter: runSf3dCooperativeAdapter,
+});
+```
+
+The runner invokes `runAdapter()` four times through the real cooperative
+execution facade:
+
+1. cooperative success;
+2. scheduling-disabled success over the same declared work;
+3. cancellation after the first observed duty;
+4. an injected queue or host-runtime failure.
+
+It rejects unless every declared range has exact, gap-free coverage; terminal
+progress has a real denominator and reaches 100%; enabled and disabled runs
+return the same caller-owned `outputFingerprint`; cancellation and failure
+leave no pending planner range; and the manifest's declared resource
+transitions end with exactly `expectedFinalResources`.
+
+The rejected error retains the complete immutable report at
+`error.cooperativeAdapterConformanceReport`. Successful and failed reports keep
+every scenario, progress event, execution report, and check without a hidden
+cap. `kitVersion` is runtime-owned; adapter package identity and output
+fingerprints are explicitly caller-declared. Bind the fingerprint to a
+deterministic numerical or artifact baseline rather than a label.
+
+This catches orchestration defects before browser smoke. It does not compile
+WGSL, execute model kernels, observe physical buffer destruction, prove
+numerical parity by itself, or claim foreground cadence. Those remain real
+adapter and product-route obligations.
+
 ## Build Runtime Primitives
 
 ```js
