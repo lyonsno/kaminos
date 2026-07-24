@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import {
   KAMINOS_FLUID_PACKAGE_DESCRIPTOR,
@@ -156,6 +158,84 @@ const opticalExecution = {
     resolutionScale: 0.75,
   },
 };
+
+const publishedReceiptPath = `${root}/tests/fixtures/wet-border-moving-hill-remap-receipt-v2.json`;
+const publishedReceiptBytes = readFileSync(publishedReceiptPath);
+assert.equal(
+  createHash('sha256').update(publishedReceiptBytes).digest('hex'),
+  '8b6a9ab084bc8fd8f32e055e696e5d1d3197e957072954daa122522f4930647d',
+  'the fixture must remain byte-identical to Wet Border\'s published v2 browser receipt',
+);
+const publishedReceipt = JSON.parse(publishedReceiptBytes);
+assert.equal(
+  publishedReceipt.schema,
+  'lerms.hill-of-hills.kaminos-moving-browser-receipt.v2',
+);
+assert.equal(publishedReceipt.kaminosPackageVersion, '0.2.1');
+assert.equal(
+  publishedReceipt.kaminosRuntimeRevision,
+  KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRevision,
+);
+assert.deepEqual(publishedReceipt.browser.pageAndConsoleErrors, []);
+assert.deepEqual(publishedReceipt.canonicalReceiptCapture.pageAndConsoleErrors, []);
+assert.equal(publishedReceipt.canonicalReceiptCapture.receiptsExactlyEqual, true);
+assert.equal(
+  publishedReceipt.canonicalReceiptCapture.sourceSurface,
+  'window.__lermsHillKaminosDebugState.remap.receipt',
+);
+
+const publishedLineageId = publishedReceipt.committedRemap.lineageIds[0];
+const publishedPreviousFrame = {
+  ...previousFrame,
+  fluidEpoch: publishedReceipt.preRemap.fluidEpoch,
+  terrainEpoch: publishedReceipt.source.previousTerrainEpoch,
+  conservationReceiptIds: [...publishedReceipt.committedRemap.predecessorReceiptIds],
+  lineageIds: [publishedLineageId],
+};
+const publishedCurrentFrame = {
+  ...currentFrame,
+  fluidEpoch: publishedReceipt.postRemap.fluidEpoch,
+  terrainEpoch: publishedReceipt.source.currentTerrainEpoch,
+  conservationReceiptIds: [...publishedReceipt.postRemap.conservationReceiptIds],
+  lineageIds: [publishedLineageId],
+};
+const publishedTransition = webgpuCore.validateFingerFluidOpticalRepresentationTransition({
+  previousFrame: publishedPreviousFrame,
+  currentFrame: publishedCurrentFrame,
+  remapReceipt: publishedReceipt.committedRemap,
+  expectedPreviousIdentity: {
+    ...previousIdentity,
+    fluidEpoch: publishedPreviousFrame.fluidEpoch,
+    terrainEpoch: publishedPreviousFrame.terrainEpoch,
+  },
+  expectedCurrentIdentity: {
+    ...currentIdentity,
+    fluidEpoch: publishedCurrentFrame.fluidEpoch,
+    terrainEpoch: publishedCurrentFrame.terrainEpoch,
+  },
+  opticalExecution,
+});
+assert.equal(
+  publishedTransition.remap.receiptId,
+  publishedReceipt.committedRemap.receiptId,
+);
+assert.equal(
+  publishedTransition.remap.terrainId,
+  publishedReceipt.committedRemap.terrainId,
+);
+assert.equal(
+  publishedTransition.remap.sourceId,
+  publishedReceipt.committedRemap.sourceId,
+);
+assert.equal(
+  publishedTransition.remap.transformId,
+  publishedReceipt.committedRemap.transformId,
+);
+assert.deepEqual(
+  publishedTransition.conservationReceiptIds,
+  publishedReceipt.postRemap.conservationReceiptIds,
+);
+assert.deepEqual(publishedTransition.lineageIds, [publishedLineageId]);
 
 const accepted = webgpuCore.validateFingerFluidOpticalRepresentationTransition({
   previousFrame,
