@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
@@ -22,6 +30,16 @@ assert.match(
   witness,
   /resolveHeadlessBrowser/,
   'Crucible headless smoke must use the independent-browser resolver',
+);
+assert.match(
+  witness,
+  /--remote-debugging-port=0/,
+  'Crucible headless smoke must let its spawned child own a unique CDP endpoint',
+);
+assert.match(
+  witness,
+  /DevToolsActivePort/,
+  'Crucible headless smoke must attach through the spawned profile endpoint',
 );
 assert.match(
   witness,
@@ -101,6 +119,7 @@ try {
     flameContinuity: 'live-every-frame',
     captureInFlight: false,
     requireFrameStageLedger: false,
+    requestedCdpPort: null,
     browserRequest: {
       source: 'independent-default',
       executable: null,
@@ -147,6 +166,74 @@ try {
   assert.equal(existsSync(join(browserFailureRoot, 'should-not-exist.png')), false);
 } finally {
   rmSync(browserFailureRoot, { recursive: true, force: true });
+}
+const occupiedPortServer = createServer((_request, response) => {
+  response.writeHead(200, { 'content-type': 'application/json' });
+  response.end(JSON.stringify({ Browser: 'incumbent-stable-chrome' }));
+});
+await new Promise((resolve, reject) => {
+  occupiedPortServer.once('error', reject);
+  occupiedPortServer.listen(0, '127.0.0.1', resolve);
+});
+try {
+  const occupiedPortRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-occupied-cdp-'));
+  try {
+    const occupiedPort = occupiedPortServer.address().port;
+    const occupiedPortReport = join(occupiedPortRoot, 'witness.json');
+    const occupiedPortFailure = spawnSync(process.execPath, [
+      witnessPath.pathname,
+      '--cdp-port', String(occupiedPort),
+      '--report', occupiedPortReport,
+      '--out', join(occupiedPortRoot, 'should-not-exist.png'),
+    ], { encoding: 'utf8' });
+    assert.notEqual(occupiedPortFailure.status, 0);
+    const occupiedPortDocument = JSON.parse(readFileSync(occupiedPortReport, 'utf8'));
+    assert.equal(occupiedPortDocument.ok, false);
+    assert.equal(occupiedPortDocument.phase, 'validating-arguments');
+    assert.equal(occupiedPortDocument.requestedInvocation.requestedCdpPort, occupiedPort);
+    assert.match(occupiedPortDocument.error, /--cdp-port is retired/);
+    assert.equal(occupiedPortDocument.effectiveIdentity.browser, null);
+    assert.equal(existsSync(join(occupiedPortRoot, 'should-not-exist.png')), false);
+  } finally {
+    rmSync(occupiedPortRoot, { recursive: true, force: true });
+  }
+} finally {
+  await new Promise(resolve => occupiedPortServer.close(resolve));
+}
+for (const [name, script, expectedError] of [
+  ['unlaunchable', '#!/definitely/missing/interpreter\n', /spawn.*ENOENT|launch.*ENOENT/i],
+  ['early-exit', '#!/bin/sh\nexit 7\n', /exited before.*DevTools.*7/i],
+]) {
+  const launchFailureRoot = mkdtempSync(join(tmpdir(), `kaminos-crucible-${name}-`));
+  try {
+    const requestedBrowser = join(launchFailureRoot, 'browser');
+    writeFileSync(requestedBrowser, script);
+    chmodSync(requestedBrowser, 0o755);
+    const launchFailureReport = join(launchFailureRoot, 'witness.json');
+    const launchFailure = spawnSync(process.execPath, [
+      witnessPath.pathname,
+      '--chrome', requestedBrowser,
+      '--report', launchFailureReport,
+      '--out', join(launchFailureRoot, 'should-not-exist.png'),
+    ], { encoding: 'utf8' });
+    assert.notEqual(launchFailure.status, 0, `${name} child must fail`);
+    assert.equal(existsSync(launchFailureReport), true, `${name} child must produce a durable report`);
+    const launchFailureDocument = JSON.parse(readFileSync(launchFailureReport, 'utf8'));
+    assert.equal(launchFailureDocument.ok, false);
+    assert.equal(launchFailureDocument.phase, 'launching-chrome');
+    assert.equal(launchFailureDocument.primaryOutputWritten, false);
+    assert.equal(
+      launchFailureDocument.effectiveIdentity.browser.resolution.effective.executable,
+      requestedBrowser,
+    );
+    assert.equal(launchFailureDocument.effectiveIdentity.browser.session, null);
+    assert.match(launchFailureDocument.error, expectedError);
+    assert.equal(launchFailureDocument.browserCleanup.profileRemoved, true);
+    assert.equal(existsSync(launchFailureDocument.browserCleanup.profilePath), false);
+    assert.equal(existsSync(join(launchFailureRoot, 'should-not-exist.png')), false);
+  } finally {
+    rmSync(launchFailureRoot, { recursive: true, force: true });
+  }
 }
 const schedulerExpectationSource = witness.match(
   /function expectedSchedulerForProfile\([\s\S]*?\n}\n(?=\nfunction )/,
@@ -524,7 +611,7 @@ const effectiveIdentitySource = witness.match(
 );
 assert.ok(effectiveIdentitySource, 'witness must expose a testable compact effective identity projector');
 const bestKnownEffectiveIdentity = vm.runInNewContext(
-  `((lastTrustworthyEvidence, replayCastEvidence, browserResolution = null) => (${effectiveIdentitySource[0]})())`,
+  `((lastTrustworthyEvidence, replayCastEvidence, browserResolution = null, browserSession = null) => (${effectiveIdentitySource[0]})())`,
 );
 const replayIdentity = JSON.parse(JSON.stringify(bestKnownEffectiveIdentity({
   sourceSelectionExercise: { effectiveAssetId: 'image-inbox:21_img.png' },

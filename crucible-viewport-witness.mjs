@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -28,7 +34,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -41,7 +47,7 @@ const browserRequest = headlessBrowserRequest({
   cliExecutable: args.get('chrome'),
   envExecutable: process.env.KAMINOS_CHROME,
 });
-const port = Number(args.get('cdp-port') || 9341);
+const requestedCdpPort = args.has('cdp-port') ? Number(args.get('cdp-port')) : null;
 const viewportWidth = Number(args.get('viewport-width') || 1600);
 const viewportHeight = Number(args.get('viewport-height') || 1100);
 const fireFriendly = args.has('fire-friendly');
@@ -79,6 +85,20 @@ let stderr = '';
 let lastTrustworthyEvidence = null;
 let replayCastEvidence = null;
 let browserResolution = null;
+let browserSession = null;
+let browserSpawnError = null;
+let browserExit = null;
+let browserSocket = null;
+let successfulReportPayload = null;
+let terminalSummary = null;
+let terminalFailure = null;
+let browserCleanup = {
+  profilePath: null,
+  profileRemoved: false,
+  processStopped: false,
+  forced: false,
+  errors: [],
+};
 let inFlightCapture = {
   requested: captureInFlight,
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
@@ -102,6 +122,7 @@ const requestedInvocation = {
   flameContinuity: requestedFlameContinuity,
   captureInFlight,
   requireFrameStageLedger,
+  requestedCdpPort,
   browserRequest,
 };
 
@@ -115,7 +136,10 @@ function bestKnownEffectiveIdentity() {
   const replaySource = replay?.sourceArtifact || null;
   const output = route?.output || replay?.artifact || null;
   return {
-    browser: browserResolution,
+    browser: browserResolution ? {
+      resolution: browserResolution,
+      session: browserSession,
+    } : null,
     sourceAssetId: replaySource ? null : workroomSourceAssetId,
     workroomSourceAssetId,
     source: replaySource ? {
@@ -304,26 +328,81 @@ function writeReport(payload) {
     finishedAt: new Date().toISOString(),
     requestedInvocation,
     effectiveIdentity: bestKnownEffectiveIdentity(),
+    browserCleanup,
     ...payload,
   }, null, 2));
 }
 
-async function cdp(pathname) {
+async function cdpAtPort(port, pathname) {
   const response = await fetch(`http://127.0.0.1:${port}${pathname}`);
   if (!response.ok) throw new Error(`CDP ${pathname} failed ${response.status}`);
   return response.json();
 }
 
-async function waitForCdp() {
-  for (let i = 0; i < 100; i += 1) {
+async function cdp(pathname) {
+  if (!browserSession?.cdpPort) throw new Error('spawned browser CDP identity is unavailable');
+  return cdpAtPort(browserSession.cdpPort, pathname);
+}
+
+function browserExitedBeforeDevToolsMessage() {
+  if (browserSpawnError) return `Browser spawn failed with ${browserSpawnError.code || browserSpawnError.name}: ${browserSpawnError.message}`;
+  if (browserExit) {
+    return `Browser exited before DevTools endpoint with code ${browserExit.code ?? 'null'} and signal ${browserExit.signal ?? 'null'}`;
+  }
+  return null;
+}
+
+async function waitForSpawnedBrowserCdp() {
+  const activePortPath = path.join(userDataDir, 'DevToolsActivePort');
+  let lastEndpointError = null;
+  for (let index = 0; index < 600; index += 1) {
+    const earlyFailure = browserExitedBeforeDevToolsMessage();
+    if (earlyFailure) throw new Error(earlyFailure);
+    let content;
     try {
-      await cdp('/json/version');
-      return;
-    } catch {
-      await sleep(100);
+      content = readFileSync(activePortPath, 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await sleep(50);
+      continue;
+    }
+    const [portLine, browserWebSocketPath] = content.trim().split(/\r?\n/);
+    const cdpPort = Number(portLine);
+    if (!Number.isInteger(cdpPort) || cdpPort <= 0 || cdpPort > 65535
+      || !browserWebSocketPath?.startsWith('/devtools/browser/')) {
+      throw new Error(`Spawned browser wrote invalid DevToolsActivePort: ${JSON.stringify(content)}`);
+    }
+    try {
+      const version = await cdpAtPort(cdpPort, '/json/version');
+      const attachedUrl = new URL(version.webSocketDebuggerUrl);
+      if (Number(attachedUrl.port) !== cdpPort || attachedUrl.pathname !== browserWebSocketPath) {
+        throw new Error(`CDP browser endpoint does not match DevToolsActivePort: ${JSON.stringify({
+          cdpPort,
+          browserWebSocketPath,
+          webSocketDebuggerUrl: version.webSocketDebuggerUrl,
+        })}`);
+      }
+      const earlyFailureAfterAttach = browserExitedBeforeDevToolsMessage();
+      if (earlyFailureAfterAttach) throw new Error(earlyFailureAfterAttach);
+      return {
+        spawnedPid: browser.pid ?? null,
+        profilePath: userDataDir,
+        devToolsActivePortPath: activePortPath,
+        cdpPort,
+        browserWebSocketPath,
+        browserWebSocketUrl: version.webSocketDebuggerUrl,
+        attachedBrowserProduct: version.Browser ?? null,
+        attachedProtocolVersion: version['Protocol-Version'] ?? null,
+      };
+    } catch (error) {
+      lastEndpointError = error;
+      await sleep(50);
     }
   }
-  throw new Error(`CDP did not open on ${port}`);
+  throw new Error(
+    `Spawned browser DevTools endpoint did not become usable within 30000ms`
+    + (lastEndpointError ? `: ${lastEndpointError.message}` : ''),
+  );
 }
 
 function connectWebSocket(wsUrl) {
@@ -332,6 +411,66 @@ function connectWebSocket(wsUrl) {
     ws.onopen = () => resolve(ws);
     ws.onerror = reject;
   });
+}
+
+function waitForBrowserExit(timeoutMs) {
+  if (!browser || browserExit || browser.exitCode !== null || browser.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      browser.removeListener('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    browser.once('exit', onExit);
+  });
+}
+
+async function cleanupBrowserResources() {
+  browserCleanup.profilePath = userDataDir;
+  if (browserSocket) {
+    try {
+      browserSocket.close();
+    } catch (error) {
+      browserCleanup.errors.push(`websocket-close: ${error.message}`);
+    }
+    browserSocket = null;
+  }
+  if (browser) {
+    try {
+      if (!browserExit && browser.exitCode === null && browser.signalCode === null && browser.pid) {
+        browser.kill('SIGTERM');
+        if (!await waitForBrowserExit(5000)) {
+          browserCleanup.forced = true;
+          browser.kill('SIGKILL');
+          if (!await waitForBrowserExit(5000)) {
+            browserCleanup.errors.push('browser-process-did-not-exit');
+          }
+        }
+      }
+      browserCleanup.processStopped = Boolean(
+        browserExit
+        || browser.exitCode !== null
+        || browser.signalCode !== null
+        || !browser.pid,
+      );
+    } catch (error) {
+      browserCleanup.errors.push(`browser-stop: ${error.message}`);
+    }
+  }
+  if (userDataDir) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true });
+      browserCleanup.profileRemoved = true;
+    } catch (error) {
+      browserCleanup.errors.push(`profile-remove: ${error.message}`);
+    }
+  }
+  return browserCleanup;
 }
 
 let seq = 0;
@@ -1118,6 +1257,9 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
 
 try {
   phase = 'validating-arguments';
+  if (args.has('cdp-port')) {
+    throw new Error('--cdp-port is retired; omit it so the spawned browser owns a unique dynamic CDP endpoint');
+  }
   if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
     throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
   }
@@ -1151,6 +1293,7 @@ try {
     envExecutable: process.env.KAMINOS_CHROME,
   });
   userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
+  browserCleanup.profilePath = userDataDir;
   if (replayCastReportPath) {
     phase = 'validating-replay-cast-report';
     replayCastEvidence = validatedReplayCastReport(
@@ -1162,32 +1305,35 @@ try {
   phase = 'launching-chrome';
   browser = spawn(browserResolution.effective.executable, [
     '--headless=new',
-    `--remote-debugging-port=${port}`,
+    '--remote-debugging-port=0',
     `--user-data-dir=${userDataDir}`,
     '--disable-gpu-sandbox',
     '--no-first-run',
     `--window-size=${viewportWidth},${viewportHeight}`,
     'about:blank',
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  browser.on('error', error => { browserSpawnError = error; });
+  browser.on('exit', (code, signal) => { browserExit = { code, signal }; });
   browser.stderr.on('data', chunk => { stderr += chunk.toString(); });
 
+  browserSession = await waitForSpawnedBrowserCdp();
   phase = 'opening-cdp';
-  await waitForCdp();
   const targets = await cdp('/json/list');
   const page = targets.find(target => target.type === 'page');
   if (!page) throw new Error('no CDP page target found');
-  const ws = await connectWebSocket(page.webSocketDebuggerUrl);
+  browserSocket = await connectWebSocket(page.webSocketDebuggerUrl);
+  const ws = browserSocket;
 
   phase = 'arming-runtime';
-  await wsRequest(ws, 'Runtime.enable');
-  ws.addEventListener('message', event => {
+  await wsRequest(browserSocket, 'Runtime.enable');
+  browserSocket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     if (message.method === 'Runtime.exceptionThrown') {
       runtimeExceptions.push(message.params.exceptionDetails?.text || 'Runtime.exceptionThrown');
     }
   });
-  await wsRequest(ws, 'Page.enable');
-  await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+  await wsRequest(browserSocket, 'Page.enable');
+  await wsRequest(browserSocket, 'Emulation.setDeviceMetricsOverride', {
     width: viewportWidth,
     height: viewportHeight,
     deviceScaleFactor: 1,
@@ -2008,27 +2154,43 @@ try {
   const png = await captureViewportPng(ws, out);
   primaryOutputWritten = true;
 
-  phase = 'writing-report';
-  writeReport({
+  successfulReportPayload = {
     ok: true,
     state,
     bytes: png.length,
     runtimeExceptions,
     stderrTail: stderr.slice(-1000),
-  });
-  const terminalSummary = compactWitnessSummary({ state, out, inFlightCapture, reportPath });
-  console.log(JSON.stringify(terminalSummary, null, 2));
-  ws.close();
-  browser.kill('SIGTERM');
+  };
+  terminalSummary = compactWitnessSummary({ state, out, inFlightCapture, reportPath });
 } catch (error) {
+  terminalFailure = { error, phase };
+}
+
+await cleanupBrowserResources();
+if (browserCleanup.errors.length && !terminalFailure) {
+  terminalFailure = {
+    error: new Error(`Browser cleanup failed: ${browserCleanup.errors.join('; ')}`),
+    phase: 'cleaning-up-browser',
+  };
+}
+
+if (terminalFailure) {
+  phase = terminalFailure.phase;
   writeReport({
     ok: false,
-    error: error.message || String(error),
+    error: terminalFailure.error.message || String(terminalFailure.error),
     lastTrustworthyEvidence,
     runtimeExceptions,
     stderrTail: stderr.slice(-1000),
   });
-  if (browser) browser.kill('SIGTERM');
-  console.error(error.stack || error.message || String(error));
-  process.exit(1);
+  console.error(
+    terminalFailure.error.stack
+    || terminalFailure.error.message
+    || String(terminalFailure.error),
+  );
+  process.exitCode = 1;
+} else {
+  phase = 'writing-report';
+  writeReport(successfulReportPayload);
+  console.log(JSON.stringify(terminalSummary, null, 2));
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -117,6 +118,21 @@ try {
     () => resolveHeadlessBrowser({ candidates: [] }),
     /installed stable Chrome fallback is forbidden/,
   );
+
+  const stableChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (existsSync(stableChrome)) {
+    assert.throws(
+      () => resolveHeadlessBrowser({
+        candidates: [{
+          executable: stableChrome,
+          kind: 'playwright-chrome-for-testing',
+          playwrightRevision: 9999,
+        }],
+      }),
+      /installed stable Chrome fallback is forbidden/,
+      'resolved stable-Chrome identity must outrank a benign implicit candidate descriptor',
+    );
+  }
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
