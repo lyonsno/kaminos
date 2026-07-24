@@ -830,6 +830,10 @@ export function measureFingerFluidLiveInletReleasePlan(
   return Object.freeze({
     contract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
     economicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+    packetId: normalized.packetId,
+    sourceRoute: normalized.sourceRoute,
+    artifactSha256: normalized.artifactSha256,
+    sourceAuthority: normalized.sourceAuthority,
     particleVolume: LAMINAR_SOURCE_PARTICLE_VOLUME,
     referenceFps: LAMINAR_SOURCE_REFERENCE_FPS,
     activeInletCount: economics.effectiveActiveInletCount,

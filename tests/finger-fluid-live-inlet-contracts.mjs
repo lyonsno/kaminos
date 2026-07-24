@@ -349,6 +349,7 @@ assert.doesNotMatch(
 const economicsPacket = {
   packet_id: 'economics-explicit',
   route_identity: 'hand-state-runtime/canonical-economics',
+  artifact_sha256: 'e'.repeat(64),
   simulation_authority: 'live_simulation',
   authority: { simulation_safe: true, stale: false },
   emitters: [{
@@ -416,6 +417,10 @@ if (typeof planFingerFluidLiveInletEconomics === 'function') {
     economics.inlets[0].effective.particleReleaseRate,
     'release plans must use the published lane-realizable effective rate',
   );
+  const sourceBoundReleasePlan = measureFingerFluidLiveInletReleasePlan(economicsPacket, 2400);
+  assert.equal(sourceBoundReleasePlan.packetId, economicsPacket.packet_id);
+  assert.equal(sourceBoundReleasePlan.sourceRoute, economicsPacket.route_identity);
+  assert.equal(sourceBoundReleasePlan.artifactSha256, economicsPacket.artifact_sha256);
 
   const opticsOnlyDelta = structuredClone(economicsPacket);
   opticsOnlyDelta.emitters[0].optical_density_scale = 7.5;
