@@ -12,8 +12,10 @@ aesthetically positive cast without per-vertex or per-leg authoring.
 | `heavy-seed720201-default` | `needs-edit` | Same body frame and inherited `front t=0.75`, `rear t=0.25` windows |
 | `heavy-seed720201-front-recentered` | `admit` | One paired fore-support recenter from `t=0.75` to measured `t=0.62` |
 
-The control proposal reproduces every accepted contact vertex and influence
-membership exactly. The pressure cast preserves four-way contact and rigid-core
+The control proposal reproduces the accepted atlas exactly: source GLB,
+registration file, accepted-atlas bytes, top-level identity, patch metadata,
+contact vertices, influence vertices, and weights all match independently
+declared identities. The pressure cast preserves four-way contact and rigid-core
 separability, but the inherited fore windows initially clip both fore support
 clusters at their posterior boundary. One shared axial recenter admits the
 pressure cast. No side-specific edit, per-leg paint, vertex selection, carrier
@@ -54,14 +56,17 @@ The pressure GLB came from GPU Greenroom job `9c153ba6b424` using effective job
 type `trellis2mlx_fast`: seed `42`, resolution `512`, `6` steps, no cascade,
 `200000` target faces, `1024` texture, simplify-first. Wall time was `79.5s`.
 The Greenroom receipt did not emit attention-backend identity, so this assay
-does not make an SDPA-backend claim.
+does not make an SDPA-backend claim. The runner rejects caller/observed identity
+mismatches, malformed carrier definitions, and substituted accepted controls.
+Per-cast admission artifacts publish only after every cast has been assessed.
 
 Key SHA-256 identities:
 
 - pressure GLB: `bf85508eb353f742611369c839dfb67d23aa19ef7bdffbd63f015c6274f04c68`
 - admitted pressure atlas: `371f061d5cda49eba1acc2333da485194428722afe1a38d822e579c0001397fa`
-- annotated pressure GLB: `8d53b12bdf8025940b57a914058d87a4e48ceae250e8dd9cc6f7816bda586fa7`
-- assay report: `7098ca8493db7b2ea1687d6718ff01b7eaa542a1c919ef686ed5a508debc374a`
+- annotated pressure GLB: `d74a146c7d95c77cf9b92d600b65940495cc6f12049f70f86719b6ce1337aac7`
+- accepted control atlas: `e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78`
+- assay report: `b1dc0bbb2f6247830a20e8e5b457b43cab5b1cba4ed4dda207c973ddc22c4f45`
 
 `assay-report.json` is the machine-readable verdict. The runner writes a
 failure report even when route verification or cast loading fails.

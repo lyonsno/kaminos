@@ -349,36 +349,87 @@ export function assessCrawlerContactAtlas({
     if (patch.id !== spec.id || patch.axialRegion !== spec.axialRegion || patch.side !== spec.side) {
       addReason(rejectionReasons, 'reject', 'patch-identity-order', `patch ${patchIndex} identity/order mismatch`);
     }
-    const contactIndices = Array.from(patch.vertexIndices ?? [], Number);
-    const influenceIndices = Array.from(patch.influenceVertexIndices ?? [], Number);
-    const influenceWeights = Array.from(patch.influenceWeights ?? [], Number);
+    const contactIndices = Array.from(patch.vertexIndices ?? []);
+    const contactWeights = Array.from(patch.weights ?? []);
+    const influenceIndices = Array.from(patch.influenceVertexIndices ?? []);
+    const influenceWeights = Array.from(patch.influenceWeights ?? []);
     if (contactIndices.length < 32) {
       addReason(rejectionReasons, 'reject', 'insufficient-contact-geometry', `${patch.id} has fewer than 32 contact vertices`);
     }
+    const contactWeightSum = contactWeights.reduce(
+      (sum, weight) => sum + (typeof weight === 'number' && Number.isFinite(weight) ? weight : 0),
+      0,
+    );
+    const validContactWeights = contactWeights.length === contactIndices.length
+      && contactWeights.every(weight => (
+        typeof weight === 'number' && Number.isFinite(weight) && weight >= 0 && weight <= 1
+      ))
+      && Math.abs(contactWeightSum - 1) <= 1e-6;
+    if (!validContactWeights) {
+      addReason(rejectionReasons, 'reject', 'invalid-contact-weights', `${patch.id} contact weights are incomplete or invalid`);
+    }
     if (influenceIndices.length !== influenceWeights.length || influenceIndices.length < contactIndices.length) {
       addReason(rejectionReasons, 'reject', 'invalid-influence-membership', `${patch.id} influence membership is incomplete`);
+    }
+    const validInfluenceWeights = influenceIndices.length === influenceWeights.length
+      && influenceWeights.every(weight => (
+        typeof weight === 'number' && Number.isFinite(weight) && weight >= 0 && weight <= 1
+      ));
+    if (!validInfluenceWeights) {
+      addReason(rejectionReasons, 'reject', 'invalid-influence-weights', `${patch.id} influence weights are incomplete or invalid`);
     }
     const invalidIndex = [...contactIndices, ...influenceIndices]
       .find(index => !Number.isInteger(index) || index < 0 || index >= vertexCount);
     if (invalidIndex !== undefined) {
       addReason(rejectionReasons, 'reject', 'vertex-index-out-of-bounds', `${patch.id} contains vertex ${invalidIndex}`);
     }
+    const safeContactIndices = contactIndices.filter(
+      index => Number.isInteger(index) && index >= 0 && index < vertexCount,
+    );
     const centroid = weightedPosition(
       positions,
-      contactIndices,
-      new Array(contactIndices.length).fill(contactIndices.length ? 1 / contactIndices.length : 0),
+      safeContactIndices,
+      new Array(safeContactIndices.length).fill(safeContactIndices.length ? 1 / safeContactIndices.length : 0),
     );
     const expectedSide = spec.sideSign * centroid[0];
     if (!(expectedSide > 0)) {
       addReason(rejectionReasons, 'reject', 'side-separation-failed', `${patch.id} centroid crossed the body midline`);
     }
-    const axialCenterT = Number(patch.derivation?.axialCenterT);
+    const derivation = patch.derivation;
+    const validDerivation = derivation
+      && typeof derivation === 'object'
+      && typeof derivation.axialCenterT === 'number'
+      && Number.isFinite(derivation.axialCenterT)
+      && derivation.axialCenterT >= 0
+      && derivation.axialCenterT <= 1
+      && typeof derivation.axialWindow === 'number'
+      && Number.isFinite(derivation.axialWindow)
+      && derivation.axialWindow > 0
+      && typeof derivation.innerSide === 'number'
+      && Number.isFinite(derivation.innerSide)
+      && derivation.innerSide >= 0
+      && typeof derivation.lowQuantile === 'number'
+      && Number.isFinite(derivation.lowQuantile)
+      && derivation.lowQuantile >= 0
+      && derivation.lowQuantile <= 1
+      && typeof derivation.thresholdY === 'number'
+      && Number.isFinite(derivation.thresholdY)
+      && Array.isArray(derivation.influenceRadii)
+      && derivation.influenceRadii.length === 3
+      && derivation.influenceRadii.every(radius => (
+        typeof radius === 'number' && Number.isFinite(radius) && radius > 0
+      ));
+    if (!validDerivation) {
+      addReason(rejectionReasons, 'reject', 'invalid-carrier-derivation', `${patch.id} carrier derivation is incomplete or invalid`);
+    }
+    const axialCenterT = validDerivation ? derivation.axialCenterT : spec.axialCenterT;
+    const axialWindow = validDerivation ? derivation.axialWindow : registration.axialSpan * 0.16;
     const centerZ = mix(
       registration.tailZ,
       registration.headZ,
-      Number.isFinite(axialCenterT) ? axialCenterT : spec.axialCenterT,
+      axialCenterT,
     );
-    if (Math.abs(centroid[2] - centerZ) > patch.derivation.axialWindow * 1.1) {
+    if (Math.abs(centroid[2] - centerZ) > axialWindow * 1.1) {
       addReason(rejectionReasons, 'reject', 'axial-separation-failed', `${patch.id} centroid escaped its axial window`);
     }
     const axialCenterError = Math.abs(centroid[2] - centerZ) / registration.axialSpan;
@@ -404,9 +455,12 @@ export function assessCrawlerContactAtlas({
     }
     let coreVertexCount = 0;
     for (let index = 0; index < influenceIndices.length; index += 1) {
-      if (influenceWeights[index] < rigidCoreWeight) continue;
-      coreVertexCount += 1;
       const vertex = influenceIndices[index];
+      const weight = influenceWeights[index];
+      if (!Number.isInteger(vertex) || vertex < 0 || vertex >= vertexCount) continue;
+      if (typeof weight !== 'number' || !Number.isFinite(weight)) continue;
+      if (weight < rigidCoreWeight) continue;
+      coreVertexCount += 1;
       const priorOwner = coreOwners.get(vertex);
       if (priorOwner && priorOwner !== patch.id) {
         addReason(

@@ -166,6 +166,48 @@ assert.ok(
   'overlapping rigid carrier cores must fail admission',
 );
 
+const malformedWeights = structuredClone(reproduced);
+malformedWeights.patches[0].weights = [];
+malformedWeights.patches[1].influenceWeights =
+  malformedWeights.patches[1].influenceWeights.map(() => 'nan');
+const malformedWeightsAssessment = proposal.assessCrawlerContactAtlas({
+  atlas: malformedWeights,
+  positions: controlMesh.positions,
+  registration,
+  expectedIdentity: {
+    castId: admittedAtlas.castId,
+    castHash: admittedAtlas.castHash,
+    registrationHash: admittedAtlas.registrationHash,
+  },
+});
+assert.equal(malformedWeightsAssessment.classification, 'reject');
+assert.ok(
+  malformedWeightsAssessment.rejectionReasons.some(reason => reason.code === 'invalid-contact-weights'),
+  'missing contact weights must fail admission',
+);
+assert.ok(
+  malformedWeightsAssessment.rejectionReasons.some(reason => reason.code === 'invalid-influence-weights'),
+  'non-finite influence weights must fail admission',
+);
+
+const missingBoundary = structuredClone(reproduced);
+delete missingBoundary.patches[0].derivation;
+const missingBoundaryAssessment = proposal.assessCrawlerContactAtlas({
+  atlas: missingBoundary,
+  positions: controlMesh.positions,
+  registration,
+  expectedIdentity: {
+    castId: admittedAtlas.castId,
+    castHash: admittedAtlas.castHash,
+    registrationHash: admittedAtlas.registrationHash,
+  },
+});
+assert.equal(missingBoundaryAssessment.classification, 'reject');
+assert.ok(
+  missingBoundaryAssessment.rejectionReasons.some(reason => reason.code === 'invalid-carrier-derivation'),
+  'missing carrier derivation must fail admission with a structured reason',
+);
+
 await assert.rejects(
   proposal.loadGlbPositionMesh(new URL('../artifacts/does-not-exist.glb', import.meta.url)),
   /ENOENT/,

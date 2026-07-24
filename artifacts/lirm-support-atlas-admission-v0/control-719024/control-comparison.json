@@ -1,5 +1,10 @@
 {
   "schema": "kaminos.support-atlas-control-comparison.v0",
+  "acceptedAtlasByteIdentityMatch": true,
+  "expectedAtlasSha256": "e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
+  "observedAtlasSha256": "e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
+  "topLevelIdentityMatch": true,
+  "exactAtlasMatch": true,
   "exactMembershipMatch": true,
   "patches": [
     {

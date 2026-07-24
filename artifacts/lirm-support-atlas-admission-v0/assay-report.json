@@ -39,7 +39,7 @@
           ]
         }
       },
-      "registrationHash": "31265a2ca88a551eb7c3fb731598708973c81a622cb158660a154de3b5dab58e",
+      "registrationHash": "cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6",
       "derivationOptions": {},
       "authoredEdits": [],
       "classification": "admit",
@@ -104,6 +104,11 @@
       ],
       "controlComparison": {
         "schema": "kaminos.support-atlas-control-comparison.v0",
+        "acceptedAtlasByteIdentityMatch": true,
+        "expectedAtlasSha256": "e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
+        "observedAtlasSha256": "e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
+        "topLevelIdentityMatch": true,
+        "exactAtlasMatch": true,
         "exactMembershipMatch": true,
         "patches": [
           {
@@ -349,5 +354,5 @@
     "heavy-seed720201-default": "needs-edit",
     "heavy-seed720201-front-recentered": "admit"
   },
-  "lastTrustworthyEvidence": "all-casts-assessed"
+  "lastTrustworthyEvidence": "all-casts-published"
 }

@@ -32,6 +32,10 @@ function jsonHash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
+function byteHash(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 function arrayHash(values) {
   return createHash('sha256').update(JSON.stringify(Array.from(values))).digest('hex');
 }
@@ -70,7 +74,7 @@ function axisAlignedRegistration(mesh, cast) {
   };
 }
 
-function compareAtlasMembership(actual, expected) {
+function compareAtlasMembership(actual, expected, expectedAtlasSha256, observedAtlasSha256) {
   const patches = actual.patches.map((patch, index) => {
     const accepted = expected.patches?.[index];
     return {
@@ -83,17 +87,50 @@ function compareAtlasMembership(actual, expected) {
         arrayHash(patch.influenceVertexIndices) === arrayHash(accepted?.influenceVertexIndices ?? []),
     };
   });
+  const topLevelIdentityMatch = (
+    actual.schema === expected.schema
+    && actual.version === expected.version
+    && actual.castId === expected.castId
+    && actual.castHash === expected.castHash
+    && actual.registrationHash === expected.registrationHash
+    && actual.motionClass === expected.motionClass
+    && actual.authority === expected.authority
+    && actual.vertexCount === expected.vertexCount
+  );
+  const exactAtlasMatch = jsonHash(actual) === jsonHash(expected);
   return {
     schema: 'kaminos.support-atlas-control-comparison.v0',
-    exactMembershipMatch: patches.every(patch => (
-      patch.id === patch.expectedId
-      && patch.contactCountMatch
-      && patch.influenceCountMatch
-      && patch.contactMembershipMatch
-      && patch.influenceMembershipMatch
-    )),
+    acceptedAtlasByteIdentityMatch: observedAtlasSha256 === expectedAtlasSha256,
+    expectedAtlasSha256,
+    observedAtlasSha256,
+    topLevelIdentityMatch,
+    exactAtlasMatch,
+    exactMembershipMatch: topLevelIdentityMatch
+      && exactAtlasMatch
+      && observedAtlasSha256 === expectedAtlasSha256
+      && patches.every(patch => (
+        patch.id === patch.expectedId
+        && patch.contactCountMatch
+        && patch.influenceCountMatch
+        && patch.contactMembershipMatch
+        && patch.influenceMembershipMatch
+      )),
     patches,
   };
+}
+
+function requireExpectedIdentity(cast, observedIdentity, vertexCount) {
+  const expected = cast.expectedIdentity;
+  if (!expected || typeof expected !== 'object') {
+    throw new Error(`${cast.id} requires caller-declared expected identity`);
+  }
+  if (expected.castId !== observedIdentity.castId) throw new Error(`${cast.id} cast id mismatch`);
+  if (expected.castHash !== observedIdentity.castHash) throw new Error(`${cast.id} cast hash mismatch`);
+  if (expected.registrationHash !== observedIdentity.registrationHash) {
+    throw new Error(`${cast.id} registration hash mismatch`);
+  }
+  if (expected.vertexCount !== vertexCount) throw new Error(`${cast.id} vertex count mismatch`);
+  return expected;
 }
 
 async function main() {
@@ -103,6 +140,7 @@ async function main() {
   let assayId = 'unknown';
   let routeIdentity = null;
   const castResults = [];
+  const pendingPublications = [];
   try {
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     assayId = String(manifest.assayId ?? 'unknown');
@@ -130,15 +168,22 @@ async function main() {
     for (const cast of manifest.casts) {
       const glbPath = resolve(cast.glbPath);
       const mesh = await loadGlbPositionMesh(glbPath);
-      const registration = cast.registrationPath
-        ? JSON.parse(await readFile(resolve(cast.registrationPath), 'utf8'))
-        : axisAlignedRegistration(mesh, cast);
-      const registrationHash = jsonHash(registration);
-      const identity = {
+      let registration;
+      let registrationHash;
+      if (cast.registrationPath) {
+        const registrationBytes = await readFile(resolve(cast.registrationPath));
+        registration = JSON.parse(registrationBytes.toString('utf8'));
+        registrationHash = byteHash(registrationBytes);
+      } else {
+        registration = axisAlignedRegistration(mesh, cast);
+        registrationHash = jsonHash(registration);
+      }
+      const observedIdentity = {
         castId: cast.id,
         castHash: mesh.sha256.slice('sha256:'.length),
         registrationHash,
       };
+      const identity = requireExpectedIdentity(cast, observedIdentity, mesh.vertexCount);
       const atlas = deriveCrawlerContactAtlas(
         mesh.positions,
         registration,
@@ -153,8 +198,18 @@ async function main() {
       });
       let controlComparison = null;
       if (cast.acceptedAtlasPath) {
-        const acceptedAtlas = JSON.parse(await readFile(resolve(cast.acceptedAtlasPath), 'utf8'));
-        controlComparison = compareAtlasMembership(atlas, acceptedAtlas);
+        if (!cast.acceptedAtlasSha256) {
+          throw new Error(`${cast.id} accepted control requires expected atlas byte identity`);
+        }
+        const acceptedAtlasBytes = await readFile(resolve(cast.acceptedAtlasPath));
+        const observedAtlasSha256 = byteHash(acceptedAtlasBytes);
+        const acceptedAtlas = JSON.parse(acceptedAtlasBytes.toString('utf8'));
+        controlComparison = compareAtlasMembership(
+          atlas,
+          acceptedAtlas,
+          cast.acceptedAtlasSha256,
+          observedAtlasSha256,
+        );
         if (!controlComparison.exactMembershipMatch) {
           assessment.classification = 'reject';
           assessment.rejectionReasons.push({
@@ -165,12 +220,13 @@ async function main() {
         }
       }
       const castOutputDir = resolve(cast.outputDir);
-      await writeJson(resolve(castOutputDir, 'registration.json'), registration);
-      await writeJson(resolve(castOutputDir, 'proposed-contact-atlas.json'), atlas);
-      await writeJson(resolve(castOutputDir, 'assessment.json'), assessment);
-      if (controlComparison) {
-        await writeJson(resolve(castOutputDir, 'control-comparison.json'), controlComparison);
-      }
+      pendingPublications.push({
+        castOutputDir,
+        registration,
+        atlas,
+        assessment,
+        controlComparison,
+      });
       castResults.push({
         id: cast.id,
         role: cast.role,
@@ -195,6 +251,18 @@ async function main() {
       });
     }
     lastTrustworthyEvidence = 'all-casts-assessed';
+    for (const publication of pendingPublications) {
+      await writeJson(resolve(publication.castOutputDir, 'registration.json'), publication.registration);
+      await writeJson(resolve(publication.castOutputDir, 'proposed-contact-atlas.json'), publication.atlas);
+      await writeJson(resolve(publication.castOutputDir, 'assessment.json'), publication.assessment);
+      if (publication.controlComparison) {
+        await writeJson(
+          resolve(publication.castOutputDir, 'control-comparison.json'),
+          publication.controlComparison,
+        );
+      }
+    }
+    lastTrustworthyEvidence = 'all-casts-published';
     failurePhase = null;
     await writeJson(reportPath, {
       schema: 'kaminos.support-atlas-admission-assay-report.v0',
