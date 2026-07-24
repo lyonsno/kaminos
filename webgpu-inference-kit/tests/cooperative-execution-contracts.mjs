@@ -317,6 +317,54 @@ assert.deepEqual(
   'a cooperative GPU duty must prepare, encode, settle, submit, fence, then yield',
 );
 
+const progressFailureCalls = [];
+let progressFailureNowMs = 0;
+const progressFailureNow = () => {
+  progressFailureNowMs += 1;
+  return progressFailureNowMs;
+};
+const progressFailure = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({
+    calls: progressFailureCalls,
+    now: progressFailureNow,
+  }),
+  manifest,
+  invocationId: 'sharp:firing:progress-callback-failure',
+  schedulingMode: 'cooperative',
+  onProgress() {
+    throw new Error('progress sink down');
+  },
+  now: progressFailureNow,
+});
+await assert.rejects(
+  () => progressFailure.run(async cooperative => {
+    const gpu = cooperative.startBoundary('spn-window-tiles');
+    await gpu.runGpuDuty(gpu.nextRange(), {
+      encode({ range: exactRange }) {
+        return { rangeId: exactRange.rangeId };
+      },
+      submit(commandBuffer) {
+        progressFailureCalls.push(`progress-submit:${commandBuffer.rangeId}`);
+      },
+    });
+  }),
+  error => {
+    assert.equal(error.message, 'progress sink down');
+    const failureReport = error.cooperativeExecutionReport;
+    assert.equal(failureReport.status, 'failed');
+    assert.equal(failureReport.failure.phase, 'progress-callback');
+    assert.equal(failureReport.failure.boundaryId, 'spn-window-tiles');
+    assert.equal(failureReport.failure.error.message, 'progress sink down');
+    assert.equal(failureReport.boundaries[0].status, 'failed');
+    assert.equal(failureReport.boundaries[0].failure.phase, 'progress-callback');
+    assert.equal(failureReport.boundaries[0].completedItems, 4);
+    assert.equal(failureReport.boundaries[0].ranges[0].status, 'observed');
+    assert.equal(failureReport.boundaries[0].planner.pendingRangeId, null);
+    assert.equal(failureReport.progress.completedItems, 4);
+    return true;
+  },
+);
+
 const disabledCalls = [];
 let disabledNowMs = 0;
 const disabledNow = () => {

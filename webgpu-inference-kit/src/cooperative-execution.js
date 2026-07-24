@@ -312,9 +312,15 @@ export function createWebGpuCooperativeExecution(input = {}) {
     });
   }
 
-  function emitProgress() {
+  function emitProgress(boundaryState) {
     const progress = createProgress();
-    if (input.onProgress) input.onProgress(progress);
+    if (input.onProgress) {
+      try {
+        input.onProgress(progress);
+      } catch (error) {
+        throw failExecution(error, 'progress-callback', boundaryState);
+      }
+    }
     return progress;
   }
 
@@ -637,7 +643,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
           });
         }
         await yieldAfterDuty(range);
-        emitProgress();
+        emitProgress(boundaryState);
         return {
           range,
           encoded,
@@ -682,7 +688,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
           observedDurationMs: readNow(now) - startedAtMs,
         });
         await yieldAfterDuty(range);
-        emitProgress();
+        emitProgress(boundaryState);
         return { range };
       },
 
