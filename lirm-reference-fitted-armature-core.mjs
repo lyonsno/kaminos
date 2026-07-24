@@ -988,6 +988,164 @@ export function evaluateSmoothFittedProxyRigPhase({
   };
 }
 
+function finiteVectorArray(value, label) {
+  if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(component))) {
+    throw new Error(`${label} must be a finite three-component vector`);
+  }
+  return value.map(Number);
+}
+
+function exactSupportSurfaceIdentity(actual, expected) {
+  return actual?.id === expected?.id
+    && actual?.sourceRef === expected?.sourceRef
+    && actual?.revision === expected?.revision;
+}
+
+function exactBodyIdentity(actual, expected) {
+  return actual?.id === expected?.id
+    && actual?.registrationId === expected?.registrationId
+    && Object.is(actual?.scale, expected?.scale);
+}
+
+function exactContactAtlasIdentity(actual, probeBinding) {
+  return actual?.schema === 'kaminos.creature-contact-atlas.v0'
+    && actual?.castId === probeBinding.contactAtlasCastId
+    && actual?.castHash?.toLowerCase() === sha256Digest(
+      probeBinding.sourceCastSha256,
+      'probe binding source cast hash',
+    )
+    && actual?.registrationHash === probeBinding.contactAtlasRegistrationHash;
+}
+
+export function evaluateMotionContactProbeRequest({
+  binding,
+  probeBinding,
+  request,
+  prepass,
+  normalization,
+  contactPlaneY,
+  amplitude = 0.18,
+  poseId,
+} = {}) {
+  if (request?.schema !== 'kaminos.motion-contact-probe-request.v0') {
+    throw new Error('motion contact probe request schema mismatch');
+  }
+  if (prepass?.schema !== 'kaminos.motion-support-prepass.v0') {
+    throw new Error('motion contact probe producer requires a support prepass');
+  }
+  if (request.prepassId !== prepass.id) {
+    throw new Error('motion contact prepass identity mismatch');
+  }
+  if (!exactSupportSurfaceIdentity(request.supportSurface, prepass.supportSurface)) {
+    throw new Error('motion contact support surface identity mismatch');
+  }
+  if (!Number.isFinite(request.body?.scale) || request.body.scale <= 0
+      || !Number.isFinite(prepass.body?.scale) || prepass.body.scale <= 0) {
+    throw new Error('motion contact body scale must be finite and positive');
+  }
+  if (!exactBodyIdentity(request.body, prepass.body)) {
+    throw new Error('motion contact body identity mismatch');
+  }
+  if (!exactContactAtlasIdentity(request.contactAtlas, probeBinding)) {
+    throw new Error('motion contact contact atlas identity mismatch');
+  }
+  if (typeof poseId !== 'string' || poseId.length === 0 || request.poseId !== poseId) {
+    throw new Error('motion contact pose identity mismatch');
+  }
+  if (!Number.isFinite(request.phase)) {
+    throw new Error('motion contact phase must be finite');
+  }
+  if (!Array.isArray(request.patches) || request.patches.length !== probeBinding?.probes?.length) {
+    throw new Error('motion contact producer requires exactly the bound requested patches');
+  }
+  const boundProbeIds = new Set(probeBinding.probes.map(probe => probe.id));
+  const requestedProbeIds = new Set();
+  for (const patch of request.patches) {
+    if (typeof patch?.id !== 'string' || patch.id.length === 0 || requestedProbeIds.has(patch.id)) {
+      throw new Error('motion contact requested patch identity must be unique');
+    }
+    if (!boundProbeIds.has(patch.id) || !Number.isFinite(patch.phaseOffset)) {
+      throw new Error('motion contact producer requires exactly the bound requested patches');
+    }
+    requestedProbeIds.add(patch.id);
+  }
+  if (requestedProbeIds.size !== boundProbeIds.size) {
+    throw new Error('motion contact producer requires exactly the bound requested patches');
+  }
+
+  const center = finiteVectorArray(normalization?.center, 'motion contact normalization center');
+  if (!Number.isFinite(normalization?.scale) || normalization.scale <= 0) {
+    throw new Error('motion contact normalization scale must be positive and finite');
+  }
+  if (!Number.isFinite(contactPlaneY)) {
+    throw new Error('motion contact contact plane must be finite');
+  }
+  if (!Number.isFinite(amplitude) || amplitude < 0) {
+    throw new Error('motion contact amplitude must be finite and nonnegative');
+  }
+  const rootSurface = finiteVectorArray(prepass.rootSurface, 'motion contact root surface');
+  const forward = finiteVectorArray(prepass.frame?.forward, 'motion contact forward');
+  const right = finiteVectorArray(prepass.frame?.right, 'motion contact right');
+  const up = finiteVectorArray(prepass.frame?.up, 'motion contact up');
+  if (!Number.isFinite(prepass.support?.rootLift)) {
+    throw new Error('motion contact support root lift must be finite');
+  }
+  const placementFrame = validateRootFrame({
+    schema: 'kaminos.creature-root-frame.v0',
+    origin: v3(),
+    lateral: v3(...right),
+    normal: v3(...up),
+    tangent: mul(v3(...forward), -1),
+  });
+  const rootHeight = prepass.support.rootLift - contactPlaneY * request.body.scale;
+  const rootOrigin = add(v3(...rootSurface), mul(placementFrame.normal, rootHeight));
+  const identityRoot = {
+    schema: 'kaminos.creature-root-frame.v0',
+    origin: v3(),
+    lateral: v3(1, 0, 0),
+    normal: v3(0, 1, 0),
+    tangent: v3(0, 0, 1),
+  };
+  const packet = evaluateSmoothFittedProxyRigPhase({
+    binding,
+    probeBinding,
+    phase: request.phase / (Math.PI * 2),
+    amplitude,
+    rootFrame: identityRoot,
+  });
+  const probesById = new Map(packet.probes.map(probe => [probe.id, probe]));
+  const patches = request.patches.map(requestedPatch => {
+    const probe = probesById.get(requestedPatch.id);
+    if (!probe) throw new Error(`motion contact producer is missing bound patch ${requestedPatch.id}`);
+    const sourcePosition = probe.bodyPosition.map(
+      (value, axis) => value / normalization.scale + center[axis],
+    );
+    const scaledPosition = sourcePosition.map(value => value * request.body.scale);
+    const worldPosition = add(
+      add(
+        add(rootOrigin, mul(placementFrame.lateral, scaledPosition[0])),
+        mul(placementFrame.normal, scaledPosition[1]),
+      ),
+      mul(placementFrame.tangent, scaledPosition[2]),
+    );
+    return {
+      id: requestedPatch.id,
+      worldPosition: pointArray(worldPosition),
+    };
+  });
+  return {
+    schema: 'kaminos.motion-contact-probe-set.v0',
+    requestId: request.id,
+    prepassId: request.prepassId,
+    supportSurface: structuredClone(request.supportSurface),
+    body: structuredClone(request.body),
+    contactAtlas: structuredClone(request.contactAtlas),
+    poseId: request.poseId,
+    phase: request.phase,
+    patches,
+  };
+}
+
 export const FITTED_PROXY_RIG_PROOF_ROUTE = 'kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0';
 
 function packedPositionsToTriangles(positions) {

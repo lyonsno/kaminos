@@ -1,0 +1,83 @@
+{
+  "schema": "kaminos.motion-contact-probe-handshake-exercise.v0",
+  "status": "pass",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/fitted-proxy-rig/motion-contact-probe-adapter-v0",
+  "effectiveRoute": "kaminos/fitted-proxy-rig/motion-contact-probe-adapter-v0",
+  "inputs": {
+    "source": {
+      "path": "../motion-ready-719024/creature.glb",
+      "sha256": "sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e"
+    },
+    "registration": {
+      "path": "../lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json",
+      "sha256": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9"
+    },
+    "contactAtlas": {
+      "path": "../lirm-719024-smooth-fitted-phase-exercise-v0/admitted-contact-atlas.json",
+      "sha256": "sha256:e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78"
+    },
+    "handshake": {
+      "path": "stationary-hill-request.json",
+      "sha256": "sha256:905b8ab8640651ec8a9bb00eb3f21c24fda513a9e7393c2e55e90127e9c01e73"
+    }
+  },
+  "outputInventory": {
+    "fixture": {
+      "path": "stationary-hill-request-response.json",
+      "bytes": 4540,
+      "sha256": "sha256:f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112"
+    }
+  },
+  "results": {
+    "requestId": "stationary-hill-probes:C",
+    "prepassId": "stationary-hill-prepass",
+    "supportSurface": {
+      "id": "hill-of-hills-motion-affordance-packet-v0",
+      "sourceRef": "lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348",
+      "revision": "81c5348"
+    },
+    "body": {
+      "id": "motion-ready-719024:axial-footprint",
+      "registrationId": "motion-ready-719024:registration:cb519913ad863441",
+      "scale": 1.14
+    },
+    "poseId": "molten-low-frequency:C",
+    "phase": 1.3,
+    "patchIds": [
+      "front-left",
+      "front-right",
+      "rear-left",
+      "rear-right"
+    ],
+    "patchWorldPositions": {
+      "front-left": [
+        0.7378611936464464,
+        0.38356042280405594,
+        -1.2430538270580525
+      ],
+      "front-right": [
+        0.5326761678180649,
+        0.40796058944019337,
+        -1.4050204603192653
+      ],
+      "rear-left": [
+        0.2662727566851218,
+        0.39343797908217404,
+        -0.8519709648899683
+      ],
+      "rear-right": [
+        0.1586828678357605,
+        0.39258986988157685,
+        -1.0758264306818621
+      ]
+    }
+  },
+  "timing": {
+    "startedAt": "2026-07-24T01:53:28.493Z",
+    "finishedAt": "2026-07-24T01:53:28.666Z",
+    "durationSeconds": 0.173
+  },
+  "lastTrustworthyEvidence": "byte-bound deterministic request/response fixture written",
+  "error": null
+}
