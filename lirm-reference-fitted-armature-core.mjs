@@ -1,8 +1,24 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
-import { deflateSync } from 'node:zlib';
+let createHash;
+let existsSync;
+let readFileSync;
+let statSync;
+let mkdir;
+let readFile;
+let rename;
+let writeFile;
+let basename;
+let dirname;
+let isAbsolute;
+let resolve;
+let deflateSync;
+
+if (typeof process !== 'undefined' && process.versions?.node) {
+  ({ createHash } = await import('node:crypto'));
+  ({ existsSync, readFileSync, statSync } = await import('node:fs'));
+  ({ mkdir, readFile, rename, writeFile } = await import('node:fs/promises'));
+  ({ basename, dirname, isAbsolute, resolve } = await import('node:path'));
+  ({ deflateSync } = await import('node:zlib'));
+}
 
 export const REFERENCE_FIT_ROUTE = 'kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0';
 export const REFERENCE_FIT_CAMERAS = Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
@@ -664,6 +680,312 @@ export function deformSmoothFittedProxyRigBinding({ binding, pose } = {}) {
     output[vertex * 3 + 2] = point.z;
   }
   return output;
+}
+
+export const SMOOTH_FITTED_PHASE_ROUTE = 'kaminos/fitted-proxy-rig/arbitrary-phase-plus-semantic-probes-v0';
+export const SMOOTH_FITTED_PHASE_SEQUENCE = Object.freeze([
+  'rest',
+  'c-bend',
+  'rest',
+  's-bend',
+  'rest',
+  'asymmetric',
+  'rest',
+]);
+
+function normalizedCyclePhase(phase) {
+  if (!Number.isFinite(phase)) throw new Error('smooth fitted cycle phase must be finite');
+  return ((phase % 1) + 1) % 1;
+}
+
+function smoothstep(value) {
+  const exact = clamp(value, 0, 1);
+  return exact * exact * (3 - 2 * exact);
+}
+
+export function createSmoothFittedProxyRigCyclePose({
+  registration,
+  phase = 0,
+  amplitude = 0.18,
+} = {}) {
+  if (registration?.schema !== 'kaminos.lirm-fitted-proxy-rig-registration.v0') {
+    throw new Error('smooth fitted cycle pose requires fitted registration');
+  }
+  if (!Number.isFinite(amplitude) || amplitude < 0 || amplitude > 0.45) {
+    throw new Error('smooth fitted cycle pose amplitude must be finite in [0, 0.45]');
+  }
+  const normalizedPhase = normalizedCyclePhase(phase);
+  const rawSegmentPosition = normalizedPhase * (SMOOTH_FITTED_PHASE_SEQUENCE.length - 1);
+  const nearestKeyframe = Math.round(rawSegmentPosition);
+  const segmentPosition = Math.abs(rawSegmentPosition - nearestKeyframe) < 1e-12
+    ? nearestKeyframe
+    : rawSegmentPosition;
+  const segment = Math.min(
+    SMOOTH_FITTED_PHASE_SEQUENCE.length - 2,
+    Math.floor(segmentPosition),
+  );
+  const linearMix = segmentPosition - segment;
+  const mix = smoothstep(linearMix);
+  const fromPreset = SMOOTH_FITTED_PHASE_SEQUENCE[segment];
+  const toPreset = SMOOTH_FITTED_PHASE_SEQUENCE[segment + 1];
+  const fromPose = createSmoothFittedProxyRigPose({ registration, preset: fromPreset, amplitude });
+  const toPose = createSmoothFittedProxyRigPose({ registration, preset: toPreset, amplitude });
+  let stationPositions;
+  if (mix === 0) {
+    stationPositions = fromPose.stationPositions.map(point => ({ ...point }));
+  } else if (mix === 1) {
+    stationPositions = toPose.stationPositions.map(point => ({ ...point }));
+  } else {
+    const restPositions = registration.stations.map(station => station.position);
+    const blended = fromPose.stationPositions.map(
+      (point, index) => lerpPoint(point, toPose.stationPositions[index], mix),
+    );
+    stationPositions = preserveStationChainLengths(restPositions, blended);
+  }
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-proxy-rig-pose.v0',
+    sourceCandidateId: registration.sourceCandidateId,
+    preset: 'cycle',
+    amplitude,
+    phase: normalizedPhase,
+    segment,
+    fromPreset,
+    toPreset,
+    linearMix,
+    mix,
+    stationPositions,
+  };
+}
+
+function sha256Digest(value, label) {
+  if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/i.test(value)) {
+    throw new Error(`${label} must be an exact sha256 digest`);
+  }
+  return value.slice('sha256:'.length).toLowerCase();
+}
+
+export function createSmoothFittedProxyRigProbeBinding({
+  binding,
+  contactAtlas,
+  contactAtlasSha256,
+} = {}) {
+  if (binding?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0') {
+    throw new Error('smooth fitted probe binding requires a smooth fitted cast binding');
+  }
+  if (contactAtlas?.schema !== 'kaminos.creature-contact-atlas.v0'
+      || !Array.isArray(contactAtlas.patches)
+      || contactAtlas.patches.length === 0) {
+    throw new Error('smooth fitted probe binding requires a nonempty creature contact atlas');
+  }
+  const atlasDigest = sha256Digest(contactAtlasSha256, 'contact atlas hash');
+  const donorDigest = sha256Digest(binding.registration.donorSha256, 'binding donor hash');
+  if (contactAtlas.castHash?.toLowerCase() !== donorDigest) {
+    throw new Error(`contact atlas cast hash mismatch: ${contactAtlas.castHash} != ${donorDigest}`);
+  }
+  if (contactAtlas.vertexCount !== binding.vertexCount) {
+    throw new Error(`contact atlas vertex count mismatch: ${contactAtlas.vertexCount} != ${binding.vertexCount}`);
+  }
+  const ids = new Set();
+  const probes = contactAtlas.patches.map((patch, patchIndex) => {
+    if (typeof patch.id !== 'string' || patch.id.length === 0 || ids.has(patch.id)) {
+      throw new Error(`contact atlas patch ${patchIndex} requires a unique nonempty id`);
+    }
+    ids.add(patch.id);
+    if (!Array.isArray(patch.vertexIndices) || !Array.isArray(patch.weights)
+        || patch.vertexIndices.length === 0
+        || patch.vertexIndices.length !== patch.weights.length) {
+      throw new Error(`contact atlas patch ${patch.id} requires matching vertex indices and weights`);
+    }
+    const vertexIndices = Uint32Array.from(patch.vertexIndices);
+    const rawWeights = Float64Array.from(patch.weights);
+    let weightSum = 0;
+    let arcCoordinate = 0;
+    const localCoordinates = [0, 0, 0];
+    for (let index = 0; index < vertexIndices.length; index += 1) {
+      const vertex = vertexIndices[index];
+      const weight = rawWeights[index];
+      if (!Number.isInteger(patch.vertexIndices[index]) || vertex >= binding.vertexCount) {
+        throw new Error(`contact atlas patch ${patch.id} has invalid vertex index ${patch.vertexIndices[index]}`);
+      }
+      if (!Number.isFinite(weight) || weight < 0) {
+        throw new Error(`contact atlas patch ${patch.id} has invalid weight ${weight}`);
+      }
+      weightSum += weight;
+      arcCoordinate += binding.arcCoordinates[vertex] * weight;
+      for (let axis = 0; axis < 3; axis += 1) {
+        localCoordinates[axis] += binding.localCoordinates[vertex * 3 + axis] * weight;
+      }
+    }
+    if (!(weightSum > 0)) throw new Error(`contact atlas patch ${patch.id} has zero total weight`);
+    const weights = Float64Array.from(rawWeights, weight => weight / weightSum);
+    return {
+      id: patch.id,
+      axialRegion: patch.axialRegion ?? null,
+      side: patch.side ?? null,
+      phaseOffset: Number.isFinite(patch.phaseOffset) ? patch.phaseOffset : 0,
+      vertexIndices,
+      weights,
+      arcCoordinate: arcCoordinate / weightSum,
+      localCoordinates: localCoordinates.map(value => value / weightSum),
+    };
+  });
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-probe-binding.v0',
+    sourceCandidateId: binding.registration.sourceCandidateId,
+    sourceCastSha256: binding.registration.donorSha256,
+    contactAtlasSha256: `sha256:${atlasDigest}`,
+    contactAtlasRegistrationHash: contactAtlas.registrationHash ?? null,
+    contactAtlasAuthority: contactAtlas.authority ?? null,
+    contactAtlasCastId: contactAtlas.castId ?? null,
+    vertexCount: binding.vertexCount,
+    probes,
+  };
+}
+
+function packedPoint(values, vertex) {
+  return v3(values[vertex * 3], values[vertex * 3 + 1], values[vertex * 3 + 2]);
+}
+
+function validateRootFrame(rootFrame) {
+  if (rootFrame?.schema !== 'kaminos.creature-root-frame.v0') {
+    throw new Error('smooth fitted phase evaluation requires a creature root frame');
+  }
+  for (const [name, vector] of Object.entries({
+    origin: rootFrame.origin,
+    lateral: rootFrame.lateral,
+    normal: rootFrame.normal,
+    tangent: rootFrame.tangent,
+  })) {
+    if (![vector?.x, vector?.y, vector?.z].every(Number.isFinite)) {
+      throw new Error(`creature root frame ${name} must be finite`);
+    }
+  }
+  for (const name of ['lateral', 'normal', 'tangent']) {
+    const magnitude = length3(rootFrame[name]);
+    if (Math.abs(magnitude - 1) > 1e-6) throw new Error(`creature root frame ${name} must be unit length`);
+  }
+  if (Math.abs(dot(rootFrame.lateral, rootFrame.normal)) > 1e-6
+      || Math.abs(dot(rootFrame.lateral, rootFrame.tangent)) > 1e-6
+      || Math.abs(dot(rootFrame.normal, rootFrame.tangent)) > 1e-6
+      || dot(cross(rootFrame.lateral, rootFrame.normal), rootFrame.tangent) < 1 - 1e-6) {
+    throw new Error('creature root frame axes must be right-handed and orthonormal');
+  }
+  return rootFrame;
+}
+
+function transformRootPoint(rootFrame, point) {
+  return add(
+    add(
+      add(rootFrame.origin, mul(rootFrame.lateral, point.x)),
+      mul(rootFrame.normal, point.y),
+    ),
+    mul(rootFrame.tangent, point.z),
+  );
+}
+
+function transformRootVector(rootFrame, vector) {
+  return normalize(add(
+    add(mul(rootFrame.lateral, vector.x), mul(rootFrame.normal, vector.y)),
+    mul(rootFrame.tangent, vector.z),
+  ));
+}
+
+function pointArray(point) {
+  return [point.x, point.y, point.z];
+}
+
+export function evaluateSmoothFittedProxyRigPhase({
+  binding,
+  probeBinding,
+  phase = 0,
+  amplitude = 0.18,
+  rootFrame,
+} = {}) {
+  if (binding?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0') {
+    throw new Error('smooth fitted phase evaluation requires a smooth fitted cast binding');
+  }
+  if (probeBinding?.schema !== 'kaminos.lirm-smooth-fitted-probe-binding.v0'
+      || probeBinding.vertexCount !== binding.vertexCount
+      || probeBinding.sourceCastSha256 !== binding.registration.donorSha256) {
+    throw new Error('smooth fitted phase evaluation probe binding does not match the cast');
+  }
+  const exactRootFrame = validateRootFrame(rootFrame);
+  const pose = createSmoothFittedProxyRigCyclePose({
+    registration: binding.registration,
+    phase,
+    amplitude,
+  });
+  const bodyPositions = deformSmoothFittedProxyRigBinding({ binding, pose });
+  const worldPositions = new Float64Array(bodyPositions.length);
+  for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
+    const world = transformRootPoint(exactRootFrame, packedPoint(bodyPositions, vertex));
+    worldPositions[vertex * 3] = world.x;
+    worldPositions[vertex * 3 + 1] = world.y;
+    worldPositions[vertex * 3 + 2] = world.z;
+  }
+  const poseCurve = createSmoothFittedProxyRigCurve({
+    stationPositions: pose.stationPositions,
+    sampleCount: binding.sampleCount,
+  });
+  const probes = probeBinding.probes.map(probe => {
+    let bodyPosition = v3();
+    for (let index = 0; index < probe.vertexIndices.length; index += 1) {
+      bodyPosition = add(
+        bodyPosition,
+        mul(packedPoint(bodyPositions, probe.vertexIndices[index]), probe.weights[index]),
+      );
+    }
+    const curveFrame = evaluateSmoothCurveFrame(poseCurve, probe.arcCoordinate);
+    let bodyNormal = add(
+      mul(curveFrame.lateral, probe.localCoordinates[0]),
+      mul(curveFrame.normal, probe.localCoordinates[1]),
+    );
+    if (length3(bodyNormal) < 1e-8) bodyNormal = mul(curveFrame.normal, -1);
+    bodyNormal = normalize(bodyNormal);
+    return {
+      id: probe.id,
+      axialRegion: probe.axialRegion,
+      side: probe.side,
+      phaseOffset: probe.phaseOffset,
+      vertexCount: probe.vertexIndices.length,
+      bodyArcCoordinate: probe.arcCoordinate,
+      bodyPosition: pointArray(bodyPosition),
+      worldPosition: pointArray(transformRootPoint(exactRootFrame, bodyPosition)),
+      bodyNormal: pointArray(bodyNormal),
+      worldNormal: pointArray(transformRootVector(exactRootFrame, bodyNormal)),
+      normalAuthority: 'deformation-derived-body-outward-v0',
+    };
+  });
+  return {
+    schema: 'kaminos.lirm-smooth-fitted-phase-packet.v0',
+    requestedRoute: SMOOTH_FITTED_PHASE_ROUTE,
+    effectiveRoute: SMOOTH_FITTED_PHASE_ROUTE,
+    source: {
+      candidateId: binding.registration.sourceCandidateId,
+      castSha256: binding.registration.donorSha256,
+      sourcePacketSha256: binding.registration.sourcePacketSha256,
+      armatureProgramId: binding.registration.armatureProgramId,
+      contactAtlasSha256: probeBinding.contactAtlasSha256,
+      contactAtlasRegistrationHash: probeBinding.contactAtlasRegistrationHash,
+      contactAtlasAuthority: probeBinding.contactAtlasAuthority,
+    },
+    pose: {
+      phase: pose.phase,
+      amplitude: pose.amplitude,
+      segment: pose.segment,
+      fromPreset: pose.fromPreset,
+      toPreset: pose.toPreset,
+      linearMix: pose.linearMix,
+      mix: pose.mix,
+      stationPositions: pose.stationPositions.map(pointArray),
+      frameTransport: 'rotation-minimizing-parallel-transport-v0',
+      bodyParameterization: binding.parameterization,
+    },
+    rootFrame: structuredClone(exactRootFrame),
+    bodyPositions,
+    worldPositions,
+    probes,
+  };
 }
 
 export const FITTED_PROXY_RIG_PROOF_ROUTE = 'kaminos/fitted-proxy-rig/software-triangle-deformation-witness-v0';

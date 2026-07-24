@@ -31,7 +31,7 @@ async function writeJsonAtomic(path, value) {
   await rename(temporary, path);
 }
 
-function parseGlb(bytes) {
+export function parseGlb(bytes) {
   if (bytes.length < 20 || bytes.readUInt32LE(0) !== 0x46546c67 || bytes.readUInt32LE(4) !== 2) {
     throw new Error('source is not a GLB v2 file');
   }
@@ -89,7 +89,7 @@ function accessorLayout(json, binary, accessorIndex, expectedType = null) {
   return { accessor, component, itemCount, stride, offset };
 }
 
-function readAccessor(json, binary, accessorIndex, expectedType = null) {
+export function readAccessor(json, binary, accessorIndex, expectedType = null) {
   const layout = accessorLayout(json, binary, accessorIndex, expectedType);
   const view = new DataView(binary.buffer, binary.byteOffset, binary.byteLength);
   const output = new Float64Array(layout.accessor.count * layout.itemCount);
@@ -117,7 +117,7 @@ function writeFloatAccessor(json, binary, accessorIndex, values, expectedType) {
   }
 }
 
-function locateEditablePrimitive(json) {
+export function locateEditablePrimitive(json) {
   const scene = json.scenes?.[json.scene ?? 0];
   const roots = scene?.nodes ?? [];
   let found = null;
@@ -143,7 +143,7 @@ function locateEditablePrimitive(json) {
   return found;
 }
 
-function normalizePositions(positions) {
+export function normalizePositions(positions) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (let index = 0; index < positions.length; index += 3) {
@@ -163,7 +163,7 @@ function normalizePositions(positions) {
   };
 }
 
-function denormalizePositions(positions, normalization) {
+export function denormalizePositions(positions, normalization) {
   return Float64Array.from(positions, (value, index) => value / normalization.scale + normalization.center[index % 3]);
 }
 

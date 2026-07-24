@@ -187,6 +187,7 @@
     </div>
     <button type="button" data-action="motion" aria-pressed="false">Play motion</button>
     <div class="toolbar-spacer"></div>
+    <label class="toggle"><input id="probes" type="checkbox" checked /> Probes</label>
     <label class="toggle"><input id="wireframe" type="checkbox" /> Wireframe</label>
     <div class="segmented diagnostic" role="group" aria-label="Diagnostic control">
       <button type="button" data-pose="legacy">Segmented control</button>
@@ -209,10 +210,17 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import {
+      createSmoothFittedProxyRigBinding,
+      createSmoothFittedProxyRigProbeBinding,
+      evaluateSmoothFittedProxyRigPhase,
+      SMOOTH_FITTED_PHASE_ROUTE,
+    } from './lirm-reference-fitted-armature-core.mjs';
 
     const app = document.querySelector('#app');
     const identity = document.querySelector('#identity');
     const wireframeInput = document.querySelector('#wireframe');
+    const probesInput = document.querySelector('#probes');
     const poseButtons = [...document.querySelectorAll('[data-pose]')];
     const motionButton = document.querySelector('[data-action="motion"]');
     const metricPose = document.querySelector('#metric-pose');
@@ -221,15 +229,26 @@
     const metricMax = document.querySelector('#metric-max');
 
     const ROUTE = 'kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0';
+    const EVALUATOR_ROUTE = SMOOTH_FITTED_PHASE_ROUTE;
+    const EXERCISE_ROUTE = 'kaminos/fitted-proxy-rig/arbitrary-phase-flat-support-exercise-v0';
     const SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
     const REGISTRATION_HASH = 'a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9';
     const BASE = './artifacts/lirm-719024-smooth-fitted-proxy-rig-assay-v0';
+    const PHASE_BASE = './artifacts/lirm-719024-smooth-fitted-phase-exercise-v0';
+    const FITTED_REGISTRATION = './artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json';
     const SOURCES = {
       rest: './artifacts/motion-ready-719024/creature.glb',
       c: `${BASE}/smooth-c-bend.glb`,
       s: `${BASE}/smooth-s-bend.glb`,
       asym: `${BASE}/smooth-asymmetric.glb`,
       legacy: `${BASE}/legacy-s-bend.glb`,
+    };
+    const SOURCE_HASHES = {
+      rest: SOURCE_HASH,
+      c: 'd11dec96a20b39457faf9dbddb22627cf99b475e75119d3efb7eda15012d4cd6',
+      s: '23c1af48f2d0ea354327a1a5607c64b125e0d7d3f5c741fc1fcbb3fa7ff31a90',
+      asym: '8b7e06c5c792ac84923feb8b5135b7856ac4ef2310efc5c33c84866c60280a23',
+      legacy: '0e7366b1d663b78fd3fc65d7352a2fe3faafdd4449d8f62c481e41fa729453c6',
     };
     const LABELS = {
       rest: 'Rest',
@@ -293,7 +312,10 @@
     const loader = new GLTFLoader();
     const objects = new Map();
     const motionMeshes = [];
+    const probeMarkers = new Map();
     let report = null;
+    let phaseReport = null;
+    let phaseEvaluator = null;
     let currentPose = 'rest';
     let framed = false;
     let motionActive = false;
@@ -306,7 +328,12 @@
       requestedRoute: ROUTE,
       effectiveRoute: null,
       sourceHash: SOURCE_HASH,
+      actualRenderedSourceHash: null,
       registrationHash: REGISTRATION_HASH,
+      requestedEvaluatorRoute: EVALUATOR_ROUTE,
+      effectiveEvaluatorRoute: null,
+      requestedExerciseRoute: EXERCISE_ROUTE,
+      effectiveExerciseRoute: null,
       effectiveAmplitude: null,
       currentPose,
       loadedPoses: [],
@@ -315,12 +342,31 @@
         active: false,
         phase: 0,
         sequence: [...MOTION_SEQUENCE],
-        parameterization: 'smooth-endpoint-vertex-interpolation',
+        requestedEvaluatorRoute: EVALUATOR_ROUTE,
+        effectiveEvaluatorRoute: null,
+        requestedExerciseRoute: EXERCISE_ROUTE,
+        effectiveExerciseRoute: null,
+        parameterization: 'station-chain-interpolation-plus-fitted-curve-reconstruction-v0',
+        probes: [],
       },
     };
 
-    function loadGLB(url) {
-      return new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+    async function sha256Hex(bytes) {
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function loadGLB(url, expectedHash) {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`GLB load failed for ${url}: ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const actualHash = await sha256Hex(bytes);
+      if (actualHash !== expectedHash) {
+        throw new Error(`rendered source hash mismatch for ${url}: ${actualHash}`);
+      }
+      const resourcePath = new URL('.', new URL(url, location.href)).href;
+      const gltf = await new Promise((resolve, reject) => loader.parse(bytes, resourcePath, resolve, reject));
+      return { gltf, actualHash };
     }
 
     function styleObject(root) {
@@ -352,74 +398,126 @@
       return meshes;
     }
 
-    function buildMotionObject() {
-      const smoothRoots = MOTION_SEQUENCE.map(name => objects.get(name));
-      if (smoothRoots.some(root => !root)) throw new Error('dense motion requires every smooth pose');
-      const poseMeshes = Object.fromEntries([...new Set(MOTION_SEQUENCE)].map(name => [name, meshList(objects.get(name))]));
-      const restMeshes = poseMeshes.rest;
-      for (const [name, meshes] of Object.entries(poseMeshes)) {
-        if (meshes.length !== restMeshes.length) throw new Error(`motion mesh count mismatch for ${name}`);
+    function normalizePositionArray(values) {
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (let index = 0; index < values.length; index += 3) {
+        for (let axis = 0; axis < 3; axis += 1) {
+          min[axis] = Math.min(min[axis], values[index + axis]);
+          max[axis] = Math.max(max[axis], values[index + axis]);
+        }
       }
+      const center = min.map((value, axis) => (value + max[axis]) * 0.5);
+      const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+      const scale = 2.15 / Math.max(diagonal, 1e-12);
+      return {
+        values: Float64Array.from(values, (value, index) => (value - center[index % 3]) * scale),
+        center,
+        scale,
+      };
+    }
+
+    function buildMotionObject(registration, contactAtlas) {
       const root = objects.get('rest').clone(true);
       styleObject(root);
       const animatedMeshes = meshList(root);
-      for (let index = 0; index < animatedMeshes.length; index += 1) {
-        const mesh = animatedMeshes[index];
-        mesh.geometry = mesh.geometry.clone();
-        const positions = {};
-        const normals = {};
-        for (const [name, meshes] of Object.entries(poseMeshes)) {
-          const sourcePosition = meshes[index].geometry.getAttribute('position');
-          const sourceNormal = meshes[index].geometry.getAttribute('normal');
-          if (!sourcePosition || !sourceNormal
-              || sourcePosition.count !== mesh.geometry.getAttribute('position').count
-              || sourceNormal.count !== mesh.geometry.getAttribute('normal').count) {
-            throw new Error(`motion vertex layout mismatch for ${name} mesh ${index}`);
-          }
-          positions[name] = Float32Array.from(sourcePosition.array);
-          normals[name] = Float32Array.from(sourceNormal.array);
-        }
-        motionMeshes.push({ mesh, positions, normals });
+      if (animatedMeshes.length !== 1) throw new Error(`arbitrary-phase evaluator requires one exact mesh, got ${animatedMeshes.length}`);
+      const mesh = animatedMeshes[0];
+      mesh.geometry = mesh.geometry.clone();
+      const sourcePosition = mesh.geometry.getAttribute('position');
+      if (!sourcePosition || sourcePosition.count !== contactAtlas.vertexCount) {
+        throw new Error(`contact atlas vertex layout mismatch: ${sourcePosition?.count} != ${contactAtlas.vertexCount}`);
       }
+      const normalization = normalizePositionArray(sourcePosition.array);
+      const binding = createSmoothFittedProxyRigBinding({
+        positions: normalization.values,
+        registration,
+        sampleCount: phaseReport.effectiveConfig.curveSampleCount,
+      });
+      const probeBinding = createSmoothFittedProxyRigProbeBinding({
+        binding,
+        contactAtlas,
+        contactAtlasSha256: phaseReport.contactAtlas.sha256,
+      });
+      phaseEvaluator = {
+        binding,
+        probeBinding,
+        normalization,
+        rootFrame: phaseReport.flatSupport?.rootFrame ?? {
+          schema: 'kaminos.creature-root-frame.v0',
+          origin: { x: 0, y: 0, z: 0 },
+          lateral: { x: 1, y: 0, z: 0 },
+          normal: { x: 0, y: 1, z: 0 },
+          tangent: { x: 0, y: 0, z: 1 },
+        },
+      };
+      motionMeshes.push({ mesh });
+      const probeColors = [0x68d5ff, 0xff6f72, 0x65e394, 0xffc85a];
+      const markerGeometry = new THREE.SphereGeometry(0.018, 16, 10);
+      const markerRoot = new THREE.Group();
+      markerRoot.name = 'exact-contact-probes';
+      probeBinding.probes.forEach((probe, index) => {
+        const marker = new THREE.Mesh(
+          markerGeometry,
+          new THREE.MeshBasicMaterial({ color: probeColors[index % probeColors.length], depthTest: false }),
+        );
+        marker.name = `probe-${probe.id}`;
+        marker.renderOrder = 10;
+        probeMarkers.set(probe.id, marker);
+        markerRoot.add(marker);
+      });
+      root.add(markerRoot);
       root.name = 'pose-motion';
       root.visible = false;
       objects.set('motion', root);
       scene.add(root);
-      window.__LIRM_INSPECTOR_STATE__.denseMotion.status = 'mounted';
-    }
-
-    function smoothstep(value) {
-      return value * value * (3 - 2 * value);
+      Object.assign(window.__LIRM_INSPECTOR_STATE__.denseMotion, {
+        status: 'mounted',
+        effectiveExerciseRoute: phaseReport.effectiveExerciseRoute,
+        probeIds: probeBinding.probes.map(probe => probe.id),
+      });
     }
 
     function applyMotionPhase(normalizedPhase) {
       motionPhase = ((normalizedPhase % 1) + 1) % 1;
-      const segmentPosition = motionPhase * (MOTION_SEQUENCE.length - 1);
-      const segment = Math.min(MOTION_SEQUENCE.length - 2, Math.floor(segmentPosition));
-      const mix = smoothstep(segmentPosition - segment);
-      const from = MOTION_SEQUENCE[segment];
-      const to = MOTION_SEQUENCE[segment + 1];
+      if (!phaseEvaluator) throw new Error('arbitrary-phase evaluator is not mounted');
+      const packet = evaluateSmoothFittedProxyRigPhase({
+        binding: phaseEvaluator.binding,
+        probeBinding: phaseEvaluator.probeBinding,
+        phase: motionPhase,
+        amplitude: phaseReport.effectiveConfig.amplitude,
+        rootFrame: phaseEvaluator.rootFrame,
+      });
+      if (packet.effectiveRoute !== EVALUATOR_ROUTE) {
+        throw new Error(`effective evaluator route mismatch: ${packet.effectiveRoute}`);
+      }
       for (const entry of motionMeshes) {
         const position = entry.mesh.geometry.getAttribute('position');
-        const normal = entry.mesh.geometry.getAttribute('normal');
-        const fromPosition = entry.positions[from];
-        const toPosition = entry.positions[to];
-        const fromNormal = entry.normals[from];
-        const toNormal = entry.normals[to];
         for (let index = 0; index < position.array.length; index += 1) {
-          position.array[index] = fromPosition[index] + (toPosition[index] - fromPosition[index]) * mix;
-          normal.array[index] = fromNormal[index] + (toNormal[index] - fromNormal[index]) * mix;
+          position.array[index] = packet.worldPositions[index];
         }
         position.needsUpdate = true;
-        normal.needsUpdate = true;
+        entry.mesh.geometry.computeVertexNormals();
         entry.mesh.geometry.computeBoundingBox();
       }
+      for (const probe of packet.probes) {
+        probeMarkers.get(probe.id).position.fromArray(probe.worldPosition);
+      }
+      const from = packet.pose.fromPreset === 'c-bend' ? 'c'
+        : packet.pose.fromPreset === 's-bend' ? 's'
+          : packet.pose.fromPreset === 'asymmetric' ? 'asym' : 'rest';
+      const to = packet.pose.toPreset === 'c-bend' ? 'c'
+        : packet.pose.toPreset === 's-bend' ? 's'
+          : packet.pose.toPreset === 'asymmetric' ? 'asym' : 'rest';
       Object.assign(window.__LIRM_INSPECTOR_STATE__.denseMotion, {
+        effectiveEvaluatorRoute: packet.effectiveRoute,
+        effectiveExerciseRoute: phaseReport.effectiveExerciseRoute,
         phase: motionPhase,
-        segment,
+        segment: packet.pose.segment,
         from,
         to,
-        mix,
+        mix: packet.pose.mix,
+        probes: packet.probes,
       });
       return window.__LIRM_INSPECTOR_STATE__.denseMotion;
     }
@@ -476,9 +574,9 @@
       currentPose = 'motion';
       applyMotionPhase(normalizedPhase);
       metricPose.textContent = `${LABELS[window.__LIRM_INSPECTOR_STATE__.denseMotion.from]} to ${LABELS[window.__LIRM_INSPECTOR_STATE__.denseMotion.to]}`;
-      metricFlips.textContent = 'dense witness';
-      metricP99.textContent = 'continuous';
-      metricMax.textContent = 'bounded endpoints';
+      metricFlips.textContent = '4 live probes';
+      metricP99.textContent = 'fitted curve';
+      metricMax.textContent = 'flat support';
       window.__LIRM_INSPECTOR_STATE__.currentPose = currentPose;
       window.__LIRM_INSPECTOR_STATE__.denseMotion.active = false;
       return window.__LIRM_INSPECTOR_STATE__.denseMotion;
@@ -534,11 +632,13 @@
 
     function frameObjects() {
       const union = new THREE.Box3();
-      for (const root of objects.values()) union.union(new THREE.Box3().setFromObject(root));
+      for (const root of objects.values()) {
+        if (root.visible) union.union(new THREE.Box3().setFromObject(root));
+      }
+      if (union.isEmpty()) throw new Error('cannot frame an empty visible object set');
       const sphere = union.getBoundingSphere(new THREE.Sphere());
       const center = sphere.center;
-      for (const root of objects.values()) root.position.sub(center);
-      floor.position.y = union.min.y - center.y - 0.04;
+      floor.position.y = currentPose === 'motion' ? 0 : union.min.y - 0.04;
       const distance = sphere.radius / Math.sin(THREE.MathUtils.degToRad(camera.fov * 0.5));
       const view = new URLSearchParams(location.search).get('view') ?? 'three-quarter';
       const directions = {
@@ -550,11 +650,14 @@
         low: new THREE.Vector3(0.9, -0.18, 0.25),
         top: new THREE.Vector3(0.25, 1, 0.18),
       };
-      camera.position.copy(directions[view] ?? directions['three-quarter']).normalize().multiplyScalar(distance * 1.26);
+      camera.position.copy(directions[view] ?? directions['three-quarter'])
+        .normalize()
+        .multiplyScalar(distance * 1.26)
+        .add(center);
       camera.near = Math.max(0.005, distance / 100);
       camera.far = distance * 12;
       camera.updateProjectionMatrix();
-      controls.target.set(0, 0, 0);
+      controls.target.copy(center);
       controls.minDistance = sphere.radius * 0.72;
       controls.maxDistance = sphere.radius * 8;
       controls.update();
@@ -571,9 +674,9 @@
         if (time - lastMetricUpdate > 120) {
           const motion = window.__LIRM_INSPECTOR_STATE__.denseMotion;
           metricPose.textContent = `${LABELS[motion.from]} to ${LABELS[motion.to]}`;
-          metricFlips.textContent = 'dense witness';
+          metricFlips.textContent = `${motion.probes.length} live probes`;
           metricP99.textContent = `${Math.round(motion.phase * 100)}% cycle`;
-          metricMax.textContent = 'bounded endpoints';
+          metricMax.textContent = 'fitted phase';
           lastMetricUpdate = time;
         }
       }
@@ -583,19 +686,45 @@
 
     async function boot() {
       try {
-        const [reportResponse, ...glbs] = await Promise.all([
+        const [reportResponse, phaseReportResponse, registrationResponse, contactAtlasResponse, ...glbs] = await Promise.all([
           fetch(`${BASE}/report.json`, { cache: 'no-store' }),
-          ...Object.entries(SOURCES).map(async ([pose, url]) => [pose, await loadGLB(url)]),
+          fetch(`${PHASE_BASE}/report.json`, { cache: 'no-store' }),
+          fetch(FITTED_REGISTRATION, { cache: 'no-store' }),
+          fetch(`${PHASE_BASE}/admitted-contact-atlas.json`, { cache: 'no-store' }),
+          ...Object.entries(SOURCES).map(async ([pose, url]) => [
+            pose,
+            await loadGLB(url, SOURCE_HASHES[pose]),
+          ]),
         ]);
         if (!reportResponse.ok) throw new Error(`report load failed: ${reportResponse.status}`);
+        if (!phaseReportResponse.ok) throw new Error(`phase report load failed: ${phaseReportResponse.status}`);
+        if (!registrationResponse.ok) throw new Error(`fitted registration load failed: ${registrationResponse.status}`);
+        if (!contactAtlasResponse.ok) throw new Error(`contact atlas load failed: ${contactAtlasResponse.status}`);
         report = await reportResponse.json();
+        phaseReport = await phaseReportResponse.json();
+        const registration = await registrationResponse.json();
+        const contactAtlas = await contactAtlasResponse.json();
         if (report.effectiveRoute !== ROUTE) throw new Error(`effective route mismatch: ${report.effectiveRoute}`);
+        if (phaseReport.effectiveEvaluatorRoute !== EVALUATOR_ROUTE) {
+          throw new Error(`effective evaluator route mismatch: ${phaseReport.effectiveEvaluatorRoute}`);
+        }
+        if (phaseReport.effectiveExerciseRoute !== EXERCISE_ROUTE) {
+          throw new Error(`effective exercise route mismatch: ${phaseReport.effectiveExerciseRoute}`);
+        }
         if (report.source?.sha256 !== `sha256:${SOURCE_HASH}`) throw new Error(`source hash mismatch: ${report.source?.sha256}`);
         if (report.registration?.sha256 !== `sha256:${REGISTRATION_HASH}`) {
           throw new Error(`registration hash mismatch: ${report.registration?.sha256}`);
         }
+        if (phaseReport.source?.sha256 !== `sha256:${SOURCE_HASH}`
+            || phaseReport.registration?.sha256 !== `sha256:${REGISTRATION_HASH}`
+            || contactAtlas.castHash !== SOURCE_HASH
+            || registration.donorSha256 !== `sha256:${SOURCE_HASH}`) {
+          throw new Error('arbitrary-phase source identity mismatch');
+        }
 
-        for (const [pose, gltf] of glbs) {
+        for (const [pose, loaded] of glbs) {
+          const { gltf, actualHash } = loaded;
+          if (actualHash !== SOURCE_HASHES[pose]) throw new Error(`rendered source hash mismatch for ${pose}`);
           const root = gltf.scene;
           root.name = `pose-${pose}`;
           styleObject(root);
@@ -603,14 +732,13 @@
           objects.set(pose, root);
           scene.add(root);
         }
-        buildMotionObject();
-        frameObjects();
-
         const params = new URLSearchParams(location.search);
         const requestedPose = params.get('pose');
         const initialPose = objects.has(requestedPose) ? requestedPose : 'rest';
         wireframeInput.checked = params.get('wire') === '1';
         setWireframe(wireframeInput.checked);
+        buildMotionObject(registration, contactAtlas);
+        applyMotionPhase(0);
         if (params.get('motion') === '1') {
           applyMotionPhase(Number(params.get('phase') ?? 0));
           if (params.get('paused') === '1') setMotionPhase(Number(params.get('phase') ?? 0));
@@ -618,12 +746,16 @@
         } else {
           showPose(initialPose);
         }
+        frameObjects();
 
         identity.dataset.state = 'loaded';
-        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted</strong><br>${ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${REGISTRATION_HASH.slice(0, 16)}... | 148,118 vertices | amplitude ${report.effectiveConfig.amplitude}`;
+        identity.innerHTML = `<strong>exact route loaded | 5/5 poses mounted | 4 probes live</strong><br>${EVALUATOR_ROUTE}<br>source ${SOURCE_HASH.slice(0, 16)}... | registration ${REGISTRATION_HASH.slice(0, 16)}... | 148,118 vertices | amplitude ${phaseReport.effectiveConfig.amplitude}`;
         Object.assign(window.__LIRM_INSPECTOR_STATE__, {
           status: 'loaded',
           effectiveRoute: report.effectiveRoute,
+          actualRenderedSourceHash: glbs.find(([pose]) => pose === 'rest')[1].actualHash,
+          effectiveEvaluatorRoute: window.__LIRM_INSPECTOR_STATE__.denseMotion.effectiveEvaluatorRoute,
+          effectiveExerciseRoute: phaseReport.effectiveExerciseRoute,
           effectiveAmplitude: report.effectiveConfig.amplitude,
           loadedPoses: [...objects.keys()],
           currentPose,
@@ -642,6 +774,9 @@
 
     for (const button of poseButtons) button.addEventListener('click', () => showPose(button.dataset.pose));
     motionButton.addEventListener('click', () => setMotionActive(!motionActive));
+    probesInput.addEventListener('change', () => {
+      for (const marker of probeMarkers.values()) marker.visible = probesInput.checked;
+    });
     wireframeInput.addEventListener('change', () => {
       setWireframe(wireframeInput.checked);
       const params = new URLSearchParams(location.search);

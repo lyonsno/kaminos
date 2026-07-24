@@ -9,9 +9,12 @@ import {
 } from './artifacts/lirm-trellis-multisource-sparse-guidance-v1/evidence-admission.mjs';
 
 const EXPECTED_ROUTE = 'kaminos/fitted-proxy-rig/exact-glb-smooth-curve-stress-v0';
+const EXPECTED_EVALUATOR_ROUTE = 'kaminos/fitted-proxy-rig/arbitrary-phase-plus-semantic-probes-v0';
+const EXPECTED_EXERCISE_ROUTE = 'kaminos/fitted-proxy-rig/arbitrary-phase-flat-support-exercise-v0';
 const EXPECTED_SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
 const EXPECTED_REGISTRATION_HASH = 'a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9';
 const EXPECTED_AMPLITUDE = 0.18;
+const EXPECTED_PROBE_IDS = Object.freeze(['front-left', 'front-right', 'rear-left', 'rear-right']);
 const DEFAULT_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const VIEWS = Object.freeze([
   { id: 'profile', queryView: 'side' },
@@ -105,7 +108,16 @@ async function waitForInspector(cdp, timeoutMs = 30000) {
 
 export function assertInspectorIdentity(state) {
   if (state.effectiveRoute !== EXPECTED_ROUTE) throw new Error(`effective route mismatch: ${state.effectiveRoute}`);
+  if (state.effectiveEvaluatorRoute !== EXPECTED_EVALUATOR_ROUTE) {
+    throw new Error(`effective evaluator route mismatch: ${state.effectiveEvaluatorRoute}`);
+  }
+  if (state.effectiveExerciseRoute !== EXPECTED_EXERCISE_ROUTE) {
+    throw new Error(`effective exercise route mismatch: ${state.effectiveExerciseRoute}`);
+  }
   if (state.sourceHash !== EXPECTED_SOURCE_HASH) throw new Error(`source hash mismatch: ${state.sourceHash}`);
+  if (state.actualRenderedSourceHash !== EXPECTED_SOURCE_HASH) {
+    throw new Error(`rendered source hash mismatch: ${state.actualRenderedSourceHash}`);
+  }
   if (state.registrationHash !== EXPECTED_REGISTRATION_HASH) {
     throw new Error(`registration hash mismatch: ${state.registrationHash}`);
   }
@@ -113,6 +125,36 @@ export function assertInspectorIdentity(state) {
     throw new Error(`effective amplitude mismatch: ${state.effectiveAmplitude}`);
   }
   if (state.denseMotion?.status !== 'mounted') throw new Error('dense motion did not mount');
+  if (state.denseMotion.effectiveEvaluatorRoute !== EXPECTED_EVALUATOR_ROUTE
+      || state.denseMotion.effectiveExerciseRoute !== EXPECTED_EXERCISE_ROUTE
+      || JSON.stringify(state.denseMotion.probeIds) !== JSON.stringify(EXPECTED_PROBE_IDS)) {
+    throw new Error(`semantic probes did not mount: ${JSON.stringify(state.denseMotion)}`);
+  }
+}
+
+export function assertMotionProbePacket(motion) {
+  if (!motion || JSON.stringify(motion.probeIds) !== JSON.stringify(EXPECTED_PROBE_IDS)
+      || motion.effectiveEvaluatorRoute !== EXPECTED_EVALUATOR_ROUTE
+      || motion.effectiveExerciseRoute !== EXPECTED_EXERCISE_ROUTE
+      || !Array.isArray(motion.probes) || motion.probes.length !== EXPECTED_PROBE_IDS.length) {
+    throw new Error(`semantic probe packet is missing or partial: ${JSON.stringify(motion)}`);
+  }
+  for (let index = 0; index < EXPECTED_PROBE_IDS.length; index += 1) {
+    const probe = motion.probes[index];
+    if (probe.id !== EXPECTED_PROBE_IDS[index]
+        || !['bodyPosition', 'worldPosition', 'bodyNormal', 'worldNormal'].every(field => (
+          Array.isArray(probe[field])
+          && probe[field].length === 3
+          && probe[field].every(Number.isFinite)
+        ))
+        || !Number.isFinite(probe.bodyArcCoordinate)
+        || !Number.isInteger(probe.vertexCount)
+        || probe.vertexCount <= 0
+        || typeof probe.normalAuthority !== 'string'
+        || !probe.normalAuthority.trim()) {
+      throw new Error(`semantic probe packet is invalid at ${index}: ${JSON.stringify(probe)}`);
+    }
+  }
 }
 
 export function assertCapturedFrameSet(capturedFrames, view, frameCount) {
@@ -141,6 +183,20 @@ export function verifyPng(bytes, frameId, options = {}) {
 export async function prepareFrameDirectory(frameRoot) {
   await rm(frameRoot, { recursive: true, force: true });
   await mkdir(frameRoot, { recursive: true });
+}
+
+async function waitForBrowserExit(browser, timeoutMs = 5000) {
+  if (!browser || browser.exitCode !== null || browser.signalCode !== null) return;
+  const exited = new Promise(accept => browser.once('exit', accept));
+  browser.kill('SIGTERM');
+  await Promise.race([
+    exited,
+    new Promise(accept => setTimeout(accept, timeoutMs)),
+  ]);
+  if (browser.exitCode === null && browser.signalCode === null) {
+    browser.kill('SIGKILL');
+    await exited;
+  }
 }
 
 async function fileIdentity(path, root = null) {
@@ -186,7 +242,7 @@ export async function runDenseMotionWitness({
   const profileRoot = resolve(outputRoot, 'profile');
   const chromeRoot = resolve(outputRoot, '.chrome-profile');
   await mkdir(profileRoot, { recursive: true });
-  await rm(chromeRoot, { recursive: true, force: true });
+  await rm(chromeRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
   const port = 44000 + Math.floor(Math.random() * 12000);
   const startedAt = new Date().toISOString();
   const report = {
@@ -195,11 +251,17 @@ export async function runDenseMotionWitness({
     failurePhase: null,
     requestedRoute: EXPECTED_ROUTE,
     effectiveRoute: null,
+    requestedEvaluatorRoute: EXPECTED_EVALUATOR_ROUTE,
+    effectiveEvaluatorRoute: null,
+    requestedExerciseRoute: EXPECTED_EXERCISE_ROUTE,
+    effectiveExerciseRoute: null,
     requestedConfig: { url, views: VIEWS.map(view => view.id), frameCount, frameRate },
     effectiveConfig: null,
     sourceHash: null,
+    actualRenderedSourceHash: null,
     registrationHash: null,
     effectiveAmplitude: null,
+    probeIds: null,
     outputs: {},
     capturedFrames: [],
     lastTrustworthyEvidence: 'invocation recorded; browser not started',
@@ -238,9 +300,13 @@ export async function runDenseMotionWitness({
       const state = await waitForInspector(cdp);
       assertInspectorIdentity(state);
       report.effectiveRoute = state.effectiveRoute;
+      report.effectiveEvaluatorRoute = state.effectiveEvaluatorRoute;
+      report.effectiveExerciseRoute = state.effectiveExerciseRoute;
       report.sourceHash = state.sourceHash;
+      report.actualRenderedSourceHash = state.actualRenderedSourceHash;
       report.registrationHash = state.registrationHash;
       report.effectiveAmplitude = state.effectiveAmplitude;
+      report.probeIds = state.denseMotion.probeIds;
       report.lastTrustworthyEvidence = `${view.id} exact route and dense motion mounted`;
       await writeReport(reportPath, report);
 
@@ -256,6 +322,7 @@ export async function runDenseMotionWitness({
         })()`, true);
         const motion = sample?.state;
         if (!motion || Math.abs(motion.phase - phase) > 1e-6) throw new Error(`dense motion phase drift at ${view.id} ${index}`);
+        assertMotionProbePacket(motion);
         const screenProbe = sample?.screenProbe;
         if (!screenProbe?.intersectsViewport || screenProbe.areaRatio < 0.025
             || screenProbe.clipped.width < 120 || screenProbe.clipped.height < 90) {
@@ -322,8 +389,8 @@ export async function runDenseMotionWitness({
     report.timing.finishedAt = new Date().toISOString();
     await writeReport(reportPath, report);
     cdp?.close();
-    chrome?.kill('SIGTERM');
-    await rm(chromeRoot, { recursive: true, force: true });
+    await waitForBrowserExit(chrome);
+    await rm(chromeRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
   }
   return report;
 }
