@@ -1,0 +1,115 @@
+{
+  "schema": "kaminos.motion-contact-constraints.v0",
+  "id": "stationary-hill-probes:C:constraints",
+  "authority": "world-space-contact-resolution",
+  "requestId": "stationary-hill-probes:C",
+  "prepassId": "stationary-hill-prepass",
+  "supportSurface": {
+    "id": "hill-of-hills-motion-affordance-packet-v0",
+    "sourceRef": "lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348",
+    "revision": "81c5348"
+  },
+  "body": {
+    "id": "motion-ready-719024:axial-footprint",
+    "registrationId": "motion-ready-719024:registration:cb519913ad863441",
+    "scale": 1.14
+  },
+  "contactAtlas": {
+    "schema": "kaminos.creature-contact-atlas.v0",
+    "castId": "motion-ready-719024",
+    "castHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "registrationHash": "cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6"
+  },
+  "poseId": "molten-low-frequency:C",
+  "phase": 1.3,
+  "patches": [
+    {
+      "id": "front-left",
+      "contactState": "stance",
+      "cycle": 0.20690142601946393,
+      "probeWorldPosition": [
+        0.7378611936464464,
+        0.38356042280405594,
+        -1.2430538270580525
+      ],
+      "terrainPoint": [
+        0.7378611936464464,
+        0.17217698491836972,
+        -1.2430538270580525
+      ],
+      "terrainNormal": [
+        0.2666898049482342,
+        0.9003935657737028,
+        -0.3437556903528863
+      ],
+      "signedDistance": 0.19032828738339705,
+      "inBounds": true
+    },
+    {
+      "id": "front-right",
+      "contactState": "swing",
+      "cycle": 0.7069014260194639,
+      "probeWorldPosition": [
+        0.5326761678180649,
+        0.40796058944019337,
+        -1.4050204603192653
+      ],
+      "terrainPoint": [
+        0.5326761678180649,
+        0.19396752633534065,
+        -1.4050204603192653
+      ],
+      "terrainNormal": [
+        0.41350277709080924,
+        0.8831902053142965,
+        -0.2213380097838583
+      ],
+      "signedDistance": 0.18899657733941008,
+      "inBounds": true
+    },
+    {
+      "id": "rear-left",
+      "contactState": "swing",
+      "cycle": 0.7069014260194639,
+      "probeWorldPosition": [
+        0.2662727566851218,
+        0.39343797908217404,
+        -0.8519709648899683
+      ],
+      "terrainPoint": [
+        0.2662727566851218,
+        0.5323015001199942,
+        -0.8519709648899683
+      ],
+      "terrainNormal": [
+        0.2775575448040279,
+        0.8918288829031474,
+        -0.35721569526279795
+      ],
+      "signedDistance": -0.12384249884315689,
+      "inBounds": true
+    },
+    {
+      "id": "rear-right",
+      "contactState": "stance",
+      "cycle": 0.20690142601946393,
+      "probeWorldPosition": [
+        0.1586828678357605,
+        0.39258986988157685,
+        -1.0758264306818621
+      ],
+      "terrainPoint": [
+        0.1586828678357605,
+        0.4857400654661089,
+        -1.0758264306818621
+      ],
+      "terrainNormal": [
+        0.3474764797767468,
+        0.8914957588255177,
+        -0.2906809384842331
+      ],
+      "signedDistance": -0.08304300429737776,
+      "inBounds": true
+    }
+  ]
+}
