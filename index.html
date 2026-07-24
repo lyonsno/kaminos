@@ -600,6 +600,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+#kaminos-wake-sharp-promoted-fire-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
+#kaminos-wake-sharp-promoted-fire-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -2932,6 +2934,19 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
 import {
+  WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY,
+  createWakeSharpPromotedFireGpuContext,
+  createWakeSharpPromotedFireVolumeAdapter,
+} from './kiln-sharp-promoted-fire-volume-adapter.mjs';
+import {
+  createKilnPromotedFireActorApplication,
+  loadKilnPromotedFireActor,
+} from './kiln-promoted-fire-actor-consumer.mjs';
+import {
+  beginWakeSharpFireActorProductEpisode,
+  completeWakeSharpFireActorProductEpisode,
+} from './kiln-sharp-promoted-fire-actor-composition.mjs';
+import {
   createForegroundKilnHeartbeatEpisode,
   firePresentationMismatchReasons,
   foregroundKilnStartAllowsPipeline,
@@ -3062,6 +3077,11 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let kaminosVolumeRouteInitPromise = null;
+let wakeSharpPromotedFireVolumePrototype = null;
+let wakeSharpPromotedFireGpuContext = null;
+let wakeSharpPromotedFireControls = null;
+let wakeSharpPreviousVolumePrototype = null;
+let wakeSharpPreviousVolumeActive = false;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -14897,6 +14917,208 @@ async function ensureKaminosVolumeRouteInitialized() {
   return volumePrototype;
 }
 
+const WAKE_SHARP_FIRE_ACTOR_SELECTION_URL = './kiln-sharp-fire-actor-selection.json';
+let wakeSharpFireActorResourcesPromise = null;
+
+async function verifyWakeSharpPromotedFireEngine(expectedSha256) {
+  const [manifestResponse, engineResponse] = await Promise.all([
+    fetch('./kiln-promoted-fire-engine.json', { cache: 'no-store' }),
+    fetch('./kiln-promoted-fire-volume-core.js', { cache: 'no-store' }),
+  ]);
+  if (!manifestResponse.ok || !engineResponse.ok) {
+    throw new Error(
+      `Promoted fire engine fetch failed: manifest ${manifestResponse.status}, source ${engineResponse.status}`,
+    );
+  }
+  const [manifest, sourceBytes] = await Promise.all([
+    manifestResponse.json(),
+    engineResponse.arrayBuffer(),
+  ]);
+  const effectiveSha256 = Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', sourceBytes)),
+    byte => byte.toString(16).padStart(2, '0'),
+  ).join('');
+  if (manifest.schema !== 'kaminos.kiln.promoted-fire-engine.v1'
+    || manifest.consumerPath !== 'kiln-promoted-fire-volume-core.js'
+    || manifest.sha256 !== expectedSha256
+    || effectiveSha256 !== expectedSha256) {
+    throw new Error('Promoted fire engine identity mismatch');
+  }
+  return { ...manifest, effectiveSha256 };
+}
+
+async function verifyWakeSharpPromotedFireCarrier(expectedIdentity, expectedSha256) {
+  const response = await fetch('./kiln-sharp-promoted-fire-volume-adapter.mjs', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Promoted fire carrier fetch failed: ${response.status}`);
+  }
+  const sourceBytes = await response.arrayBuffer();
+  const effectiveSha256 = Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', sourceBytes)),
+    byte => byte.toString(16).padStart(2, '0'),
+  ).join('');
+  if (WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY !== expectedIdentity
+    || effectiveSha256 !== expectedSha256) {
+    throw new Error('Promoted fire carrier identity mismatch');
+  }
+  return {
+    identity: WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY,
+    consumerPath: 'kiln-sharp-promoted-fire-volume-adapter.mjs',
+    sha256: expectedSha256,
+    effectiveSha256,
+  };
+}
+
+async function loadWakeSharpFireActorResources() {
+  if (wakeSharpFireActorResourcesPromise) return wakeSharpFireActorResourcesPromise;
+  wakeSharpFireActorResourcesPromise = (async () => {
+    const selectionResponse = await fetch(WAKE_SHARP_FIRE_ACTOR_SELECTION_URL, { cache: 'no-store' });
+    if (!selectionResponse.ok) {
+      throw new Error(`Wake SHARP FireActor selection fetch failed: ${selectionResponse.status}`);
+    }
+    const selection = await selectionResponse.json();
+    const [engineIdentity, carrierIdentity, loaded] = await Promise.all([
+      verifyWakeSharpPromotedFireEngine(selection.expected?.engineSha256),
+      verifyWakeSharpPromotedFireCarrier(
+        selection.expected?.carrierIdentity,
+        selection.expected?.carrierSha256,
+      ),
+      loadKilnPromotedFireActor({ mountUrl: selection.mountUrl }),
+    ]);
+    return {
+      selection,
+      engineIdentity,
+      carrierIdentity,
+      loaded,
+      application: createKilnPromotedFireActorApplication(loaded),
+    };
+  })();
+  try {
+    return await wakeSharpFireActorResourcesPromise;
+  } catch (error) {
+    wakeSharpFireActorResourcesPromise = null;
+    throw error;
+  }
+}
+
+function applyWakeSharpFireActorApplication(application, loaded) {
+  const missingControls = [];
+  for (const control of application.domControls) {
+    const element = document.getElementById(control.id);
+    if (!element) {
+      missingControls.push(control.id);
+      continue;
+    }
+    if (element.type === 'checkbox') element.checked = Boolean(control.value);
+    else element.value = String(control.value);
+  }
+  for (const control of application.rendererControls) {
+    const element = document.getElementById(control.id);
+    if (!element) continue;
+    if (element.type === 'checkbox') element.checked = Boolean(control.value);
+    else element.value = String(control.value);
+  }
+  if (missingControls.length) {
+    throw new Error(`Promoted fire basin controls are not mounted: ${missingControls.join(', ')}`);
+  }
+  updateVolumeControlLabels();
+  const rendererControls = Object.fromEntries(
+    application.rendererControls.map(control => [control.id, Number(control.value)]),
+  );
+  return {
+    ...readVolumeControls(),
+    resolution: application.runtimeControls['volume-resolution'],
+    raySteps: application.runtimeControls['volume-steps'],
+    adaptiveRays: application.runtimeControls['volume-adaptive-rays'],
+    renderScale: application.runtimeControls['volume-render-scale'],
+    boundarySplatMode: loaded.mount.representation.splatMode,
+    boundarySplatComposition: 'hybrid-smoke',
+    flameContinuityMode: application.presentation.flameContinuity,
+    flowKernelStrength: rendererControls['volume-flow-kernel-strength'],
+    flowKernelRadius: rendererControls['volume-flow-kernel-radius'],
+    flowKernelCoherence: rendererControls['volume-flow-kernel-coherence'],
+  };
+}
+
+function wakeSharpPromotedFireFallbackReason(engineState, mount) {
+  if (engineState.error) return engineState.error;
+  if (engineState.boundarySplatFallbackReason) return engineState.boundarySplatFallbackReason;
+  if (engineState.boundarySplatPresentationModeFallbackReason) {
+    return engineState.boundarySplatPresentationModeFallbackReason;
+  }
+  if (engineState.raymarchSmokePresentationModeFallbackReason) {
+    return engineState.raymarchSmokePresentationModeFallbackReason;
+  }
+  if (engineState.boundarySplatMode !== mount.representation.splatMode) {
+    return `splat-mode-mismatch:${engineState.boundarySplatMode || 'missing'}`;
+  }
+  if (engineState.raymarchSmokePresentationModeEffective !== 'on') {
+    return `smoke-presentation-mismatch:${engineState.raymarchSmokePresentationModeEffective || 'missing'}`;
+  }
+  return null;
+}
+
+function wakeSharpPromotedFirePresentation(fireState, engineState) {
+  const { loaded } = fireState.fireActorResources;
+  return {
+    mountId: loaded.mount.mountId,
+    actorId: loaded.mount.actorId,
+    basinRevision: loaded.mount.basin.revision,
+    packageSha256: loaded.packageSha256,
+    policyId: loaded.mount.policy.policyId,
+    composition: loaded.mount.representation.composition,
+    rendererIdentity: loaded.mount.representation.rendererIdentity,
+    splatMode: engineState.boundarySplatMode,
+    smokePresentation: engineState.raymarchSmokePresentationModeEffective,
+    fallbackReason: wakeSharpPromotedFireFallbackReason(engineState, loaded.mount),
+  };
+}
+
+async function activateWakeSharpPromotedFireVolume(resources) {
+  const previousVolumePrototype = volumePrototype;
+  const previousActive = previousVolumePrototype?.debugState?.().active === true;
+  wakeSharpPromotedFireControls = applyWakeSharpFireActorApplication(
+    resources.application,
+    resources.loaded,
+  );
+  wakeSharpPromotedFireGpuContext ||= await createWakeSharpPromotedFireGpuContext();
+  if (!wakeSharpPromotedFireVolumePrototype) {
+    wakeSharpPromotedFireVolumePrototype = createWakeSharpPromotedFireVolumeAdapter({
+      THREE,
+      viewport: document.getElementById('viewport'),
+      camera,
+      controls,
+      getControls: () => ({ ...wakeSharpPromotedFireControls }),
+      gpuContext: wakeSharpPromotedFireGpuContext,
+      productTransform: resources.application.productTransform,
+      onStatus: status => {
+        document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      },
+    });
+  }
+  if (previousActive) await previousVolumePrototype.setActive(false);
+  wakeSharpPreviousVolumePrototype = previousVolumePrototype;
+  wakeSharpPreviousVolumeActive = previousActive;
+  volumePrototype = wakeSharpPromotedFireVolumePrototype;
+  window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setControls(wakeSharpPromotedFireControls);
+  volumePrototype.setRaymarchSmokePresentationMode(resources.application.presentation.raymarchSmoke);
+  await volumePrototype.setActive(true);
+  return { previousActive };
+}
+
+async function restoreWakeSharpPreviousVolume() {
+  const promoted = wakeSharpPromotedFireVolumePrototype;
+  if (promoted?.debugState?.().active === true) await promoted.setActive(false);
+  volumePrototype = wakeSharpPreviousVolumePrototype || volumePrototype;
+  window.__kaminosVolumePrototype = volumePrototype;
+  if (wakeSharpPreviousVolumeActive && volumePrototype?.debugState?.().active !== true) {
+    await volumePrototype.setActive(true);
+  }
+  wakeSharpPreviousVolumePrototype = null;
+  wakeSharpPreviousVolumeActive = false;
+}
+
 const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
   identity: 'kaminos.kiln-contention-fire-budget.v0',
   resolution: 90,
@@ -14906,9 +15128,9 @@ const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
 
 let activeForegroundKilnHeartbeat = null;
 
-function fireBudgetFromVolumeState(state = {}) {
+function fireBudgetFromVolumeState(state = {}, identity = KILN_CONTENTION_FIRE_BUDGET.identity) {
   return {
-    identity: KILN_CONTENTION_FIRE_BUDGET.identity,
+    identity,
     resolution: Number(state.simGrid ?? state.resolution),
     renderScale: Number(state.renderScale),
     adaptiveRays: Number(state.adaptiveRaymarch ?? state.adaptiveRays),
@@ -14958,46 +15180,57 @@ async function beginSharpBreathingRoomKilnFire({
   window.__kaminosSharpBreathingRoomKilnFireState = fireState;
   try {
     await ensureKaminosVolumeRouteInitialized();
-    const wasActive = volumePrototype?.debugState?.().active === true;
-    applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
-    const fireBudget = applyKilnContentionFireBudget();
-    const hybridPresentationRequested = firePresentationMode === 'hybrid-smoke-preview';
-    setVolumeControlValue('volume-boundary-splat-mode', hybridPresentationRequested ? 'learned' : 'off');
-    setVolumeControlValue('volume-boundary-splat-composition', hybridPresentationRequested ? 'hybrid-smoke' : 'splat-only');
-    updateVolumeControlLabels();
-    volumePrototype.setControls({
-      ...readVolumeControls(),
-      flameContinuityMode,
-    });
+    const sharpRuntime = await loadSharpInlineProductRuntime();
+    const fireActorResources = await loadWakeSharpFireActorResources();
+    const activation = await activateWakeSharpPromotedFireVolume(fireActorResources);
+    const effectiveFlameContinuity = fireActorResources.application.presentation.flameContinuity;
+    if (flameContinuityMode !== effectiveFlameContinuity) {
+      throw new Error(
+        `Promoted FireActor flame continuity mismatch: requested ${flameContinuityMode}, effective ${effectiveFlameContinuity}`,
+      );
+    }
     frameVolumeCamera();
-    await volumePrototype.setActive(true);
     const fireEpisodeHooks = volumePrototype.beginFireEpisode({ firingId });
     if (fireEpisodeHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
       || fireEpisodeHooks?.firingId !== firingId
       || fireEpisodeHooks?.status !== 'recording') {
       throw new Error(`The renderer did not open the requested fire episode ${firingId || '<missing>'}.`);
     }
-    if (hybridPresentationRequested) {
-      await waitForHybridKilnFirePresentation({
-        firingId,
-        flameContinuityRequested: flameContinuityMode,
-        readState: () => volumePrototype?.debugState?.() || null,
-      });
-    }
+    const fireActorProductEpisode = beginWakeSharpFireActorProductEpisode({
+      selection: fireActorResources.selection,
+      loaded: fireActorResources.loaded,
+      application: fireActorResources.application,
+      engineIdentity: fireActorResources.engineIdentity,
+      carrierIdentity: fireActorResources.carrierIdentity,
+      sharpMount: sharpRuntime.mount,
+      firingId,
+      requireSharpDutyCorrelation,
+      rendererEpisode: fireEpisodeHooks,
+    });
+    const requestedFireBudget = {
+      identity: fireActorResources.loaded.mount.policy.policyId,
+      resolution: fireActorResources.application.runtimeControls['volume-resolution'],
+      renderScale: fireActorResources.application.runtimeControls['volume-render-scale'],
+      adaptiveRays: fireActorResources.application.runtimeControls['volume-adaptive-rays'],
+    };
     fireState.phase = 'burning';
-    fireState.activatedByRun = !wasActive;
-    fireState.previousActive = wasActive;
+    fireState.activatedByRun = true;
+    fireState.previousActive = activation.previousActive;
     fireState.volumeDebugState = volumePrototype.debugState();
     fireState.fireEpisodeHooks = fireEpisodeHooks;
-    fireState.requestedFireBudget = fireBudget.requestedFireBudget;
-    fireState.effectiveFireBudget = fireBudgetFromVolumeState(fireState.volumeDebugState);
-    const expectedFirePresentation = hybridPresentationRequested
-      ? createExpectedHybridKilnFirePresentation({
-          firingId,
-          learnedModelIdentity: fireState.volumeDebugState?.boundarySplatAttributeModelIdentity,
-          flameContinuityRequested: flameContinuityMode,
-        })
-      : null;
+    fireState.fireActorResources = fireActorResources;
+    fireState.fireActorProductEpisode = fireActorProductEpisode;
+    fireState.sharpMount = {
+      expectedRevision: sharpRuntime.mount.expectedRevision,
+      revision: sharpRuntime.mount.revision,
+      revisionContractStatus: sharpRuntime.mount.revisionContractStatus,
+    };
+    fireState.requestedFireBudget = requestedFireBudget;
+    fireState.effectiveFireBudget = fireBudgetFromVolumeState(
+      fireState.volumeDebugState,
+      requestedFireBudget.identity,
+    );
+    const expectedFirePresentation = null;
     fireState.expectedFirePresentation = expectedFirePresentation;
     activeForegroundKilnHeartbeat = createForegroundKilnHeartbeatEpisode({
       routeId: 'sharp-image-to-splat-live-v0',
@@ -15021,8 +15254,10 @@ async function beginSharpBreathingRoomKilnFire({
     refreshVolumeReadout();
     return fireState;
   } catch (err) {
+    if (wakeSharpPreviousVolumePrototype) await restoreWakeSharpPreviousVolume();
     fireState.phase = 'failed';
     fireState.error = err?.message || String(err);
+    fireState.errorStack = err?.stack || null;
     window.__kaminosSharpBreathingRoomKilnFireState = fireState;
     setSharpBreathingRoomStatus(`The route is running, but the kiln fire could not start: ${fireState.error}`, 'error');
     return fireState;
@@ -15091,12 +15326,61 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   }) || fireState.foregroundHeartbeat || null;
   activeForegroundKilnHeartbeat = null;
   fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
+  if (fireState.fireActorProductEpisode) {
+    const effectivePresentation = wakeSharpPromotedFirePresentation(
+      fireState,
+      fireState.volumeDebugState,
+    );
+    try {
+      if (phase !== 'complete') {
+        fireState.fireActorProductReceipt = {
+          ...structuredClone(fireState.fireActorProductEpisode),
+          status: 'failed',
+          terminalPhase: phase,
+          effectivePresentation,
+        };
+      } else {
+        fireState.fireActorProductReceipt = completeWakeSharpFireActorProductEpisode({
+          selection: fireState.fireActorResources.selection,
+          loaded: fireState.fireActorResources.loaded,
+          episode: fireState.fireActorProductEpisode,
+          rendererEpisode: fireState.fireEpisodeHooks,
+          foregroundHeartbeat: fireState.foregroundHeartbeat,
+          sharpReport: options.runResult?.inlineSharp || null,
+          effectivePresentation,
+        });
+      }
+    } catch (error) {
+      fireState.fireActorProductCompletionError = error?.message || String(error);
+      fireState.fireActorProductReceipt = {
+        ...structuredClone(fireState.fireActorProductEpisode),
+        status: 'invalid',
+        terminalPhase: phase,
+        error: fireState.fireActorProductCompletionError,
+        effectivePresentation,
+      };
+      if (fireState.foregroundHeartbeat) {
+        fireState.foregroundHeartbeat = {
+          ...fireState.foregroundHeartbeat,
+          status: 'invalid',
+          failures: [
+            ...(fireState.foregroundHeartbeat.failures || []),
+            'fire-actor-product-receipt-invalid',
+          ],
+        };
+      }
+    }
+  }
   if (options.runResult && typeof options.runResult === 'object') {
     options.runResult.foregroundKilnHeartbeat = fireState.foregroundHeartbeat;
     options.runResult.fireEpisodeHooks = fireState.fireEpisodeHooks || null;
     options.runResult.kilnFrameStageLedger = fireState.volumeDebugState?.kilnFrameStageLedger || null;
+    options.runResult.fireActorProductReceipt = fireState.fireActorProductReceipt || null;
     if (fireState.fireEpisodeCloseError) {
       options.runResult.fireEpisodeCloseError = fireState.fireEpisodeCloseError;
+    }
+    if (fireState.fireActorProductCompletionError) {
+      options.runResult.fireActorProductCompletionError = fireState.fireActorProductCompletionError;
     }
   }
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
@@ -15111,6 +15395,8 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
     fireState.volumeReleaseConfirmed = false;
     fireState.forcedRelease = false;
   }
+  fireState.promotedVolumeDebugState = volumePrototype?.debugState?.() || null;
+  if (wakeSharpPreviousVolumePrototype) await restoreWakeSharpPreviousVolume();
   fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
   fireState.volumeBridgeDebugState = volumeBridge?.debugState?.() || null;
   window.__kaminosSharpBreathingRoomKilnFireState = fireState;
@@ -15121,6 +15407,7 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
 window.kaminosSharpBreathingRoomKilnFireDebug = {
   begin: beginSharpBreathingRoomKilnFire,
   end: endSharpBreathingRoomKilnFire,
+  sampleStageTimings: () => volumePrototype?.sampleLiveStageTimings?.(),
   state: () => ({
     fire: window.__kaminosSharpBreathingRoomKilnFireState || null,
     foregroundHeartbeat: window.__kaminosSharpBreathingRoomKilnFireState?.foregroundHeartbeat || null,

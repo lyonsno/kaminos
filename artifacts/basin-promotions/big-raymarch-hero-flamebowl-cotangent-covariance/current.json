@@ -1,0 +1,31 @@
+{
+  "schema": "kaminos.volume.basin-promotion-channel.v1",
+  "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+  "label": "Big Raymarch Hero Flamebowl Cotangent Covariance",
+  "current": {
+    "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+    "stableRef": "big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+    "packageRelativePath": "revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json",
+    "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc",
+    "sourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+    "updatedAt": "2026-07-20T12:27:33.147Z"
+  },
+  "history": [
+    {
+      "revision": "basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603",
+      "stableRef": "big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603",
+      "packageRelativePath": "revisions/basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603/package.json",
+      "packageSha256": "268bbe1d64daf031a283cac3cee7e4d22f1d6805ab8eda33e4a712c645f0242b",
+      "sourceCommit": "cef86b64fd9d32155c6f255c7208f88be1e7bbae",
+      "updatedAt": "2026-07-20T07:46:50.538Z"
+    },
+    {
+      "revision": "basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+      "stableRef": "big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95",
+      "packageRelativePath": "revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json",
+      "packageSha256": "f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc",
+      "sourceCommit": "dcf2ee18a8ed726efde5bf2ae4a8e0f8cd804c10",
+      "updatedAt": "2026-07-20T12:27:33.147Z"
+    }
+  ]
+}
