@@ -148,6 +148,99 @@ def apply_signed_source_space_correction(
     }
 
 
+def relax_signed_source_space_correction(
+    target_medium: Any,
+    state: Any,
+    *,
+    trust_radius_cells: float,
+    soft_neighbors: int,
+    temperature_cells: float,
+    maximum_iterations: int,
+) -> tuple[Any, dict[str, Any]]:
+    FITTER.require(maximum_iterations > 0, "maximum relaxation iterations must be positive")
+    trust_radius = float(np.mean(target_medium.spacing)) * trust_radius_cells
+    origin = state.positions.copy()
+    current = state
+    _, initial_receipt = signed_source_space_forces(target_medium, current)
+    current_residual = float(initial_receipt["massResidualL1"])
+    iterations: list[dict[str, Any]] = []
+    for iteration in range(maximum_iterations):
+        force, force_receipt = signed_source_space_forces(target_medium, current)
+        accepted = None
+        for line_scale in (1.0, 0.5, 0.25, 0.125):
+            candidate_positions = current.positions + force * line_scale
+            displacement = candidate_positions - origin
+            displacement_norm = np.linalg.norm(displacement, axis=1)
+            scale = np.ones_like(displacement_norm)
+            outside = displacement_norm > trust_radius
+            if trust_radius == 0.0:
+                scale[displacement_norm > 0.0] = 0.0
+            else:
+                scale[outside] = trust_radius / displacement_norm[outside]
+            candidate_positions = origin + displacement * scale[:, None]
+            ownership = PERSISTENT.sparse_soft_ownership(
+                target_medium,
+                candidate_positions,
+                soft_neighbors=soft_neighbors,
+                temperature_cells=temperature_cells,
+            )
+            candidate = PERSISTENT.fixed_geometry_state(
+                target_medium,
+                state,
+                candidate_positions,
+                state.covariances,
+                ownership,
+            )
+            _, candidate_receipt = signed_source_space_forces(target_medium, candidate)
+            candidate_residual = float(candidate_receipt["massResidualL1"])
+            if candidate_residual < current_residual - 1e-12:
+                accepted = (candidate, candidate_residual, line_scale, int(np.count_nonzero(scale < 1.0)))
+                break
+        iterations.append(
+            {
+                "iteration": iteration + 1,
+                "inputMassResidualL1": current_residual,
+                "forceMaximum": force_receipt["maximumForceMagnitude"],
+                "accepted": accepted is not None,
+                "lineScale": None if accepted is None else accepted[2],
+                "trustRegionClippedModeCount": 0 if accepted is None else accepted[3],
+                "outputMassResidualL1": current_residual if accepted is None else accepted[1],
+            }
+        )
+        if accepted is None:
+            break
+        current, current_residual, _line_scale, _clipped = accepted
+    FITTER.require(np.array_equal(current.mode_ids, state.mode_ids), "relaxation changed mode identity")
+    FITTER.require(np.array_equal(current.covariances, state.covariances), "relaxation changed covariance")
+    expected_mass = np.sum(target_medium.coefficients, axis=0, dtype=np.float64)
+    FITTER.require(
+        np.allclose(np.sum(current.coefficients, axis=0, dtype=np.float64), expected_mass, rtol=1e-10, atol=1e-8),
+        "relaxation lost target optical ownership",
+    )
+    final_displacement = np.linalg.norm(current.positions - origin, axis=1)
+    return current, {
+        "identity": "monotone-source-space-signed-mass-residual-relaxation-v0",
+        "geometryPolicy": "bounded-monotone-source-space-signed-residual-center-relaxation",
+        "covariancePolicy": "fixed-input-covariance",
+        "coefficientPolicy": "target-state-conservative-soft-ownership",
+        "trustRegionReference": "input-persistent-state",
+        "trustRadiusCells": trust_radius_cells,
+        "trustRadiusWorld": trust_radius,
+        "maximumIterations": maximum_iterations,
+        "attemptedIterationCount": len(iterations),
+        "acceptedIterationCount": sum(int(item["accepted"]) for item in iterations),
+        "initialMassResidualL1": float(initial_receipt["massResidualL1"]),
+        "finalMassResidualL1": current_residual,
+        "relativeMassResidualReduction": 1.0 - current_residual / max(float(initial_receipt["massResidualL1"]), 1e-12),
+        "meanTotalCorrection": float(np.mean(final_displacement)),
+        "maximumTotalCorrection": float(np.max(final_displacement)),
+        "modeCount": int(state.mode_ids.size),
+        "birthCount": 0,
+        "deathCount": 0,
+        "iterations": iterations,
+    }
+
+
 def physical_render(
     mode_module: Any,
     target_medium: Any,
@@ -304,6 +397,14 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         soft_neighbors=args.soft_neighbors,
         temperature_cells=args.temperature_cells,
     )
+    relaxed, relaxation_receipt = relax_signed_source_space_correction(
+        target_medium,
+        advected,
+        trust_radius_cells=args.trust_radius_cells,
+        soft_neighbors=args.soft_neighbors,
+        temperature_cells=args.temperature_cells,
+        maximum_iterations=args.relaxation_iterations,
+    )
 
     mode_module = load_module(mode_path, "grid16_structural_mode_renderer")
     camera = target_state.get("target") or {}
@@ -318,6 +419,7 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
         "advected-baseline": (advected, advected_receipt),
         "old-bounded-exclusive": (old_bounded, old_bounded_receipt),
         "signed-source-correction": (corrected, correction_receipt),
+        "signed-source-relaxation": (relaxed, relaxation_receipt),
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, str]] = []
@@ -381,6 +483,7 @@ def run_assay(args: argparse.Namespace) -> dict[str, Any]:
             "render_width": args.render_width,
             "depth_bins": args.depth_bins,
             "samples_per_cell": args.samples_per_cell,
+            "relaxation_iterations": args.relaxation_iterations,
         },
         "effective": {
             "sourceStateId": source_state_id,
@@ -444,6 +547,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--depth-bins", type=int, default=96)
     parser.add_argument("--samples-per-cell", type=int, default=4)
+    parser.add_argument("--relaxation-iterations", type=int, default=8)
     return parser.parse_args()
 
 

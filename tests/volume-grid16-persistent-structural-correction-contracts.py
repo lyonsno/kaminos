@@ -103,6 +103,29 @@ def main() -> int:
     assert correction_receipt["covariancePolicy"] == "fixed-input-covariance"
     assert correction_receipt["coefficientPolicy"] == "target-state-conservative-soft-ownership"
 
+    relaxed, relaxation_receipt = module.relax_signed_source_space_correction(
+        medium,
+        state,
+        trust_radius_cells=0.1,
+        soft_neighbors=2,
+        temperature_cells=0.9,
+        maximum_iterations=8,
+    )
+    relaxed_displacement = np.linalg.norm(relaxed.positions - state.positions, axis=1)
+    assert np.max(relaxed_displacement) <= 0.1 + 1e-12
+    assert np.array_equal(relaxed.mode_ids, state.mode_ids)
+    assert np.array_equal(relaxed.covariances, state.covariances)
+    assert np.allclose(
+        np.sum(relaxed.coefficients, axis=0, dtype=np.float64),
+        np.sum(medium.coefficients, axis=0, dtype=np.float64),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    assert relaxation_receipt["finalMassResidualL1"] <= relaxation_receipt["initialMassResidualL1"] + 1e-12
+    assert relaxation_receipt["acceptedIterationCount"] > 0
+    assert relaxation_receipt["covariancePolicy"] == "fixed-input-covariance"
+    assert relaxation_receipt["trustRegionReference"] == "input-persistent-state"
+
     with tempfile.TemporaryDirectory() as temporary:
         output_dir = Path(temporary) / "failed"
         result = subprocess.run(
