@@ -820,12 +820,14 @@ export function createSmoothFittedProxyRigProbeBinding({
     }
     if (!(weightSum > 0)) throw new Error(`contact atlas patch ${patch.id} has zero total weight`);
     const weights = Float64Array.from(rawWeights, weight => weight / weightSum);
-    const influenceVertexIndices = Uint32Array.from(
-      patch.influenceVertexIndices ?? patch.vertexIndices,
-    );
-    const rawInfluenceWeights = Float64Array.from(
-      patch.influenceWeights ?? patch.vertexIndices.map(() => 1),
-    );
+    if (!Array.isArray(patch.influenceVertexIndices)
+        || !Array.isArray(patch.influenceWeights)) {
+      throw new Error(
+        `contact atlas patch ${patch.id} requires exact influence vertex indices and weights`,
+      );
+    }
+    const influenceVertexIndices = Uint32Array.from(patch.influenceVertexIndices);
+    const rawInfluenceWeights = Float64Array.from(patch.influenceWeights);
     if (influenceVertexIndices.length !== rawInfluenceWeights.length
         || influenceVertexIndices.length === 0) {
       throw new Error(`contact atlas patch ${patch.id} requires matching influence indices and weights`);
@@ -835,7 +837,7 @@ export function createSmoothFittedProxyRigProbeBinding({
     for (let index = 0; index < influenceVertexIndices.length; index += 1) {
       const vertex = influenceVertexIndices[index];
       const weight = rawInfluenceWeights[index];
-      if (!Number.isInteger((patch.influenceVertexIndices ?? patch.vertexIndices)[index])
+      if (!Number.isInteger(patch.influenceVertexIndices[index])
           || vertex >= binding.vertexCount) {
         throw new Error(`contact atlas patch ${patch.id} has invalid influence vertex ${vertex}`);
       }
@@ -893,9 +895,7 @@ export function createSmoothFittedProxyRigProbeBinding({
       localCoordinates: localCoordinates.map(value => value / weightSum),
       carrier: {
         schema: 'kaminos.lirm-appendage-local-carrier-binding.v0',
-        authority: patch.influenceVertexIndices
-          ? 'exact-contact-atlas-influence-region'
-          : 'contact-patch-fallback-region',
+        authority: 'exact-contact-atlas-influence-region',
         influenceVertexIndices,
         influenceWeights: rawInfluenceWeights,
         rigidCoreThreshold,
@@ -1586,6 +1586,7 @@ function exactBodyIdentity(actual, expected) {
 function exactContactAtlasIdentity(actual, probeBinding) {
   return actual?.schema === 'kaminos.creature-contact-atlas.v0'
     && actual?.castId === probeBinding.contactAtlasCastId
+    && actual?.sha256 === probeBinding.contactAtlasSha256
     && actual?.castHash?.toLowerCase() === sha256Digest(
       probeBinding.sourceCastSha256,
       'probe binding source cast hash',

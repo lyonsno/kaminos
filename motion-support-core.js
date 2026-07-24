@@ -320,11 +320,16 @@ export function createMotionContactProbeRequest(prepassInput, contactAtlas, opti
   if (!Array.isArray(contactAtlas?.patches) || contactAtlas.patches.length === 0) {
     throw new Error('motion contact probe request requires named contact patches');
   }
+  const contactAtlasSha256 = String(options.contactAtlasSha256 || '').toLowerCase();
+  if (!/^sha256:[0-9a-f]{64}$/.test(contactAtlasSha256)) {
+    throw new Error('motion contact probe request requires exact contact atlas sha256');
+  }
   const contactAtlasIdentity = {
     schema: String(contactAtlas.schema || ''),
     castId: String(contactAtlas.castId || ''),
     castHash: String(contactAtlas.castHash || ''),
     registrationHash: String(contactAtlas.registrationHash || ''),
+    sha256: contactAtlasSha256,
   };
   if (Object.values(contactAtlasIdentity).some(value => !value)) {
     throw new Error('motion contact probe request requires exact contact atlas identity');
@@ -383,6 +388,7 @@ export function validateMotionContactProbeSet(request, probeSet) {
     || probeSet.contactAtlas?.castId !== request.contactAtlas.castId
     || probeSet.contactAtlas?.castHash !== request.contactAtlas.castHash
     || probeSet.contactAtlas?.registrationHash !== request.contactAtlas.registrationHash
+    || probeSet.contactAtlas?.sha256 !== request.contactAtlas.sha256
   ) {
     throw new Error('motion contact atlas identity mismatch');
   }

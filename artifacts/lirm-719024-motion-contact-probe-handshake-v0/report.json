@@ -19,14 +19,14 @@
     },
     "handshake": {
       "path": "stationary-hill-request.json",
-      "sha256": "sha256:905b8ab8640651ec8a9bb00eb3f21c24fda513a9e7393c2e55e90127e9c01e73"
+      "sha256": "sha256:00e58980ed5218da28269af1c78ec9dba1629713edc236a57b98606cf606f67f"
     }
   },
   "outputInventory": {
     "fixture": {
       "path": "stationary-hill-request-response.json",
-      "bytes": 4540,
-      "sha256": "sha256:f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112"
+      "bytes": 4722,
+      "sha256": "sha256:a84bfcae1ad03f71961bcfc4c9040980648f4c579b1bccc3ba15d82a25a6210a"
     }
   },
   "results": {
@@ -74,9 +74,9 @@
     }
   },
   "timing": {
-    "startedAt": "2026-07-24T01:53:28.493Z",
-    "finishedAt": "2026-07-24T01:53:28.666Z",
-    "durationSeconds": 0.173
+    "startedAt": "2026-07-24T07:47:08.758Z",
+    "finishedAt": "2026-07-24T07:47:08.919Z",
+    "durationSeconds": 0.161
   },
   "lastTrustworthyEvidence": "byte-bound deterministic request/response fixture written",
   "error": null

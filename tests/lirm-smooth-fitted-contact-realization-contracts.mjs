@@ -49,12 +49,59 @@ const contactAtlas = {
   authority: 'exact-cast-consumer-derived-contact-v0',
   vertexCount: positions.length / 3,
   patches: [
-    { id: 'front-left', axialRegion: 'front', side: 'left', phaseOffset: 0, vertexIndices: [0], weights: [1] },
-    { id: 'front-right', axialRegion: 'front', side: 'right', phaseOffset: 0.5, vertexIndices: [1], weights: [1] },
-    { id: 'rear-left', axialRegion: 'rear', side: 'left', phaseOffset: 0.5, vertexIndices: [2], weights: [1] },
-    { id: 'rear-right', axialRegion: 'rear', side: 'right', phaseOffset: 0, vertexIndices: [3], weights: [1] },
+    {
+      id: 'front-left',
+      axialRegion: 'front',
+      side: 'left',
+      phaseOffset: 0,
+      vertexIndices: [0],
+      weights: [1],
+      influenceVertexIndices: [0],
+      influenceWeights: [1],
+    },
+    {
+      id: 'front-right',
+      axialRegion: 'front',
+      side: 'right',
+      phaseOffset: 0.5,
+      vertexIndices: [1],
+      weights: [1],
+      influenceVertexIndices: [1],
+      influenceWeights: [1],
+    },
+    {
+      id: 'rear-left',
+      axialRegion: 'rear',
+      side: 'left',
+      phaseOffset: 0.5,
+      vertexIndices: [2],
+      weights: [1],
+      influenceVertexIndices: [2],
+      influenceWeights: [1],
+    },
+    {
+      id: 'rear-right',
+      axialRegion: 'rear',
+      side: 'right',
+      phaseOffset: 0,
+      vertexIndices: [3],
+      weights: [1],
+      influenceVertexIndices: [3],
+      influenceWeights: [1],
+    },
   ],
 };
+assert.throws(
+  () => fitted.createSmoothFittedProxyRigProbeBinding({
+    binding,
+    contactAtlas: {
+      ...contactAtlas,
+      patches: contactAtlas.patches.map(({ influenceVertexIndices, influenceWeights, ...patch }) => patch),
+    },
+    contactAtlasSha256: `sha256:${'9'.repeat(64)}`,
+  }),
+  /requires exact influence vertex indices and weights/,
+);
 assert.throws(
   () => fitted.createSmoothFittedProxyRigProbeBinding({
     binding,

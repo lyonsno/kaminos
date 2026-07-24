@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
@@ -111,10 +112,11 @@ try {
     new URL('artifacts/motion-ready-719024/registration.json', import.meta.url),
     'utf8',
   )));
-  const atlas = JSON.parse(await readFile(
+  const atlasBytes = await readFile(
     new URL('artifacts/lirm-719024-smooth-fitted-phase-exercise-v0/admitted-contact-atlas.json', import.meta.url),
-    'utf8',
-  ));
+  );
+  const atlas = JSON.parse(atlasBytes);
+  const contactAtlasSha256 = `sha256:${createHash('sha256').update(atlasBytes).digest('hex')}`;
   const hillSource = decodeHillMotionAffordancePacket({ packet, data });
   const identity = createHillMotionSupportIdentity(packet);
   const surface = createHillSampledSupportSurface(hillSource, identity);
@@ -197,6 +199,7 @@ try {
     id: 'stationary-hill-probes:C',
     phase: 1.3,
     poseId: 'molten-low-frequency:C',
+    contactAtlasSha256,
   });
   const probes = request.patches.map((patch, index) => {
     const longitudinal = index < 2 ? -0.31 : 0.31;

@@ -11,8 +11,8 @@ import {
 
 export const STATIONARY_HILL_CONTACT_ROUTE = 'kaminos/lirm-719024/stationary-hill-smooth-contact-v0';
 export const STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE = 'kaminos/lirm-719024/published-stationary-contact-v0';
-export const STATIONARY_CONTACT_RECEIPT_SHA256 = 'sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad';
-export const STATIONARY_CONTACT_CONSTRAINTS_SHA256 = 'sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029';
+export const STATIONARY_CONTACT_RECEIPT_SHA256 = 'sha256:2c5a33f6334308e5b410f465119dceea0ddf656f9d68061054542b70f1503925';
+export const STATIONARY_CONTACT_CONSTRAINTS_SHA256 = 'sha256:77a8e0f795791956ceb34a17da397865ea0a7504f98542de1e6b0529e66f72fb';
 const VERIFIED_STATIONARY_CONTACT_PUBLICATION = Symbol('verified stationary contact publication');
 const STATIONARY_CONTACT_PATCH_IDS = Object.freeze([
   'front-left',
@@ -252,7 +252,9 @@ function requireExactPublishedStationaryContact({
   if (constraints.contactAtlas?.castHash
         !== placedRig?.probeBinding?.sourceCastSha256?.slice('sha256:'.length)
       || constraints.contactAtlas?.registrationHash
-        !== placedRig?.probeBinding?.contactAtlasRegistrationHash) {
+        !== placedRig?.probeBinding?.contactAtlasRegistrationHash
+      || constraints.contactAtlas?.sha256
+        !== placedRig?.probeBinding?.contactAtlasSha256) {
     throw new Error('stationary contact atlas identity mismatch');
   }
   if (!Array.isArray(constraints.patches)
@@ -346,6 +348,7 @@ export function evaluateStationaryHillContactPhase({
     id: `stationary-hill-probes:${normalizedPhase.toFixed(9)}`,
     phase: radians,
     poseId,
+    contactAtlasSha256: placedRig.probeBinding.contactAtlasSha256,
   });
   const rootFrame = createSupportRootFrame({ prepass, contactPlaneY });
   const baseline = evaluateSmoothFittedProxyRigPhase({

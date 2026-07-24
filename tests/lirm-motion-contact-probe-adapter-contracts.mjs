@@ -51,7 +51,11 @@ const contactAtlas = {
     { id: 'front-right', axialRegion: 'front', side: 'right', phaseOffset: 0.5, vertexIndices: [1], weights: [1] },
     { id: 'rear-left', axialRegion: 'rear', side: 'left', phaseOffset: 0.5, vertexIndices: [2], weights: [1] },
     { id: 'rear-right', axialRegion: 'rear', side: 'right', phaseOffset: 0, vertexIndices: [3], weights: [1] },
-  ],
+  ].map(patch => ({
+    ...patch,
+    influenceVertexIndices: [...patch.vertexIndices],
+    influenceWeights: [...patch.weights],
+  })),
 };
 const probeBinding = fitted.createSmoothFittedProxyRigProbeBinding({
   binding,
@@ -97,6 +101,7 @@ const request = {
     castId: contactAtlas.castId,
     castHash: contactAtlas.castHash,
     registrationHash: contactAtlas.registrationHash,
+    sha256: `sha256:${'9'.repeat(64)}`,
   },
   poseId: 'molten-low-frequency:cycle-v0',
   phase: 1.3,

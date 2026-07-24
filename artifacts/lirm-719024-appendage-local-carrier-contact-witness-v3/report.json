@@ -18,13 +18,13 @@
       "registration": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9",
       "contactAtlas": "sha256:e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
       "phaseReport": "sha256:97abeb1cdacb802ecf26e2aba6e27ae9d96508e6f85836853b9c3bdd993583ff",
-      "handshake": "sha256:f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112",
+      "handshake": "sha256:a84bfcae1ad03f71961bcfc4c9040980648f4c579b1bccc3ba15d82a25a6210a",
       "axialRegistration": "sha256:cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6",
       "hillPacket": "sha256:ab9900438d60ca3356327e700617c65fd65e75e4b2707d8e03da0e2f3dd8e9e2",
       "hillData": "sha256:bd29f0464aecffdd35d79496b744b6d04175b1c2b8a80934fa3c88ed34874fd7"
     },
-    "receiptSha256": "sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad",
-    "constraintsSha256": "sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029",
+    "receiptSha256": "sha256:2c5a33f6334308e5b410f465119dceea0ddf656f9d68061054542b70f1503925",
+    "constraintsSha256": "sha256:77a8e0f795791956ceb34a17da397865ea0a7504f98542de1e6b0529e66f72fb",
     "constraintsId": "stationary-hill-probes:C:constraints",
     "directVertexTranslationCount": 0,
     "contactRoute": "kaminos/fitted-proxy-rig/appendage-local-carrier-contact-v1",
@@ -43,7 +43,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001203202554865522,
-      "solveMilliseconds": 79.79999999701977
+      "solveMilliseconds": 78.20000000298023
     },
     {
       "phase": 0.02083333333333326,
@@ -54,7 +54,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011636402692178846,
-      "solveMilliseconds": 79.59999999403954
+      "solveMilliseconds": 76.19999998807907
     },
     {
       "phase": 0.04166666666666674,
@@ -65,7 +65,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010556155099503833,
-      "solveMilliseconds": 94.5
+      "solveMilliseconds": 83.19999998807907
     },
     {
       "phase": 0.0625,
@@ -76,7 +76,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00008939931767625899,
-      "solveMilliseconds": 99.29999999701977
+      "solveMilliseconds": 79.29999999701977
     },
     {
       "phase": 0.08333333333333326,
@@ -87,7 +87,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00006969942562220187,
-      "solveMilliseconds": 86.5
+      "solveMilliseconds": 80.30000001192093
     },
     {
       "phase": 0.10416666666666674,
@@ -98,7 +98,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00004894991083310811,
-      "solveMilliseconds": 87.29999999701977
+      "solveMilliseconds": 82.5
     },
     {
       "phase": 0.125,
@@ -109,7 +109,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.000030209638215487195,
-      "solveMilliseconds": 76.70000000298023
+      "solveMilliseconds": 72.8999999910593
     },
     {
       "phase": 0.14583333333333326,
@@ -120,7 +120,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.000016718578373358522,
-      "solveMilliseconds": 76.90000000596046
+      "solveMilliseconds": 73.29999999701977
     },
     {
       "phase": 0.16666666666666674,
@@ -131,7 +131,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.000011570204863545208,
-      "solveMilliseconds": 74.3999999910593
+      "solveMilliseconds": 72.1000000089407
     },
     {
       "phase": 0.1875,
@@ -142,7 +142,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.000016718578373285664,
-      "solveMilliseconds": 73.90000000596046
+      "solveMilliseconds": 72.5
     },
     {
       "phase": 0.20833333333333326,
@@ -153,7 +153,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.000030209638215535767,
-      "solveMilliseconds": 83.29999999701977
+      "solveMilliseconds": 83.20000000298023
     },
     {
       "phase": 0.22916666666666674,
@@ -164,7 +164,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00004894991083293117,
-      "solveMilliseconds": 79.70000000298023
+      "solveMilliseconds": 79.79999999701977
     },
     {
       "phase": 0.25,
@@ -175,7 +175,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00006969942562220534,
-      "solveMilliseconds": 80.5
+      "solveMilliseconds": 74.59999999403954
     },
     {
       "phase": 0.27083333333333326,
@@ -186,7 +186,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00008939931767619654,
-      "solveMilliseconds": 76.30000001192093
+      "solveMilliseconds": 74.59999999403954
     },
     {
       "phase": 0.29166666666666674,
@@ -197,7 +197,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010556155099514068,
-      "solveMilliseconds": 74.20000000298023
+      "solveMilliseconds": 77.70000000298023
     },
     {
       "phase": 0.3125,
@@ -208,7 +208,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011636402692172428,
-      "solveMilliseconds": 76.79999999701977
+      "solveMilliseconds": 77.59999999403954
     },
     {
       "phase": 0.33333333333333326,
@@ -219,7 +219,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001203202554865522,
-      "solveMilliseconds": 73.40000000596046
+      "solveMilliseconds": 76.29999999701977
     },
     {
       "phase": 0.35416666666666674,
@@ -230,7 +230,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00012444922047881446,
-      "solveMilliseconds": 77.79999999701977
+      "solveMilliseconds": 73.70000000298023
     },
     {
       "phase": 0.375,
@@ -241,7 +241,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00013587747651545856,
-      "solveMilliseconds": 74.70000000298023
+      "solveMilliseconds": 72.5
     },
     {
       "phase": 0.39583333333333326,
@@ -252,7 +252,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00015483774489152488,
-      "solveMilliseconds": 73.70000000298023
+      "solveMilliseconds": 72
     },
     {
       "phase": 0.41666666666666674,
@@ -263,7 +263,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00020657005783389706,
-      "solveMilliseconds": 73.3999999910593
+      "solveMilliseconds": 72.3999999910593
     },
     {
       "phase": 0.4375,
@@ -274,7 +274,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.008794367568542578,
-      "solveMilliseconds": 76.30000001192093
+      "solveMilliseconds": 72.79999999701977
     },
     {
       "phase": 0.45833333333333326,
@@ -285,7 +285,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.017966130688400785,
-      "solveMilliseconds": 75.8999999910593
+      "solveMilliseconds": 72.40000000596046
     },
     {
       "phase": 0.47916666666666674,
@@ -296,7 +296,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.024200408846708453,
-      "solveMilliseconds": 75.40000000596046
+      "solveMilliseconds": 73.40000000596046
     },
     {
       "phase": 0.5,
@@ -307,7 +307,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.026494035594217792,
-      "solveMilliseconds": 74.70000000298023
+      "solveMilliseconds": 72.79999999701977
     },
     {
       "phase": 0.5208333333333335,
@@ -318,7 +318,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.024200408846709077,
-      "solveMilliseconds": 74.5
+      "solveMilliseconds": 73.79999999701977
     },
     {
       "phase": 0.5416666666666665,
@@ -329,7 +329,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.017966130688400923,
-      "solveMilliseconds": 75.90000000596046
+      "solveMilliseconds": 77.20000000298023
     },
     {
       "phase": 0.5625,
@@ -340,7 +340,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00879436756854255,
-      "solveMilliseconds": 75.5
+      "solveMilliseconds": 81
     },
     {
       "phase": 0.5833333333333335,
@@ -351,7 +351,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00020657005783351196,
-      "solveMilliseconds": 75.79999999701977
+      "solveMilliseconds": 72.80000001192093
     },
     {
       "phase": 0.6041666666666665,
@@ -362,7 +362,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001548377448914312,
-      "solveMilliseconds": 73.5
+      "solveMilliseconds": 72.09999999403954
     },
     {
       "phase": 0.625,
@@ -373,7 +373,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001358774765154551,
-      "solveMilliseconds": 74
+      "solveMilliseconds": 72.3999999910593
     },
     {
       "phase": 0.6458333333333335,
@@ -384,7 +384,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00012444922047897752,
-      "solveMilliseconds": 74.40000000596046
+      "solveMilliseconds": 73.29999999701977
     },
     {
       "phase": 0.6666666666666665,
@@ -395,7 +395,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001203202554865522,
-      "solveMilliseconds": 72.69999998807907
+      "solveMilliseconds": 70.29999999701977
     },
     {
       "phase": 0.6875,
@@ -406,7 +406,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011945705603060713,
-      "solveMilliseconds": 75.8999999910593
+      "solveMilliseconds": 73.09999999403954
     },
     {
       "phase": 0.7083333333333335,
@@ -417,7 +417,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011726062087232501,
-      "solveMilliseconds": 74.59999999403954
+      "solveMilliseconds": 72.59999999403954
     },
     {
       "phase": 0.7291666666666665,
@@ -428,7 +428,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011433262522946887,
-      "solveMilliseconds": 73.59999999403954
+      "solveMilliseconds": 72.20000000298023
     },
     {
       "phase": 0.75,
@@ -439,7 +439,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011118562301185367,
-      "solveMilliseconds": 75.5
+      "solveMilliseconds": 72.5
     },
     {
       "phase": 0.7708333333333335,
@@ -450,7 +450,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010819495166086018,
-      "solveMilliseconds": 75.8999999910593
+      "solveMilliseconds": 72.59999999403954
     },
     {
       "phase": 0.7916666666666665,
@@ -461,7 +461,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010564961123002425,
-      "solveMilliseconds": 76.40000000596046
+      "solveMilliseconds": 72.8999999910593
     },
     {
       "phase": 0.8125,
@@ -472,7 +472,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010384989322386948,
-      "solveMilliseconds": 74
+      "solveMilliseconds": 72.70000000298023
     },
     {
       "phase": 0.8333333333333335,
@@ -483,7 +483,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010316171128716897,
-      "solveMilliseconds": 75.20000000298023
+      "solveMilliseconds": 72.5
     },
     {
       "phase": 0.8541666666666665,
@@ -494,7 +494,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010384989322394234,
-      "solveMilliseconds": 75.20000000298023
+      "solveMilliseconds": 72.79999999701977
     },
     {
       "phase": 0.875,
@@ -505,7 +505,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010564961123022895,
-      "solveMilliseconds": 75.29999999701977
+      "solveMilliseconds": 72.59999999403954
     },
     {
       "phase": 0.8958333333333335,
@@ -516,7 +516,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00010819495166098855,
-      "solveMilliseconds": 75.79999999701977
+      "solveMilliseconds": 72.59999999403954
     },
     {
       "phase": 0.9166666666666665,
@@ -527,7 +527,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011118562301186408,
-      "solveMilliseconds": 74.70000000298023
+      "solveMilliseconds": 73.40000000596046
     },
     {
       "phase": 0.9375,
@@ -538,7 +538,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.0001143326252296007,
-      "solveMilliseconds": 74.09999999403954
+      "solveMilliseconds": 73.1000000089407
     },
     {
       "phase": 0.9583333333333335,
@@ -549,7 +549,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011726062087224869,
-      "solveMilliseconds": 74.09999999403954
+      "solveMilliseconds": 73.5
     },
     {
       "phase": 0.9791666666666665,
@@ -560,19 +560,19 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.00011945705603018386,
-      "solveMilliseconds": 75.40000000596046
+      "solveMilliseconds": 72.79999999701977
     }
   ],
   "outputs": {
     "video": {
       "path": "stationary-hill-contact.mp4",
-      "bytes": 219695,
-      "sha256": "sha256:89e4dbb5681eedca78f48aaee54bd707d435afcfe69556721ef8ee56d5454c73"
+      "bytes": 219726,
+      "sha256": "sha256:aa7a5985690f0f7fd2bd3a01f05f5feb717aa910e37fe61aabf4444165945b74"
     },
     "contactSheet": {
       "path": "stationary-hill-contact-sheet.png",
-      "bytes": 301168,
-      "sha256": "sha256:e1112981872b4d1cd7dde89d62985f59d6e9223d61d682a5d701dad24cdde944"
+      "bytes": 301198,
+      "sha256": "sha256:54da2e326b6c16dfe8076939e93c1b792719b3306710f9950983ff81b59e68bf"
     }
   },
   "eventCentered": [
@@ -602,12 +602,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.000014392105514066458,
-        "solveMilliseconds": 77.20000000298023
+        "solveMilliseconds": 72.79999999701977
       },
       "output": {
         "path": "event-profile-00.png",
-        "bytes": 252321,
-        "sha256": "sha256:418a56c93f4461e38e76a6a0b8301144ff26c1dcc4f7bcc95181cdefd73a4761"
+        "bytes": 252547,
+        "sha256": "sha256:a0948d355dbe2df356344ff288d3b1b1c5b59b7b4dfca20f7dc26246f4a418ea"
       }
     },
     {
@@ -636,12 +636,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00002907787166414079,
-        "solveMilliseconds": 77.59999999403954
+        "solveMilliseconds": 72.70000000298023
       },
       "output": {
         "path": "event-profile-01.png",
-        "bytes": 252899,
-        "sha256": "sha256:f3910c82d03554a86c80001f0312a6be8d0a1173c109388121ab507fd1a39264"
+        "bytes": 253122,
+        "sha256": "sha256:7efc4f10e38764978ddb4ff8f31f60581353ae4fbd26f83cd4cf47aaa16e7a91"
       }
     },
     {
@@ -670,12 +670,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00005162858730383031,
-        "solveMilliseconds": 73.90000000596046
+        "solveMilliseconds": 72.80000001192093
       },
       "output": {
         "path": "event-profile-02.png",
-        "bytes": 254174,
-        "sha256": "sha256:0c721f142602ed094624fd3ac371ecd3b7ae52c128146cb920077ee5bb729ca1"
+        "bytes": 254400,
+        "sha256": "sha256:7ff789078c4e1e8efcfcb37b85a2a710c5191eaddba79972c253db2ca39a8f53"
       }
     },
     {
@@ -704,12 +704,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.000014392105514066458,
-        "solveMilliseconds": 74.79999999701977
+        "solveMilliseconds": 72.29999999701977
       },
       "output": {
         "path": "event-three-quarter-00.png",
-        "bytes": 244939,
-        "sha256": "sha256:bffc9cdfc0c480248528fcc68fcdf11f086ca94bc2dbf758e92c686bf3015289"
+        "bytes": 244976,
+        "sha256": "sha256:355767d48f5b1113fdec61e710b355d45c15640f397665915079c7332af67536"
       }
     },
     {
@@ -738,12 +738,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00002907787166414079,
-        "solveMilliseconds": 75.29999999701977
+        "solveMilliseconds": 73.79999999701977
       },
       "output": {
         "path": "event-three-quarter-01.png",
-        "bytes": 245732,
-        "sha256": "sha256:f5251d8162fb95c0a475870e727d7835d2690789492c590f1467a4ebb0d34fe1"
+        "bytes": 245774,
+        "sha256": "sha256:c4661fba176d519d0b0af7786b96ceacbd0ba9dbe8a3e9b229db7b7052d72c23"
       }
     },
     {
@@ -772,12 +772,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00005162858730383031,
-        "solveMilliseconds": 79.30000001192093
+        "solveMilliseconds": 76.69999998807907
       },
       "output": {
         "path": "event-three-quarter-02.png",
-        "bytes": 246804,
-        "sha256": "sha256:538896df3bdc6f77cdc82ca85dde6fd111c7716fb26b6f7ff17793a719062d29"
+        "bytes": 246855,
+        "sha256": "sha256:eaeeb35e94b4de73bddf4de4d7d7db926c1880a7ba3e3c4021612e8b0e08c536"
       }
     }
   ],
@@ -808,12 +808,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.000014392105514066458,
-        "solveMilliseconds": 77.29999999701977
+        "solveMilliseconds": 73.1000000089407
       },
       "output": {
         "path": "posterior-closeup-00.png",
-        "bytes": 410580,
-        "sha256": "sha256:3315fa7430f15f564c7487621ddb9f46966c5b595294099b93dd717d2ed27162"
+        "bytes": 410564,
+        "sha256": "sha256:aa7d6d39b204c8e9776377d965e258a40f3553367ee18ae3c885d0cd0d5407ff"
       }
     },
     {
@@ -842,12 +842,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00002907787166414079,
-        "solveMilliseconds": 75.40000000596046
+        "solveMilliseconds": 74.70000000298023
       },
       "output": {
         "path": "posterior-closeup-01.png",
-        "bytes": 411707,
-        "sha256": "sha256:003b55d600d289cc1ed021855f475debd3220e6df6c494e91dede7e05f3cd310"
+        "bytes": 411689,
+        "sha256": "sha256:0691f9a394adba9961f5c32292f44a7e81337f72de4b4efb6c9ae1273b5b88fd"
       }
     },
     {
@@ -876,12 +876,12 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.00005162858730383031,
-        "solveMilliseconds": 76.5
+        "solveMilliseconds": 72.3999999910593
       },
       "output": {
         "path": "posterior-closeup-02.png",
-        "bytes": 413584,
-        "sha256": "sha256:6779dc373453eddce549568a0c53c801629f9e93fbe81bdcdd5216f97b529094"
+        "bytes": 413572,
+        "sha256": "sha256:17cc563571ef3ba797db75e8781e627d7d504674c7ee91ac466e72aa6a1f2939"
       }
     }
   ],

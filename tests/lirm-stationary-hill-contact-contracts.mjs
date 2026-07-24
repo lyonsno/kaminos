@@ -118,6 +118,7 @@ const packet = evaluateStationaryHillContactPhase({
 
 assert.equal(packet.schema, 'kaminos.lirm-stationary-hill-contact-packet.v0');
 assert.equal(packet.effectiveRoute, STATIONARY_HILL_CONTACT_ROUTE);
+assert.equal(packet.request.contactAtlas.sha256, phaseReport.contactAtlas.sha256);
 assert.deepEqual(packet.request.supportSurface, handshake.request.supportSurface);
 assert.deepEqual(packet.request.body, handshake.request.body);
 assert.deepEqual(packet.constraints.supportSurface, handshake.request.supportSurface);
@@ -176,6 +177,24 @@ assert.deepEqual(
   'published signed distances and ordering must survive application exactly',
 );
 assert.equal(published.realized.contactRealization.directVertexTranslationCount, 0);
+assert.throws(
+  () => evaluatePublishedStationaryContactPhase({
+    placedRig: {
+      ...placedRig,
+      probeBinding: {
+        ...placedRig.probeBinding,
+        contactAtlasSha256: `sha256:${'0'.repeat(64)}`,
+      },
+    },
+    prepass: handshake.prepass,
+    publication,
+    bodyPhase: publishedConstraints.phase / (Math.PI * 2),
+    amplitude: phaseReport.effectiveConfig.amplitude,
+    contactPlaneY: 0,
+  }),
+  /stationary contact atlas identity mismatch/,
+  'published constraints must reject a same-cast atlas with divergent influence-region bytes',
+);
 
 assert.throws(
   () => evaluatePublishedStationaryContactPhase({

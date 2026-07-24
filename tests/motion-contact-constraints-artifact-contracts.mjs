@@ -15,8 +15,8 @@ const producerFixture = new URL('producer-fixture.json', artifact);
 const checkedConstraints = new URL('constraints.json', artifact);
 const checkedReceipt = new URL('receipt.json', artifact);
 const checkedReport = new URL('report.json', artifact);
-const expectedProducerSha256 = 'f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112';
-const expectedConstraintsSha256 = '8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029';
+const expectedProducerSha256 = 'a84bfcae1ad03f71961bcfc4c9040980648f4c579b1bccc3ba15d82a25a6210a';
+const expectedConstraintsSha256 = '77a8e0f795791956ceb34a17da397865ea0a7504f98542de1e6b0529e66f72fb';
 
 function run(outputDir, options = {}) {
   const fixture = options.fixture || producerFixture.pathname;
