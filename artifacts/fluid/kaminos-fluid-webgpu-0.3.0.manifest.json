@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.fluid.package-artifact-manifest.v1",
+  "status": "complete",
+  "packageName": "@kaminos/fluid-webgpu",
+  "packageVersion": "0.3.0",
+  "artifactRevision": "@kaminos/fluid-webgpu@0.3.0",
+  "runtimeRevision": "854c57ee7086783c0b0d099058a2c985b71168cd",
+  "runtimeRoute": "kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1",
+  "representationRoutes": [
+    "kaminos/fluid/representation-frame"
+  ],
+  "sourceRoutes": [
+    "kaminos/fluid/portable-macro-source"
+  ],
+  "outputRoutes": [
+    "kaminos/fluid/terrain-feedback"
+  ],
+  "artifact": {
+    "filename": "kaminos-fluid-webgpu-0.3.0.tgz",
+    "integrity": "sha512-aVk2m0XuPDoEkM2gB43SxyXFFWuGVc6t6wvs6wYHlq2XdwFmXIvgz7UzgS8O4OHZrz44lnrIxkDeHYQdF6CrVw==",
+    "shasum": "8e4a4fac7d46e9bd0cc92aa28e3990375fba082e",
+    "size": 17952,
+    "unpackedSize": 97489,
+    "bundled": [
+      "@kaminos/fluid-contracts"
+    ]
+  }
+}

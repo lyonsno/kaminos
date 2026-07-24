@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = new URL('..', import.meta.url).pathname;
-const producerRevision = '7a979e60eca52a1c29544aad2e221182dca3f9cd';
+const producerRevision = '854c57ee7086783c0b0d099058a2c985b71168cd';
 const packageModule = await import('@kaminos/fluid-webgpu');
 
 assert.equal(
