@@ -12,7 +12,136 @@ Strict route and run identity travels with the runtime so composed pipelines can
 npm install @kaminos/webgpu-inference-kit
 ```
 
-## Start Here When Porting A Model
+## Start Here When Porting A Long Model
+
+Describe the route's real pre-submission boundaries once, then let the cooperative execution facade own safe-boundary servicing, exact range coverage, queue-prefix completion, adaptation, browser yields, progress, cancellation, and terminal settlement:
+
+```js
+import {
+  createWebGpuCooperativeExecution,
+  defineWebGpuCooperativeBoundaryManifest,
+} from "@kaminos/webgpu-inference-kit";
+
+const boundaries = defineWebGpuCooperativeBoundaryManifest({
+  manifestId: "sf3d.cooperative-boundaries.v0",
+  routeId: "sf3d.image-to-mesh.webgpu-local.v0",
+  phases: [
+    {
+      phaseId: "image-encoder",
+      boundaries: [{
+        boundaryId: "dino-window-tiles",
+        kind: "gpu-command",
+        commandDutyKind: "compute",
+        unit: "window-tile",
+        totalItems: encoderWindowCount,
+        progressWeight: 7,
+        chunking: {
+          mode: "adaptive",
+          initialItems: 8,
+          minItems: 1,
+          maxItems: 32,
+          targetDurationMs: 8,
+        },
+        yieldPolicy: "after-duty",
+        resources: {
+          retain: ["dino.weights"],
+          produce: ["dino.features"],
+          release: [],
+        },
+      }],
+    },
+    {
+      phaseId: "mesh-materialization",
+      boundaries: [{
+        boundaryId: "glb-compose",
+        kind: "cpu-work",
+        hostPhase: "presentation",
+        unit: "mesh-primitive",
+        totalItems: meshPrimitives.length,
+        progressWeight: 1,
+        chunking: { mode: "fixed", chunkItems: 1 },
+        yieldPolicy: "after-duty",
+        resources: {
+          retain: ["mesh.geometry", "mesh.materials"],
+          produce: ["scene.glb"],
+          release: ["mesh.geometry", "mesh.materials"],
+        },
+      }],
+    },
+  ],
+});
+
+const abortController = new AbortController();
+const execution = createWebGpuCooperativeExecution({
+  runtime,
+  manifest: boundaries,
+  invocationId: crypto.randomUUID(),
+  schedulingMode: "cooperative",
+  signal: abortController.signal,
+  onProgress(progress) {
+    renderProgress(progress.percent, {
+      completedItems: progress.completedItems,
+      totalItems: progress.totalItems,
+      phaseId: progress.currentPhaseId,
+      boundaryId: progress.currentBoundaryId,
+    });
+  },
+});
+
+const glb = await execution.run(async cooperative => {
+  const encoderTiles = cooperative.startBoundary("dino-window-tiles");
+  for (let range = encoderTiles.nextRange(); range; range = encoderTiles.nextRange()) {
+    await encoderTiles.runGpuDuty(range, {
+      encode({ range, commandDuty }) {
+        const encoder = device.createCommandEncoder({
+          label: commandDuty.dutyId,
+        });
+        encodeDinoWindows(encoder, {
+          firstWindow: range.itemStart,
+          windowCount: range.itemCount,
+        });
+        return encoder.finish();
+      },
+      submit(commandBuffer) {
+        runtime.queue.submit([commandBuffer]);
+      },
+    });
+  }
+
+  const composition = cooperative.startBoundary("glb-compose");
+  for (let range = composition.nextRange(); range; range = composition.nextRange()) {
+    await composition.runCpuDuty(range, {
+      work({ range }) {
+        appendGlbPrimitives(meshPrimitives.slice(range.itemStart, range.itemEnd));
+      },
+    });
+  }
+  return finishGlb();
+});
+
+const cooperativeReport = execution.finish();
+```
+
+For each cooperative GPU duty, Kaminos services pending foreground work before encoding, submits the exact model-owned command buffer, captures that inference prefix's queue fence immediately, adapts the next exact range from completed queue time, and yields to the browser. CPU duties use the same range and progress grammar with host-phase timing. Histories remain uncapped, and `actualRangeCount` becomes authoritative only when the boundary completes.
+
+Every progress event carries `completedItems`, `totalItems`, phase progress, and overall progress. A boundary whose total is discovered at invocation time declares `totalItems: null`; `startBoundary(boundaryId, { totalItems })` supplies the exact total before its first range. Until every total is known, aggregate progress remains `null` instead of presenting a fabricated percentage.
+
+Set `schedulingMode: "disabled"` to exercise the same declared work as a pass-through A/B. That mode keeps command-duty measurement, omits cooperative preparation, adaptation, and per-duty yields, and captures one terminal queue-prefix fence before reporting success.
+
+The first SF3D manifest should expose these model-owned duty families:
+
+| Phase | Boundary unit | Initial control target |
+| --- | --- | --- |
+| DINO image encoding | window or token tile | completed queue duty near one display-frame budget |
+| two-stream/QKV attention | query tile | completed queue duty near one display-frame budget |
+| triplane decoding | decoder output tile | completed queue duty near one display-frame budget |
+| marching tetrahedra | tetrahedron/cell range | bounded GPU duty with exact cell coverage |
+| UV and texture baking | atlas tile | bounded GPU duty followed by cooperative CPU materialization |
+| GLB materialization | mesh primitive or byte range | fixed CPU range with browser yield |
+
+The model adapter remains the authority for buffer lifetimes, bind groups, dispatch geometry, numerical equivalence, and lawful split points. The manifest makes those boundaries reusable by the scheduler, progress UI, cancellation path, and terminal report without embedding SF3D or SHARP internals in the runtime.
+
+## Build Runtime Primitives
 
 ```js
 import {
@@ -411,6 +540,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
+- `defineWebGpuCooperativeBoundaryManifest(input)` and `createWebGpuCooperativeExecution(input)`: declare a long route's GPU and CPU duty families once, execute exact fixed or adaptive ranges through safe pre-encoding boundaries, expose complete phase and overall progress, preserve cancellation/failure reports, and run a scheduling-disabled A/B over the same work.
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.

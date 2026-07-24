@@ -46,6 +46,18 @@ export {
 } from './inference-runtime.js';
 
 export {
+  WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA,
+  defineWebGpuCooperativeBoundaryManifest,
+} from './cooperative-boundary-manifest.js';
+
+export {
+  WEBGPU_COOPERATIVE_EXECUTION_REPORT_SCHEMA,
+  WEBGPU_COOPERATIVE_PROGRESS_SCHEMA,
+  WEBGPU_COOPERATIVE_RANGE_SCHEMA,
+  createWebGpuCooperativeExecution,
+} from './cooperative-execution.js';
+
+export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
   requestBrowserWebGpuDevice,
