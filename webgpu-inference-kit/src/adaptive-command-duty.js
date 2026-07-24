@@ -42,6 +42,10 @@ function normalizeInput(input) {
   if (!Number.isFinite(input.targetDurationMs) || input.targetDurationMs <= 0) {
     throw new Error('targetDurationMs must be finite and greater than zero');
   }
+  const adjustmentGain = input.adjustmentGain ?? 1;
+  if (!Number.isFinite(adjustmentGain) || adjustmentGain <= 0 || adjustmentGain > 1) {
+    throw new Error('adjustmentGain must be finite, greater than zero, and at most one');
+  }
   if (!isPlainObject(input.bounds)) throw new Error('bounds must be a caller-declared object');
   const { minChunkItems, maxChunkItems } = input.bounds;
   requirePositiveSafeInteger(minChunkItems, 'bounds.minChunkItems');
@@ -64,33 +68,56 @@ function normalizeInput(input) {
     totalItems: input.totalItems,
     initialChunkItems: input.initialChunkItems,
     targetDurationMs: input.targetDurationMs,
+    requestedAdjustmentGain: adjustmentGain,
+    effectiveAdjustmentGain: adjustmentGain,
     bounds: { minChunkItems, maxChunkItems },
     metadata: clone(input.metadata || {}),
   };
 }
 
-function nextChunkFromObservation({ range, observedDurationMs, targetDurationMs, bounds }) {
-  let rawChunkItems;
+function nextChunkFromObservation({
+  range,
+  observedDurationMs,
+  targetDurationMs,
+  adjustmentGain,
+  bounds,
+}) {
+  let fullGainCorrectionRatio;
   if (observedDurationMs === 0) {
-    rawChunkItems = Number.POSITIVE_INFINITY;
+    fullGainCorrectionRatio = Number.POSITIVE_INFINITY;
   } else {
-    rawChunkItems = range.itemCount * targetDurationMs / observedDurationMs;
+    fullGainCorrectionRatio = targetDurationMs / observedDurationMs;
   }
+  const effectiveCorrectionRatio = fullGainCorrectionRatio ** adjustmentGain;
+  const rawChunkItems = range.itemCount * fullGainCorrectionRatio;
+  const effectiveRawChunkItems = range.itemCount * effectiveCorrectionRatio;
 
   let nextChunkItems;
   let boundApplication = null;
-  if (rawChunkItems < bounds.minChunkItems) {
+  if (effectiveRawChunkItems < bounds.minChunkItems) {
     nextChunkItems = bounds.minChunkItems;
     boundApplication = 'minChunkItems';
-  } else if (rawChunkItems > bounds.maxChunkItems) {
+  } else if (effectiveRawChunkItems > bounds.maxChunkItems) {
     nextChunkItems = bounds.maxChunkItems;
     boundApplication = 'maxChunkItems';
   } else {
-    nextChunkItems = Math.max(bounds.minChunkItems, Math.min(bounds.maxChunkItems, Math.round(rawChunkItems)));
+    nextChunkItems = Math.max(
+      bounds.minChunkItems,
+      Math.min(bounds.maxChunkItems, Math.round(effectiveRawChunkItems)),
+    );
   }
 
   return {
+    fullGainCorrectionRatio: Number.isFinite(fullGainCorrectionRatio)
+      ? fullGainCorrectionRatio
+      : null,
+    effectiveCorrectionRatio: Number.isFinite(effectiveCorrectionRatio)
+      ? effectiveCorrectionRatio
+      : null,
     rawChunkItems: Number.isFinite(rawChunkItems) ? rawChunkItems : null,
+    effectiveRawChunkItems: Number.isFinite(effectiveRawChunkItems)
+      ? effectiveRawChunkItems
+      : null,
     nextChunkItems,
     boundApplication,
     adjustment: nextChunkItems < range.plannedChunkItems
@@ -125,6 +152,8 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
       initialChunkItems: config.initialChunkItems,
       currentChunkItems: state.currentChunkItems,
       targetDurationMs: config.targetDurationMs,
+      requestedAdjustmentGain: config.requestedAdjustmentGain,
+      effectiveAdjustmentGain: config.effectiveAdjustmentGain,
       bounds: config.bounds,
       metadata: config.metadata,
       retention: 'uncapped',
@@ -165,6 +194,8 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
       progressAfter: itemEnd / config.totalItems,
       plannedChunkItems: state.currentChunkItems,
       targetDurationMs: config.targetDurationMs,
+      requestedAdjustmentGain: config.requestedAdjustmentGain,
+      effectiveAdjustmentGain: config.effectiveAdjustmentGain,
       bounds: clone(config.bounds),
       metadata: clone(config.metadata),
     });
@@ -196,7 +227,10 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
     const complete = state.completedItems === config.totalItems;
     const adjustment = complete
       ? {
+          fullGainCorrectionRatio: null,
+          effectiveCorrectionRatio: null,
           rawChunkItems: null,
+          effectiveRawChunkItems: null,
           nextChunkItems: null,
           boundApplication: null,
           adjustment: 'complete',
@@ -205,6 +239,7 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
           range,
           observedDurationMs: observation.observedDurationMs,
           targetDurationMs: config.targetDurationMs,
+          adjustmentGain: config.effectiveAdjustmentGain,
           bounds: config.bounds,
         });
     if (!complete) state.currentChunkItems = adjustment.nextChunkItems;
@@ -220,8 +255,13 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
       timingAuthority: observation.timingAuthority,
       observedDurationMs: observation.observedDurationMs,
       targetDurationMs: config.targetDurationMs,
+      requestedAdjustmentGain: config.requestedAdjustmentGain,
+      effectiveAdjustmentGain: config.effectiveAdjustmentGain,
+      fullGainCorrectionRatio: adjustment.fullGainCorrectionRatio,
+      effectiveCorrectionRatio: adjustment.effectiveCorrectionRatio,
       observedChunkItems: range.itemCount,
       rawNextChunkItems: adjustment.rawChunkItems,
+      effectiveRawNextChunkItems: adjustment.effectiveRawChunkItems,
       nextChunkItems: adjustment.nextChunkItems,
       adjustment: adjustment.adjustment,
       boundApplication: adjustment.boundApplication,
@@ -267,6 +307,8 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
       status: 'failed',
       completedItems: state.completedItems,
       totalItems: config.totalItems,
+      requestedAdjustmentGain: config.requestedAdjustmentGain,
+      effectiveAdjustmentGain: config.effectiveAdjustmentGain,
       rangeCountAuthority: 'open-at-failure',
       actualRangeCount: null,
       failure,

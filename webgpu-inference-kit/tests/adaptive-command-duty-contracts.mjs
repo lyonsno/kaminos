@@ -27,6 +27,8 @@ function planner(overrides = {}) {
 
 const adaptive = planner();
 assert.equal(adaptive.schema, WEBGPU_ADAPTIVE_COMMAND_DUTY_PLANNER_SCHEMA);
+assert.equal(adaptive.snapshot().requestedAdjustmentGain, 1);
+assert.equal(adaptive.snapshot().effectiveAdjustmentGain, 1);
 const first = adaptive.nextRange();
 assert.equal(first.schema, WEBGPU_ADAPTIVE_COMMAND_DUTY_RANGE_SCHEMA);
 assert.equal(first.rangeId, 'sharp:gaussian:head-conv1:0');
@@ -62,6 +64,12 @@ const firstObservation = adaptive.observeRange({
 });
 assert.equal(firstObservation.status, 'range-observed');
 assert.equal(firstObservation.nextChunkItems, 10, 'a 2x over-budget duty must halve the next exact range');
+assert.equal(firstObservation.requestedAdjustmentGain, 1);
+assert.equal(firstObservation.effectiveAdjustmentGain, 1);
+assert.equal(firstObservation.fullGainCorrectionRatio, 0.5);
+assert.equal(firstObservation.effectiveCorrectionRatio, 0.5);
+assert.equal(firstObservation.rawNextChunkItems, 10);
+assert.equal(firstObservation.effectiveRawNextChunkItems, 10);
 assert.equal(firstObservation.adjustment, 'decrease');
 assert.equal(firstObservation.rangeCountAuthority, 'open-until-completion');
 assert.equal(firstObservation.actualRangeCount, null);
@@ -78,6 +86,9 @@ const secondObservation = adaptive.observeRange({
   timingAuthority: 'queue-work-done',
 });
 assert.equal(secondObservation.nextChunkItems, 20, 'an under-budget duty must grow toward the caller target');
+assert.equal(secondObservation.fullGainCorrectionRatio, 2);
+assert.equal(secondObservation.effectiveCorrectionRatio, 2);
+assert.equal(secondObservation.effectiveRawNextChunkItems, 20);
 assert.equal(secondObservation.adjustment, 'increase');
 
 const ranges = [first, second];
@@ -191,6 +202,153 @@ assert.equal(uncappedHistory.snapshot().ranges.length, 257);
 assert.equal(uncappedHistory.snapshot().observations.length, 257);
 assert.equal(uncappedHistory.snapshot().retention, 'uncapped');
 
+const damped = planner({
+  totalItems: 1_000,
+  initialChunkItems: 20,
+  adjustmentGain: 0.375,
+});
+assert.equal(damped.snapshot().requestedAdjustmentGain, 0.375);
+assert.equal(damped.snapshot().effectiveAdjustmentGain, 0.375);
+const dampedFirst = damped.nextRange();
+const dampedSlow = damped.observeRange({
+  rangeId: dampedFirst.rangeId,
+  observedDurationMs: 20,
+  timingAuthority: 'queue-work-done',
+});
+assert.equal(dampedSlow.fullGainCorrectionRatio, 0.5);
+assert.ok(Math.abs(dampedSlow.effectiveCorrectionRatio - (0.5 ** 0.375)) < 1e-12);
+assert.equal(dampedSlow.rawNextChunkItems, 10);
+assert.ok(
+  Math.abs(dampedSlow.effectiveRawNextChunkItems - (20 * (0.5 ** 0.375))) < 1e-12,
+);
+assert.equal(dampedSlow.nextChunkItems, 15);
+assert.ok(
+  Math.abs(Math.log(dampedSlow.effectiveCorrectionRatio))
+    < Math.abs(Math.log(dampedSlow.fullGainCorrectionRatio)),
+);
+
+const dampedSecond = damped.nextRange();
+const dampedFast = damped.observeRange({
+  rangeId: dampedSecond.rangeId,
+  observedDurationMs: 5,
+  timingAuthority: 'queue-work-done',
+});
+assert.equal(dampedFast.fullGainCorrectionRatio, 2);
+assert.ok(Math.abs(dampedFast.effectiveCorrectionRatio - (2 ** 0.375)) < 1e-12);
+assert.equal(dampedFast.rawNextChunkItems, 30);
+assert.ok(
+  Math.abs(dampedFast.effectiveRawNextChunkItems - (15 * (2 ** 0.375))) < 1e-12,
+);
+assert.equal(dampedFast.nextChunkItems, 19);
+assert.ok(
+  Math.abs(Math.log(dampedFast.effectiveCorrectionRatio))
+    < Math.abs(Math.log(dampedFast.fullGainCorrectionRatio)),
+);
+
+const alternating = planner({
+  totalItems: 10_000,
+  initialChunkItems: 64,
+  targetDurationMs: 12,
+  bounds: { minChunkItems: 1, maxChunkItems: 1_024 },
+  adjustmentGain: 0.375,
+});
+const alternatingDurations = [4.75, 18.06, 4.75, 18.06, 4.75, 18.06, 4.75, 18.06];
+const alternatingReceipts = [];
+for (const observedDurationMs of alternatingDurations) {
+  const range = alternating.nextRange();
+  alternatingReceipts.push(alternating.observeRange({
+    rangeId: range.rangeId,
+    observedDurationMs,
+    timingAuthority: 'queue-work-done',
+  }));
+}
+assert.ok(alternatingReceipts.every(receipt => (
+  Math.abs(Math.log(receipt.effectiveCorrectionRatio))
+  < Math.abs(Math.log(receipt.fullGainCorrectionRatio))
+)));
+assert.ok(alternatingReceipts.every(receipt => receipt.requestedAdjustmentGain === 0.375));
+assert.ok(alternatingReceipts.every(receipt => receipt.effectiveAdjustmentGain === 0.375));
+
+const stableDamped = planner({
+  totalItems: 60,
+  initialChunkItems: 20,
+  adjustmentGain: 0.375,
+});
+const stableRange = stableDamped.nextRange();
+const stableObservation = stableDamped.observeRange({
+  rangeId: stableRange.rangeId,
+  observedDurationMs: 10,
+  timingAuthority: 'queue-work-done',
+});
+assert.equal(stableObservation.fullGainCorrectionRatio, 1);
+assert.equal(stableObservation.effectiveCorrectionRatio, 1);
+assert.equal(stableObservation.nextChunkItems, 20);
+
+const dampedZero = planner({
+  totalItems: 200,
+  adjustmentGain: 0.375,
+  bounds: { minChunkItems: 5, maxChunkItems: 80 },
+});
+const dampedZeroRange = dampedZero.nextRange();
+const dampedZeroObservation = dampedZero.observeRange({
+  rangeId: dampedZeroRange.rangeId,
+  observedDurationMs: 0,
+  timingAuthority: 'queue-work-done',
+});
+assert.equal(dampedZeroObservation.fullGainCorrectionRatio, null);
+assert.equal(dampedZeroObservation.effectiveCorrectionRatio, null);
+assert.equal(dampedZeroObservation.rawNextChunkItems, null);
+assert.equal(dampedZeroObservation.effectiveRawNextChunkItems, null);
+assert.equal(dampedZeroObservation.nextChunkItems, 80);
+assert.equal(dampedZeroObservation.boundApplication, 'maxChunkItems');
+
+const finalPartial = planner({
+  totalItems: 45,
+  initialChunkItems: 20,
+  adjustmentGain: 0.375,
+});
+const partialRanges = [];
+const partialReceipts = [];
+while (finalPartial.snapshot().status === 'active') {
+  const range = finalPartial.nextRange();
+  partialRanges.push(range);
+  partialReceipts.push(finalPartial.observeRange({
+    rangeId: range.rangeId,
+    observedDurationMs: 10,
+    timingAuthority: 'queue-work-done',
+  }));
+}
+assert.deepEqual(partialRanges.map(range => range.itemCount), [20, 20, 5]);
+assert.equal(partialRanges.at(-1).itemEnd, 45);
+assert.equal(partialReceipts.at(-1).status, 'planner-complete');
+assert.equal(partialReceipts.at(-1).nextChunkItems, null);
+assert.equal(partialReceipts.at(-1).requestedAdjustmentGain, 0.375);
+assert.equal(partialReceipts.at(-1).effectiveAdjustmentGain, 0.375);
+
+const defaultGain = planner({ plannerId: 'gain-compatibility' });
+const explicitFullGain = planner({
+  plannerId: 'gain-compatibility',
+  adjustmentGain: 1,
+});
+for (const observedDurationMs of [20, 5, 10, 0]) {
+  const defaultRange = defaultGain.nextRange();
+  const explicitRange = explicitFullGain.nextRange();
+  assert.deepEqual(defaultRange, explicitRange);
+  assert.deepEqual(
+    defaultGain.observeRange({
+      rangeId: defaultRange.rangeId,
+      observedDurationMs,
+      timingAuthority: 'queue-work-done',
+    }),
+    explicitFullGain.observeRange({
+      rangeId: explicitRange.rangeId,
+      observedDurationMs,
+      timingAuthority: 'queue-work-done',
+    }),
+  );
+}
+assert.deepEqual(defaultGain.snapshot(), explicitFullGain.snapshot());
+
 for (const invalid of [
   { plannerId: '' },
   { unit: '' },
@@ -203,6 +361,10 @@ for (const invalid of [
   { bounds: { minChunkItems: 20, maxChunkItems: 10 } },
   { bounds: { minChunkItems: 5, maxChunkItems: 10 }, initialChunkItems: 20 },
   { retention: 'last-100' },
+  { adjustmentGain: 0 },
+  { adjustmentGain: -0.25 },
+  { adjustmentGain: 1.01 },
+  { adjustmentGain: Number.NaN },
 ]) {
   assert.throws(() => planner(invalid));
 }

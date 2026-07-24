@@ -74,7 +74,7 @@ function createInput(overrides = {}) {
       adapterId: 'sf3d.browser-webgpu.v0',
       routeId: ROUTE_ID,
       packageName: '@kaminos/webgpu-inference-kit',
-      packageVersion: '0.1.37',
+      packageVersion: '0.1.38',
       sourceRevision: 'sf3d-contract-fixture',
     },
     manifest: createManifest(),
@@ -116,11 +116,11 @@ assert.equal(report.status, 'passed');
 assert.equal(report.conformanceId, 'sf3d:adapter:contract');
 assert.equal(report.routeId, ROUTE_ID);
 assert.equal(report.manifestId, 'sf3d.adapter-conformance.v0');
-assert.equal(report.kitVersion, '0.1.37');
+assert.equal(report.kitVersion, '0.1.38');
 assert.equal(report.adapterIdentityAuthority, 'caller-declared');
 assert.equal(report.adapterIdentity.adapterId, 'sf3d.browser-webgpu.v0');
 assert.equal(report.adapterIdentity.packageName, '@kaminos/webgpu-inference-kit');
-assert.equal(report.adapterIdentity.packageVersion, '0.1.37');
+assert.equal(report.adapterIdentity.packageVersion, '0.1.38');
 assert.equal(report.adapterIdentity.sourceRevision, 'sf3d-contract-fixture');
 assert.equal(report.retention, 'uncapped');
 assert.deepEqual(

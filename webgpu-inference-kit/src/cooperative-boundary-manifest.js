@@ -108,7 +108,7 @@ function normalizeChunking(value, kind, name) {
   }
   rejectUnsupportedKeys(
     value,
-    new Set(['mode', 'initialItems', 'minItems', 'maxItems', 'targetDurationMs']),
+    new Set(['mode', 'initialItems', 'minItems', 'maxItems', 'targetDurationMs', 'adjustmentGain']),
     name,
   );
   const initialItems = requirePositiveSafeInteger(`${name}.initialItems`, value.initialItems);
@@ -121,12 +121,17 @@ function normalizeChunking(value, kind, name) {
   if (!Number.isFinite(value.targetDurationMs) || value.targetDurationMs <= 0) {
     throw new TypeError(`${name}.targetDurationMs must be finite and greater than zero`);
   }
+  const adjustmentGain = value.adjustmentGain ?? 1;
+  if (!Number.isFinite(adjustmentGain) || adjustmentGain <= 0 || adjustmentGain > 1) {
+    throw new TypeError(`${name}.adjustmentGain must be finite, greater than zero, and at most one`);
+  }
   return {
     mode: 'adaptive',
     initialItems,
     minItems,
     maxItems,
     targetDurationMs: value.targetDurationMs,
+    adjustmentGain,
   };
 }
 

@@ -41,6 +41,7 @@ const boundaries = defineWebGpuCooperativeBoundaryManifest({
           minItems: 1,
           maxItems: 32,
           targetDurationMs: 8,
+          adjustmentGain: 0.375,
         },
         yieldPolicy: "after-duty",
         resources: {
@@ -724,7 +725,7 @@ Long browser WebGPU routes need to say how they behave under contention. The pac
 - `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)` for visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)` for portable command-boundary attribution and adaptive chunk-control selection across model ports.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)` for automatic runtime submission capture and strict measured-duty projection.
-- `createWebGpuAdaptiveCommandDutyPlanner(input)` for exact within-kernel ranges that grow or shrink toward a caller-owned completed-duty duration. The caller supplies the total work, initial range, duration target, and minimum/maximum chunk bounds; the planner preserves complete coverage and does not pretend to know the final range count until execution finishes.
+- `createWebGpuAdaptiveCommandDutyPlanner(input)` for exact within-kernel ranges that grow or shrink toward a caller-owned completed-duty duration. The caller supplies the total work, initial range, duration target, and minimum/maximum chunk bounds; optional `adjustmentGain` exponent-damps each measured correction to control oscillation while preserving full-gain behavior at the default `1`. Receipts keep the raw full-gain recommendation separate from the effective correction. The planner preserves complete coverage and does not pretend to know the final range count until execution finishes.
 - `createForegroundBudgetGovernor(input)` for a long-lived adaptive control loop. The caller supplies scheduler bounds, attribution policy, hysteresis, and an `episodeEpochId`; each observation carries the same epoch plus a unique episode/firing identity. Exact replays cannot vote twice. `forgetEpisode()` and `clearDecisionHistory()` discard cached decisions while preserving replay protection, and `beginEpisodeEpoch(nextId)` is the explicit boundary that reclaims those identities and resets hysteresis while preserving the tuned scheduler.
 - `createWebGpuSchedulerApplication(input)` for guarded application of governor decisions. It rejects foreign routes, skipped/stale/replayed revisions, undeclared controls, bounds mismatches, capped boundary retention, duplicate boundaries, and refresh attempts anywhere except an explicit `before-encode` boundary. Applying a revision while an invocation is active changes future invocations immediately but changes that active invocation only when it reaches its next boundary.
 - `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)` for the current SHARP default-vs-cooperative comparison contract.
@@ -740,6 +741,7 @@ const planner = createWebGpuAdaptiveCommandDutyPlanner({
   totalItems: outputElements,
   initialChunkItems: 524_288,
   targetDurationMs: 8,
+  adjustmentGain: 0.375,
   bounds: {
     minChunkItems: 65_536,
     maxChunkItems: outputElements,

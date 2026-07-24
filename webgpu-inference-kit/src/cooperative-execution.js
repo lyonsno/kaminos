@@ -460,6 +460,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
         totalItems,
         initialChunkItems: definition.boundary.chunking.initialItems,
         targetDurationMs: definition.boundary.chunking.targetDurationMs,
+        adjustmentGain: definition.boundary.chunking.adjustmentGain,
         bounds: {
           minChunkItems: definition.boundary.chunking.minItems,
           maxChunkItems: definition.boundary.chunking.maxItems,

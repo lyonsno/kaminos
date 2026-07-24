@@ -30,6 +30,7 @@ function createManifest(overrides = {}) {
               minItems: 1,
               maxItems: 8,
               targetDurationMs: 8,
+              adjustmentGain: 0.375,
             },
             yieldPolicy: 'after-duty',
             resources: {
@@ -155,6 +156,7 @@ assert.equal(Object.isFrozen(manifest), true);
 assert.equal(Object.isFrozen(manifest.phases), true);
 assert.equal(Object.isFrozen(manifest.phases[0].boundaries[0].resources.retain), true);
 assert.equal(manifest.progressWeight, 10);
+assert.equal(manifest.phases[0].boundaries[0].chunking.adjustmentGain, 0.375);
 assert.deepEqual(
   manifest.phases.map(phase => [phase.phaseId, phase.progressWeight]),
   [['feature-extraction', 8], ['materialization', 2]],
@@ -302,11 +304,62 @@ assert.equal(report.boundaries[0].actualRangeCount, 2);
 assert.equal(report.boundaries[1].actualRangeCount, 3);
 assert.equal(report.boundaries[0].rangeCountAuthority, 'actual');
 assert.equal(report.boundaries[1].rangeCountAuthority, 'actual');
+assert.equal(report.boundaries[0].planner.requestedAdjustmentGain, 0.375);
+assert.equal(report.boundaries[0].planner.effectiveAdjustmentGain, 0.375);
+assert.ok(
+  report.boundaries[0].planner.observations.every(
+    observation => observation.effectiveAdjustmentGain === 0.375,
+  ),
+);
 assert.equal(report.failure, null);
 assert.equal(progressEvents.length, 5);
 assert.equal(progressEvents.at(-1).percent, 100);
 assert.ok(progressEvents.every(event => event.totalItems === 15));
 assert.ok(progressEvents.every(event => Number.isFinite(event.percent)));
+
+const defaultGainManifest = defineWebGpuCooperativeBoundaryManifest({
+  manifestId: 'sharp.default-gain.v0',
+  routeId: ROUTE_ID,
+  phases: [{
+    phaseId: 'feature-extraction',
+    boundaries: [{
+      boundaryId: 'default-gain-boundary',
+      kind: 'gpu-command',
+      unit: 'window-tile',
+      totalItems: 8,
+      progressWeight: 1,
+      commandDutyKind: 'compute',
+      chunking: {
+        mode: 'adaptive',
+        initialItems: 4,
+        minItems: 1,
+        maxItems: 8,
+        targetDurationMs: 8,
+      },
+      yieldPolicy: 'after-duty',
+    }],
+  }],
+});
+assert.equal(defaultGainManifest.phases[0].boundaries[0].chunking.adjustmentGain, 1);
+for (const adjustmentGain of [0, -0.25, 1.01, Number.NaN]) {
+  assert.throws(
+    () => defineWebGpuCooperativeBoundaryManifest({
+      manifestId: `sharp.invalid-gain.${String(adjustmentGain)}`,
+      routeId: ROUTE_ID,
+      phases: [{
+        phaseId: 'feature-extraction',
+        boundaries: [{
+          ...defaultGainManifest.phases[0].boundaries[0],
+          chunking: {
+            ...defaultGainManifest.phases[0].boundaries[0].chunking,
+            adjustmentGain,
+          },
+        }],
+      }],
+    }),
+    /adjustmentGain/,
+  );
+}
 assert.deepEqual(
   calls.slice(0, 9),
   [
