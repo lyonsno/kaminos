@@ -16,7 +16,10 @@ const {
 
 const ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 
-function createManifest({ dynamicEncoderTotal = false } = {}) {
+function createManifest({
+  dynamicEncoderTotal = false,
+  releaseEncoderWeights = false,
+} = {}) {
   return defineWebGpuCooperativeBoundaryManifest({
     manifestId: 'sf3d.adapter-conformance.v0',
     routeId: ROUTE_ID,
@@ -38,7 +41,7 @@ function createManifest({ dynamicEncoderTotal = false } = {}) {
           resources: {
             retain: ['dino.weights'],
             produce: ['dino.features'],
-            release: [],
+            release: releaseEncoderWeights ? ['dino.weights'] : [],
           },
         }],
       },
@@ -212,6 +215,17 @@ await assert.rejects(
     return true;
   },
 );
+
+const consumeThenReleaseReport = await runWebGpuCooperativeAdapterConformance(createInput({
+  manifest: createManifest({ releaseEncoderWeights: true }),
+  expectedFinalResources: ['scene.glb'],
+}));
+const consumeThenReleaseCheck = consumeThenReleaseReport.checks
+  .find(check => check.checkId === 'resource-lifecycle');
+assert.equal(consumeThenReleaseCheck.status, 'passed');
+assert.deepEqual(consumeThenReleaseCheck.detail.finalResources, ['scene.glb']);
+assert.deepEqual(consumeThenReleaseCheck.detail.expectedFinalResources, ['scene.glb']);
+assert.deepEqual(consumeThenReleaseCheck.detail.failures, []);
 
 await assert.rejects(
   () => runWebGpuCooperativeAdapterConformance(createInput({

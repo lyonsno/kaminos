@@ -121,7 +121,7 @@ function normalizeChunking(value, kind, name) {
   if (!Number.isFinite(value.targetDurationMs) || value.targetDurationMs <= 0) {
     throw new TypeError(`${name}.targetDurationMs must be finite and greater than zero`);
   }
-  const adjustmentGain = value.adjustmentGain ?? 1;
+  const adjustmentGain = value.adjustmentGain === undefined ? 1 : value.adjustmentGain;
   if (!Number.isFinite(adjustmentGain) || adjustmentGain <= 0 || adjustmentGain > 1) {
     throw new TypeError(`${name}.adjustmentGain must be finite, greater than zero, and at most one`);
   }

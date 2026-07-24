@@ -142,6 +142,13 @@ The first SF3D manifest should expose these model-owned duty families:
 
 The model adapter remains the authority for buffer lifetimes, bind groups, dispatch geometry, numerical equivalence, and lawful split points. The manifest makes those boundaries reusable by the scheduler, progress UI, cancellation path, and terminal report without embedding SF3D or SHARP internals in the runtime.
 
+Resource lists describe one boundary transition: `retain` names resources that
+must already be live while the boundary executes, `produce` names resources
+created by the boundary, and `release` names live resources retired after it
+executes. A resource may therefore appear in both `retain` and `release` when
+the boundary consumes it for the last time. A produced resource cannot also be
+retained or released by that same boundary.
+
 ## Prove An Adapter Before Browser Smoke
 
 Run the same adapter orchestration against deterministic Kaminos runtime
@@ -179,6 +186,14 @@ execution facade:
 2. scheduling-disabled success over the same declared work;
 3. cancellation after the first observed duty;
 4. an injected queue or host-runtime failure.
+
+`runAdapter` is a trust-bearing production-path callback: route the same
+production orchestration through all four calls. The `scenario` argument and
+scenario-bearing invocation identity are explicit diagnostics; use them to
+interpret expected cancellation or failure while the injected runtime supplies
+the behavioral difference. A passing report certifies the orchestration the
+caller supplied, so bind production-path identity through adapter tests and the
+reported source revision rather than substituting harness-only work.
 
 It rejects unless every declared range has exact, gap-free coverage; terminal
 progress has a real denominator and reaches 100%; enabled and disabled runs

@@ -42,7 +42,7 @@ function normalizeInput(input) {
   if (!Number.isFinite(input.targetDurationMs) || input.targetDurationMs <= 0) {
     throw new Error('targetDurationMs must be finite and greater than zero');
   }
-  const adjustmentGain = input.adjustmentGain ?? 1;
+  const adjustmentGain = input.adjustmentGain === undefined ? 1 : input.adjustmentGain;
   if (!Number.isFinite(adjustmentGain) || adjustmentGain <= 0 || adjustmentGain > 1) {
     throw new Error('adjustmentGain must be finite, greater than zero, and at most one');
   }

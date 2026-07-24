@@ -330,6 +330,11 @@ const explicitFullGain = planner({
   plannerId: 'gain-compatibility',
   adjustmentGain: 1,
 });
+const explicitUndefinedGain = planner({
+  plannerId: 'gain-compatibility',
+  adjustmentGain: undefined,
+});
+assert.deepEqual(defaultGain.snapshot(), explicitUndefinedGain.snapshot());
 for (const observedDurationMs of [20, 5, 10, 0]) {
   const defaultRange = defaultGain.nextRange();
   const explicitRange = explicitFullGain.nextRange();
@@ -365,6 +370,10 @@ for (const invalid of [
   { adjustmentGain: -0.25 },
   { adjustmentGain: 1.01 },
   { adjustmentGain: Number.NaN },
+  { adjustmentGain: null },
+  { adjustmentGain: '0.375' },
+  { adjustmentGain: true },
+  { adjustmentGain: false },
 ]) {
   assert.throws(() => planner(invalid));
 }

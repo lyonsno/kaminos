@@ -341,7 +341,7 @@ const defaultGainManifest = defineWebGpuCooperativeBoundaryManifest({
   }],
 });
 assert.equal(defaultGainManifest.phases[0].boundaries[0].chunking.adjustmentGain, 1);
-for (const adjustmentGain of [0, -0.25, 1.01, Number.NaN]) {
+for (const adjustmentGain of [0, -0.25, 1.01, Number.NaN, null, '0.375', true, false]) {
   assert.throws(
     () => defineWebGpuCooperativeBoundaryManifest({
       manifestId: `sharp.invalid-gain.${String(adjustmentGain)}`,
