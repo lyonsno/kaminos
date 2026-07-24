@@ -22,6 +22,8 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-dis
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT = 'wgsl-live-hand-round-inlet-uniform-v1';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT = 'gpu-dormant-pool-source-flux-release-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT = 'new-release-fail-closed-emitted-material-persists-v0';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT = 'requested-effective-release-pool-residence-v1';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT = 'gpu-particle-residence-cohort-v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -81,6 +83,8 @@ const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
 const INTERFACE_RECORD_FLOATS = 20;
 const INTERFACE_RECORD_BYTES = INTERFACE_RECORD_FLOATS * 4;
+const INTERFACE_COUNTER_WORDS = 10;
+const INTERFACE_COUNTER_BYTES = INTERFACE_COUNTER_WORDS * 4;
 const LIQUID_FIRE_CONTACT_RECORD_FLOATS = 32;
 const LIQUID_FIRE_CONTACT_RECORD_BYTES = LIQUID_FIRE_CONTACT_RECORD_FLOATS * 4;
 const LIQUID_FIRE_CONTACT_HEADER_WORDS = 20;
@@ -141,7 +145,7 @@ const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 36;
 const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
-const MATERIAL_TRACER_FLOATS = 4;
+const MATERIAL_TRACER_FLOATS = 12;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
 const ENERGY_RECORD_FLOATS = 4;
 const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
@@ -349,6 +353,12 @@ const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS = Object.freeze({
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA = Object.freeze({
+  yaw: -0.48,
+  pitch: 0.3,
+  distance: 3.25,
+  target: Object.freeze([0, 0.12, -0.42]),
+});
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -383,7 +393,10 @@ function isFingerFluidLaminarSourceScene(scene) {
 }
 
 const LIVE_HAND_INLET_CAPACITY = 5;
-const LIVE_HAND_INLET_FLOATS = 12;
+const LIVE_HAND_INLET_FLOATS = 16;
+const LIVE_HAND_DEFAULT_RESIDENCE_SECONDS = 1.65;
+const LIVE_HAND_DEFAULT_RESIDENCE_DISTANCE_WORLD = 2.4;
+const MAX_FINITE_F32 = 3.402823466e38;
 
 function finiteFingerFluidVector(vector, fallback) {
   if (!Array.isArray(vector) || vector.length !== 3) return [...fallback];
@@ -401,17 +414,28 @@ function tangentForInletAxis(axis) {
 
 export function normalizeFingerFluidLiveInletPacket(packet) {
   const source = packet && typeof packet === 'object' ? packet : {};
-  const simulationSafe = source.simulation_authority === 'live_simulation'
-    && source.authority?.simulation_safe === true
-    && source.authority?.stale !== true;
-  const emitters = (Array.isArray(source.emitters) ? source.emitters : [])
-    .slice(0, LIVE_HAND_INLET_CAPACITY)
+  const sourceEmitters = Array.isArray(source.emitters) ? source.emitters : [];
+  if (sourceEmitters.length > LIVE_HAND_INLET_CAPACITY) {
+    throw new RangeError(
+      `Finger fluid live-inlet emitter count ${sourceEmitters.length} exceeds GPU capacity ${LIVE_HAND_INLET_CAPACITY}`,
+    );
+  }
+  const sourceAuthority = source.authority?.stale === true
+    ? 'stale_source_authority'
+    : source.simulation_authority !== 'live_simulation'
+      ? 'non_live_simulation_authority'
+      : source.authority?.simulation_safe !== true
+        ? 'simulation_unsafe'
+        : 'live_simulation_authority';
+  const simulationSafe = sourceAuthority === 'live_simulation_authority';
+  const emitters = sourceEmitters
     .map((emitter, index) => {
       const axis = normalizeFingerFluidInletVector(
         finiteFingerFluidVector(emitter.aim_world, [0, 0.15, -1]),
         `live inlet ${emitter.id || index} axis`,
       );
-      const active = simulationSafe && emitter.active === true && emitter.emission_state === 'jet';
+      const requestedActive = emitter.active === true && emitter.emission_state === 'jet';
+      const active = simulationSafe && requestedActive;
       return Object.freeze({
         id: String(emitter.id || `inlet-${index}`),
         origin: Object.freeze(finiteFingerFluidVector(emitter.origin_world, [0, 0, -0.8])),
@@ -420,7 +444,11 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
         radius: Math.max(0.035, Math.min(0.18, finite(emitter.radius, 0.07) * 1.45)),
         maximumSpeed: Math.max(0.25, Math.min(2.6, finite(emitter.strength, 1.15) * 1.35)),
         reservoirLength: 0.26,
+        requestedActive,
         active,
+        activationAuthority: requestedActive
+          ? sourceAuthority
+          : 'inactive_request',
       });
     });
   while (emitters.length < LIVE_HAND_INLET_CAPACITY) {
@@ -432,7 +460,9 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
       radius: 0.07,
       maximumSpeed: 0,
       reservoirLength: 0.26,
+      requestedActive: false,
       active: false,
+      activationAuthority: 'inactive_padding',
     }));
   }
   return Object.freeze({
@@ -440,47 +470,788 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
     contract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
     packetId: source.packet_id || source.packetId || 'no-live-inlet-packet',
     sourceRoute: source.route_identity || source.source_route || 'unknown',
+    artifactSha256: source.artifact_sha256 || source.artifactSha256 || null,
+    sourceAuthority,
+    requestedActiveInletCount: emitters.filter(inlet => inlet.requestedActive).length,
     activeInletCount: emitters.filter(inlet => inlet.active).length,
     inlets: Object.freeze(emitters),
   });
 }
 
-export function measureFingerFluidLiveInletReleasePlan(packet) {
+function readOptionalLiveInletNumber(emitter, keys, label, {
+  minimum = 0,
+  integer = false,
+  minimumInclusive = true,
+} = {}) {
+  const key = keys.find(candidate => Object.hasOwn(emitter, candidate) && emitter[candidate] !== null);
+  if (!key) return { provided: false, value: null };
+  const value = Number(emitter[key]);
+  const belowMinimum = minimumInclusive ? value < minimum : value <= minimum;
+  if (!Number.isFinite(value) || belowMinimum || (integer && !Number.isSafeInteger(value))) {
+    const expectation = integer ? `a safe integer >= ${minimum}` : `finite and ${minimumInclusive ? '>=' : '>'} ${minimum}`;
+    throw new RangeError(`Finger fluid live-inlet ${label} must be ${expectation}: ${emitter[key]}`);
+  }
+  return { provided: true, value };
+}
+
+function requireFiniteF32(value, label) {
+  if (!Number.isFinite(value) || Math.abs(value) > MAX_FINITE_F32) {
+    throw new RangeError(`Finger fluid live-inlet ${label} must fit finite f32: ${value}`);
+  }
+  return value;
+}
+
+export function measureFingerFluidLiveInletSchedulerCapacity({
+  radius,
+  maximumSpeed,
+  releasePoolBudget,
+  residenceSeconds,
+  residenceDistanceWorld,
+}) {
+  const budget = Number(releasePoolBudget);
+  const safeRadius = Number(radius);
+  const safeMaximumSpeed = Number(maximumSpeed);
+  const safeResidenceSeconds = Number(residenceSeconds);
+  const safeResidenceDistanceWorld = Number(residenceDistanceWorld);
+  if (!Number.isSafeInteger(budget) || budget < 0) {
+    throw new RangeError(`Finger fluid live-inlet scheduler budget must be a non-negative safe integer: ${releasePoolBudget}`);
+  }
+  if (![safeRadius, safeMaximumSpeed, safeResidenceSeconds, safeResidenceDistanceWorld].every(Number.isFinite)) {
+    throw new RangeError('Finger fluid live-inlet scheduler capacity requires finite physical inputs');
+  }
+  if (safeRadius <= 0 || safeMaximumSpeed <= 0 || safeResidenceSeconds <= 0 || safeResidenceDistanceWorld <= 0) {
+    throw new RangeError('Finger fluid live-inlet scheduler capacity requires positive physical inputs');
+  }
+  if (budget === 0) {
+    return Object.freeze({
+      laneCount: 0,
+      nominalResidenceCycleSeconds: safeResidenceSeconds,
+      dispatchCeilingParticleReleaseRate: 0,
+      laneDispatchCeilingParticleReleaseRate: 0,
+      aggregateResidenceCeilingParticleReleaseRate: 0,
+      laneResidenceCeilingParticleReleaseRate: 0,
+      residenceCeilingParticleReleaseRate: 0,
+      schedulerCeilingParticleReleaseRate: 0,
+    });
+  }
+  const apertureArea = Math.PI * safeRadius * safeRadius;
+  const laneCount = Math.min(
+    budget,
+    Math.max(1, Math.round(apertureArea / (LAMINAR_SOURCE_AXIAL_SPACING ** 2))),
+  );
+  const laneWeights = Array.from({ length: laneCount }, (_, laneIndex) => {
+    const radial = safeRadius * 0.82 * Math.sqrt((laneIndex + 0.5) / laneCount);
+    const normalizedRadius = radial / safeRadius;
+    return Math.max(0, 1 - normalizedRadius * normalizedRadius);
+  });
+  const laneWeightSum = laneWeights.reduce((sum, weight) => sum + weight, 0);
+  const distanceResidenceSeconds = safeResidenceDistanceWorld / safeMaximumSpeed;
+  const nominalResidenceCycleSeconds = Math.max(
+    1 / LAMINAR_SOURCE_REFERENCE_FPS,
+    Math.min(safeResidenceSeconds, distanceResidenceSeconds),
+  );
+  let laneDispatchCeilingParticleReleaseRate = Infinity;
+  let laneResidenceCeilingParticleReleaseRate = Infinity;
+  for (let laneIndex = 0; laneIndex < laneCount; laneIndex += 1) {
+    const laneParticleCount = Math.floor((budget - 1 - laneIndex) / laneCount) + 1;
+    const laneWeight = laneWeights[laneIndex];
+    if (laneWeight <= 0) continue;
+    laneDispatchCeilingParticleReleaseRate = Math.min(
+      laneDispatchCeilingParticleReleaseRate,
+      laneParticleCount * LAMINAR_SOURCE_REFERENCE_FPS * laneWeightSum / laneWeight,
+    );
+    laneResidenceCeilingParticleReleaseRate = Math.min(
+      laneResidenceCeilingParticleReleaseRate,
+      laneParticleCount / nominalResidenceCycleSeconds * laneWeightSum / laneWeight,
+    );
+  }
+  const dispatchCeilingParticleReleaseRate = budget * LAMINAR_SOURCE_REFERENCE_FPS;
+  const aggregateResidenceCeilingParticleReleaseRate = budget / nominalResidenceCycleSeconds;
+  const residenceCeilingParticleReleaseRate = laneResidenceCeilingParticleReleaseRate;
+  return Object.freeze({
+    laneCount,
+    nominalResidenceCycleSeconds,
+    dispatchCeilingParticleReleaseRate,
+    laneDispatchCeilingParticleReleaseRate,
+    aggregateResidenceCeilingParticleReleaseRate,
+    laneResidenceCeilingParticleReleaseRate,
+    residenceCeilingParticleReleaseRate,
+    schedulerCeilingParticleReleaseRate: Math.min(
+      dispatchCeilingParticleReleaseRate,
+      laneDispatchCeilingParticleReleaseRate,
+      residenceCeilingParticleReleaseRate,
+    ),
+  });
+}
+
+export function planFingerFluidLiveInletEconomics(
+  packet,
+  poolCapacity = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+) {
+  const capacity = Number(poolCapacity);
+  if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+    throw new RangeError(`Finger fluid live-inlet pool capacity must be a positive safe integer: ${poolCapacity}`);
+  }
   const normalized = normalizeFingerFluidLiveInletPacket(packet);
-  const inlets = normalized.inlets.map(inlet => {
-    const physicalSourceFlux = inlet.active
-      ? Math.PI * inlet.radius * inlet.radius * inlet.maximumSpeed * 0.5
+  const sourceEmitters = Array.isArray(packet?.emitters) ? packet.emitters : [];
+  const requested = normalized.inlets.map((inlet, index) => {
+    const emitter = sourceEmitters[index] && typeof sourceEmitters[index] === 'object'
+      ? sourceEmitters[index]
+      : {};
+    return {
+      active: inlet.requestedActive,
+      particleReleaseRate: readOptionalLiveInletNumber(
+        emitter,
+        ['source_flux_particles_per_second', 'sourceFluxParticlesPerSecond'],
+        `${inlet.id} source release`,
+      ),
+      releasePoolBudget: readOptionalLiveInletNumber(
+        emitter,
+        ['active_budget_particles', 'activeBudgetParticles', 'release_pool_budget_particles', 'releasePoolBudgetParticles'],
+        `${inlet.id} release-pool budget`,
+        { integer: true },
+      ),
+      residenceSeconds: readOptionalLiveInletNumber(
+        emitter,
+        ['lifetime_seconds', 'lifetimeSeconds', 'residence_seconds', 'residenceSeconds'],
+        `${inlet.id} residence seconds`,
+        { minimum: 0, minimumInclusive: false },
+      ),
+      residenceDistanceWorld: readOptionalLiveInletNumber(
+        emitter,
+        ['residence_distance_world', 'residenceDistanceWorld'],
+        `${inlet.id} residence distance`,
+        { minimum: 0, minimumInclusive: false },
+      ),
+      opticalDensityScale: readOptionalLiveInletNumber(
+        emitter,
+        ['optical_density_scale', 'opticalDensityScale'],
+        `${inlet.id} optical density scale`,
+        { minimum: 0, minimumInclusive: false },
+      ),
+      reconstructionRadiusScale: readOptionalLiveInletNumber(
+        emitter,
+        ['reconstruction_radius_scale', 'reconstructionRadiusScale'],
+        `${inlet.id} reconstruction radius scale`,
+        { minimum: 0, minimumInclusive: false },
+      ),
+    };
+  });
+  const requestedExplicitBudget = requested.reduce((sum, values) => (
+    sum + (values.active && values.releasePoolBudget.provided
+      ? values.releasePoolBudget.value
+      : 0)
+  ), 0);
+  if (requestedExplicitBudget > capacity) {
+    throw new RangeError(`Finger fluid live-inlet release-pool budget ${requestedExplicitBudget} exceeds runtime capacity ${capacity}`);
+  }
+  const effectiveExplicitBudget = requested.reduce((sum, values, index) => (
+    sum + (normalized.inlets[index].active && values.releasePoolBudget.provided
+      ? values.releasePoolBudget.value
+      : 0)
+  ), 0);
+  const unspecifiedActiveIndices = normalized.inlets
+    .map((inlet, index) => ({ inlet, index }))
+    .filter(({ inlet, index }) => inlet.active && !requested[index].releasePoolBudget.provided)
+    .map(({ index }) => index);
+  const remainingBudget = capacity - effectiveExplicitBudget;
+  const sharedBudget = unspecifiedActiveIndices.length
+    ? Math.floor(remainingBudget / unspecifiedActiveIndices.length)
+    : 0;
+  let sharedBudgetRemainder = unspecifiedActiveIndices.length
+    ? remainingBudget % unspecifiedActiveIndices.length
+    : 0;
+  const inlets = normalized.inlets.map((inlet, index) => {
+    const values = requested[index];
+    let releasePoolBudget = 0;
+    if (inlet.active && values.releasePoolBudget.provided) {
+      releasePoolBudget = values.releasePoolBudget.value;
+    } else if (inlet.active) {
+      releasePoolBudget = sharedBudget + (sharedBudgetRemainder > 0 ? 1 : 0);
+      sharedBudgetRemainder = Math.max(0, sharedBudgetRemainder - 1);
+    }
+    const geometryDerivedParticleReleaseRate = inlet.requestedActive
+      ? Math.PI * inlet.radius * inlet.radius * inlet.maximumSpeed * 0.5 / LAMINAR_SOURCE_PARTICLE_VOLUME
       : 0;
-    const expectedParticleReleaseRate = physicalSourceFlux / LAMINAR_SOURCE_PARTICLE_VOLUME;
+    const requestedParticleReleaseRate = inlet.requestedActive
+      ? (values.particleReleaseRate.provided
+        ? values.particleReleaseRate.value
+        : geometryDerivedParticleReleaseRate)
+      : 0;
+    const residenceSeconds = requireFiniteF32(values.residenceSeconds.provided
+      ? values.residenceSeconds.value
+      : LIVE_HAND_DEFAULT_RESIDENCE_SECONDS, `${inlet.id} residence seconds`);
+    const residenceDistanceWorld = requireFiniteF32(values.residenceDistanceWorld.provided
+      ? values.residenceDistanceWorld.value
+      : values.residenceSeconds.provided
+        ? MAX_FINITE_F32
+        : LIVE_HAND_DEFAULT_RESIDENCE_DISTANCE_WORLD, `${inlet.id} residence distance`);
+    const schedulerCapacity = inlet.active && releasePoolBudget > 0
+      ? measureFingerFluidLiveInletSchedulerCapacity({
+        radius: inlet.radius,
+        maximumSpeed: inlet.maximumSpeed,
+        releasePoolBudget,
+        residenceSeconds,
+        residenceDistanceWorld,
+      })
+      : {
+        laneCount: 0,
+        nominalResidenceCycleSeconds: residenceSeconds,
+        dispatchCeilingParticleReleaseRate: 0,
+        laneDispatchCeilingParticleReleaseRate: 0,
+        aggregateResidenceCeilingParticleReleaseRate: 0,
+        laneResidenceCeilingParticleReleaseRate: 0,
+        residenceCeilingParticleReleaseRate: 0,
+        schedulerCeilingParticleReleaseRate: 0,
+      };
+    const particleReleaseRate = inlet.active
+      ? Math.min(
+        requestedParticleReleaseRate,
+        schedulerCapacity.schedulerCeilingParticleReleaseRate,
+      )
+      : 0;
+    const releaseSaturated = inlet.active && particleReleaseRate < requestedParticleReleaseRate;
+    requireFiniteF32(particleReleaseRate, `${inlet.id} source release`);
+    const deniedAuthority = inlet.requestedActive && !inlet.active
+      ? inlet.activationAuthority
+      : null;
+    return Object.freeze({
+      ...inlet,
+      requested: Object.freeze({
+        active: values.active,
+        particleReleaseRate: values.particleReleaseRate.value,
+        releasePoolBudget: values.releasePoolBudget.value,
+        residenceSeconds: values.residenceSeconds.value,
+        residenceDistanceWorld: values.residenceDistanceWorld.value,
+      }),
+      effective: Object.freeze({
+        particleReleaseRate,
+        geometryDerivedParticleReleaseRate,
+        ...schedulerCapacity,
+        releaseSaturated,
+        releaseAuthority: deniedAuthority
+          ? deniedAuthority
+          : !inlet.active
+          ? 'inactive_zero_release'
+          : releasePoolBudget <= 0
+            ? 'zero_budget_zero_release'
+          : values.particleReleaseRate.provided
+            ? releaseSaturated
+              ? 'explicit_particle_rate_scheduler_limited'
+              : 'explicit_particle_rate'
+            : releaseSaturated
+              ? 'derived_from_aperture_and_speed_scheduler_limited'
+              : 'derived_from_aperture_and_speed',
+        releasePoolBudget,
+        releasePoolAuthority: deniedAuthority
+          ? deniedAuthority
+          : values.releasePoolBudget.provided
+          ? 'explicit_particle_budget'
+          : inlet.active
+            ? 'equal_share_remaining_pool'
+            : 'inactive_zero_budget',
+        residenceSeconds,
+        residenceDistanceWorld,
+        residenceAuthority: values.residenceSeconds.provided
+          ? 'explicit_lifetime'
+          : 'legacy_default',
+        residenceDistanceAuthority: values.residenceDistanceWorld.provided
+          ? 'explicit_distance'
+          : values.residenceSeconds.provided
+            ? 'unbounded_for_explicit_lifetime'
+            : 'legacy_default',
+      }),
+      opticalDensity: Object.freeze({
+        requested: values.opticalDensityScale.value,
+        effective: null,
+        authority: 'consumer_owned_not_applied',
+        appliedToPhysicalInlet: false,
+      }),
+      reconstructionRadius: Object.freeze({
+        requested: values.reconstructionRadiusScale.value,
+        effective: null,
+        authority: 'consumer_owned_not_applied',
+        appliedToPhysicalInlet: false,
+      }),
+    });
+  });
+  const effectiveReleasePoolBudget = inlets.reduce(
+    (sum, inlet) => sum + inlet.effective.releasePoolBudget,
+    0,
+  );
+  const requestedActiveInletCount = normalized.requestedActiveInletCount;
+  const effectiveReservedInletCount = inlets.filter(
+    inlet => inlet.active && inlet.effective.releasePoolBudget > 0,
+  ).length;
+  const effectiveActiveInletCount = inlets.filter(
+    inlet => inlet.active
+      && inlet.effective.releasePoolBudget > 0
+      && inlet.effective.particleReleaseRate > 0,
+  ).length;
+  return Object.freeze({
+    schema: 'kaminos.finger-fluid.live-inlet-economics.v1',
+    contract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+    packetId: normalized.packetId,
+    sourceRoute: normalized.sourceRoute,
+    artifactSha256: normalized.artifactSha256,
+    sourceAuthority: normalized.sourceAuthority,
+    poolCapacity: capacity,
+    requestedActiveInletCount,
+    effectiveReservedInletCount,
+    effectiveActiveInletCount,
+    requestedReleasePoolBudget: requestedExplicitBudget,
+    effectiveReleasePoolBudget,
+    unallocatedDormantParticleCount: capacity - effectiveReleasePoolBudget,
+    inlets: Object.freeze(inlets),
+  });
+}
+
+export function measureFingerFluidLiveInletReleasePlan(
+  packet,
+  poolCapacity = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+) {
+  const normalized = normalizeFingerFluidLiveInletPacket(packet);
+  const economics = planFingerFluidLiveInletEconomics(packet, poolCapacity);
+  const inlets = economics.inlets.map(inlet => {
+    const expectedParticleReleaseRate = inlet.effective.particleReleaseRate;
+    const physicalSourceFlux = expectedParticleReleaseRate * LAMINAR_SOURCE_PARTICLE_VOLUME;
     return Object.freeze({
       id: inlet.id,
       active: inlet.active,
       physicalSourceFlux,
       expectedParticleReleaseRate,
       expectedParticlesPerReferenceFrame: expectedParticleReleaseRate / LAMINAR_SOURCE_REFERENCE_FPS,
+      requested: inlet.requested,
+      effective: inlet.effective,
+      opticalDensity: inlet.opticalDensity,
+      reconstructionRadius: inlet.reconstructionRadius,
     });
   });
   return Object.freeze({
     contract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
+    economicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
     particleVolume: LAMINAR_SOURCE_PARTICLE_VOLUME,
     referenceFps: LAMINAR_SOURCE_REFERENCE_FPS,
-    activeInletCount: normalized.activeInletCount,
+    activeInletCount: economics.effectiveActiveInletCount,
+    requestedActiveInletCount: economics.requestedActiveInletCount,
+    effectiveReservedInletCount: economics.effectiveReservedInletCount,
+    effectiveActiveInletCount: economics.effectiveActiveInletCount,
+    poolCapacity: economics.poolCapacity,
+    effectiveReleasePoolBudget: economics.effectiveReleasePoolBudget,
+    unallocatedDormantParticleCount: economics.unallocatedDormantParticleCount,
     expectedParticleReleaseRate: inlets.reduce((sum, inlet) => sum + inlet.expectedParticleReleaseRate, 0),
     expectedParticlesPerReferenceFrame: inlets.reduce((sum, inlet) => sum + inlet.expectedParticlesPerReferenceFrame, 0),
     inlets: Object.freeze(inlets),
   });
 }
 
-function packFingerFluidLiveInletPacket(packet) {
+function comparableFingerFluidLiveInletEconomics(economics) {
+  return {
+    contract: economics?.contract ?? null,
+    packetId: economics?.packetId ?? null,
+    sourceRoute: economics?.sourceRoute ?? null,
+    artifactSha256: economics?.artifactSha256 ?? null,
+    sourceAuthority: economics?.sourceAuthority ?? null,
+    poolCapacity: economics?.poolCapacity ?? null,
+    requestedActiveInletCount: economics?.requestedActiveInletCount ?? null,
+    effectiveReservedInletCount: economics?.effectiveReservedInletCount ?? null,
+    effectiveActiveInletCount: economics?.effectiveActiveInletCount ?? null,
+    requestedReleasePoolBudget: economics?.requestedReleasePoolBudget ?? null,
+    effectiveReleasePoolBudget: economics?.effectiveReleasePoolBudget ?? null,
+    unallocatedDormantParticleCount: economics?.unallocatedDormantParticleCount ?? null,
+    inlets: Array.isArray(economics?.inlets) ? economics.inlets.map(inlet => ({
+      id: inlet.id,
+      origin: Array.from(inlet.origin || []),
+      axis: Array.from(inlet.axis || []),
+      radius: inlet.radius,
+      maximumSpeed: inlet.maximumSpeed,
+      requestedActive: inlet.requestedActive,
+      active: inlet.active,
+      activationAuthority: inlet.activationAuthority,
+      requested: inlet.requested,
+      effective: inlet.effective,
+      opticalDensity: inlet.opticalDensity,
+      reconstructionRadius: inlet.reconstructionRadius,
+    })) : [],
+  };
+}
+
+export function validateFingerFluidLiveInletDiagnosticsEpoch(
+  requestedGeneration,
+  completedGeneration,
+) {
+  if (requestedGeneration !== completedGeneration) {
+    throw new Error(
+      `Finger fluid live-inlet packet generation changed during diagnostics readback: ${requestedGeneration} !== ${completedGeneration}`,
+    );
+  }
+  return requestedGeneration;
+}
+
+export function measureFingerFluidLiveInletReleaseRealizability({
+  expectedParticleReleaseRate,
+  elapsedSteps,
+  predecessorBlockedReleaseCount,
+  observedParticleReleaseCount,
+} = {}) {
+  const releaseRate = Number(expectedParticleReleaseRate);
+  const steps = Number(elapsedSteps);
+  const blocked = Number(predecessorBlockedReleaseCount);
+  const observed = Number(observedParticleReleaseCount);
+  if (!Number.isFinite(releaseRate) || releaseRate < 0) {
+    throw new TypeError(`Finger fluid live-inlet realizability requires a nonnegative release rate: ${expectedParticleReleaseRate}`);
+  }
+  for (const [label, value] of [
+    ['elapsed steps', steps],
+    ['predecessor-blocked release count', blocked],
+    ['observed particle release count', observed],
+  ]) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(`Finger fluid live-inlet realizability requires nonnegative integer ${label}: ${value}`);
+    }
+  }
+  const nominalExpectedParticleReleaseCount = releaseRate
+    * steps
+    / LAMINAR_SOURCE_REFERENCE_FPS;
+  const realizableExpectedParticleReleaseCount = Math.max(
+    0,
+    nominalExpectedParticleReleaseCount - blocked,
+  );
+  return Object.freeze({
+    nominalExpectedParticleReleaseCount: Number(nominalExpectedParticleReleaseCount.toFixed(6)),
+    predecessorBlockedReleaseCount: blocked,
+    realizableExpectedParticleReleaseCount: Number(realizableExpectedParticleReleaseCount.toFixed(6)),
+    observedParticleReleaseCount: observed,
+    observedRealizableReleaseRatio: realizableExpectedParticleReleaseCount > 0
+      ? Number((observed / realizableExpectedParticleReleaseCount).toFixed(6))
+      : null,
+  });
+}
+
+export function validateFingerFluidLiveInletCohortLedger(publications, ledger) {
+  if (ledger?.contract !== 'gpu-particle-residence-cohort-ledger-v1') {
+    throw new Error(`Finger fluid live-inlet cohort ledger contract mismatch: ${ledger?.contract}`);
+  }
+  const publicationByGeneration = new Map();
+  for (const publication of publications || []) {
+    const generation = Number(publication?.generation);
+    if (!Number.isSafeInteger(generation) || generation <= 0) {
+      throw new Error(`Finger fluid live-inlet publication has invalid generation: ${publication?.generation}`);
+    }
+    if (publicationByGeneration.has(generation)) {
+      throw new Error(`Finger fluid live-inlet publication generation is duplicated: ${generation}`);
+    }
+    publicationByGeneration.set(generation, publication);
+  }
+  for (const cohort of ledger.generations || []) {
+    const publication = publicationByGeneration.get(cohort.generation);
+    if (!publication) {
+      throw new Error(`Finger fluid live-inlet cohort has unknown publication generation: ${cohort.generation}`);
+    }
+    if (
+      cohort.packetId !== publication.packetId
+      || cohort.sourceRoute !== publication.sourceRoute
+      || (cohort.artifactSha256 ?? null) !== (publication.artifactSha256 ?? null)
+    ) {
+      throw new Error(`Finger fluid live-inlet cohort publication identity mismatch: ${JSON.stringify({
+        cohort,
+        publication: {
+          generation: publication.generation,
+          packetId: publication.packetId,
+          sourceRoute: publication.sourceRoute,
+          artifactSha256: publication.artifactSha256 ?? null,
+        },
+      })}`);
+    }
+    if ((cohort.authorityMismatchCount || 0) > 0) {
+      throw new Error(`Finger fluid live-inlet cohort authority mismatch: ${JSON.stringify(cohort)}`);
+    }
+    if ((cohort.unknownSourceCount || 0) > 0) {
+      throw new Error(`Finger fluid live-inlet cohort has unknown source attribution: ${JSON.stringify(cohort)}`);
+    }
+  }
+  return ledger;
+}
+
+export function validateFingerFluidLiveInletCohortTrajectory({
+  publications = [],
+  economics = [],
+  replacementRequired = false,
+} = {}) {
+  if (!Array.isArray(publications) || publications.length < 1) {
+    throw new Error('Finger fluid live-inlet cohort trajectory has no packet publications');
+  }
+  for (let index = 0; index < publications.length; index += 1) {
+    const generation = Number(publications[index]?.generation);
+    if (!Number.isSafeInteger(generation) || generation <= 0) {
+      throw new Error(`Finger fluid live-inlet publication has invalid generation: ${publications[index]?.generation}`);
+    }
+    if (index > 0 && generation !== publications[index - 1].generation + 1) {
+      throw new Error(`Finger fluid live-inlet replacement generation was not monotonic: ${JSON.stringify(publications)}`);
+    }
+  }
+  if (replacementRequired && publications.length < 2) {
+    throw new Error(`Finger fluid live-inlet replacement witness has fewer than two publications: ${JSON.stringify(publications)}`);
+  }
+
+  const currentPublication = publications[publications.length - 1];
+  const currentEconomics = (economics || []).filter(
+    entry => entry?.generation === currentPublication.generation,
+  );
+  if (currentEconomics.length < 1) {
+    throw new Error(`Finger fluid live-inlet trajectory has no diagnostics for current generation ${currentPublication.generation}`);
+  }
+  const currentAgeRecycleCount = Math.max(
+    0,
+    ...currentEconomics.map(entry => Number(entry.liveInletAgeRecycleCount) || 0),
+  );
+  const currentDistanceRecycleCount = Math.max(
+    0,
+    ...currentEconomics.map(entry => Number(entry.liveInletDistanceRecycleCount) || 0),
+  );
+  if (currentAgeRecycleCount < 1 || currentDistanceRecycleCount < 1) {
+    throw new Error(`Finger fluid live-inlet current generation did not exercise both recycle reasons: ${JSON.stringify({
+      currentPublication,
+      currentEconomics,
+    })}`);
+  }
+
+  const priorGenerationAgeRecycleCount = Math.max(
+    0,
+    ...currentEconomics.map(entry => Number(entry.priorGenerationAgeRecycleCount) || 0),
+  );
+  const priorGenerationDistanceRecycleCount = Math.max(
+    0,
+    ...currentEconomics.map(entry => Number(entry.priorGenerationDistanceRecycleCount) || 0),
+  );
+  const predecessors = publications.slice(0, -1);
+  const predecessorCohorts = predecessors.map(predecessor => {
+    const matchingCohorts = [];
+    for (const entry of currentEconomics) {
+      if (!entry.cohortLedger) continue;
+      validateFingerFluidLiveInletCohortLedger(publications, entry.cohortLedger);
+      const cohort = entry.cohortLedger.generations?.find(
+        candidate => candidate.generation === predecessor.generation,
+      );
+      if (cohort) matchingCohorts.push(cohort);
+    }
+    const ageRecycledDormantParticleCount = Math.max(
+      0,
+      ...matchingCohorts.map(cohort => Number(cohort.ageRecycledDormantParticleCount) || 0),
+    );
+    const distanceRecycledDormantParticleCount = Math.max(
+      0,
+      ...matchingCohorts.map(cohort => Number(cohort.distanceRecycledDormantParticleCount) || 0),
+    );
+    if (
+      matchingCohorts.length < 1
+      || ageRecycledDormantParticleCount < 1
+      || distanceRecycledDormantParticleCount < 1
+    ) {
+      throw new Error(`Finger fluid live-inlet predecessor generation did not retire under preserved cohort authority: ${JSON.stringify({
+        predecessor,
+        matchingCohorts,
+      })}`);
+    }
+    return Object.freeze({
+      generation: predecessor.generation,
+      packetId: predecessor.packetId,
+      ageRecycledDormantParticleCount,
+      distanceRecycledDormantParticleCount,
+    });
+  });
+  if (
+    predecessors.length > 0
+    && (priorGenerationAgeRecycleCount < 1 || priorGenerationDistanceRecycleCount < 1)
+  ) {
+    throw new Error(`Finger fluid live-inlet predecessor recycle counters are incomplete: ${JSON.stringify({
+      priorGenerationAgeRecycleCount,
+      priorGenerationDistanceRecycleCount,
+    })}`);
+  }
+
+  return Object.freeze({
+    contract: 'gpu-particle-residence-cohort-witness-v1',
+    publicationCount: publications.length,
+    currentPacketId: currentPublication.packetId,
+    currentGeneration: currentPublication.generation,
+    predecessorPacketId: predecessors.length === 1 ? predecessors[0].packetId : null,
+    predecessorGeneration: predecessors.length === 1 ? predecessors[0].generation : null,
+    successorPacketId: predecessors.length === 1 ? currentPublication.packetId : null,
+    successorGeneration: predecessors.length === 1 ? currentPublication.generation : null,
+    predecessorGenerations: Object.freeze(predecessors.map(publication => publication.generation)),
+    currentAgeRecycleCount,
+    currentDistanceRecycleCount,
+    priorGenerationAgeRecycleCount,
+    priorGenerationDistanceRecycleCount,
+    predecessorCohorts: Object.freeze(predecessorCohorts),
+    predecessorAgeRecycledDormantParticleCount: predecessors.length === 1
+      ? predecessorCohorts[0].ageRecycledDormantParticleCount
+      : 0,
+    predecessorDistanceRecycledDormantParticleCount: predecessors.length === 1
+      ? predecessorCohorts[0].distanceRecycledDormantParticleCount
+      : 0,
+  });
+}
+
+export function createFingerFluidLiveInletPublicationState(
+  packet,
+  economics,
+  releasePlan,
+) {
+  if (packet === null || packet === undefined) {
+    return { generation: 0, releaseEpochFrame: 0, publications: [] };
+  }
+  if (!economics || !releasePlan) {
+    throw new TypeError('Finger fluid initial live-inlet publication requires economics and release plan');
+  }
+  const generation = 1;
+  return {
+    generation,
+    releaseEpochFrame: 0,
+    publications: [Object.freeze({
+      generation,
+      packetId: economics.packetId,
+      sourceRoute: economics.sourceRoute,
+      artifactSha256: economics.artifactSha256,
+      expectedEconomics: economics,
+      releasePlan,
+    })],
+  };
+}
+
+function measureFingerFluidLiveInletCohortLedger(
+  particleValues,
+  materialTracerValues,
+  particleCount,
+  publications,
+) {
+  const publicationByGeneration = new Map(
+    publications.map(publication => [publication.generation, publication]),
+  );
+  const cohorts = new Map();
+  const cohortForGeneration = generation => {
+    if (!cohorts.has(generation)) {
+      const publication = publicationByGeneration.get(generation);
+      cohorts.set(generation, {
+        generation,
+        packetId: publication?.packetId ?? null,
+        sourceRoute: publication?.sourceRoute ?? null,
+        artifactSha256: publication?.artifactSha256 ?? null,
+        activeParticleCount: 0,
+        ageRecycledDormantParticleCount: 0,
+        distanceRecycledDormantParticleCount: 0,
+        authorityMismatchCount: 0,
+        unknownSourceCount: 0,
+      });
+    }
+    return cohorts.get(generation);
+  };
+  const approximatelyEqual = (left, right) => (
+    Number.isFinite(left)
+    && Number.isFinite(right)
+    && Math.abs(left - right) <= 1e-4 * Math.max(1, Math.abs(right))
+  );
+  for (let index = 0; index < particleCount; index += 1) {
+    const particleOffset = index * PARTICLE_FLOATS;
+    const tracerOffset = index * MATERIAL_TRACER_FLOATS;
+    const marker = Math.round(materialTracerValues[tracerOffset + 11]);
+    const generation = Math.round(materialTracerValues[tracerOffset + 7]);
+    if (marker < 1 || marker > 3 || generation <= 0) continue;
+    const cohort = cohortForGeneration(generation);
+    const publication = publicationByGeneration.get(generation);
+    const sourceIndex = Math.round(materialTracerValues[tracerOffset + 10]);
+    const expectedInlet = publication?.expectedEconomics?.inlets?.[sourceIndex];
+    if (!expectedInlet) {
+      cohort.unknownSourceCount += 1;
+      continue;
+    }
+    const originMatches = [0, 1, 2].every(axis => approximatelyEqual(
+      materialTracerValues[tracerOffset + 4 + axis],
+      expectedInlet.origin[axis],
+    ));
+    const residenceMatches = approximatelyEqual(
+      materialTracerValues[tracerOffset + 8],
+      expectedInlet.effective.residenceSeconds,
+    ) && approximatelyEqual(
+      materialTracerValues[tracerOffset + 9],
+      expectedInlet.effective.residenceDistanceWorld,
+    );
+    const particleActive = particleValues[particleOffset + 11] >= 0;
+    if (!originMatches || !residenceMatches || (marker === 1) !== particleActive) {
+      cohort.authorityMismatchCount += 1;
+    }
+    if (marker === 1) cohort.activeParticleCount += 1;
+    if (marker === 2) cohort.ageRecycledDormantParticleCount += 1;
+    if (marker === 3) cohort.distanceRecycledDormantParticleCount += 1;
+  }
+  return Object.freeze({
+    contract: 'gpu-particle-residence-cohort-ledger-v1',
+    generations: Object.freeze(
+      [...cohorts.values()]
+        .sort((left, right) => left.generation - right.generation)
+        .map(cohort => Object.freeze(cohort)),
+    ),
+  });
+}
+
+export function validateFingerFluidLiveInletRuntimeReceipt(
+  expectedEconomics,
+  receipt,
+  { artifactSha256 = null } = {},
+) {
+  if (receipt?.schema !== 'kaminos.finger-fluid.live-inlet-publication-receipt.v0') {
+    throw new Error(`Finger fluid live-inlet publication receipt schema mismatch: ${receipt?.schema}`);
+  }
+  if (receipt.economicsContract !== expectedEconomics?.contract) {
+    throw new Error(
+      `Finger fluid live-inlet economics contract mismatch: ${receipt.economicsContract} !== ${expectedEconomics?.contract}`,
+    );
+  }
+  if (receipt.packetId !== expectedEconomics?.packetId || receipt.sourceRoute !== expectedEconomics?.sourceRoute) {
+    throw new Error('Finger fluid live-inlet packet route identity differs from requested economics');
+  }
+  if (artifactSha256 !== null && receipt.artifactSha256 !== artifactSha256) {
+    throw new Error(
+      `Finger fluid live-inlet packet artifact digest differs: ${receipt.artifactSha256} !== ${artifactSha256}`,
+    );
+  }
+  const expected = comparableFingerFluidLiveInletEconomics(expectedEconomics);
+  const effective = comparableFingerFluidLiveInletEconomics(receipt.runtimeEconomics);
+  if (JSON.stringify(effective) !== JSON.stringify(expected)) {
+    throw new Error(`Finger fluid live-inlet runtime economics differs from requested economics: ${JSON.stringify({
+      expected,
+      effective,
+    })}`);
+  }
+  return Object.freeze({
+    packetId: receipt.packetId,
+    sourceRoute: receipt.sourceRoute,
+    artifactSha256: receipt.artifactSha256 ?? null,
+    economicsContract: receipt.economicsContract,
+  });
+}
+
+function packFingerFluidLiveInletPacket(
+  packet,
+  poolCapacity = KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+) {
   const normalized = normalizeFingerFluidLiveInletPacket(packet);
+  const economics = planFingerFluidLiveInletEconomics(packet, poolCapacity);
   const data = new Float32Array(LIVE_HAND_INLET_CAPACITY * LIVE_HAND_INLET_FLOATS);
-  normalized.inlets.forEach((inlet, index) => {
+  economics.inlets.forEach((inlet, index) => {
     const offset = index * LIVE_HAND_INLET_FLOATS;
     data.set([...inlet.origin, inlet.radius], offset);
     data.set([...inlet.axis, inlet.maximumSpeed], offset + 4);
     data.set([...inlet.tangent, inlet.active ? 1 : 0], offset + 8);
+    data.set([
+      inlet.effective.particleReleaseRate,
+      inlet.effective.releasePoolBudget,
+      inlet.effective.residenceSeconds,
+      inlet.effective.residenceDistanceWorld,
+    ], offset + 12);
   });
-  return { normalized, data };
+  return { normalized, economics, data };
 }
 
 export function resolveFingerFluidWaterfallOraclePreset(value = 'baseline') {
@@ -1753,6 +2524,8 @@ struct NeighborTopologyState {
 
 struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
+  liveInletOriginGeneration: vec4<f32>,
+  liveInletLimitsSource: vec4<f32>,
 }
 
 struct LaminarInletSample {
@@ -1765,6 +2538,7 @@ struct LiveInletDescriptor {
   originRadius: vec4<f32>,
   axisSpeed: vec4<f32>,
   tangentActive: vec4<f32>,
+  economics: vec4<f32>,
 }
 
 struct LiveInletPacket {
@@ -1829,6 +2603,7 @@ struct Params {
   contactIdentity: vec4<u32>,
   sourceControl: vec4<u32>,
   refinementControl: vec4<u32>,
+  liveInletControl: vec4<u32>,
 }
 
 const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
@@ -2111,44 +2886,54 @@ fn apply_laminar_inlet_boundary(position: vec3<f32>, phase: f32, velocity: vec3<
 fn live_inlet_active_count() -> u32 {
   var count = 0u;
   for (var sourceIndex = 0u; sourceIndex < ${LIVE_HAND_INLET_CAPACITY}u; sourceIndex = sourceIndex + 1u) {
-    if (liveInletPacket.inlets[sourceIndex].tangentActive.w > 0.5) { count = count + 1u; }
+    let descriptor = liveInletPacket.inlets[sourceIndex];
+    if (descriptor.tangentActive.w > 0.5 && descriptor.economics.y >= 0.5) { count = count + 1u; }
   }
   return count;
 }
 
-fn live_inlet_source_index(index: u32) -> u32 {
-  let activeCount = live_inlet_active_count();
-  if (activeCount == 0u) { return 0u; }
-  let targetOrdinal = index % activeCount;
-  var activeOrdinal = 0u;
-  for (var sourceIndex = 0u; sourceIndex < ${LIVE_HAND_INLET_CAPACITY}u; sourceIndex = sourceIndex + 1u) {
-    if (liveInletPacket.inlets[sourceIndex].tangentActive.w > 0.5) {
-      if (activeOrdinal == targetOrdinal) { return sourceIndex; }
-      activeOrdinal = activeOrdinal + 1u;
-    }
-  }
-  return 0u;
-}
-
-fn live_inlet_source_active_ordinal(sourceIndex: u32) -> u32 {
-  var activeOrdinal = 0u;
-  for (var candidateIndex = 0u; candidateIndex < ${LIVE_HAND_INLET_CAPACITY}u; candidateIndex = candidateIndex + 1u) {
-    if (liveInletPacket.inlets[candidateIndex].tangentActive.w > 0.5) {
-      if (candidateIndex == sourceIndex) { return activeOrdinal; }
-      activeOrdinal = activeOrdinal + 1u;
-    }
-  }
-  return 0u;
-}
-
 fn live_inlet_source_particle_count(sourceIndex: u32) -> u32 {
-  let activeCount = max(1u, live_inlet_active_count());
-  let activeOrdinal = live_inlet_source_active_ordinal(sourceIndex);
-  return (params.refinementControl.x + activeCount - 1u - activeOrdinal) / activeCount;
+  let descriptor = liveInletPacket.inlets[sourceIndex];
+  if (descriptor.tangentActive.w <= 0.5) { return 0u; }
+  return u32(round(max(0.0, descriptor.economics.y)));
+}
+
+fn live_inlet_total_budget() -> u32 {
+  var budget = 0u;
+  for (var sourceIndex = 0u; sourceIndex < ${LIVE_HAND_INLET_CAPACITY}u; sourceIndex = sourceIndex + 1u) {
+    budget = budget + live_inlet_source_particle_count(sourceIndex);
+  }
+  return min(params.refinementControl.x, budget);
+}
+
+fn live_inlet_particle_has_budget(index: u32) -> bool {
+  return index < live_inlet_total_budget();
+}
+
+fn live_inlet_source_index(index: u32) -> u32 {
+  var sourceStart = 0u;
+  for (var sourceIndex = 0u; sourceIndex < ${LIVE_HAND_INLET_CAPACITY}u; sourceIndex = sourceIndex + 1u) {
+    let sourceEnd = sourceStart + live_inlet_source_particle_count(sourceIndex);
+    if (index >= sourceStart && index < sourceEnd) { return sourceIndex; }
+    sourceStart = sourceEnd;
+  }
+  return 0u;
+}
+
+fn live_inlet_source_local_ordinal(index: u32, sourceIndex: u32) -> u32 {
+  var sourceStart = 0u;
+  for (var candidateIndex = 0u; candidateIndex < sourceIndex; candidateIndex = candidateIndex + 1u) {
+    sourceStart = sourceStart + live_inlet_source_particle_count(candidateIndex);
+  }
+  return index - sourceStart;
 }
 
 fn live_inlet_source_from_phase(phase: f32) -> u32 {
   return min(${LIVE_HAND_INLET_CAPACITY - 1}u, u32(floor(clamp(abs(phase), 0.0, 0.999999) * ${LIVE_HAND_INLET_CAPACITY}.0)));
+}
+
+fn live_inlet_particle_is_current_generation(index: u32) -> bool {
+  return u32(round(materialTracers[index].liveInletOriginGeneration.w)) == params.liveInletControl.x;
 }
 
 fn live_inlet_lane_count(sourceParticleCount: u32, descriptor: LiveInletDescriptor) -> u32 {
@@ -2172,10 +2957,9 @@ fn live_inlet_profile_weight(descriptor: LiveInletDescriptor, localCoordinates: 
 }
 
 fn live_inlet_release_phase(index: u32) -> vec4<f32> {
-  let activeCount = max(1u, live_inlet_active_count());
   let sourceIndex = live_inlet_source_index(index);
   let descriptor = liveInletPacket.inlets[sourceIndex];
-  let localOrdinal = index / activeCount;
+  let localOrdinal = live_inlet_source_local_ordinal(index, sourceIndex);
   let sourceParticleCount = max(1u, live_inlet_source_particle_count(sourceIndex));
   let laneCount = live_inlet_lane_count(sourceParticleCount, descriptor);
   let laneIndex = localOrdinal % laneCount;
@@ -2190,12 +2974,7 @@ fn live_inlet_release_phase(index: u32) -> vec4<f32> {
       live_inlet_lane_coordinates(descriptor, candidateLane, laneCount),
     );
   }
-  let physicalSourceFlux = 3.141592653589793
-    * descriptor.originRadius.w
-    * descriptor.originRadius.w
-    * descriptor.axisSpeed.w
-    * 0.5;
-  let expectedReleaseRate = physicalSourceFlux / ${LAMINAR_SOURCE_PARTICLE_VOLUME};
+  let expectedReleaseRate = max(0.0, descriptor.economics.x);
   let laneReleaseRate = expectedReleaseRate * profileWeight / max(laneSpeedSum, 0.000001);
   let lanePhaseEvents = (f32(laneIndex) + 0.5) / f32(laneCount);
   return vec4<f32>(f32(laneOrdinal), f32(laneParticleCount), laneReleaseRate, lanePhaseEvents);
@@ -2215,10 +2994,9 @@ fn live_inlet_release_due(frameIndex: u32, schedule: vec4<f32>) -> bool {
 }
 
 fn live_inlet_sample(index: u32) -> LaminarInletSample {
-  let activeCount = max(1u, live_inlet_active_count());
   let sourceIndex = live_inlet_source_index(index);
   let descriptor = liveInletPacket.inlets[sourceIndex];
-  let localOrdinal = index / activeCount;
+  let localOrdinal = live_inlet_source_local_ordinal(index, sourceIndex);
   let sourceParticleCount = max(1u, live_inlet_source_particle_count(sourceIndex));
   let laneCount = live_inlet_lane_count(sourceParticleCount, descriptor);
   let laneIndex = localOrdinal % laneCount;
@@ -2241,7 +3019,8 @@ fn live_inlet_sample(index: u32) -> LaminarInletSample {
   return sample;
 }
 
-fn apply_live_inlet_boundary(position: vec3<f32>, phase: f32, velocity: vec3<f32>) -> vec4<f32> {
+fn apply_live_inlet_boundary(index: u32, position: vec3<f32>, phase: f32, velocity: vec3<f32>) -> vec4<f32> {
+  if (!live_inlet_particle_is_current_generation(index)) { return vec4<f32>(velocity, 0.0); }
   let descriptor = liveInletPacket.inlets[live_inlet_source_from_phase(phase)];
   if (descriptor.tangentActive.w <= 0.5) { return vec4<f32>(velocity, 0.0); }
   let axis = normalize(descriptor.axisSpeed.xyz + vec3<f32>(0.000001, 0.000002, 0.000003));
@@ -2260,12 +3039,13 @@ fn apply_live_inlet_boundary(position: vec3<f32>, phase: f32, velocity: vec3<f32
   return vec4<f32>(mix(velocity, targetVelocity, inletCoreWeight), inletCoreWeight);
 }
 
-fn apply_active_inlet_boundary(position: vec3<f32>, phase: f32, velocity: vec3<f32>) -> vec4<f32> {
-  if (params.particleShift.z > 2.5) { return apply_live_inlet_boundary(position, phase, velocity); }
+fn apply_active_inlet_boundary(index: u32, position: vec3<f32>, phase: f32, velocity: vec3<f32>) -> vec4<f32> {
+  if (params.particleShift.z > 2.5) { return apply_live_inlet_boundary(index, position, phase, velocity); }
   return apply_laminar_inlet_boundary(position, phase, velocity);
 }
 
-fn constrain_live_inlet_reservoir(position: vec3<f32>, phase: f32) -> vec3<f32> {
+fn constrain_live_inlet_reservoir(index: u32, position: vec3<f32>, phase: f32) -> vec3<f32> {
+  if (!live_inlet_particle_is_current_generation(index)) { return position; }
   let descriptor = liveInletPacket.inlets[live_inlet_source_from_phase(phase)];
   if (descriptor.tangentActive.w <= 0.5) { return position; }
   let axis = normalize(descriptor.axisSpeed.xyz + vec3<f32>(0.000001, 0.000002, 0.000003));
@@ -2281,8 +3061,8 @@ fn constrain_live_inlet_reservoir(position: vec3<f32>, phase: f32) -> vec3<f32> 
   return descriptor.originRadius.xyz + axis * axialPosition + tangent * local.x + bitangent * local.y;
 }
 
-fn constrain_active_inlet_reservoir(position: vec3<f32>, phase: f32) -> vec3<f32> {
-  if (params.particleShift.z > 2.5) { return constrain_live_inlet_reservoir(position, phase); }
+fn constrain_active_inlet_reservoir(index: u32, position: vec3<f32>, phase: f32) -> vec3<f32> {
+  if (params.particleShift.z > 2.5) { return constrain_live_inlet_reservoir(index, position, phase); }
   return constrain_laminar_inlet_reservoir(position, phase);
 }
 
@@ -2533,8 +3313,23 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   let waterfallOracleScene = params.particleShift.z > 1.5 && params.particleShift.z < 2.5;
   let liveInletScene = params.particleShift.z > 2.5;
   _ = waterfallOracleScene;
+  if (
+    liveInletScene
+    && particle.velocity.w >= 0.0
+    && live_inlet_particle_has_budget(index)
+    && !live_inlet_particle_is_current_generation(index)
+  ) {
+    let successorSample = live_inlet_sample(index);
+    let successorReleaseDue = live_inlet_release_due(
+      params.frameIndex - min(params.frameIndex, params.liveInletControl.y),
+      successorSample.releaseSchedule,
+    );
+    if (successorReleaseDue) {
+      atomicAdd(&interfaceCounters[9], 1u);
+    }
+  }
   if (laminarInletScene && particle.velocity.w < 0.0) {
-    if (liveInletScene && live_inlet_active_count() == 0u) {
+    if (liveInletScene && (live_inlet_active_count() == 0u || !live_inlet_particle_has_budget(index))) {
       particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
       particle.delta = vec4<f32>(0.0);
       particles[index] = particle;
@@ -2554,7 +3349,10 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     let releaseDue = select(
       laminar_inlet_release_due(params.frameIndex, inletSample.releaseSchedule),
-      live_inlet_release_due(params.frameIndex, inletSample.releaseSchedule),
+      live_inlet_release_due(
+        params.frameIndex - min(params.frameIndex, params.liveInletControl.y),
+        inletSample.releaseSchedule,
+      ),
       liveInletScene,
     );
     if (!releaseDue) {
@@ -2575,20 +3373,44 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     particle.predicted = vec4<f32>(inletSample.positionPhase.xyz, 0.0);
     particle.velocity = vec4<f32>(inletSample.velocityCore.xyz, resetPhase);
     particle.delta = vec4<f32>(0.0);
+    if (liveInletScene) {
+      let liveSource = liveInletPacket.inlets[live_inlet_source_from_phase(resetPhase)];
+      materialTracers[index].liveInletOriginGeneration = vec4<f32>(
+        liveSource.originRadius.xyz,
+        f32(params.liveInletControl.x),
+      );
+      materialTracers[index].liveInletLimitsSource = vec4<f32>(
+        liveSource.economics.z,
+        liveSource.economics.w,
+        f32(live_inlet_source_from_phase(resetPhase)),
+        1.0,
+      );
+    }
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
     clear_unsupported_sheet_state(index);
     atomicAdd(&interfaceCounters[2], 1u);
   }
-  let liveSource = liveInletPacket.inlets[live_inlet_source_from_phase(particle.velocity.w)];
+  let liveResidence = materialTracers[index];
   let liveAge = particle.position.w + params.dt;
   if (liveInletScene) { particle.position.w = liveAge; }
-  let recycleLiveInlet = liveInletScene
-    && (liveAge > 1.65 || distance(particle.position.xyz, liveSource.originRadius.xyz) > 2.4);
+  let liveInletAgeExpired = liveInletScene && liveAge > liveResidence.liveInletLimitsSource.x;
+  let liveInletDistanceExpired = liveInletScene
+    && distance(particle.position.xyz, liveResidence.liveInletOriginGeneration.xyz)
+      > liveResidence.liveInletLimitsSource.y;
+  let recycleLiveInlet = liveInletAgeExpired || liveInletDistanceExpired;
   let recycleLaminarInlet = !liveInletScene && laminarInletScene && particle.velocity.w >= 0.0 && particle.position.z > 2.35;
   let recyclePlaygroundSource = !laminarInletScene && particle.velocity.w < 0.15 && particle.position.z > -0.15;
   if (recycleLiveInlet) {
+    let currentGeneration = live_inlet_particle_is_current_generation(index);
+    if (liveInletAgeExpired) {
+      atomicAdd(&interfaceCounters[select(7u, 5u, currentGeneration)], 1u);
+      materialTracers[index].liveInletLimitsSource.w = 2.0;
+    } else {
+      atomicAdd(&interfaceCounters[select(8u, 6u, currentGeneration)], 1u);
+      materialTracers[index].liveInletLimitsSource.w = 3.0;
+    }
     particle.velocity = vec4<f32>(vec3<f32>(0.0), -abs(particle.velocity.w));
     particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
     particle.delta = vec4<f32>(0.0);
@@ -2636,7 +3458,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   var velocity = particle.velocity.xyz;
   var inletCoreWeight = 0.0;
   if (laminarInletScene) {
-    let inletBoundary = apply_active_inlet_boundary(particle.position.xyz, particle.velocity.w, velocity);
+    let inletBoundary = apply_active_inlet_boundary(index, particle.position.xyz, particle.velocity.w, velocity);
     velocity = inletBoundary.xyz;
     inletCoreWeight = inletBoundary.w;
   }
@@ -2644,7 +3466,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   particle.velocity = vec4<f32>(velocity, particle.velocity.w);
   var predictedPosition = collideDomain(particle.position.xyz + velocity * params.dt);
   if (laminarInletScene) {
-    predictedPosition = constrain_active_inlet_reservoir(predictedPosition, particle.velocity.w);
+    predictedPosition = constrain_active_inlet_reservoir(index, predictedPosition, particle.velocity.w);
   }
   particle.predicted = vec4<f32>(predictedPosition, 0.0);
   particle.delta = vec4<f32>(0.0);
@@ -2874,12 +3696,12 @@ fn apply_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
   let particle = particles[index];
   var correction = particle.delta.xyz;
   if (params.particleShift.z > 0.5) {
-    let inletCoreWeight = apply_active_inlet_boundary(particle.predicted.xyz, particle.velocity.w, particle.velocity.xyz).w;
+    let inletCoreWeight = apply_active_inlet_boundary(index, particle.predicted.xyz, particle.velocity.w, particle.velocity.xyz).w;
     correction = correction * (1.0 - inletCoreWeight);
   }
   var correctedPosition = collideDomain(particle.predicted.xyz + correction);
   if (params.particleShift.z > 0.5) {
-    correctedPosition = constrain_active_inlet_reservoir(correctedPosition, particle.velocity.w);
+    correctedPosition = constrain_active_inlet_reservoir(index, correctedPosition, particle.velocity.w);
   }
   particles[index].predicted = vec4<f32>(correctedPosition, particle.predicted.w);
 }
@@ -3007,7 +3829,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportTangentialRetention = exp(-params.particleShift.y * supportContact * params.dt);
   velocity = supportNormal * supportNormalSpeed + supportTangentialVelocity * supportTangentialRetention;
   if (params.particleShift.z > 0.5) {
-    velocity = apply_active_inlet_boundary(position, particle.velocity.w, velocity).xyz;
+    velocity = apply_active_inlet_boundary(index, position, particle.velocity.w, velocity).xyz;
   }
   if (position.x <= params.boundsMin.x + radius + 0.006 && velocity.x < 0.0) { velocity.x = 0.0; }
   if (position.x >= params.boundsMax.x - radius - 0.006 && velocity.x > 0.0) { velocity.x = 0.0; }
@@ -3089,7 +3911,7 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   let confinementNormal = magnitudeGradient / max(gradientLength, 0.00001);
   var inletCoreWeight = 0.0;
   if (params.particleShift.z > 0.5) {
-    inletCoreWeight = apply_active_inlet_boundary(position, particle.velocity.w, particle.delta.xyz).w;
+    inletCoreWeight = apply_active_inlet_boundary(index, position, particle.velocity.w, particle.delta.xyz).w;
   }
   var confinementActivity = 1.0 - restStates[index].z * 0.92;
   confinementActivity = confinementActivity * (1.0 - inletCoreWeight);
@@ -3243,7 +4065,7 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
   eigenvector = normalize(eigenvector);
   let widthTangent = normalize(transverseU * eigenvector.x + transverseV * eigenvector.y);
   let sheetNormal = normalize(cross(flowTangent, widthTangent));
-  let inletCoreWeight = apply_active_inlet_boundary(position, particle.velocity.w, velocity).w;
+  let inletCoreWeight = apply_active_inlet_boundary(index, position, particle.velocity.w, velocity).w;
   let activity = clamp(
     classificationStrength
       * (1.0 - smoothstep(0.04, 0.20, supportContact))
@@ -3429,7 +4251,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportTransportWeight = supportPhaseWeights(position, particle.delta.xyz).z;
   var inletCoreWeight = 0.0;
   if (params.particleShift.z > 0.5) {
-    inletCoreWeight = apply_active_inlet_boundary(position, particle.velocity.w, particle.delta.xyz).w;
+    inletCoreWeight = apply_active_inlet_boundary(index, position, particle.velocity.w, particle.delta.xyz).w;
   }
   let cohesionActivity = (1.0 - restStates[index].z * 0.72) * (1.0 - supportTransportWeight * 0.62) * (1.0 - inletCoreWeight);
   var cohesionAcceleration = attraction * (0.12 * params.chemistry.y) * cohesionActivity;
@@ -3450,7 +4272,7 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
   }
   if (params.particleShift.z > 0.5) {
-    velocity = apply_active_inlet_boundary(position, particle.velocity.w, velocity).xyz;
+    velocity = apply_active_inlet_boundary(index, position, particle.velocity.w, velocity).xyz;
   }
   let speed = length(velocity);
   if (speed > solverMaximumSpeed) { velocity = velocity * (solverMaximumSpeed / speed); }
@@ -3949,6 +4771,8 @@ struct NeighborTopologyState {
 
 struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
+  liveInletOriginGeneration: vec4<f32>,
+  liveInletLimitsSource: vec4<f32>,
 }
 
 struct RenderParams {
@@ -4330,6 +5154,8 @@ struct NeighborTopologyState {
 
 struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
+  liveInletOriginGeneration: vec4<f32>,
+  liveInletLimitsSource: vec4<f32>,
 }
 
 struct RenderParams {
@@ -6557,10 +7383,17 @@ export async function createWebGPUFingerFluidSolver({
   const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
   const safeMaxFluidSpeed = resolveFingerFluidMaxSpeed(maxFluidSpeed);
   const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
-  const initialLiveInletPacket = packFingerFluidLiveInletPacket(liveInletPacket);
+  const initialLiveInletPacket = packFingerFluidLiveInletPacket(liveInletPacket, safeBaseParticleCount);
   let currentLiveInletPacket = initialLiveInletPacket.normalized;
-  let liveInletActivated = currentLiveInletPacket.activeInletCount > 0;
-  let liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(liveInletPacket);
+  let currentLiveInletEconomics = initialLiveInletPacket.economics;
+  let liveInletActivated = currentLiveInletEconomics.effectiveActiveInletCount > 0;
+  let liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(liveInletPacket, safeBaseParticleCount);
+  const initialLiveInletPublicationState = createFingerFluidLiveInletPublicationState(
+    liveInletPacket,
+    currentLiveInletEconomics,
+    liveInletReleasePlan,
+  );
+  const liveInletPublicationHistory = [...initialLiveInletPublicationState.publications];
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
@@ -6596,7 +7429,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 192,
+    size: 208,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const liveInletBuffer = device.createBuffer({
@@ -6626,7 +7459,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters',
-    size: 20,
+    size: INTERFACE_COUNTER_BYTES,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
   const liquidFireContactRecordsBuffer = device.createBuffer({
@@ -6656,7 +7489,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const interfaceCountersReadbackBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters-readback',
-    size: 20,
+    size: INTERFACE_COUNTER_BYTES,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const interfaceRecordsReadbackBuffer = device.createBuffer({
@@ -6686,7 +7519,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(energyDiagnosticsBuffer, 0, new Float32Array(safeParticleCount * ENERGY_RECORD_FLOATS));
-  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(5));
+  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(INTERFACE_COUNTER_WORDS));
   device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
   const initialTopology = new Uint32Array(safeParticleCount * NEIGHBOR_TOPOLOGY_WORDS);
@@ -7008,6 +7841,9 @@ export async function createWebGPUFingerFluidSolver({
   let configuredExtent = '';
   let frameIndex = 0;
   let stepCount = 0;
+  let liveInletPlanStep = 0;
+  let liveInletGeneration = initialLiveInletPublicationState.generation;
+  let liveInletReleaseEpochFrame = initialLiveInletPublicationState.releaseEpochFrame;
   let linkedCellGridBuildCount = 0;
   let densityIterationCount = 0;
   let vorticityPassCount = 0;
@@ -7123,7 +7959,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(192);
+    const buffer = new ArrayBuffer(208);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -7171,6 +8007,10 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(180, safeAdaptiveDensity ? 1 : 0, true);
     view.setUint32(184, safeParticleCount, true);
     view.setUint32(188, 1, true);
+    view.setUint32(192, liveInletGeneration, true);
+    view.setUint32(196, liveInletReleaseEpochFrame, true);
+    view.setUint32(200, 0, true);
+    view.setUint32(204, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -7178,18 +8018,43 @@ export async function createWebGPUFingerFluidSolver({
     if (safeTruthScene !== 'live_hand_inlets') {
       throw new Error(`Live inlet packets require truthScene live_hand_inlets, not ${safeTruthScene}`);
     }
-    const packed = packFingerFluidLiveInletPacket(packet);
+    const packed = packFingerFluidLiveInletPacket(packet, safeBaseParticleCount);
+    liveInletGeneration = (liveInletGeneration % 0x00fffffe) + 1;
+    liveInletReleaseEpochFrame = frameIndex;
     currentLiveInletPacket = packed.normalized;
-    liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(packet);
+    currentLiveInletEconomics = packed.economics;
+    liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(packet, safeBaseParticleCount);
+    liveInletPublicationHistory.push(Object.freeze({
+      generation: liveInletGeneration,
+      packetId: currentLiveInletPacket.packetId,
+      sourceRoute: currentLiveInletPacket.sourceRoute,
+      artifactSha256: currentLiveInletPacket.artifactSha256,
+      expectedEconomics: currentLiveInletEconomics,
+      releasePlan: liveInletReleasePlan,
+    }));
     device.queue.writeBuffer(liveInletBuffer, 0, packed.data);
-    const firstActivation = !liveInletActivated && currentLiveInletPacket.activeInletCount > 0;
+    device.queue.writeBuffer(interfaceCountersBuffer, 2 * Uint32Array.BYTES_PER_ELEMENT, new Uint32Array([0]));
+    device.queue.writeBuffer(interfaceCountersBuffer, 5 * Uint32Array.BYTES_PER_ELEMENT, new Uint32Array([0, 0]));
+    device.queue.writeBuffer(interfaceCountersBuffer, 9 * Uint32Array.BYTES_PER_ELEMENT, new Uint32Array([0]));
+    liveInletPlanStep = stepCount;
+    const firstActivation = !liveInletActivated && currentLiveInletEconomics.effectiveActiveInletCount > 0;
     if (firstActivation) liveInletActivated = true;
     return {
       contract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
       releaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
       packetId: currentLiveInletPacket.packetId,
       sourceRoute: currentLiveInletPacket.sourceRoute,
-      activeInletCount: currentLiveInletPacket.activeInletCount,
+      activeInletCount: currentLiveInletEconomics.effectiveActiveInletCount,
+      requestedActiveInletCount: currentLiveInletEconomics.requestedActiveInletCount,
+      effectiveReservedInletCount: currentLiveInletEconomics.effectiveReservedInletCount,
+      effectiveActiveInletCount: currentLiveInletEconomics.effectiveActiveInletCount,
+      economicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+      cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
+      generation: liveInletGeneration,
+      artifactSha256: currentLiveInletPacket.artifactSha256,
+      poolCapacity: currentLiveInletEconomics.poolCapacity,
+      effectiveReleasePoolBudget: currentLiveInletEconomics.effectiveReleasePoolBudget,
+      unallocatedDormantParticleCount: currentLiveInletEconomics.unallocatedDormantParticleCount,
       expectedParticleReleaseRate: liveInletReleasePlan.expectedParticleReleaseRate,
       expectedParticlesPerReferenceFrame: liveInletReleasePlan.expectedParticlesPerReferenceFrame,
       firstActivation,
@@ -7458,10 +8323,21 @@ export async function createWebGPUFingerFluidSolver({
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
+      const diagnosticsLiveInletGeneration = liveInletGeneration;
+      const diagnosticsLiveInletEconomics = currentLiveInletEconomics;
+      const diagnosticsLiveInletReleasePlan = liveInletReleasePlan;
+      const diagnosticsLiveInletPlanStep = liveInletPlanStep;
+      const diagnosticsLiveInletPublications = [...liveInletPublicationHistory];
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
       encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
-      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 20);
+      encoder.copyBufferToBuffer(
+        interfaceCountersBuffer,
+        0,
+        interfaceCountersReadbackBuffer,
+        0,
+        INTERFACE_COUNTER_BYTES,
+      );
       encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
       encoder.copyBufferToBuffer(neighborTopologyBuffer, 0, neighborTopologyReadbackBuffer, 0, safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES);
@@ -7471,6 +8347,12 @@ export async function createWebGPUFingerFluidSolver({
       const mapResults = await Promise.allSettled(readbackBuffers.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
       const failedMap = mapResults.find(result => result.status === 'rejected');
       if (failedMap) throw failedMap.reason;
+      if (safeTruthScene === 'live_hand_inlets') {
+        validateFingerFluidLiveInletDiagnosticsEpoch(
+          diagnosticsLiveInletGeneration,
+          liveInletGeneration,
+        );
+      }
       const values = new Float32Array(diagnosticsBuffer.getMappedRange());
       const energyValues = new Float32Array(energyDiagnosticsReadbackBuffer.getMappedRange());
       const interfaceCounters = new Uint32Array(interfaceCountersReadbackBuffer.getMappedRange());
@@ -7710,6 +8592,29 @@ export async function createWebGPUFingerFluidSolver({
       const unsupportedSheetReleaseDiagnostics = safeUnsupportedSheetStrength > 0 || safeAdaptiveDensity
         ? summarizeFingerFluidSheetReleaseDiagnostics(topologyValues, values, safeParticleCount)
         : null;
+      const liveInletCohortLedger = safeTruthScene === 'live_hand_inlets'
+        ? measureFingerFluidLiveInletCohortLedger(
+          values,
+          materialTracerValues,
+          safeParticleCount,
+          diagnosticsLiveInletPublications,
+        )
+        : null;
+      if (liveInletCohortLedger) {
+        validateFingerFluidLiveInletCohortLedger(
+          diagnosticsLiveInletPublications,
+          liveInletCohortLedger,
+        );
+      }
+      const liveInletObservedReleaseCount = interfaceCounters[2];
+      const liveInletReleaseRealizability = safeTruthScene === 'live_hand_inlets'
+        ? measureFingerFluidLiveInletReleaseRealizability({
+          expectedParticleReleaseRate: diagnosticsLiveInletReleasePlan.expectedParticleReleaseRate,
+          elapsedSteps: Math.max(0, diagnosticsStepCount - diagnosticsLiveInletPlanStep),
+          predecessorBlockedReleaseCount: interfaceCounters[9],
+          observedParticleReleaseCount: liveInletObservedReleaseCount,
+        })
+        : null;
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
@@ -7785,6 +8690,39 @@ export async function createWebGPUFingerFluidSolver({
           : null,
         waterfallContinuityDiagnostics,
         sourceRecirculationCount: interfaceCounters[2],
+        liveInletEconomics: safeTruthScene === 'live_hand_inlets' ? {
+          contract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+          cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
+          generation: diagnosticsLiveInletGeneration,
+          packetId: diagnosticsLiveInletEconomics.packetId,
+          sourceRoute: diagnosticsLiveInletEconomics.sourceRoute,
+          artifactSha256: diagnosticsLiveInletEconomics.artifactSha256,
+          sourceAuthority: diagnosticsLiveInletEconomics.sourceAuthority,
+          poolCapacity: diagnosticsLiveInletEconomics.poolCapacity,
+          requestedActiveInletCount: diagnosticsLiveInletEconomics.requestedActiveInletCount,
+          effectiveReservedInletCount: diagnosticsLiveInletEconomics.effectiveReservedInletCount,
+          effectiveActiveInletCount: diagnosticsLiveInletEconomics.effectiveActiveInletCount,
+          requestedReleasePoolBudget: diagnosticsLiveInletEconomics.requestedReleasePoolBudget,
+          effectiveReleasePoolBudget: diagnosticsLiveInletEconomics.effectiveReleasePoolBudget,
+          unallocatedDormantParticleCount: diagnosticsLiveInletEconomics.unallocatedDormantParticleCount,
+          observedActiveParticleCount: activeParticleCount,
+          observedDormantParticleCount: dormantParticleCount,
+          expectedParticleReleaseRate: diagnosticsLiveInletReleasePlan.expectedParticleReleaseRate,
+          releaseRealizabilityContract: 'gpu-predecessor-occupancy-adjusted-release-v0',
+          nominalExpectedParticleReleaseCount: liveInletReleaseRealizability.nominalExpectedParticleReleaseCount,
+          predecessorBlockedReleaseCount: interfaceCounters[9],
+          realizableExpectedParticleReleaseCount: liveInletReleaseRealizability.realizableExpectedParticleReleaseCount,
+          expectedParticleReleaseCount: liveInletReleaseRealizability.realizableExpectedParticleReleaseCount,
+          observedParticleReleaseCount: liveInletObservedReleaseCount,
+          observedExpectedReleaseRatio: liveInletReleaseRealizability.observedRealizableReleaseRatio,
+          liveInletAgeRecycleCount: interfaceCounters[5],
+          liveInletDistanceRecycleCount: interfaceCounters[6],
+          priorGenerationAgeRecycleCount: interfaceCounters[7],
+          priorGenerationDistanceRecycleCount: interfaceCounters[8],
+          cohortLedger: liveInletCohortLedger,
+          planStartStep: diagnosticsLiveInletPlanStep,
+          capturedStep: diagnosticsStepCount,
+        } : null,
         inletCutoffStep: safeInletCutoffStep,
         inletCutoffReached: safeInletCutoffStep !== null && diagnosticsStepCount >= safeInletCutoffStep,
         interfaceCarrier: {
@@ -7889,27 +8827,48 @@ export async function createWebGPUFingerFluidSolver({
       liveInletContract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
       liveInletReleaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
       liveInletSourceAuthorityContract: KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT,
+      liveInletEconomicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+      liveInletCohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
       liveInlets: safeTruthScene === 'live_hand_inlets' ? {
+        schema: 'kaminos.finger-fluid.live-inlet-economics.v1',
+        contract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
         requestedMode: 'live_hand_inlets',
         effectiveMode: 'live_hand_inlets',
         packetId: currentLiveInletPacket.packetId,
         sourceRoute: currentLiveInletPacket.sourceRoute,
+        artifactSha256: currentLiveInletPacket.artifactSha256,
+        sourceAuthority: currentLiveInletEconomics.sourceAuthority,
+        cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
+        generation: liveInletGeneration,
         capacity: LIVE_HAND_INLET_CAPACITY,
-        activeInletCount: currentLiveInletPacket.activeInletCount,
+        activeInletCount: currentLiveInletEconomics.effectiveActiveInletCount,
+        requestedActiveInletCount: currentLiveInletEconomics.requestedActiveInletCount,
+        effectiveReservedInletCount: currentLiveInletEconomics.effectiveReservedInletCount,
+        effectiveActiveInletCount: currentLiveInletEconomics.effectiveActiveInletCount,
         activated: liveInletActivated,
         sourceLifecycle: 'dormant_pool_progressive_gpu_release',
         initialActiveParticleCount: 0,
         initialDormantParticleCount: safeBaseParticleCount,
         particleVolume: liveInletReleasePlan.particleVolume,
+        poolCapacity: currentLiveInletEconomics.poolCapacity,
+        requestedReleasePoolBudget: currentLiveInletEconomics.requestedReleasePoolBudget,
+        effectiveReleasePoolBudget: currentLiveInletEconomics.effectiveReleasePoolBudget,
+        unallocatedDormantParticleCount: currentLiveInletEconomics.unallocatedDormantParticleCount,
         expectedParticleReleaseRate: liveInletReleasePlan.expectedParticleReleaseRate,
         expectedParticlesPerReferenceFrame: liveInletReleasePlan.expectedParticlesPerReferenceFrame,
-        inlets: currentLiveInletPacket.inlets.map(inlet => ({
+        inlets: currentLiveInletEconomics.inlets.map(inlet => ({
           id: inlet.id,
           origin: [...inlet.origin],
           axis: [...inlet.axis],
           radius: inlet.radius,
           maximumSpeed: inlet.maximumSpeed,
+          requestedActive: inlet.requestedActive,
           active: inlet.active,
+          activationAuthority: inlet.activationAuthority,
+          requested: inlet.requested,
+          effective: inlet.effective,
+          opticalDensity: inlet.opticalDensity,
+          reconstructionRadius: inlet.reconstructionRadius,
         })),
       } : null,
       laminarInlets: safeTruthScene === 'laminar_inlets' ? {

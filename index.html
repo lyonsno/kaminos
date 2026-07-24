@@ -2791,6 +2791,7 @@ import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA,
   createFingerFluidPulseControlReadout,
   createFingerFluidWaterfallOracleConfig,
   createWebGPUFingerFluidSolver,
@@ -10397,6 +10398,24 @@ async function requestFingerFluidBenchDiagnostics() {
   };
 }
 
+function setFingerFluidBenchLiveInletPacket(packet) {
+  if (!fingerFluidBenchSolver?.available) {
+    throw new Error('Finger Fluid solver unavailable for live-inlet packet publication');
+  }
+  if (fingerFluidBenchConfig?.effectiveTruthScene !== 'live_hand_inlets') {
+    throw new Error(`Finger Fluid live-inlet packets require effective truth scene live_hand_inlets, not ${fingerFluidBenchConfig?.effectiveTruthScene || 'uninitialized'}`);
+  }
+  const receipt = fingerFluidBenchSolver.setLiveInletPacket(packet);
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  if (fingerFluidBenchState) fingerFluidBenchState.runtime = runtime;
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.live-inlet-publication-receipt.v0',
+    ...receipt,
+    runtimeEconomics: runtime.liveInlets,
+  };
+}
+
 function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode) {
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
   const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
@@ -10634,6 +10653,10 @@ async function startFingerFluidBench() {
         const camera = fingerFluidBenchConfig.waterfallOracleConfig.camera;
         fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
       }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'live_hand_inlets') {
+        const camera = KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA;
+        fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
+      }
       if (fingerFluidBenchConfig.oracleCockpitRequested) {
         fingerFluidBenchSimulationPaused = fingerFluidBenchConfig.oracleCockpitRequested.paused;
         if (fingerFluidBenchConfig.oracleCockpitRequested.fixedCamera) {
@@ -10722,6 +10745,7 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchSetLiveInletPacket = setFingerFluidBenchLiveInletPacket;
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
   window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
