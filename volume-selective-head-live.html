@@ -17,7 +17,8 @@
     #title strong { display: block; font-size: 11px; line-height: 1.2; }
     #title span { display: block; overflow: hidden; color: #84979c; font-size: 9px; line-height: 1.3; margin-top: 2px; text-overflow: ellipsis; white-space: nowrap; }
     #toolbar-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; margin-top: 7px; }
-    #presentations, #smoke-presentations { display: flex; gap: 3px; }
+    #presentations, #smoke-presentations, #optical-unit-modes { display: flex; gap: 3px; }
+    #live-optical-authority { flex: 1 1 100%; color: #ffb09f; font: 9px/1.35 "SF Mono", Menlo, monospace; }
     .select-control { display: flex; align-items: center; gap: 5px; min-width: 0; color: #829499; font-size: 9px; }
     select { min-height: 28px; max-width: 210px; padding: 0 24px 0 7px; border: 1px solid #35454b; border-radius: 4px; background: #11191c; color: #dce7e9; font: inherit; font-size: 10px; }
     #roles { max-width: 176px; }
@@ -75,6 +76,10 @@
       </label>
       <button id="appearance-assay-enabled" type="button" data-assay-enabled aria-pressed="false">Assay Off</button>
       <button id="splats-enabled" type="button" data-splats-enabled aria-pressed="true">Splats On</button>
+      <div id="optical-unit-modes" role="group" aria-label="Splat optical units" hidden>
+        <button type="button" data-optical-unit-mode="legacy-global-path-scale-diagnostic-v0">Legacy Optics</button>
+        <button type="button" data-optical-unit-mode="projected-native-cell-area-integral-normalized-v0">Physical Optics</button>
+      </div>
       <label class="select-control" for="roles">Field
         <select id="roles" aria-label="Live reconstruction role">
           <option value="truthHigh" data-role="truthHigh">Truth high</option>
@@ -82,6 +87,7 @@
           <option value="selectiveFullResidual" data-role="selectiveFullResidual">Selective full residual</option>
         </select>
       </label>
+      <div id="live-optical-authority" hidden>Dynamic analytical coefficients | source-authored kernel covariance | not frozen round cohort</div>
     </div>
     <div id="status">Starting exact basin...</div>
   </div>
@@ -105,6 +111,10 @@
     ];
     const presentations = ['beauty', 'intrinsic'];
     const raymarchSmokePresentations = ['on', 'off'];
+    const opticalUnitModes = [
+      'legacy-global-path-scale-diagnostic-v0',
+      'projected-native-cell-area-integral-normalized-v0',
+    ];
     const appearanceAssaySelections = [
       'structural-a',
       'broad-carrier-b',
@@ -130,6 +140,7 @@
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
     const params = new URLSearchParams(location.search);
+    const liveFullSupportOpticsRequested = params.has('full_support_live_step');
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
     let legacyDiagnosticCompositionRequested = requestedComposition === 'full-raymarch-under-splats-diagnostic-v0';
@@ -139,6 +150,10 @@
       ? requestedRaymarchSmokePresentationRaw
       : (requestedComposition === 'splat-only-v0' ? 'off' : 'on');
     let requestedSplatsEnabled = requestedComposition !== 'raymarch-only-v0';
+    const requestedOpticalUnitModeRaw = params.get('volume_optical_unit_mode');
+    let requestedOpticalUnitMode = opticalUnitModes.includes(requestedOpticalUnitModeRaw)
+      ? requestedOpticalUnitModeRaw
+      : 'projected-native-cell-area-integral-normalized-v0';
     const requestedAppearanceAssayRaw = params.get('volume_appearance_decomposition');
     let requestedAppearanceAssay = appearanceAssayModes.includes(requestedAppearanceAssayRaw)
       ? requestedAppearanceAssayRaw
@@ -176,6 +191,9 @@
     if (requestedAppearanceAssaySelectionRaw !== null
       && !appearanceAssaySelections.includes(requestedAppearanceAssaySelectionRaw)) {
       warmupError ||= `unsupported-appearance-decomposition-selection:${requestedAppearanceAssaySelectionRaw}`;
+    }
+    if (requestedOpticalUnitModeRaw !== null && !opticalUnitModes.includes(requestedOpticalUnitModeRaw)) {
+      warmupError ||= `unsupported-optical-unit-mode:${requestedOpticalUnitModeRaw}`;
     }
     const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
     let sourceSettingsPresetReceipt = null;
@@ -304,16 +322,23 @@
     const operatorOverlayResizeObserver = new ResizeObserver(syncVolumeAssayViewportPlacement);
     operatorOverlayResizeObserver.observe(operatorToolbar);
     window.addEventListener('resize', syncVolumeAssayViewportPlacement);
-    document.getElementById('assay-source').textContent = warmupTarget === 0
-      ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
-      : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
+    document.getElementById('assay-source').textContent = liveFullSupportOpticsRequested
+      ? 'Genuinely evolving 160 simulation; dynamic analytical coefficients; no frozen cohort'
+      : warmupTarget === 0
+        ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
+        : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
     const buttons = Array.from(document.querySelectorAll('[data-role]'));
     const presentationButtons = Array.from(document.querySelectorAll('[data-presentation]'));
     const smokePresentationButtons = Array.from(document.querySelectorAll('[data-smoke-presentation]'));
+    const opticalUnitButtons = Array.from(document.querySelectorAll('[data-optical-unit-mode]'));
+    const opticalUnitModesGroup = document.getElementById('optical-unit-modes');
+    const liveOpticalAuthority = document.getElementById('live-optical-authority');
     const roleSelect = document.getElementById('roles');
     const appearanceAssaySelect = document.getElementById('appearance-assay');
     const appearanceAssayEnabledButton = document.getElementById('appearance-assay-enabled');
     const splatsEnabledButton = document.getElementById('splats-enabled');
+    opticalUnitModesGroup.hidden = !liveFullSupportOpticsRequested;
+    liveOpticalAuthority.hidden = !liveFullSupportOpticsRequested;
     const basinQuery = new URLSearchParams({
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
@@ -546,6 +571,18 @@
       };
     }
 
+    function setOpticalUnitMode(mode) {
+      if (!opticalUnitModes.includes(mode)) return null;
+      requestedOpticalUnitMode = mode;
+      for (const button of opticalUnitButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.opticalUnitMode === mode));
+      }
+      const next = new URL(location.href);
+      next.searchParams.set('volume_optical_unit_mode', mode);
+      history.replaceState(null, '', next);
+      return prototype()?.setBoundarySplatOpticalUnitMode?.(mode) || null;
+    }
+
     function applyAppearanceAssayState() {
       requestedAppearanceAssay = requestedAppearanceAssayEnabled ? requestedAppearanceAssaySelection : 'off';
       appearanceAssaySelect.value = requestedAppearanceAssaySelection;
@@ -624,6 +661,8 @@
         || state?.raymarchSmokePresentationModeEffective
         || null;
       const appearanceDecompositionReceipt = state?.appearanceDecompositionReceipt || null;
+      const effectiveOpticalUnitMode = state?.effectiveBoundarySplatOpticalUnitMode || null;
+      const opticalUnitFallbackReason = state?.boundarySplatOpticalUnitModeFallbackReason || null;
       const effectiveAppearanceAssay = appearanceDecompositionReceipt?.effectiveMode
         || state?.appearanceDecompositionModeEffective
         || null;
@@ -648,6 +687,7 @@
         || volumePresentationReceipt?.fallbackReason
         || raymarchSmokePresentationReceipt?.fallbackReason
         || appearanceDecompositionReceipt?.fallbackReason
+        || opticalUnitFallbackReason
         || null;
       const appliedPresentation = volumePresentationReceipt?.application || null;
       const appearanceApplication = appearanceDecompositionReceipt?.application || null;
@@ -697,6 +737,15 @@
         requestedAppearanceAssayEnabled,
         effectiveAppearanceAssay,
         appearanceDecompositionReceipt,
+        requestedOpticalUnitMode,
+        effectiveOpticalUnitMode,
+        opticalUnitFallbackReason,
+        dynamicCoefficientAuthority: state?.liveCompleteFlameOpticalCoefficientReceipt?.authority
+          || state?.boundarySplatSourceAuthority
+          || null,
+        dynamicFootprintAuthority: state?.boundarySplatFootprintAuthority || null,
+        dynamicGaussianGeometryIdentity: state?.fullSupportGaussianGeometryIdentity || null,
+        persistentSparseCohortGpuReceipt: state?.persistentSparseCohortGpuReceipt || null,
         sourceCaptureId: params.get('basin_capture') || null,
         sourceSettingsPresetRequestedId,
         sourceSettingsPresetId: sourceSettingsPresetReceipt?.presetId || null,
@@ -763,6 +812,7 @@
       prototype().setVolumePresentationMode(requestedPresentation);
       prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
       prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
+      prototype().setBoundarySplatOpticalUnitMode(requestedOpticalUnitMode);
       await prototype().setActive(true);
     }
 
@@ -782,12 +832,14 @@
     roleSelect.addEventListener('change', () => setRole(roleSelect.value));
     for (const button of presentationButtons) button.addEventListener('click', () => setPresentation(button.dataset.presentation));
     for (const button of smokePresentationButtons) button.addEventListener('click', () => setRaymarchSmokePresentation(button.dataset.smokePresentation));
+    for (const button of opticalUnitButtons) button.addEventListener('click', () => setOpticalUnitMode(button.dataset.opticalUnitMode));
     appearanceAssaySelect.addEventListener('change', () => setAppearanceAssaySelection(appearanceAssaySelect.value));
     appearanceAssayEnabledButton.addEventListener('click', () => setAppearanceAssayEnabled(!requestedAppearanceAssayEnabled));
     splatsEnabledButton.addEventListener('click', () => setSplatsEnabled(!requestedSplatsEnabled));
     appearanceAssaySelect.value = requestedAppearanceAssaySelection;
     splatsEnabledButton.setAttribute('aria-pressed', String(requestedSplatsEnabled));
     splatsEnabledButton.textContent = requestedSplatsEnabled ? 'Splats On' : 'Splats Off';
+    setOpticalUnitMode(requestedOpticalUnitMode);
     setRole(requestedRole);
     setRaymarchSmokePresentation(requestedRaymarchSmokePresentation, { preserveDiagnostic: true });
     if (requestedAppearanceAssayEnabled) {
@@ -821,6 +873,10 @@
         `presentation: ${state.requestedPresentation} -> ${state.effectivePresentation || 'starting'}`,
         `raymarch smoke: ${state.requestedRaymarchSmokePresentation} -> ${state.effectiveRaymarchSmokePresentation || 'starting'} / applied: ${state.raymarchSmokeApplied ? 'on' : 'off'}`,
         `appearance assay: ${state.requestedAppearanceAssayEnabled ? 'on' : 'off'} / ${state.requestedAppearanceAssaySelection} -> ${state.effectiveAppearanceAssay || 'starting'}`,
+        `optical units: ${state.requestedOpticalUnitMode} -> ${state.effectiveOpticalUnitMode || 'starting'}`,
+        liveFullSupportOpticsRequested
+          ? `live source: ${state.dynamicCoefficientAuthority || 'loading'} / geometry: ${state.dynamicGaussianGeometryIdentity || state.dynamicFootprintAuthority || 'loading'} / frozen cohort: ${state.persistentSparseCohortGpuReceipt ? 'present' : 'none'}`
+          : '',
         `composition authority: ${state.compositionAuthority || 'loading'}`,
         `pass receipt: raymarch ${appliedPass.raymarchApplied ? 'applied' : 'off'} / splat ${(appliedPass.splatsApplied ?? appliedPass.splatApplied) ? 'applied' : 'off'}`,
         `model identity: ${state.modelIdentity || 'loading'}`,
@@ -844,6 +900,7 @@
       setAppearanceAssay,
       setAppearanceAssaySelection,
       setAppearanceAssayEnabled,
+      setOpticalUnitMode,
       captureFrame,
       setCapturePaused,
       stepCaptureFrame,

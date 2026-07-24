@@ -28,6 +28,7 @@ for (const parameter of [...route.searchParams.keys()]) {
 route.searchParams.set('kaminos_volume_smoke', '1');
 route.searchParams.set('composition', 'splat-only-v0');
 route.searchParams.set('volume_raymarch_smoke', 'off');
+route.searchParams.set('volume_optical_unit_mode', 'projected-native-cell-area-integral-normalized-v0');
 route.searchParams.set('full_support_live_step', '120');
 route.searchParams.set('full_support_source', requestedSource);
 

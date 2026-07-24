@@ -18177,6 +18177,9 @@ async function initKaminosVolumeRoute() {
     syncControls({ target: splatMode });
     const requestedDeposition = 'flow-kernel-moment-gaussian-raster-v0';
     const depositionReceipt = volumePrototype.setFullSupportDepositionMode(requestedDeposition);
+    const requestedLiveOpticalUnitMode = params.get('volume_optical_unit_mode')
+      || 'projected-native-cell-area-integral-normalized-v0';
+    const opticalUnitReceipt = volumePrototype.setBoundarySplatOpticalUnitMode(requestedLiveOpticalUnitMode);
     const overlayReceipt = volumePrototype.clearBoundarySplatLiveUnionCoefficientOverlay({
       reason: 'live-raymarch-native-cell-coefficients-selected',
       silent: true,
@@ -18211,6 +18214,8 @@ async function initKaminosVolumeRoute() {
     if (!(effectiveState?.boundarySplatCandidateCount > 0)) failures.push('live-population-empty');
     if (effectiveState?.boundarySplatOverflowCount !== 0) failures.push('live-population-overflow');
     if (effectiveState?.fullSupportDepositionEffective !== requestedDeposition) failures.push('live-deposition-substitution');
+    if (effectiveState?.effectiveBoundarySplatOpticalUnitMode !== requestedLiveOpticalUnitMode) failures.push('live-optical-unit-substitution');
+    if (effectiveState?.boundarySplatOpticalUnitModeFallbackReason) failures.push(`live-optical-unit-fallback:${effectiveState.boundarySplatOpticalUnitModeFallbackReason}`);
     if (effectiveState.boundarySplatPresentationModeEffective !== FULL_SUPPORT_STAGE_A.stageB.identity) failures.push('live-optical-recurrence-substitution');
     if (effectiveState.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') failures.push('live-composition-substitution');
     if (effectiveState.boundarySplatPresentationModeFallbackReason) failures.push(`live-optical-fallback:${effectiveState.boundarySplatPresentationModeFallbackReason}`);
@@ -18253,6 +18258,7 @@ async function initKaminosVolumeRoute() {
       resumeReceipt,
       compositionReceipt,
       depositionReceipt,
+      opticalUnitReceipt,
       loadReceipt,
       overlayReceipt,
       presentationReceipt,
@@ -18263,6 +18269,15 @@ async function initKaminosVolumeRoute() {
       effectiveComposition: effectiveState.selectiveHeadLiveCompositionEffective,
       requestedOpticalRecurrence: FULL_SUPPORT_STAGE_A.stageB.identity,
       effectiveOpticalRecurrence: effectiveState.boundarySplatPresentationModeEffective,
+      requestedOpticalUnitMode: requestedLiveOpticalUnitMode,
+      effectiveOpticalUnitMode: effectiveState.effectiveBoundarySplatOpticalUnitMode,
+      opticalUnitFallbackReason: effectiveState.boundarySplatOpticalUnitModeFallbackReason,
+      dynamicCoefficientAuthority: coefficientReceipt.authority,
+      dynamicFootprintAuthority: effectiveState.boundarySplatFootprintAuthority,
+      dynamicGaussianGeometryIdentity: effectiveState.fullSupportGaussianGeometryIdentity,
+      persistentSparseCohortApplied: false,
+      frozenRoundCohortParity: false,
+      geometryGap: 'source-authored-kernel-covariance-not-authenticated-frozen-round-cohort-v0',
       failures,
     };
     window.__kaminosLiveFullSupportOpticsBootstrapReceipt = receipt;

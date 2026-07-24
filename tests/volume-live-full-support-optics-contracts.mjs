@@ -14,6 +14,7 @@ const [core, index, session, witness] = await Promise.all([
   readFile(sessionUrl, 'utf8'),
   readFile(witnessUrl, 'utf8'),
 ]);
+const livePage = await readFile(new URL('../volume-selective-head-live.html', import.meta.url), 'utf8');
 
 assert.match(
   core,
@@ -185,6 +186,36 @@ assert.match(
 assert.match(session, /full_support_live_step/, 'the launcher requests exact live state instead of replay fields');
 assert.doesNotMatch(session, /source-field-manifest/, 'the direct launcher has no frozen-field input');
 assert.doesNotMatch(session, /stage-b-manifest/, 'the direct launcher has no evidence-media input');
+assert.match(
+  session,
+  /volume_optical_unit_mode', 'projected-native-cell-area-integral-normalized-v0'/,
+  'the direct live operator route does not boot into the physical optical law',
+);
+assert.match(
+  livePage,
+  /data-optical-unit-mode="legacy-global-path-scale-diagnostic-v0"[\s\S]*data-optical-unit-mode="projected-native-cell-area-integral-normalized-v0"/,
+  'the volume-only toolbar does not expose an in-place legacy/physical optical toggle',
+);
+assert.match(
+  livePage,
+  /Dynamic analytical coefficients[\s\S]*not frozen round cohort/,
+  'the live toolbar does not make its coefficient and geometry gap operator-visible',
+);
+assert.match(
+  livePage,
+  /function setOpticalUnitMode\(mode\)[\s\S]*setBoundarySplatOpticalUnitMode/,
+  'the live toolbar cannot switch optical laws through the existing runtime setter',
+);
+assert.match(
+  livePage,
+  /requestedOpticalUnitMode[\s\S]*effectiveOpticalUnitMode[\s\S]*opticalUnitFallbackReason/,
+  'the live toolbar debug receipt does not distinguish requested, effective, and fallback optical state',
+);
+assert.match(
+  livePage,
+  /dynamicCoefficientAuthority[\s\S]*dynamicFootprintAuthority[\s\S]*dynamicGaussianGeometryIdentity/,
+  'the operator surface omits the effective dynamic source and geometry identities',
+);
 assert.match(witness, /__kaminosLiveFullSupportOpticsBootstrapReceipt/, 'the witness waits for the direct live bootstrap');
 assert.match(witness, /litFraction/, 'the witness rejects blank optical output');
 assert.match(witness, /rendererEncoded[^]*rendererApplied/, 'the witness checks requested optical passes were encoded and applied');
@@ -226,6 +257,31 @@ assert.match(
   witness,
   /flow-kernel-moment-gaussian-raster-v0/,
   'the production witness rejects the longitudinal five-tap diagnostic as the effective footprint',
+);
+assert.match(
+  witness,
+  /opticalToggleProbe/,
+  'the production witness does not exercise the live optical-law toggle',
+);
+assert.match(
+  witness,
+  /legacy-global-path-scale-diagnostic-v0[\s\S]*projected-native-cell-area-integral-normalized-v0/,
+  'the production witness does not compare both live optical laws',
+);
+assert.match(
+  witness,
+  /postToggleSimStepDelta[^]*> 0/,
+  'the production witness does not prove simulation advance continued after the optical switch',
+);
+assert.match(
+  witness,
+  /persistentSparseCohortGpuReceipt[^]*null/,
+  'the production witness permits a frozen cohort to impersonate the live route',
+);
+assert.match(
+  witness,
+  /live-raymarch-complete-flame-native-cell-coefficients-v0/,
+  'the production witness does not preserve the exact dynamic coefficient authority across the toggle',
 );
 
 console.log('volume live full-support optics contracts passed');

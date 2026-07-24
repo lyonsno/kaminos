@@ -129,6 +129,12 @@ try {
   assert.equal(bootstrap.effectiveComposition, 'splat-only-v0');
   assert.equal(bootstrap.requestedOpticalRecurrence, 'matched-optical-recurrence-v0');
   assert.equal(bootstrap.effectiveOpticalRecurrence, 'matched-optical-recurrence-v0');
+  assert.equal(bootstrap.requestedOpticalUnitMode, 'projected-native-cell-area-integral-normalized-v0');
+  assert.equal(bootstrap.effectiveOpticalUnitMode, 'projected-native-cell-area-integral-normalized-v0');
+  assert.equal(bootstrap.opticalUnitFallbackReason, null);
+  assert.equal(bootstrap.persistentSparseCohortApplied, false);
+  assert.equal(bootstrap.frozenRoundCohortParity, false);
+  assert.equal(bootstrap.geometryGap, 'source-authored-kernel-covariance-not-authenticated-frozen-round-cohort-v0');
   assert.equal(bootstrap.rendererEncoded, true);
   assert.equal(bootstrap.rendererApplied, true);
   assert.equal(bootstrap.coefficientAuthority, 'live-raymarch-complete-flame-native-cell-coefficients-v0');
@@ -182,7 +188,60 @@ try {
   assert.equal(second.effectiveComposition, 'splat-only-v0');
   assert.equal(second.effectivePresentation, 'matched-optical-recurrence-v0');
   assert.equal(second.effectiveDeposition, 'flow-kernel-moment-gaussian-raster-v0');
+  assert.equal(second.effectiveOpticalUnitMode, 'projected-native-cell-area-integral-normalized-v0');
   assert.equal(second.fallbackReason, null);
+
+  failurePhase = 'live-optical-toggle-probe';
+  const legacyToggleReceipt = await evaluate(socket, `(() => {
+    const controls = window.__kaminosSelectiveHeadLive;
+    if (!controls?.setOpticalUnitMode) throw new Error('live-optical-toggle-api-missing');
+    return controls.setOpticalUnitMode('legacy-global-path-scale-diagnostic-v0');
+  })()`);
+  assert.equal(
+    legacyToggleReceipt?.effectiveBoundarySplatOpticalUnitMode,
+    'legacy-global-path-scale-diagnostic-v0',
+    'legacy optical toggle was substituted',
+  );
+  await delay(600);
+  const legacyLiveSample = await captureLiveSample(socket);
+  const legacyToggleScreenshotPath = screenshotPath.replace(/(\.[^./]+)?$/, '-legacy-live$1');
+  const legacyToggleScreenshot = await socket.call('Page.captureScreenshot', { format: 'png', fromSurface: true });
+  writeFileSync(legacyToggleScreenshotPath, Buffer.from(legacyToggleScreenshot.data, 'base64'));
+  const physicalToggleReceipt = await evaluate(socket, `(() => {
+    return window.__kaminosSelectiveHeadLive.setOpticalUnitMode(
+      'projected-native-cell-area-integral-normalized-v0'
+    );
+  })()`);
+  assert.equal(
+    physicalToggleReceipt?.effectiveBoundarySplatOpticalUnitMode,
+    'projected-native-cell-area-integral-normalized-v0',
+    'physical optical toggle was substituted',
+  );
+  await delay(600);
+  const physicalLiveSample = await captureLiveSample(socket);
+  const physicalToggleScreenshotPath = screenshotPath.replace(/(\.[^./]+)?$/, '-physical-live$1');
+  const physicalToggleScreenshot = await socket.call('Page.captureScreenshot', { format: 'png', fromSurface: true });
+  writeFileSync(physicalToggleScreenshotPath, Buffer.from(physicalToggleScreenshot.data, 'base64'));
+  const postToggleSimStepDelta = physicalLiveSample.simStepCount - legacyLiveSample.simStepCount;
+  const opticalToggleProbe = {
+    legacyReceipt: legacyToggleReceipt,
+    physicalReceipt: physicalToggleReceipt,
+    legacy: sampleMetrics(legacyLiveSample),
+    physical: sampleMetrics(physicalLiveSample),
+    postToggleSimStepDelta,
+    legacyScreenshotPath: legacyToggleScreenshotPath,
+    physicalScreenshotPath: physicalToggleScreenshotPath,
+  };
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, opticalToggleProbe };
+  assert.ok(postToggleSimStepDelta > 0, `simulation stopped across optical toggle:${postToggleSimStepDelta}`);
+  assert.equal(legacyLiveSample.effectiveOpticalUnitMode, 'legacy-global-path-scale-diagnostic-v0');
+  assert.equal(physicalLiveSample.effectiveOpticalUnitMode, 'projected-native-cell-area-integral-normalized-v0');
+  assert.equal(legacyLiveSample.coefficientAuthority, 'live-raymarch-complete-flame-native-cell-coefficients-v0');
+  assert.equal(physicalLiveSample.coefficientAuthority, 'live-raymarch-complete-flame-native-cell-coefficients-v0');
+  assert.equal(legacyLiveSample.persistentSparseCohortGpuReceipt, null);
+  assert.equal(physicalLiveSample.persistentSparseCohortGpuReceipt, null);
+  assert.equal(physicalLiveSample.effectiveDeposition, 'flow-kernel-moment-gaussian-raster-v0');
+  assert.equal(physicalLiveSample.opticalUnitFallbackReason, null);
 
   failurePhase = 'camera-motion-probe';
   const cameraBefore = await runtimeState(socket);
@@ -303,6 +362,7 @@ try {
     bootstrap,
     coefficientStats,
     liveMotionProbe,
+    opticalToggleProbe,
     cameraMotionProbe,
     depthOrderDiagnostic,
     pixelProbe: sampleMetrics(second),
@@ -316,6 +376,7 @@ try {
     reportPath,
     screenshotPath,
     liveMotionProbe,
+    opticalToggleProbe,
     cameraMotionProbe,
     depthOrderDiagnostic,
     pixelProbe: sampleMetrics(second),
@@ -371,6 +432,14 @@ async function captureLiveSample(cdp) {
       effectiveComposition: state.selectiveHeadLiveCompositionEffective,
       effectivePresentation: state.boundarySplatPresentationModeEffective,
       effectiveDeposition: state.fullSupportDepositionEffective,
+      requestedOpticalUnitMode: state.requestedBoundarySplatOpticalUnitMode,
+      effectiveOpticalUnitMode: state.effectiveBoundarySplatOpticalUnitMode,
+      opticalUnitFallbackReason: state.boundarySplatOpticalUnitModeFallbackReason,
+      coefficientAuthority: state.liveCompleteFlameOpticalCoefficientReceipt?.authority || null,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySplatFootprintAuthority: state.boundarySplatFootprintAuthority,
+      dynamicGaussianGeometryIdentity: state.fullSupportGaussianGeometryIdentity,
+      persistentSparseCohortGpuReceipt: state.persistentSparseCohortGpuReceipt || null,
       fallbackReason: state.liveCompleteFlameOpticalFrameReceipt?.fallbackReason
         || state.boundarySplatFallbackReason
         || state.boundarySplatPresentationModeFallbackReason
