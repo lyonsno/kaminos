@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+  WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
@@ -37,6 +38,21 @@ const interlock = createWebGpuForegroundOpportunityInterlock({
 
 assert.equal(interlock.schema, WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA);
 assert.equal(interlock.snapshot().retention, 'uncapped');
+assert.equal(
+  typeof interlock.pressureSnapshot,
+  'function',
+  'hot-path pressure checks must not require cloning the uncapped evidence history',
+);
+assert.deepEqual(interlock.pressureSnapshot(), {
+  schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runId: 'foreground-opportunity-contract-a',
+  pendingRequestCount: 0,
+  activeRequestCount: 0,
+  activeServiceCount: 0,
+  queuedServiceCount: 0,
+  authority: 'live-foreground-opportunity-counters-no-history-clone',
+});
 
 const idle = await interlock.serviceAtBoundary({
   invocationId: 'sharp-invocation-a',
@@ -390,6 +406,83 @@ externalSnapshotIsValid = false;
 assert.throws(
   () => mutableExternalRuntime.foregroundOpportunitySnapshot(),
   /activeServiceCount.*non-negative integer/i,
+);
+
+let legacyFullSnapshotCalls = 0;
+const legacyExternalRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runtimeLabel: 'legacy-external-foreground-snapshot',
+  device: runtimeDevice,
+  queue: runtimeQueue,
+  adapterName: 'Legacy External Foreground Snapshot',
+  kernel: { profile: 'legacy-external-foreground-snapshot' },
+  foregroundOpportunities: {
+    ...externalMethods,
+    snapshot() {
+      legacyFullSnapshotCalls += 1;
+      return externalSnapshot();
+    },
+  },
+});
+assert.equal(
+  typeof legacyExternalRuntime.foregroundOpportunityPressureSnapshot,
+  'undefined',
+  'a full-history compatibility fallback must not impersonate the constant-time public capability',
+);
+const legacySnapshotCallsAfterConstruction = legacyFullSnapshotCalls;
+await legacyExternalRuntime.prepareCommandDutyAtBoundary({ phase: 'legacy-vit-block-microphase' });
+assert.equal(
+  legacyFullSnapshotCalls,
+  legacySnapshotCallsAfterConstruction + 1,
+  'legacy duty preparation may retain the honest full-history compatibility path',
+);
+
+let hotPathFullSnapshotCalls = 0;
+let hotPathPressureSnapshotCalls = 0;
+const hotPathExternalRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runtimeLabel: 'foreground-pressure-fast-path-contract',
+  device: runtimeDevice,
+  queue: runtimeQueue,
+  adapterName: 'Foreground Pressure Fast Path Adapter',
+  kernel: { profile: 'foreground-pressure-fast-path-contract' },
+  foregroundOpportunities: {
+    ...externalMethods,
+    snapshot() {
+      hotPathFullSnapshotCalls += 1;
+      return externalSnapshot();
+    },
+    pressureSnapshot() {
+      hotPathPressureSnapshotCalls += 1;
+      return {
+        schema: WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+        routeId: 'sharp.image-to-splat.webgpu-local.v0',
+        runId: 'external-foreground-opportunities',
+        pendingRequestCount: 0,
+        activeRequestCount: 0,
+        activeServiceCount: 0,
+        queuedServiceCount: 0,
+        authority: 'live-foreground-opportunity-counters-no-history-clone',
+      };
+    },
+  },
+});
+assert.equal(hotPathFullSnapshotCalls, 1, 'runtime construction may validate the full evidence snapshot once');
+const pressureCallsAfterConstruction = hotPathPressureSnapshotCalls;
+await hotPathExternalRuntime.prepareCommandDutyAtBoundary({ phase: 'vit-block-microphase' });
+assert.equal(
+  hotPathFullSnapshotCalls,
+  1,
+  'duty preparation must not clone the full uncapped foreground history',
+);
+assert.equal(
+  hotPathPressureSnapshotCalls,
+  pressureCallsAfterConstruction + 1,
+  'duty preparation must consult the constant-time pressure view exactly once',
+);
+assert.equal(
+  hotPathExternalRuntime.foregroundOpportunityPressureSnapshot().schema,
+  WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
 );
 const schedulerApplication = createWebGpuSchedulerApplication({
   routeId: 'sharp.image-to-splat.webgpu-local.v0',

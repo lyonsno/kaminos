@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   WEBGPU_INFERENCE_KIT_VERSION,
@@ -9,7 +10,14 @@ import {
   validateRouteTimingMetadata,
 } from '../src/index.js';
 
-assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.32');
+const packageManifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+assert.equal(
+  WEBGPU_INFERENCE_KIT_VERSION,
+  packageManifest.version,
+  'the exported runtime kit identity must match the installed package manifest',
+);
+
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.34');
 
 const kernel = createKernelProfileMetadata({
   profile: 'conv-transpose2d-stride2',
