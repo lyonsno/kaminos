@@ -332,6 +332,8 @@ const adaptiveDecoderKernelEvents = [
     observedDurationMs: 12,
     timingAuthority: 'queue-work-done',
     queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    requestedAdjustmentGain: 0.375,
+    effectiveAdjustmentGain: 0.375,
     actualRangeCount: null,
   },
   {
@@ -349,6 +351,8 @@ const adaptiveDecoderKernelEvents = [
     observedDurationMs: 7,
     timingAuthority: 'queue-work-done',
     queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    requestedAdjustmentGain: 0.375,
+    effectiveAdjustmentGain: 0.375,
     actualRangeCount: 2,
   },
 ];
@@ -381,6 +385,7 @@ assert.deepEqual(
       minChunkItems: 65536,
       maxChunkItems: 8388608,
       targetDurationMs: 12,
+      adjustmentGain: 0.375,
     },
     boundaryAssertions: [adaptiveDecoderAssertion],
     tileEvents: adaptiveDecoderKernelEvents,
@@ -392,6 +397,8 @@ for (const [mutate, expectedFailure] of [
   [events => { events[1].actualRangeCount = null; }, 'adaptive-terminal-count-missing'],
   [events => { events[1].outputStart = 300000; }, 'range-coverage-invalid'],
   [events => { events[0].queueWorkAttribution = 'isolated-kernel-time'; }, 'adaptive-timing-authority-invalid'],
+  [events => { delete events[0].requestedAdjustmentGain; }, 'adaptive-adjustment-gain-missing'],
+  [events => { events[0].effectiveAdjustmentGain = 1; }, 'adaptive-adjustment-gain-mismatch'],
   [events => {
     events.push({
       ...events[1],
@@ -411,6 +418,7 @@ for (const [mutate, expectedFailure] of [
       minChunkItems: 65536,
       maxChunkItems: 8388608,
       targetDurationMs: 12,
+      adjustmentGain: 0.375,
     },
     boundaryAssertions: [adaptiveDecoderAssertion],
     tileEvents: events,

@@ -1831,6 +1831,7 @@ try {
         minChunkItems: expectedScheduler.decoderKernelMinChunkItems,
         maxChunkItems: expectedScheduler.decoderKernelMaxChunkItems,
         targetDurationMs: expectedScheduler.decoderKernelTargetDurationMs,
+        adjustmentGain: expectedScheduler.decoderKernelAdjustmentGain,
       },
       boundaryAssertions: state.fullRoute.schedulerBoundaryAssertions,
       tileEvents: state.fullRoute.decoderKernelTileEvents,

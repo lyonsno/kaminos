@@ -92,6 +92,8 @@ function schedulerVerification({
     observedDurationMs: range.rangeIndex === 0 ? 12 : 7,
     timingAuthority: 'queue-work-done',
     queueWorkAttribution: 'submitted-range-plus-shared-queue-work',
+    requestedAdjustmentGain: 0.375,
+    effectiveAdjustmentGain: 0.375,
     actualRangeCount: range.actualRangeCount,
   }]);
   const eventTrace = {
@@ -164,6 +166,7 @@ function schedulerVerification({
           decoderKernelMinChunkItems: 65536,
           decoderKernelMaxChunkItems: 8388608,
           decoderKernelTargetDurationMs: 12,
+          decoderKernelAdjustmentGain: 0.375,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
         },
@@ -174,6 +177,7 @@ function schedulerVerification({
           decoderKernelMinChunkItems: 65536,
           decoderKernelMaxChunkItems: 8388608,
           decoderKernelTargetDurationMs: 12,
+          decoderKernelAdjustmentGain: 0.375,
           waitForSubmittedWorkDone: true,
           yieldMs: 2,
           unsupportedFields: [],
@@ -316,6 +320,7 @@ assert.equal(profiles.profiles[1].scheduler.decoderKernelChunkItems, 262144);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelMinChunkItems, 65536);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelMaxChunkItems, 8388608);
 assert.equal(profiles.profiles[1].scheduler.decoderKernelTargetDurationMs, 12);
+assert.equal(profiles.profiles[1].scheduler.decoderKernelAdjustmentGain, 0.375);
 assert.equal(profiles.profiles[1].scheduler.plyAssemblyMode, 'worker');
 assert.equal(profiles.profiles[1].scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(profiles.profiles[1].unsupportedFields, []);
@@ -334,6 +339,7 @@ assert.equal(friendlyProfile.scheduler.decoderKernelChunkItems, 262144);
 assert.equal(friendlyProfile.scheduler.decoderKernelMinChunkItems, 65536);
 assert.equal(friendlyProfile.scheduler.decoderKernelMaxChunkItems, 8388608);
 assert.equal(friendlyProfile.scheduler.decoderKernelTargetDurationMs, 12);
+assert.equal(friendlyProfile.scheduler.decoderKernelAdjustmentGain, 0.375);
 assert.equal(friendlyProfile.scheduler.plyAssemblyMode, 'worker');
 assert.equal(friendlyProfile.scheduler.retirePostInferenceBuffers, true);
 assert.deepEqual(friendlyProfile.unsupportedFields, []);
