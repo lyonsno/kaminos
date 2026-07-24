@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
 import { createHillMotionSupportIdentity, createHillSampledSupportSurface } from './hill-motion-support-adapter.js';
@@ -53,6 +53,27 @@ function errorRecord(error) {
   };
 }
 
+const PUBLICATION_PATHS = [
+  'constraints.json',
+  'receipt.json',
+  'report.json',
+  'constraints.json.pending',
+  'receipt.json.pending',
+  'report.json.pending',
+];
+
+async function removePublication(outputDir) {
+  const results = await Promise.allSettled(
+    PUBLICATION_PATHS.map(name => rm(join(outputDir, name), { force: true })),
+  );
+  const failures = results
+    .filter(result => result.status === 'rejected')
+    .map(result => result.reason);
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'failed to invalidate prior artifact publication');
+  }
+}
+
 function requireFixture(fixture) {
   if (fixture?.schema !== 'kaminos.motion-contact-probe-handshake-fixture.v0') {
     throw new Error('producer fixture schema mismatch');
@@ -83,13 +104,15 @@ const report = {
 };
 
 try {
+  if (outputDir) {
+    report.failurePhase = 'artifact-cleanup';
+    await mkdir(outputDir, { recursive: true });
+    await removePublication(outputDir);
+  }
+  report.failurePhase = 'argument-parse';
   requested = parseArguments(argv);
   outputDir = resolve(requested.outputDir);
   await mkdir(outputDir, { recursive: true });
-  await Promise.all([
-    rm(join(outputDir, 'constraints.json'), { force: true }),
-    rm(join(outputDir, 'receipt.json'), { force: true }),
-  ]);
 
   report.failurePhase = 'fixture-load';
   const [producerFixtureBytes, hillPacketBytes, hillDataBytes] = await Promise.all([
@@ -145,21 +168,33 @@ try {
   };
   const receiptBytes = `${JSON.stringify(receipt, null, 2)}\n`;
 
-  report.failurePhase = 'artifact-write';
-  await Promise.all([
-    writeFile(join(outputDir, 'constraints.json'), constraintsBytes),
-    writeFile(join(outputDir, 'receipt.json'), receiptBytes),
-  ]);
   report.status = 'pass';
   report.failurePhase = null;
   report.body = receipt.body;
   report.pose = receipt.pose;
   report.output = receipt.output;
+  const reportBytes = `${JSON.stringify(report, null, 2)}\n`;
+
+  report.failurePhase = 'artifact-write';
+  await writeFile(join(outputDir, 'constraints.json.pending'), constraintsBytes);
+  if (process.env.KAMINOS_CONTACT_CONSTRAINTS_TEST_FAIL_AFTER_CONSTRAINTS_STAGE === '1') {
+    throw new Error('forced failure after constraints staging');
+  }
+  await writeFile(join(outputDir, 'receipt.json.pending'), receiptBytes);
+  await writeFile(join(outputDir, 'report.json.pending'), reportBytes);
+  await rename(join(outputDir, 'constraints.json.pending'), join(outputDir, 'constraints.json'));
+  await rename(join(outputDir, 'report.json.pending'), join(outputDir, 'report.json'));
+  await rename(join(outputDir, 'receipt.json.pending'), join(outputDir, 'receipt.json'));
+  report.failurePhase = null;
 } catch (error) {
+  report.status = 'fail';
   report.error = errorRecord(error);
-} finally {
   if (outputDir) {
-    await mkdir(outputDir, { recursive: true });
+    try {
+      await removePublication(outputDir);
+    } catch (cleanupError) {
+      report.error.cleanup = errorRecord(cleanupError);
+    }
     await writeFile(join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   }
 }

@@ -14,6 +14,7 @@ const artifact = new URL(
 const producerFixture = new URL('producer-fixture.json', artifact);
 const checkedConstraints = new URL('constraints.json', artifact);
 const checkedReceipt = new URL('receipt.json', artifact);
+const checkedReport = new URL('report.json', artifact);
 const expectedProducerSha256 = 'f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112';
 const expectedConstraintsSha256 = '8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029';
 
@@ -36,7 +37,11 @@ function run(outputDir, options = {}) {
       '--output-dir',
       outputDir,
     ],
-    { cwd: root.pathname, encoding: 'utf8' },
+    {
+      cwd: root.pathname,
+      encoding: 'utf8',
+      env: { ...process.env, ...options.env },
+    },
   );
 }
 
@@ -59,6 +64,14 @@ assert.equal(
   generatedReceiptBytes,
   checkedReceiptBytes,
   'the checked-in consumer receipt must be byte-reproducible',
+);
+
+const generatedReportBytes = await readFile(join(positiveDir, 'report.json'), 'utf8');
+const checkedReportBytes = await readFile(checkedReport, 'utf8');
+assert.equal(
+  generatedReportBytes,
+  checkedReportBytes,
+  'the checked-in success report must be byte-reproducible',
 );
 
 const receipt = JSON.parse(generatedReceiptBytes);
@@ -99,6 +112,24 @@ await assert.rejects(
   'a failed run must not leave a consumable constraint packet',
 );
 
+const partialWriteDir = join(temporary, 'partial-write');
+const partialWrite = run(partialWriteDir, {
+  env: {
+    KAMINOS_CONTACT_CONSTRAINTS_TEST_FAIL_AFTER_CONSTRAINTS_STAGE: '1',
+  },
+});
+assert.notEqual(partialWrite.status, 0, 'a forced partial artifact write must fail');
+const partialWriteReport = JSON.parse(await readFile(join(partialWriteDir, 'report.json'), 'utf8'));
+assert.equal(partialWriteReport.status, 'fail');
+assert.equal(partialWriteReport.failurePhase, 'artifact-write');
+for (const name of ['constraints.json', 'receipt.json']) {
+  await assert.rejects(
+    readFile(join(partialWriteDir, name)),
+    /ENOENT/,
+    `a partial artifact write must not leave ${name} consumable`,
+  );
+}
+
 const stalePacketPath = join(temporary, 'stale-hill-packet.json');
 const hillPacket = JSON.parse(await readFile(
   new URL('artifacts/motion-ready-719024/hill/motion-affordance-packet.json', root),
@@ -115,6 +146,7 @@ assert.equal(staleReport.failurePhase, 'contact-resolution');
 assert.match(staleReport.error.message, /support surface revision mismatch/);
 
 const malformedDir = join(temporary, 'malformed-arguments');
+assert.equal(run(malformedDir).status, 0, 'malformed invocation case requires cached primary outputs');
 const malformed = spawnSync(
   process.execPath,
   [
@@ -131,5 +163,12 @@ const malformedReport = JSON.parse(await readFile(join(malformedDir, 'report.jso
 assert.equal(malformedReport.status, 'fail');
 assert.equal(malformedReport.failurePhase, 'argument-parse');
 assert.match(malformedReport.error.message, /requires --hill-packet/);
+for (const name of ['constraints.json', 'receipt.json']) {
+  await assert.rejects(
+    readFile(join(malformedDir, name)),
+    /ENOENT/,
+    `argument failure must invalidate cached ${name}`,
+  );
+}
 
 console.log('motion contact constraints artifact contracts passed');
