@@ -55,12 +55,24 @@ function errorRecord(error) {
   };
 }
 
-const requested = parseArguments(process.argv.slice(2));
-const outputPath = resolve(requested.output);
+function recoverArgumentValue(argv, name) {
+  const index = argv.indexOf(name);
+  const value = index >= 0 ? argv[index + 1] : '';
+  return value && !value.startsWith('--') ? value : null;
+}
+
+const argv = process.argv.slice(2);
+const recoveredOutput = recoverArgumentValue(argv, '--output');
+let requested = {
+  output: recoveredOutput || '',
+  expectedSurfaceRevision: recoverArgumentValue(argv, '--expected-surface-revision') || '',
+  probeMode: recoverArgumentValue(argv, '--probe-mode'),
+};
+let outputPath = recoveredOutput ? resolve(recoveredOutput) : null;
 const report = {
   schema: 'kaminos.motion-support-boundary-witness-report.v0',
   status: 'fail',
-  failurePhase: 'fixture-load',
+  failurePhase: 'argument-parse',
   requested: {
     output: outputPath,
     expectedSurfaceRevision: requested.expectedSurfaceRevision || null,
@@ -69,7 +81,7 @@ const report = {
   effective: {
     route: 'motion-support-core + hill-motion-support-adapter',
     supportSurface: null,
-    probeMode: requested.probeMode,
+    probeMode: null,
     fixture: 'artifacts/motion-ready-719024',
   },
   evidence: {},
@@ -77,6 +89,16 @@ const report = {
 };
 
 try {
+  requested = parseArguments(argv);
+  outputPath = resolve(requested.output);
+  report.requested = {
+    output: outputPath,
+    expectedSurfaceRevision: requested.expectedSurfaceRevision || null,
+    probeMode: requested.probeMode,
+  };
+  report.effective.probeMode = requested.probeMode;
+  report.failurePhase = 'fixture-load';
+
   const packet = JSON.parse(await readFile(
     new URL('artifacts/motion-ready-719024/hill/motion-affordance-packet.json', import.meta.url),
     'utf8',
@@ -227,8 +249,10 @@ try {
 } catch (error) {
   report.error = errorRecord(error);
 } finally {
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+  if (outputPath) {
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+  }
 }
 
 if (report.status !== 'pass') {

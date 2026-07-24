@@ -203,6 +203,10 @@ for (const malformed of [
   },
   {
     ...probeSet,
+    phase: probeSet.phase + 5e-10,
+  },
+  {
+    ...probeSet,
     patches: probeSet.patches.slice(0, -1),
   },
   {
@@ -215,6 +219,16 @@ for (const malformed of [
     /mismatch|exactly|duplicate|missing/,
   );
 }
+
+assert.throws(
+  () => solveMotionSupportPrepass(surface, footprint, {
+    ...supportOptions,
+    id: 'outside-hill-prepass',
+    rootSurface: [bounds.x.max + 10, rootSurface[1], rootSurface[2]],
+  }),
+  /outside.*bounds/,
+  'out-of-bounds terrain samples must not produce a consumable support prepass',
+);
 
 const outsideProbeSet = structuredClone(probeSet);
 outsideProbeSet.patches[0].worldPosition[0] = bounds.x.max + 10;

@@ -233,6 +233,9 @@ export function solveMotionSupportPrepass(surfaceInput, footprintInput, options 
   );
   const rootLiftAboveClearance = Math.max(0, rootLift - clearance);
   const outOfBounds = stations.some(station => !station.inBounds);
+  if (outOfBounds) {
+    throw new Error('motion support sample is outside admitted support surface bounds');
+  }
   const suspensionDemand = Math.max(maxEnvelopeLift, rootLiftAboveClearance);
   const normalizedMargin = (limit, measured) => {
     const margin = limit > EPSILON
@@ -383,7 +386,8 @@ export function validateMotionContactProbeSet(request, probeSet) {
   ) {
     throw new Error('motion contact atlas identity mismatch');
   }
-  if (Math.abs(requireFinite(probeSet.phase, 'motion contact probe phase') - request.phase) > 1e-9) {
+  const probePhase = requireFinite(probeSet.phase, 'motion contact probe phase');
+  if (!Object.is(probePhase, request.phase)) {
     throw new Error('motion contact phase mismatch');
   }
   if (!Array.isArray(probeSet.patches) || probeSet.patches.length !== request.patches.length) {
