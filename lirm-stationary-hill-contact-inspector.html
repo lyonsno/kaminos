@@ -154,6 +154,7 @@
       STATIONARY_CONTACT_CONSTRAINTS_SHA256,
       STATIONARY_CONTACT_RECEIPT_SHA256,
       STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE,
+      verifyPublishedStationaryContactArtifacts,
     } from './lirm-stationary-hill-contact-core.mjs';
     import {
       decodeHillMotionAffordancePacket,
@@ -165,6 +166,13 @@
     } from './hill-motion-support-adapter.js';
 
     const SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
+    const REGISTRATION_SHA256 = 'sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9';
+    const CONTACT_ATLAS_SHA256 = 'sha256:e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78';
+    const PHASE_REPORT_SHA256 = 'sha256:97abeb1cdacb802ecf26e2aba6e27ae9d96508e6f85836853b9c3bdd993583ff';
+    const HANDSHAKE_SHA256 = 'sha256:f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112';
+    const AXIAL_REGISTRATION_SHA256 = 'sha256:cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6';
+    const HILL_PACKET_SHA256 = 'sha256:ab9900438d60ca3356327e700617c65fd65e75e4b2707d8e03da0e2f3dd8e9e2';
+    const HILL_DATA_SHA256 = 'sha256:bd29f0464aecffdd35d79496b744b6d04175b1c2b8a80934fa3c88ed34874fd7';
     const SOURCE_URL = './artifacts/motion-ready-719024/creature.glb';
     const REGISTRATION_URL = './artifacts/lirm-719024-fitted-proxy-rig-mechanism-witness-v1/registration.json';
     const CONTACT_ATLAS_URL = './artifacts/lirm-719024-smooth-fitted-phase-exercise-v0/admitted-contact-atlas.json';
@@ -253,6 +261,7 @@
       effectiveRoute: null,
       sourceHash: SOURCE_HASH,
       actualSourceHash: null,
+      inputHashes: null,
       supportSurface: null,
       supportActive: true,
       phase: 0,
@@ -269,15 +278,19 @@
       return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
     }
 
-    async function loadJsonPublication(url, expectedHash) {
+    async function loadExactJson(url, expectedHash) {
       const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`publication load failed: ${url} ${response.status}`);
+      if (!response.ok) throw new Error(`exact JSON load failed: ${url} ${response.status}`);
       const bytes = await response.arrayBuffer();
       const actualHash = `sha256:${await sha256Hex(bytes)}`;
       if (actualHash !== expectedHash) {
-        throw new Error(`publication hash mismatch: ${actualHash} != ${expectedHash}`);
+        throw new Error(`exact JSON hash mismatch for ${url}: ${actualHash} != ${expectedHash}`);
       }
-      return { value: JSON.parse(new TextDecoder().decode(bytes)), sha256: actualHash };
+      return {
+        value: JSON.parse(new TextDecoder().decode(bytes)),
+        bytes,
+        sha256: actualHash,
+      };
     }
 
     function normalizePositionArray(values) {
@@ -510,27 +523,34 @@
       try {
         const [
           source,
-          registration,
-          atlas,
-          phaseReport,
-          handshake,
-          axialRegistration,
-          hillPacket,
-          hillData,
+          registrationInput,
+          atlasInput,
+          phaseReportInput,
+          handshakeInput,
+          axialRegistrationInput,
+          hillPacketInput,
+          hillDataInput,
           constraintsPublication,
           receiptPublication,
         ] = await Promise.all([
           loadSource(),
-          fetch(REGISTRATION_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(CONTACT_ATLAS_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(PHASE_REPORT_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(HANDSHAKE_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(AXIAL_REGISTRATION_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(HILL_PACKET_URL, { cache: 'no-store' }).then(response => response.json()),
-          fetch(HILL_DATA_URL, { cache: 'no-store' }).then(response => response.json()),
-          loadJsonPublication(CONSTRAINTS_URL, STATIONARY_CONTACT_CONSTRAINTS_SHA256),
-          loadJsonPublication(RECEIPT_URL, STATIONARY_CONTACT_RECEIPT_SHA256),
+          loadExactJson(REGISTRATION_URL, REGISTRATION_SHA256),
+          loadExactJson(CONTACT_ATLAS_URL, CONTACT_ATLAS_SHA256),
+          loadExactJson(PHASE_REPORT_URL, PHASE_REPORT_SHA256),
+          loadExactJson(HANDSHAKE_URL, HANDSHAKE_SHA256),
+          loadExactJson(AXIAL_REGISTRATION_URL, AXIAL_REGISTRATION_SHA256),
+          loadExactJson(HILL_PACKET_URL, HILL_PACKET_SHA256),
+          loadExactJson(HILL_DATA_URL, HILL_DATA_SHA256),
+          loadExactJson(CONSTRAINTS_URL, STATIONARY_CONTACT_CONSTRAINTS_SHA256),
+          loadExactJson(RECEIPT_URL, STATIONARY_CONTACT_RECEIPT_SHA256),
         ]);
+        const registration = registrationInput.value;
+        const atlas = atlasInput.value;
+        const phaseReport = phaseReportInput.value;
+        const handshake = handshakeInput.value;
+        const axialRegistration = axialRegistrationInput.value;
+        const hillPacket = hillPacketInput.value;
+        const hillData = hillDataInput.value;
         hillSource = decodeHillMotionAffordancePacket({ packet: hillPacket, data: hillData });
         supportSurface = createHillSampledSupportSurface(
           hillSource,
@@ -538,12 +558,10 @@
         );
         prepass = handshake.prepass;
         contactAtlas = atlas;
-        publication = {
-          constraints: constraintsPublication.value,
-          constraintsSha256: constraintsPublication.sha256,
-          receipt: receiptPublication.value,
-          receiptSha256: receiptPublication.sha256,
-        };
+        publication = await verifyPublishedStationaryContactArtifacts({
+          constraintsBytes: constraintsPublication.bytes,
+          receiptBytes: receiptPublication.bytes,
+        });
         contactPlaneY = axialRegistration.contactPlaneY;
         amplitude = phaseReport.effectiveConfig.amplitude;
         creatureRoot = source.root;
@@ -575,14 +593,23 @@
         supportActive = new URLSearchParams(location.search).get('support') !== '0';
         supportButton.setAttribute('aria-pressed', String(supportActive));
         supportButton.textContent = supportActive ? 'Support on' : 'Support off';
+        Object.assign(window.__LIRM_HILL_CONTACT_STATE__, {
+          actualSourceHash: source.actualHash,
+          supportSurface: { ...supportSurface.identity },
+          inputHashes: {
+            registration: registrationInput.sha256,
+            contactAtlas: atlasInput.sha256,
+            phaseReport: phaseReportInput.sha256,
+            handshake: handshakeInput.sha256,
+            axialRegistration: axialRegistrationInput.sha256,
+            hillPacket: hillPacketInput.sha256,
+            hillData: hillDataInput.sha256,
+          },
+        });
         setPhase(requestedPhase, true);
         frameScene();
         identity.dataset.state = 'loaded';
         identity.innerHTML = `<strong>happy | reviewed stationary constraints | smooth fitted field</strong><br>${STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE}<br>receipt ${STATIONARY_CONTACT_RECEIPT_SHA256.slice(7, 23)}... | Hill ${supportSurface.identity.revision} | zero direct vertex translations`;
-        Object.assign(window.__LIRM_HILL_CONTACT_STATE__, {
-          actualSourceHash: source.actualHash,
-          supportSurface: { ...supportSurface.identity },
-        });
       } catch (error) {
         identity.dataset.state = 'error';
         identity.innerHTML = `<strong>load failed</strong><br>${String(error?.message || error)}`;

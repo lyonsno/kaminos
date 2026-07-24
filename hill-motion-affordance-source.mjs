@@ -17,6 +17,15 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+function fnv1a32(bytes) {
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
 function decodeFloat32Channel(name, encoded, sampleCount) {
   if (encoded?.encoding !== 'base64-f32-le') {
     throw new Error(`Hill channel ${name} must use base64-f32-le`);
@@ -29,10 +38,24 @@ function decodeFloat32Channel(name, encoded, sampleCount) {
   if (bytes.byteLength !== expectedLength * 4 || Number(encoded.byteLength) !== bytes.byteLength) {
     throw new Error(`Hill channel ${name} byte length does not match its declared shape`);
   }
+  const expectedShape = components.length === 1
+    ? [sampleCount]
+    : [sampleCount, components.length];
+  if (!Array.isArray(encoded.shape)
+      || encoded.shape.length !== expectedShape.length
+      || encoded.shape.some((value, index) => Number(value) !== expectedShape[index])) {
+    throw new Error(`Hill channel ${name} shape does not match its declared components`);
+  }
+  if (String(encoded.checksum || '') !== fnv1a32(bytes)) {
+    throw new Error(`Hill channel ${name} checksum mismatch`);
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const values = new Float32Array(expectedLength);
   for (let index = 0; index < values.length; index += 1) {
     values[index] = view.getFloat32(index * 4, true);
+    if (!Number.isFinite(values[index])) {
+      throw new Error(`Hill channel ${name} contains a non-finite sample`);
+    }
   }
   return {
     name,
@@ -52,9 +75,30 @@ export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
   if (data?.schema !== 'lerms.hill-of-hills.motion-affordance-data.v0') {
     throw new Error('Hill motion data schema mismatch');
   }
+  if (packet.ok !== true
+      || packet.status !== 'fresh-live-motion-affordance'
+      || packet.route !== 'lerms/hill-of-hills/motion-affordance-packet-file'
+      || packet.source?.route !== packet.route) {
+    throw new Error('Hill motion route identity mismatch');
+  }
   if (packet.source?.authority !== 'live_simulation'
       || data.sourceTruth?.authority !== 'live_simulation') {
     throw new Error('Hill motion source must retain live simulation authority');
+  }
+  if (packet.frameId !== data.sourceTruth.frameId
+      || data.sourceTruth.route !== 'hill-of-hills/motion-affordance-packet'
+      || packet.source?.backend !== data.sourceTruth.backend
+      || packet.source?.configId !== data.sourceTruth.configId
+      || packet.source?.configId !== 'hill-of-hills-motion-affordance-packet-v0') {
+    throw new Error('Hill motion source truth identity mismatch');
+  }
+  const embedded = packet.motionAffordanceData;
+  if (embedded?.schema !== data.schema
+      || embedded?.sourceTruth?.frameId !== data.sourceTruth.frameId
+      || embedded?.sourceTruth?.backend !== data.sourceTruth.backend
+      || embedded?.sourceTruth?.configId !== data.sourceTruth.configId
+      || JSON.stringify(embedded?.checksums) !== JSON.stringify(data.checksums)) {
+    throw new Error('Hill packet and motion data identity disagree');
   }
   const columns = Number(data.grid?.columns);
   const rows = Number(data.grid?.rows);
@@ -63,8 +107,36 @@ export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
       || columns < 2 || rows < 2 || sampleCount !== columns * rows) {
     throw new Error('Hill motion data grid is incomplete');
   }
+  const spacingX = Number(data.grid.spacing?.x);
+  const spacingZ = Number(data.grid.spacing?.z);
+  if (!(spacingX > 0) || !(spacingZ > 0)) {
+    throw new Error('Hill motion data grid spacing must be finite and positive');
+  }
+  const worldBounds = structuredClone(data.worldBounds);
+  const bounds = [
+    Number(worldBounds?.x?.min),
+    Number(worldBounds?.x?.max),
+    Number(worldBounds?.y?.min),
+    Number(worldBounds?.y?.max),
+    Number(worldBounds?.z?.min),
+    Number(worldBounds?.z?.max),
+  ];
+  if (!bounds.every(Number.isFinite)
+      || bounds[1] <= bounds[0]
+      || bounds[3] <= bounds[2]
+      || bounds[5] <= bounds[4]) {
+    throw new Error('Hill motion data world bounds must be finite and non-empty');
+  }
+  const expectedSpacingX = (bounds[1] - bounds[0]) / (columns - 1);
+  const expectedSpacingZ = (bounds[5] - bounds[4]) / (rows - 1);
+  if (Math.abs(spacingX - expectedSpacingX) > 1e-12
+      || Math.abs(spacingZ - expectedSpacingZ) > 1e-12) {
+    throw new Error('Hill motion data grid spacing disagrees with world bounds');
+  }
   const channelLayout = Array.isArray(data.channelLayout) ? data.channelLayout.map(String) : [];
-  if (channelLayout.length === 0) throw new Error('Hill motion data requires a channel layout');
+  if (channelLayout.length === 0 || new Set(channelLayout).size !== channelLayout.length) {
+    throw new Error('Hill motion data requires a unique channel layout');
+  }
   const channels = Object.fromEntries(channelLayout.map(name => [
     name,
     decodeFloat32Channel(name, data.channels?.[name], sampleCount),
@@ -85,11 +157,11 @@ export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
       rows,
       sampleCount,
       spacing: {
-        x: Number(data.grid.spacing?.x),
-        z: Number(data.grid.spacing?.z),
+        x: spacingX,
+        z: spacingZ,
       },
     },
-    worldBounds: structuredClone(data.worldBounds),
+    worldBounds,
     channels,
   };
 }
@@ -127,7 +199,11 @@ export function sampleHillTerrainSurface(source, worldXInput, worldZInput) {
   const row1 = row0 + 1;
   const tx = clampedX - column0;
   const tz = clampedZ - row0;
-  const at = (column, row) => Number(heights[row * columns + column]) || 0;
+  const at = (column, row) => {
+    const value = Number(heights[row * columns + column]);
+    if (!Number.isFinite(value)) throw new Error('Hill terrain source contains non-finite height');
+    return value;
+  };
   const near = mix(at(column0, row0), at(column1, row0), tx);
   const far = mix(at(column0, row1), at(column1, row1), tx);
   const height = mix(near, far, tz);

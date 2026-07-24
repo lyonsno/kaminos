@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+import * as stationaryContactCore from '../lirm-stationary-hill-contact-core.mjs';
 import {
   createSupportPlacedFittedRig,
   evaluatePublishedStationaryContactPhase,
@@ -143,12 +144,15 @@ for (const patch of packet.realized.contactRealization.patches) {
 
 const publishedConstraints = JSON.parse(publishedConstraintsBytes);
 const publishedReceipt = JSON.parse(publishedReceiptBytes);
-const publication = {
-  constraints: publishedConstraints,
-  constraintsSha256: STATIONARY_CONTACT_CONSTRAINTS_SHA256,
-  receipt: publishedReceipt,
-  receiptSha256: STATIONARY_CONTACT_RECEIPT_SHA256,
-};
+assert.equal(
+  typeof stationaryContactCore.verifyPublishedStationaryContactArtifacts,
+  'function',
+  'stationary contact core must expose an exact-byte publication verifier',
+);
+const publication = await stationaryContactCore.verifyPublishedStationaryContactArtifacts({
+  constraintsBytes: publishedConstraintsBytes,
+  receiptBytes: publishedReceiptBytes,
+});
 const published = evaluatePublishedStationaryContactPhase({
   placedRig,
   prepass: handshake.prepass,
@@ -165,7 +169,7 @@ assert.equal(published.effectiveRoute, STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE);
 assert.equal(published.baseline, null);
 assert.equal(published.publication.receiptSha256, STATIONARY_CONTACT_RECEIPT_SHA256);
 assert.equal(published.publication.constraintsSha256, STATIONARY_CONTACT_CONSTRAINTS_SHA256);
-assert.equal(published.constraints, publishedConstraints);
+assert.deepEqual(published.constraints, publishedConstraints);
 assert.deepEqual(
   published.constraints.patches.map(({ id, signedDistance }) => ({ id, signedDistance })),
   publishedConstraints.patches.map(({ id, signedDistance }) => ({ id, signedDistance })),
@@ -178,15 +182,29 @@ assert.throws(
     placedRig,
     prepass: handshake.prepass,
     publication: {
-      ...publication,
-      receiptSha256: `sha256:${'0'.repeat(64)}`,
+      constraints: structuredClone(publishedConstraints),
+      constraintsSha256: STATIONARY_CONTACT_CONSTRAINTS_SHA256,
+      receipt: structuredClone(publishedReceipt),
+      receiptSha256: STATIONARY_CONTACT_RECEIPT_SHA256,
     },
     bodyPhase: 0,
     amplitude: phaseReport.effectiveConfig.amplitude,
     contactPlaneY: 0,
   }),
-  /receipt hash mismatch/,
-  'an unreviewed receipt must fail before fitted-body application',
+  /verified publication bytes/,
+  'caller-crafted parsed publication objects must fail before fitted-body application',
+);
+
+const forgedConstraintBytes = Buffer.from(
+  publishedConstraintsBytes.replace('0.19032828738339705', '9.19032828738339705'),
+);
+await assert.rejects(
+  () => stationaryContactCore.verifyPublishedStationaryContactArtifacts({
+    constraintsBytes: forgedConstraintBytes,
+    receiptBytes: publishedReceiptBytes,
+  }),
+  /constraints hash mismatch/,
+  'mutated constraint bytes must not inherit the reviewed claimed hash',
 );
 
 process.stdout.write('lirm stationary Hill contact contracts passed\n');

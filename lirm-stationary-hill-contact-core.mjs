@@ -13,12 +13,79 @@ export const STATIONARY_HILL_CONTACT_ROUTE = 'kaminos/lirm-719024/stationary-hil
 export const STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE = 'kaminos/lirm-719024/published-stationary-contact-v0';
 export const STATIONARY_CONTACT_RECEIPT_SHA256 = 'sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad';
 export const STATIONARY_CONTACT_CONSTRAINTS_SHA256 = 'sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029';
+const VERIFIED_STATIONARY_CONTACT_PUBLICATION = Symbol('verified stationary contact publication');
 const STATIONARY_CONTACT_PATCH_IDS = Object.freeze([
   'front-left',
   'front-right',
   'rear-left',
   'rear-right',
 ]);
+
+function bytesOf(value, label) {
+  if (typeof value === 'string') return new TextEncoder().encode(value);
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  throw new Error(`${label} must be exact bytes or text`);
+}
+
+async function sha256(bytes) {
+  if (!globalThis.crypto?.subtle) throw new Error('SHA-256 verifier is unavailable');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return `sha256:${[...new Uint8Array(digest)]
+    .map(value => value.toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+function parseJsonBytes(bytes, label) {
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON: ${error.message}`);
+  }
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+export async function verifyPublishedStationaryContactArtifacts({
+  constraintsBytes,
+  receiptBytes,
+} = {}) {
+  const exactConstraintsBytes = bytesOf(constraintsBytes, 'stationary contact constraints');
+  const exactReceiptBytes = bytesOf(receiptBytes, 'stationary contact receipt');
+  const [constraintsSha256, receiptSha256] = await Promise.all([
+    sha256(exactConstraintsBytes),
+    sha256(exactReceiptBytes),
+  ]);
+  if (constraintsSha256 !== STATIONARY_CONTACT_CONSTRAINTS_SHA256) {
+    throw new Error(`stationary contact constraints hash mismatch: ${constraintsSha256}`);
+  }
+  if (receiptSha256 !== STATIONARY_CONTACT_RECEIPT_SHA256) {
+    throw new Error(`stationary contact receipt hash mismatch: ${receiptSha256}`);
+  }
+  const constraints = deepFreeze(
+    parseJsonBytes(exactConstraintsBytes, 'stationary contact constraints'),
+  );
+  const receipt = deepFreeze(
+    parseJsonBytes(exactReceiptBytes, 'stationary contact receipt'),
+  );
+  const publication = {
+    constraints,
+    constraintsSha256,
+    receipt,
+    receiptSha256,
+  };
+  Object.defineProperty(publication, VERIFIED_STATIONARY_CONTACT_PUBLICATION, {
+    value: true,
+    enumerable: false,
+  });
+  return Object.freeze(publication);
+}
 
 function requireVector3(value, label) {
   if (!Array.isArray(value) || value.length !== 3
@@ -147,6 +214,9 @@ function requireExactPublishedStationaryContact({
   prepass,
   publication,
 } = {}) {
+  if (publication?.[VERIFIED_STATIONARY_CONTACT_PUBLICATION] !== true) {
+    throw new Error('stationary contact application requires verified publication bytes');
+  }
   const { constraints, constraintsSha256, receipt, receiptSha256 } = publication ?? {};
   if (receiptSha256 !== STATIONARY_CONTACT_RECEIPT_SHA256) {
     throw new Error(`stationary contact receipt hash mismatch: ${receiptSha256}`);

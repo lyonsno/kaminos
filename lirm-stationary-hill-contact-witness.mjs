@@ -131,7 +131,7 @@ async function fileRecord(path, root) {
 }
 
 async function stopBrowser(browser) {
-  if (!browser || browser.exitCode !== null || browser.signalCode !== null) return;
+  if (!browser || !browser.pid || browser.exitCode !== null || browser.signalCode !== null) return;
   const exited = new Promise(accept => browser.once('exit', accept));
   browser.kill('SIGTERM');
   await Promise.race([
@@ -189,7 +189,15 @@ try {
     '--window-size=1280,800',
     'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
-  await waitForJson(`http://127.0.0.1:${port}/json/version`);
+  const browserLaunchFailure = new Promise((accept, reject) => {
+    browser.once('error', error => {
+      reject(new Error(`Chrome launch failed for ${chromePath}: ${error.message}`, { cause: error }));
+    });
+  });
+  await Promise.race([
+    waitForJson(`http://127.0.0.1:${port}/json/version`),
+    browserLaunchFailure,
+  ]);
   const target = await fetch(
     `http://127.0.0.1:${port}/json/new?${encodeURIComponent(options.url)}`,
     { method: 'PUT' },
