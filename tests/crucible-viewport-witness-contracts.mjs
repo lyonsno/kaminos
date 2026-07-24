@@ -13,6 +13,16 @@ import {
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
+assert.doesNotMatch(
+  witness,
+  /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
+  'Crucible headless smoke must not default to the installed stable Chrome application',
+);
+assert.match(
+  witness,
+  /resolveHeadlessBrowser/,
+  'Crucible headless smoke must use the independent-browser resolver',
+);
 assert.match(
   witness,
   /consoleState:\s*workspace\?\.dataset\.crucibleConsoleState/,
@@ -91,8 +101,13 @@ try {
     flameContinuity: 'live-every-frame',
     captureInFlight: false,
     requireFrameStageLedger: false,
+    browserRequest: {
+      source: 'independent-default',
+      executable: null,
+    },
   });
   assert.deepEqual(argumentFailureDocument.effectiveIdentity, {
+    browser: null,
     sourceAssetId: null,
     workroomSourceAssetId: null,
     source: null,
@@ -106,6 +121,32 @@ try {
   assert.equal(existsSync(join(argumentFailureRoot, 'should-not-exist.png')), false, 'argument rejection must happen before browser capture');
 } finally {
   rmSync(argumentFailureRoot, { recursive: true, force: true });
+}
+const browserFailureRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-browser-resolution-'));
+try {
+  const browserFailureReport = join(browserFailureRoot, 'witness.json');
+  const requestedBrowser = join(browserFailureRoot, 'missing-browser');
+  const browserFailure = spawnSync(process.execPath, [
+    witnessPath.pathname,
+    '--chrome', requestedBrowser,
+    '--report', browserFailureReport,
+    '--out', join(browserFailureRoot, 'should-not-exist.png'),
+  ], { encoding: 'utf8' });
+  assert.notEqual(browserFailure.status, 0, 'an unavailable explicit browser must fail without default fallback');
+  assert.equal(existsSync(browserFailureReport), true, 'browser resolution failure must write the requested durable report');
+  const browserFailureDocument = JSON.parse(readFileSync(browserFailureReport, 'utf8'));
+  assert.equal(browserFailureDocument.ok, false);
+  assert.equal(browserFailureDocument.phase, 'resolving-headless-browser');
+  assert.equal(browserFailureDocument.primaryOutputWritten, false);
+  assert.deepEqual(browserFailureDocument.requestedInvocation.browserRequest, {
+    source: 'cli',
+    executable: requestedBrowser,
+  });
+  assert.equal(browserFailureDocument.effectiveIdentity.browser, null);
+  assert.match(browserFailureDocument.error, /not an executable file/);
+  assert.equal(existsSync(join(browserFailureRoot, 'should-not-exist.png')), false);
+} finally {
+  rmSync(browserFailureRoot, { recursive: true, force: true });
 }
 const schedulerExpectationSource = witness.match(
   /function expectedSchedulerForProfile\([\s\S]*?\n}\n(?=\nfunction )/,
@@ -483,7 +524,7 @@ const effectiveIdentitySource = witness.match(
 );
 assert.ok(effectiveIdentitySource, 'witness must expose a testable compact effective identity projector');
 const bestKnownEffectiveIdentity = vm.runInNewContext(
-  `((lastTrustworthyEvidence, replayCastEvidence) => (${effectiveIdentitySource[0]})())`,
+  `((lastTrustworthyEvidence, replayCastEvidence, browserResolution = null) => (${effectiveIdentitySource[0]})())`,
 );
 const replayIdentity = JSON.parse(JSON.stringify(bestKnownEffectiveIdentity({
   sourceSelectionExercise: { effectiveAssetId: 'image-inbox:21_img.png' },

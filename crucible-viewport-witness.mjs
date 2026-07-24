@@ -9,6 +9,10 @@ import {
   decoderKernelTileEventsFromSchedulerEvents,
   validateDecoderKernelTileEvidence,
 } from './lib/decoder-kernel-tiling-evidence.mjs';
+import {
+  headlessBrowserRequest,
+  resolveHeadlessBrowser,
+} from './lib/headless-browser-resolver.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -24,7 +28,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -33,7 +37,10 @@ if (args.has('help')) {
 const url = args.get('url') || 'http://127.0.0.1:8095/';
 const out = args.get('out') || '/tmp/kaminos-crucible-viewport-witness.png';
 const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness.json';
-const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const browserRequest = headlessBrowserRequest({
+  cliExecutable: args.get('chrome'),
+  envExecutable: process.env.KAMINOS_CHROME,
+});
 const port = Number(args.get('cdp-port') || 9341);
 const viewportWidth = Number(args.get('viewport-width') || 1600);
 const viewportHeight = Number(args.get('viewport-height') || 1100);
@@ -71,6 +78,7 @@ let primaryOutputWritten = false;
 let stderr = '';
 let lastTrustworthyEvidence = null;
 let replayCastEvidence = null;
+let browserResolution = null;
 let inFlightCapture = {
   requested: captureInFlight,
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
@@ -94,6 +102,7 @@ const requestedInvocation = {
   flameContinuity: requestedFlameContinuity,
   captureInFlight,
   requireFrameStageLedger,
+  browserRequest,
 };
 
 function bestKnownEffectiveIdentity() {
@@ -106,6 +115,7 @@ function bestKnownEffectiveIdentity() {
   const replaySource = replay?.sourceArtifact || null;
   const output = route?.output || replay?.artifact || null;
   return {
+    browser: browserResolution,
     sourceAssetId: replaySource ? null : workroomSourceAssetId,
     workroomSourceAssetId,
     source: replaySource ? {
@@ -1135,6 +1145,11 @@ try {
   if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
     throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
   }
+  phase = 'resolving-headless-browser';
+  browserResolution = resolveHeadlessBrowser({
+    cliExecutable: args.get('chrome'),
+    envExecutable: process.env.KAMINOS_CHROME,
+  });
   userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
   if (replayCastReportPath) {
     phase = 'validating-replay-cast-report';
@@ -1145,7 +1160,7 @@ try {
     lastTrustworthyEvidence = { replayCastSource: replayCastEvidence };
   }
   phase = 'launching-chrome';
-  browser = spawn(chrome, [
+  browser = spawn(browserResolution.effective.executable, [
     '--headless=new',
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
