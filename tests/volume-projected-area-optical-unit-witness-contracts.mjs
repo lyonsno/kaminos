@@ -103,5 +103,15 @@ assert.match(
   /boundarySplatSourceAuthority,\s*HISTORICAL_OPTICAL_SOURCE_AUTHORITY/,
   'witness does not bind the authenticated persistent-cohort optical source',
 );
+assert.match(
+  witness,
+  /sourceManifestAccounting:\s*{\s*requestedChargedDeposits:\s*arm\.probe\.population\.requestedDeposits/,
+  'witness lets producer charged-deposit accounting impersonate effective raster work',
+);
+assert.match(
+  witness,
+  /effectiveRasterAccounting:\s*{\s*sourceCandidateCount:\s*arm\.canvas\.fullSupportSourceCandidateCount/,
+  'witness does not make effective one-deposit raster accounting authoritative',
+);
 
 console.log('volume projected-area optical-unit witness contracts: passed');

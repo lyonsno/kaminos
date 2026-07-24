@@ -413,14 +413,37 @@ try {
     const screenshotPath = join(outputDirectory, `${definition.id}.png`);
     await captureScreenshot(socket, arm.rect, screenshotPath);
     assert.ok(readFileSync(screenshotPath).byteLength > 1024, `${definition.id} screenshot was blank`);
-    arms.push({ id: definition.id, screenshotPath, ...arm });
+    const reportedProbe = {
+      ...arm.probe,
+      population: {
+        sourceCandidates: arm.probe.population.candidates,
+        sourceManifestAccounting: {
+          requestedChargedDeposits: arm.probe.population.requestedDeposits,
+          appliedChargedDeposits: arm.probe.population.appliedDeposits,
+          rowCap: arm.probe.population.rowCap,
+          selectorRerun: arm.probe.population.selectorRerun,
+        },
+        effectiveRasterAccounting: {
+          sourceCandidateCount: arm.canvas.fullSupportSourceCandidateCount,
+          rasterDepositCount: arm.canvas.fullSupportRasterDepositCount,
+          depositsPerCandidate:
+            arm.canvas.fullSupportRasterDepositCount / arm.canvas.fullSupportSourceCandidateCount,
+          depositionIdentity: arm.canvas.fullSupportDepositionEffective,
+        },
+      },
+    };
+    arms.push({ id: definition.id, screenshotPath, ...arm, probe: reportedProbe });
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, arms };
   }
 
   failurePhase = 'same-state-comparison';
   assert.equal(arms[0].probe.capturedSimStepCount, arms[1].probe.capturedSimStepCount, 'same-state arms drifted');
   assert.equal(arms[0].probe.cameraSignature, arms[1].probe.cameraSignature, 'same-camera arms drifted');
-  assert.equal(arms[0].probe.population.candidates, arms[1].probe.population.candidates, 'candidate population drifted');
+  assert.equal(
+    arms[0].probe.population.sourceCandidates,
+    arms[1].probe.population.sourceCandidates,
+    'candidate population drifted',
+  );
   assert.equal(arms[0].probe.depositionPayload.width, arms[1].probe.depositionPayload.width, 'render width drifted');
   assert.equal(arms[0].probe.depositionPayload.height, arms[1].probe.depositionPayload.height, 'render height drifted');
   const legacyArm = arms.find(arm => arm.id === 'legacy-raw-scale-1');
