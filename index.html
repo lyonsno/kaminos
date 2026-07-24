@@ -15174,6 +15174,7 @@ async function waitForWakeSharpPromotedFirePresentation({
   }
   while (true) {
     const state = readState() || {};
+    const firingHooks = state.fireEpisodeHooks || null;
     const fallbackReason = wakeSharpPromotedFireFallbackReason(state, loaded.mount);
     if (fallbackReason) {
       throw new Error(`Promoted FireActor presentation fallback: ${fallbackReason}`);
@@ -15181,6 +15182,11 @@ async function waitForWakeSharpPromotedFirePresentation({
     if (state.active === true
       && state.frameCount > 0
       && state.simStepCount > 0
+      && firingHooks?.identity === 'foreground-kiln-fire-episode-hooks-v0'
+      && firingHooks.firingId === firingId
+      && firingHooks.status === 'recording'
+      && firingHooks.frameAdvanceCount > 0
+      && firingHooks.simStepAdvanceCount > 0
       && state.boundarySplatMode === loaded.mount.representation.splatMode
       && state.raymarchSmokePresentationModeEffective === 'on') {
       return {
@@ -15192,6 +15198,7 @@ async function waitForWakeSharpPromotedFirePresentation({
         packageSha256: loaded.packageSha256,
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
+        fireEpisodeHooks: structuredClone(firingHooks),
         boundarySplatMode: state.boundarySplatMode,
         smokePresentation: state.raymarchSmokePresentationModeEffective,
         fallbackReason: null,

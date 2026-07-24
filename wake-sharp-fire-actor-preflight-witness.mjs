@@ -1,11 +1,23 @@
 #!/usr/bin/env node
 
-import { createHash, randomInt } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path, { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
+
+import {
+  headlessBrowserRequest,
+  resolveHeadlessBrowser,
+} from './lib/headless-browser-resolver.mjs';
 
 const EXPECTED = Object.freeze({
   mountId: 'firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7',
@@ -54,6 +66,14 @@ export function validateWakeSharpFireActorPreflightState(state, {
   if (volume?.active !== true) throw new Error('promoted product volume is not active');
   if (!(volume.frameCount > 0) || !(volume.simStepCount > 0)) {
     throw new Error('promoted product volume did not advance a rendered simulation frame');
+  }
+  const firingHooks = volume.fireEpisodeHooks;
+  if (firingHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
+    || firingHooks.firingId !== state.firingId
+    || firingHooks.status !== 'recording'
+    || !(firingHooks.frameAdvanceCount > 0)
+    || !(firingHooks.simStepAdvanceCount > 0)) {
+    throw new Error('promoted product firing-local frame and simulation advancement is unavailable');
   }
   if (volume.boundarySplatMode !== EXPECTED.splatMode) {
     throw new Error(`promoted product splat mode mismatch: ${volume.boundarySplatMode || 'missing'}`);
@@ -118,18 +138,6 @@ async function cdpJson(port, path) {
   return response.json();
 }
 
-async function waitForCdp(port) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try {
-      await cdpJson(port, '/json/version');
-      return;
-    } catch {
-      await delay(100);
-    }
-  }
-  throw new Error(`CDP did not open on ${port}`);
-}
-
 async function waitForPage(port) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const targets = await cdpJson(port, '/json/list');
@@ -138,6 +146,128 @@ async function waitForPage(port) {
     await delay(100);
   }
   throw new Error('No debuggable Kaminos page target');
+}
+
+async function waitForSpawnedBrowserCdp({
+  browser,
+  userDataDir,
+  browserState,
+} = {}) {
+  const activePortPath = path.join(userDataDir, 'DevToolsActivePort');
+  let lastEndpointError = null;
+  for (let attempt = 0; attempt < 600; attempt += 1) {
+    if (browserState.spawnError) {
+      throw new Error(
+        `Browser spawn failed with ${browserState.spawnError.code || browserState.spawnError.name}: `
+        + browserState.spawnError.message,
+      );
+    }
+    if (browserState.exit) {
+      throw new Error(
+        `Browser exited before DevTools endpoint with code ${browserState.exit.code ?? 'null'} `
+        + `and signal ${browserState.exit.signal ?? 'null'}`,
+      );
+    }
+    let content;
+    try {
+      content = readFileSync(activePortPath, 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await delay(50);
+      continue;
+    }
+    const [portLine, browserWebSocketPath] = content.trim().split(/\r?\n/);
+    const cdpPort = Number(portLine);
+    if (!Number.isInteger(cdpPort) || cdpPort <= 0 || cdpPort > 65535
+      || !browserWebSocketPath?.startsWith('/devtools/browser/')) {
+      throw new Error(`Spawned browser wrote invalid DevToolsActivePort: ${JSON.stringify(content)}`);
+    }
+    try {
+      const version = await cdpJson(cdpPort, '/json/version');
+      const attachedUrl = new URL(version.webSocketDebuggerUrl);
+      if (Number(attachedUrl.port) !== cdpPort || attachedUrl.pathname !== browserWebSocketPath) {
+        throw new Error('CDP browser endpoint does not match spawned DevToolsActivePort');
+      }
+      return {
+        spawnedPid: browser.pid ?? null,
+        profilePath: userDataDir,
+        devToolsActivePortPath: activePortPath,
+        cdpPort,
+        browserWebSocketPath,
+        browserWebSocketUrl: version.webSocketDebuggerUrl,
+        attachedBrowserProduct: version.Browser ?? null,
+        attachedProtocolVersion: version['Protocol-Version'] ?? null,
+      };
+    } catch (error) {
+      lastEndpointError = error;
+      await delay(50);
+    }
+  }
+  throw new Error(
+    'Spawned browser DevTools endpoint did not become usable within 30000ms'
+    + (lastEndpointError ? `: ${lastEndpointError.message}` : ''),
+  );
+}
+
+function waitForBrowserExit(browser, browserState, timeoutMs) {
+  if (!browser || browserState.exit || browser.exitCode !== null || browser.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+  return new Promise(resolveExit => {
+    const timer = setTimeout(() => {
+      browser.removeListener('exit', onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolveExit(true);
+    };
+    browser.once('exit', onExit);
+  });
+}
+
+async function cleanupBrowser({
+  browser,
+  ws,
+  userDataDir,
+  browserState,
+  browserCleanup,
+} = {}) {
+  try {
+    ws?.close();
+  } catch (error) {
+    browserCleanup.errors.push(`websocket-close: ${error.message}`);
+  }
+  if (browser) {
+    try {
+      if (!browserState.exit && browser.exitCode === null && browser.signalCode === null && browser.pid) {
+        browser.kill('SIGTERM');
+        if (!await waitForBrowserExit(browser, browserState, 5000)) {
+          browserCleanup.forced = true;
+          browser.kill('SIGKILL');
+          if (!await waitForBrowserExit(browser, browserState, 5000)) {
+            browserCleanup.errors.push('browser-process-did-not-exit');
+          }
+        }
+      }
+      browserCleanup.processStopped = Boolean(
+        browserState.exit
+        || browser.exitCode !== null
+        || browser.signalCode !== null
+        || !browser.pid,
+      );
+    } catch (error) {
+      browserCleanup.errors.push(`browser-stop: ${error.message}`);
+    }
+  }
+  if (userDataDir) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true });
+      browserCleanup.profileRemoved = true;
+    } catch (error) {
+      browserCleanup.errors.push(`profile-remove: ${error.message}`);
+    }
+  }
 }
 
 function openWebSocket(url) {
@@ -364,6 +494,7 @@ const browserProjection = `(() => {
       active: volume?.active,
       frameCount: volume?.frameCount,
       simStepCount: volume?.simStepCount,
+      fireEpisodeHooks: volume?.fireEpisodeHooks,
       boundarySplatMode: volume?.boundarySplatMode,
       boundarySplatRendererIdentity: volume?.boundarySplatRendererIdentity,
       boundarySplatFallbackReason: volume?.boundarySplatFallbackReason,
@@ -397,11 +528,11 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
   const expectedSharpRevision = String(options.expectedSharpRevision || '').trim();
   const settleMs = Number(options.settleMs || 5000);
   const frameWaitMs = Number(options.frameWaitMs || 60000);
-  const port = Number(options.debugPort || randomInt(42000, 62000));
-  const chrome = options.chrome
-    || process.env.KAMINOS_CHROME
-    || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  const userDataDir = options.userDataDir || `/tmp/kaminos-wake-sharp-fireactor-${port}-${process.pid}`;
+  const browserRequest = headlessBrowserRequest({
+    cliExecutable: options.chrome,
+    envExecutable: process.env.KAMINOS_CHROME,
+  });
+  let userDataDir = null;
   const firingId = options.firingId || `firing-fireactor-preflight-${Date.now()}`;
   const failureReportPath = resolve(
     options.failureReportPath || `${requestedReportPath}.failed-${firingId}.json`,
@@ -417,6 +548,16 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
   let screenshotSha256 = null;
   let releaseState = null;
   let failure = null;
+  let browserResolution = null;
+  let browserSession = null;
+  const browserState = { spawnError: null, exit: null };
+  const browserCleanup = {
+    profilePath: null,
+    profileRemoved: false,
+    processStopped: false,
+    forced: false,
+    errors: [],
+  };
 
   const writeReport = () => {
     const successful = failure === null
@@ -442,6 +583,12 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
         inferenceInvoked: false,
         action: 'product-fire-begin-and-release-only',
       },
+      browser: {
+        requested: browserRequest,
+        resolution: browserResolution,
+        session: browserSession,
+        cleanup: browserCleanup,
+      },
       settleMs,
       frameWaitMs,
       phase,
@@ -459,20 +606,41 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
 
   try {
     if (!expectedSharpRevision) throw new Error('--expected-sharp-revision is required');
-    browser = spawn(chrome, [
-      `--remote-debugging-port=${port}`,
+    if (options.debugPort !== undefined && options.debugPort !== null) {
+      throw new Error('debugPort is retired; the spawned browser owns a dynamic CDP endpoint');
+    }
+    phase = 'browser-resolution';
+    browserResolution = resolveHeadlessBrowser({
+      cliExecutable: options.chrome,
+      envExecutable: process.env.KAMINOS_CHROME,
+    });
+    userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-wake-sharp-fireactor-'));
+    browserCleanup.profilePath = userDataDir;
+    phase = 'browser-launch';
+    browser = spawn(browserResolution.effective.executable, [
+      '--headless=new',
+      '--remote-debugging-port=0',
       `--user-data-dir=${userDataDir}`,
       '--no-first-run',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1440,1000',
-      url,
-    ], { stdio: 'ignore' });
-    await waitForCdp(port);
-    const page = await waitForPage(port);
+      'about:blank',
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    browser.on('error', error => { browserState.spawnError = error; });
+    browser.on('exit', (code, signal) => { browserState.exit = { code, signal }; });
+    browser.stderr.on('data', () => {});
+    browserSession = await waitForSpawnedBrowserCdp({
+      browser,
+      userDataDir,
+      browserState,
+    });
+    const page = await waitForPage(browserSession.cdpPort);
     ws = await openWebSocket(page.webSocketDebuggerUrl);
     await cdpRequest(ws, 'Runtime.enable');
     await cdpRequest(ws, 'Page.enable');
+    phase = 'page-navigation';
+    await cdpRequest(ws, 'Page.navigate', { url });
     phase = 'product-fire-api';
     await waitForProductFireApi(ws);
     await waitForKaminosHostReady(ws);
@@ -541,14 +709,8 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
       || releaseState.promotedActiveAfterRelease !== false) {
       throw new Error('Product FireActor preflight release evidence mismatch');
     }
-    mkdirSync(dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, screenshotPng);
-    primaryOutputWritten = true;
-    phase = 'complete';
-    return { reportPath, outputPath, preflightState, releaseState };
   } catch (error) {
     failure = { phase, error: error.message || String(error) };
-    throw error;
   } finally {
     if (ws && releaseState?.phase !== 'preflight-complete') {
       try {
@@ -558,10 +720,29 @@ export async function runWakeSharpFireActorPreflight(options = {}) {
         );
       } catch {}
     }
+    await cleanupBrowser({
+      browser,
+      ws,
+      userDataDir,
+      browserState,
+      browserCleanup,
+    });
+    if (browserCleanup.errors.length && !failure) {
+      failure = {
+        phase: 'browser-cleanup',
+        error: browserCleanup.errors.join('; '),
+      };
+    }
+    if (!failure) {
+      mkdirSync(dirname(outputPath), { recursive: true });
+      writeFileSync(outputPath, screenshotPng);
+      primaryOutputWritten = true;
+      phase = 'complete';
+    }
     writeReport();
-    ws?.close();
-    browser?.kill('SIGTERM');
   }
+  if (failure) throw new Error(failure.error);
+  return { reportPath, outputPath, preflightState, releaseState };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));

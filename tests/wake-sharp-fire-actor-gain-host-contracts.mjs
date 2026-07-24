@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
@@ -53,3 +54,72 @@ assert.match(
   /waitForWakeSharpPromotedFirePresentation\(\{[\s\S]{0,300}timeoutMs = null[\s\S]{0,1200}callerDeadlineMs = timeoutMs === null \? null/,
   'promoted readiness must remain uncapped unless its caller supplies a deadline',
 );
+
+const readinessSource = page.match(
+  /async function waitForWakeSharpPromotedFirePresentation\([\s\S]*?\n}\n(?=\nasync function beginSharpBreathingRoomKilnFire)/,
+)?.[0];
+assert.ok(readinessSource, 'the promoted readiness function must remain independently exercisable');
+const waitForWakeSharpPromotedFirePresentation = vm.runInNewContext(
+  `(${readinessSource})`,
+  {
+    structuredClone,
+    volumePrototype: null,
+    performance: { now: () => 0 },
+    requestAnimationFrame: callback => callback(),
+    wakeSharpPromotedFireFallbackReason: () => null,
+  },
+);
+const firingId = 'firing-reused-adapter';
+const loaded = {
+  mount: {
+    mountId: 'firemount-test',
+    actorId: 'actor-test',
+    basin: { revision: 'basinrev-test' },
+    representation: { splatMode: 'kernel_moment_covariance' },
+  },
+  packageSha256: 'package-test',
+};
+const staleReusedState = {
+  active: true,
+  frameCount: 80,
+  simStepCount: 90,
+  boundarySplatMode: 'kernel_moment_covariance',
+  raymarchSmokePresentationModeEffective: 'on',
+  fireEpisodeHooks: {
+    identity: 'foreground-kiln-fire-episode-hooks-v0',
+    firingId,
+    status: 'recording',
+    frameAdvanceCount: 0,
+    simStepAdvanceCount: 0,
+  },
+};
+let nowMs = 0;
+await assert.rejects(
+  waitForWakeSharpPromotedFirePresentation({
+    firingId,
+    fireEpisodeHooks: staleReusedState.fireEpisodeHooks,
+    loaded,
+    readState: () => staleReusedState,
+    requestFrame: callback => {
+      nowMs += 2;
+      callback();
+    },
+    now: () => nowMs,
+    timeoutMs: 1,
+  }),
+  /timed out waiting for an exact same-firing rendered frame/,
+  'reused cumulative counters must not satisfy a new firing before local advancement',
+);
+const advancedState = structuredClone(staleReusedState);
+advancedState.fireEpisodeHooks.frameAdvanceCount = 1;
+advancedState.fireEpisodeHooks.simStepAdvanceCount = 1;
+const readiness = await waitForWakeSharpPromotedFirePresentation({
+  firingId,
+  fireEpisodeHooks: advancedState.fireEpisodeHooks,
+  loaded,
+  readState: () => advancedState,
+  timeoutMs: null,
+});
+assert.equal(readiness.firingId, firingId);
+assert.equal(readiness.fireEpisodeHooks.frameAdvanceCount, 1);
+assert.equal(readiness.fireEpisodeHooks.simStepAdvanceCount, 1);

@@ -2,6 +2,16 @@
   "schema": "kaminos.wake-sharp-fire-actor-preflight-witness.v1",
   "ok": true,
   "reportRole": "canonical-success",
+  "runtimeAuthority": {
+    "exactHeadProof": false,
+    "scope": "supporting-preflight-before-firing-local-and-child-browser-r1-repair",
+    "missingFromCapturedProjection": [
+      "volumeState.fireEpisodeHooks",
+      "browser.session",
+      "browser.cleanup"
+    ],
+    "continuation": "deterministic-r1-contracts-close-these-gaps-without-an-unauthorized-second-browser-preflight"
+  },
   "reportPath": "artifacts/wake-sharp-fire-actor-preflight/live/report.json",
   "requestedRoute": "http://127.0.0.1:18402/",
   "effectiveRoute": "http://127.0.0.1:18402/",

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -49,6 +51,13 @@ const expected = {
     active: true,
     frameCount: 8,
     simStepCount: 8,
+    fireEpisodeHooks: {
+      identity: 'foreground-kiln-fire-episode-hooks-v0',
+      firingId: 'firing-fireactor-preflight-001',
+      status: 'recording',
+      frameAdvanceCount: 3,
+      simStepAdvanceCount: 3,
+    },
     boundarySplatMode: 'kernel_moment_covariance',
     boundarySplatFallbackReason: null,
     raymarchSmokePresentationModeEffective: 'on',
@@ -92,6 +101,15 @@ for (const [name, mutate, pattern] of [
   ['wrong SHARP revision', value => { value.fireActorProductEpisode.sharp.effectiveRevision = 'stale'; }, /SHARP/],
   ['renderer fallback', value => { value.volumeState.boundarySplatFallbackReason = 'ordinary-volume'; }, /fallback/],
   ['no frame', value => { value.volumeState.frameCount = 0; }, /frame/],
+  ['stale cumulative frames', value => {
+    value.volumeState.frameCount = 80;
+    value.volumeState.simStepCount = 90;
+    value.volumeState.fireEpisodeHooks.frameAdvanceCount = 0;
+    value.volumeState.fireEpisodeHooks.simStepAdvanceCount = 0;
+  }, /firing-local/],
+  ['wrong hook firing', value => {
+    value.volumeState.fireEpisodeHooks.firingId = 'firing-stale';
+  }, /firing-local/],
   ['blank output', value => { value.pixelWitness.changedPixels = 0; value.pixelWitness.litPixels = 0; }, /blank/],
 ]) {
   const candidate = structuredClone(expected);
@@ -148,6 +166,42 @@ assert.match(
 );
 assert.match(
   source,
+  /fireEpisodeHooks:\s*volume\?\.fireEpisodeHooks/,
+  'the preflight projection must preserve firing-local renderer advancement',
+);
+assert.match(
+  source,
+  /resolveHeadlessBrowser/,
+  'preflight browser selection must use the reviewed independent-browser resolver',
+);
+assert.match(
+  source,
+  /--remote-debugging-port=0/,
+  'the preflight browser child must allocate its own CDP endpoint',
+);
+assert.match(
+  source,
+  /DevToolsActivePort/,
+  'the preflight must bind CDP to the spawned profile endpoint',
+);
+assert.match(
+  source,
+  /browserCleanup/,
+  'the preflight report must bind browser stop and profile cleanup evidence',
+);
+assert.match(source, /profileRemoved/, 'the preflight must report profile removal');
+assert.match(
+  source,
+  /rmSync\(userDataDir,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/,
+  'the preflight must remove its child-owned browser profile',
+);
+assert.doesNotMatch(
+  source,
+  /randomInt\(42000,\s*62000\)|--remote-debugging-port=\$\{port\}/,
+  'the preflight must not guess a fixed CDP port',
+);
+assert.match(
+  source,
   /kaminosSharpBreathingRoomKilnFireDebug\.end\('preflight-complete'/,
   'preflight must release the product firing without claiming a completed inference route',
 );
@@ -191,6 +245,37 @@ assert.equal(failedReport.failure?.phase, 'launch');
 assert.equal(failedReport.primaryOutputWritten, false);
 assert.equal(failedReport.screenshotPath, null);
 
+const childFailureRoot = mkdtempSync(resolve(tmpdir(), 'wake-fireactor-preflight-child-'));
+try {
+  const exitingBrowser = resolve(childFailureRoot, 'exiting-browser');
+  const childFailureReport = resolve(childFailureRoot, 'child-failure.json');
+  writeFileSync(exitingBrowser, '#!/bin/sh\nexit 7\n');
+  chmodSync(exitingBrowser, 0o755);
+  await assert.rejects(
+    runWakeSharpFireActorPreflight({
+      expectedSharpRevision: 'sharp-test-revision',
+      chrome: exitingBrowser,
+      outputPath: resolve(childFailureRoot, 'should-not-exist.png'),
+      reportPath: resolve(childFailureRoot, 'canonical.json'),
+      failureReportPath: childFailureReport,
+      firingId: 'early-exit-browser',
+    }),
+    /exited before DevTools endpoint.*7/i,
+  );
+  const childFailure = JSON.parse(readFileSync(childFailureReport, 'utf8'));
+  assert.equal(childFailure.ok, false);
+  assert.equal(childFailure.phase, 'browser-launch');
+  assert.equal(childFailure.primaryOutputWritten, false);
+  assert.equal(childFailure.browser.requested.source, 'cli');
+  assert.equal(childFailure.browser.resolution.effective.executable, exitingBrowser);
+  assert.equal(childFailure.browser.session, null);
+  assert.equal(childFailure.browser.cleanup.processStopped, true);
+  assert.equal(childFailure.browser.cleanup.profileRemoved, true);
+  assert.equal(existsSync(childFailure.browser.cleanup.profilePath), false);
+} finally {
+  rmSync(childFailureRoot, { recursive: true, force: true });
+}
+
 const exactPreflightRevision = 'b689f485d5d6f6c8868f21ad3d56d17e81cba44a';
 const artifactRoot = resolve(
   import.meta.dirname,
@@ -218,6 +303,15 @@ assert.equal(
 );
 assert.ok(liveReport.preflightState, 'canonical preflight report must preserve the validated live state');
 assert.equal(
+  liveReport.runtimeAuthority?.exactHeadProof,
+  false,
+  'the sole pre-R1 browser artifact must not impersonate exact-head runtime proof',
+);
+assert.deepEqual(
+  liveReport.runtimeAuthority?.missingFromCapturedProjection,
+  ['volumeState.fireEpisodeHooks', 'browser.session', 'browser.cleanup'],
+);
+assert.equal(
   liveReport.releaseState?.volumeReleaseConfirmed,
   true,
   'canonical preflight report must preserve confirmed release',
@@ -236,6 +330,24 @@ assert.equal(
   liveReport.screenshotSha256,
   createHash('sha256').update(readFileSync(liveImagePath)).digest('hex'),
   'canonical preflight report must bind the exact committed image bytes',
+);
+
+const historicalProductReport = JSON.parse(readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'artifacts',
+    'wake-sharp-fire-actor-product',
+    'live',
+    'report.json',
+  ),
+  'utf8',
+));
+assert.equal(historicalProductReport.reportRole, 'historical-obsolete-failure');
+assert.equal(historicalProductReport.currentAuthority, false);
+assert.equal(
+  historicalProductReport.obsoleteSharpRevision,
+  '637f45fe4150e34a36fd2200f08319a964bdbaee',
 );
 
 console.log('Wake SHARP FireActor preflight witness contracts verified');

@@ -38,7 +38,7 @@ node wake-sharp-fire-actor-preflight-witness.mjs \
 
 - `live/report.json`: canonical requested/effective route, identity, timing,
   pixel-witness, and release receipt; SHA-256
-  `ee8a6e27b30fe31bf49c93a89631765853508f9d0824d2190f6b6ba2845cb661`
+  `2b5b8d5cf49d3a73889a856b09ba4ae494fe98116cf310b7c4e6af993ffde999`
 - `live/fireactor-product-preflight.png`: inspected product-canvas projection;
   SHA-256
   `f35ca029b45496f4c600660d38a797017064350f16bdd7b8041eafd8835093aa`
@@ -82,3 +82,10 @@ Wake independently cleared exact SHARP
 projection raises the already-live product canvas above product UI and records
 that projection identity; it does not alter the render route. The full Friendly
 firing remains separate and requires a new Wake disposition.
+
+The report also records `runtimeAuthority.exactHeadProof: false`. This sole
+authorized browser run preceded the R1 firing-local hook and child-owned browser
+session/cleanup repairs. Its captured pixels and exact SHARP/FireActor identity
+remain supporting evidence; deterministic R1 contracts close those reviewed
+false-authority paths without laundering this artifact into an exact-head
+runtime witness.

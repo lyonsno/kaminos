@@ -1,5 +1,8 @@
 {
   "schema": "crucible-viewport-witness.v0",
+  "reportRole": "historical-obsolete-failure",
+  "currentAuthority": false,
+  "obsoleteSharpRevision": "637f45fe4150e34a36fd2200f08319a964bdbaee",
   "url": "http://127.0.0.1:18402/",
   "screenshot": null,
   "reportPath": "artifacts/wake-sharp-fire-actor-product/live/report.json",

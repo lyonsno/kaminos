@@ -268,5 +268,10 @@ assert.match(
   /volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*await waitForWakeSharpPromotedFirePresentation\(\{[\s\S]*firingId,[\s\S]*fireEpisodeHooks,[\s\S]*loaded:\s*fireActorResources\.loaded,[\s\S]*createForegroundKilnHeartbeatEpisode\(/,
   'promoted FireActor readiness must be proven inside the exact firing before foreground verification starts',
 );
+assert.match(
+  ui,
+  /state\.fireEpisodeHooks[\s\S]*firingId[\s\S]*frameAdvanceCount\s*>\s*0[\s\S]*simStepAdvanceCount\s*>\s*0/,
+  'promoted readiness must require firing-local frame and simulation advancement',
+);
 
 console.log('kiln fire presentation contracts passed');
