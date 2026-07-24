@@ -90,6 +90,9 @@ try {
     firePresentation: 'full-volume',
     flameContinuity: 'live-every-frame',
     captureInFlight: false,
+    fireTimeoutMs: null,
+    fireTimeoutAuthority: 'uncapped-until-route-terminal',
+    pollEvaluateTimeoutMs: 5000,
     requireFrameStageLedger: false,
   });
   assert.deepEqual(argumentFailureDocument.effectiveIdentity, {
@@ -624,11 +627,36 @@ const observationGapReset = advanceInFlightCaptureReadiness({
   observationGapMs: 75,
   maxObservationGapMs: 50,
 });
-assert.equal(observationGapReset.eligibleSinceMs, null, 'an unobserved frame interval must reset settle eligibility');
-assert.equal(observationGapReset.resetReason, 'observation-gap-exceeded');
+assert.equal(
+  observationGapReset.eligibleSinceMs,
+  settlingReadiness.eligibleSinceMs,
+  'a slow observed frame must not erase visual authority merely because cadence exceeded a performance threshold',
+);
+assert.equal(observationGapReset.resetReason, null);
+assert.equal(
+  observationGapReset.observationGapExceeded,
+  true,
+  'contention must remain visible as a diagnostic without blocking visual capture',
+);
+
+const captureProgressSource = witness.match(
+  /function classifyInFlightCaptureProgress\([\s\S]*?\n}\n(?=\nfunction advanceInFlightCaptureReadiness)/,
+);
+assert.ok(captureProgressSource, 'witness must expose testable disjoint product-phase progress windows');
+const classifyInFlightCaptureProgress = vm.runInNewContext(`(${captureProgressSource[0]})`);
+const beginningTarget = { phase: 'beginning', minimumProgress: 0, maximumProgressExclusive: 0.45 };
+const middleTarget = { phase: 'middle', minimumProgress: 0.45, maximumProgressExclusive: 0.85 };
+const endTarget = { phase: 'end', minimumProgress: 0.85, maximumProgressExclusive: null };
+assert.equal(classifyInFlightCaptureProgress({ target: beginningTarget, progress: 0.44 }).status, 'eligible');
+assert.equal(classifyInFlightCaptureProgress({ target: beginningTarget, progress: 0.45 }).status, 'missed');
+assert.equal(classifyInFlightCaptureProgress({ target: middleTarget, progress: 0.44 }).status, 'waiting');
+assert.equal(classifyInFlightCaptureProgress({ target: middleTarget, progress: 0.45 }).status, 'eligible');
+assert.equal(classifyInFlightCaptureProgress({ target: middleTarget, progress: 0.85 }).status, 'missed');
+assert.equal(classifyInFlightCaptureProgress({ target: endTarget, progress: 0.84 }).status, 'waiting');
+assert.equal(classifyInFlightCaptureProgress({ target: endTarget, progress: 0.85 }).status, 'eligible');
 
 const cadenceAcceptanceSource = witness.match(
-  /function classifyCadenceAcceptance\([\s\S]*?\n}\n(?=\nfunction advanceInFlightCaptureReadiness)/,
+  /function classifyCadenceAcceptance\([\s\S]*?\n}\n(?=\nfunction classifyInFlightCaptureProgress)/,
 );
 assert.ok(cadenceAcceptanceSource, 'witness must expose a testable visual-versus-performance acceptance split');
 const classifyCadenceAcceptance = vm.runInNewContext(`(${cadenceAcceptanceSource[0]})`);
@@ -1100,12 +1128,17 @@ for (const [pattern, message] of [
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
   [/--in-flight-middle-out/, 'Witness must let callers address the middle same-firing FireActor screenshot'],
   [/--in-flight-end-out/, 'Witness must let callers address the late same-firing FireActor screenshot'],
-  [/phase:\s*'beginning'[\s\S]*minimumProgress:\s*0[\s\S]*phase:\s*'middle'[\s\S]*minimumProgress:\s*0\.45[\s\S]*phase:\s*'end'[\s\S]*minimumProgress:\s*0\.85/, 'Witness must bind beginning, middle, and end captures to explicit live-route progress gates'],
+  [/phase:\s*'beginning'[\s\S]*minimumProgress:\s*0[\s\S]*maximumProgressExclusive:\s*0\.45[\s\S]*phase:\s*'middle'[\s\S]*minimumProgress:\s*0\.45[\s\S]*maximumProgressExclusive:\s*0\.85[\s\S]*phase:\s*'end'[\s\S]*minimumProgress:\s*0\.85[\s\S]*maximumProgressExclusive:\s*null/, 'Witness must bind beginning, middle, and end captures to disjoint live-route progress windows'],
   [/phaseCaptures[\s\S]*firingId[\s\S]*progress[\s\S]*postCaptureSettleEvidence/, 'Every product-phase image must retain same-firing, progress, and post-capture settle authority'],
   [/productEpisodeFailures[\s\S]*fireActorProductEpisode[\s\S]*status !== 'recording'/, 'Full-volume captures must reject a missing or inactive promoted FireActor episode'],
   [/kaminos\.wake-sharp-promoted-fire-volume-adapter\.v1/, 'Full-volume captures must bind the selected promoted carrier instead of accepting generic volume fire'],
-  [/remainingFiringDeadlineMs[\s\S]*evaluate\(ws,[\s\S]*remainingFiringDeadlineMs\(\)/, 'In-flight telemetry must use the caller firing deadline instead of a hidden short CDP timeout'],
+  [/pollEvaluateTimeoutMs[\s\S]*evaluate\(ws,[\s\S]*pollEvaluateTimeoutMs[\s\S]*Runtime\.evaluate timed out[\s\S]*continue/, 'In-flight telemetry must use short recoverable CDP polls instead of one evaluation spanning the product run'],
   [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
+  [/--fire-timeout-ms/, 'Witness must expose an optional caller-owned product deadline'],
+  [/fireTimeoutMs:\s*Number\.isFinite\(fireTimeoutMs\)\s*\?\s*fireTimeoutMs\s*:\s*null/, 'Witness receipt must distinguish an explicit caller deadline from an uncapped route'],
+  [/phase = 'polling-friendly-route'/, 'Settle-monitor installation must return immediately and advance to a distinct polling phase'],
+  [/\['complete', 'error', 'evidence-only'\]\.includes\(routeState\.status\)\) break;/, 'Uncapped polling must terminate on a route terminal state even when running was never observed'],
+  [/captureProgress\.status === 'missed'[\s\S]*missedPhase[\s\S]*throw new Error/, 'A skipped product capture window must fail loud instead of relabeling a late frame'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],
   [/id: 'crucible-viewport-workspace'/, 'Witness report must include the requested workspace selector'],
@@ -1190,9 +1223,10 @@ for (const [pattern, message] of [
   [/sampleNow\('pre-capture'\)[\s\S]*attemptInFlightHybridCapture[\s\S]*sampleNow\('post-capture'\)/, 'Transient capture must verify the same settle epoch immediately before and after screenshot I/O'],
   [/compactWitnessSummary\([\s\S]*console\.log\(JSON\.stringify\(terminalSummary/, 'Successful stdout must emit only the compact locator summary'],
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
+  [/phase = 'reading-friendly-firing-evidence'[\s\S]*browser runtime exceptions[\s\S]*phase = 'capturing-screenshot'[\s\S]*browser runtime exceptions[\s\S]*phase = 'writing-report'/, 'Runtime exceptions must be rechecked after route termination and immediately before success publication'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
-  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing browser evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
+  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)/, 'Every Runtime.evaluate call must carry an operation-scoped timeout'],
   [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*const reportPath = routeState\.result\?\.report\?\.path[\s\S]*reportPath,/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
   [/JSON\.parse\(readFileSync\(browserFiringEvidence\.reportPath, 'utf8'\)\)/, 'Node witness must read the backend report from its durable filesystem path'],
   [/projectFriendlyFiringEvidence\(\{[\s\S]*browserFiringEvidence,[\s\S]*pipelineReport/, 'Node witness must join browser-owned firing evidence with filesystem-owned backend evidence outside CDP'],
@@ -1212,6 +1246,11 @@ assert.doesNotMatch(
   witness,
   /\n\s*backgroundHeartbeat,\n\s*foregroundKilnHeartbeat,/,
   'CDP witness must not return the raw multi-megabyte background heartbeat shorthand',
+);
+assert.doesNotMatch(
+  witness,
+  /fireTimeoutMs\s*=\s*Number\(args\.get\('fire-timeout-ms'\)\s*\|\|\s*\d+/,
+  'the witness must not impose a default product deadline when the caller supplied none',
 );
 assert.doesNotMatch(
   witness,
