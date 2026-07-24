@@ -20,6 +20,7 @@ export const KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT = 'wgsl-descriptor-lami
 export const KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT = 'wgsl-analytic-laminar-inlet-fixture-presentation-v0';
 export const KAMINOS_FINGER_FLUID_LAMINAR_SOURCE_POPULATION_CONTRACT = 'wgsl-distinct-flux-cadenced-inlet-population-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT = 'wgsl-live-hand-round-inlet-uniform-v1';
+export const KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT = 'gpu-material-tracer-release-age-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT = 'gpu-dormant-pool-source-flux-release-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT = 'new-release-fail-closed-emitted-material-persists-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT = 'requested-effective-release-pool-residence-v1';
@@ -145,7 +146,7 @@ const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 36;
 const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
-const MATERIAL_TRACER_FLOATS = 12;
+const MATERIAL_TRACER_FLOATS = 16;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
 const ENERGY_RECORD_FLOATS = 4;
 const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
@@ -2530,6 +2531,7 @@ struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
+  liveInletAgeState: vec4<f32>,
 }
 
 struct LaminarInletSample {
@@ -3389,6 +3391,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
         f32(live_inlet_source_from_phase(resetPhase)),
         1.0,
       );
+      materialTracers[index].liveInletAgeState = vec4<f32>(0.0);
     }
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
@@ -3397,8 +3400,8 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicAdd(&interfaceCounters[2], 1u);
   }
   let liveResidence = materialTracers[index];
-  let liveAge = particle.position.w + params.dt;
-  if (liveInletScene) { particle.position.w = liveAge; }
+  let liveAge = liveResidence.liveInletAgeState.x + params.dt;
+  if (liveInletScene) { materialTracers[index].liveInletAgeState.x = liveAge; }
   let liveInletAgeExpired = liveInletScene && liveAge > liveResidence.liveInletLimitsSource.x;
   let liveInletDistanceExpired = liveInletScene
     && distance(particle.position.xyz, liveResidence.liveInletOriginGeneration.xyz)
@@ -4777,6 +4780,7 @@ struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
+  liveInletAgeState: vec4<f32>,
 }
 
 struct RenderParams {
@@ -5160,6 +5164,7 @@ struct MaterialTracerState {
   concentrationDeltaRecipeSource: vec4<f32>,
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
+  liveInletAgeState: vec4<f32>,
 }
 
 struct RenderParams {
@@ -8045,6 +8050,7 @@ export async function createWebGPUFingerFluidSolver({
     if (firstActivation) liveInletActivated = true;
     return {
       contract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
+      ageContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
       releaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
       packetId: currentLiveInletPacket.packetId,
       sourceRoute: currentLiveInletPacket.sourceRoute,
@@ -8696,6 +8702,7 @@ export async function createWebGPUFingerFluidSolver({
         sourceRecirculationCount: interfaceCounters[2],
         liveInletEconomics: safeTruthScene === 'live_hand_inlets' ? {
           contract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
+          ageContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
           cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
           generation: diagnosticsLiveInletGeneration,
           packetId: diagnosticsLiveInletEconomics.packetId,
@@ -8829,6 +8836,7 @@ export async function createWebGPUFingerFluidSolver({
       chemistryContract: KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT,
       laminarInletContract: KAMINOS_FINGER_FLUID_LAMINAR_INLET_CONTRACT,
       liveInletContract: KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
+      liveInletAgeContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
       liveInletReleaseContract: KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
       liveInletSourceAuthorityContract: KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT,
       liveInletEconomicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
@@ -8842,6 +8850,7 @@ export async function createWebGPUFingerFluidSolver({
         sourceRoute: currentLiveInletPacket.sourceRoute,
         artifactSha256: currentLiveInletPacket.artifactSha256,
         sourceAuthority: currentLiveInletEconomics.sourceAuthority,
+        ageContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
         cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
         generation: liveInletGeneration,
         capacity: LIVE_HAND_INLET_CAPACITY,

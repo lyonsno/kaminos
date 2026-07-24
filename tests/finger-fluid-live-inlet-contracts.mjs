@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const fluid = await import('../finger-fluid-webgpu-core.js');
 const {
   KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
+  KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
   KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
   KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
   KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
@@ -29,6 +30,10 @@ const witnessSource = readFileSync(new URL('../finger-fluid-truth-witness.mjs', 
 assert.equal(
   KAMINOS_FINGER_FLUID_LIVE_INLET_CONTRACT,
   'wgsl-live-hand-round-inlet-uniform-v1',
+);
+assert.equal(
+  KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
+  'gpu-material-tracer-release-age-v0',
 );
 assert.equal(
   KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT,
@@ -146,6 +151,54 @@ assert.match(
   source,
   /liveInletActivated = currentLiveInletEconomics\.effectiveActiveInletCount > 0/,
   'initial activation must follow effective inventory rather than a requested source with zero budget',
+);
+
+const tracerStructs = [...source.matchAll(/struct MaterialTracerState \{([\s\S]*?)\n\}/g)];
+assert.equal(tracerStructs.length, 3, 'compute and both renderer ABIs must declare the material tracer');
+for (const [, tracerStruct] of tracerStructs) {
+  assert.match(
+    tracerStruct,
+    /liveInletAgeState:\s*vec4<f32>/,
+    'every material-tracer ABI must carry source-owned live residence age',
+  );
+}
+
+const predictStart = source.indexOf('fn predict_positions(');
+const predictEnd = source.indexOf('\n@compute', predictStart + 1);
+const predictSource = source.slice(predictStart, predictEnd);
+assert.match(
+  predictSource,
+  /materialTracers\[index\]\.liveInletAgeState\s*=\s*vec4<f32>\(0\.0\)/,
+  'GPU release must reset source-owned residence age independently of particle diagnostics',
+);
+assert.match(
+  predictSource,
+  /let liveAge = liveResidence\.liveInletAgeState\.x \+ params\.dt;/,
+  'residence must advance from the stable material-tracer age channel',
+);
+assert.match(
+  predictSource,
+  /materialTracers\[index\]\.liveInletAgeState\.x = liveAge;/,
+  'the advanced age must remain source-owned across later compute passes',
+);
+assert.doesNotMatch(
+  predictSource,
+  /liveAge\s*=\s*particle\.position\.w|particle\.position\.w\s*=\s*liveAge/,
+  'particle.position.w is a vorticity diagnostic and must never carry live residence age',
+);
+
+const vorticityStart = source.indexOf('fn apply_vorticity_confinement(');
+const vorticityEnd = source.indexOf('\n@compute', vorticityStart + 1);
+const vorticitySource = source.slice(vorticityStart, vorticityEnd);
+assert.match(
+  vorticitySource,
+  /particles\[index\]\.position\.w = min\(omegaMagnitude, 4096\.0\);/,
+  'the non-live vorticity diagnostic must remain available after separating residence age',
+);
+assert.doesNotMatch(
+  vorticitySource,
+  /liveInletAgeState/,
+  'an intervening vorticity update must not mutate source age before residence or optical ownership checks',
 );
 
 const live = normalizeFingerFluidLiveInletPacket({
