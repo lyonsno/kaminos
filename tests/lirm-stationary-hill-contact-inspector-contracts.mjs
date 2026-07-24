@@ -36,6 +36,26 @@ for (const contract of [
   assert.match(source, new RegExp(contract), `stationary Hill inspector is missing ${contract}`);
 }
 assert.doesNotMatch(source, /filmstrip|contact sheet|sparse witness/i);
+assert.match(
+  source,
+  /id="play" aria-pressed="false">Play<\/button>/,
+  'stationary Hill inspector must present an explicit Play control on arrival',
+);
+assert.match(
+  source,
+  /let active = false;/,
+  'stationary Hill inspector must not activate temporal playback on page open',
+);
+assert.match(
+  source,
+  /playbackStatus: 'paused'/,
+  'stationary Hill inspector must expose its paused arrival state to witnesses',
+);
+assert.match(
+  source,
+  /playbackActivation: 'none'/,
+  'stationary Hill inspector must distinguish arrival from explicit activation',
+);
 for (const url of [
   'REGISTRATION_URL',
   'CONTACT_ATLAS_URL',

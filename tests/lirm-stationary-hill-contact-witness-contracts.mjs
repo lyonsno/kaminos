@@ -26,6 +26,16 @@ assert.match(
   /posteriorCloseups/,
   'dense witness report must identify posterior close-up outputs',
 );
+for (const [pattern, message] of [
+  [/arrivalPlayback/, 'witness must report the operator arrival playback state'],
+  [/playback-settle/, 'witness must wait for and verify an inert arrival frame'],
+  [/explicit-play/, 'witness must record explicit Play activation'],
+  [/explicit-pause/, 'witness must exercise and record the persistent Pause control'],
+  [/document\.querySelector\('#play'\)\.click\(\)/, 'witness must activate playback through the visible control'],
+  [/paused-arrival\.png/, 'witness must preserve an inspectable paused-arrival frame'],
+]) {
+  assert.match(witnessSource, pattern, message);
+}
 
 const valid = {
   status: 'loaded',

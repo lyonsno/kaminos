@@ -127,7 +127,7 @@
   <div id="app"></div>
   <div class="toolbar">
     <div class="title">719024 <span>stationary Hill contact</span></div>
-    <button type="button" id="play" aria-pressed="true">Pause</button>
+    <button type="button" id="play" aria-pressed="false">Play</button>
     <button type="button" id="support" aria-pressed="true">Support on</button>
     <div class="spacer"></div>
     <label class="toggle"><input id="contacts" type="checkbox" checked /> Contact field</label>
@@ -244,7 +244,7 @@
     let contactPlaneY = 0;
     let amplitude = 0.18;
     let phase = 0;
-    let active = true;
+    let active = false;
     let supportActive = true;
     let lastTime = null;
     let lastSolveTime = -Infinity;
@@ -264,6 +264,8 @@
       inputHashes: null,
       supportSurface: null,
       supportActive: true,
+      playbackStatus: 'paused',
+      playbackActivation: 'none',
       phase: 0,
       contactStates: {},
       maximumResidual: null,
@@ -474,11 +476,20 @@
     }
 
     window.__setLirmHillContactPhase = value => {
-      active = false;
-      playButton.textContent = 'Play';
-      playButton.setAttribute('aria-pressed', 'false');
+      setPlaybackState(false, 'programmatic-phase');
       return setPhase(value, true);
     };
+
+    function setPlaybackState(nextActive, activation) {
+      active = nextActive;
+      playButton.textContent = active ? 'Pause' : 'Play';
+      playButton.setAttribute('aria-pressed', String(active));
+      Object.assign(window.__LIRM_HILL_CONTACT_STATE__, {
+        playbackStatus: active ? 'playing' : 'paused',
+        playbackActivation: activation,
+      });
+      lastTime = null;
+    }
 
     function screenProbe() {
       if (!creatureRoot) throw new Error('creature is not mounted');
@@ -638,10 +649,7 @@
     }
 
     playButton.addEventListener('click', () => {
-      active = !active;
-      playButton.textContent = active ? 'Pause' : 'Play';
-      playButton.setAttribute('aria-pressed', String(active));
-      if (active) lastTime = null;
+      setPlaybackState(!active, active ? 'explicit-pause' : 'explicit-play');
     });
     supportButton.addEventListener('click', () => {
       supportActive = !supportActive;

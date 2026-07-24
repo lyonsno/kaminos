@@ -164,6 +164,8 @@ const report = {
   requestedUrl: options.url,
   effectiveUrl: null,
   identity: null,
+  arrivalPlayback: null,
+  playbackActivation: null,
   frameCount,
   frameRate,
   states: [],
@@ -216,6 +218,122 @@ try {
   report.identity = createStationaryHillContactWitnessIdentity(initial);
   const screen = await evaluate(cdp, 'window.__lirmHillContactScreenProbe()');
   if (!(screen?.areaRatio > 0.05)) throw new Error(`creature framing is too small: ${JSON.stringify(screen)}`);
+
+  report.failurePhase = 'playback-settle';
+  const arrivalControl = await evaluate(
+    cdp,
+    `(() => {
+      const control = document.querySelector('#play');
+      return { text: control.textContent, pressed: control.getAttribute('aria-pressed') };
+    })()`,
+  );
+  if (initial.playbackStatus !== 'paused' || initial.playbackActivation !== 'none'
+      || arrivalControl?.text !== 'Play' || arrivalControl?.pressed !== 'false') {
+    throw new Error(
+      `viewer did not arrive paused behind explicit Play: ${JSON.stringify({
+        state: {
+          playbackStatus: initial.playbackStatus,
+          playbackActivation: initial.playbackActivation,
+        },
+        control: arrivalControl,
+      })}`,
+    );
+  }
+  await new Promise(accept => setTimeout(accept, 750));
+  const settled = await evaluate(cdp, 'window.__LIRM_HILL_CONTACT_STATE__');
+  const settledControl = await evaluate(
+    cdp,
+    `(() => {
+      const control = document.querySelector('#play');
+      return { text: control.textContent, pressed: control.getAttribute('aria-pressed') };
+    })()`,
+  );
+  if (settled.phase !== initial.phase || settled.playbackStatus !== 'paused'
+      || settled.playbackActivation !== 'none'
+      || settledControl?.text !== 'Play' || settledControl?.pressed !== 'false') {
+    throw new Error(
+      `viewer moved during paused arrival settle: ${JSON.stringify({
+        initialPhase: initial.phase,
+        settledPhase: settled.phase,
+        playbackStatus: settled.playbackStatus,
+        playbackActivation: settled.playbackActivation,
+        control: settledControl,
+      })}`,
+    );
+  }
+  report.arrivalPlayback = {
+    initialPhase: initial.phase,
+    settledPhase: settled.phase,
+    settleMilliseconds: 750,
+    status: settled.playbackStatus,
+    activation: settled.playbackActivation,
+    control: settledControl,
+  };
+  const pausedArrivalPath = resolve(outputRoot, 'paused-arrival.png');
+  await capture(cdp, pausedArrivalPath);
+  report.outputs.pausedArrival = await fileRecord(pausedArrivalPath, outputRoot);
+
+  report.failurePhase = 'explicit-play';
+  await evaluate(cdp, "document.querySelector('#play').click()");
+  await new Promise(accept => setTimeout(accept, 550));
+  const played = await evaluate(cdp, 'window.__LIRM_HILL_CONTACT_STATE__');
+  const playedControl = await evaluate(
+    cdp,
+    `(() => {
+      const control = document.querySelector('#play');
+      return { text: control.textContent, pressed: control.getAttribute('aria-pressed') };
+    })()`,
+  );
+  if (played.playbackStatus !== 'playing' || played.playbackActivation !== 'explicit-play'
+      || playedControl?.text !== 'Pause' || playedControl?.pressed !== 'true'
+      || Math.abs(played.phase - settled.phase) < 1e-5) {
+    throw new Error(
+      `explicit Play did not advance playback: ${JSON.stringify({
+        settledPhase: settled.phase,
+        playedPhase: played.phase,
+        playbackStatus: played.playbackStatus,
+        playbackActivation: played.playbackActivation,
+        control: playedControl,
+      })}`,
+    );
+  }
+
+  report.failurePhase = 'explicit-pause';
+  await evaluate(cdp, "document.querySelector('#play').click()");
+  const paused = await evaluate(cdp, 'window.__LIRM_HILL_CONTACT_STATE__');
+  await new Promise(accept => setTimeout(accept, 450));
+  const pausedSettled = await evaluate(cdp, 'window.__LIRM_HILL_CONTACT_STATE__');
+  const pausedControl = await evaluate(
+    cdp,
+    `(() => {
+      const control = document.querySelector('#play');
+      return { text: control.textContent, pressed: control.getAttribute('aria-pressed') };
+    })()`,
+  );
+  if (pausedSettled.playbackStatus !== 'paused'
+      || pausedSettled.playbackActivation !== 'explicit-pause'
+      || pausedControl?.text !== 'Play' || pausedControl?.pressed !== 'false'
+      || pausedSettled.phase !== paused.phase) {
+    throw new Error(
+      `Pause did not hold the current frame: ${JSON.stringify({
+        pausedPhase: paused.phase,
+        settledPhase: pausedSettled.phase,
+        playbackStatus: pausedSettled.playbackStatus,
+        playbackActivation: pausedSettled.playbackActivation,
+        control: pausedControl,
+      })}`,
+    );
+  }
+  report.playbackActivation = {
+    playedPhase: played.phase,
+    playStatus: played.playbackStatus,
+    playActivation: played.playbackActivation,
+    playControl: playedControl,
+    pausedPhase: pausedSettled.phase,
+    pauseStatus: pausedSettled.playbackStatus,
+    pauseActivation: pausedSettled.playbackActivation,
+    pauseControl: pausedControl,
+  };
 
   report.failurePhase = 'dense-capture';
   await evaluate(cdp, "window.__setLirmHillContactView('three-quarter')");
