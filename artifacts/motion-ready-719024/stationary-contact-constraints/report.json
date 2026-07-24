@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos.motion-contact-constraints-artifact-report.v0",
+  "status": "pass",
+  "failurePhase": null,
+  "effectiveRoute": "motion-support-core + hill-motion-support-adapter",
+  "source": {
+    "producerFixture": "producer-fixture.json",
+    "producerFixtureSha256": "f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112",
+    "hillPacket": "motion-affordance-packet.json",
+    "hillPacketSha256": "ab9900438d60ca3356327e700617c65fd65e75e4b2707d8e03da0e2f3dd8e9e2",
+    "hillData": "motion-affordance-data.json",
+    "hillDataSha256": "bd29f0464aecffdd35d79496b744b6d04175b1c2b8a80934fa3c88ed34874fd7"
+  },
+  "supportSurface": {
+    "id": "hill-of-hills-motion-affordance-packet-v0",
+    "sourceRef": "lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348",
+    "revision": "81c5348"
+  },
+  "body": {
+    "id": "motion-ready-719024:axial-footprint",
+    "registrationId": "motion-ready-719024:registration:cb519913ad863441",
+    "scale": 1.14
+  },
+  "pose": {
+    "id": "molten-low-frequency:C",
+    "phase": 1.3
+  },
+  "output": {
+    "schema": "kaminos.motion-contact-constraints.v0",
+    "id": "stationary-hill-probes:C:constraints",
+    "constraintsSha256": "8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029",
+    "patchIds": [
+      "front-left",
+      "front-right",
+      "rear-left",
+      "rear-right"
+    ]
+  },
+  "error": null
+}
