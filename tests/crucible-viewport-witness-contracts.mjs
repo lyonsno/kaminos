@@ -839,6 +839,7 @@ vm.runInNewContext(
   buildInFlightHybridSettleMonitorExpression({
     settleMs: 30,
     maxObservationGapMs: 20,
+    requestedFirePresentation: 'hybrid-smoke-preview',
     requestedFlameContinuity: 'live-every-frame',
   }),
   {
@@ -1097,6 +1098,13 @@ for (const [pattern, message] of [
   [/receiptReportPath:\s*replayResult\.receipt\?\.reportPath[\s\S]*receiptReportPath !== state\.replayedCast\.reportPath/, 'Replay witness must verify the persisted Crucible receipt retained the source pipeline report path'],
   [/kaminosCrucibleViewportReplayRealCast[\s\S]*setTimeout\(resolve,\s*240\)[\s\S]*completedWorkroom/, 'Replay geometry must settle past the workroom posture transition before toolbar clearance is judged'],
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
+  [/--in-flight-middle-out/, 'Witness must let callers address the middle same-firing FireActor screenshot'],
+  [/--in-flight-end-out/, 'Witness must let callers address the late same-firing FireActor screenshot'],
+  [/phase:\s*'beginning'[\s\S]*minimumProgress:\s*0[\s\S]*phase:\s*'middle'[\s\S]*minimumProgress:\s*0\.45[\s\S]*phase:\s*'end'[\s\S]*minimumProgress:\s*0\.85/, 'Witness must bind beginning, middle, and end captures to explicit live-route progress gates'],
+  [/phaseCaptures[\s\S]*firingId[\s\S]*progress[\s\S]*postCaptureSettleEvidence/, 'Every product-phase image must retain same-firing, progress, and post-capture settle authority'],
+  [/productEpisodeFailures[\s\S]*fireActorProductEpisode[\s\S]*status !== 'recording'/, 'Full-volume captures must reject a missing or inactive promoted FireActor episode'],
+  [/kaminos\.wake-sharp-promoted-fire-volume-adapter\.v1/, 'Full-volume captures must bind the selected promoted carrier instead of accepting generic volume fire'],
+  [/remainingFiringDeadlineMs[\s\S]*evaluate\(ws,[\s\S]*remainingFiringDeadlineMs\(\)/, 'In-flight telemetry must use the caller firing deadline instead of a hidden short CDP timeout'],
   [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],

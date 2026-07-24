@@ -31,7 +31,7 @@ const expected = {
     },
     carrier: {
       identity: 'kaminos.wake-sharp-promoted-fire-volume-adapter.v1',
-      effectiveSha256: 'fcdec4fd4b7a103b5f228613a90d4a1f48bff63112f70403c488fa64902e0ca4',
+      effectiveSha256: '9654565c662782d22a3d2d3917cbec139715eeafccff3c1b4050d6f80797ba6d',
     },
     sharp: {
       requestedRevision: 'd86691338df56df56b7f3942702c7c8648e9d0f2',
@@ -191,7 +191,7 @@ assert.equal(failedReport.failure?.phase, 'launch');
 assert.equal(failedReport.primaryOutputWritten, false);
 assert.equal(failedReport.screenshotPath, null);
 
-const exactPreflightRevision = '7a35d565805ad6c70f848146c986864d0155dbf1';
+const exactPreflightRevision = '637f45fe4150e34a36fd2200f08319a964bdbaee';
 const artifactRoot = resolve(
   import.meta.dirname,
   '..',

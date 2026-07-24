@@ -143,6 +143,9 @@ const core = {
   },
   debugState() {
     return {
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
       frameCount: encodedFrames,
       simStepCount: encodedFrames,
       boundarySplatMode: 'kernel_moment_covariance',
@@ -207,6 +210,8 @@ assert.equal(adapter.debugState().timing.frameSamples, 0);
 const opened = adapter.beginFireEpisode({ firingId: 'firing-adapter-001' });
 assert.equal(opened.status, 'recording');
 assert.equal(opened.firingId, 'firing-adapter-001');
+assert.equal(opened.routeIdentity.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
+assert.equal(opened.routeIdentity.prototypeIdentity, 'kaminos-volume-prototype-v0');
 assert.doesNotThrow(
   () => adapter.recordMainPageKilnRaf(1000, { frameGapMs: 16.7 }),
   'Wake heartbeat samples must feed the promoted episode without a telemetry-name mismatch',

@@ -24,7 +24,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <beginning.png>] [--in-flight-middle-out <middle.png>] [--in-flight-end-out <end.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -54,6 +54,15 @@ const requireFrameStageLedger = args.has('require-frame-stage-ledger');
 const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
+const inFlightMiddleOut = args.get('in-flight-middle-out')
+  || path.join(outParts.dir, `${outParts.name}-in-flight-middle${outParts.ext || '.png'}`);
+const inFlightEndOut = args.get('in-flight-end-out')
+  || path.join(outParts.dir, `${outParts.name}-in-flight-end${outParts.ext || '.png'}`);
+const inFlightCaptureTargets = [
+  { phase: 'beginning', minimumProgress: 0, path: inFlightOut },
+  { phase: 'middle', minimumProgress: 0.45, path: inFlightMiddleOut },
+  { phase: 'end', minimumProgress: 0.85, path: inFlightEndOut },
+];
 const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
@@ -75,6 +84,8 @@ let inFlightCapture = {
   requested: captureInFlight,
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
   path: captureInFlight ? inFlightOut : null,
+  phaseCaptures: [],
+  captureTargets: captureInFlight ? structuredClone(inFlightCaptureTargets) : [],
   settleMs: captureInFlight ? inFlightSettleMs : null,
   maxObservationGapMs: captureInFlight ? inFlightMaxObservationGapMs : null,
   observerEffect: captureInFlight
@@ -93,6 +104,9 @@ const requestedInvocation = {
   firePresentation: requestedFirePresentation,
   flameContinuity: requestedFlameContinuity,
   captureInFlight,
+  ...(captureInFlight
+    ? { inFlightCaptureTargets: structuredClone(inFlightCaptureTargets) }
+    : {}),
   requireFrameStageLedger,
 };
 
@@ -381,12 +395,12 @@ async function clickVisibleElementCenter(ws, elementId) {
   return target;
 }
 
-async function captureViewportPng(ws, outputPath) {
+async function captureViewportPng(ws, outputPath, timeoutMs = 20000) {
   const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
     captureBeyondViewport: false,
-  });
+  }, timeoutMs);
   const png = Buffer.from(screenshot.data, 'base64');
   if (png.length < 4096) throw new Error('screenshot is too small to be credible evidence');
   ensureParent(outputPath);
@@ -457,7 +471,12 @@ function advanceInFlightCaptureReadiness({
   };
 }
 
-function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGapMs, requestedFlameContinuity }) {
+function buildInFlightHybridSettleMonitorExpression({
+  settleMs,
+  maxObservationGapMs,
+  requestedFirePresentation,
+  requestedFlameContinuity,
+}) {
   const validateSource = validateRequestedFirePresentation.toString();
   const advanceSource = advanceInFlightCaptureReadiness.toString();
   return `(() => {
@@ -502,18 +521,43 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
       const fireState = window.__kaminosSharpBreathingRoomKilnFireState || {};
       const firingId = fireState.firingId || null;
       const expected = fireState.expectedFirePresentation || null;
+      const fireActorProductEpisode = fireState.fireActorProductEpisode || null;
       const liveVolumeDebugState = window.__kaminosVolumePrototype?.debugState?.() || null;
       const effective = liveVolumeDebugState?.firePresentation || null;
       const presentationSource = liveVolumeDebugState
         ? 'live-volume-prototype-debug-state'
         : 'missing-live-volume-prototype-debug-state';
       const presentationFailures = validatePresentation({
-        requestedPresentation: 'hybrid-smoke-preview',
+        requestedPresentation: ${JSON.stringify(requestedFirePresentation)},
         requestedFlameContinuity: ${JSON.stringify(requestedFlameContinuity)},
         firingId,
         expected,
         effective,
       });
+      const productEpisodeFailures = [];
+      if (${JSON.stringify(requestedFirePresentation)} === 'full-volume') {
+        if (fireActorProductEpisode?.status !== 'recording') {
+          productEpisodeFailures.push('fire-actor-product-episode-not-recording');
+        }
+        if (fireActorProductEpisode?.firingId !== firingId) {
+          productEpisodeFailures.push('fire-actor-product-episode-firing-mismatch');
+        }
+        if (liveVolumeDebugState?.adapterIdentity
+          !== 'kaminos.wake-sharp-promoted-fire-volume-adapter.v1') {
+          productEpisodeFailures.push('fire-actor-promoted-adapter-missing');
+        }
+        if (liveVolumeDebugState?.boundarySplatMode !== 'kernel_moment_covariance') {
+          productEpisodeFailures.push('fire-actor-splat-mode-mismatch');
+        }
+        if (liveVolumeDebugState?.raymarchSmokePresentationModeEffective !== 'on') {
+          productEpisodeFailures.push('fire-actor-smoke-presentation-mismatch');
+        }
+        if (liveVolumeDebugState?.boundarySplatFallbackReason
+          || liveVolumeDebugState?.boundarySplatCompositionFallbackReason) {
+          productEpisodeFailures.push('fire-actor-fallback-present');
+        }
+      }
+      presentationFailures.push(...productEpisodeFailures);
       const observationGapMs = Number.isFinite(monitor.lastObservedAtMs)
         ? Math.max(0, nowMs - monitor.lastObservedAtMs)
         : 0;
@@ -541,6 +585,16 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
         observationGapMs,
         resetReason: readiness.resetReason,
         presentationFailures,
+        productEpisodeFailures,
+        fireActorProductEpisode: fireActorProductEpisode ? {
+          status: fireActorProductEpisode.status || null,
+          firingId: fireActorProductEpisode.firingId || null,
+          mountId: fireActorProductEpisode.mountId || null,
+          actorId: fireActorProductEpisode.actorId || null,
+          basinRevision: fireActorProductEpisode.basinRevision || null,
+          packageSha256: fireActorProductEpisode.packageSha256 || null,
+        } : null,
+        adapterIdentity: liveVolumeDebugState?.adapterIdentity || null,
         candidateCount: effective?.candidateCount ?? null,
         candidateCapacity: effective?.candidateCapacity ?? null,
         candidateOverflow: effective?.candidateOverflow ?? null,
@@ -565,6 +619,7 @@ async function attemptInFlightHybridCapture({
   ws,
   outputPath,
   authorization,
+  timeoutMs,
   capturePng = captureViewportPng,
   persistEvidence,
 }) {
@@ -576,7 +631,7 @@ async function attemptInFlightHybridCapture({
   };
   persistEvidence(receipt);
   try {
-    const png = await capturePng(ws, outputPath);
+    const png = await capturePng(ws, outputPath, timeoutMs);
     receipt = {
       ...receipt,
       status: 'captured',
@@ -648,6 +703,15 @@ function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
           settleResetCount: inFlightCapture.settleEvidence?.resetCount ?? null,
           postCaptureVerified: inFlightCapture.postCaptureSettleEvidence?.verified ?? null,
           bytes: inFlightCapture.bytes ?? null,
+          phaseCaptures: (inFlightCapture.phaseCaptures || []).map(capture => ({
+            phase: capture.phase,
+            path: capture.path,
+            bytes: capture.bytes ?? null,
+            firingId: capture.firingId || null,
+            progress: capture.progress ?? null,
+            minimumProgress: capture.minimumProgress,
+            postCaptureVerified: capture.postCaptureSettleEvidence?.verified ?? null,
+          })),
           observerEffect: inFlightCapture.observerEffect,
           error: inFlightCapture.error || null,
         }
@@ -1119,8 +1183,8 @@ try {
   if (args.has('expected-webgpu-kit-version') && expectedWebgpuKitVersion !== sourceLockedWebgpuKitVersion) {
     throw new Error(`Requested WebGPU inference kit ${expectedWebgpuKitVersion} does not match source lock ${sourceLockedWebgpuKitVersion}`);
   }
-  if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
-    throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
+  if (captureInFlight && !fireFriendly) {
+    throw new Error('--capture-in-flight requires --fire-friendly');
   }
   if (args.has('scheduler-profile') && !fireFriendly) {
     throw new Error('--scheduler-profile requires --fire-friendly');
@@ -1438,12 +1502,14 @@ try {
       const installedMonitor = await evaluate(ws, buildInFlightHybridSettleMonitorExpression({
         settleMs: inFlightSettleMs,
         maxObservationGapMs: inFlightMaxObservationGapMs,
+        requestedFirePresentation,
         requestedFlameContinuity,
       }));
       inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
     }
     const deadline = Date.now() + fireTimeoutMs;
+    const remainingFiringDeadlineMs = () => Math.max(1, deadline - Date.now());
     let observedRunning = false;
     let routeState = null;
     while (Date.now() < deadline) {
@@ -1454,6 +1520,9 @@ try {
         status: window.__kaminosKilnRouteBenchState?.status || null,
         message: window.__kaminosKilnRouteBenchState?.message || null,
         runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
+        progress: Number.isFinite(window.__kaminosKilnRouteBenchState?.progressEvent?.progress)
+          ? window.__kaminosKilnRouteBenchState.progressEvent.progress
+          : null,
         firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
         firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
@@ -1478,28 +1547,37 @@ try {
           } : null;
         })(),
         });
-      })()`);
+      })()`, remainingFiringDeadlineMs());
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
       if ((routeState.runningProfileId || routeState.status === 'running') && routeState.roomPosture !== 'firing') {
         throw new Error(`Live firing did not fold the Crucible into its furnace-visible posture: ${JSON.stringify(routeState)}`);
       }
-      if (captureInFlight && !['captured', 'capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
+      const nextCaptureTarget = inFlightCaptureTargets[inFlightCapture.phaseCaptures.length] || null;
+      if (captureInFlight
+        && nextCaptureTarget
+        && !['capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
+        const progressReached = nextCaptureTarget.minimumProgress === 0
+          || (Number.isFinite(routeState.progress)
+            && routeState.progress >= nextCaptureTarget.minimumProgress);
         inFlightCapture = {
           ...inFlightCapture,
-          status: routeState.settleMonitor?.ready ? 'capture-authorized' : (routeState.settleMonitor?.latest?.status || 'awaiting-effective-hybrid'),
+          status: routeState.settleMonitor?.ready && progressReached
+            ? 'capture-authorized'
+            : (routeState.settleMonitor?.latest?.status || 'awaiting-effective-hybrid'),
           settledForMs: routeState.settleMonitor?.settledForMs ?? 0,
           settleSampleCount: routeState.settleMonitor?.sampleCount ?? 0,
           settleResetCount: routeState.settleMonitor?.resetCount ?? 0,
+          nextCaptureTarget,
           lastRouteState: routeState,
         };
         lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
-        if (routeState.settleMonitor?.ready) {
+        if (routeState.settleMonitor?.ready && progressReached) {
           const preCaptureSettleEvidence = await evaluate(ws, `(() => {
             const monitor = window.__kaminosInFlightHybridSettleMonitor;
             if (!monitor) return null;
             monitor.sampleNow('pre-capture');
             return monitor.snapshot();
-          })()`);
+          })()`, remainingFiringDeadlineMs());
           if (!preCaptureSettleEvidence?.ready
             || preCaptureSettleEvidence.latest?.admissible !== true
             || preCaptureSettleEvidence.latest?.firingId !== routeState.firingId) {
@@ -1511,7 +1589,7 @@ try {
             lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
             continue;
           }
-          phase = 'capturing-in-flight-hybrid';
+          phase = `capturing-in-flight-hybrid-${nextCaptureTarget.phase}`;
           const presentationFailures = validateRequestedFirePresentation({
             requestedPresentation: requestedFirePresentation,
             requestedFlameContinuity,
@@ -1519,11 +1597,15 @@ try {
             expected: routeState.expectedFirePresentation,
             effective: routeState.effectiveFirePresentation,
           });
-          inFlightCapture = await attemptInFlightHybridCapture({
+          const phaseCapture = await attemptInFlightHybridCapture({
             ws,
-            outputPath: inFlightOut,
+            outputPath: nextCaptureTarget.path,
+            timeoutMs: remainingFiringDeadlineMs(),
             authorization: {
-              ...inFlightCapture,
+              phase: nextCaptureTarget.phase,
+              minimumProgress: nextCaptureTarget.minimumProgress,
+              progress: routeState.progress,
+              observerEffect: inFlightCapture.observerEffect,
               firingId: routeState.firingId,
               firePhase: routeState.firePhase,
               requestedFirePresentation,
@@ -1535,17 +1617,20 @@ try {
               settleEvidence: preCaptureSettleEvidence,
             },
             persistEvidence: receipt => {
-              inFlightCapture = receipt;
-              lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture: receipt };
+              inFlightCapture = {
+                ...inFlightCapture,
+                status: receipt.status,
+                activePhaseCapture: receipt,
+              };
+              lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
             },
           });
           const postCaptureSettleEvidence = await evaluate(ws, `(() => {
             const monitor = window.__kaminosInFlightHybridSettleMonitor;
             if (!monitor) return null;
             monitor.sampleNow('post-capture');
-            monitor.active = false;
             return monitor.snapshot();
-          })()`);
+          })()`, remainingFiringDeadlineMs());
           const postCaptureVerified = Boolean(
             postCaptureSettleEvidence?.ready
             && postCaptureSettleEvidence.latest?.admissible === true
@@ -1553,9 +1638,8 @@ try {
             && postCaptureSettleEvidence.eligibleSinceMs === preCaptureSettleEvidence.eligibleSinceMs
             && postCaptureSettleEvidence.resetCount === preCaptureSettleEvidence.resetCount
           );
-          inFlightCapture = {
-            ...inFlightCapture,
-            status: postCaptureVerified ? 'captured' : 'capture-invalidated',
+          const completedPhaseCapture = {
+            ...phaseCapture,
             postCaptureSettleEvidence: postCaptureSettleEvidence
               ? {
                   ...postCaptureSettleEvidence,
@@ -1564,9 +1648,29 @@ try {
                 }
               : { verified: false },
           };
+          const phaseCaptures = [...inFlightCapture.phaseCaptures, completedPhaseCapture];
+          const allProductPhasesCaptured = phaseCaptures.length === inFlightCaptureTargets.length;
+          inFlightCapture = {
+            ...inFlightCapture,
+            status: postCaptureVerified
+              ? (allProductPhasesCaptured ? 'captured' : 'awaiting-next-product-phase')
+              : 'capture-invalidated',
+            firingId: routeState.firingId,
+            progress: routeState.progress,
+            phaseCaptures,
+            activePhaseCapture: null,
+            postCaptureSettleEvidence: completedPhaseCapture.postCaptureSettleEvidence,
+          };
           lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
           if (!postCaptureVerified) {
             throw new Error(`Hybrid presentation lost its settled same-firing authority during visual capture: ${JSON.stringify(inFlightCapture.postCaptureSettleEvidence)}`);
+          }
+          if (allProductPhasesCaptured) {
+            await evaluate(ws, `(() => {
+              const monitor = window.__kaminosInFlightHybridSettleMonitor;
+              if (monitor) monitor.active = false;
+              return monitor?.snapshot?.() || null;
+            })()`, remainingFiringDeadlineMs());
           }
           phase = 'waiting-for-friendly-firing';
         }
@@ -1577,7 +1681,10 @@ try {
       inFlightCapture = {
         ...inFlightCapture,
         status: 'not-captured',
-        reason: 'effective-hybrid-presentation-not-observed-before-route-finished',
+        reason: 'all-product-phase-captures-not-observed-before-route-finished',
+        missingPhases: inFlightCaptureTargets
+          .slice(inFlightCapture.phaseCaptures.length)
+          .map(target => target.phase),
         lastRouteState: routeState,
       };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };

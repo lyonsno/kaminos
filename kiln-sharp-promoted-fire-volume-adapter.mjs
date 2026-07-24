@@ -344,12 +344,21 @@ export function createWakeSharpPromotedFireVolumeAdapter({
         return { frameCount: state.frameCount, simStepCount: state.simStepCount };
       },
       readQueueProxy: () => ({ completionSequence: submissionSequence }),
-      readRouteIdentity: () => ({
-        routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
-        adapterIdentity: WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY,
-        deviceIdentity: exactGpu.deviceIdentity,
-        queueIdentity: exactGpu.queueIdentity,
-      }),
+      readRouteIdentity: () => {
+        const state = core.debugState();
+        return {
+          effectiveRoute: state.effectiveRoute || state.routeIdentity || null,
+          prototypeIdentity: state.prototypeIdentity || null,
+          compositionRequested: state.boundarySplatCompositionRequested || null,
+          compositionEffective: state.boundarySplatCompositionEffective || null,
+          compositionFallbackReason: state.boundarySplatCompositionFallbackReason
+            || state.boundarySplatFallbackReason
+            || null,
+          adapterIdentity: WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY,
+          deviceIdentity: exactGpu.deviceIdentity,
+          queueIdentity: exactGpu.queueIdentity,
+        };
+      },
     });
     return fireEpisodeHooks;
   }

@@ -5,7 +5,7 @@ truthful carrier and GPU-stage timing, and release cleanly inside Wake's SHARP
 product realm before invoking inference?
 
 Result: Yes for the architecture preflight against exact SHARP source
-`7a35d565805ad6c70f848146c986864d0155dbf1`. The witness bound the exact basin,
+`637f45fe4150e34a36fd2200f08319a964bdbaee`. The witness bound the exact basin,
 mount, package, engine, carrier, shared-device product route, and requested /
 effective SHARP revision; observed live splats and smoke; sampled a distinct
 same-controls/same-device diagnostic stage profile; and confirmed clean release.
@@ -21,16 +21,17 @@ Route:
   named by the next pushed branch commit
 - server route: `http://127.0.0.1:18402/`
 - SHARP source checkout:
-  `/private/tmp/sharp-webgpu-handy-sharp-7a35d565-runtime-0724`
-- SHARP source: `7a35d565805ad6c70f848146c986864d0155dbf1`
+  `/private/tmp/sharp-webgpu-wake-sharp-residual-polish-0724-handy-sharp-637f45fe-runtime-0724`
+- SHARP source: `637f45fe4150e34a36fd2200f08319a964bdbaee`
 - backend/device: Wake same-browser product realm, shared WebGPU device and queue
+- firing: `firing-fireactor-preflight-637f45fe-003`
 - command:
 
 ```sh
 node wake-sharp-fire-actor-preflight-witness.mjs \
   --url http://127.0.0.1:18402/ \
-  --expected-sharp-revision 7a35d565805ad6c70f848146c986864d0155dbf1 \
-  --firing-id firing-fireactor-preflight-7a35d565-005 \
+  --expected-sharp-revision 637f45fe4150e34a36fd2200f08319a964bdbaee \
+  --firing-id firing-fireactor-preflight-637f45fe-003 \
   --out artifacts/wake-sharp-fire-actor-preflight/live/fireactor-product-preflight.png \
   --report artifacts/wake-sharp-fire-actor-preflight/live/report.json
 ```
@@ -39,16 +40,31 @@ Artifacts:
 
 - `live/report.json`: canonical requested/effective route, identity, timing,
   pixel-witness, and release receipt; SHA-256
-  `b7aed8434fc76b71c83f5799ab3a89831580381a1a65b88f6d7b49217a78719a`
+  `c412648c723f8be218dfde60d8fd32c45a0bbbfc9cfd20cce253c6ef990337b8`
 - `live/fireactor-product-preflight.png`: inspected product-canvas projection;
   SHA-256
-  `53604d3baf25f3f390cc557bb373cbf092b92b8e193381f4b0d261063e27a2be`
+  `d9dd782e70edd5646305fecde3e76f59fdaf9034863fc4795db8195fc7d2b2b3`
+
+Bound identity:
+
+- FireActor mount:
+  `firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7`
+- basin revision:
+  `basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95`
+- package SHA-256:
+  `f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc`
+- promoted engine SHA-256:
+  `ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab`
+- Wake carrier SHA-256:
+  `9654565c662782d22a3d2d3917cbec139715eeafccff3c1b4050d6f80797ba6d`
 
 Does not prove: SHARP inference was not invoked, so this does not prove
 foreground cadence during a full firing, coherent PLY completion, durable final
-report completion, or absence of contention. It does not exercise the
-superseding SHARP source
-`9014118fc2faf7b483ad142b7a407d023b01a863`, whose rebuilt bundle and
-uncontended cold gate remain Wake-owned prerequisites. The temporary screenshot
-projection raises the already-live product canvas above product UI and records
-that projection identity; it does not alter the render route.
+report completion, or absence of contention. The product episode therefore
+records terminal phase `preflight-complete` rather than pretending that an
+inference firing completed. Wake independently cleared exact SHARP
+`637f45fe4150e34a36fd2200f08319a964bdbaee` through its uncontended cold product
+gate before this preflight. The temporary screenshot projection raises the
+already-live product canvas above product UI and records that projection
+identity; it does not alter the render route. The full Friendly firing remains
+separate and must retain the same exact SHARP source and FireActor identities.
