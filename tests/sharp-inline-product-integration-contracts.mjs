@@ -112,9 +112,14 @@ assert.match(
   /persistSharpInlineSplat\(sharpResult, firingId\)[\s\S]{0,2200}catch \(error\)[\s\S]{0,1800}phase:\s*'splat-ingest'/,
   'PLY ingest must be guarded by a durable post-inference failure report',
 );
+assert.match(
+  page,
+  /let backgroundHeartbeat;[\s\S]{0,300}try \{[\s\S]{0,500}createSharpInlineBackgroundHeartbeat[\s\S]{0,500}catch \(error\) \{[\s\S]{0,1200}phase:\s*'foreground-heartbeat-correlation'[\s\S]{0,1800}artifacts:\s*\{ splat: artifact \}[\s\S]{0,800}sharpRunDebug:\s*sharpResult\.runDebug[\s\S]{0,1800}persistSharpInlineRunReport\(\{[\s\S]{0,500}lastTrustworthyOutput:\s*artifact/,
+  'terminal correlation failure must durably retain its phase, PLY identity, and exact run debug',
+);
 assert.equal(
   (page.match(/report:\s*\{\s*path:\s*failureReceipt\.path,\s*readUrl:\s*failureReceipt\.readUrl,\s*document:\s*failureReceipt\.document,?\s*\}/g) || []).length,
-  3,
+  4,
   'every inline failure return must expose the durable receipt through the canonical result.report shape',
 );
 assert.match(
@@ -129,8 +134,23 @@ assert.match(
 );
 assert.match(
   page,
-  /const overlapCandidates = \[\.\.\.events, \.\.\.intervals\][\s\S]{0,1500}candidate\.endMs > gapStartMs && candidate\.startMs < gapEndMs/,
-  'foreground gap attribution must include reconstructed queue intervals that span an entire gap',
+  /from '\.\/lib\/sharp-foreground-gap-index\.mjs'/,
+  'foreground gap attribution must use the independently testable interval index',
+);
+assert.match(
+  page,
+  /indexSharpForegroundGapOverlaps\(\{[\s\S]{0,300}gaps:\s*foregroundGaps[\s\S]{0,300}candidates:\s*overlapCandidates/,
+  'foreground gap attribution must index the complete gap and candidate collections once',
+);
+assert.doesNotMatch(
+  page,
+  /foregroundGaps[\s\S]{0,1000}overlapCandidates\.filter/,
+  'foreground gap attribution must not rescan the complete scheduler corpus for every gap',
+);
+assert.match(
+  page,
+  /overlapIndex:\s*\{[\s\S]{0,500}algorithm:\s*'chronological-active-set-sweep'[\s\S]{0,500}durationMs:\s*correlationDurationMs/,
+  'terminal evidence must expose effective overlap algorithm and measured correlation wall',
 );
 assert.match(
   page,

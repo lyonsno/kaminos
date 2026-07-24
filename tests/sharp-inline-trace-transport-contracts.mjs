@@ -133,6 +133,27 @@ assert.equal(
   'externalization must preserve the exact uncapped row count',
 );
 
+const correlationFailure = compactSharpInlineReportDocument({
+  schema: 'kaminos.sharp-inline-failure-report.v0',
+  status: 'failed',
+  phase: 'foreground-heartbeat-correlation',
+  artifacts: {
+    splat: {
+      path: '/tmp/correlation-failure.ply',
+      sha256: 'c'.repeat(64),
+      bytes: 66_060_836,
+    },
+  },
+  sharpRunDebug: document.authoritativeTrace.sharpRunDebug,
+}, { schedulerTelemetryArchive });
+assert.equal(
+  correlationFailure.collections.find(collection => collection.id === 'scheduler-events')?.values,
+  schedulerTelemetryArchive.events,
+  'a post-ingest correlation failure must retain the exact scheduler trace for durable diagnosis',
+);
+assert.equal(correlationFailure.document.phase, 'foreground-heartbeat-correlation');
+assert.equal(correlationFailure.document.artifacts.splat.path, '/tmp/correlation-failure.ply');
+
 const scaleEvents = Array.from({ length: 189_000 }, (_, index) => ({ tMs: index }));
 const scaleCompacted = compactSharpInlineReportDocument({
   authoritativeTrace: {

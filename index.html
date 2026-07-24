@@ -2947,6 +2947,7 @@ import {
   compactSharpInlineReportDocument,
   persistSharpInlineReportSession,
 } from './lib/sharp-inline-trace-transport.mjs';
+import { indexSharpForegroundGapOverlaps } from './lib/sharp-foreground-gap-index.mjs';
 import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
   createExpectedHybridKilnFirePresentation,
@@ -13275,34 +13276,45 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
     durationMs: Number((endMs - startMs).toFixed(3)),
   };
   const foregroundSamples = Array.isArray(foregroundSnapshot?.samples) ? foregroundSnapshot.samples : [];
-  const overlapCandidates = [...events, ...intervals];
-  const overlapCandidateRefs = new Map();
-  events.forEach((event, index) => overlapCandidateRefs.set(event, `event:${index}`));
-  intervals.forEach((interval, index) => overlapCandidateRefs.set(interval, `interval:${index}`));
-  const worstFrameGaps = [];
+  const overlapCandidates = [
+    ...events.map((value, index) => ({
+      value,
+      ref: `event:${index}`,
+      sourceOrder: index,
+    })),
+    ...intervals.map((value, index) => ({
+      value,
+      ref: `interval:${index}`,
+      sourceOrder: events.length + index,
+    })),
+  ];
+  const foregroundGaps = [];
   for (let index = 1; index < foregroundSamples.length; index += 1) {
     const previous = foregroundSamples[index - 1];
     const current = foregroundSamples[index];
     const gapStartMs = Math.max(startMs, previous?.timestampMs);
     const gapEndMs = Math.min(endMs, current?.timestampMs);
     if (!Number.isFinite(gapStartMs) || !Number.isFinite(gapEndMs) || gapEndMs <= gapStartMs) continue;
-    const overlappedEventRefs = overlapCandidates.filter(candidate => {
-      if (Number.isFinite(candidate?.intervalStartMs) && Number.isFinite(candidate?.intervalEndMs)) {
-        return candidate.intervalEndMs > gapStartMs && candidate.intervalStartMs < gapEndMs;
-      }
-      if (Number.isFinite(candidate?.startMs) && Number.isFinite(candidate?.endMs)) {
-        return candidate.endMs > gapStartMs && candidate.startMs < gapEndMs;
-      }
-      return Number.isFinite(candidate?.tMs) && candidate.tMs >= gapStartMs && candidate.tMs <= gapEndMs;
-    }).map(candidate => overlapCandidateRefs.get(candidate));
-    worstFrameGaps.push({
+    foregroundGaps.push({
       startMs: gapStartMs,
       endMs: gapEndMs,
       durationMs: Number((gapEndMs - gapStartMs).toFixed(3)),
-      overlapClassification: overlappedEventRefs.length ? 'scheduler-event-overlap' : 'uninstrumented-gap',
-      overlappedEventRefs,
     });
   }
+  const correlationStartMs = performance.now();
+  const indexedOverlap = indexSharpForegroundGapOverlaps({
+    gaps: foregroundGaps,
+    candidates: overlapCandidates,
+  });
+  const correlationDurationMs = Number((performance.now() - correlationStartMs).toFixed(3));
+  const worstFrameGaps = foregroundGaps.map((gap, index) => {
+    const overlappedEventRefs = indexedOverlap.overlapsByGap[index];
+    return {
+      ...gap,
+      overlapClassification: overlappedEventRefs.length ? 'scheduler-event-overlap' : 'uninstrumented-gap',
+      overlappedEventRefs,
+    };
+  });
   worstFrameGaps.sort((left, right) => right.durationMs - left.durationMs);
   return {
     schema: 'sharp-webgpu.background-heartbeat.v0',
@@ -13347,6 +13359,14 @@ function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = nul
     },
     inferenceWindow,
     gapRetention: 'uncapped',
+    overlapIndex: {
+      schema: 'kaminos.sharp-foreground-gap-overlap-index.v0',
+      status: 'complete',
+      algorithm: 'chronological-active-set-sweep',
+      timingAuthority: 'browser-performance-now-main-thread-elapsed',
+      durationMs: correlationDurationMs,
+      ...indexedOverlap.stats,
+    },
     mohelIndicator: {
       tripped: worstFrameGaps.length > 120,
       observedGapCount: worstFrameGaps.length,
@@ -13565,14 +13585,6 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         reportReadUrl: failureReceipt.readUrl,
       };
     }
-    const foregroundSnapshot = activeForegroundKilnHeartbeat?.report({ phase: 'burning' }) || null;
-    const backgroundHeartbeat = createSharpInlineBackgroundHeartbeat(sharpResult.runDebug, foregroundSnapshot);
-    const pipelineScheduler = {
-      schema: 'kaminos.pipeline-scheduler-composition.v0',
-      scheduler: sharpResult.runDebug?.sharpScheduler || null,
-      schedulerVerification: sharpResult.runDebug?.schedulerTelemetry || null,
-      backpressure: sharpResult.runDebug?.backpressure || null,
-    };
     const artifact = {
       id: 'splat',
       role: 'splat-candidate',
@@ -13583,6 +13595,60 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       status: entry.status,
       bytes: entry.bytes,
       size: entry.bytes,
+    };
+    const foregroundSnapshot = activeForegroundKilnHeartbeat?.report({ phase: 'burning' }) || null;
+    let backgroundHeartbeat;
+    try {
+      backgroundHeartbeat = createSharpInlineBackgroundHeartbeat(sharpResult.runDebug, foregroundSnapshot);
+    } catch (error) {
+      const failureDocument = {
+        schema: 'kaminos.sharp-inline-failure-report.v0',
+        status: 'failed',
+        phase: 'foreground-heartbeat-correlation',
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        firingId,
+        error: error?.message || String(error),
+        effectiveRoute: {
+          route: 'same-browser-product-realm-shared-device',
+          sharpRevision: inline.mount.revision,
+          moduleUrl: inline.mount.moduleUrl,
+          weightsUrl: inline.mount.weightsUrl,
+        },
+        artifacts: { splat: artifact },
+        sharpRunDebug: sharpResult.runDebug,
+        lastTrustworthyEvidence: {
+          inferenceStatus: sharpResult.runDebug?.status || null,
+          outputs: sharpResult.runDebug?.outputs || null,
+          schedulerStatus: sharpResult.runDebug?.schedulerTelemetry?.status || null,
+          artifact,
+        },
+      };
+      const failureReceipt = await persistSharpInlineRunReport({
+        document: failureDocument,
+        firingId,
+        schedulerTelemetryArchive: sharpResult?.schedulerTelemetryArchive,
+        lastTrustworthyOutput: artifact,
+      });
+      return {
+        ok: false,
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        phase: failureDocument.phase,
+        error: failureDocument.error,
+        sharpRunDebug: sharpResult.runDebug,
+        report: {
+          path: failureReceipt.path,
+          readUrl: failureReceipt.readUrl,
+          document: failureReceipt.document,
+        },
+        reportPath: failureReceipt.path,
+        reportReadUrl: failureReceipt.readUrl,
+      };
+    }
+    const pipelineScheduler = {
+      schema: 'kaminos.pipeline-scheduler-composition.v0',
+      scheduler: sharpResult.runDebug?.sharpScheduler || null,
+      schedulerVerification: sharpResult.runDebug?.schedulerTelemetry || null,
+      backpressure: sharpResult.runDebug?.backpressure || null,
     };
     const adapterReport = {
       schema: 'kaminos.sharp-inline-product-route-report.v0',
