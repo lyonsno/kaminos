@@ -332,22 +332,33 @@ assert.equal(
   'canonical preflight report must bind the exact committed image bytes',
 );
 
-const historicalProductReport = JSON.parse(readFileSync(
-  resolve(
-    import.meta.dirname,
-    '..',
-    'artifacts',
-    'wake-sharp-fire-actor-product',
-    'live',
-    'report.json',
-  ),
-  'utf8',
-));
+const historicalProductReportPath = resolve(
+  import.meta.dirname,
+  '..',
+  'artifacts',
+  'wake-sharp-fire-actor-product',
+  'live',
+  'report.json',
+);
+const historicalProductReportBytes = readFileSync(historicalProductReportPath);
+const historicalProductReport = JSON.parse(historicalProductReportBytes);
 assert.equal(historicalProductReport.reportRole, 'historical-obsolete-failure');
 assert.equal(historicalProductReport.currentAuthority, false);
 assert.equal(
   historicalProductReport.obsoleteSharpRevision,
   '637f45fe4150e34a36fd2200f08319a964bdbaee',
+);
+const historicalProductReadme = readFileSync(
+  resolve(historicalProductReportPath, '..', '..', 'README.md'),
+  'utf8',
+);
+const historicalProductReportSha256 = createHash('sha256')
+  .update(historicalProductReportBytes)
+  .digest('hex');
+assert.match(
+  historicalProductReadme,
+  new RegExp(historicalProductReportSha256),
+  'the historical product README must publish the exact demoted report bytes',
 );
 
 console.log('Wake SHARP FireActor preflight witness contracts verified');

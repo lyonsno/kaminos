@@ -33,7 +33,7 @@ Canonical failure report:
 
 - `live/report.json`
 - SHA-256:
-  `e5f1c0577a5ba09420f31ce898da80da39e36d73f4639a0c7ffaea8f79177e3e`
+  `6a22a836c57748a93a4bbaba4088bcb85e960672a48343360039ed08fbf784b5`
 - `ok: false`
 - `primaryOutputWritten: false`
 
