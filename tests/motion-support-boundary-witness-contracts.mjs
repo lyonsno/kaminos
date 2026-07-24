@@ -55,4 +55,16 @@ assert.match(partialReport.error.message, /exactly the requested patches/);
 assert.equal(partialReport.requested.probeMode, 'missing-last');
 assert.equal(partialReport.effective.probeMode, 'missing-last');
 
+const malformedArguments = run('malformed-arguments', ['--probe-mode', 'bogus']);
+assert.notEqual(malformedArguments.result.status, 0, 'malformed witness arguments must fail');
+const malformedArgumentsReport = JSON.parse(await readFile(malformedArguments.output, 'utf8'));
+assert.equal(malformedArgumentsReport.status, 'fail');
+assert.equal(malformedArgumentsReport.failurePhase, 'argument-parse');
+assert.equal(malformedArgumentsReport.requested.probeMode, 'bogus');
+assert.equal(malformedArgumentsReport.effective.probeMode, null);
+assert.match(
+  malformedArgumentsReport.error.message,
+  /probe mode must be complete or missing-last/,
+);
+
 console.log('motion support boundary witness contracts passed');
