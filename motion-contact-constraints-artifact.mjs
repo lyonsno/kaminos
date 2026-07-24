@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
 import { createHillMotionSupportIdentity, createHillSampledSupportSurface } from './hill-motion-support-adapter.js';
-import { decodeHillMotionAffordancePacket } from './motion-core.js';
+import { decodeHillMotionAffordancePacket } from './hill-motion-affordance-source.mjs';
 import { resolveMotionContactConstraints } from './motion-support-core.js';
 
 function sha256(bytes) {

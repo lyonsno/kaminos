@@ -1,7 +1,7 @@
 import {
   sampleHillTerrainSurface,
   validateAxialCrawlerRegistration,
-} from './motion-ready-719024-core.js';
+} from './hill-motion-affordance-source.mjs';
 import { createSampledSupportSurface } from './motion-support-core.js';
 
 const EPSILON = 1e-8;

@@ -890,15 +890,22 @@ function transformRootVector(rootFrame, vector) {
   ));
 }
 
+function inverseTransformRootVector(rootFrame, vector) {
+  return v3(
+    dot(vector, rootFrame.lateral),
+    dot(vector, rootFrame.normal),
+    dot(vector, rootFrame.tangent),
+  );
+}
+
 function pointArray(point) {
   return [point.x, point.y, point.z];
 }
 
-export function evaluateSmoothFittedProxyRigPhase({
+function evaluateSmoothFittedProxyRigPose({
   binding,
   probeBinding,
-  phase = 0,
-  amplitude = 0.18,
+  pose,
   rootFrame,
 } = {}) {
   if (binding?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-binding.v0') {
@@ -910,11 +917,10 @@ export function evaluateSmoothFittedProxyRigPhase({
     throw new Error('smooth fitted phase evaluation probe binding does not match the cast');
   }
   const exactRootFrame = validateRootFrame(rootFrame);
-  const pose = createSmoothFittedProxyRigCyclePose({
-    registration: binding.registration,
-    phase,
-    amplitude,
-  });
+  if (pose?.schema !== 'kaminos.lirm-smooth-fitted-proxy-rig-pose.v0'
+      || pose.stationPositions?.length !== binding.registration.stationCount) {
+    throw new Error('smooth fitted phase evaluation pose does not match the cast');
+  }
   const bodyPositions = deformSmoothFittedProxyRigBinding({ binding, pose });
   const worldPositions = new Float64Array(bodyPositions.length);
   for (let vertex = 0; vertex < binding.vertexCount; vertex += 1) {
@@ -985,6 +991,241 @@ export function evaluateSmoothFittedProxyRigPhase({
     bodyPositions,
     worldPositions,
     probes,
+  };
+}
+
+export function evaluateSmoothFittedProxyRigPhase({
+  binding,
+  probeBinding,
+  phase = 0,
+  amplitude = 0.18,
+  rootFrame,
+} = {}) {
+  const pose = createSmoothFittedProxyRigCyclePose({
+    registration: binding?.registration,
+    phase,
+    amplitude,
+  });
+  return evaluateSmoothFittedProxyRigPose({
+    binding,
+    probeBinding,
+    pose,
+    rootFrame,
+  });
+}
+
+export const SMOOTH_FITTED_CONTACT_ROUTE = 'kaminos/fitted-proxy-rig/smooth-contact-realization-v0';
+
+function validateSmoothFittedContactConstraints(constraints, probeBinding) {
+  if (constraints?.schema !== 'kaminos.motion-contact-constraints.v0'
+      || constraints.authority !== 'world-space-contact-resolution') {
+    throw new Error('smooth contact realization requires world-space contact constraints');
+  }
+  if (!Array.isArray(constraints.patches)
+      || constraints.patches.length !== probeBinding.probes.length) {
+    throw new Error('smooth contact realization requires exactly the bound probes');
+  }
+  const patchesById = new Map();
+  for (const patch of constraints.patches) {
+    if (typeof patch?.id !== 'string' || patchesById.has(patch.id)
+        || !['stance', 'release', 'swing'].includes(patch.contactState)
+        || patch.inBounds !== true) {
+      throw new Error('smooth contact realization requires unique in-bounds patch states');
+    }
+    const terrainPoint = finiteVectorArray(patch.terrainPoint, `${patch.id} terrain point`);
+    const terrainNormal = finiteVectorArray(patch.terrainNormal, `${patch.id} terrain normal`);
+    const normalLength = Math.hypot(...terrainNormal);
+    if (!(normalLength > 1e-8)) throw new Error(`${patch.id} terrain normal collapsed`);
+    patchesById.set(patch.id, {
+      ...patch,
+      terrainPoint: v3(...terrainPoint),
+      terrainNormal: mul(v3(...terrainNormal), 1 / normalLength),
+    });
+  }
+  if (probeBinding.probes.some(probe => !patchesById.has(probe.id))) {
+    throw new Error('smooth contact realization requires exactly the bound probes');
+  }
+  return patchesById;
+}
+
+function smoothContactStateGain(state) {
+  if (state === 'stance') return 1;
+  if (state === 'release') return 0.34;
+  return 0.14;
+}
+
+function smoothStationInfluence(stationArc, probeArc, radius) {
+  const normalizedDistance = Math.abs(stationArc - probeArc) / radius;
+  if (normalizedDistance >= 2.5) return 0;
+  return Math.exp(-0.5 * normalizedDistance * normalizedDistance);
+}
+
+function evaluateSmoothFittedProbePose({
+  binding,
+  probeBinding,
+  pose,
+  rootFrame,
+} = {}) {
+  const poseCurve = createSmoothFittedProxyRigCurve({
+    stationPositions: pose.stationPositions,
+    sampleCount: binding.sampleCount,
+  });
+  return probeBinding.probes.map(probe => {
+    const frame = evaluateSmoothCurveFrame(poseCurve, probe.arcCoordinate);
+    const bodyPosition = add(
+      add(
+        add(frame.center, mul(frame.lateral, probe.localCoordinates[0])),
+        mul(frame.normal, probe.localCoordinates[1]),
+      ),
+      mul(frame.tangent, probe.localCoordinates[2]),
+    );
+    return {
+      id: probe.id,
+      bodyArcCoordinate: probe.arcCoordinate,
+      bodyPosition: pointArray(bodyPosition),
+      worldPosition: pointArray(transformRootPoint(rootFrame, bodyPosition)),
+    };
+  });
+}
+
+export function evaluateSmoothFittedProxyRigContactPhase({
+  binding,
+  probeBinding,
+  phase = 0,
+  amplitude = 0.18,
+  rootFrame,
+  constraints,
+  clearance = 0.008,
+  correctionGain = 0.82,
+  influenceRadius = 0.2,
+  maximumCorrection = 0.18,
+  iterationCount = 3,
+} = {}) {
+  if (!Number.isFinite(clearance) || clearance < 0 || clearance > 0.08) {
+    throw new Error('smooth contact clearance must be finite in [0, 0.08]');
+  }
+  if (!Number.isFinite(correctionGain) || correctionGain <= 0 || correctionGain > 1) {
+    throw new Error('smooth contact correctionGain must be finite in (0, 1]');
+  }
+  if (!Number.isFinite(influenceRadius) || influenceRadius < 0.06 || influenceRadius > 0.5) {
+    throw new Error('smooth contact influenceRadius must be finite in [0.06, 0.5]');
+  }
+  if (!Number.isFinite(maximumCorrection) || maximumCorrection <= 0 || maximumCorrection > 0.4) {
+    throw new Error('smooth contact maximumCorrection must be finite in (0, 0.4]');
+  }
+  if (!Number.isInteger(iterationCount) || iterationCount < 1 || iterationCount > 8) {
+    throw new Error('smooth contact iterationCount must be an integer in [1, 8]');
+  }
+  const exactRootFrame = validateRootFrame(rootFrame);
+  const patchesById = validateSmoothFittedContactConstraints(constraints, probeBinding);
+  const restPositions = binding.registration.stations.map(station => station.position);
+  const basePose = createSmoothFittedProxyRigCyclePose({
+    registration: binding.registration,
+    phase,
+    amplitude,
+  });
+  let pose = {
+    ...basePose,
+    stationPositions: basePose.stationPositions.map(point => ({ ...point })),
+  };
+  const accumulatedOffsets = restPositions.map(() => v3());
+  const iterationResiduals = [];
+
+  for (let iteration = 0; iteration < iterationCount; iteration += 1) {
+    const probes = evaluateSmoothFittedProbePose({
+      binding,
+      probeBinding,
+      pose,
+      rootFrame: exactRootFrame,
+    });
+    const corrections = [];
+    let maximumResidual = 0;
+    for (const probe of probes) {
+      const constraint = patchesById.get(probe.id);
+      const probeWorld = v3(...probe.worldPosition);
+      const terrainDelta = sub(probeWorld, constraint.terrainPoint);
+      const signedDistance = dot(terrainDelta, constraint.terrainNormal);
+      let residual = clearance - signedDistance;
+      if (constraint.contactState === 'swing') residual = Math.max(0, residual);
+      maximumResidual = Math.max(maximumResidual, Math.abs(residual));
+      const worldCorrection = mul(
+        constraint.terrainNormal,
+        clamp(residual * correctionGain * smoothContactStateGain(constraint.contactState), -maximumCorrection, maximumCorrection),
+      );
+      corrections.push({
+        probe,
+        bodyCorrection: inverseTransformRootVector(exactRootFrame, worldCorrection),
+      });
+    }
+    iterationResiduals.push(maximumResidual);
+    const targetPositions = pose.stationPositions.map((position, stationIndex) => {
+      const stationArc = binding.registration.stations[stationIndex].t;
+      let weightedCorrection = v3();
+      let weightSum = 0;
+      for (const correction of corrections) {
+        const influence = smoothStationInfluence(
+          stationArc,
+          correction.probe.bodyArcCoordinate,
+          influenceRadius,
+        );
+        weightedCorrection = add(
+          weightedCorrection,
+          mul(correction.bodyCorrection, influence),
+        );
+        weightSum += influence;
+      }
+      const correction = weightSum > 1e-8
+        ? mul(weightedCorrection, 1 / weightSum)
+        : v3();
+      accumulatedOffsets[stationIndex] = add(accumulatedOffsets[stationIndex], correction);
+      return add(position, correction);
+    });
+    pose = {
+      ...basePose,
+      stationPositions: preserveStationChainLengths(restPositions, targetPositions),
+    };
+  }
+
+  const packet = evaluateSmoothFittedProxyRigPose({
+    binding,
+    probeBinding,
+    pose,
+    rootFrame: exactRootFrame,
+  });
+  let maximumStationOffset = 0;
+  for (const offset of accumulatedOffsets) {
+    maximumStationOffset = Math.max(maximumStationOffset, length3(offset));
+  }
+  return {
+    ...packet,
+    schema: 'kaminos.lirm-smooth-fitted-contact-phase-packet.v0',
+    requestedRoute: SMOOTH_FITTED_CONTACT_ROUTE,
+    effectiveRoute: SMOOTH_FITTED_CONTACT_ROUTE,
+    contactRealization: {
+      authority: 'smooth-station-field-before-volume-deformation',
+      constraintsId: constraints.id ?? null,
+      clearance,
+      correctionGain,
+      influenceRadius,
+      maximumCorrection,
+      iterationCount,
+      iterationResiduals,
+      maximumStationOffset,
+      directVertexTranslationCount: 0,
+      patches: packet.probes.map(probe => {
+        const constraint = patchesById.get(probe.id);
+        const signedDistance = dot(
+          sub(v3(...probe.worldPosition), constraint.terrainPoint),
+          constraint.terrainNormal,
+        );
+        return {
+          id: probe.id,
+          contactState: constraint.contactState,
+          signedDistance,
+          residual: clearance - signedDistance,
+        };
+      }),
+    },
   };
 }
 

@@ -13,10 +13,10 @@ import {
   createHillSampledSupportSurface,
 } from './hill-motion-support-adapter.js';
 import {
+  decodeHillMotionAffordancePacket,
   sampleHillTerrainSurface,
   validateAxialCrawlerRegistration,
-} from './motion-ready-719024-core.js';
-import { decodeHillMotionAffordancePacket } from './motion-core.js';
+} from './hill-motion-affordance-source.mjs';
 
 function parseArguments(argv) {
   const result = {
@@ -112,7 +112,7 @@ try {
     'utf8',
   )));
   const atlas = JSON.parse(await readFile(
-    new URL('artifacts/motion-ready-719024/contact-atlas.json', import.meta.url),
+    new URL('artifacts/lirm-719024-smooth-fitted-phase-exercise-v0/admitted-contact-atlas.json', import.meta.url),
     'utf8',
   ));
   const hillSource = decodeHillMotionAffordancePacket({ packet, data });
