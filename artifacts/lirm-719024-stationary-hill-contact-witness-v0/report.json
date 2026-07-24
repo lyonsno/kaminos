@@ -6,6 +6,17 @@
   "effectiveRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
   "requestedUrl": "http://127.0.0.1:8877/lirm-stationary-hill-contact-inspector.html?phase=0.206901426",
   "effectiveUrl": "http://127.0.0.1:8877/lirm-stationary-hill-contact-inspector.html?phase=0.206901426",
+  "identity": {
+    "requestedRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+    "effectiveRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+    "sourceHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "actualSourceHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "hillRevision": "81c5348",
+    "receiptSha256": "sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad",
+    "constraintsSha256": "sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029",
+    "constraintsId": "stationary-hill-probes:C:constraints",
+    "directVertexTranslationCount": 0
+  },
   "frameCount": 48,
   "frameRate": 12,
   "states": [
@@ -18,7 +29,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028322448471915347,
-      "solveMilliseconds": 55.400000005960464
+      "solveMilliseconds": 116.3999999910593
     },
     {
       "phase": 0.02083333333333326,
@@ -29,7 +40,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028042373316544758,
-      "solveMilliseconds": 55.30000001192093
+      "solveMilliseconds": 115
     },
     {
       "phase": 0.04166666666666674,
@@ -40,7 +51,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.027338227036587684,
-      "solveMilliseconds": 51.599999994039536
+      "solveMilliseconds": 110.59999999403954
     },
     {
       "phase": 0.0625,
@@ -51,7 +62,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02642356325156077,
-      "solveMilliseconds": 50.599999994039536
+      "solveMilliseconds": 121.5
     },
     {
       "phase": 0.08333333333333326,
@@ -62,7 +73,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.025483805861740982,
-      "solveMilliseconds": 51.19999998807907
+      "solveMilliseconds": 121.5
     },
     {
       "phase": 0.10416666666666674,
@@ -73,7 +84,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.024651422806649427,
-      "solveMilliseconds": 50.20000000298023
+      "solveMilliseconds": 106.59999999403954
     },
     {
       "phase": 0.125,
@@ -84,7 +95,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02400672449159664,
-      "solveMilliseconds": 49.70000000298023
+      "solveMilliseconds": 104.79999999701977
     },
     {
       "phase": 0.14583333333333326,
@@ -95,7 +106,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.023593940767691217,
-      "solveMilliseconds": 49.70000000298023
+      "solveMilliseconds": 102.5
     },
     {
       "phase": 0.16666666666666674,
@@ -106,7 +117,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.023446400816050712,
-      "solveMilliseconds": 50.20000000298023
+      "solveMilliseconds": 101.19999998807907
     },
     {
       "phase": 0.1875,
@@ -117,7 +128,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.023593940767691036,
-      "solveMilliseconds": 50.099999994039536
+      "solveMilliseconds": 114.69999998807907
     },
     {
       "phase": 0.20833333333333326,
@@ -128,7 +139,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02400672449159661,
-      "solveMilliseconds": 50.900000005960464
+      "solveMilliseconds": 105.79999999701977
     },
     {
       "phase": 0.22916666666666674,
@@ -139,7 +150,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02465142280664956,
-      "solveMilliseconds": 50.79999999701977
+      "solveMilliseconds": 101.29999999701977
     },
     {
       "phase": 0.25,
@@ -150,7 +161,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.025483805861740913,
-      "solveMilliseconds": 50.099999994039536
+      "solveMilliseconds": 105.20000000298023
     },
     {
       "phase": 0.27083333333333326,
@@ -161,7 +172,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.026423563251560624,
-      "solveMilliseconds": 50.70000000298023
+      "solveMilliseconds": 102.40000000596046
     },
     {
       "phase": 0.29166666666666674,
@@ -172,7 +183,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02733822703658753,
-      "solveMilliseconds": 50.900000005960464
+      "solveMilliseconds": 101.29999999701977
     },
     {
       "phase": 0.3125,
@@ -183,7 +194,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028042373316544363,
-      "solveMilliseconds": 50.5
+      "solveMilliseconds": 101.29999999701977
     },
     {
       "phase": 0.33333333333333326,
@@ -194,7 +205,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028322448471915347,
-      "solveMilliseconds": 50.79999999701977
+      "solveMilliseconds": 103.70000000298023
     },
     {
       "phase": 0.35416666666666674,
@@ -205,7 +216,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028830819001665654,
-      "solveMilliseconds": 51
+      "solveMilliseconds": 108.20000000298023
     },
     {
       "phase": 0.375,
@@ -216,7 +227,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.03031837603560407,
-      "solveMilliseconds": 50.599999994039536
+      "solveMilliseconds": 100.59999999403954
     },
     {
       "phase": 0.39583333333333326,
@@ -227,7 +238,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.032795900196183204,
-      "solveMilliseconds": 50.3999999910593
+      "solveMilliseconds": 99.69999998807907
     },
     {
       "phase": 0.41666666666666674,
@@ -238,7 +249,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.036188827687903054,
-      "solveMilliseconds": 50.5
+      "solveMilliseconds": 99.70000000298023
     },
     {
       "phase": 0.4375,
@@ -249,7 +260,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.04017578174959748,
-      "solveMilliseconds": 49.900000005960464
+      "solveMilliseconds": 112.40000000596046
     },
     {
       "phase": 0.45833333333333326,
@@ -260,7 +271,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.04413051532024637,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 103.5
     },
     {
       "phase": 0.47916666666666674,
@@ -271,7 +282,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.047187117535321156,
-      "solveMilliseconds": 50.20000000298023
+      "solveMilliseconds": 99.30000001192093
     },
     {
       "phase": 0.5,
@@ -282,7 +293,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.048492009747144564,
-      "solveMilliseconds": 50.80000001192093
+      "solveMilliseconds": 100.3999999910593
     },
     {
       "phase": 0.5208333333333335,
@@ -293,7 +304,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.04718711753532082,
-      "solveMilliseconds": 50.099999994039536
+      "solveMilliseconds": 99.59999999403954
     },
     {
       "phase": 0.5416666666666665,
@@ -304,7 +315,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.04413051532024601,
-      "solveMilliseconds": 50.5
+      "solveMilliseconds": 98.80000001192093
     },
     {
       "phase": 0.5625,
@@ -315,7 +326,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.04017578174959741,
-      "solveMilliseconds": 50.29999999701977
+      "solveMilliseconds": 90.79999999701977
     },
     {
       "phase": 0.5833333333333335,
@@ -326,7 +337,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.036188827687903026,
-      "solveMilliseconds": 50.400000005960464
+      "solveMilliseconds": 76.40000000596046
     },
     {
       "phase": 0.6041666666666665,
@@ -337,7 +348,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.03279590019618315,
-      "solveMilliseconds": 50.599999994039536
+      "solveMilliseconds": 67.6000000089407
     },
     {
       "phase": 0.625,
@@ -348,7 +359,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.03031837603560418,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 59.79999999701977
     },
     {
       "phase": 0.6458333333333335,
@@ -359,7 +370,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028830819001665835,
-      "solveMilliseconds": 49.8999999910593
+      "solveMilliseconds": 58
     },
     {
       "phase": 0.6666666666666665,
@@ -370,7 +381,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028322448471915347,
-      "solveMilliseconds": 50.20000000298023
+      "solveMilliseconds": 57.1000000089407
     },
     {
       "phase": 0.6875,
@@ -381,7 +392,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028352747033541514,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 54.400000005960464
     },
     {
       "phase": 0.7083333333333335,
@@ -392,7 +403,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028444678563399856,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 51.900000005960464
     },
     {
       "phase": 0.7291666666666665,
@@ -403,7 +414,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028602472016054876,
-      "solveMilliseconds": 51
+      "solveMilliseconds": 51.69999998807907
     },
     {
       "phase": 0.75,
@@ -414,7 +425,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02881929889416822,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 49.900000005960464
     },
     {
       "phase": 0.7708333333333335,
@@ -425,7 +436,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.029069756550213002,
-      "solveMilliseconds": 50.1000000089407
+      "solveMilliseconds": 49.900000005960464
     },
     {
       "phase": 0.7916666666666665,
@@ -436,7 +447,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02931247416320431,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 49.6000000089407
     },
     {
       "phase": 0.8125,
@@ -447,7 +458,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.029496655384835237,
-      "solveMilliseconds": 50.70000000298023
+      "solveMilliseconds": 47.6000000089407
     },
     {
       "phase": 0.8333333333333335,
@@ -458,7 +469,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.029569121959579843,
-      "solveMilliseconds": 50
+      "solveMilliseconds": 46.599999994039536
     },
     {
       "phase": 0.8541666666666665,
@@ -469,7 +480,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.029496655384835417,
-      "solveMilliseconds": 49.70000000298023
+      "solveMilliseconds": 45.79999999701977
     },
     {
       "phase": 0.875,
@@ -480,7 +491,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02931247416320438,
-      "solveMilliseconds": 49.6000000089407
+      "solveMilliseconds": 46.099999994039536
     },
     {
       "phase": 0.8958333333333335,
@@ -491,7 +502,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.029069756550213093,
-      "solveMilliseconds": 50.099999994039536
+      "solveMilliseconds": 46
     },
     {
       "phase": 0.9166666666666665,
@@ -502,7 +513,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.02881929889416812,
-      "solveMilliseconds": 49.70000000298023
+      "solveMilliseconds": 46.29999999701977
     },
     {
       "phase": 0.9375,
@@ -513,7 +524,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028602472016054772,
-      "solveMilliseconds": 50.29999999701977
+      "solveMilliseconds": 45.29999999701977
     },
     {
       "phase": 0.9583333333333335,
@@ -524,7 +535,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028444678563400057,
-      "solveMilliseconds": 49.29999999701977
+      "solveMilliseconds": 46.099999994039536
     },
     {
       "phase": 0.9791666666666665,
@@ -535,7 +546,7 @@
         "rear-right": "stance"
       },
       "maximumResidual": 0.028352747033541854,
-      "solveMilliseconds": 49.20000000298023
+      "solveMilliseconds": 45.8999999910593
     }
   ],
   "outputs": {
@@ -577,7 +588,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.023526619199064076,
-        "solveMilliseconds": 49.900000005960464
+        "solveMilliseconds": 46.70000000298023
       },
       "output": {
         "path": "event-profile-00.png",
@@ -611,7 +622,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.023970558026260545,
-        "solveMilliseconds": 50.20000000298023
+        "solveMilliseconds": 46.20000000298023
       },
       "output": {
         "path": "event-profile-01.png",
@@ -645,7 +656,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.0247512614435271,
-        "solveMilliseconds": 49.79999999701977
+        "solveMilliseconds": 45.79999999701977
       },
       "output": {
         "path": "event-profile-02.png",
@@ -679,7 +690,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.023526619199064076,
-        "solveMilliseconds": 50.19999998807907
+        "solveMilliseconds": 46
       },
       "output": {
         "path": "event-three-quarter-00.png",
@@ -713,7 +724,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.023970558026260545,
-        "solveMilliseconds": 50.6000000089407
+        "solveMilliseconds": 46.5
       },
       "output": {
         "path": "event-three-quarter-01.png",
@@ -747,7 +758,7 @@
           "rear-right": "stance"
         },
         "maximumResidual": 0.0247512614435271,
-        "solveMilliseconds": 50
+        "solveMilliseconds": 46.599999994039536
       },
       "output": {
         "path": "event-three-quarter-02.png",

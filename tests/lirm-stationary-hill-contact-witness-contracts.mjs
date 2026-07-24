@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   assertStationaryHillContactWitnessState,
+  createStationaryHillContactWitnessIdentity,
   EXPECTED_STATIONARY_CONTACT_CONSTRAINTS,
   EXPECTED_STATIONARY_CONTACT_RECEIPT,
   EXPECTED_STATIONARY_CONTACT_ROUTE,
@@ -27,6 +28,17 @@ const valid = {
 };
 
 assert.equal(assertStationaryHillContactWitnessState(valid), valid);
+assert.deepEqual(createStationaryHillContactWitnessIdentity(valid), {
+  requestedRoute: EXPECTED_STATIONARY_CONTACT_ROUTE,
+  effectiveRoute: EXPECTED_STATIONARY_CONTACT_ROUTE,
+  sourceHash: EXPECTED_STATIONARY_CONTACT_SOURCE_HASH,
+  actualSourceHash: EXPECTED_STATIONARY_CONTACT_SOURCE_HASH,
+  hillRevision: '81c5348',
+  receiptSha256: EXPECTED_STATIONARY_CONTACT_RECEIPT,
+  constraintsSha256: EXPECTED_STATIONARY_CONTACT_CONSTRAINTS,
+  constraintsId: 'stationary-hill-probes:C:constraints',
+  directVertexTranslationCount: 0,
+});
 for (const [name, mutate, pattern] of [
   ['fallback route', state => { state.effectiveRoute = 'fallback'; }, /route mismatch/],
   ['stale source', state => { state.actualSourceHash = 'stale'; }, /source identity/],

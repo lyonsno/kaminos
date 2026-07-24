@@ -6,6 +6,7 @@ import { relative, resolve } from 'node:path';
 
 import {
   assertStationaryHillContactWitnessState as assertState,
+  createStationaryHillContactWitnessIdentity,
   EXPECTED_STATIONARY_CONTACT_ROUTE as EXPECTED_ROUTE,
 } from './lirm-stationary-hill-contact-witness-core.mjs';
 
@@ -162,6 +163,7 @@ const report = {
   effectiveRoute: null,
   requestedUrl: options.url,
   effectiveUrl: null,
+  identity: null,
   frameCount,
   frameRate,
   states: [],
@@ -202,6 +204,7 @@ try {
   assertState(initial);
   report.effectiveUrl = await evaluate(cdp, 'location.href');
   report.effectiveRoute = initial.effectiveRoute;
+  report.identity = createStationaryHillContactWitnessIdentity(initial);
   const screen = await evaluate(cdp, 'window.__lirmHillContactScreenProbe()');
   if (!(screen?.areaRatio > 0.05)) throw new Error(`creature framing is too small: ${JSON.stringify(screen)}`);
 

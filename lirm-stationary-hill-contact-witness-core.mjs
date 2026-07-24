@@ -32,3 +32,18 @@ export function assertStationaryHillContactWitnessState(state) {
   }
   return state;
 }
+
+export function createStationaryHillContactWitnessIdentity(state) {
+  assertStationaryHillContactWitnessState(state);
+  return {
+    requestedRoute: state.requestedRoute,
+    effectiveRoute: state.effectiveRoute,
+    sourceHash: state.sourceHash,
+    actualSourceHash: state.actualSourceHash,
+    hillRevision: state.supportSurface.revision,
+    receiptSha256: state.publication.receiptSha256,
+    constraintsSha256: state.publication.constraintsSha256,
+    constraintsId: state.publication.constraintsId,
+    directVertexTranslationCount: state.directVertexTranslationCount,
+  };
+}
