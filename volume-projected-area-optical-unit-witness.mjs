@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomInt } from 'node:crypto';
 import {
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -27,6 +28,14 @@ const HISTORICAL_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-sp
 const HISTORICAL_FOOTPRINT_AUTHORITY = 'learned-camera-facing-billboard-v0';
 const HISTORICAL_ATTRIBUTE_MODEL_IDENTITY = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
 const HISTORICAL_OPTICAL_SOURCE_AUTHORITY = 'authenticated-persistent-sparse-cohort-gpu-source-v0';
+const RAYMARCH_TARGET_SHA256 = 'c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7';
+const RAYMARCH_TARGET_RAW_PIXEL_SHA256 = 'f19fbd6489c935dde37bc6c0c82bf1fe9b438a0f0b3a64b8cfa43ed8c221f58f';
+const TARGET_PROJECTION_MATRIX = Object.freeze([
+  2.9306425807515972, 0, 0, 0,
+  0, 2.7474774194546225, 0, 0,
+  0, 0, -1.0002000200020003, -1,
+  0, 0, -0.020002000200020003, 0,
+]);
 const CAMERA = Object.freeze({
   position: [1.1799999999999993, 0.28, 2.049999999999998],
   target: [0, 0.02, 0],
@@ -102,11 +111,20 @@ const sourceCaptureReportPath = resolve(String(
   args.get('--source-capture-report')
     || '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/capture-report.json',
 ));
+const raymarchTargetPath = resolve(String(
+  args.get('--raymarch-target')
+    || '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-exact-bilinear-motion-r4/render/images/coefficient-state-120-target.png',
+));
+const raymarchTargetReportPath = resolve(String(
+  args.get('--raymarch-target-report')
+    || '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-exact-bilinear-motion-r4/render-report.json',
+));
 const outputDirectory = resolve(String(
   args.get('--output')
     || '/tmp/kaminos-projected-area-optical-unit-witness',
 ));
 const reportPath = join(outputDirectory, 'report.json');
+const raymarchTargetOutputPath = join(outputDirectory, 'raymarch-target.png');
 const timeoutMs = Number(args.get('--timeout-ms') || 900_000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42_000, 62_000));
 const browserProfilePath = `/tmp/kaminos-projected-area-optical-unit-witness-${process.pid}-${Date.now()}`;
@@ -125,14 +143,34 @@ let lastTrustworthyEvidence = {
   stateId: STATE_ID,
   cohortManifestPath,
   sourceCaptureReportPath,
+  raymarchTargetPath,
+  raymarchTargetReportPath,
 };
 const startedAt = new Date().toISOString();
 
 try {
   assert.equal(existsSync(cohortManifestPath), true, 'cohort manifest is missing');
   assert.equal(existsSync(sourceCaptureReportPath), true, 'source capture report is missing');
+  assert.equal(existsSync(raymarchTargetPath), true, 'Raymarch target image is missing');
+  assert.equal(existsSync(raymarchTargetReportPath), true, 'Raymarch target report is missing');
   const cohortSha256 = sha256File(cohortManifestPath);
   assert.equal(cohortSha256, COHORT_SHA256, 'cohort manifest checksum drifted');
+  const raymarchTargetSha256 = sha256File(raymarchTargetPath);
+  assert.equal(raymarchTargetSha256, RAYMARCH_TARGET_SHA256, 'Raymarch target image checksum drifted');
+  const raymarchTargetReport = readJson(raymarchTargetReportPath);
+  const raymarchTargetState = raymarchTargetReport.states?.find(state => state.stateId === STATE_ID);
+  assert.ok(raymarchTargetState, 'Raymarch target report omitted state 120');
+  assert.equal(
+    raymarchTargetState.targetPixelSha256,
+    RAYMARCH_TARGET_RAW_PIXEL_SHA256,
+    'Raymarch target raw-pixel checksum drifted',
+  );
+  assert.equal(
+    resolve(raymarchTargetState.images?.target || ''),
+    raymarchTargetPath,
+    'Raymarch target report points at a different image',
+  );
+  copyFileSync(raymarchTargetPath, raymarchTargetOutputPath);
   ensureMount(cohortMount, dirname(cohortManifestPath));
 
   const route = buildRoute({
@@ -145,6 +183,12 @@ try {
     requestedRoute: route.href,
     effectiveRoute: null,
     cohortSha256,
+    raymarchTarget: {
+      sourcePath: raymarchTargetPath,
+      screenshotPath: raymarchTargetOutputPath,
+      sha256: raymarchTargetSha256,
+      rawPixelSha256: raymarchTargetState.targetPixelSha256,
+    },
   };
 
   failurePhase = 'browser-launch';
@@ -156,7 +200,7 @@ try {
     '--disable-backgrounding-occluded-windows',
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${browserProfilePath}`,
-    '--window-size=1400,1100',
+    '--window-size=1668,960',
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank',
@@ -169,8 +213,8 @@ try {
   await socket.call('Runtime.enable');
   await socket.call('Log.enable');
   await socket.call('Emulation.setDeviceMetricsOverride', {
-    width: 1400,
-    height: 1100,
+    width: 1668,
+    height: 960,
     deviceScaleFactor: 1,
     mobile: false,
   });
@@ -246,6 +290,12 @@ try {
   assert.equal(cohort.state.boundarySplatRadius, HISTORICAL_SPLAT_RADIUS, 'historical radius was substituted');
   assert.equal(cohort.state.boundarySplatSharpness, HISTORICAL_SPLAT_SHARPNESS, 'historical sharpness was substituted');
   assert.equal(cohort.state.fullSupportDepositionRequested, HISTORICAL_DEPOSITION_MODE, 'historical deposition request did not stick');
+  assertArrayNearlyEqual(
+    cohort.camera.projectionMatrix,
+    TARGET_PROJECTION_MATRIX,
+    1e-12,
+    'target camera projection was substituted',
+  );
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, cohort };
 
   const sameStateCaptureId = `projected-area-optical-units-${STATE_ID}-${Date.now()}`;
@@ -397,6 +447,8 @@ try {
     assert.equal(arm.probe.route.requestedRoute, route.href, `${definition.id} requested route drifted`);
     assert.equal(arm.finalState.simStepCount, cohort.state.simStepCount, `${definition.id} state drifted`);
     assert.equal(arm.finalState.cameraSignature, cohort.state.cameraSignature, `${definition.id} camera-drift`);
+    assert.equal(arm.rect.width, 900, `${definition.id} target render width drifted`);
+    assert.equal(arm.rect.height, 960, `${definition.id} target render height drifted`);
     await evaluate(socket, `(async () => {
       const toolbar = document.querySelector('#toolbar');
       if (toolbar) {
@@ -493,6 +545,19 @@ try {
       sha256: COHORT_SHA256,
       appliedRows: cohort.receipt.appliedRowCount,
       producerChargedDeposits: cohort.receipt.appliedDepositCount,
+    },
+    raymarchTarget: {
+      stateId: STATE_ID,
+      screenshotPath: raymarchTargetOutputPath,
+      sourcePath: raymarchTargetPath,
+      sourceReportPath: raymarchTargetReportPath,
+      sha256: raymarchTargetSha256,
+      rawPixelSha256: raymarchTargetState.targetPixelSha256,
+      width: 900,
+      height: 960,
+      meanLinearLuma: raymarchTargetState.metrics?.targetMeanLuma ?? null,
+      projectionMatrix: TARGET_PROJECTION_MATRIX,
+      authority: 'authenticated-same-state-raymarch-target-v0',
     },
     effectiveGeometry: {
       depositionIdentity: HISTORICAL_DEPOSITION_MODE,
@@ -677,6 +742,17 @@ function readJson(path) {
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function assertArrayNearlyEqual(actual, expected, tolerance, message) {
+  assert.equal(Array.isArray(actual), true, `${message}: actual is not an array`);
+  assert.equal(actual.length, expected.length, `${message}: length drifted`);
+  for (let index = 0; index < expected.length; index += 1) {
+    assert.ok(
+      Math.abs(Number(actual[index]) - Number(expected[index])) <= tolerance,
+      `${message}: index ${index} expected ${expected[index]} got ${actual[index]}`,
+    );
+  }
 }
 
 function delay(ms) {

@@ -11,6 +11,51 @@ assert.equal(
 const witness = readFileSync(witnessUrl, 'utf8');
 assert.match(witness, /coefficient-state-120/, 'witness does not bind the authenticated source state');
 assert.match(witness, /4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20/, 'witness does not bind the cohort manifest checksum');
+assert.match(
+  witness,
+  /coefficient-state-120-target\.png/,
+  'witness does not bind the authenticated Raymarch target image',
+);
+assert.match(
+  witness,
+  /c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7/,
+  'witness does not bind the authenticated Raymarch target file checksum',
+);
+assert.match(
+  witness,
+  /f19fbd6489c935dde37bc6c0c82bf1fe9b438a0f0b3a64b8cfa43ed8c221f58f/,
+  'witness does not preserve the authenticated Raymarch raw-pixel checksum',
+);
+assert.match(
+  witness,
+  /2\.9306425807515972[\s\S]*2\.7474774194546225/,
+  'witness does not bind the target camera projection',
+);
+assert.match(
+  witness,
+  /--window-size=1668,960/,
+  'witness does not reserve an exact 900x960 renderer viewport for the target projection',
+);
+assert.match(
+  witness,
+  /width:\s*1668,[\s\S]*height:\s*960/,
+  'witness device metrics do not preserve the target projection',
+);
+assert.match(
+  witness,
+  /projectionMatrix[\s\S]*TARGET_PROJECTION_MATRIX/,
+  'witness does not reject projection substitution',
+);
+assert.match(
+  witness,
+  /copyFileSync\(raymarchTargetPath,\s*raymarchTargetOutputPath\)/,
+  'witness does not preserve the Raymarch target beside both splat arms',
+);
+assert.match(
+  witness,
+  /raymarchTarget:[\s\S]*screenshotPath:[\s\S]*sha256:[\s\S]*rawPixelSha256/,
+  'witness report does not expose the exact Raymarch target artifact identity',
+);
 assert.match(witness, /projected-native-cell-area-integral-normalized-v0/, 'witness omits the physical optical-unit arm');
 assert.match(witness, /legacy-global-path-scale-diagnostic-v0/, 'witness omits the legacy raw-scale control arm');
 assert.match(
