@@ -71,7 +71,12 @@ function createManifest(overrides = {}) {
   });
 }
 
-function createFakeRuntime({ calls, now, failedSettlementError = null }) {
+function createFakeRuntime({
+  calls,
+  now,
+  failedSettlementError = null,
+  browserYieldError = null,
+}) {
   const queue = {
     submit(commandBuffers) {
       calls.push(`submit:${commandBuffers[0].rangeId}`);
@@ -110,6 +115,7 @@ function createFakeRuntime({ calls, now, failedSettlementError = null }) {
           },
           async yieldToBrowser(metadata) {
             calls.push(`yield:${metadata.metadata.boundaryId}`);
+            if (browserYieldError) throw browserYieldError;
             return { reason: metadata.reason, elapsedMs: 0 };
           },
         });
@@ -357,6 +363,52 @@ await assert.rejects(
     assert.equal(failureReport.failure.error.message, 'progress sink down');
     assert.equal(failureReport.boundaries[0].status, 'failed');
     assert.equal(failureReport.boundaries[0].failure.phase, 'progress-callback');
+    assert.equal(failureReport.boundaries[0].completedItems, 4);
+    assert.equal(failureReport.boundaries[0].ranges[0].status, 'observed');
+    assert.equal(failureReport.boundaries[0].planner.pendingRangeId, null);
+    assert.equal(failureReport.progress.completedItems, 4);
+    return true;
+  },
+);
+
+const yieldFailureCalls = [];
+let yieldFailureNowMs = 0;
+const yieldFailureNow = () => {
+  yieldFailureNowMs += 1;
+  return yieldFailureNowMs;
+};
+const yieldFailure = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({
+    calls: yieldFailureCalls,
+    now: yieldFailureNow,
+    browserYieldError: new Error('browser yield sink down'),
+  }),
+  manifest,
+  invocationId: 'sharp:firing:browser-yield-failure',
+  schedulingMode: 'cooperative',
+  now: yieldFailureNow,
+});
+await assert.rejects(
+  () => yieldFailure.run(async cooperative => {
+    const gpu = cooperative.startBoundary('spn-window-tiles');
+    await gpu.runGpuDuty(gpu.nextRange(), {
+      encode({ range: exactRange }) {
+        return { rangeId: exactRange.rangeId };
+      },
+      submit(commandBuffer) {
+        yieldFailureCalls.push(`yield-submit:${commandBuffer.rangeId}`);
+      },
+    });
+  }),
+  error => {
+    assert.equal(error.message, 'browser yield sink down');
+    const failureReport = error.cooperativeExecutionReport;
+    assert.equal(failureReport.status, 'failed');
+    assert.equal(failureReport.failure.phase, 'browser-yield');
+    assert.equal(failureReport.failure.boundaryId, 'spn-window-tiles');
+    assert.equal(failureReport.failure.error.message, 'browser yield sink down');
+    assert.equal(failureReport.boundaries[0].status, 'failed');
+    assert.equal(failureReport.boundaries[0].failure.phase, 'browser-yield');
     assert.equal(failureReport.boundaries[0].completedItems, 4);
     assert.equal(failureReport.boundaries[0].ranges[0].status, 'observed');
     assert.equal(failureReport.boundaries[0].planner.pendingRangeId, null);

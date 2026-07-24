@@ -508,16 +508,20 @@ export function createWebGpuCooperativeExecution(input = {}) {
 
     async function yieldAfterDuty(range) {
       if (schedulingMode !== 'cooperative' || definition.boundary.yieldPolicy !== 'after-duty') return null;
-      return schedulerInvocation.yieldToBrowser({
-        reason: 'cooperative-boundary-duty-complete',
-        metadata: {
-          manifestId: manifest.manifestId,
-          phaseId: definition.phase.phaseId,
-          boundaryId,
-          rangeId: range.rangeId,
-          rangeIndex: range.rangeIndex,
-        },
-      });
+      try {
+        return await schedulerInvocation.yieldToBrowser({
+          reason: 'cooperative-boundary-duty-complete',
+          metadata: {
+            manifestId: manifest.manifestId,
+            phaseId: definition.phase.phaseId,
+            boundaryId,
+            rangeId: range.rangeId,
+            rangeIndex: range.rangeIndex,
+          },
+        });
+      } catch (error) {
+        throw failExecution(error, 'browser-yield', boundaryState);
+      }
     }
 
     const controller = Object.freeze({
