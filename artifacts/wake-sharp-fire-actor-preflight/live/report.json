@@ -17,7 +17,7 @@
     "routeAuthority": "same-browser-product-realm-shared-device",
     "splatMode": "kernel_moment_covariance",
     "sharpRevision": "637f45fe4150e34a36fd2200f08319a964bdbaee",
-    "firingId": "firing-fireactor-preflight-637f45fe-003"
+    "firingId": "firing-fireactor-preflight-637f45fe-005"
   },
   "invocation": {
     "inferenceInvoked": false,
@@ -29,7 +29,7 @@
   "failure": null,
   "primaryOutputWritten": true,
   "screenshotPath": "artifacts/wake-sharp-fire-actor-preflight/live/fireactor-product-preflight.png",
-  "screenshotSha256": "d9dd782e70edd5646305fecde3e76f59fdaf9034863fc4795db8195fc7d2b2b3",
+  "screenshotSha256": "58dc66afc5ed63b4151399e4149797315ca587d4d01d82b1ce8fd16e90092b2e",
   "screenshotProjection": {
     "identity": "promoted-canvas-raised-over-product-ui",
     "renderSource": "live-product-canvas",
@@ -41,11 +41,11 @@
   },
   "preflightState": {
     "phase": "burning",
-    "firingId": "firing-fireactor-preflight-637f45fe-003",
+    "firingId": "firing-fireactor-preflight-637f45fe-005",
     "fireActorProductEpisode": {
       "schema": "kaminos.wake-sharp-fire-actor-product-episode.v1",
       "status": "recording",
-      "firingId": "firing-fireactor-preflight-637f45fe-003",
+      "firingId": "firing-fireactor-preflight-637f45fe-005",
       "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
       "actorId": "wake-kiln-flamebowl-hero",
       "basinHandle": "big-raymarch-hero-flamebowl-cotangent-covariance",
@@ -875,8 +875,8 @@
     },
     "volumeState": {
       "active": true,
-      "frameCount": 20,
-      "simStepCount": 23,
+      "frameCount": 22,
+      "simStepCount": 25,
       "boundarySplatMode": "kernel_moment_covariance",
       "boundarySplatRendererIdentity": "live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0",
       "boundarySplatFallbackReason": null,
@@ -887,16 +887,16 @@
         "identity": "wake-sharp-promoted-fire-carrier-timing-v0",
         "timingEvidenceSource": "product-carrier-raf-cpu-and-queue-proxy",
         "timingDisclaimer": "RAF and CPU encode timing are not GPU-exclusive or presentation latency",
-        "rafFps": 1.2074378169524271,
-        "frameDeltaMs": 38.20000000000073,
-        "frameP95Ms": 828.1999999999998,
-        "frameSamples": 16,
-        "cpuFrameMs": 0.20000000298023224,
-        "cpuFrameP95Ms": 1,
-        "queueDoneMs": 1173.699999988079,
-        "queueDoneP95Ms": 1260.6000000089407,
+        "rafFps": 1.4042971492767862,
+        "frameDeltaMs": 31.199999999999818,
+        "frameP95Ms": 712.1000000000004,
+        "frameSamples": 19,
+        "cpuFrameMs": 0.29999999701976776,
+        "cpuFrameP95Ms": 0.5999999940395355,
+        "queueDoneMs": 1105.5,
+        "queueDoneP95Ms": 1105.5,
         "queueProbePending": true,
-        "queueSamples": 4,
+        "queueSamples": 6,
         "queueTimingAvailable": true
       },
       "liveStageTimingReceipt": {
@@ -917,15 +917,15 @@
           "stages": {
             "simulation": {
               "status": "sampled",
-              "ms": 6.88128
+              "ms": 6.422528
             },
             "sidecar": {
               "status": "sampled",
-              "ms": 0.65536
+              "ms": 0.393216
             },
             "compaction": {
               "status": "sampled",
-              "ms": 0.720896
+              "ms": 0.458752
             },
             "candidateCopy": {
               "status": "sampled",
@@ -935,29 +935,29 @@
             },
             "indirectSetup": {
               "status": "sampled",
-              "ms": 0
+              "ms": 0.065536
             },
             "splatRaster": {
               "status": "sampled",
-              "ms": 1.114112
+              "ms": 0.786432
             },
             "matchedRaymarchRaster": {
               "status": "sampled",
-              "ms": 30.736384
+              "ms": 26.017792
             },
             "total": {
               "status": "sampled",
-              "ms": 40.108032
+              "ms": 34.144256
             }
           }
         },
         "before": {
-          "frameCount": 3,
-          "simStepCount": 3
+          "frameCount": 2,
+          "simStepCount": 2
         },
         "after": {
-          "frameCount": 3,
-          "simStepCount": 6
+          "frameCount": 2,
+          "simStepCount": 5
         },
         "carrierTimingReset": true
       },
@@ -974,15 +974,15 @@
         "stages": {
           "simulation": {
             "status": "sampled",
-            "ms": 6.88128
+            "ms": 6.422528
           },
           "sidecar": {
             "status": "sampled",
-            "ms": 0.65536
+            "ms": 0.393216
           },
           "compaction": {
             "status": "sampled",
-            "ms": 0.720896
+            "ms": 0.458752
           },
           "candidateCopy": {
             "status": "sampled",
@@ -992,19 +992,19 @@
           },
           "indirectSetup": {
             "status": "sampled",
-            "ms": 0
+            "ms": 0.065536
           },
           "splatRaster": {
             "status": "sampled",
-            "ms": 1.114112
+            "ms": 0.786432
           },
           "matchedRaymarchRaster": {
             "status": "sampled",
-            "ms": 30.736384
+            "ms": 26.017792
           },
           "total": {
             "status": "sampled",
-            "ms": 40.108032
+            "ms": 34.144256
           }
         }
       },
@@ -1024,8 +1024,8 @@
       "projectionIdentity": "promoted-canvas-raised-over-product-ui",
       "width": 2120,
       "height": 1826,
-      "changedPixels": 2077061,
-      "litPixels": 2014369
+      "changedPixels": 2128864,
+      "litPixels": 2064124
     }
   },
   "lastObservedState": {
@@ -1036,10 +1036,10 @@
       "pipelineId": "sharp-image-to-splat-live-v0",
       "source": "preflight://no-inference",
       "sourceLabel": "FireActor product preflight",
-      "firingId": "firing-fireactor-preflight-637f45fe-003",
+      "firingId": "firing-fireactor-preflight-637f45fe-005",
       "firePresentationMode": "full-volume",
       "flameContinuityMode": "live-every-frame",
-      "startedAt": "2026-07-24T04:53:14.174Z",
+      "startedAt": "2026-07-24T05:22:41.282Z",
       "activatedByRun": true,
       "previousActive": false,
       "error": null,
@@ -2247,8 +2247,8 @@
         },
         "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
         "foregroundOpportunityMode": "ordinary-raf",
-        "deviceIdentity": "kaminos-wake-sharp-promoted-device:d937f26e-c4ea-435e-90aa-440f9a553164",
-        "queueIdentity": "kaminos-wake-sharp-promoted-queue:d937f26e-c4ea-435e-90aa-440f9a553164",
+        "deviceIdentity": "kaminos-wake-sharp-promoted-device:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
+        "queueIdentity": "kaminos-wake-sharp-promoted-queue:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
         "coreTiming": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
@@ -2273,12 +2273,12 @@
             "not-displayed-frame-latency",
             "not-sharp-backend-heartbeat"
           ],
-          "firingId": "firing-fireactor-preflight-637f45fe-003",
+          "firingId": "firing-fireactor-preflight-637f45fe-005",
           "generation": 1,
           "phase": "recording",
           "status": "recording",
-          "startedAtMs": 1715.4000000059605,
-          "updatedAtMs": 1715.4000000059605,
+          "startedAtMs": 1139.4000000059605,
+          "updatedAtMs": 1139.4000000059605,
           "endedAtMs": null,
           "durationMs": 0,
           "routeIdentity": {
@@ -2288,8 +2288,8 @@
             "compositionEffective": null,
             "compositionFallbackReason": null,
             "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
-            "deviceIdentity": "kaminos-wake-sharp-promoted-device:d937f26e-c4ea-435e-90aa-440f9a553164",
-            "queueIdentity": "kaminos-wake-sharp-promoted-queue:d937f26e-c4ea-435e-90aa-440f9a553164"
+            "deviceIdentity": "kaminos-wake-sharp-promoted-device:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
+            "queueIdentity": "kaminos-wake-sharp-promoted-queue:e357a90b-c674-45c7-a00b-dc5d6e0b037c"
           },
           "rawRafGapSamplesMs": [],
           "rafGapHistogramMs": [],
@@ -2336,12 +2336,12 @@
           "not-displayed-frame-latency",
           "not-sharp-backend-heartbeat"
         ],
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
         "generation": 1,
         "phase": "recording",
         "status": "recording",
-        "startedAtMs": 1715.4000000059605,
-        "updatedAtMs": 1715.4000000059605,
+        "startedAtMs": 1139.4000000059605,
+        "updatedAtMs": 1139.4000000059605,
         "endedAtMs": null,
         "durationMs": 0,
         "routeIdentity": {
@@ -2351,8 +2351,8 @@
           "compositionEffective": null,
           "compositionFallbackReason": null,
           "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
-          "deviceIdentity": "kaminos-wake-sharp-promoted-device:d937f26e-c4ea-435e-90aa-440f9a553164",
-          "queueIdentity": "kaminos-wake-sharp-promoted-queue:d937f26e-c4ea-435e-90aa-440f9a553164"
+          "deviceIdentity": "kaminos-wake-sharp-promoted-device:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
+          "queueIdentity": "kaminos-wake-sharp-promoted-queue:e357a90b-c674-45c7-a00b-dc5d6e0b037c"
         },
         "rawRafGapSamplesMs": [],
         "rafGapHistogramMs": [],
@@ -7417,7 +7417,7 @@
       "fireActorProductEpisode": {
         "schema": "kaminos.wake-sharp-fire-actor-product-episode.v1",
         "status": "recording",
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
         "mountId": "firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7",
         "actorId": "wake-kiln-flamebowl-hero",
         "basinHandle": "big-raymarch-hero-flamebowl-cotangent-covariance",
@@ -8263,7 +8263,7 @@
         "status": "recording",
         "evidenceSource": "foreground-kaminos-main-page-raf",
         "disclaimer": "main-page-raf-and-volume-counter-evidence-not-gpu-exclusive-or-display-present-latency",
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
         "routeId": "sharp-image-to-splat-live-v0",
         "profileId": "baseline-default",
         "pipelineId": "sharp-image-to-splat-live-v0",
@@ -8286,7 +8286,7 @@
         "effectiveFireEpisodeHooks": {
           "identity": "foreground-kiln-fire-episode-hooks-v0",
           "schema": null,
-          "firingId": "firing-fireactor-preflight-637f45fe-003",
+          "firingId": "firing-fireactor-preflight-637f45fe-005",
           "generation": 1,
           "phase": "recording",
           "status": "recording",
@@ -8307,19 +8307,19 @@
           "sampleCount": 0,
           "frameAdvanceCount": 0,
           "simStepAdvanceCount": 0,
-          "startedAtMs": 1715.4000000059605,
+          "startedAtMs": 1139.4000000059605,
           "finishedAtMs": null,
           "evidenceRef": null,
           "evidenceDigest": null
         },
-        "startedAtMs": 1715.7999999970198,
+        "startedAtMs": 1139.7999999970198,
         "finishedAtMs": null,
-        "startedAtEpochMs": 1784868795289.3,
+        "startedAtEpochMs": 1784870561964.3,
         "finishedAtEpochMs": null,
         "clock": {
           "schema": "kaminos.browser-epoch-monotonic-clock.v0",
           "timingAuthority": "performance-time-origin-plus-now",
-          "timeOriginEpochMs": 1784868793573.5
+          "timeOriginEpochMs": 1784870560824.5
         },
         "durationMs": null,
         "phase": "burning",
@@ -8338,7 +8338,7 @@
         "simStepCountDelta": 0,
         "samples": [
           {
-            "timestampMs": 1715.7999999970198,
+            "timestampMs": 1139.7999999970198,
             "active": true,
             "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
             "prototypeIdentity": "kaminos-volume-prototype-v0",
@@ -8354,7 +8354,7 @@
             "fireEpisodeHooks": {
               "identity": "foreground-kiln-fire-episode-hooks-v0",
               "schema": null,
-              "firingId": "firing-fireactor-preflight-637f45fe-003",
+              "firingId": "firing-fireactor-preflight-637f45fe-005",
               "generation": 1,
               "phase": "recording",
               "status": "recording",
@@ -8375,12 +8375,12 @@
               "sampleCount": 0,
               "frameAdvanceCount": 0,
               "simStepAdvanceCount": 0,
-              "startedAtMs": 1715.4000000059605,
+              "startedAtMs": 1139.4000000059605,
               "finishedAtMs": null,
               "evidenceRef": null,
               "evidenceDigest": null
             },
-            "epochMs": 1784868795289.3,
+            "epochMs": 1784870561964.3,
             "frameGapMs": null
           }
         ],
@@ -8390,12 +8390,12 @@
         "hostTelemetry": {
           "schema": "kaminos.foreground-host-telemetry.v0",
           "status": "recording",
-          "firingId": "firing-fireactor-preflight-637f45fe-003",
-          "episodeId": "firing-fireactor-preflight-637f45fe-003:1784868793573.5:1715.7999999970198",
+          "firingId": "firing-fireactor-preflight-637f45fe-005",
+          "episodeId": "firing-fireactor-preflight-637f45fe-005:1784870560824.5:1139.7999999970198",
           "clock": {
             "schema": "kaminos.browser-epoch-monotonic-clock.v0",
             "timingAuthority": "performance-time-origin-plus-now",
-            "timeOriginEpochMs": 1784868793573.5
+            "timeOriginEpochMs": 1784870560824.5
           },
           "explicitRecordEventAvailable": true,
           "explicitEventSource": {
@@ -8422,7 +8422,7 @@
       "status": "recording",
       "evidenceSource": "foreground-kaminos-main-page-raf",
       "disclaimer": "main-page-raf-and-volume-counter-evidence-not-gpu-exclusive-or-display-present-latency",
-      "firingId": "firing-fireactor-preflight-637f45fe-003",
+      "firingId": "firing-fireactor-preflight-637f45fe-005",
       "routeId": "sharp-image-to-splat-live-v0",
       "profileId": "baseline-default",
       "pipelineId": "sharp-image-to-splat-live-v0",
@@ -8445,7 +8445,7 @@
       "effectiveFireEpisodeHooks": {
         "identity": "foreground-kiln-fire-episode-hooks-v0",
         "schema": null,
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
         "generation": 1,
         "phase": "recording",
         "status": "recording",
@@ -8466,19 +8466,19 @@
         "sampleCount": 0,
         "frameAdvanceCount": 0,
         "simStepAdvanceCount": 0,
-        "startedAtMs": 1715.4000000059605,
+        "startedAtMs": 1139.4000000059605,
         "finishedAtMs": null,
         "evidenceRef": null,
         "evidenceDigest": null
       },
-      "startedAtMs": 1715.7999999970198,
+      "startedAtMs": 1139.7999999970198,
       "finishedAtMs": null,
-      "startedAtEpochMs": 1784868795289.3,
+      "startedAtEpochMs": 1784870561964.3,
       "finishedAtEpochMs": null,
       "clock": {
         "schema": "kaminos.browser-epoch-monotonic-clock.v0",
         "timingAuthority": "performance-time-origin-plus-now",
-        "timeOriginEpochMs": 1784868793573.5
+        "timeOriginEpochMs": 1784870560824.5
       },
       "durationMs": null,
       "phase": "burning",
@@ -8497,7 +8497,7 @@
       "simStepCountDelta": 0,
       "samples": [
         {
-          "timestampMs": 1715.7999999970198,
+          "timestampMs": 1139.7999999970198,
           "active": true,
           "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
           "prototypeIdentity": "kaminos-volume-prototype-v0",
@@ -8513,7 +8513,7 @@
           "fireEpisodeHooks": {
             "identity": "foreground-kiln-fire-episode-hooks-v0",
             "schema": null,
-            "firingId": "firing-fireactor-preflight-637f45fe-003",
+            "firingId": "firing-fireactor-preflight-637f45fe-005",
             "generation": 1,
             "phase": "recording",
             "status": "recording",
@@ -8534,12 +8534,12 @@
             "sampleCount": 0,
             "frameAdvanceCount": 0,
             "simStepAdvanceCount": 0,
-            "startedAtMs": 1715.4000000059605,
+            "startedAtMs": 1139.4000000059605,
             "finishedAtMs": null,
             "evidenceRef": null,
             "evidenceDigest": null
           },
-          "epochMs": 1784868795289.3,
+          "epochMs": 1784870561964.3,
           "frameGapMs": null
         }
       ],
@@ -8549,12 +8549,12 @@
       "hostTelemetry": {
         "schema": "kaminos.foreground-host-telemetry.v0",
         "status": "recording",
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
-        "episodeId": "firing-fireactor-preflight-637f45fe-003:1784868793573.5:1715.7999999970198",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
+        "episodeId": "firing-fireactor-preflight-637f45fe-005:1784870560824.5:1139.7999999970198",
         "clock": {
           "schema": "kaminos.browser-epoch-monotonic-clock.v0",
           "timingAuthority": "performance-time-origin-plus-now",
-          "timeOriginEpochMs": 1784868793573.5
+          "timeOriginEpochMs": 1784870560824.5
         },
         "explicitRecordEventAvailable": true,
         "explicitEventSource": {
@@ -8608,8 +8608,8 @@
         "privateSubmitApplied": false,
         "colorFormat": "bgra8unorm",
         "depthFormat": "depth24plus",
-        "frameCount": 1,
-        "simStepCount": 2,
+        "frameCount": 0,
+        "simStepCount": 1,
         "fallbackReason": null
       },
       "volumePresentationModeRequestedRaw": "beauty",
@@ -8764,16 +8764,16 @@
         "supersededBy": null,
         "fallbackReason": null
       },
-      "frameCount": 2,
-      "simStepCount": 2,
+      "frameCount": 1,
+      "simStepCount": 1,
       "lookFreeze": 0,
       "lookFreezeFrame": null,
       "lookFreezeTimeSeconds": null,
       "lookFreezeRenderTimeMs": null,
       "lookFreezeRenderFrame": null,
       "lookFreezeSkippedFrames": 0,
-      "renderPhaseTimeMs": 1723,
-      "renderPhaseFrame": 1,
+      "renderPhaseTimeMs": 1141.5,
+      "renderPhaseFrame": 0,
       "renderPhaseAuthority": "live-render-phase",
       "pyroCompareMode": "base",
       "pyroCompareMuted": true,
@@ -8897,10 +8897,10 @@
       "fluidStateResetReason": "grid-rebuilt",
       "majorantGrid": 24,
       "majorantBuilt": true,
-      "majorantFrameCount": 2,
+      "majorantFrameCount": 1,
       "majorantCadence": 1,
       "majorantBuiltThisFrame": true,
-      "majorantLastBuiltFrame": 1,
+      "majorantLastBuiltFrame": 0,
       "majorantSkippedFrameCount": 0,
       "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
       "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
@@ -8908,8 +8908,8 @@
       "boundarySidecarSource": "baked",
       "boundarySidecarBuilt": true,
       "boundarySidecarBuiltThisFrame": true,
-      "boundarySidecarFrameCount": 2,
-      "boundarySidecarLastBuiltFrame": 1,
+      "boundarySidecarFrameCount": 1,
+      "boundarySidecarLastBuiltFrame": 0,
       "boundaryStructureSource": "baked",
       "boundarySidecarView": "off",
       "boundarySidecarDebug": {
@@ -8934,8 +8934,8 @@
         "bytes": 33554432,
         "built": true,
         "builtThisFrame": true,
-        "frameCount": 2,
-        "lastBuiltFrame": 1,
+        "frameCount": 1,
+        "lastBuiltFrame": 0,
         "overrideReceipt": null
       },
       "boundarySidecarOverrideReceipt": null,
@@ -9043,7 +9043,7 @@
       "boundarySplatCountAuthority": "gpu-indirect-async-readback",
       "boundarySplatInstanceCount": null,
       "boundarySplatFallbackReason": null,
-      "boundarySplatFrameCount": 2,
+      "boundarySplatFrameCount": 1,
       "boundarySplatTimestampStatus": "available",
       "boundarySplatGpuProfile": {
         "identity": "boundary-splat-stage-gpu-timestamp-profile-v0",
@@ -9174,14 +9174,14 @@
         "majorantBuiltThisFrame": true,
         "majorantCellVisitsThisFrame": 13824,
         "majorantEstimatedCellVisitsPerFrame": 13824,
-        "majorantLastBuiltFrame": 1,
+        "majorantLastBuiltFrame": 0,
         "majorantSkippedFrameCount": 0,
         "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
         "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
         "boundarySidecarSource": "baked",
         "boundarySidecarBuiltThisFrame": true,
         "boundarySidecarCellVisitsThisFrame": 2097152,
-        "boundarySidecarLastBuiltFrame": 1,
+        "boundarySidecarLastBuiltFrame": 0,
         "pressureProjectionEnabled": true,
         "pressureIterationDefault": 2,
         "pressureIterationRequested": 3,
@@ -9407,12 +9407,12 @@
         "liveFireAuthority": 0,
         "smokeAuthority": 0.028000000000000004,
         "stateEnergy": 0,
-        "statePhase": 0.012336,
+        "statePhase": 0.008224,
         "resetGate": true,
         "resetReasons": [
           "disabled"
         ],
-        "lastUpdateFrame": 1,
+        "lastUpdateFrame": 0,
         "lastInputAgeMs": 0,
         "lastReadbackFrame": -1,
         "lastReadbackAgeMs": null,
@@ -9614,12 +9614,12 @@
         "identity": "wake-sharp-promoted-fire-carrier-timing-v0",
         "timingEvidenceSource": "product-carrier-raf-cpu-and-queue-proxy",
         "timingDisclaimer": "RAF and CPU encode timing are not GPU-exclusive or presentation latency",
-        "rafFps": 120.48192771084403,
-        "frameDeltaMs": 8.299999999999955,
-        "frameP95Ms": 8.299999999999955,
-        "frameSamples": 1,
-        "cpuFrameMs": 0.4000000059604645,
-        "cpuFrameP95Ms": 2.4000000059604645,
+        "rafFps": 0,
+        "frameDeltaMs": 0,
+        "frameP95Ms": 0,
+        "frameSamples": 0,
+        "cpuFrameMs": 2.7000000029802322,
+        "cpuFrameP95Ms": 2.7000000029802322,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": true,
@@ -10033,8 +10033,8 @@
       },
       "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
       "foregroundOpportunityMode": "ordinary-raf",
-      "deviceIdentity": "kaminos-wake-sharp-promoted-device:d937f26e-c4ea-435e-90aa-440f9a553164",
-      "queueIdentity": "kaminos-wake-sharp-promoted-queue:d937f26e-c4ea-435e-90aa-440f9a553164",
+      "deviceIdentity": "kaminos-wake-sharp-promoted-device:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
+      "queueIdentity": "kaminos-wake-sharp-promoted-queue:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
       "coreTiming": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
@@ -10059,14 +10059,14 @@
           "not-displayed-frame-latency",
           "not-sharp-backend-heartbeat"
         ],
-        "firingId": "firing-fireactor-preflight-637f45fe-003",
+        "firingId": "firing-fireactor-preflight-637f45fe-005",
         "generation": 1,
         "phase": "recording",
         "status": "recording",
-        "startedAtMs": 1715.4000000059605,
-        "updatedAtMs": 1724.2999999970198,
+        "startedAtMs": 1139.4000000059605,
+        "updatedAtMs": 1147.2999999970198,
         "endedAtMs": null,
-        "durationMs": 8.899999991059303,
+        "durationMs": 7.899999991059303,
         "routeIdentity": {
           "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
           "prototypeIdentity": "kaminos-volume-prototype-v0",
@@ -10074,21 +10074,20 @@
           "compositionEffective": null,
           "compositionFallbackReason": null,
           "adapterIdentity": "kaminos.wake-sharp-promoted-fire-volume-adapter.v1",
-          "deviceIdentity": "kaminos-wake-sharp-promoted-device:d937f26e-c4ea-435e-90aa-440f9a553164",
-          "queueIdentity": "kaminos-wake-sharp-promoted-queue:d937f26e-c4ea-435e-90aa-440f9a553164"
+          "deviceIdentity": "kaminos-wake-sharp-promoted-device:e357a90b-c674-45c7-a00b-dc5d6e0b037c",
+          "queueIdentity": "kaminos-wake-sharp-promoted-queue:e357a90b-c674-45c7-a00b-dc5d6e0b037c"
         },
         "rawRafGapSamplesMs": [
           0,
           0,
-          8.299999999999955,
-          7.200000002980232
+          1.7000000029802322
         ],
         "rafGapHistogramMs": [
           {
             "label": "0-16ms",
             "minMs": 0,
             "maxMs": 16,
-            "count": 4
+            "count": 3
           },
           {
             "label": "16-33ms",
@@ -10121,35 +10120,35 @@
             "count": 0
           }
         ],
-        "sampleCount": 4,
-        "maxRafGapMs": 8.299999999999955,
-        "p95RafGapMs": 8.299999999999955,
-        "lastRafGapMs": 7.200000002980232,
+        "sampleCount": 3,
+        "maxRafGapMs": 1.7000000029802322,
+        "p95RafGapMs": 1.7000000029802322,
+        "lastRafGapMs": 1.7000000029802322,
         "longGapThresholdMs": 50,
         "longGapCount": 0,
         "longGapStreakCurrent": 0,
         "longGapStreakMax": 0,
         "frameStartCount": 0,
-        "frameEndCount": 2,
-        "frameAdvanceCount": 2,
+        "frameEndCount": 1,
+        "frameAdvanceCount": 1,
         "simStepStartCount": 0,
-        "simStepEndCount": 2,
-        "simStepAdvanceCount": 2,
-        "cpuFrameMs": 0.4000000059604645,
+        "simStepEndCount": 1,
+        "simStepAdvanceCount": 1,
+        "cpuFrameMs": 2.7000000029802322,
         "queueCompletionProxy": {
           "evidenceSource": "webgpu-queue-onSubmittedWorkDone-proxy",
           "disclaimer": "queue-completion-proxy-not-present-latency",
           "prototypeSampleBaseline": 0,
           "available": true,
           "pending": false,
-          "samples": 2,
+          "samples": 1,
           "lastDoneMs": 0,
           "p95DoneMs": 0,
           "error": null
         },
         "mohelIndicator": {
           "uncappedRawGapSamples": true,
-          "sampleCount": 4,
+          "sampleCount": 3,
           "largeSampleSet": false,
           "note": "Raw firing-window gap samples are intentionally uncapped; use this diagnostic if the window is too broad."
         }

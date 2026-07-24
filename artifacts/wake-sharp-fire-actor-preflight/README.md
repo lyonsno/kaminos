@@ -24,14 +24,14 @@ Route:
   `/private/tmp/sharp-webgpu-wake-sharp-residual-polish-0724-handy-sharp-637f45fe-runtime-0724`
 - SHARP source: `637f45fe4150e34a36fd2200f08319a964bdbaee`
 - backend/device: Wake same-browser product realm, shared WebGPU device and queue
-- firing: `firing-fireactor-preflight-637f45fe-003`
+- firing: `firing-fireactor-preflight-637f45fe-005`
 - command:
 
 ```sh
 node wake-sharp-fire-actor-preflight-witness.mjs \
   --url http://127.0.0.1:18402/ \
   --expected-sharp-revision 637f45fe4150e34a36fd2200f08319a964bdbaee \
-  --firing-id firing-fireactor-preflight-637f45fe-003 \
+  --firing-id firing-fireactor-preflight-637f45fe-005 \
   --out artifacts/wake-sharp-fire-actor-preflight/live/fireactor-product-preflight.png \
   --report artifacts/wake-sharp-fire-actor-preflight/live/report.json
 ```
@@ -40,10 +40,10 @@ Artifacts:
 
 - `live/report.json`: canonical requested/effective route, identity, timing,
   pixel-witness, and release receipt; SHA-256
-  `c412648c723f8be218dfde60d8fd32c45a0bbbfc9cfd20cce253c6ef990337b8`
+  `7fac0ecffefb31a098a598b38b89ee0d94afe4ac68912179bf90001ab2a9d7cc`
 - `live/fireactor-product-preflight.png`: inspected product-canvas projection;
   SHA-256
-  `d9dd782e70edd5646305fecde3e76f59fdaf9034863fc4795db8195fc7d2b2b3`
+  `58dc66afc5ed63b4151399e4149797315ca587d4d01d82b1ce8fd16e90092b2e`
 
 Bound identity:
 

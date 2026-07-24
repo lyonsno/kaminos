@@ -34,7 +34,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <beginning.png>] [--in-flight-middle-out <middle.png>] [--in-flight-end-out <end.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--fire-timeout-ms <caller-owned-milliseconds>] [--poll-evaluate-timeout-ms <milliseconds>] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <beginning.png>] [--in-flight-middle-out <middle.png>] [--in-flight-end-out <end.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <diagnostic-milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -72,13 +72,15 @@ const inFlightMiddleOut = args.get('in-flight-middle-out')
 const inFlightEndOut = args.get('in-flight-end-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight-end${outParts.ext || '.png'}`);
 const inFlightCaptureTargets = [
-  { phase: 'beginning', minimumProgress: 0, path: inFlightOut },
-  { phase: 'middle', minimumProgress: 0.45, path: inFlightMiddleOut },
-  { phase: 'end', minimumProgress: 0.85, path: inFlightEndOut },
+  { phase: 'beginning', minimumProgress: 0, maximumProgressExclusive: 0.45, path: inFlightOut },
+  { phase: 'middle', minimumProgress: 0.45, maximumProgressExclusive: 0.85, path: inFlightMiddleOut },
+  { phase: 'end', minimumProgress: 0.85, maximumProgressExclusive: null, path: inFlightEndOut },
 ];
 const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
-const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
+const fireTimeoutMs = args.has('fire-timeout-ms') ? Number(args.get('fire-timeout-ms')) : null;
+const pollEvaluateTimeoutMs = Number(args.get('poll-evaluate-timeout-ms') ?? 5000);
+const cdpOperationTimeoutMs = 20000;
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
 const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
@@ -132,6 +134,11 @@ const requestedInvocation = {
   firePresentation: requestedFirePresentation,
   flameContinuity: requestedFlameContinuity,
   captureInFlight,
+  fireTimeoutMs: Number.isFinite(fireTimeoutMs) ? fireTimeoutMs : null,
+  fireTimeoutAuthority: Number.isFinite(fireTimeoutMs)
+    ? 'caller-explicit'
+    : 'uncapped-until-route-terminal',
+  pollEvaluateTimeoutMs,
   ...(captureInFlight
     ? { inFlightCaptureTargets: structuredClone(inFlightCaptureTargets) }
     : {}),
@@ -491,7 +498,6 @@ let seq = 0;
 function wsRequest(ws, method, params = {}, timeoutMs = 20000) {
   const id = ++seq;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${method} timed out`)), timeoutMs);
     const onMessage = event => {
       const message = JSON.parse(event.data);
       if (message.id !== id) return;
@@ -500,6 +506,10 @@ function wsRequest(ws, method, params = {}, timeoutMs = 20000) {
       if (message.error) reject(new Error(`${method}: ${JSON.stringify(message.error)}`));
       else resolve(message.result || {});
     };
+    const timer = setTimeout(() => {
+      ws.removeEventListener('message', onMessage);
+      reject(new Error(`${method} timed out`));
+    }, timeoutMs);
     ws.addEventListener('message', onMessage);
     ws.send(JSON.stringify({ id, method, params }));
   });
@@ -584,6 +594,20 @@ function classifyCadenceAcceptance({ captureInFlight, diagnoseCadenceFailures = 
   };
 }
 
+function classifyInFlightCaptureProgress({ target, progress }) {
+  if (!target || !Number.isFinite(progress)) {
+    return { status: 'waiting', progress, target: target || null };
+  }
+  if (progress < target.minimumProgress) {
+    return { status: 'waiting', progress, target };
+  }
+  if (Number.isFinite(target.maximumProgressExclusive)
+    && progress >= target.maximumProgressExclusive) {
+    return { status: 'missed', progress, target };
+  }
+  return { status: 'eligible', progress, target };
+}
+
 function advanceInFlightCaptureReadiness({
   admissible,
   nowMs,
@@ -595,7 +619,7 @@ function advanceInFlightCaptureReadiness({
   const observationGapExceeded = Number.isFinite(observationGapMs)
     && Number.isFinite(maxObservationGapMs)
     && observationGapMs > maxObservationGapMs;
-  if (!admissible || observationGapExceeded) {
+  if (!admissible) {
     return {
       status: 'awaiting-effective-hybrid',
       ready: false,
@@ -604,7 +628,8 @@ function advanceInFlightCaptureReadiness({
       settleMs,
       observationGapMs,
       maxObservationGapMs,
-      resetReason: observationGapExceeded ? 'observation-gap-exceeded' : 'presentation-inadmissible',
+      observationGapExceeded,
+      resetReason: 'presentation-inadmissible',
     };
   }
   const effectiveEligibleSinceMs = Number.isFinite(eligibleSinceMs) ? eligibleSinceMs : nowMs;
@@ -617,6 +642,7 @@ function advanceInFlightCaptureReadiness({
     settleMs,
     observationGapMs,
     maxObservationGapMs,
+    observationGapExceeded,
     resetReason: null,
   };
 }
@@ -733,6 +759,7 @@ function buildInFlightHybridSettleMonitorExpression({
         admissible: fireState.phase === 'burning' && presentationFailures.length === 0,
         status: readiness.status,
         observationGapMs,
+        observationGapExceeded: readiness.observationGapExceeded,
         resetReason: readiness.resetReason,
         presentationFailures,
         productEpisodeFailures,
@@ -1351,6 +1378,12 @@ try {
   if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
     throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
   }
+  if (fireTimeoutMs !== null && (!Number.isFinite(fireTimeoutMs) || fireTimeoutMs <= 0)) {
+    throw new Error('--fire-timeout-ms must be a finite positive number when explicitly supplied');
+  }
+  if (!Number.isFinite(pollEvaluateTimeoutMs) || pollEvaluateTimeoutMs <= 0) {
+    throw new Error('--poll-evaluate-timeout-ms must be a finite positive number');
+  }
   phase = 'resolving-headless-browser';
   browserResolution = resolveHeadlessBrowser({
     cliExecutable: args.get('chrome'),
@@ -1571,7 +1604,7 @@ try {
           castScreenX: debug?.castScreenPoint?.screenX ?? null,
         },
       };
-    })()`, fireTimeoutMs);
+    })()`, cdpOperationTimeoutMs);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, replayedCast: state.replayedCast };
     if (state.replayedCast.status !== 'real-output-replay-not-inference') throw new Error(`Replay authority changed: ${JSON.stringify(state.replayedCast)}`);
     if (state.replayedCast.receiptReportPath !== state.replayedCast.reportPath) throw new Error(`Replayed Crucible receipt lost source report identity: ${JSON.stringify(state.replayedCast)}`);
@@ -1666,50 +1699,70 @@ try {
         maxObservationGapMs: inFlightMaxObservationGapMs,
         requestedFirePresentation,
         requestedFlameContinuity,
-      }));
+      }), pollEvaluateTimeoutMs);
       inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
     }
-    const deadline = Date.now() + fireTimeoutMs;
-    const remainingFiringDeadlineMs = () => Math.max(1, deadline - Date.now());
+    phase = 'polling-friendly-route';
+    const deadline = Number.isFinite(fireTimeoutMs) ? Date.now() + fireTimeoutMs : null;
+    const routeMayContinue = () => deadline === null || Date.now() < deadline;
     let observedRunning = false;
     let routeState = null;
-    while (Date.now() < deadline) {
+    let pollTimeoutCount = 0;
+    while (routeMayContinue()) {
       await sleep(1000);
-      routeState = await evaluate(ws, `(() => {
-        const liveVolume = window.__kaminosVolumePrototype?.debugState?.() || null;
-        return ({
-        status: window.__kaminosKilnRouteBenchState?.status || null,
-        message: window.__kaminosKilnRouteBenchState?.message || null,
-        runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
-        progress: Number.isFinite(window.__kaminosKilnRouteBenchState?.progressEvent?.progress)
-          ? window.__kaminosKilnRouteBenchState.progressEvent.progress
-          : null,
-        firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
-        firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
-        expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
-        effectiveFirePresentation: liveVolume?.firePresentation || null,
-        effectiveFlameContinuity: liveVolume?.flameContinuityEffective || null,
-        roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
-        settleMonitor: (() => {
-          const monitor = window.__kaminosInFlightHybridSettleMonitor;
-          return monitor ? {
-            schema: monitor.schema,
-            sampleRetention: monitor.sampleRetention,
-            active: monitor.active,
-            settleMs: monitor.settleMs,
-            maxObservationGapMs: monitor.maxObservationGapMs,
-            eligibleSinceMs: monitor.eligibleSinceMs,
-            settledForMs: monitor.settledForMs,
-            ready: monitor.ready,
-            resetCount: monitor.resetCount,
-            lastObservedAtMs: monitor.lastObservedAtMs,
-            latest: monitor.latest,
-            sampleCount: monitor.samples.length,
-          } : null;
-        })(),
-        });
-      })()`, remainingFiringDeadlineMs());
+      try {
+        routeState = await evaluate(ws, `(() => {
+          const liveVolume = window.__kaminosVolumePrototype?.debugState?.() || null;
+          return ({
+          status: window.__kaminosKilnRouteBenchState?.status || null,
+          message: window.__kaminosKilnRouteBenchState?.message || null,
+          runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
+          progress: Number.isFinite(window.__kaminosKilnRouteBenchState?.progressEvent?.progress)
+            ? window.__kaminosKilnRouteBenchState.progressEvent.progress
+            : null,
+          firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
+          firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
+          expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
+          effectiveFirePresentation: liveVolume?.firePresentation || null,
+          effectiveFlameContinuity: liveVolume?.flameContinuityEffective || null,
+          roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
+          settleMonitor: (() => {
+            const monitor = window.__kaminosInFlightHybridSettleMonitor;
+            return monitor ? {
+              schema: monitor.schema,
+              sampleRetention: monitor.sampleRetention,
+              active: monitor.active,
+              settleMs: monitor.settleMs,
+              maxObservationGapMs: monitor.maxObservationGapMs,
+              eligibleSinceMs: monitor.eligibleSinceMs,
+              settledForMs: monitor.settledForMs,
+              ready: monitor.ready,
+              resetCount: monitor.resetCount,
+              lastObservedAtMs: monitor.lastObservedAtMs,
+              latest: monitor.latest,
+              sampleCount: monitor.samples.length,
+            } : null;
+          })(),
+          });
+        })()`, pollEvaluateTimeoutMs);
+      } catch (error) {
+        if (error?.message !== 'Runtime.evaluate timed out') throw error;
+        pollTimeoutCount += 1;
+        inFlightCapture = {
+          ...inFlightCapture,
+          pollTimeoutCount,
+          lastPollFailure: {
+            phase: 'polling-friendly-route',
+            error: error.message,
+            timeoutMs: pollEvaluateTimeoutMs,
+            at: new Date().toISOString(),
+          },
+        };
+        lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+        phase = 'polling-friendly-route';
+        continue;
+      }
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
       if ((routeState.runningProfileId || routeState.status === 'running') && routeState.roomPosture !== 'firing') {
         throw new Error(`Live firing did not fold the Crucible into its furnace-visible posture: ${JSON.stringify(routeState)}`);
@@ -1718,9 +1771,27 @@ try {
       if (captureInFlight
         && nextCaptureTarget
         && !['capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
-        const progressReached = nextCaptureTarget.minimumProgress === 0
-          || (Number.isFinite(routeState.progress)
-            && routeState.progress >= nextCaptureTarget.minimumProgress);
+        const captureProgress = classifyInFlightCaptureProgress({
+          target: nextCaptureTarget,
+          progress: routeState.progress,
+        });
+        if (captureProgress.status === 'missed') {
+          inFlightCapture = {
+            ...inFlightCapture,
+            status: 'phase-window-missed',
+            missedPhase: {
+              phase: nextCaptureTarget.phase,
+              progress: routeState.progress,
+              minimumProgress: nextCaptureTarget.minimumProgress,
+              maximumProgressExclusive: nextCaptureTarget.maximumProgressExclusive,
+            },
+            nextCaptureTarget,
+            lastRouteState: routeState,
+          };
+          lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+          throw new Error(`Friendly firing missed the ${nextCaptureTarget.phase} visual capture window: ${JSON.stringify(inFlightCapture.missedPhase)}`);
+        }
+        const progressReached = captureProgress.status === 'eligible';
         inFlightCapture = {
           ...inFlightCapture,
           status: routeState.settleMonitor?.ready && progressReached
@@ -1739,7 +1810,7 @@ try {
             if (!monitor) return null;
             monitor.sampleNow('pre-capture');
             return monitor.snapshot();
-          })()`, remainingFiringDeadlineMs());
+          })()`, cdpOperationTimeoutMs);
           if (!preCaptureSettleEvidence?.ready
             || preCaptureSettleEvidence.latest?.admissible !== true
             || preCaptureSettleEvidence.latest?.firingId !== routeState.firingId) {
@@ -1762,10 +1833,11 @@ try {
           const phaseCapture = await attemptInFlightHybridCapture({
             ws,
             outputPath: nextCaptureTarget.path,
-            timeoutMs: remainingFiringDeadlineMs(),
+            timeoutMs: cdpOperationTimeoutMs,
             authorization: {
               phase: nextCaptureTarget.phase,
               minimumProgress: nextCaptureTarget.minimumProgress,
+              maximumProgressExclusive: nextCaptureTarget.maximumProgressExclusive,
               progress: routeState.progress,
               observerEffect: inFlightCapture.observerEffect,
               firingId: routeState.firingId,
@@ -1792,7 +1864,7 @@ try {
             if (!monitor) return null;
             monitor.sampleNow('post-capture');
             return monitor.snapshot();
-          })()`, remainingFiringDeadlineMs());
+          })()`, cdpOperationTimeoutMs);
           const postCaptureVerified = Boolean(
             postCaptureSettleEvidence?.ready
             && postCaptureSettleEvidence.latest?.admissible === true
@@ -1832,12 +1904,12 @@ try {
               const monitor = window.__kaminosInFlightHybridSettleMonitor;
               if (monitor) monitor.active = false;
               return monitor?.snapshot?.() || null;
-            })()`, remainingFiringDeadlineMs());
+            })()`, cdpOperationTimeoutMs);
           }
-          phase = 'waiting-for-friendly-firing';
+          phase = 'polling-friendly-route';
         }
       }
-      if (observedRunning && !routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
+      if (!routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
     }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       inFlightCapture = {
@@ -1853,9 +1925,12 @@ try {
     }
     if (!observedRunning) throw new Error(`Friendly firing never entered running state: ${JSON.stringify(routeState)}`);
     if (!routeState || routeState.runningProfileId || !['complete', 'error', 'evidence-only'].includes(routeState.status)) {
-      throw new Error(`Friendly firing did not finish within ${fireTimeoutMs}ms: ${JSON.stringify(routeState)}`);
+      throw new Error(`Friendly firing did not finish within caller deadline ${fireTimeoutMs}ms: ${JSON.stringify(routeState)}`);
     }
     phase = 'reading-friendly-firing-evidence';
+    if (runtimeExceptions.length) {
+      throw new Error(`browser runtime exceptions after firing: ${runtimeExceptions.join('; ')}`);
+    }
     const browserFiringEvidence = await evaluate(ws, `(() => {
       const routeState = window.__kaminosKilnRouteBenchState || {};
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
@@ -1902,7 +1977,7 @@ try {
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
-    })()`, fireTimeoutMs);
+    })()`, cdpOperationTimeoutMs);
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       postFiringSummary: {
@@ -1984,7 +2059,7 @@ try {
       arrayKey: 'foregroundSamples',
       expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: cdpOperationTimeoutMs,
       label: 'foreground heartbeat samples',
     });
     browserFiringEvidence.foregroundKilnHeartbeat.hostEvents = await readBrowserArrayInChunks({
@@ -1993,7 +2068,7 @@ try {
       arrayKey: 'hostEvents',
       expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.hostEventCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: cdpOperationTimeoutMs,
       label: 'foreground host events',
     });
     browserFiringEvidence.sharpDutyCorrelation.foregroundGaps = await readBrowserArrayInChunks({
@@ -2002,7 +2077,7 @@ try {
       arrayKey: 'foregroundGaps',
       expectedCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: cdpOperationTimeoutMs,
       label: 'foreground SHARP duty correlation gaps',
     });
     if (browserFiringEvidence.kilnFrameStageLedger) {
@@ -2012,7 +2087,7 @@ try {
         arrayKey: 'kilnFrameStageFrames',
         expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.frameCount,
         expectedIdentity: browserFiringEvidence.snapshotIdentity,
-        timeoutMs: fireTimeoutMs,
+        timeoutMs: cdpOperationTimeoutMs,
         label: 'kiln frame stage ledger frames',
       });
       browserFiringEvidence.kilnFrameStageLedger.events = await readBrowserArrayInChunks({
@@ -2021,7 +2096,7 @@ try {
         arrayKey: 'kilnFrameStageEvents',
         expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.eventCount,
         expectedIdentity: browserFiringEvidence.snapshotIdentity,
-        timeoutMs: fireTimeoutMs,
+        timeoutMs: cdpOperationTimeoutMs,
         label: 'kiln frame stage ledger events',
       });
     }
@@ -2261,6 +2336,9 @@ try {
   const png = await captureViewportPng(ws, out);
   primaryOutputWritten = true;
 
+  if (runtimeExceptions.length) {
+    throw new Error(`browser runtime exceptions before witness success: ${runtimeExceptions.join('; ')}`);
+  }
   successfulReportPayload = {
     ok: true,
     state,
