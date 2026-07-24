@@ -1,4 +1,6 @@
 export const EXPECTED_STATIONARY_CONTACT_ROUTE = 'kaminos/lirm-719024/published-stationary-contact-v0';
+export const EXPECTED_STATIONARY_CONTACT_INNER_ROUTE = 'kaminos/fitted-proxy-rig/appendage-local-carrier-contact-v1';
+export const EXPECTED_STATIONARY_CONTACT_AUTHORITY = 'appendage-local-rigid-carriers-plus-bounded-rigid-body-fit';
 export const EXPECTED_STATIONARY_CONTACT_SOURCE_HASH = '8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
 export const EXPECTED_STATIONARY_CONTACT_RECEIPT = 'sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad';
 export const EXPECTED_STATIONARY_CONTACT_CONSTRAINTS = 'sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029';
@@ -50,6 +52,11 @@ export function assertStationaryHillContactWitnessState(state) {
   if (state.directVertexTranslationCount !== 0) {
     throw new Error('direct vertex translations entered the route');
   }
+  if (state.contactRoute !== EXPECTED_STATIONARY_CONTACT_INNER_ROUTE
+      || state.contactAuthority !== EXPECTED_STATIONARY_CONTACT_AUTHORITY
+      || state.carrierTransformCount !== 4) {
+    throw new Error('appendage-local carrier route identity mismatch');
+  }
   if (!Number.isFinite(state.maximumResidual)) throw new Error('contact residual is not finite');
   if (state.maximumResidual > EXPECTED_STATIONARY_CONTACT_MAXIMUM_RESIDUAL) {
     throw new Error(
@@ -78,5 +85,8 @@ export function createStationaryHillContactWitnessIdentity(state) {
     constraintsSha256: state.publication.constraintsSha256,
     constraintsId: state.publication.constraintsId,
     directVertexTranslationCount: state.directVertexTranslationCount,
+    contactRoute: state.contactRoute,
+    contactAuthority: state.contactAuthority,
+    carrierTransformCount: state.carrierTransformCount,
   };
 }

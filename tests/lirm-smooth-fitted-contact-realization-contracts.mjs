@@ -55,6 +55,44 @@ const contactAtlas = {
     { id: 'rear-right', axialRegion: 'rear', side: 'right', phaseOffset: 0, vertexIndices: [3], weights: [1] },
   ],
 };
+assert.throws(
+  () => fitted.createSmoothFittedProxyRigProbeBinding({
+    binding,
+    contactAtlas: {
+      ...contactAtlas,
+      patches: contactAtlas.patches.map((patch, index) => (
+        index < 2
+          ? {
+              ...patch,
+              influenceVertexIndices: [0],
+              influenceWeights: [1],
+            }
+          : patch
+      )),
+    },
+    contactAtlasSha256: `sha256:${'9'.repeat(64)}`,
+  }),
+  /rigid carrier core vertex 0 belongs to both front-left and front-right/,
+);
+assert.throws(
+  () => fitted.createSmoothFittedProxyRigProbeBinding({
+    binding,
+    contactAtlas: {
+      ...contactAtlas,
+      patches: contactAtlas.patches.map((patch, index) => (
+        index === 0
+          ? {
+              ...patch,
+              influenceVertexIndices: [0],
+              influenceWeights: [0.05],
+            }
+          : patch
+      )),
+    },
+    contactAtlasSha256: `sha256:${'9'.repeat(64)}`,
+  }),
+  /front-left has no body-side attachment samples/,
+);
 const probeBinding = fitted.createSmoothFittedProxyRigProbeBinding({
   binding,
   contactAtlas,
@@ -125,14 +163,26 @@ const realized = fitted.evaluateSmoothFittedProxyRigContactPhase({
 assert.equal(realized.schema, 'kaminos.lirm-smooth-fitted-contact-phase-packet.v0');
 assert.equal(
   realized.effectiveRoute,
-  'kaminos/fitted-proxy-rig/smooth-contact-realization-v0',
+  'kaminos/fitted-proxy-rig/appendage-local-carrier-contact-v1',
 );
-assert.equal(realized.contactRealization.authority, 'smooth-station-field-before-volume-deformation');
+assert.equal(
+  realized.contactRealization.authority,
+  'appendage-local-rigid-carriers-plus-bounded-rigid-body-fit',
+);
 assert.equal(realized.contactRealization.directVertexTranslationCount, 0);
+assert.equal(realized.contactRealization.carrierTransformCount, 4);
 assert.equal(realized.contactRealization.iterationCount, 3);
+assert.equal(
+  Object.hasOwn(realized.contactRealization, 'influenceRadius'),
+  false,
+  'appendage-local carrier receipts must not advertise the retired global influence radius',
+);
 assert.equal(realized.contactRealization.patches.length, 4);
-assert.ok(realized.contactRealization.maximumStationOffset > 0);
-assert.ok(realized.contactRealization.maximumStationOffset < 0.2);
+assert.ok(realized.contactRealization.maximumStationOffset <= 0.25);
+assert.ok(realized.contactRealization.bodyResidual.rotationAngle <= 0.5);
+assert.ok(
+  Math.hypot(...realized.contactRealization.bodyResidual.translation) <= 0.12,
+);
 
 const realizedById = new Map(realized.probes.map(probe => [probe.id, probe]));
 for (const id of ['front-left', 'rear-right']) {

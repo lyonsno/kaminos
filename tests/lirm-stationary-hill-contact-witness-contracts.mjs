@@ -4,10 +4,28 @@ import {
   assertStationaryHillContactWitnessState,
   createStationaryHillContactWitnessIdentity,
   EXPECTED_STATIONARY_CONTACT_CONSTRAINTS,
+  EXPECTED_STATIONARY_CONTACT_AUTHORITY,
+  EXPECTED_STATIONARY_CONTACT_INNER_ROUTE,
   EXPECTED_STATIONARY_CONTACT_RECEIPT,
   EXPECTED_STATIONARY_CONTACT_ROUTE,
   EXPECTED_STATIONARY_CONTACT_SOURCE_HASH,
 } from '../lirm-stationary-hill-contact-witness-core.mjs';
+import { readFile } from 'node:fs/promises';
+
+const witnessSource = await readFile(
+  new URL('../lirm-stationary-hill-contact-witness.mjs', import.meta.url),
+  'utf8',
+);
+assert.match(
+  witnessSource,
+  /posterior-closeup/,
+  'dense witness must capture an explicit posterior close-up',
+);
+assert.match(
+  witnessSource,
+  /posteriorCloseups/,
+  'dense witness report must identify posterior close-up outputs',
+);
 
 const valid = {
   status: 'loaded',
@@ -36,6 +54,9 @@ const valid = {
     constraintsId: 'stationary-hill-probes:C:constraints',
   },
   directVertexTranslationCount: 0,
+  contactRoute: EXPECTED_STATIONARY_CONTACT_INNER_ROUTE,
+  contactAuthority: EXPECTED_STATIONARY_CONTACT_AUTHORITY,
+  carrierTransformCount: 4,
   maximumResidual: 0.01,
   solveMilliseconds: 40,
 };
@@ -54,6 +75,9 @@ assert.deepEqual(createStationaryHillContactWitnessIdentity(valid), {
   constraintsSha256: EXPECTED_STATIONARY_CONTACT_CONSTRAINTS,
   constraintsId: 'stationary-hill-probes:C:constraints',
   directVertexTranslationCount: 0,
+  contactRoute: EXPECTED_STATIONARY_CONTACT_INNER_ROUTE,
+  contactAuthority: EXPECTED_STATIONARY_CONTACT_AUTHORITY,
+  carrierTransformCount: 4,
 });
 for (const [name, mutate, pattern] of [
   ['fallback route', state => { state.effectiveRoute = 'fallback'; }, /route mismatch/],
@@ -66,6 +90,9 @@ for (const [name, mutate, pattern] of [
   ['unreviewed receipt', state => { state.publication.receiptSha256 = 'unreviewed'; }, /receipt identity/],
   ['substitute constraints', state => { state.publication.constraintsSha256 = 'substitute'; }, /constraint identity/],
   ['direct patch motion', state => { state.directVertexTranslationCount = 4; }, /direct vertex/],
+  ['fallback inner route', state => { state.contactRoute = 'fallback'; }, /carrier route identity/],
+  ['substitute contact authority', state => { state.contactAuthority = 'substitute'; }, /carrier route identity/],
+  ['missing carriers', state => { state.carrierTransformCount = 0; }, /carrier route identity/],
   ['blank residual evidence', state => { state.maximumResidual = Number.NaN; }, /residual/],
   ['excessive residual', state => { state.maximumResidual = 0.061; }, /residual ceiling/],
   ['missing timing evidence', state => { state.solveMilliseconds = null; }, /duration/],

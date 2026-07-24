@@ -30,7 +30,8 @@ for (const contract of [
   '__lirmHillContactScreenProbe',
   'Play',
   'Contact field',
-  'smooth station field',
+  'appendage-local carriers',
+  'posterior-closeup',
 ]) {
   assert.match(source, new RegExp(contract), `stationary Hill inspector is missing ${contract}`);
 }

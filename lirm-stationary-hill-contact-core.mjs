@@ -276,7 +276,6 @@ export function evaluatePublishedStationaryContactPhase({
   includeBaseline = false,
   clearance = 0.008,
   correctionGain = 0.82,
-  influenceRadius = 0.2,
   maximumCorrection = 0.18,
   iterationCount = 3,
 } = {}) {
@@ -302,7 +301,6 @@ export function evaluatePublishedStationaryContactPhase({
     constraints,
     clearance,
     correctionGain,
-    influenceRadius,
     maximumCorrection,
     iterationCount,
   });
@@ -335,7 +333,6 @@ export function evaluateStationaryHillContactPhase({
   contactPlaneY,
   clearance = 0.008,
   correctionGain = 0.82,
-  influenceRadius = 0.2,
   maximumCorrection = 0.18,
   iterationCount = 3,
 } = {}) {
@@ -374,7 +371,6 @@ export function evaluateStationaryHillContactPhase({
     constraints,
     clearance,
     correctionGain,
-    influenceRadius,
     maximumCorrection,
     iterationCount,
   });

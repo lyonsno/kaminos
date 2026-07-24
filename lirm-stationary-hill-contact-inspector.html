@@ -137,7 +137,7 @@
     <div class="metric"><div class="metric-label">Phase</div><div class="metric-value" id="phase">0%</div></div>
     <div class="metric"><div class="metric-label">Stance</div><div class="metric-value" id="stance">-</div></div>
     <div class="metric"><div class="metric-label">Max residual</div><div class="metric-value" id="residual">-</div></div>
-    <div class="metric"><div class="metric-label">Realization</div><div class="metric-value">smooth station field</div></div>
+    <div class="metric"><div class="metric-label">Realization</div><div class="metric-value">appendage-local carriers</div></div>
   </div>
   <div class="identity" id="identity" data-state="loading">
     <strong>loading exact route</strong><br />Source and support identity pending.
@@ -269,6 +269,9 @@
       maximumResidual: null,
       solveMilliseconds: null,
       directVertexTranslationCount: null,
+      contactRoute: null,
+      contactAuthority: null,
+      carrierTransformCount: null,
       publication: null,
       cameraView: 'three-quarter',
     };
@@ -418,7 +421,6 @@
         includeBaseline: !supportActive,
         clearance: 0.008,
         correctionGain: 0.82,
-        influenceRadius: 0.2,
         maximumCorrection: 0.18,
         iterationCount: 3,
       });
@@ -462,6 +464,9 @@
         maximumResidual,
         solveMilliseconds: performance.now() - solveStartedAt,
         directVertexTranslationCount: packet.realized.contactRealization.directVertexTranslationCount,
+        contactRoute: packet.realized.effectiveRoute,
+        contactAuthority: packet.realized.contactRealization.authority,
+        carrierTransformCount: packet.realized.contactRealization.carrierTransformCount,
         publication: { ...packet.publication },
         forcedPhase: force,
       });
@@ -506,11 +511,24 @@
 
     function frameScene(view = 'three-quarter') {
       const center = new THREE.Vector3(...prepass.rootSurface);
-      controls.target.copy(center).add(new THREE.Vector3(0, 0.25, 0));
-      const offset = view === 'profile'
-        ? new THREE.Vector3(1.55, 0.65, 1.72)
-        : new THREE.Vector3(2.25, 0.95, 0);
-      camera.position.copy(center).add(offset);
+      let offset;
+      if (view === 'posterior-closeup') {
+        creatureMesh.geometry.computeBoundingBox();
+        const bounds = creatureMesh.geometry.boundingBox;
+        controls.target.set(
+          (bounds.min.x + bounds.max.x) * 0.5,
+          (bounds.min.y + bounds.max.y) * 0.5,
+          bounds.max.z - (bounds.max.z - bounds.min.z) * 0.18,
+        );
+        offset = new THREE.Vector3(0.88, 0.24, 0.58);
+        camera.position.copy(controls.target).add(offset);
+      } else {
+        controls.target.copy(center).add(new THREE.Vector3(0, 0.25, 0));
+        offset = view === 'profile'
+          ? new THREE.Vector3(1.55, 0.65, 1.72)
+          : new THREE.Vector3(2.25, 0.95, 0);
+        camera.position.copy(center).add(offset);
+      }
       camera.lookAt(controls.target);
       controls.update();
       window.__LIRM_HILL_CONTACT_STATE__.cameraView = view;
@@ -609,7 +627,7 @@
         setPhase(requestedPhase, true);
         frameScene();
         identity.dataset.state = 'loaded';
-        identity.innerHTML = `<strong>happy | reviewed stationary constraints | smooth fitted field</strong><br>${STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE}<br>receipt ${STATIONARY_CONTACT_RECEIPT_SHA256.slice(7, 23)}... | Hill ${supportSurface.identity.revision} | zero direct vertex translations`;
+        identity.innerHTML = `<strong>happy | reviewed stationary constraints | appendage-local carriers</strong><br>${STATIONARY_HILL_PUBLISHED_CONTACT_ROUTE}<br>receipt ${STATIONARY_CONTACT_RECEIPT_SHA256.slice(7, 23)}... | Hill ${supportSurface.identity.revision} | zero direct vertex translations`;
       } catch (error) {
         identity.dataset.state = 'error';
         identity.innerHTML = `<strong>load failed</strong><br>${String(error?.message || error)}`;

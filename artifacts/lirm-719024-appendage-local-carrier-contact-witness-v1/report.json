@@ -1,0 +1,782 @@
+{
+  "schema": "kaminos.lirm-stationary-hill-contact-witness.v0",
+  "status": "pass",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+  "effectiveRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+  "requestedUrl": "http://127.0.0.1:8877/lirm-stationary-hill-contact-inspector.html?phase=0.206901426",
+  "effectiveUrl": "http://127.0.0.1:8877/lirm-stationary-hill-contact-inspector.html?phase=0.206901426",
+  "identity": {
+    "requestedRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+    "effectiveRoute": "kaminos/lirm-719024/published-stationary-contact-v0",
+    "sourceHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "actualSourceHash": "8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e",
+    "hillId": "hill-of-hills-motion-affordance-packet-v0",
+    "hillSourceRef": "lerms:cc/hill-of-hills-live-terrain-server-0702@81c5348",
+    "hillRevision": "81c5348",
+    "inputHashes": {
+      "registration": "sha256:a63fa02ffa7a144234eef3b9902ac9d349fd413d93a19c87ee1464b0b61ca7f9",
+      "contactAtlas": "sha256:e3007a55f930d709ac8a7bf684ff32ad862e7d55186343220edb3e2ad3635b78",
+      "phaseReport": "sha256:97abeb1cdacb802ecf26e2aba6e27ae9d96508e6f85836853b9c3bdd993583ff",
+      "handshake": "sha256:f6d5d91f71dd34feb5c632ca0c673cb82877a011e63d3e2348c851b2c5649112",
+      "axialRegistration": "sha256:cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6",
+      "hillPacket": "sha256:ab9900438d60ca3356327e700617c65fd65e75e4b2707d8e03da0e2f3dd8e9e2",
+      "hillData": "sha256:bd29f0464aecffdd35d79496b744b6d04175b1c2b8a80934fa3c88ed34874fd7"
+    },
+    "receiptSha256": "sha256:4feca6a1d50cb1387b520e5375b75bb42db882279bf260cfc1ac7c12bbb823ad",
+    "constraintsSha256": "sha256:8fea248f4c275f8db4d687d57aea17db9e5f91192bbef39c89665fc9c2b23029",
+    "constraintsId": "stationary-hill-probes:C:constraints",
+    "directVertexTranslationCount": 0
+  },
+  "frameCount": 48,
+  "frameRate": 12,
+  "states": [
+    {
+      "phase": 0,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001020129127960706,
+      "solveMilliseconds": 76.70000000298023
+    },
+    {
+      "phase": 0.02083333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010214119415131312,
+      "solveMilliseconds": 95.79999999701977
+    },
+    {
+      "phase": 0.04166666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001024669212840619,
+      "solveMilliseconds": 97.80000001192093
+    },
+    {
+      "phase": 0.0625,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001028857023271941,
+      "solveMilliseconds": 81.30000001192093
+    },
+    {
+      "phase": 0.08333333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010328344805264518,
+      "solveMilliseconds": 76.5
+    },
+    {
+      "phase": 0.10416666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.00103567588166701,
+      "solveMilliseconds": 76.19999998807907
+    },
+    {
+      "phase": 0.125,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010370413025847687,
+      "solveMilliseconds": 78.29999999701977
+    },
+    {
+      "phase": 0.14583333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010373053170067113,
+      "solveMilliseconds": 83.5
+    },
+    {
+      "phase": 0.16666666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010372441459196129,
+      "solveMilliseconds": 83.6000000089407
+    },
+    {
+      "phase": 0.1875,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010373053170067703,
+      "solveMilliseconds": 78.90000000596046
+    },
+    {
+      "phase": 0.20833333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010370413025848277,
+      "solveMilliseconds": 77
+    },
+    {
+      "phase": 0.22916666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010356758816668366,
+      "solveMilliseconds": 81.40000000596046
+    },
+    {
+      "phase": 0.25,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010328344805265281,
+      "solveMilliseconds": 83.79999999701977
+    },
+    {
+      "phase": 0.27083333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010288570232720173,
+      "solveMilliseconds": 76.5
+    },
+    {
+      "phase": 0.29166666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010246692128405982,
+      "solveMilliseconds": 76.30000001192093
+    },
+    {
+      "phase": 0.3125,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010214119415131312,
+      "solveMilliseconds": 75.20000000298023
+    },
+    {
+      "phase": 0.33333333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001020129127960706,
+      "solveMilliseconds": 73.8999999910593
+    },
+    {
+      "phase": 0.35416666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001027774004435232,
+      "solveMilliseconds": 78.70000000298023
+    },
+    {
+      "phase": 0.375,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010487384223999419,
+      "solveMilliseconds": 76.20000000298023
+    },
+    {
+      "phase": 0.39583333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010802619961835305,
+      "solveMilliseconds": 75.5
+    },
+    {
+      "phase": 0.41666666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001118740449022028,
+      "solveMilliseconds": 75.90000000596046
+    },
+    {
+      "phase": 0.4375,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0011590610443406799,
+      "solveMilliseconds": 77.59999999403954
+    },
+    {
+      "phase": 0.45833333333333326,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0011950442184602075,
+      "solveMilliseconds": 78.40000000596046
+    },
+    {
+      "phase": 0.47916666666666674,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0012205593206510088,
+      "solveMilliseconds": 77.90000000596046
+    },
+    {
+      "phase": 0.5,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001230188715766807,
+      "solveMilliseconds": 78.5
+    },
+    {
+      "phase": 0.5208333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0012205593206510088,
+      "solveMilliseconds": 79.20000000298023
+    },
+    {
+      "phase": 0.5416666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0011950442184603463,
+      "solveMilliseconds": 82.6000000089407
+    },
+    {
+      "phase": 0.5625,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0011590610443408464,
+      "solveMilliseconds": 83.8999999910593
+    },
+    {
+      "phase": 0.5833333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0011187404490219446,
+      "solveMilliseconds": 80.09999999403954
+    },
+    {
+      "phase": 0.6041666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010802619961835722,
+      "solveMilliseconds": 76.40000000596046
+    },
+    {
+      "phase": 0.625,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010487384223999419,
+      "solveMilliseconds": 76.90000000596046
+    },
+    {
+      "phase": 0.6458333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010277740044352737,
+      "solveMilliseconds": 77.79999999701977
+    },
+    {
+      "phase": 0.6666666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001020129127960706,
+      "solveMilliseconds": 74.70000000298023
+    },
+    {
+      "phase": 0.6875,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010203057638655047,
+      "solveMilliseconds": 76.09999999403954
+    },
+    {
+      "phase": 0.7083333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010214469287649838,
+      "solveMilliseconds": 76.5
+    },
+    {
+      "phase": 0.7291666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010247793284402437,
+      "solveMilliseconds": 78.20000000298023
+    },
+    {
+      "phase": 0.75,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010311395371889395,
+      "solveMilliseconds": 78.70000000298023
+    },
+    {
+      "phase": 0.7708333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010402267830845885,
+      "solveMilliseconds": 78.19999998807907
+    },
+    {
+      "phase": 0.7916666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010503326979202018,
+      "solveMilliseconds": 77.79999999701977
+    },
+    {
+      "phase": 0.8125,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.001058655692240916,
+      "solveMilliseconds": 76.20000000298023
+    },
+    {
+      "phase": 0.8333333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010620565960318337,
+      "solveMilliseconds": 76.40000000596046
+    },
+    {
+      "phase": 0.8541666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010586556922408744,
+      "solveMilliseconds": 78.40000000596046
+    },
+    {
+      "phase": 0.875,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010503326979201047,
+      "solveMilliseconds": 79.20000000298023
+    },
+    {
+      "phase": 0.8958333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010402267830846093,
+      "solveMilliseconds": 77.40000000596046
+    },
+    {
+      "phase": 0.9166666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010311395371887938,
+      "solveMilliseconds": 77.40000000596046
+    },
+    {
+      "phase": 0.9375,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010247793284400217,
+      "solveMilliseconds": 76
+    },
+    {
+      "phase": 0.9583333333333335,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010214469287648728,
+      "solveMilliseconds": 79.69999998807907
+    },
+    {
+      "phase": 0.9791666666666665,
+      "contactStates": {
+        "front-left": "stance",
+        "front-right": "swing",
+        "rear-left": "swing",
+        "rear-right": "stance"
+      },
+      "maximumResidual": 0.0010203057638656435,
+      "solveMilliseconds": 79
+    }
+  ],
+  "outputs": {
+    "video": {
+      "path": "stationary-hill-contact.mp4",
+      "bytes": 216993,
+      "sha256": "sha256:bd0b703e23540d81e758e3f6dda7d17f27918d4c1f094882476cce9e41606391"
+    },
+    "contactSheet": {
+      "path": "stationary-hill-contact-sheet.png",
+      "bytes": 303752,
+      "sha256": "sha256:f40036bc0147ffbb542a206aab7bc58954518a4b7569f0a51651cf958c35478a"
+    }
+  },
+  "eventCentered": [
+    {
+      "view": "profile",
+      "camera": {
+        "view": "profile",
+        "position": [
+          2.0100000000000007,
+          0.9843370383679866,
+          0.5999999999999996
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": -0.025,
+      "state": {
+        "phase": 0.18190142601946402,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010372888698032962,
+        "solveMilliseconds": 77.09999999403954
+      },
+      "output": {
+        "path": "event-profile-00.png",
+        "bytes": 247964,
+        "sha256": "sha256:072adabbe3e87714cb66da49dacc4eb588facd50d360394397585f9238f38d56"
+      }
+    },
+    {
+      "view": "profile",
+      "camera": {
+        "view": "profile",
+        "position": [
+          2.0100000000000007,
+          0.9843370383679866,
+          0.5999999999999996
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": 0,
+      "state": {
+        "phase": 0.20690142601946393,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010370868001212466,
+        "solveMilliseconds": 76.70000000298023
+      },
+      "output": {
+        "path": "event-profile-01.png",
+        "bytes": 248578,
+        "sha256": "sha256:900c4d541a74d9ecf259d8463ea77125a58fcb751d6c017a2b7f57b2a2e00260"
+      }
+    },
+    {
+      "view": "profile",
+      "camera": {
+        "view": "profile",
+        "position": [
+          2.0100000000000007,
+          0.9843370383679866,
+          0.5999999999999996
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": 0.025,
+      "state": {
+        "phase": 0.23190142601946384,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010353871939592502,
+        "solveMilliseconds": 76.79999999701977
+      },
+      "output": {
+        "path": "event-profile-02.png",
+        "bytes": 249536,
+        "sha256": "sha256:ba29ae4f874edc36c4db1d771a00a6e7a208d08f0079373e65d2c06799ba70bb"
+      }
+    },
+    {
+      "view": "three-quarter",
+      "camera": {
+        "view": "three-quarter",
+        "position": [
+          2.710000000000001,
+          1.2843370383679866,
+          -1.1199999999999999
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": -0.025,
+      "state": {
+        "phase": 0.18190142601946402,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010372888698032962,
+        "solveMilliseconds": 80
+      },
+      "output": {
+        "path": "event-three-quarter-00.png",
+        "bytes": 245407,
+        "sha256": "sha256:701ce9edb2851946afd88fb03418d6b73175f54a2ad60375d6c6dde918c47883"
+      }
+    },
+    {
+      "view": "three-quarter",
+      "camera": {
+        "view": "three-quarter",
+        "position": [
+          2.710000000000001,
+          1.2843370383679866,
+          -1.1199999999999999
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": 0,
+      "state": {
+        "phase": 0.20690142601946393,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010370868001212466,
+        "solveMilliseconds": 80
+      },
+      "output": {
+        "path": "event-three-quarter-01.png",
+        "bytes": 246040,
+        "sha256": "sha256:8cb4fb13ec98c934d1111f47c36c5b39448345dc339a58d8bf0579b1950837a1"
+      }
+    },
+    {
+      "view": "three-quarter",
+      "camera": {
+        "view": "three-quarter",
+        "position": [
+          2.710000000000001,
+          1.2843370383679866,
+          -1.1199999999999999
+        ],
+        "target": [
+          0.46000000000000085,
+          0.5843370383679867,
+          -1.12
+        ]
+      },
+      "eventPhase": 0.20690142601946396,
+      "offset": 0.025,
+      "state": {
+        "phase": 0.23190142601946384,
+        "contactStates": {
+          "front-left": "stance",
+          "front-right": "swing",
+          "rear-left": "swing",
+          "rear-right": "stance"
+        },
+        "maximumResidual": 0.0010353871939592502,
+        "solveMilliseconds": 85
+      },
+      "output": {
+        "path": "event-three-quarter-02.png",
+        "bytes": 246919,
+        "sha256": "sha256:2542c02b2267830d52dc5b0b30f63b56eb71ca8e28201918d9ec50bd0c5d1f0b"
+      }
+    }
+  ],
+  "error": null
+}

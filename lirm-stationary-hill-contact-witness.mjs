@@ -169,6 +169,7 @@ const report = {
   states: [],
   outputs: {},
   eventCentered: [],
+  posteriorCloseups: [],
   error: null,
 };
 await rm(outputRoot, { recursive: true, force: true });
@@ -286,6 +287,39 @@ try {
         },
       });
     }
+  }
+
+  report.failurePhase = 'posterior-closeup-capture';
+  for (const [index, offset] of [-0.025, 0, 0.025].entries()) {
+    const state = await evaluate(
+      cdp,
+      `window.__setLirmHillContactPhase(${JSON.stringify(eventPhase + offset)})`,
+    );
+    assertState(state);
+    const camera = await evaluate(
+      cdp,
+      "window.__setLirmHillContactView('posterior-closeup')",
+    );
+    await new Promise(accept => setTimeout(accept, 55));
+    const path = resolve(outputRoot, `posterior-closeup-${String(index).padStart(2, '0')}.png`);
+    const bytes = await capture(cdp, path);
+    report.posteriorCloseups.push({
+      view: 'posterior-closeup',
+      camera,
+      eventPhase,
+      offset,
+      state: {
+        phase: state.phase,
+        contactStates: state.contactStates,
+        maximumResidual: state.maximumResidual,
+        solveMilliseconds: state.solveMilliseconds,
+      },
+      output: {
+        path: relative(outputRoot, path),
+        bytes: bytes.length,
+        sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+      },
+    });
   }
 
   report.failurePhase = 'encode';
