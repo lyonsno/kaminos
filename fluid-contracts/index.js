@@ -149,6 +149,7 @@ export function validateTerrainFluidFrame(frame, expectations = {}) {
   const fields = frame.fields;
   invariant(fields && typeof fields === 'object', 'terrain fields are required');
   numericArray(fields.bedHeight, grid.sampleCount, 'bedHeight');
+  if (fields.worldPosition != null) numericArray(fields.worldPosition, grid.sampleCount * 3, 'worldPosition');
   invariant(frame.actualSampleCount === grid.sampleCount, 'terrain frame actual sample count mismatch');
   numericArray(fields.jacobian, grid.sampleCount, 'jacobian');
   numericArray(fields.gradient, grid.sampleCount * 2, 'gradient');

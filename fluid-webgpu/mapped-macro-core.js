@@ -20,8 +20,8 @@ export const PORTABLE_MACRO_SOURCE_ROUTE = 'kaminos/fluid/portable-macro-source'
 export const PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA = 'kaminos.fluid.portable-macro-source-handle.v1';
 export const PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-macro-source-snapshot.v1';
 
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.2.1';
-const KAMINOS_FLUID_PRODUCER_REVISION = '95920668287205517bc2e22f4f224b0d7584f53e';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.3.0';
+const KAMINOS_FLUID_PRODUCER_REVISION = '7a979e60eca52a1c29544aad2e221182dca3f9cd';
 
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
   schema: KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA,
@@ -115,6 +115,10 @@ function validatePortableCapability(requested, effective) {
 
 function validatePhysicalMaterial(material) {
   invariant(material && typeof material === 'object', 'physical material descriptor is required');
+  const supportedFields = new Set(['densityKgM3', 'dynamicViscosityPaS', 'absorptionPerMeter']);
+  for (const key of Object.keys(material)) {
+    invariant(supportedFields.has(key), `unsupported physical material field: ${key}`);
+  }
   invariant(finite(material.densityKgM3, 'physicalMaterial.densityKgM3') > 0, 'physicalMaterial.densityKgM3 must be positive');
   if (material.dynamicViscosityPaS != null) {
     invariant(finite(material.dynamicViscosityPaS, 'physicalMaterial.dynamicViscosityPaS') >= 0, 'physicalMaterial.dynamicViscosityPaS must be non-negative');
@@ -130,6 +134,17 @@ function validatePhysicalMaterial(material) {
     );
   }
   return material;
+}
+
+function copyPhysicalMaterial(material) {
+  validatePhysicalMaterial(material);
+  return {
+    densityKgM3: material.densityKgM3,
+    ...(material.dynamicViscosityPaS == null
+      ? {}
+      : { dynamicViscosityPaS: material.dynamicViscosityPaS }),
+    absorptionPerMeter: [...material.absorptionPerMeter],
+  };
 }
 
 function portableTypedArray(values, length, label, { nonNegative = false } = {}) {
@@ -205,6 +220,11 @@ function sameDirtyRegions(left, right) {
     });
 }
 
+function sameOptionalVector(left, right, tolerance = 0) {
+  if (left == null || right == null) return left == null && right == null;
+  return sameVector(left, right, tolerance);
+}
+
 function validateSameEpochTerrain(previousTerrainFrame, terrainFrame) {
   const unchanged = terrainFrame.currentEpoch === previousTerrainFrame.currentEpoch
     && terrainFrame.priorEpoch === previousTerrainFrame.priorEpoch
@@ -237,7 +257,12 @@ function validateSameEpochTerrain(previousTerrainFrame, terrainFrame) {
       'normal',
       'supportVelocity',
       'valid',
-    ].every(field => sameVector(terrainFrame.fields[field], previousTerrainFrame.fields[field], 0));
+    ].every(field => sameVector(terrainFrame.fields[field], previousTerrainFrame.fields[field], 0))
+    && sameOptionalVector(
+      terrainFrame.fields.worldPosition,
+      previousTerrainFrame.fields.worldPosition,
+      0,
+    );
   invariant(
     unchanged,
     `same-epoch terrain frame ${terrainFrame.currentEpoch} changed; terrain changes require an exact successor remap`,
@@ -940,8 +965,12 @@ function validatePortableMacroSourceDescriptor(descriptor) {
   invariant(Number.isInteger(support.sampleCount) && support.sampleCount > 0, 'supportGeometry.sampleCount must be positive');
   invariant(support.coordinateSpace === 'world_meters', 'portable source support geometry must publish world-meter coordinates');
   invariant(
-    support.mapping === 'orthogonal-heightfield-evaluation-v1',
+    support.mapping === 'explicit-world-position-buffer-v1',
     `unsupported portable source support mapping: ${support.mapping}`,
+  );
+  invariant(
+    support.positionSource === 'terrain-fluid-frame.fields.worldPosition',
+    `unsupported portable source position source: ${support.positionSource}`,
   );
   invariant(descriptor.lifetime?.releasePolicy === 'explicit-release-v1', 'portable source lifetime requires explicit release');
   integer(descriptor.lifetime?.retainedTerrainEpoch, 'lifetime.retainedTerrainEpoch');
@@ -961,6 +990,11 @@ export function validatePortableMacroSourceSnapshot(snapshot, expectations = {})
   validateExactPortableRoute(snapshot.route);
   validatePortableCapability(snapshot.requestedCapability, snapshot.effectiveCapability);
   invariant(snapshot.capability === snapshot.effectiveCapability, 'portable source snapshot capability identity mismatch');
+  invariant(snapshot.sourceAuthority === 'live_runtime', `unsupported portable source authority: ${snapshot.sourceAuthority}`);
+  invariant(snapshot.fallbackStatus === 'none', `portable source fallback is forbidden: ${snapshot.fallbackStatus}`);
+  invariant(snapshot.producer?.runtimeRoute === MAPPED_MACRO_SOLVER_ROUTE, 'portable source runtime route mismatch');
+  invariant(snapshot.producer?.method === MAPPED_MACRO_METHOD, 'portable source method mismatch');
+  nonEmptyString(snapshot.producer?.revision, 'portable source producer revision');
   nonEmptyString(snapshot.sourceHandleId, 'sourceHandleId');
   if (expectations.expectedSourceHandleId != null) {
     invariant(
@@ -993,7 +1027,11 @@ export function validatePortableMacroSourceSnapshot(snapshot, expectations = {})
   nonEmptyString(support.transformId, 'supportGeometry.transformId');
   invariant(support.coordinateSpace === 'world_meters', 'portable source support geometry must publish world-meter coordinates');
   invariant(support.worldMetersPerUnit === 1, 'portable source support geometry must use physical SI meters');
-  invariant(support.mapping === 'orthogonal-heightfield-evaluation-v1', `unsupported support geometry mapping: ${support.mapping}`);
+  invariant(support.mapping === 'explicit-world-position-buffer-v1', `unsupported support geometry mapping: ${support.mapping}`);
+  invariant(
+    support.positionSource === 'terrain-fluid-frame.fields.worldPosition',
+    `unsupported support geometry position source: ${support.positionSource}`,
+  );
   const width = integer(support.grid?.width, 'supportGeometry.grid.width');
   const height = integer(support.grid?.height, 'supportGeometry.grid.height');
   invariant(width > 0 && height > 0, 'supportGeometry grid dimensions must be positive');
@@ -1019,6 +1057,15 @@ export function validatePortableMacroSourceSnapshot(snapshot, expectations = {})
     invariant(support.jacobian[index] > 0, `supportGeometry.jacobian[${index}] must be positive`);
   }
   invariant(snapshot.macro?.method === MAPPED_MACRO_METHOD, `portable macro method mismatch: ${snapshot.macro?.method}`);
+  invariant(snapshot.source && typeof snapshot.source === 'object', 'portable source terrain identity is required');
+  nonEmptyString(snapshot.source.requested, 'requested source');
+  nonEmptyString(snapshot.source.effective, 'effective source');
+  invariant(
+    snapshot.source.effective === snapshot.source.requested,
+    `effective source mismatch: requested ${snapshot.source.requested}, received ${snapshot.source.effective}`,
+  );
+  nonEmptyString(snapshot.source.producerId, 'source.producerId');
+  nonEmptyString(snapshot.source.producerRevision, 'source.producerRevision');
   portableTypedArray(snapshot.macro?.mappedDepth, sampleCount, 'macro.mappedDepth', { nonNegative: true });
   portableTypedArray(snapshot.macro?.mappedMomentumU, sampleCount, 'macro.mappedMomentumU');
   portableTypedArray(snapshot.macro?.mappedMomentumV, sampleCount, 'macro.mappedMomentumV');
@@ -1050,27 +1097,24 @@ export function validatePortableMacroSourceHandle(handle) {
   return handle;
 }
 
-function supportWorldPositions(terrainFrame) {
+function validateSupportWorldPositions(terrainFrame) {
   validateReferenceMetric(terrainFrame);
-  const { width, height, spacing, origin } = terrainFrame.grid;
-  const positions = new Float64Array(width * height * 3);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      const offset = index * 3;
-      const normalDirection = normalizedDirection(terrainFrame.fields.normal, offset);
-      const coordinateU = x * spacing[0];
-      const coordinateV = y * spacing[1];
-      const bedHeight = terrainFrame.fields.bedHeight[index];
-      for (let component = 0; component < 3; component += 1) {
-        positions[offset + component] = origin[component]
-          + coordinateU * terrainFrame.fields.tangentU[offset + component]
-          + coordinateV * terrainFrame.fields.tangentV[offset + component]
-          + bedHeight * normalDirection[component];
-      }
-    }
-  }
-  return positions;
+  const sampleCount = terrainFrame.grid.width * terrainFrame.grid.height;
+  invariant(
+    terrainFrame.fields.worldPosition != null,
+    'portable macro source requires explicit world-position support in terrainFrame.fields.worldPosition',
+  );
+  portableTypedArray(
+    terrainFrame.fields.worldPosition,
+    sampleCount * 3,
+    'terrainFrame.fields.worldPosition',
+  );
+  return terrainFrame.fields.worldPosition;
+}
+
+function supportWorldPositions(terrainFrame) {
+  validateSupportWorldPositions(terrainFrame);
+  return Float64Array.from(terrainFrame.fields.worldPosition);
 }
 
 function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
@@ -1105,7 +1149,8 @@ function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
       transformId: terrainFrame.transformId,
       coordinateSpace: 'world_meters',
       worldMetersPerUnit: terrainFrame.worldMetersPerUnit,
-      mapping: 'orthogonal-heightfield-evaluation-v1',
+      mapping: 'explicit-world-position-buffer-v1',
+      positionSource: 'terrain-fluid-frame.fields.worldPosition',
       sampleCount,
       grid: {
         width: terrainFrame.grid.width,
@@ -1129,10 +1174,7 @@ function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
         Object.entries(state.materialMasses).map(([key, values]) => [key, Float64Array.from(values)]),
       ),
     },
-    physicalMaterial: {
-      ...descriptor.physicalMaterial,
-      absorptionPerMeter: [...descriptor.physicalMaterial.absorptionPerMeter],
-    },
+    physicalMaterial: copyPhysicalMaterial(descriptor.physicalMaterial),
     confidence: 1,
     dirtyRegions: terrainFrame.dirtyRegions.map(region => ({ ...region })),
     complete: true,
@@ -1240,6 +1282,7 @@ export function createMappedMacroRuntime(options = {}) {
         validatePortableCapability(requestedCapability, effectiveCapability);
         invariant(!portableSourceHandles.has(sourceHandleId), `portable source handle ${sourceHandleId} is already retained`);
         validateState(state, terrainFrame);
+        validateSupportWorldPositions(terrainFrame);
         const physicalMaterial = validatePhysicalMaterial(sourceOptions.physicalMaterial ?? {
           densityKgM3: 997,
           dynamicViscosityPaS: 0.00089,
@@ -1271,13 +1314,11 @@ export function createMappedMacroRuntime(options = {}) {
             transformId: terrainFrame.transformId,
             coordinateSpace: 'world_meters',
             worldMetersPerUnit: terrainFrame.worldMetersPerUnit,
-            mapping: 'orthogonal-heightfield-evaluation-v1',
+            mapping: 'explicit-world-position-buffer-v1',
+            positionSource: 'terrain-fluid-frame.fields.worldPosition',
             sampleCount: terrainFrame.grid.width * terrainFrame.grid.height,
           },
-          physicalMaterial: {
-            ...physicalMaterial,
-            absorptionPerMeter: [...physicalMaterial.absorptionPerMeter],
-          },
+          physicalMaterial: copyPhysicalMaterial(physicalMaterial),
           lifetime: {
             releasePolicy: 'explicit-release-v1',
             retainedTerrainEpoch: terrainFrame.currentEpoch,

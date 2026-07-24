@@ -131,6 +131,7 @@ try {
     runtimeRevision: descriptor.runtimeRevision,
     runtimeRoute: descriptor.runtimeRoute,
     representationRoutes: descriptor.representationRoutes,
+    sourceRoutes: descriptor.sourceRoutes,
     outputRoutes: descriptor.outputRoutes,
     artifact: {
       filename: packResult.filename,

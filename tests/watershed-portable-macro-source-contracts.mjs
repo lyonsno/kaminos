@@ -42,6 +42,12 @@ function makeAnalyticTerrain({
     },
     fields: {
       bedHeight: Float64Array.from(bedHeight),
+      worldPosition: new Float64Array([
+        10, 11, 12,
+        13, 14, 15,
+        16, 17, 18,
+        19, 20, 21,
+      ]),
       jacobian: new Float64Array(sampleCount).fill(1),
       gradient: new Float64Array(sampleCount * 2),
       tangentU: new Float64Array(Array.from({ length: sampleCount }, () => [1, 0, 0]).flat()),
@@ -110,10 +116,10 @@ assert.equal(first.schema, PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA);
 assert.equal(first.terrainEpoch, 1);
 assert.equal(first.fluidEpoch, 0);
 assert.deepEqual(Array.from(first.supportGeometry.worldPosition), [
-  2, 3.1, 4,
-  2.5, 3.2, 4,
-  2, 3.3, 4.25,
-  2.5, 3.4, 4.25,
+  10, 11, 12,
+  13, 14, 15,
+  16, 17, 18,
+  19, 20, 21,
 ]);
 assert.deepEqual(Array.from(first.macro.mappedDepth), [0.4, 0.3, 0.2, 0.1]);
 assert.deepEqual(Array.from(first.macro.mappedMomentumU), [0.04, 0.03, 0.02, 0.01]);
@@ -128,7 +134,21 @@ first.macro.mappedDepth[0] = 999;
 first.supportGeometry.worldPosition[0] = 999;
 const independentRead = handle.read();
 assert.equal(independentRead.macro.mappedDepth[0], 0.4, 'a consumer cannot mutate producer state through a read snapshot');
-assert.equal(independentRead.supportGeometry.worldPosition[0], 2, 'a consumer cannot mutate producer support through a read snapshot');
+assert.equal(independentRead.supportGeometry.worldPosition[0], 10, 'a consumer cannot mutate producer support through a read snapshot');
+
+const changedSameEpochSupport = {
+  ...terrain,
+  fields: {
+    ...terrain.fields,
+    worldPosition: Float64Array.from(terrain.fields.worldPosition),
+  },
+};
+changedSameEpochSupport.fields.worldPosition[0] += 1;
+assert.throws(
+  () => runtime.step({ terrainFrame: changedSameEpochSupport, deltaSeconds: 1 / 240 }),
+  /same-epoch terrain frame .* changed/,
+  'absolute support positions cannot change without a new terrain epoch',
+);
 
 runtime.step({ terrainFrame: terrain, deltaSeconds: 1 / 240 });
 const advanced = handle.read({ minimumFluidEpoch: 1 });
@@ -165,6 +185,31 @@ assert.throws(
   'camera state cannot contaminate producer source truth',
 );
 assert.throws(
+  () => validatePortableMacroSourceSnapshot({
+    ...advanced,
+    sourceAuthority: 'cached_fixture',
+    fallbackStatus: 'fallback',
+    producer: {
+      revision: 'forged',
+      runtimeRoute: 'fixture/runtime',
+      method: 'fixture-method',
+    },
+  }),
+  /source authority|fallback|runtime route/,
+  'a forged fallback snapshot cannot validate as live producer truth',
+);
+assert.throws(
+  () => validatePortableMacroSourceSnapshot({
+    ...advanced,
+    source: {
+      ...advanced.source,
+      effective: 'cached-analytic-saddle',
+    },
+  }),
+  /effective source mismatch/,
+  'a fallback terrain source cannot hide behind the portable source route',
+);
+assert.throws(
   () => validatePortableMacroSourceHandle(Object.freeze({
     descriptor: { ...handle.descriptor },
     read: handle.read,
@@ -177,6 +222,26 @@ assert.throws(
   () => validatePortableMacroSourceHandle(Object.freeze({ descriptor: handle.descriptor })),
   /read function/,
   'a partial source handle cannot validate',
+);
+
+const terrainWithoutWorldPosition = makeAnalyticTerrain();
+delete terrainWithoutWorldPosition.fields.worldPosition;
+const runtimeWithoutWorldPosition = createKaminosFluidRuntime({
+  terrainFrame: terrainWithoutWorldPosition,
+  depth: new Float64Array(4),
+  producerRevision: 'missing-support-position-test',
+});
+assert.throws(
+  () => runtimeWithoutWorldPosition.retainPortableMacroSource({
+    sourceHandleId: 'missing-world-position-handle',
+  }),
+  error => {
+    assert.match(error.message, /explicit world-position support/);
+    assert.equal(error.report.status, 'failed');
+    assert.equal(error.report.phase, 'retain-source');
+    return true;
+  },
+  'portable retention fails before output when the terrain source omits absolute support positions',
 );
 
 for (const [label, options, pattern] of [
@@ -227,6 +292,34 @@ for (const [label, options, pattern] of [
       camera: { position: [0, 0, 0] },
     },
     /camera-owned state/,
+  ],
+  [
+    'optical material metadata',
+    {
+      sourceHandleId: 'optical-material-metadata-handle',
+      requestedRoute: PORTABLE_MACRO_SOURCE_ROUTE,
+      effectiveRoute: PORTABLE_MACRO_SOURCE_ROUTE,
+      physicalMaterial: {
+        densityKgM3: 997,
+        absorptionPerMeter: [0.05, 0.02, 0.01],
+        shader: { entryPoint: 'forbidden' },
+      },
+    },
+    /unsupported physical material field: shader/,
+  ],
+  [
+    'mutable material metadata',
+    {
+      sourceHandleId: 'mutable-material-metadata-handle',
+      requestedRoute: PORTABLE_MACRO_SOURCE_ROUTE,
+      effectiveRoute: PORTABLE_MACRO_SOURCE_ROUTE,
+      physicalMaterial: {
+        densityKgM3: 997,
+        absorptionPerMeter: [0.05, 0.02, 0.01],
+        lookup: new Float32Array([1]),
+      },
+    },
+    /unsupported physical material field: lookup/,
   ],
 ]) {
   assert.throws(
