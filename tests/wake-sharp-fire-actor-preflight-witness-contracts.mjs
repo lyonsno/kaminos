@@ -191,7 +191,7 @@ assert.equal(failedReport.failure?.phase, 'launch');
 assert.equal(failedReport.primaryOutputWritten, false);
 assert.equal(failedReport.screenshotPath, null);
 
-const exactPreflightRevision = '637f45fe4150e34a36fd2200f08319a964bdbaee';
+const exactPreflightRevision = 'b689f485d5d6f6c8868f21ad3d56d17e81cba44a';
 const artifactRoot = resolve(
   import.meta.dirname,
   '..',

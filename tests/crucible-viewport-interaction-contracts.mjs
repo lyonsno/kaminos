@@ -102,7 +102,7 @@ assert.match(
 );
 assert.match(
   html,
-  /volumePrototype\.setControls\(\{[\s\S]*flameContinuityMode[\s\S]*\}\)/,
+  /flameContinuityMode:\s*application\.presentation\.flameContinuity[\s\S]*volumePrototype\.setControls\(wakeSharpPromotedFireControls\)[\s\S]*flameContinuityMode\s*!==\s*effectiveFlameContinuity/,
   'the same-firing start must apply the chosen continuity mode to the volume runtime',
 );
 assert.match(

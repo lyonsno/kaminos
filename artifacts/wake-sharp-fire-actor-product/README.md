@@ -1,6 +1,8 @@
 # Wake SHARP FireActor Product Firing
 
-Status: failed witness run; no product acceptance claimed.
+Status: historical failed witness run against obsolete SHARP `637f45f`; retained
+as failure evidence only. It is not current product authority and claims no
+FireActor defect or product acceptance.
 
 The exact renewed firing `firing-mryh01td-fqsvu6` ran uncontended from
 `2026-07-24T04:58:55.110Z` through `2026-07-24T05:05:59.371Z` from Kaminos

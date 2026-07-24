@@ -265,8 +265,8 @@ assert.match(
 );
 assert.match(
   ui,
-  /volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*await waitForHybridKilnFirePresentation\(\{[\s\S]*flameContinuityRequested:\s*flameContinuityMode,[\s\S]*createForegroundKilnHeartbeatEpisode\(/,
-  'hybrid readiness must be proven inside the exact firing before foreground verification starts',
+  /volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*await waitForWakeSharpPromotedFirePresentation\(\{[\s\S]*firingId,[\s\S]*fireEpisodeHooks,[\s\S]*loaded:\s*fireActorResources\.loaded,[\s\S]*createForegroundKilnHeartbeatEpisode\(/,
+  'promoted FireActor readiness must be proven inside the exact firing before foreground verification starts',
 );
 
 console.log('kiln fire presentation contracts passed');

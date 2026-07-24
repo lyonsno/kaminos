@@ -15152,6 +15152,60 @@ function applyKilnContentionFireBudget() {
   return { requestedFireBudget, effectiveFireBudget };
 }
 
+async function waitForWakeSharpPromotedFirePresentation({
+  firingId,
+  fireEpisodeHooks,
+  loaded,
+  readState = () => volumePrototype?.debugState?.() || null,
+  requestFrame = callback => requestAnimationFrame(callback),
+  now = () => performance.now(),
+  timeoutMs = null,
+} = {}) {
+  if (fireEpisodeHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
+    || fireEpisodeHooks?.firingId !== firingId
+    || fireEpisodeHooks?.status !== 'recording') {
+    throw new Error(`Promoted FireActor did not open exact firing episode ${firingId || '<missing>'}.`);
+  }
+  const startedAtMs = Number(now());
+  const callerDeadlineMs = timeoutMs === null ? null : Number(timeoutMs);
+  if (callerDeadlineMs !== null
+    && (!Number.isFinite(callerDeadlineMs) || callerDeadlineMs <= 0)) {
+    throw new Error('Promoted FireActor readiness timeout must be finite and positive when supplied');
+  }
+  while (true) {
+    const state = readState() || {};
+    const fallbackReason = wakeSharpPromotedFireFallbackReason(state, loaded.mount);
+    if (fallbackReason) {
+      throw new Error(`Promoted FireActor presentation fallback: ${fallbackReason}`);
+    }
+    if (state.active === true
+      && state.frameCount > 0
+      && state.simStepCount > 0
+      && state.boundarySplatMode === loaded.mount.representation.splatMode
+      && state.raymarchSmokePresentationModeEffective === 'on') {
+      return {
+        schema: 'kaminos.wake-sharp-promoted-fire-readiness.v1',
+        firingId,
+        mountId: loaded.mount.mountId,
+        actorId: loaded.mount.actorId,
+        basinRevision: loaded.mount.basin.revision,
+        packageSha256: loaded.packageSha256,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        boundarySplatMode: state.boundarySplatMode,
+        smokePresentation: state.raymarchSmokePresentationModeEffective,
+        fallbackReason: null,
+      };
+    }
+    if (callerDeadlineMs !== null && Number(now()) - startedAtMs >= callerDeadlineMs) {
+      throw new Error(
+        `Promoted FireActor timed out waiting for an exact same-firing rendered frame after ${callerDeadlineMs}ms`,
+      );
+    }
+    await new Promise(resolve => requestFrame(resolve));
+  }
+}
+
 async function beginSharpBreathingRoomKilnFire({
   profileId,
   source,
@@ -15207,6 +15261,11 @@ async function beginSharpBreathingRoomKilnFire({
       requireSharpDutyCorrelation,
       rendererEpisode: fireEpisodeHooks,
     });
+    const promotedFirePresentationReadiness = await waitForWakeSharpPromotedFirePresentation({
+      firingId,
+      fireEpisodeHooks,
+      loaded: fireActorResources.loaded,
+    });
     const requestedFireBudget = {
       identity: fireActorResources.loaded.mount.policy.policyId,
       resolution: fireActorResources.application.runtimeControls['volume-resolution'],
@@ -15220,6 +15279,7 @@ async function beginSharpBreathingRoomKilnFire({
     fireState.fireEpisodeHooks = fireEpisodeHooks;
     fireState.fireActorResources = fireActorResources;
     fireState.fireActorProductEpisode = fireActorProductEpisode;
+    fireState.promotedFirePresentationReadiness = promotedFirePresentationReadiness;
     fireState.sharpMount = {
       expectedRevision: sharpRuntime.mount.expectedRevision,
       revision: sharpRuntime.mount.revision,
