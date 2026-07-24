@@ -59,16 +59,29 @@ def require_lattice_identity(lattice: np.ndarray, expected: str) -> None:
     require(lattice_digest(lattice) == expected, "target lattice identity drifted during fitting")
 
 
-def orbit_cameras(camera: dict[str, Any], *, count: int) -> list[dict[str, Any]]:
-    require(count >= 1, "camera count must be positive")
+def orbit_cameras(
+    camera: dict[str, Any],
+    *,
+    count: int | None = None,
+    pivot: np.ndarray | None = None,
+    angles_degrees: list[float] | None = None,
+) -> list[dict[str, Any]]:
     pose = camera["cameraPose"]
     position = np.asarray(pose["position"], dtype=np.float64)
     target = np.asarray(pose["target"], dtype=np.float64)
+    # Review finding F1: the orbit must pivot about the volume center, not the
+    # operator's arbitrary look-at framing point; the two only coincide by luck.
+    pivot_point = target if pivot is None else np.asarray(pivot, dtype=np.float64)
+    if angles_degrees is None:
+        require(count is not None and count >= 1, "camera count must be positive")
+        angles = [2.0 * np.pi * index / count for index in range(count)]
+    else:
+        require(len(angles_degrees) >= 1, "camera angle list must not be empty")
+        angles = [np.deg2rad(value) for value in angles_degrees]
     cameras = []
-    for index in range(count):
-        angle = 2.0 * np.pi * index / count
+    for angle in angles:
         cos, sin = np.cos(angle), np.sin(angle)
-        offset = position - target
+        offset = position - pivot_point
         rotated = np.asarray(
             (
                 cos * offset[0] + sin * offset[2],
@@ -76,17 +89,38 @@ def orbit_cameras(camera: dict[str, Any], *, count: int) -> list[dict[str, Any]]
                 -sin * offset[0] + cos * offset[2],
             )
         )
+        target_offset = target - pivot_point
+        rotated_target = np.asarray(
+            (
+                cos * target_offset[0] + sin * target_offset[2],
+                target_offset[1],
+                -sin * target_offset[0] + cos * target_offset[2],
+            )
+        )
         cameras.append(
             {
                 **camera,
                 "cameraPose": {
                     **pose,
-                    "position": (target + rotated).tolist(),
-                    "target": target.tolist(),
+                    "position": (pivot_point + rotated).tolist(),
+                    "target": (pivot_point + rotated_target).tolist(),
                 },
             }
         )
     return cameras
+
+
+def require_cameras_see_medium(cameras: list[dict[str, Any]], medium: Any) -> None:
+    lower = medium.origin
+    upper = medium.origin + medium.source_spacing * medium.source_grid
+    for index, camera in enumerate(cameras):
+        pose = camera["cameraPose"]
+        origin = np.asarray(pose["position"], dtype=np.float64)[None, :]
+        direction = np.asarray(pose["target"], dtype=np.float64)[None, :] - origin
+        norm = np.linalg.norm(direction)
+        require(norm > 1e-9, f"camera {index} has a degenerate view direction")
+        near, far = FITTER.ray_box_intersection(origin, direction / norm, lower, upper)
+        require(bool(far[0] > near[0]), f"camera {index} central ray misses the medium bounds")
 
 
 def camera_rays(medium: Any, camera: dict[str, Any], *, width: int) -> dict[str, np.ndarray]:
@@ -402,6 +436,25 @@ def evaluate_arm(
 ) -> dict[str, Any]:
     label = f"n{arm['modeCount']}-{arm['init']}-s{arm['seed']}"
     reconstruction = mixture_density_lattice(arm["state"], medium, fine_grid=fine_grid)
+    # Review finding F3: fitted-mixture coefficients are not exact conserved
+    # mass (analytic kernels lose tail mass to fine-grid truncation); record the
+    # world-integral ratio so nobody reads them as mass without seeing this.
+    source_cell_volume = float(np.prod(medium.source_spacing))
+    fine_cell_volume = float(np.prod((medium.source_spacing * medium.source_grid) / fine_grid))
+    lattice_mass = np.sum(reconstruction, axis=(0, 1, 2)) * (fine_cell_volume / source_cell_volume)
+    state = arm["state"]
+    nominal_emission = np.sum(state["emission"], axis=0)
+    nominal_extinction = float(np.sum(state["extinction"]))
+    mass_receipt = {
+        "nominalEmission": nominal_emission.tolist(),
+        "nominalExtinction": nominal_extinction,
+        "latticeEmission": lattice_mass[:3].tolist(),
+        "latticeExtinction": float(lattice_mass[3]),
+        "emissionRetention": float(
+            np.sum(lattice_mass[:3]) / max(float(np.sum(nominal_emission)), 1e-12)
+        ),
+        "extinctionRetention": float(lattice_mass[3] / max(nominal_extinction, 1e-12)),
+    }
     evaluations = []
     for index, camera in enumerate(cameras):
         target_linear, _tt, _tr = TARGET.march_density_lattice(
@@ -411,7 +464,7 @@ def evaluate_arm(
             reconstruction, medium, camera, width=render_width, samples_per_cell=samples_per_cell
         )
         metrics = FITTER.image_metrics(fitted_linear, target_linear)
-        entry: dict[str, Any] = {"cameraIndex": index, **metrics}
+        entry: dict[str, Any] = {"cameraIndex": index, "seenDuringFit": index == 0, **metrics}
         if index == 0:
             fit_png = output_dir / f"oracle-{label}.png"
             entry["artifact"] = FITTER.visual_artifact(fit_png, fitted_linear, mode_module)
@@ -419,8 +472,10 @@ def evaluate_arm(
             if not target_png.exists():
                 FITTER.visual_artifact(target_png, target_linear, mode_module)
         evaluations.append(entry)
-    mean_mae = float(np.mean([entry["linearMae"] for entry in evaluations]))
-    state = arm["state"]
+    unseen = [entry for entry in evaluations if not entry["seenDuringFit"]]
+    require(len(unseen) > 0, "held evaluation has no unseen cameras")
+    mean_mae = float(np.mean([entry["linearMae"] for entry in unseen]))
+    mean_target_luma = float(np.mean([entry["targetMeanLuma"] for entry in unseen]))
     state_path = output_dir / f"oracle-{label}-state.json"
     FITTER.write_json(
         state_path,
@@ -440,6 +495,8 @@ def evaluate_arm(
         "initialLoss": arm["initialLoss"],
         "finalLoss": arm["finalLoss"],
         "meanHeldLinearMae": mean_mae,
+        "meanHeldTargetLuma": mean_target_luma,
+        "massReceipt": mass_receipt,
         "perCamera": evaluations,
         "statePath": str(state_path),
     }
@@ -483,8 +540,14 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
         "targetLatticeSha256": digest,
     }
 
-    fit_cameras = orbit_cameras(held_camera, count=args.fit_cameras)
-    held_eval_cameras = [held_camera] + orbit_cameras(held_camera, count=4)[1:3]
+    world_center = medium.origin + medium.source_spacing * medium.source_grid * 0.5
+    fit_cameras = orbit_cameras(held_camera, count=args.fit_cameras, pivot=world_center)
+    # Review finding F2: evaluation angles are disjoint from every fit-orbit
+    # angle; the operator's held camera is retained but labeled as seen and
+    # excluded from the held mean.
+    unseen_eval_cameras = orbit_cameras(held_camera, angles_degrees=[30.0, 90.0, 150.0], pivot=world_center)
+    held_eval_cameras = [held_camera] + unseen_eval_cameras
+    require_cameras_see_medium(fit_cameras + held_eval_cameras, medium)
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -527,7 +590,12 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
     for mode_count in mode_counts:
         candidates = [arm for arm in arms if arm["modeCount"] == mode_count]
         best = min(candidates, key=lambda arm: arm["meanHeldLinearMae"])
-        curve[str(mode_count)] = {"best": best["label"], "meanHeldLinearMae": best["meanHeldLinearMae"]}
+        curve[str(mode_count)] = {
+            "best": best["label"],
+            "meanHeldLinearMae": best["meanHeldLinearMae"],
+            "meanHeldTargetLuma": best["meanHeldTargetLuma"],
+            "maeFractionOfTargetLuma": best["meanHeldLinearMae"] / max(best["meanHeldTargetLuma"], 1e-12),
+        }
     report["arms"] = arms
     report["capacityCurve"] = curve
     report["failurePhase"] = None

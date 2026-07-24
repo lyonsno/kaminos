@@ -85,6 +85,24 @@ class CeilingOracleContracts(unittest.TestCase):
         positions = {tuple(np.round(c["cameraPose"]["position"], 9)) for c in cameras}
         self.assertEqual(len(positions), 6)
 
+    def test_offcenter_lookat_orbit_still_sees_medium_with_center_pivot(self) -> None:
+        medium = synthetic_medium()
+        center = medium.origin + medium.source_spacing * medium.source_grid * 0.5
+        camera = synthetic_camera()
+        camera["cameraPose"]["target"] = [0.0, 0.55, 0.0]
+        cameras = ORACLE.orbit_cameras(camera, count=8, pivot=center)
+        ORACLE.require_cameras_see_medium(cameras, medium)
+        radii = [
+            np.linalg.norm(np.asarray(c["cameraPose"]["position"], dtype=np.float64) - center)
+            for c in cameras
+        ]
+        np.testing.assert_allclose(radii, radii[0], rtol=1e-9)
+
+    def test_eval_angles_disjoint_from_fit_orbit(self) -> None:
+        fit_angles = {round(360.0 * index / 6, 6) for index in range(6)}
+        for angle in (30.0, 90.0, 150.0):
+            self.assertNotIn(round(angle, 6), fit_angles)
+
     def test_parameterization_round_trips_nonnegative_coefficients(self) -> None:
         medium = synthetic_medium()
         state = ORACLE.analytical_seed_state(medium, mode_count=3, seed=0)
@@ -116,6 +134,14 @@ class CeilingOracleContracts(unittest.TestCase):
         self.assertLess(result["finalLoss"], result["initialLoss"])
         self.assertTrue(np.all(np.isfinite(result["lossHistory"])))
         self.assertEqual(result["modeCount"], 4)
+        # Structural bound (review finding F4): a blank fit scores exactly the
+        # target's own magnitude under this loss; the fit must beat half of it.
+        target_linear, _t, _r = TARGET.march_density_lattice(
+            lattice, medium, synthetic_camera(), width=32, samples_per_cell=4
+        )
+        flat = target_linear.reshape((-1, 3))
+        blank_loss = float(np.mean(np.abs(flat)) + 0.25 * np.mean(np.square(flat)))
+        self.assertLess(result["finalLoss"], 0.5 * blank_loss)
 
     def test_target_identity_binding_rejects_drifted_lattice(self) -> None:
         medium = synthetic_medium()
