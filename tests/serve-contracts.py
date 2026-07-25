@@ -235,6 +235,23 @@ def test_image_inbox_webp_read_serves_bytes_without_json_fallback():
     assert handler.wfile.getvalue() == webp_bytes
 
 
+def test_image_asset_entry_carries_actual_file_sha256():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        image_bytes = b"frozen-gate-b-source-bytes"
+        image_path = root / "source.png"
+        image_path.write_bytes(image_bytes)
+        entry = serve.build_asset_entry({
+            "id": "image-inbox",
+            "label": "Local Image Inbox",
+            "kind": "image",
+            "stage": "working",
+            "path": root,
+        }, image_path)
+
+    assert entry["sha256"] == hashlib.sha256(image_bytes).hexdigest()
+
+
 def test_volume_only_scene_save_name_uses_scene_fallback():
     data = {
         "schema": "kaminos.scene.v1",
@@ -932,6 +949,7 @@ if __name__ == "__main__":
     test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back()
     test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile()
     test_image_inbox_webp_read_serves_bytes_without_json_fallback()
+    test_image_asset_entry_carries_actual_file_sha256()
     test_volume_only_scene_save_name_uses_scene_fallback()
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()

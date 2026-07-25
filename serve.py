@@ -1189,7 +1189,7 @@ def build_asset_entry(root, path):
     )
     if kind == "image":
         display["load_label"] = "Use Image"
-    return {
+    entry = {
         "id": f"{root_id}:{rel_path}",
         "kind": kind,
         "stage": root.get("stage", "experimental"),
@@ -1209,6 +1209,9 @@ def build_asset_entry(root, path):
             "reason": "Local image asset served through /api/read for graph input.",
         },
     }
+    if kind == "image":
+        entry["sha256"] = _sha256_file(path)
+    return entry
 
 
 def splat_asset_root(root_id):

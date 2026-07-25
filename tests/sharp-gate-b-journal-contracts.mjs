@@ -569,6 +569,11 @@ assert.match(
 );
 assert.match(
   page,
+  /function pipelineBrowserAssetSource\(entry\)[\s\S]{0,500}sha256:\s*entry\.sha256\s*\|\|\s*null/,
+  'the selected live source must preserve the server-computed file SHA-256 for Gate B route validation',
+);
+assert.match(
+  page,
   /onTelemetry:\s*gateBAssay\s*\?\s*reportTelemetry\s*:\s*undefined/,
   'the SHARP caller must stream scheduler events into Gate B during inference',
 );
