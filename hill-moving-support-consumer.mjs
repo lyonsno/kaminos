@@ -56,7 +56,39 @@ function assertPackageReport(report) {
   if (report.artifactFreshness !== 'built_current_run') {
     throw new Error('Hill package report does not identify a current-run artifact');
   }
-  exactRevision(report.requested?.sourceRevision, 'Hill package source revision');
+  const requestedSourceRevision = exactRevision(
+    report.requested?.sourceRevision,
+    'requested Hill package source revision',
+  );
+  const effectiveSourceRevision = exactRevision(
+    report.effective?.sourceRevision,
+    'effective Hill package source revision',
+  );
+  const effectiveRepositoryHead = exactRevision(
+    report.effective?.repositoryHead,
+    'effective Hill package repository HEAD',
+  );
+  if (
+    effectiveSourceRevision !== requestedSourceRevision
+    || effectiveRepositoryHead !== requestedSourceRevision
+  ) {
+    throw new Error(
+      'effective Hill package source identity diverges from the requested revision',
+    );
+  }
+  exactDigest(
+    report.effective?.sourceTreeSha256,
+    'effective Hill package source tree',
+  );
+  if (
+    !Array.isArray(report.effective?.repositoryPaths)
+    || report.effective.repositoryPaths.length === 0
+    || report.effective.repositoryPaths.some(
+      (path) => typeof path !== 'string' || path.length === 0,
+    )
+  ) {
+    throw new Error('effective Hill package source paths are missing');
+  }
   exactDigest(report.artifact?.sha256, 'Hill package artifact');
   if (
     typeof report.artifact?.integrity !== 'string'
@@ -123,7 +155,7 @@ export function exerciseHillMovingSupportConsumer({
     schema: HILL_ANALYTIC_IMPACT_SUPPORT_SCHEMA,
     sourceId: [
       'hill-moving-support-consumer',
-      packageReport.requested.sourceRevision.slice(0, 12),
+      packageReport.effective.sourceRevision.slice(0, 12),
     ].join('-'),
     providerRoute: HILL_ANALYTIC_IMPACT_SUPPORT_ROUTE,
     artifactSha256: packageReport.artifact.sha256,
@@ -434,8 +466,12 @@ export function exerciseHillMovingSupportConsumer({
     effective: Object.freeze({
       hillPackageCoordinate: HILL_SUPPORT_PACKAGE_COORDINATE,
       hillPackageSourceRevision: exactRevision(
-        packageReport.requested.sourceRevision,
+        packageReport.effective.sourceRevision,
         'effective Hill package source revision',
+      ),
+      hillPackageSourceTreeSha256: exactDigest(
+        packageReport.effective.sourceTreeSha256,
+        'effective Hill package source tree',
       ),
       hillPackageArtifactSha256: exactDigest(
         packageReport.artifact.sha256,

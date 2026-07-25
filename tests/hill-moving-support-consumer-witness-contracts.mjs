@@ -17,7 +17,7 @@ assert.ok(
 );
 const exactPackageReportPath = resolve(packageReportPath);
 const witnessPath = resolve('hill-moving-support-consumer-witness.mjs');
-const hillRevision = '62d5d348663b901304745d9649ae85d0a74394c0';
+const hillRevision = '26b79567597538996b0b8b9f58ef59ea12c5c3a9';
 const bigPapaRevision = 'f8e1f6db64fb3a505151d16f83d5131b588d2516';
 
 function runWitness(outputDir, packageReport = exactPackageReportPath, extra = []) {
@@ -136,6 +136,76 @@ try {
   assert.equal(wrongRouteReport.failurePhase, 'validate-package-receipt');
   assert.equal(wrongRouteReport.effective, null);
   assert.equal(wrongRouteReport.primaryOutputWritten, false);
+
+  const forgedEffectiveRevisionReportPath = join(
+    testRoot,
+    'forged-effective-revision-report.json',
+  );
+  writeFileSync(
+    forgedEffectiveRevisionReportPath,
+    `${JSON.stringify({
+      ...exactPackageReport,
+      effective: {
+        ...exactPackageReport.effective,
+        sourceRevision: 'c'.repeat(40),
+        repositoryHead: 'c'.repeat(40),
+      },
+    })}\n`,
+  );
+  const forgedEffectiveRevision = runWitness(
+    outputDir,
+    forgedEffectiveRevisionReportPath,
+  );
+  assert.notEqual(
+    forgedEffectiveRevision.status,
+    0,
+    'witness accepted a package whose effective source revision diverged from its claim',
+  );
+  const forgedRevisionReport = readJson(
+    reportPath,
+    'forged effective-revision failure report',
+  );
+  assert.equal(forgedRevisionReport.ok, false);
+  assert.equal(
+    forgedRevisionReport.failurePhase,
+    'validate-package-receipt',
+  );
+  assert.equal(forgedRevisionReport.primaryOutputWritten, false);
+
+  const missingSourceTreeReportPath = join(
+    testRoot,
+    'missing-source-tree-report.json',
+  );
+  const effectiveWithoutSourceTree = {
+    ...exactPackageReport.effective,
+  };
+  delete effectiveWithoutSourceTree.sourceTreeSha256;
+  writeFileSync(
+    missingSourceTreeReportPath,
+    `${JSON.stringify({
+      ...exactPackageReport,
+      effective: effectiveWithoutSourceTree,
+    })}\n`,
+  );
+  const missingSourceTree = runWitness(
+    outputDir,
+    missingSourceTreeReportPath,
+  );
+  assert.notEqual(
+    missingSourceTree.status,
+    0,
+    'witness accepted a package receipt without effective source-tree identity',
+  );
+  const missingSourceTreeReport = readJson(
+    reportPath,
+    'missing source-tree failure report',
+  );
+  assert.equal(missingSourceTreeReport.ok, false);
+  assert.equal(
+    missingSourceTreeReport.failurePhase,
+    'validate-package-receipt',
+  );
+  assert.equal(missingSourceTreeReport.primaryOutputWritten, false);
 
   const tamperedTarballPath = join(testRoot, 'tampered-package.tgz');
   writeFileSync(tamperedTarballPath, 'not the witnessed package');

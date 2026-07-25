@@ -132,6 +132,7 @@ if (config) {
     effective: null,
     primaryArtifact: null,
   };
+  writeJson(reportPath, report);
   let consumerDir;
 
   try {
@@ -163,9 +164,26 @@ if (config) {
     ) {
       throw new Error('Hill package receipt did not reach primary output');
     }
+    const requestedHillRevision = exactRevision(
+      packageReport.requested?.sourceRevision,
+      'package receipt requested Hill source revision',
+    );
+    const effectiveHillRevision = exactRevision(
+      packageReport.effective?.sourceRevision,
+      'package receipt effective Hill source revision',
+    );
+    const effectiveHillRepositoryHead = exactRevision(
+      packageReport.effective?.repositoryHead,
+      'package receipt effective Hill repository HEAD',
+    );
+    const effectiveHillSourceTreeSha256 = exactDigest(
+      packageReport.effective?.sourceTreeSha256,
+      'package receipt effective Hill source tree',
+    );
     if (
-      packageReport.requested?.sourceRevision
-        !== config.expectedHillRevision
+      requestedHillRevision !== config.expectedHillRevision
+      || effectiveHillRevision !== config.expectedHillRevision
+      || effectiveHillRepositoryHead !== config.expectedHillRevision
       || packageReport.effective?.packageCoordinate
         !== HILL_SUPPORT_PACKAGE_COORDINATE
       || packageReport.effective?.exportSubpath
@@ -175,6 +193,15 @@ if (config) {
       throw new Error(
         'Hill package receipt does not match the requested source and route',
       );
+    }
+    if (
+      !Array.isArray(packageReport.effective?.repositoryPaths)
+      || packageReport.effective.repositoryPaths.length === 0
+      || packageReport.effective.repositoryPaths.some(
+        (path) => typeof path !== 'string' || path.length === 0,
+      )
+    ) {
+      throw new Error('Hill package receipt does not identify its effective source paths');
     }
     if (packageReport.artifactFreshness !== 'built_current_run') {
       throw new Error('Hill package receipt does not identify a current-run artifact');
@@ -240,7 +267,10 @@ if (config) {
 
     report.effective = {
       hillPackageCoordinate: HILL_SUPPORT_PACKAGE_COORDINATE,
-      hillSourceRevision: packageReport.requested.sourceRevision,
+      hillSourceRevision: effectiveHillRevision,
+      hillSourceRepositoryHead: effectiveHillRepositoryHead,
+      hillSourceTreeSha256: effectiveHillSourceTreeSha256,
+      hillSourcePaths: packageReport.effective.repositoryPaths,
       hillPackageArtifactSha256: actualSha256,
       hillPackageArtifactIntegrity: actualIntegrity,
       hillPackageArtifactPath: tarballPath,
@@ -252,6 +282,7 @@ if (config) {
     report.lastTrustworthyEvidence = {
       phase: 'source-identities-verified',
       hillSourceRevision: report.effective.hillSourceRevision,
+      hillSourceTreeSha256: effectiveHillSourceTreeSha256,
       hillPackageArtifactSha256: actualSha256,
       bigPapaBaseRevision: config.expectedBigPapaRevision,
       bigPapaHandoffBlobSha: effectiveHandoffBlobSha,

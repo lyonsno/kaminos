@@ -22,6 +22,23 @@ const hillTerrainModule = await import(
   new URL('./hill-of-hills.js', analyticModuleUrl)
 );
 
+assert.throws(
+  () => exerciseHillMovingSupportConsumer({
+    hillSupportModule,
+    hillTerrainModule,
+    packageReport: {
+      ...packageReport,
+      effective: {
+        ...packageReport.effective,
+        sourceRevision: 'c'.repeat(40),
+        repositoryHead: 'c'.repeat(40),
+      },
+    },
+  }),
+  /effective.*source|source.*identity/i,
+  'direct consumer accepted a package whose effective source revision diverged',
+);
+
 const receipt = exerciseHillMovingSupportConsumer({
   hillSupportModule,
   hillTerrainModule,
@@ -40,7 +57,11 @@ assert.equal(
 );
 assert.equal(
   receipt.effective.hillPackageSourceRevision,
-  '62d5d348663b901304745d9649ae85d0a74394c0',
+  '26b79567597538996b0b8b9f58ef59ea12c5c3a9',
+);
+assert.equal(
+  receipt.effective.hillPackageSourceTreeSha256,
+  packageReport.effective.sourceTreeSha256,
 );
 assert.equal(
   receipt.effective.hillPackageArtifactSha256,
