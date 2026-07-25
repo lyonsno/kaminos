@@ -319,6 +319,85 @@ assert.throws(
   'unknown scheduler profiles must fail before a GPU run instead of falling back',
 );
 
+const terminalRouteObservationSource = witness.match(
+  /function classifyTerminalRouteObservation\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(
+  terminalRouteObservationSource,
+  'witness must expose an executable pre-running terminal route evidence classifier',
+);
+const classifyTerminalRouteObservation = vm.runInNewContext(`(${terminalRouteObservationSource[0]})`);
+const preRunningTerminalObservation = JSON.parse(JSON.stringify(classifyTerminalRouteObservation({
+  routeState: {
+    status: 'error',
+    message: 'The kiln could not start this firing, so the model was not run.',
+    routeId: 'sharp-image-to-splat-live-v0',
+    runningProfileId: null,
+    source: {
+      assetId: 'image-inbox:17_img.png',
+      rootId: 'image-inbox',
+      path: '17_img.png',
+    },
+    result: {
+      ok: false,
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      phase: 'kiln-fire-startup-failed',
+      error: 'foreground heartbeat missing',
+      reportPath: '/tmp/pipeline-runs/failed/pipeline-witness.json',
+    },
+    error: null,
+  },
+  observedRunning: false,
+  lastTrustworthyEvidence: { workroom: { routeStatus: 'idle' } },
+})));
+assert.equal(preRunningTerminalObservation.shouldExit, true);
+assert.deepEqual(preRunningTerminalObservation.lastTrustworthyEvidence.terminalRouteState, {
+  status: 'error',
+  message: 'The kiln could not start this firing, so the model was not run.',
+  observedRunning: false,
+  routeId: 'sharp-image-to-splat-live-v0',
+  runningProfileId: null,
+  source: {
+    assetId: 'image-inbox:17_img.png',
+    rootId: 'image-inbox',
+    path: '17_img.png',
+  },
+  result: {
+    ok: false,
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    phase: 'kiln-fire-startup-failed',
+    error: 'foreground heartbeat missing',
+    reportPath: '/tmp/pipeline-runs/failed/pipeline-witness.json',
+  },
+  error: null,
+});
+assert.match(
+  preRunningTerminalObservation.error,
+  /kiln-fire-startup-failed.*foreground heartbeat missing/,
+  'pre-running product errors must survive into the thrown witness error',
+);
+assert.equal(classifyTerminalRouteObservation({
+  routeState: { status: 'complete', runningProfileId: null },
+  observedRunning: false,
+  lastTrustworthyEvidence: {},
+}).shouldExit, false, 'a terminal-looking completion cannot bypass proof that the route ran');
+const completedTerminalObservation = classifyTerminalRouteObservation({
+  routeState: {
+    status: 'complete',
+    message: 'Friendly finished.',
+    routeId: 'sharp-image-to-splat-live-v0',
+    runningProfileId: null,
+    source: { assetId: 'image-inbox:17_img.png' },
+    result: { ok: true, reportPath: '/tmp/pipeline-runs/complete/pipeline-witness.json' },
+    error: null,
+  },
+  observedRunning: true,
+  lastTrustworthyEvidence: {},
+});
+assert.equal(completedTerminalObservation.shouldExit, true);
+assert.equal(completedTerminalObservation.error, null);
+assert.equal(completedTerminalObservation.lastTrustworthyEvidence.terminalRouteState.observedRunning, true);
+
 const spnFusionValidationSource = witness.match(
   /function validateSpnFusionTileEvidence\([\s\S]*?\n}/,
 );
@@ -1327,7 +1406,6 @@ for (const [pattern, message] of [
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
-  [/\['complete', 'error', 'evidence-only'\]\.includes\(routeState\.status\)[\s\S]*routeState\.status === 'error'/, 'A pre-running terminal route error must exit the observation loop instead of idling until the caller ceiling'],
   [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing browser evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
   [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*const reportPath = routeState\.result\?\.report\?\.path[\s\S]*reportPath,/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
   [/JSON\.parse\(readFileSync\(browserFiringEvidence\.reportPath, 'utf8'\)\)/, 'Node witness must read the backend report from its durable filesystem path'],
