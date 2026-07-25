@@ -72,6 +72,11 @@ const liveStart = liveRequests[0];
 assert.ok(liveStart.url.endsWith('/start'), 'live telemetry must durably start before any progress row');
 assert.equal(liveStart.payload.document.status, 'running');
 assert.equal(
+  liveStart.payload.document.liveTelemetry.progressEventsRef,
+  '#/traceArtifacts/progress-events',
+  'ordinary v0 live telemetry must retain its legacy progress trace pointer',
+);
+assert.equal(
   liveStart.payload.document.routeIdentity.effectiveRoute,
   'same-browser-product-realm-shared-device',
 );

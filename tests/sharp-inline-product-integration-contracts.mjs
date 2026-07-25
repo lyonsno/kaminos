@@ -83,6 +83,11 @@ assert.match(
 );
 assert.match(
   page,
+  /gateBAssay\.initialHostStats[\s\S]{0,500}liveTelemetry\.append\('host-stats', gateBAssay\.initialHostStats\)/,
+  'Gate B must enqueue the pre-route host observation before inference can finish',
+);
+assert.match(
+  page,
   /sharpResult = await inline\.run\([\s\S]{0,2000}catch \(error\) \{[\s\S]{0,700}liveTelemetry\.abort\([\s\S]{0,15000}liveTelemetry\.finish\([\s\S]{0,600}sharp-inference-complete/,
   'thrown inference failures must abort the journal while successful inference seals it',
 );

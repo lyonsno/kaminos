@@ -1312,6 +1312,9 @@ for (const [pattern, message] of [
   [/SystemInfo\.getProcessInfo/, 'Gate B must resolve browser, renderer, and GPU process identity from the spawned browser'],
   [/__KAMINOS_GATE_B_ASSAY__/, 'The headed witness must inject the frozen Gate B identity before firing'],
   [/appendHostStats/, 'Gate B witness must stream host CPU, memory, swap, thermal, power, and GPU observations outside the renderer'],
+  [/initialHostStats/, 'Gate B must seed its pre-route host observation into the crash-safe live journal'],
+  [/Promise\.all\([\s\S]{0,2000}readHostCommand\('ps'[\s\S]{0,2000}readHostCommand\('ioreg'/, 'Gate B host commands must run asynchronously and concurrently so they do not starve CDP'],
+  [/async function writeReport\([\s\S]{0,1800}await fileDescriptor\.sync\(\)[\s\S]{0,1000}await directoryDescriptor\.sync\(\)/, 'Crash-safe witness writes must fsync asynchronously instead of blocking CDP observation'],
   [/appendRuntimeError/, 'Gate B witness must stream CDP runtime exceptions while the renderer remains reachable'],
   [/browserExit[\s\S]{0,500}rendererProcessExits/, 'The crash-safe witness report must retain browser and renderer exit evidence'],
   [/--fire-friendly/, 'Witness must expose an explicit opt-in real Friendly firing mode'],
@@ -1428,6 +1431,12 @@ for (const [pattern, message] of [
 ]) {
   assert.match(witness, pattern, message);
 }
+
+assert.doesNotMatch(
+  witness,
+  /execFileSync|fsyncSync/,
+  'Gate B observer work must not block the Node event loop on host commands or durable report flushes',
+);
 
 assert.doesNotMatch(
   witness,

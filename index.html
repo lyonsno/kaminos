@@ -13652,6 +13652,9 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     });
   };
   if (gateBAssay) {
+    if (gateBAssay.initialHostStats) {
+      liveTelemetry.append('host-stats', gateBAssay.initialHostStats);
+    }
     liveTelemetry.append('resource-snapshots', {
       schema: 'kaminos.sharp-gate-b-resource-snapshot.v0',
       authority: 'effective-device-limits-resource-counts-not-yet-available',

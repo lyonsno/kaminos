@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import {
-  closeSync,
-  fsyncSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import {
+  open,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -104,6 +105,8 @@ let gateBProcessIdentity = null;
 let lastGateBHostStats = null;
 let forwardedRuntimeExceptionCount = 0;
 let forwardedRendererExitCount = 0;
+let gateBHostSampleTask = null;
+let gateBHostSampleStatus = null;
 let successfulReportPayload = null;
 let terminalSummary = null;
 let terminalFailure = null;
@@ -370,19 +373,23 @@ function sleep(ms) {
 }
 
 function readHostCommand(command, commandArgs = []) {
-  try {
-    return {
-      status: 'available',
-      command: [command, ...commandArgs],
-      output: execFileSync(command, commandArgs, { encoding: 'utf8' }).trim(),
-    };
-  } catch (error) {
-    return {
-      status: 'unavailable',
-      command: [command, ...commandArgs],
-      reason: error?.message || String(error),
-    };
-  }
+  return new Promise(resolve => {
+    execFile(command, commandArgs, { encoding: 'utf8' }, (error, stdout) => {
+      if (error) {
+        resolve({
+          status: 'unavailable',
+          command: [command, ...commandArgs],
+          reason: error?.message || String(error),
+        });
+        return;
+      }
+      resolve({
+        status: 'available',
+        command: [command, ...commandArgs],
+        output: stdout.trim(),
+      });
+    });
+  });
 }
 
 function parseProcessRows(text) {
@@ -472,16 +479,18 @@ function parseAgxObservation(text) {
   };
 }
 
-function sampleGateBHost(browserPid) {
+async function sampleGateBHost(browserPid) {
   const samplingStartedAtMs = performance.now();
-  const ps = readHostCommand('ps', ['-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,vsz=,comm=']);
+  const [ps, vmStat, swap, thermal, powerSource, agx] = await Promise.all([
+    readHostCommand('ps', ['-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,vsz=,comm=']),
+    readHostCommand('vm_stat'),
+    readHostCommand('sysctl', ['-n', 'vm.swapusage']),
+    readHostCommand('pmset', ['-g', 'therm']),
+    readHostCommand('pmset', ['-g', 'batt']),
+    readHostCommand('ioreg', ['-r', '-c', 'AGXAccelerator', '-d', '1', '-l']),
+  ]);
   const processRows = ps.status === 'available' ? parseProcessRows(ps.output) : [];
   const browserProcesses = descendantProcesses(processRows, browserPid);
-  const vmStat = readHostCommand('vm_stat');
-  const swap = readHostCommand('sysctl', ['-n', 'vm.swapusage']);
-  const thermal = readHostCommand('pmset', ['-g', 'therm']);
-  const powerSource = readHostCommand('pmset', ['-g', 'batt']);
-  const agx = readHostCommand('ioreg', ['-r', '-c', 'AGXAccelerator', '-d', '1', '-l']);
   return {
     schema: 'kaminos.sharp-gate-b-host-stat.v0',
     observedAt: new Date().toISOString(),
@@ -508,10 +517,10 @@ function ensureParent(filePath) {
   mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function writeReport(payload) {
+async function writeReport(payload) {
   ensureParent(reportPath);
   const temporaryPath = `${reportPath}.tmp-${process.pid}`;
-  writeFileSync(temporaryPath, `${JSON.stringify({
+  await writeFile(temporaryPath, `${JSON.stringify({
     schema: 'crucible-viewport-witness.v0',
     url,
     screenshot: primaryOutputWritten ? out : null,
@@ -531,13 +540,13 @@ function writeReport(payload) {
     lastGateBHostStats,
     ...payload,
   }, null, 2)}\n`);
-  const fileDescriptor = openSync(temporaryPath, 'r');
-  fsyncSync(fileDescriptor);
-  closeSync(fileDescriptor);
-  renameSync(temporaryPath, reportPath);
-  const directoryDescriptor = openSync(path.dirname(reportPath), 'r');
-  fsyncSync(directoryDescriptor);
-  closeSync(directoryDescriptor);
+  const fileDescriptor = await open(temporaryPath, 'r');
+  await fileDescriptor.sync();
+  await fileDescriptor.close();
+  await rename(temporaryPath, reportPath);
+  const directoryDescriptor = await open(path.dirname(reportPath), 'r');
+  await directoryDescriptor.sync();
+  await directoryDescriptor.close();
 }
 
 async function cdpAtPort(port, pathname) {
@@ -735,8 +744,6 @@ async function gateBBrowserProcessSnapshot() {
 }
 
 async function appendGateBWitnessTelemetry(ws) {
-  const hostStats = sampleGateBHost(browserSession.spawnedPid);
-  lastGateBHostStats = hostStats;
   const processSnapshot = await gateBBrowserProcessSnapshot();
   const currentRendererPids = new Set(processSnapshot.rendererPids);
   const previouslyKnownRendererPids = gateBProcessIdentity?.rendererPids || [];
@@ -766,7 +773,6 @@ async function appendGateBWitnessTelemetry(ws) {
   const result = await evaluate(ws, `(() => {
     const journal = globalThis.__KAMINOS_GATE_B_JOURNAL__;
     if (!journal) return { ok: false, reason: 'gate-b-journal-bridge-missing' };
-    journal.appendHostStats(${JSON.stringify(hostStats)});
     for (const runtimeError of ${JSON.stringify(pendingRuntimeErrors)}) {
       journal.appendRuntimeError({
         schema: 'kaminos.sharp-gate-b-runtime-error.v0',
@@ -785,7 +791,6 @@ async function appendGateBWitnessTelemetry(ws) {
   })()`);
   if (!result?.ok) {
     return {
-      hostStats,
       processSnapshot,
       batching: null,
       liveJournalStatus: result?.reason || 'unavailable',
@@ -794,11 +799,32 @@ async function appendGateBWitnessTelemetry(ws) {
   forwardedRuntimeExceptionCount += pendingRuntimeErrors.length;
   forwardedRendererExitCount += pendingRendererExits.length;
   return {
-    hostStats,
     processSnapshot,
     batching: result.batching,
     liveJournalStatus: 'appended',
   };
+}
+
+function scheduleGateBHostSample(ws) {
+  if (gateBHostSampleTask) return;
+  gateBHostSampleStatus = 'sampling';
+  gateBHostSampleTask = (async () => {
+    const hostStats = await sampleGateBHost(browserSession.spawnedPid);
+    lastGateBHostStats = hostStats;
+    const result = await evaluate(ws, `(() => {
+      const journal = globalThis.__KAMINOS_GATE_B_JOURNAL__;
+      if (!journal) return { ok: false, reason: 'gate-b-journal-bridge-missing' };
+      journal.appendHostStats(${JSON.stringify(hostStats)});
+      return { ok: true };
+    })()`);
+    gateBHostSampleStatus = result?.ok
+      ? 'appended'
+      : (result?.reason || 'live-journal-unavailable');
+  })().catch(error => {
+    gateBHostSampleStatus = `failed: ${error?.message || String(error)}`;
+  }).finally(() => {
+    gateBHostSampleTask = null;
+  });
 }
 
 async function clickVisibleElementCenter(ws, elementId) {
@@ -1905,6 +1931,7 @@ try {
         initialProcessSnapshot: processSnapshot,
         lastProcessSnapshot: processSnapshot,
       };
+      lastGateBHostStats = await sampleGateBHost(browserSession.spawnedPid);
       const assayInjection = {
         enabled: true,
         presentationIsolation: 'no-render',
@@ -1917,6 +1944,7 @@ try {
         expectedInstrumentationRevision: expectedSharpRevision,
         weightsSha256: GATE_B_WEIGHTS_SHA256,
         hostKitVersion: expectedWebgpuKitVersion,
+        initialHostStats: lastGateBHostStats,
         processes: gateBProcessIdentity,
       };
       await evaluate(ws, `(() => {
@@ -1926,8 +1954,7 @@ try {
           presentationIsolation: globalThis.__KAMINOS_GATE_B_ASSAY__.presentationIsolation,
         };
       })()`);
-      lastGateBHostStats = sampleGateBHost(browserSession.spawnedPid);
-      writeReport({
+      await writeReport({
         ok: null,
         status: 'gate-b-armed-before-primary-output',
         lastTrustworthyEvidence,
@@ -1975,12 +2002,16 @@ try {
     while (Date.now() < deadline) {
       await sleep(1000);
       if (gateBJournal) {
+        scheduleGateBHostSample(ws);
         const witnessTelemetry = await appendGateBWitnessTelemetry(ws);
         lastTrustworthyEvidence = {
           ...lastTrustworthyEvidence,
-          gateBWitnessTelemetry: witnessTelemetry,
+          gateBWitnessTelemetry: {
+            ...witnessTelemetry,
+            hostSampleStatus: gateBHostSampleStatus,
+          },
         };
-        writeReport({
+        await writeReport({
           ok: null,
           status: 'gate-b-in-progress',
           lastTrustworthyEvidence,
@@ -2596,7 +2627,7 @@ if (browserCleanup.errors.length && !terminalFailure) {
 
 if (terminalFailure) {
   phase = terminalFailure.phase;
-  writeReport({
+  await writeReport({
     ok: false,
     error: terminalFailure.error.message || String(terminalFailure.error),
     lastTrustworthyEvidence,
@@ -2611,6 +2642,6 @@ if (terminalFailure) {
   process.exitCode = 1;
 } else {
   phase = 'writing-report';
-  writeReport(successfulReportPayload);
+  await writeReport(successfulReportPayload);
   console.log(JSON.stringify(terminalSummary, null, 2));
 }
