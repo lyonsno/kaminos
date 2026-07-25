@@ -1,0 +1,102 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-control-receipt.v0",
+  "status": "controls-inspected-mass-pass",
+  "phase": "controls-admitted-for-imagegen",
+  "requestedRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "researchVisibility": "agent_only",
+  "operatorExposure": "prohibited_pending_independent_safe_and_happy",
+  "lastTrustworthyEvidence": "agent inspection confirms a directional mass delta under one effective route and camera while preserving procedural identity and explicit shell absence; coupled support-footprint merging remains a recorded confound",
+  "controlInspection": {
+    "inspector": "primary-agent-inspector",
+    "directionalMassDelta": "pass",
+    "sameProceduralIdentity": "pass",
+    "explicitShellGeometryAbsent": "pass",
+    "heavyVisibleFeatures": [
+      "broader midbody",
+      "deeper underside",
+      "fuller terminal masses",
+      "slightly shorter silhouette"
+    ],
+    "coupledFootprintConfound": {
+      "status": "present",
+      "observation": "the heavy control merges support projections more aggressively than the parent",
+      "claimBoundary": "support-count and generated-support claims remain inadmissible"
+    },
+    "imagegenAdmission": "admit"
+  },
+  "sourceCandidateId": "lirm-armature-03",
+  "sourceSeed": "molten-lirm-seed-0707",
+  "assayContractPath": "assay-contract.json",
+  "assayContractSha256": "sha256:770b9c62372fcb4aa45932654e81e1d27703b2686632b524e29a2709e243fc83",
+  "promptPath": "neutral-completion-prompt.txt",
+  "promptSha256": "sha256:08c4511c8845d96bc0d91dfb045fcafe8a639f0b8ca269e0a3e4f369e34861f5",
+  "controls": {
+    "requestedRoute": "lirm-speciation-armature-implicit-body-witness-v1",
+    "effectiveRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "receiptPath": "controls/receipt.json",
+    "outputs": [
+      {
+        "cellSourceId": "bauplan-only",
+        "bundlePath": "controls/bauplan-only/bundle.json",
+        "bundleSha256": "sha256:e3537ac8d6f278415b4996d9f2af9993355e57846cdea9719d7892f7ffe71809",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/bauplan-only/clay-implicit.png",
+            "byteSize": 28445,
+            "sha256": "sha256:ce377100c07db7e24bd28cf912cbb41eb3323e4a63bd5c21996adee545c08ec5"
+          },
+          "depth": {
+            "path": "controls/bauplan-only/depth-implicit.png",
+            "byteSize": 15184,
+            "sha256": "sha256:3715950da89484944bc8f1d80165e84d15b0b7c699c505dd79e8960bb18fa5a6"
+          },
+          "normal": {
+            "path": "controls/bauplan-only/normal-implicit.png",
+            "byteSize": 37433,
+            "sha256": "sha256:a4b93c888c6fc4655fcf9766e64936b02a0b3f09f5a5a5d67a3732cc1e99e25f"
+          }
+        }
+      },
+      {
+        "cellSourceId": "bauplan-heavy",
+        "bundlePath": "controls/bauplan-heavy/bundle.json",
+        "bundleSha256": "sha256:08e9c80874442721e0e56588b5d33f067bd9eb2b57159b6ff212ebc43fb947a0",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "maps": {
+          "clay": {
+            "path": "controls/bauplan-heavy/clay-implicit.png",
+            "byteSize": 30647,
+            "sha256": "sha256:d97daf592cab38ed491fa56714ad7ea2607432a7ba7168c0f8937742190bc5d7"
+          },
+          "depth": {
+            "path": "controls/bauplan-heavy/depth-implicit.png",
+            "byteSize": 16897,
+            "sha256": "sha256:3e6874f4f844c68ee3f26cfbd3de173ce652c836d297c3c2785fcdb0baf0f144"
+          },
+          "normal": {
+            "path": "controls/bauplan-heavy/normal-implicit.png",
+            "byteSize": 41664,
+            "sha256": "sha256:8c768705710f837d13ee39658a1225487b27800821747d031be60dbfe8b3037a"
+          }
+        }
+      }
+    ]
+  },
+  "controlSheet": {
+    "path": "control-sheet.png",
+    "byteSize": 412790,
+    "sha256": "sha256:d0a17b58472068eb66a43f60fab61e5340a63b3f554a10151f3573dcb0c80a7e"
+  }
+}

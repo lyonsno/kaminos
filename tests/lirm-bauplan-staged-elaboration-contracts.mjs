@@ -13,12 +13,18 @@ import {
   LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT,
   resolveComparatorMapSources,
 } from '../artifacts/lirm-bauplan-staged-elaboration-assay-v0/assay-contract.mjs';
+import * as stagedElaborationAssay from '../artifacts/lirm-bauplan-staged-elaboration-assay-v0/assay-contract.mjs';
 
 assert.equal(
   LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT,
   'control-generation-receipt.json',
 );
 assert.notEqual(LIRM_BAUPLAN_STAGED_ELABORATION_CONTROL_RECEIPT, 'receipt.json');
+assert.equal(
+  typeof stagedElaborationAssay.writeLirmBauplanMassAuthorityLoopOneControls,
+  'function',
+  'Loop One needs one receipt-bearing paired control writer',
+);
 
 const plan = buildLirmBauplanStagedElaborationPlan();
 assert.equal(plan.schema, 'kaminos.lirm-bauplan-staged-elaboration-plan.v0');
@@ -55,8 +61,12 @@ assert.equal(
   'kaminos.lirm-bauplan-mass-authority.v0',
   'bauplan plan must expose a deterministic low-frequency mass-authority sibling',
 );
-assert.equal(plan.massAuthority.parentStageId, 'bauplan-plus-dorsal-plates');
-assert.equal(plan.massAuthority.variant.id, 'bauplan-heavy-plus-dorsal-plates');
+assert.equal(
+  plan.massAuthority.parentStageId,
+  'bauplan-only',
+  'Loop One must derive mass authority from the explicit-module-free bauplan',
+);
+assert.equal(plan.massAuthority.variant.id, 'bauplan-heavy');
 
 const [bauplan, armored, tactile] = plan.stages;
 assert.deepEqual(
@@ -92,7 +102,19 @@ assert.deepEqual(tactile.developmentalModules, ['dorsal-plate-series', 'paired-a
 
 const heavy = plan.massAuthority.variant;
 const heavyBody = heavy.candidate.bodyPlan;
-const parentBody = armored.candidate.bodyPlan;
+const parentBody = bauplan.candidate.bodyPlan;
+assert.deepEqual(heavy.developmentalModules, []);
+assert.equal(heavyBody.shellPlateCount, 0);
+assert.equal(handleCount(heavy, 'shell_plate'), 0);
+assert.deepEqual(
+  heavyBody.gestalt.priorHooks,
+  parentBody.gestalt.priorHooks,
+  'Loop One removes explicit shell geometry while retaining armor-bearing prior hooks',
+);
+assert.deepEqual(
+  heavyBody.silhouette.outlineWords,
+  parentBody.silhouette.outlineWords,
+);
 assert.ok(heavyBody.silhouette.bellyScale > parentBody.silhouette.bellyScale);
 assert.ok(heavyBody.silhouette.widthScale > parentBody.silhouette.widthScale);
 assert.ok(heavyBody.silhouette.heightScale > parentBody.silhouette.heightScale);
@@ -119,10 +141,9 @@ assert.deepEqual(heavyBody.axisSamples, parentBody.axisSamples);
 assert.equal(heavyBody.axialCurve, parentBody.axialCurve);
 assert.equal(heavyBody.limbPairCount, parentBody.limbPairCount);
 assert.equal(heavyBody.shellPlateCount, parentBody.shellPlateCount);
-assert.deepEqual(heavy.developmentalModules, armored.developmentalModules);
 assert.deepEqual(
   heavy.candidate.contactPoints.map(({ id, t, role }) => ({ id, t, role })),
-  armored.candidate.contactPoints.map(({ id, t, role }) => ({ id, t, role })),
+  bauplan.candidate.contactPoints.map(({ id, t, role }) => ({ id, t, role })),
 );
 assert.deepEqual(
   plan.massAuthority.preserved,
@@ -131,10 +152,60 @@ assert.deepEqual(
     'axisSamples',
     'head-and-mouth-polarity',
     'limb-topology',
-    'shell-modules',
-    'contact-identities',
+    'developmental-module-absence',
+    'explicit-shell-geometry-absence',
+    'armor-bearing-prior-hooks',
+    'contact-identities-and-axial-roles',
     'motion-affordance-class',
   ],
+);
+assert.equal(
+  plan.massAuthority.assayContract?.schema,
+  'kaminos.lirm-bauplan-mass-authority-loop-one.v0',
+  'Loop One must publish one exact paired generation contract',
+);
+assert.deepEqual(
+  plan.massAuthority.assayContract.candidateIds,
+  ['bauplan-only', 'bauplan-heavy'],
+);
+assert.deepEqual(plan.massAuthority.assayContract.developmentalModules, []);
+assert.equal(plan.massAuthority.assayContract.explicitShellGeometry, 'absent');
+assert.deepEqual(
+  plan.massAuthority.assayContract.retainedArmorPriorHooks,
+  bauplan.candidate.bodyPlan.gestalt.priorHooks,
+);
+assert.equal(plan.massAuthority.assayContract.imagegen.seed, 720501);
+assert.equal(plan.massAuthority.assayContract.trellis.seed, 720501);
+assert.equal(
+  /\b(mass|fat|heavy|lean)\b|\b\d+[- ]support/iu.test(
+    plan.massAuthority.assayContract.imagegen.prompt,
+  ),
+  false,
+  'neutral completion prompt must not restate the mass mutation or a numeric support count',
+);
+assert.match(
+  plan.massAuthority.assayContract.imagegen.prompt,
+  /continuous closed-surface anatomy/iu,
+);
+assert.equal(
+  plan.massAuthority.assayContract.generatedSupportClaim,
+  'inadmissible',
+);
+assert.deepEqual(
+  plan.massAuthority.assayContract.blindClassification.cellLabels,
+  ['cell-a', 'cell-b'],
+);
+assert.equal(
+  plan.massAuthority.assayContract.blindClassification.mappingPublication,
+  'withheld_until_blind_classification',
+);
+assert.equal(
+  plan.massAuthority.assayContract.visualAdmission.operatorExposure,
+  'prohibited_pending_independent_safe_and_happy',
+);
+assert.equal(
+  plan.massAuthority.assayContract.visualAdmission.motionSafe,
+  'unassayed',
 );
 
 const forbiddenKinds = new Set(['cavity', 'aperture', 'floating_organ', 'suspended_organ']);

@@ -10,6 +10,10 @@ export const LIRM_BAUPLAN_STAGED_ELABORATION_SEED =
   'molten-lirm-seed-0707';
 export const LIRM_BAUPLAN_MASS_AUTHORITY_SCHEMA =
   'kaminos.lirm-bauplan-mass-authority.v0';
+export const LIRM_BAUPLAN_MASS_AUTHORITY_LOOP_ONE_SCHEMA =
+  'kaminos.lirm-bauplan-mass-authority-loop-one.v0';
+export const LIRM_BAUPLAN_MASS_AUTHORITY_LOOP_ONE_PROMPT =
+  'Transform these exact clay, depth, and normal controls into one coherent friendly small crawling trilobite-flatback creature. Preserve the supplied silhouette, connected body volume, front-to-back orientation, terrain-facing supports, terminal head, and body-attached structures. Complete underspecified anatomy using one plausible organismal body plan with continuous closed-surface anatomy at every attachment. Retain a flat armored-back character and broad side-plate suggestion. Matte pale green skin and warm cream keratin details, restrained cute creature design, three-quarter studio render, isolated on a plain dark background, readable silhouette, sculptural volume.';
 
 const SOURCE_CANDIDATE_ID = 'lirm-armature-03';
 const BAUPLAN_CONTRACT = Object.freeze({
@@ -67,7 +71,7 @@ function scaled(value, multiplier, maximum = Infinity) {
 
 function createHeavyBauplanVariant(parent) {
   const candidate = structuredClone(parent.candidate);
-  candidate.id = 'bauplan-heavy-plus-dorsal-plates';
+  candidate.id = 'bauplan-heavy';
   candidate.label = `${parent.candidate.label} / heavy bauplan`;
   candidate.seed = `${parent.candidate.seed}:low-frequency-heavy-v0`;
 
@@ -138,6 +142,58 @@ function createHeavyBauplanVariant(parent) {
   };
 }
 
+function createLoopOneAssayContract(parent, heavy) {
+  return {
+    schema: LIRM_BAUPLAN_MASS_AUTHORITY_LOOP_ONE_SCHEMA,
+    candidateIds: [parent.id, heavy.id],
+    developmentalModules: [],
+    explicitShellGeometry: 'absent',
+    retainedArmorPriorHooks: [...parent.candidate.bodyPlan.gestalt.priorHooks],
+    controlProjection: {
+      requestedRoute: 'lirm-speciation-armature-implicit-body-witness-v1',
+      sourceMaps: ['clay', 'depth', 'normal'],
+      camera: 'shared-implicit-body-camera',
+      crop: 'tight-surface-bounds',
+    },
+    imagegen: {
+      requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+      jobType: 'mflux_flux2_edit_promptfile_3ref',
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seed: 720501,
+      prompt: LIRM_BAUPLAN_MASS_AUTHORITY_LOOP_ONE_PROMPT,
+    },
+    trellis: {
+      requestedRoute: 'gpu-greenroom/trellis2mlx_fast',
+      jobType: 'trellis2mlx_fast',
+      seed: 720501,
+      resolution: 512,
+      steps: 6,
+      cascade: false,
+      simplifyFirst: true,
+      targetFaces: 200000,
+      textureSize: 1024,
+    },
+    generatedSupportClaim: 'inadmissible',
+    blindClassification: {
+      owner: 'blind-independent-classifier',
+      cellLabels: ['cell-a', 'cell-b'],
+      mappingPublication: 'withheld_until_blind_classification',
+      firstClassifier: 'blind-independent-classifier',
+    },
+    visualAdmission: {
+      researchVisibility: 'agent_only',
+      operatorExposure: 'prohibited_pending_independent_safe_and_happy',
+      staticGates: ['safe', 'happy'],
+      motionSafe: 'unassayed',
+    },
+  };
+}
+
 function tactileForkHandle(id, side) {
   const isLeft = side === 'left';
   return {
@@ -185,7 +241,7 @@ export function buildLirmBauplanStagedElaborationPlan() {
   const bauplan = createBauplanStage(source);
   const armored = createArmoredStage(source, bauplan.id);
   const tactile = createTactileStage(source, armored.id);
-  const heavy = createHeavyBauplanVariant(armored);
+  const heavy = createHeavyBauplanVariant(bauplan);
   return {
     schema: LIRM_BAUPLAN_STAGED_ELABORATION_SCHEMA,
     lineageId: LIRM_BAUPLAN_STAGED_ELABORATION_LINEAGE,
@@ -196,7 +252,7 @@ export function buildLirmBauplanStagedElaborationPlan() {
     massAuthority: {
       schema: LIRM_BAUPLAN_MASS_AUTHORITY_SCHEMA,
       authority: 'deterministic-low-frequency-bauplan-mutation',
-      parentStageId: armored.id,
+      parentStageId: heavy.parentId,
       variant: heavy,
       changed: {
         'bodyPlan.silhouette.bellyScale': {
@@ -229,10 +285,13 @@ export function buildLirmBauplanStagedElaborationPlan() {
         'axisSamples',
         'head-and-mouth-polarity',
         'limb-topology',
-        'shell-modules',
-        'contact-identities',
+        'developmental-module-absence',
+        'explicit-shell-geometry-absence',
+        'armor-bearing-prior-hooks',
+        'contact-identities-and-axial-roles',
         'motion-affordance-class',
       ],
+      assayContract: createLoopOneAssayContract(bauplan, heavy),
     },
     evidencePredicate: {
       fixedPromptSeedRouteCamera: true,

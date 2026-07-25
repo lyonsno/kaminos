@@ -1,0 +1,107 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one.v0",
+  "candidateIds": [
+    "bauplan-only",
+    "bauplan-heavy"
+  ],
+  "developmentalModules": [],
+  "explicitShellGeometry": "absent",
+  "retainedArmorPriorHooks": [
+    "trilobite",
+    "flat armored back",
+    "side plates",
+    "ancient arthropod"
+  ],
+  "controlProjection": {
+    "requestedRoute": "lirm-speciation-armature-implicit-body-witness-v1",
+    "sourceMaps": [
+      "clay",
+      "depth",
+      "normal"
+    ],
+    "camera": "shared-implicit-body-camera",
+    "crop": "tight-surface-bounds"
+  },
+  "imagegen": {
+    "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "jobType": "mflux_flux2_edit_promptfile_3ref",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seed": 720501,
+    "prompt": "Transform these exact clay, depth, and normal controls into one coherent friendly small crawling trilobite-flatback creature. Preserve the supplied silhouette, connected body volume, front-to-back orientation, terrain-facing supports, terminal head, and body-attached structures. Complete underspecified anatomy using one plausible organismal body plan with continuous closed-surface anatomy at every attachment. Retain a flat armored-back character and broad side-plate suggestion. Matte pale green skin and warm cream keratin details, restrained cute creature design, three-quarter studio render, isolated on a plain dark background, readable silhouette, sculptural volume."
+  },
+  "trellis": {
+    "requestedRoute": "gpu-greenroom/trellis2mlx_fast",
+    "jobType": "trellis2mlx_fast",
+    "seed": 720501,
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "simplifyFirst": true,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "generatedSupportClaim": "inadmissible",
+  "blindClassification": {
+    "owner": "blind-independent-classifier",
+    "cellLabels": [
+      "cell-a",
+      "cell-b"
+    ],
+    "mappingPublication": "withheld_until_blind_classification",
+    "firstClassifier": "blind-independent-classifier"
+  },
+  "visualAdmission": {
+    "researchVisibility": "agent_only",
+    "operatorExposure": "prohibited_pending_independent_safe_and_happy",
+    "staticGates": [
+      "safe",
+      "happy"
+    ],
+    "motionSafe": "unassayed"
+  },
+  "sourceCandidateId": "lirm-armature-03",
+  "sourceSeed": "molten-lirm-seed-0707",
+  "parentStageId": "bauplan-only",
+  "changed": {
+    "bodyPlan.silhouette.bellyScale": {
+      "from": 1.202,
+      "to": 1.418
+    },
+    "bodyPlan.silhouette.widthScale": {
+      "from": 1.419,
+      "to": 1.504
+    },
+    "bodyPlan.silhouette.heightScale": {
+      "from": 0.553,
+      "to": 0.619
+    },
+    "bodyPlan.bulkScale": {
+      "from": 0.962,
+      "to": 1.039
+    },
+    "bodyPlan.massDistribution.bellyDrop": {
+      "from": 0.541,
+      "to": 0.661
+    },
+    "bodyPlan.contactWidth": {
+      "from": 0.903,
+      "to": 0.93
+    }
+  },
+  "preserved": [
+    "axialCurve",
+    "axisSamples",
+    "head-and-mouth-polarity",
+    "limb-topology",
+    "developmental-module-absence",
+    "explicit-shell-geometry-absence",
+    "armor-bearing-prior-hooks",
+    "contact-identities-and-axial-roles",
+    "motion-affordance-class"
+  ]
+}

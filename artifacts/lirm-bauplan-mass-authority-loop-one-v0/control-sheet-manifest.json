@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-control-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1024,
+  "cellWidth": 512,
+  "cellHeight": 432,
+  "imageHeight": 384,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/clay-implicit.png",
+      "title": "bauplan-only",
+      "viewLabel": "clay"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-heavy/clay-implicit.png",
+      "title": "bauplan-heavy",
+      "viewLabel": "clay"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/depth-implicit.png",
+      "title": "bauplan-only",
+      "viewLabel": "depth"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-heavy/depth-implicit.png",
+      "title": "bauplan-heavy",
+      "viewLabel": "depth"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/normal-implicit.png",
+      "title": "bauplan-only",
+      "viewLabel": "normal"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-heavy/normal-implicit.png",
+      "title": "bauplan-heavy",
+      "viewLabel": "normal"
+    }
+  ]
+}
