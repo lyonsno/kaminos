@@ -1,0 +1,26 @@
+{
+  "name": "clay-implicit",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "c2d2f5aa717a",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/clay-implicit.png",
+  "input_name": "clay-implicit.png",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/depth-implicit.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/controls/bauplan-only/normal-implicit.png",
+    "prompt_file": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/neutral-completion-prompt.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "height": "512",
+    "width": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "720501",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785015401.517555,
+  "duration_s": 71.2
+}

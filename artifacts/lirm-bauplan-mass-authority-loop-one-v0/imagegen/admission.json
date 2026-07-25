@@ -1,0 +1,64 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-imagegen-admission.v0",
+  "status": "matched-pair-admitted-to-trellis",
+  "researchVisibility": "agent_only",
+  "operatorExposure": "prohibited_pending_independent_safe_and_happy",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+  "effectiveRouteIdentity": {
+    "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "height": "512",
+    "width": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "720501",
+    "mlxCacheLimitGb": "48"
+  },
+  "cells": [
+    {
+      "sourceCandidateId": "bauplan-only",
+      "jobId": "c2d2f5aa717a",
+      "greenroomReceiptPath": "greenroom-receipts/bauplan-only.json",
+      "outputPath": "bauplan-only/output.png",
+      "outputSha256": "sha256:bec98b6215e6de7e3351e6524797eb0a31a8eef780120d8afccda97de6ac0c90",
+      "durationSeconds": 71.169249,
+      "safe": "pass",
+      "happy": "pass",
+      "organismalCoherence": "pass",
+      "visibleMorphology": [
+        "long curved axial body",
+        "lighter underside mass",
+        "smaller sparse support forms",
+        "narrower shoulder and terminal masses"
+      ]
+    },
+    {
+      "sourceCandidateId": "bauplan-heavy",
+      "jobId": "0beeb7c9e472",
+      "greenroomReceiptPath": "greenroom-receipts/bauplan-heavy.json",
+      "outputPath": "bauplan-heavy/output.png",
+      "outputSha256": "sha256:42d30fb6e95e40d03fede56689eef1c6e22a340e7a9fc1b2677de478a32476d6",
+      "durationSeconds": 108.681378,
+      "safe": "pass",
+      "happy": "pass",
+      "organismalCoherence": "pass",
+      "visibleMorphology": [
+        "substantially deeper torso",
+        "broader shoulder mass",
+        "fuller haunch and terminal mass",
+        "larger merged support footprint"
+      ]
+    }
+  ],
+  "comparativeInspection": {
+    "sameDesignedCreatureFamily": "pass",
+    "directionalMassAuthority": "strong-pass",
+    "explicitShellGeometryAbsent": "pass",
+    "armorPriorRealization": "continuous low-frequency plating",
+    "coupledFootprintConfound": "present",
+    "generatedSupportClaim": "inadmissible",
+    "trellisAdmission": "admit-both"
+  },
+  "lastTrustworthyEvidence": "fixed-seed matched FLUX completion preserves one friendly organismal family while carrying a strong parent-to-heavy mass delta into the completed images"
+}
