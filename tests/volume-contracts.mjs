@@ -273,7 +273,11 @@ assert.match(index, /volume_look_freeze/, 'Basin URLs preserve look-lab freeze s
 assert.match(index, /volume_pyro_compare/, 'Basin URLs preserve Pyro compare mode');
 assert.match(index, /id="volume-look-lab-state"/, 'Volume readout exposes effective look-lab freeze/compare state');
 assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume route still hydrates basin controls when renderer activation fails');
-assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');
+assert.match(
+  index,
+  /initScene\(\)\.then\([\s\S]*?beginKaminosVolumeRouteInit\(\);[\s\S]*?\.catch\([\s\S]*?beginKaminosVolumeRouteInit\(\);/,
+  'Volume route uses the same idempotent initializer from both the normal and scene-init fallback paths',
+);
 assert.match(index, /\.slider-row\s*\{[^}]*user-select:\s*none/, 'Slider rows prevent label/help text selection from stealing drag gestures');
 assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*24px/, 'Range sliders expose a taller grab lane than the visible rail');
 assert.match(core, /topology-lab-monotonic-carrier-mix-v0/, 'Topology shell lab declares monotonic additive carrier-mix identity');

@@ -7,6 +7,7 @@
 <title>Kaminos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
@@ -2727,6 +2728,7 @@ import {
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
+import { parseSparseProductRoute } from './volume-sparse-product-cockpit.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   resolveVolumeSettingsPresetVisualView,
@@ -9618,7 +9620,10 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
   const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
-  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume';
+  const sparseProductRequested = ['1', 'true', 'on'].includes(
+    String(new URLSearchParams(window.location.search).get('volume_product_cockpit') || '').toLowerCase(),
+  );
+  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume' || sparseProductRequested;
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
   if (fingerJuiceHostPanel) {
     fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
@@ -16568,6 +16573,9 @@ function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const params = new URLSearchParams(window.location.search);
+  const sparseProductControlsRequested = ['1', 'true', 'on'].includes(
+    String(params.get('volume_product_cockpit') || '').toLowerCase(),
+  );
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
@@ -16607,6 +16615,8 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    selectiveHeadLiveRole: sparseProductControlsRequested ? 'off' : undefined,
+    selectiveHeadLiveRenderComposition: sparseProductControlsRequested ? 'splat-only-v0' : undefined,
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
     radiance: parseFloat(document.getElementById('volume-radiance').value),
@@ -17323,8 +17333,75 @@ function reportKaminosVolumeRouteInitFailure(error) {
   setInfo(`Volume route initialization failed: ${message}`);
 }
 
+function beginKaminosVolumeRouteInit() {
+  if (window.__kaminosVolumeRouteInitPromise) return window.__kaminosVolumeRouteInitPromise;
+  window.__kaminosVolumeRouteInitComplete = false;
+  window.__kaminosVolumeRouteInitPromise = initKaminosVolumeRoute()
+    .then(() => {
+      window.__kaminosVolumeRouteInitComplete = true;
+      const receipt = { ok: true, route: location.href };
+      window.__kaminosVolumeRouteInitReceipt = receipt;
+      return receipt;
+    })
+    .catch(error => {
+      reportKaminosVolumeRouteInitFailure(error);
+      const receipt = {
+        ok: false,
+        route: location.href,
+        error: error?.message || String(error),
+      };
+      window.__kaminosVolumeRouteInitReceipt = receipt;
+      return receipt;
+    });
+  return window.__kaminosVolumeRouteInitPromise;
+}
+
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  const sparseProductRequest = parseSparseProductRoute(params);
+  window.__kaminosSparseProductRequest = sparseProductRequest;
+  if (sparseProductRequest) {
+    for (const selector of [
+      '[data-volume-presentation-mode]',
+      '[data-raymarch-smoke-presentation]',
+    ]) {
+      document.querySelector(selector)?.closest('.volume-presentation-switch')?.setAttribute('hidden', '');
+    }
+    for (const id of [
+      'volume-presentation-requested',
+      'volume-presentation-effective',
+      'volume-presentation-ray-quality',
+      'volume-presentation-target',
+      'volume-raymarch-smoke-effective',
+      'volume-raymarch-smoke-target',
+      'volume-basin-warm-cap',
+      'volume-basin-bonfire-family',
+      'settings-preset-view',
+      'volume-scene',
+      'volume-reaction-live-view',
+      'volume-boundary-sidecar-source',
+      'volume-boundary-sidecar-view',
+      'volume-boundary-sidecar-blur',
+      'volume-boundary-sidecar-width',
+      'volume-boundary-sidecar-ridge',
+      'volume-boundary-splat-mode',
+      'volume-boundary-splat-radius',
+      'volume-boundary-splat-sharpness',
+      'volume-flow-kernel-strength',
+      'volume-flow-kernel-radius',
+      'volume-flow-kernel-coherence',
+      'volume-majorant-grid',
+      'volume-grid-overlay',
+      'volume-flow-debug',
+      'volume-residual-mode',
+      'volume-residual-model-url',
+      'volume-residual-strength',
+      'volume-residual-feature-debug',
+    ]) {
+      const element = document.getElementById(id);
+      (element?.closest('.field, .slider-row') || element)?.setAttribute('hidden', '');
+    }
+  }
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
@@ -17907,6 +17984,15 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
+  if (sparseProductRequest) {
+    const routedMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode').value);
+    if (params.has('volume_boundary_splat_mode') && routedMode !== sparseProductRequest.boundarySplatMode) {
+      throw new Error(
+        `sparse-product-geometry-route-mismatch:${sparseProductRequest.boundarySplatMode}:${routedMode}`,
+      );
+    }
+    document.getElementById('volume-boundary-splat-mode').value = sparseProductRequest.boundarySplatMode;
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -17930,6 +18016,7 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  window.kaminosReadVolumeControls = readVolumeControls;
   const requestedOpticalUnitMode = params.get('volume_optical_unit_mode')
     || 'projected-native-cell-area-integral-normalized-v0';
   window.__kaminosOpticalUnitModeReceipt = volumePrototype.setBoundarySplatOpticalUnitMode?.(requestedOpticalUnitMode) || null;
@@ -17965,6 +18052,17 @@ async function initKaminosVolumeRoute() {
     'volume-absorption',
   ]);
   const syncControls = event => {
+    if (sparseProductRequest && event?.target?.id === 'volume-resolution') {
+      updateVolumeControlLabels();
+      const requestResolution = window.parent?.__kaminosRequestSparseProductResolution;
+      if (typeof requestResolution !== 'function') {
+        throw new Error('sparse-product-resolution-host-missing');
+      }
+      void Promise.resolve(requestResolution(Number(event.target.value))).catch(error => {
+        setInfo(`Sparse product resolution transition failed: ${error?.message || error}`);
+      });
+      return;
+    }
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
     } else if (event?.target?.id) {
@@ -18976,45 +19074,58 @@ async function initKaminosVolumeRoute() {
     }
   }
   const liveFullSupportOpticsRequested = params.has('full_support_live_step');
-  const fullSupportBootstrap = liveFullSupportOpticsRequested
-    ? bootstrapLiveFullSupportOpticsState()
-    : bootstrapFullSupportStageAState();
-  fullSupportBootstrap.then(async stageAReceipt => {
-    if (stageAReceipt?.status !== 'effective') {
-      throw new Error(`stage-a-bootstrap-required:${stageAReceipt?.failures?.join(',') || stageAReceipt?.status || 'unknown'}`);
-    }
-    if (liveFullSupportOpticsRequested) return stageAReceipt;
-    const cohortReceipt = await bootstrapPersistentSparseCohort();
-    if (cohortReceipt?.status === 'failed') {
-      throw new Error(`persistent-cohort-bootstrap-failed:${cohortReceipt.failures?.join(',') || 'unknown'}`);
-    }
-    return bootstrapStageBConsumer();
-  }).catch(error => {
-    if (!window.__kaminosFullSupportStageABootstrapReceipt) {
-      const stageAFailure = { status: 'failed', failures: [error?.message || String(error)] };
-      window.__kaminosFullSupportStageABootstrapReceipt = stageAFailure;
-      renderFullSupportReceipt(stageAFailure);
-    }
-    const failure = {
-      status: 'failed',
-      disabledReason: 'stage-a-bootstrap-required',
-      resourceState: 'incomplete',
-      requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
-      effectiveTreatment: null,
-      fallbackUsed: false,
-      resources: [],
-      passes: {
-        requested: ['manifest-validation', 'resource-binding', 'resource-load-verification'],
-        applied: [],
-        rendererRequested: false,
-        rendererEncoded: false,
-        rendererApplied: false,
-      },
-      failures: [error?.message || String(error)],
-    };
-    configureStageBView(failure);
-    renderStageBReceipt(failure);
-  });
+  const fullSupportFieldBootstrapRequested = [
+    'full_support_source_field_manifest',
+    'full_support_source_fluid',
+    'full_support_source_front',
+  ].some(parameter => params.has(parameter));
+  const fullSupportBootstrapRequested = liveFullSupportOpticsRequested || fullSupportFieldBootstrapRequested;
+  if (sparseProductRequest && fullSupportBootstrapRequested) {
+    throw new Error('sparse-product-route-conflicts-with-diagnostic-bootstrap');
+  }
+  const fullSupportBootstrap = fullSupportBootstrapRequested ? (
+    liveFullSupportOpticsRequested
+      ? bootstrapLiveFullSupportOpticsState()
+      : bootstrapFullSupportStageAState()
+  ) : Promise.resolve(null);
+  if (fullSupportBootstrapRequested) {
+    fullSupportBootstrap.then(async stageAReceipt => {
+      if (stageAReceipt?.status !== 'effective') {
+        throw new Error(`stage-a-bootstrap-required:${stageAReceipt?.failures?.join(',') || stageAReceipt?.status || 'unknown'}`);
+      }
+      if (liveFullSupportOpticsRequested) return stageAReceipt;
+      const cohortReceipt = await bootstrapPersistentSparseCohort();
+      if (cohortReceipt?.status === 'failed') {
+        throw new Error(`persistent-cohort-bootstrap-failed:${cohortReceipt.failures?.join(',') || 'unknown'}`);
+      }
+      return bootstrapStageBConsumer();
+    }).catch(error => {
+      if (!window.__kaminosFullSupportStageABootstrapReceipt) {
+        const stageAFailure = { status: 'failed', failures: [error?.message || String(error)] };
+        window.__kaminosFullSupportStageABootstrapReceipt = stageAFailure;
+        renderFullSupportReceipt(stageAFailure);
+      }
+      const failure = {
+        status: 'failed',
+        disabledReason: 'stage-a-bootstrap-required',
+        resourceState: 'incomplete',
+        requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+        effectiveTreatment: null,
+        fallbackUsed: false,
+        resources: [],
+        passes: {
+          requested: ['manifest-validation', 'resource-binding', 'resource-load-verification'],
+          applied: [],
+          rendererRequested: false,
+          rendererEncoded: false,
+          rendererApplied: false,
+        },
+        failures: [error?.message || String(error)],
+      };
+      configureStageBView(failure);
+      renderStageBReceipt(failure);
+    });
+  }
   syncControls();
   setInterval(refreshVolumeReadout, 500);
 }
@@ -22274,7 +22385,7 @@ initScene().then(() => {
       await loadKaminosImageAssetRoute(imageRoute);
     }
   });
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  beginKaminosVolumeRouteInit();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
@@ -22285,7 +22396,7 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  beginKaminosVolumeRouteInit();
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();

@@ -122,8 +122,8 @@ assert.match(
 );
 assert.match(
   page,
-  /const warmupTarget = warmupParam === '0'\s*\?\s*0[\s\S]*fresh-live-settings-no-anchor-v0/,
-  'only an explicit valid zero-step request reports that no checksum field anchor was imported',
+  /const warmupTarget = sparseProductRequested\s*\?\s*0\s*:\s*warmupParam === '0'\s*\?\s*0[\s\S]*fresh-live-settings-no-anchor-v0/,
+  'the ordinary sparse product route and an explicit valid zero-step request report that no checksum field anchor was imported',
 );
 assert.match(page, /sourceCaptureId:\s*params\.get\('basin_capture'\)/, 'selective-head wrapper records the durable source-capture id');
 assert.match(page, /validateVolumeSettingsPresetVisualTarget[\s\S]*sourceSettingsPresetId:/, 'preset-backed visual routes independently validate and report settings-preset identity');

@@ -144,7 +144,7 @@ assert.doesNotMatch(
 );
 assert.ok(
   index.indexOf('await volumePrototype.setActive(true);', index.indexOf("params.get('kaminos_volume_smoke') === '1'"))
-    < index.indexOf('const fullSupportBootstrap = liveFullSupportOpticsRequested'),
+    < index.indexOf('const fullSupportBootstrap = fullSupportBootstrapRequested'),
   'routed WebGPU activation must complete before either live-state or checksum-state bootstrap begins',
 );
 assert.match(index, /fullSupportBootstrap\.then\(async stageAReceipt[\s\S]*return bootstrapStageBConsumer\(\)/, 'Stage B must wait for effective replay-backed Stage A state and overlays');

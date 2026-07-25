@@ -593,6 +593,7 @@ function selectiveHeadLiveRenderCompositionAuthority(composition) {
 
 function makeSelectiveHeadLivePassReceipt({
   composition,
+  controlGeneration = null,
   raymarchEncoded = false,
   raymarchApplied = false,
   splatEncoded = false,
@@ -604,6 +605,7 @@ function makeSelectiveHeadLivePassReceipt({
   return {
     identity: 'selective-head-live-render-pass-receipt-v0',
     composition: effectiveComposition,
+    controlGeneration,
     compositionAuthority: definition.compositionAuthority,
     raymarchAuthority: definition.raymarchFireAuthority > 0
       ? 'diagnostic-raymarch-selected-fields-fire-smoke-v0'
@@ -7734,6 +7736,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalHistoryValid: false,
     fluidStateResetCount: 0,
     fluidStateResetReason: 'initial',
+    volumeResolutionTransitionReceipt: null,
     volumePrimitiveUniformDiagnosticUpdateCount: 0,
     volumePrimitiveUpdateReceipt: null,
     majorantGrid: majorantGridSize,
@@ -7821,6 +7824,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCountAuthority: 'gpu-indirect-async-readback',
     boundarySplatInstanceCount: null,
     boundarySplatFallbackReason: null,
+    boundarySplatControlGeneration: 0,
     boundarySplatFrameCount: 0,
     boundarySplatTimestampStatus: 'unsupported',
     boundarySplatGpuProfile: makeBoundarySplatGpuProfile({
@@ -14810,7 +14814,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function recordSelectiveHeadLivePassReceipt(receipt) {
-    state.selectiveHeadLivePassReceipt = makeSelectiveHeadLivePassReceipt(receipt);
+    state.selectiveHeadLivePassReceipt = makeSelectiveHeadLivePassReceipt({
+      ...receipt,
+      controlGeneration: boundarySplatControlGeneration,
+    });
     if (state.selectiveHeadLiveCompositionEffective !== 'off') {
       state.volumeReconstructionStyle = state.selectiveHeadLiveCompositionEffective;
     }
@@ -21159,6 +21166,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
+      const resolutionTransitionBefore = {
+        fluidStateResetCount: state.fluidStateResetCount,
+        sourceAuthority: state.boundarySplatSourceAuthority,
+        diagnosticCoefficientsActive: state.liveCompleteFlameOpticalCoefficientsEnabled,
+      };
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
@@ -21166,8 +21178,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const nextBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       if (previousBoundarySplatTelemetryControlSignature !== nextBoundarySplatTelemetryControlSignature) {
         boundarySplatControlGeneration += 1;
+        state.boundarySplatControlGeneration = boundarySplatControlGeneration;
         state.boundarySplatCandidateCount = null;
         state.boundarySplatOverflowCount = null;
+        state.selectiveHeadLivePassReceipt = makeSelectiveHeadLivePassReceipt({
+          composition: state.selectiveHeadLiveCompositionRequested,
+          controlGeneration: boundarySplatControlGeneration,
+          fallbackReason: 'awaiting-frame-after-control-change',
+        });
         if (device) {
           const previousAdmissionFailureReason = boundarySplatCapacityAdmissionFailureReason;
           const retryReceipt = boundarySplatCapacityLimitReceipt({
@@ -21193,12 +21211,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+      const resolutionChanged = requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid;
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
         && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
+      if (device && resolutionChanged) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
@@ -21212,6 +21231,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.frontFieldReadIndex = currentFront;
         state.frontFieldWriteIndex = 1 - currentFront;
         state.majorantGrid = majorantGridSize;
+      }
+      if (resolutionChanged) {
+        const fallbackReason = gridSize !== requestedGrid || majorantGridSize !== requestedMajorantGrid
+          ? `resolution-rebuild-substitution:${requestedGrid}:${gridSize}:${requestedMajorantGrid}:${majorantGridSize}`
+          : state.liveCompleteFlameOpticalCoefficientsEnabled
+            ? 'resolution-rebuild-retained-diagnostic-coefficients'
+            : null;
+        state.volumeResolutionTransitionReceipt = {
+          schema: 'kaminos.volume.resolution-transition.v0',
+          status: fallbackReason ? 'failed' : (device ? 'effective' : 'deferred-until-gpu-activation'),
+          requestedResolution: requestedGrid,
+          effectiveResolution: gridSize,
+          requestedMajorantGrid,
+          effectiveMajorantGrid: majorantGridSize,
+          resetCountBefore: resolutionTransitionBefore.fluidStateResetCount,
+          resetCountAfter: state.fluidStateResetCount,
+          sourceAuthorityBefore: resolutionTransitionBefore.sourceAuthority,
+          sourceAuthorityAfter: state.boundarySplatSourceAuthority,
+          diagnosticCoefficientsActiveBefore: resolutionTransitionBefore.diagnosticCoefficientsActive,
+          diagnosticCoefficientsActiveAfter: state.liveCompleteFlameOpticalCoefficientsEnabled,
+          fallbackReason,
+        };
+        if (fallbackReason) throw new Error(fallbackReason);
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);

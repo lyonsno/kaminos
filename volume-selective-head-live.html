@@ -8,6 +8,7 @@
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050607; color: #edf4f5; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; overflow: hidden; background: #050607; }
     iframe { width: 100vw; height: 100vh; border: 0; display: block; }
     #toolbar { position: fixed; z-index: 10; display: block; width: min(860px, calc(100vw - 24px)); padding: 8px 9px 7px; border: 1px solid rgba(153, 184, 192, .34); background: rgba(6, 9, 10, .88); backdrop-filter: blur(10px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
@@ -22,6 +23,7 @@
     .select-control { display: flex; align-items: center; gap: 5px; min-width: 0; color: #829499; font-size: 9px; }
     select { min-height: 28px; max-width: 210px; padding: 0 24px 0 7px; border: 1px solid #35454b; border-radius: 4px; background: #11191c; color: #dce7e9; font: inherit; font-size: 10px; }
     #roles { max-width: 176px; }
+    #splat-geometry { max-width: 160px; }
     #appearance-assay { max-width: 220px; }
     button { min-height: 28px; padding: 0 9px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 10px; cursor: pointer; white-space: nowrap; }
     button[aria-pressed="true"] { background: #275768; border-color: #6db1c3; color: #fff; }
@@ -41,7 +43,7 @@
   <div id="toolbar" hidden>
     <div id="toolbar-head">
       <div id="title">
-        <strong>Continuous same-history live assay</strong>
+        <strong id="cockpit-title">Continuous same-history live assay</strong>
         <span id="assay-source">Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
       </div>
       <div id="presentations" role="group" aria-label="Volume presentation">
@@ -54,7 +56,7 @@
       </div>
     </div>
     <div id="toolbar-controls">
-      <label class="select-control" for="appearance-assay">Optical view
+      <label id="appearance-assay-control" class="select-control" for="appearance-assay">Optical view
         <select id="appearance-assay" aria-label="Appearance decomposition">
           <option value="structural-a" data-appearance-assay="structural-a">A</option>
           <option value="broad-carrier-b" data-appearance-assay="broad-carrier-b">B coefficients</option>
@@ -76,11 +78,18 @@
       </label>
       <button id="appearance-assay-enabled" type="button" data-assay-enabled aria-pressed="false">Assay Off</button>
       <button id="splats-enabled" type="button" data-splats-enabled aria-pressed="true">Splats On</button>
+      <label id="splat-geometry-control" class="select-control" for="splat-geometry" hidden>Shape
+        <select id="splat-geometry" aria-label="Splat geometry">
+          <option value="historical-round" data-splat-geometry="historical-round">Historical round</option>
+          <option value="flow-tangent" data-splat-geometry="flow-tangent">Flow tangent</option>
+          <option value="learned-tangent" data-splat-geometry="learned-tangent">Learned tangent</option>
+        </select>
+      </label>
       <div id="optical-unit-modes" role="group" aria-label="Splat optical units" hidden>
         <button type="button" data-optical-unit-mode="legacy-global-path-scale-diagnostic-v0">Legacy Optics</button>
         <button type="button" data-optical-unit-mode="projected-native-cell-area-integral-normalized-v0">Physical Optics</button>
       </div>
-      <label class="select-control" for="roles">Field
+      <label id="roles-control" class="select-control" for="roles">Field
         <select id="roles" aria-label="Live reconstruction role">
           <option value="truthHigh" data-role="truthHigh">Truth high</option>
           <option value="lowPhaseAligned" data-role="lowPhaseAligned">Low phase-aligned control</option>
@@ -97,6 +106,13 @@
       validateVolumeSettingsPresetDocument,
       validateVolumeSettingsPresetVisualTarget,
     } from './volume-settings-preset-contract.mjs';
+    import {
+      makeSparseProductRuntimeReceipt,
+      parseSparseProductRoute,
+      runSparseProductResolutionTransition,
+      SPARSE_PRODUCT_GEOMETRY_MODES,
+      SPARSE_PRODUCT_RESOLUTIONS,
+    } from './volume-sparse-product-cockpit.mjs';
 
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
     const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
@@ -135,14 +151,21 @@
     ];
     const appearanceAssayModes = ['off', ...appearanceAssaySelections];
     const roleAuthorities = Object.freeze({
+      off: 'ordinary-live-high-field-no-selective-head-v0',
       truthHigh: 'current-high-field-reference-no-learned-composition-v0',
       lowPhaseAligned: 'phase-aligned-low-field-control-v0',
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
     const params = new URLSearchParams(location.search);
+    const sparseProductRequest = parseSparseProductRoute(params);
+    const sparseProductRequested = Boolean(sparseProductRequest);
     const liveFullSupportOpticsRequested = params.has('full_support_live_step');
-    let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
-    let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
+    let requestedRole = sparseProductRequested
+      ? 'off'
+      : (roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual');
+    let requestedComposition = compositions.includes(params.get('composition'))
+      ? params.get('composition')
+      : (sparseProductRequested ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0');
     let legacyDiagnosticCompositionRequested = requestedComposition === 'full-raymarch-under-splats-diagnostic-v0';
     let requestedPresentation = presentations.includes(params.get('volume_presentation')) ? params.get('volume_presentation') : 'beauty';
     const requestedRaymarchSmokePresentationRaw = params.get('volume_raymarch_smoke');
@@ -154,6 +177,8 @@
     let requestedOpticalUnitMode = opticalUnitModes.includes(requestedOpticalUnitModeRaw)
       ? requestedOpticalUnitModeRaw
       : 'projected-native-cell-area-integral-normalized-v0';
+    let requestedSplatGeometry = sparseProductRequest?.geometry || 'historical-round';
+    let requestedProductResolution = sparseProductRequest?.resolution || 160;
     const requestedAppearanceAssayRaw = params.get('volume_appearance_decomposition');
     let requestedAppearanceAssay = appearanceAssayModes.includes(requestedAppearanceAssayRaw)
       ? requestedAppearanceAssayRaw
@@ -164,11 +189,13 @@
       : (requestedAppearanceAssay !== 'off' ? requestedAppearanceAssay : 'structural-a');
     let requestedAppearanceAssayEnabled = requestedAppearanceAssay !== 'off';
     const warmupParam = params.get('warmup_steps');
-    const parsedWarmupTarget = warmupParam === null ? 96 : Number(warmupParam);
+    const parsedWarmupTarget = warmupParam === null ? (sparseProductRequested ? 0 : 96) : Number(warmupParam);
     const warmupParamValid = warmupParam === null
       || warmupParam === '0'
       || (warmupParam.trim() !== '' && Number.isFinite(parsedWarmupTarget) && parsedWarmupTarget >= 1);
-    const warmupTarget = warmupParam === '0'
+    const warmupTarget = sparseProductRequested
+      ? 0
+      : warmupParam === '0'
       ? 0
       : (warmupParamValid ? Math.max(1, Math.floor(parsedWarmupTarget)) : 96);
     const warmupAuthority = warmupTarget === 0
@@ -181,6 +208,9 @@
       ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
       : null;
     let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
+    let sparseProductResolutionTransitionReceipt = null;
+    let sparseProductResolutionError = null;
+    let sparseProductResolutionPromise = null;
     if (requestedRaymarchSmokePresentationRaw !== null
       && !raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)) {
       warmupError ||= `unsupported-raymarch-smoke-presentation-mode:${requestedRaymarchSmokePresentationRaw}`;
@@ -197,7 +227,8 @@
     }
     const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
     let sourceSettingsPresetReceipt = null;
-    const basin = document.getElementById('basin');
+    let basin = document.getElementById('basin');
+    if (sparseProductRequested) basin.style.visibility = 'hidden';
     const status = document.getElementById('status');
     const operatorToolbar = document.getElementById('toolbar');
     let viewportResizeObserver = null;
@@ -322,11 +353,13 @@
     const operatorOverlayResizeObserver = new ResizeObserver(syncVolumeAssayViewportPlacement);
     operatorOverlayResizeObserver.observe(operatorToolbar);
     window.addEventListener('resize', syncVolumeAssayViewportPlacement);
-    document.getElementById('assay-source').textContent = liveFullSupportOpticsRequested
-      ? 'Genuinely evolving 160 simulation; dynamic analytical coefficients; no frozen cohort'
-      : warmupTarget === 0
-        ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
-        : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
+    document.getElementById('assay-source').textContent = sparseProductRequested
+      ? 'Ordinary sparse live renderer from routed basin settings; no late diagnostic bootstrap'
+      : liveFullSupportOpticsRequested
+        ? 'Genuinely evolving 160 simulation; dynamic analytical coefficients; no frozen cohort'
+        : warmupTarget === 0
+          ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
+          : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
     const buttons = Array.from(document.querySelectorAll('[data-role]'));
     const presentationButtons = Array.from(document.querySelectorAll('[data-presentation]'));
     const smokePresentationButtons = Array.from(document.querySelectorAll('[data-smoke-presentation]'));
@@ -337,17 +370,39 @@
     const appearanceAssaySelect = document.getElementById('appearance-assay');
     const appearanceAssayEnabledButton = document.getElementById('appearance-assay-enabled');
     const splatsEnabledButton = document.getElementById('splats-enabled');
-    opticalUnitModesGroup.hidden = !liveFullSupportOpticsRequested;
-    liveOpticalAuthority.hidden = !liveFullSupportOpticsRequested;
+    const splatGeometryControl = document.getElementById('splat-geometry-control');
+    const splatGeometrySelect = document.getElementById('splat-geometry');
+    document.getElementById('cockpit-title').textContent = sparseProductRequested
+      ? 'Sparse Live Fire'
+      : 'Continuous same-history live assay';
+    opticalUnitModesGroup.hidden = !(liveFullSupportOpticsRequested || sparseProductRequested);
+    liveOpticalAuthority.hidden = !(liveFullSupportOpticsRequested || sparseProductRequested);
+    splatGeometryControl.hidden = !sparseProductRequested;
+    if (sparseProductRequested) {
+      document.getElementById('presentations').hidden = true;
+      document.getElementById('smoke-presentations').hidden = true;
+      document.getElementById('appearance-assay-control').hidden = true;
+      appearanceAssayEnabledButton.hidden = true;
+      splatsEnabledButton.hidden = true;
+      document.getElementById('roles-control').hidden = true;
+    }
+    liveOpticalAuthority.textContent = sparseProductRequested
+      ? 'Ordinary sparse live renderer | no cohort | no full-grid coefficient takeover'
+      : 'Dynamic analytical coefficients | source-authored kernel covariance | not frozen round cohort';
     const basinQuery = new URLSearchParams({
       kaminos_volume_smoke: '1',
+      volume_product_cockpit: sparseProductRequested ? '1' : '0',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: '160',
+      volume_resolution: String(requestedProductResolution),
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
-      volume_boundary_splat_mode: 'learned',
+      volume_boundary_splat_mode: sparseProductRequest?.boundarySplatMode || 'learned',
+      volume_splat_geometry: requestedSplatGeometry,
+      volume_boundary_splat_radius: String(sparseProductRequest?.boundarySplatRadius ?? 1),
+      volume_boundary_splat_sharpness: String(sparseProductRequest?.boundarySplatSharpness ?? 3.4),
+      volume_optical_unit_mode: requestedOpticalUnitMode,
       volume_boundary_sidecar_blur: '0',
       volume_boundary_sidecar_width: '0',
       volume_boundary_sidecar_ridge: '0.46',
@@ -414,6 +469,17 @@
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
+    }
+
+    function replaceSparseProductInnerRouteParameter(name, value) {
+      if (!sparseProductRequested) return null;
+      basinQuery.set(name, String(value));
+      if (!basin.contentWindow) return null;
+      const innerUrl = new URL(basin.contentWindow.location.href);
+      if (innerUrl.protocol !== location.protocol || innerUrl.origin !== location.origin) return null;
+      innerUrl.searchParams.set(name, String(value));
+      basin.contentWindow.history.replaceState(null, '', innerUrl);
+      return innerUrl.href;
     }
 
     function setRole(role) {
@@ -580,8 +646,305 @@
       const next = new URL(location.href);
       next.searchParams.set('volume_optical_unit_mode', mode);
       history.replaceState(null, '', next);
-      return prototype()?.setBoundarySplatOpticalUnitMode?.(mode) || null;
+      const receipt = prototype()?.setBoundarySplatOpticalUnitMode?.(mode) || null;
+      replaceSparseProductInnerRouteParameter('volume_optical_unit_mode', mode);
+      return receipt;
     }
+
+    function setSparseProductGeometry(geometry) {
+      const definition = SPARSE_PRODUCT_GEOMETRY_MODES[geometry];
+      if (!sparseProductRequested || !definition) {
+        throw new Error(`sparse-product-geometry-unsupported:${geometry}`);
+      }
+      requestedSplatGeometry = geometry;
+      splatGeometrySelect.value = geometry;
+      const next = new URL(location.href);
+      next.searchParams.set('volume_splat_geometry', geometry);
+      history.replaceState(null, '', next);
+      const boundaryRasterSelect = basin.contentDocument?.getElementById('volume-boundary-splat-mode');
+      if (!boundaryRasterSelect) {
+        return {
+          status: 'deferred',
+          requestedGeometry: geometry,
+          requestedBoundarySplatMode: definition.boundarySplatMode,
+          effectiveBoundarySplatMode: null,
+        };
+      }
+      boundaryRasterSelect.value = definition.boundarySplatMode;
+      boundaryRasterSelect.dispatchEvent(new basin.contentWindow.Event('change', { bubbles: true }));
+      const effectiveState = prototype()?.debugState?.() || {};
+      if (effectiveState.boundarySplatMode !== definition.boundarySplatMode) {
+        throw new Error(
+          `sparse-product-geometry-substitution:${definition.boundarySplatMode}:${effectiveState.boundarySplatMode || 'missing'}`,
+        );
+      }
+      replaceSparseProductInnerRouteParameter('volume_splat_geometry', geometry);
+      replaceSparseProductInnerRouteParameter('volume_boundary_splat_mode', definition.boundarySplatMode);
+      const passReceipt = effectiveState.selectiveHeadLivePassReceipt || null;
+      const geometryApplied = effectiveState.boundarySplatMode === definition.boundarySplatMode
+        && effectiveState.boundarySplatFootprintAuthority === definition.footprintAuthority
+        && effectiveState.boundarySplatRendererIdentity === definition.rendererIdentity
+        && effectiveState.boundarySplatAttributeModelIdentity === definition.attributeModelIdentity
+        && !effectiveState.boundarySplatFallbackReason
+        && passReceipt?.controlGeneration === effectiveState.boundarySplatControlGeneration
+        && passReceipt?.composition === 'splat-only-v0'
+        && passReceipt?.splatEncoded === true
+        && passReceipt?.splatApplied === true
+        && !passReceipt?.fallbackReason;
+      return {
+        status: geometryApplied ? 'effective' : 'settling',
+        requestedGeometry: geometry,
+        effectiveGeometry: geometryApplied ? geometry : null,
+        requestedBoundarySplatMode: definition.boundarySplatMode,
+        effectiveBoundarySplatMode: effectiveState.boundarySplatMode,
+        footprintAuthority: effectiveState.boundarySplatFootprintAuthority || null,
+        requestedRendererIdentity: definition.rendererIdentity,
+        effectiveRendererIdentity: effectiveState.boundarySplatRendererIdentity || null,
+        requestedAttributeModelIdentity: definition.attributeModelIdentity,
+        effectiveAttributeModelIdentity: effectiveState.boundarySplatAttributeModelIdentity || null,
+        passReceipt,
+        fallbackReason: effectiveState.boundarySplatFallbackReason
+          || passReceipt?.fallbackReason
+          || (geometryApplied ? null : 'awaiting-frame-after-geometry-change'),
+      };
+    }
+
+    function disposeSparseProductRuntime(runtime) {
+      runtime?.contentWindow?.__kaminosVolumePrototype?.setActive?.(false);
+      if (runtime?.isConnected) runtime.remove();
+    }
+
+    async function stageSparseProductResolution(resolution, controlsSnapshot) {
+      const stagedBasin = document.createElement('iframe');
+      stagedBasin.title = `Staged sparse product resolution ${resolution}`;
+      stagedBasin.dataset.sparseProductStage = 'resolution';
+      Object.assign(stagedBasin.style, {
+        position: 'fixed',
+        inset: '0',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+        zIndex: '-1',
+      });
+      const stagedQuery = new URLSearchParams(basinQuery);
+      stagedQuery.set('volume_resolution', String(resolution));
+      stagedQuery.set('volume_splat_geometry', requestedSplatGeometry);
+      stagedQuery.set(
+        'volume_boundary_splat_mode',
+        SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].boundarySplatMode,
+      );
+      stagedQuery.set('volume_optical_unit_mode', requestedOpticalUnitMode);
+      stagedBasin.src = `./?${stagedQuery}`;
+      document.body.append(stagedBasin);
+      try {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('staged sparse product resolution load timeout')), 120000);
+          stagedBasin.addEventListener('load', () => {
+            clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+          stagedBasin.addEventListener('error', () => {
+            clearTimeout(timeout);
+            reject(new Error('staged sparse product resolution document failed'));
+          }, { once: true });
+        });
+        const initPromiseStarted = performance.now();
+        while (!stagedBasin.contentWindow?.__kaminosVolumeRouteInitPromise) {
+          if (performance.now() - initPromiseStarted > 15000) {
+            throw new Error('staged sparse product route init promise missing');
+          }
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        const routeInitReceipt = await stagedBasin.contentWindow.__kaminosVolumeRouteInitPromise;
+        if (routeInitReceipt?.ok !== true) {
+          throw new Error(`staged sparse product route init failed:${routeInitReceipt?.error || 'unknown'}`);
+        }
+        const started = performance.now();
+        let controlsApplied = false;
+        let runtimeConfigured = false;
+        while (performance.now() - started < 120000) {
+          const stagedWindow = stagedBasin.contentWindow;
+          const stagedPrototype = stagedWindow?.__kaminosVolumePrototype;
+          if (!controlsApplied && stagedPrototype && typeof stagedWindow.kaminosApplyVolumeControlsSnapshot === 'function') {
+            const application = stagedWindow.kaminosApplyVolumeControlsSnapshot({
+              ...controlsSnapshot,
+              resolution,
+              boundarySplatMode: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].boundarySplatMode,
+            });
+            if (application?.substitutions?.length) {
+              throw new Error(`staged-control-substitution:${JSON.stringify(application.substitutions)}`);
+            }
+            controlsApplied = true;
+          }
+          if (controlsApplied && stagedPrototype && !runtimeConfigured) {
+            stagedPrototype.setSelectiveHeadLiveRole('off');
+            stagedPrototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
+            stagedPrototype.setVolumePresentationMode('beauty');
+            stagedPrototype.setRaymarchSmokePresentationMode('off');
+            stagedPrototype.setAppearanceDecompositionMode('off');
+            stagedPrototype.setBoundarySplatOpticalUnitMode(requestedOpticalUnitMode);
+            await stagedPrototype.setActive(true);
+            runtimeConfigured = true;
+          }
+          const stagedState = runtimeConfigured ? stagedPrototype.debugState() : null;
+          if (stagedState?.error) throw new Error(`staged-runtime-error:${stagedState.error}`);
+          if (stagedState?.active && Number(stagedState.boundarySplatCandidateCount) > 0) {
+            const stagedRequest = {
+              ...sparseProductRequest,
+              resolution,
+              geometry: requestedSplatGeometry,
+              boundarySplatMode: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].boundarySplatMode,
+              footprintAuthority: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].footprintAuthority,
+              rendererIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].rendererIdentity,
+              attributeModelIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].attributeModelIdentity,
+              opticalUnitMode: requestedOpticalUnitMode,
+            };
+            const stagedReceipt = makeSparseProductRuntimeReceipt(stagedRequest, stagedState);
+            if (stagedReceipt.status === 'effective') {
+              return {
+                status: 'effective',
+                effectiveResolution: resolution,
+                runtime: stagedBasin,
+                stageIdentity: 'staged-sparse-product-iframe-handover-v0',
+                sourceAuthority: stagedReceipt.effective.sourceAuthority,
+                diagnosticCoefficientsActiveAfter: stagedReceipt.diagnosticBootstrapApplied,
+                resetCountAfter: stagedReceipt.effective.fluidStateResetCount,
+                receipt: stagedReceipt,
+              };
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        throw new Error('staged sparse product resolution did not become effective');
+      } catch (error) {
+        disposeSparseProductRuntime(stagedBasin);
+        throw error;
+      }
+    }
+
+    async function setSparseProductResolution(resolution) {
+      const normalized = Number(resolution);
+      if (!sparseProductRequested || !Number.isInteger(normalized) || !SPARSE_PRODUCT_RESOLUTIONS.includes(normalized)) {
+        throw new Error(`sparse-product-resolution-unsupported:${resolution}`);
+      }
+      if (sparseProductResolutionPromise) {
+        throw new Error('sparse-product-resolution-transition-already-active');
+      }
+      const currentState = prototype()?.debugState?.() || {};
+      const currentResolution = Number(currentState.simGrid);
+      if (currentResolution === normalized) {
+        const currentRequest = {
+          ...sparseProductRequest,
+          resolution: normalized,
+          geometry: requestedSplatGeometry,
+          boundarySplatMode: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].boundarySplatMode,
+          footprintAuthority: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].footprintAuthority,
+          rendererIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].rendererIdentity,
+          attributeModelIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].attributeModelIdentity,
+          opticalUnitMode: requestedOpticalUnitMode,
+        };
+        const currentReceipt = makeSparseProductRuntimeReceipt(currentRequest, currentState);
+        if (currentReceipt.status !== 'effective') {
+          throw new Error(`sparse-product-same-resolution-runtime-not-effective:${currentReceipt.fallbackReason || currentReceipt.status}`);
+        }
+        sparseProductResolutionError = null;
+        return {
+          schema: 'kaminos.volume.sparse-product-resolution-transition.v0',
+          status: 'effective',
+          requestedResolution: normalized,
+          effectiveResolution: normalized,
+          previousResolution: normalized,
+          retainedRuntime: true,
+          stageIdentity: 'same-resolution-noop-v0',
+          sourceAuthority: currentState.boundarySplatSourceAuthority || null,
+          fallbackReason: null,
+        };
+      }
+      const controlsSnapshot = basin.contentWindow?.kaminosReadVolumeControls?.();
+      if (!controlsSnapshot) throw new Error('sparse-product-control-snapshot-missing');
+      const previousUrl = location.href;
+      const previousRequestedResolution = requestedProductResolution;
+      const previousBasinQueryResolution = basinQuery.get('volume_resolution');
+      sparseProductResolutionError = null;
+      sparseProductResolutionTransitionReceipt = {
+        schema: 'kaminos.volume.sparse-product-resolution-transition.v0',
+        status: 'staging',
+        requestedResolution: normalized,
+        effectiveResolution: currentResolution,
+        previousResolution: currentResolution,
+        retainedRuntime: true,
+        stageIdentity: 'staged-sparse-product-iframe-handover-v0',
+        sourceAuthority: currentState.boundarySplatSourceAuthority || null,
+        fallbackReason: null,
+      };
+      sparseProductResolutionPromise = runSparseProductResolutionTransition({
+        currentResolution,
+        requestedResolution: normalized,
+        currentRuntime: basin,
+        stage: () => stageSparseProductResolution(normalized, controlsSnapshot),
+        commit: async stagedRuntime => {
+          const previousRuntime = basin;
+          stagedRuntime.style.position = '';
+          stagedRuntime.style.inset = '';
+          stagedRuntime.style.visibility = '';
+          stagedRuntime.style.pointerEvents = '';
+          stagedRuntime.style.zIndex = '';
+          stagedRuntime.id = 'basin';
+          previousRuntime.replaceWith(stagedRuntime);
+          basin = stagedRuntime;
+          basin.addEventListener('load', admitVolumeAssayViewport);
+          requestedProductResolution = normalized;
+          basinQuery.set('volume_resolution', String(normalized));
+          const next = new URL(location.href);
+          next.searchParams.set('volume_resolution', String(normalized));
+          history.replaceState(null, '', next);
+          admitVolumeAssayViewport();
+        },
+        rollback: async ({ currentRuntime, nextRuntime }) => {
+          if (!currentRuntime.isConnected) {
+            if (!nextRuntime.isConnected || !nextRuntime.parentNode) {
+              throw new Error('sparse-product-resolution-rollback-anchor-missing');
+            }
+            nextRuntime.replaceWith(currentRuntime);
+          }
+          basin = currentRuntime;
+          requestedProductResolution = previousRequestedResolution;
+          if (previousBasinQueryResolution == null) basinQuery.delete('volume_resolution');
+          else basinQuery.set('volume_resolution', previousBasinQueryResolution);
+          history.replaceState(null, '', previousUrl);
+          admitVolumeAssayViewport();
+        },
+        dispose: async runtime => disposeSparseProductRuntime(runtime),
+      });
+      try {
+        const receipt = await sparseProductResolutionPromise;
+        sparseProductResolutionTransitionReceipt = {
+          ...receipt,
+          resetCountBefore: currentState.fluidStateResetCount ?? null,
+          resetCountAfter: receipt.resetCountAfter,
+          sourceAuthorityBefore: currentState.boundarySplatSourceAuthority ?? null,
+          sourceAuthorityAfter: receipt.sourceAuthority,
+          diagnosticCoefficientsActiveBefore: currentState.liveCompleteFlameOpticalCoefficientsEnabled === true,
+          diagnosticCoefficientsActiveAfter: receipt.diagnosticCoefficientsActiveAfter,
+        };
+        return sparseProductResolutionTransitionReceipt;
+      } catch (error) {
+        sparseProductResolutionTransitionReceipt = error.receipt || {
+          schema: 'kaminos.volume.sparse-product-resolution-transition.v0',
+          status: 'failed',
+          requestedResolution: normalized,
+          effectiveResolution: currentResolution,
+          retainedRuntime: true,
+          fallbackReason: error?.message || String(error),
+        };
+        sparseProductResolutionError = sparseProductResolutionTransitionReceipt.fallbackReason;
+        const resolutionSelect = basin.contentDocument?.getElementById('volume-resolution');
+        if (resolutionSelect) resolutionSelect.value = String(currentResolution);
+        throw error;
+      } finally {
+        sparseProductResolutionPromise = null;
+      }
+    }
+    window.__kaminosRequestSparseProductResolution = setSparseProductResolution;
 
     function applyAppearanceAssayState() {
       requestedAppearanceAssay = requestedAppearanceAssayEnabled ? requestedAppearanceAssaySelection : 'off';
@@ -651,6 +1014,24 @@
 
     function debugState() {
       const state = prototype()?.debugState?.() || null;
+      let sparseProductReceipt = null;
+      let sparseProductError = null;
+      if (sparseProductRequested && state) {
+        try {
+          sparseProductReceipt = makeSparseProductRuntimeReceipt({
+            ...sparseProductRequest,
+            resolution: requestedProductResolution,
+            geometry: requestedSplatGeometry,
+            boundarySplatMode: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].boundarySplatMode,
+            footprintAuthority: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].footprintAuthority,
+            rendererIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].rendererIdentity,
+            attributeModelIdentity: SPARSE_PRODUCT_GEOMETRY_MODES[requestedSplatGeometry].attributeModelIdentity,
+            opticalUnitMode: requestedOpticalUnitMode,
+          }, state);
+        } catch (error) {
+          sparseProductError = error?.message || String(error);
+        }
+      }
       const effectiveRole = state?.selectiveHeadLiveEffectiveRole || null;
       const effectiveComposition = state?.selectiveHeadLiveCompositionEffective || null;
       const passReceipt = state?.selectiveHeadLivePassReceipt || null;
@@ -679,7 +1060,9 @@
         : requestedPresentation === 'intrinsic'
           ? 'intrinsic-overrides-beauty-composition'
           : null;
-      const fallback = (effectiveRole !== requestedRole ? state?.selectiveHeadLiveFallbackReason : null)
+      const fallback = sparseProductResolutionError
+        || sparseProductError
+        || (effectiveRole !== requestedRole ? state?.selectiveHeadLiveFallbackReason : null)
         || (!compositionOverrideReason && effectiveComposition !== requestedComposition
           ? state?.selectiveHeadLiveCompositionFallbackReason
           : null)
@@ -713,9 +1096,17 @@
       const rendererSettled = warmupComplete
         && state?.active
         && effectiveRole === requestedRole
-        && presentationSettled;
+        && presentationSettled
+        && (!sparseProductRequested || sparseProductReceipt?.status === 'effective');
       return {
         routeIdentity: ROUTE_IDENTITY,
+        sparseProductRequested,
+        sparseProductReceipt,
+        requestedSplatGeometry,
+        effectiveSplatGeometry: sparseProductReceipt?.effective?.geometry || null,
+        volumeResolutionTransitionReceipt: sparseProductRequested
+          ? sparseProductResolutionTransitionReceipt
+          : state?.volumeResolutionTransitionReceipt || null,
         status: warmupError || state?.error || fallback
           ? 'failed'
           : (rendererSettled ? 'running' : (warmupComplete && state?.active ? 'settling' : 'warming')),
@@ -787,6 +1178,17 @@
     async function initializeWarmup() {
       if (warmupStarted) return;
       if (warmupError) throw new Error(warmupError);
+      const initPromiseStarted = performance.now();
+      while (!basin.contentWindow?.__kaminosVolumeRouteInitPromise) {
+        if (performance.now() - initPromiseStarted > 15000) {
+          throw new Error('exact basin route init promise missing');
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      const routeInitReceipt = await basin.contentWindow.__kaminosVolumeRouteInitPromise;
+      if (routeInitReceipt?.ok !== true) {
+        throw new Error(`exact basin route init failed:${routeInitReceipt?.error || 'unknown'}`);
+      }
       const started = performance.now();
       while (!prototype()?.debugState?.()?.active) {
         if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
@@ -807,13 +1209,15 @@
         }
       }
       warmupComplete = true;
-      prototype().setSelectiveHeadLiveRole(requestedRole);
+      prototype().setSelectiveHeadLiveRole(sparseProductRequested ? 'off' : requestedRole);
       prototype().setSelectiveHeadLiveRenderComposition(deriveRequestedBeautyComposition());
       prototype().setVolumePresentationMode(requestedPresentation);
       prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
       prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
       prototype().setBoundarySplatOpticalUnitMode(requestedOpticalUnitMode);
+      if (sparseProductRequested) setSparseProductGeometry(requestedSplatGeometry);
       await prototype().setActive(true);
+      if (sparseProductRequested) basin.style.visibility = 'visible';
     }
 
     async function captureFrame(options = {}) {
@@ -833,14 +1237,16 @@
     for (const button of presentationButtons) button.addEventListener('click', () => setPresentation(button.dataset.presentation));
     for (const button of smokePresentationButtons) button.addEventListener('click', () => setRaymarchSmokePresentation(button.dataset.smokePresentation));
     for (const button of opticalUnitButtons) button.addEventListener('click', () => setOpticalUnitMode(button.dataset.opticalUnitMode));
+    splatGeometrySelect.addEventListener('change', () => setSparseProductGeometry(splatGeometrySelect.value));
     appearanceAssaySelect.addEventListener('change', () => setAppearanceAssaySelection(appearanceAssaySelect.value));
     appearanceAssayEnabledButton.addEventListener('click', () => setAppearanceAssayEnabled(!requestedAppearanceAssayEnabled));
     splatsEnabledButton.addEventListener('click', () => setSplatsEnabled(!requestedSplatsEnabled));
     appearanceAssaySelect.value = requestedAppearanceAssaySelection;
     splatsEnabledButton.setAttribute('aria-pressed', String(requestedSplatsEnabled));
     splatsEnabledButton.textContent = requestedSplatsEnabled ? 'Splats On' : 'Splats Off';
+    splatGeometrySelect.value = requestedSplatGeometry;
     setOpticalUnitMode(requestedOpticalUnitMode);
-    setRole(requestedRole);
+    if (!sparseProductRequested) setRole(requestedRole);
     setRaymarchSmokePresentation(requestedRaymarchSmokePresentation, { preserveDiagnostic: true });
     if (requestedAppearanceAssayEnabled) {
       setAppearanceAssay(requestedAppearanceAssaySelection);
@@ -874,6 +1280,9 @@
         `raymarch smoke: ${state.requestedRaymarchSmokePresentation} -> ${state.effectiveRaymarchSmokePresentation || 'starting'} / applied: ${state.raymarchSmokeApplied ? 'on' : 'off'}`,
         `appearance assay: ${state.requestedAppearanceAssayEnabled ? 'on' : 'off'} / ${state.requestedAppearanceAssaySelection} -> ${state.effectiveAppearanceAssay || 'starting'}`,
         `optical units: ${state.requestedOpticalUnitMode} -> ${state.effectiveOpticalUnitMode || 'starting'}`,
+        state.sparseProductRequested
+          ? `product: ${state.sparseProductReceipt?.status || 'settling'} / shape ${state.requestedSplatGeometry} -> ${state.effectiveSplatGeometry || 'settling'} / sparse candidates ${state.sparseProductReceipt?.population?.candidates ?? 'settling'} / grid ${state.sparseProductReceipt?.effective?.resolution ?? 'settling'}`
+          : '',
         liveFullSupportOpticsRequested
           ? `live source: ${state.dynamicCoefficientAuthority || 'loading'} / geometry: ${state.dynamicGaussianGeometryIdentity || state.dynamicFootprintAuthority || 'loading'} / frozen cohort: ${state.persistentSparseCohortGpuReceipt ? 'present' : 'none'}`
           : '',
@@ -901,6 +1310,8 @@
       setAppearanceAssaySelection,
       setAppearanceAssayEnabled,
       setOpticalUnitMode,
+      setSparseProductGeometry,
+      setSparseProductResolution,
       captureFrame,
       setCapturePaused,
       stepCaptureFrame,
