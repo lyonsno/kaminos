@@ -34,7 +34,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -50,6 +50,7 @@ const browserRequest = headlessBrowserRequest({
 const requestedCdpPort = args.has('cdp-port') ? Number(args.get('cdp-port')) : null;
 const viewportWidth = Number(args.get('viewport-width') || 1600);
 const viewportHeight = Number(args.get('viewport-height') || 1100);
+const headed = args.has('headed');
 const fireFriendly = args.has('fire-friendly');
 const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
@@ -114,6 +115,7 @@ const requestedInvocation = {
   url,
   screenshot: out,
   reportPath,
+  headed,
   fireFriendly,
   replayCastReportPath,
   schedulerProfileId,
@@ -1304,7 +1306,7 @@ try {
   }
   phase = 'launching-chrome';
   browser = spawn(browserResolution.effective.executable, [
-    '--headless=new',
+    ...(headed ? [] : ['--headless=new']),
     '--remote-debugging-port=0',
     `--user-data-dir=${userDataDir}`,
     '--disable-gpu-sandbox',
@@ -1733,7 +1735,9 @@ try {
           phase = 'waiting-for-friendly-firing';
         }
       }
-      if (observedRunning && !routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
+      if (!routeState.runningProfileId
+        && ['complete', 'error', 'evidence-only'].includes(routeState.status)
+        && (observedRunning || routeState.status === 'error')) break;
     }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       inFlightCapture = {
