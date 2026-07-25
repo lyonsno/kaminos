@@ -3,7 +3,156 @@ import assert from 'node:assert/strict';
 import {
   compactSharpInlineReportDocument,
   persistSharpInlineReportSession,
+  startSharpInlineLiveTelemetrySession,
 } from '../lib/sharp-inline-trace-transport.mjs';
+
+const liveRequests = [];
+const liveRows = [];
+const liveTelemetry = await startSharpInlineLiveTelemetrySession({
+  fetchImpl: async (url, options) => {
+    const payload = JSON.parse(options.body);
+    liveRequests.push({ url, payload });
+    if (url.endsWith('/start')) {
+      return response({
+        schema: 'kaminos.sharp-inline-run-report-session.v0',
+        status: 'receiving',
+        sessionId: 'live-session-test',
+        outputRoot: '/tmp/live-session-test',
+        statePath: '/tmp/live-session-test/sharp-inline-report-state.json',
+        stateReadUrl: '/api/read?root=pipeline-runs&path=live-session-test%2Fsharp-inline-report-state.json',
+      });
+    }
+    if (url.endsWith('/chunk')) {
+      assert.equal(payload.expectedStart, liveRows.length);
+      liveRows.push(...payload.rows);
+      return response({
+        schema: 'kaminos.sharp-inline-run-report-chunk-receipt.v0',
+        status: 'receiving',
+        sessionId: payload.sessionId,
+        collectionId: payload.collectionId,
+        receivedCount: liveRows.length,
+      });
+    }
+    if (url.endsWith('/finish')) {
+      assert.deepEqual(payload.expectedCounts, { 'progress-events': liveRows.length });
+      assert.deepEqual(payload.documentPatch, {
+        status: 'complete',
+        phase: 'sharp-inference-complete',
+      });
+      return response({
+        schema: 'kaminos.sharp-inline-run-report-receipt.v0',
+        status: 'complete',
+        sessionId: payload.sessionId,
+        path: '/tmp/live-session-test/sharp-inline-report.json',
+        outputRoot: '/tmp/live-session-test',
+        readUrl: '/api/read?root=pipeline-runs&path=live-session-test%2Fsharp-inline-report.json',
+        traceArtifacts: {
+          'progress-events': {
+            count: liveRows.length,
+            path: '/tmp/live-session-test/traces/progress-events.ndjson',
+          },
+        },
+      });
+    }
+    throw new Error(`Unexpected live telemetry request: ${url}`);
+  },
+  pipelineId: 'sharp-image-to-splat-live-v0',
+  firingId: 'live-firing-test',
+  routeIdentity: {
+    requestedRoute: 'sharp-image-to-splat-live-v0',
+    effectiveRoute: 'same-browser-product-realm-shared-device',
+    sharpRevision: 'sharp-live-revision',
+    schedulerProfile: 'cooperative-spn-gaussian',
+  },
+});
+assert.equal(liveTelemetry.status, 'receiving');
+assert.equal(liveTelemetry.sessionId, 'live-session-test');
+assert.match(liveTelemetry.stateReadUrl, /sharp-inline-report-state/);
+const liveStart = liveRequests[0];
+assert.ok(liveStart.url.endsWith('/start'), 'live telemetry must durably start before any progress row');
+assert.equal(liveStart.payload.document.status, 'running');
+assert.equal(
+  liveStart.payload.document.routeIdentity.effectiveRoute,
+  'same-browser-product-realm-shared-device',
+);
+assert.deepEqual(liveStart.payload.collections, [{
+  id: 'progress-events',
+  jsonPointer: '#/liveTelemetry/progressEvents',
+  expectedCount: null,
+  liveAppend: true,
+  retention: 'uncapped',
+  mediaType: 'application/x-ndjson',
+}]);
+liveTelemetry.append({ ordinal: 0, progress: 0.03, message: 'loading source' });
+liveTelemetry.append({ ordinal: 1, progress: 0.925, message: 'gaussian stage' });
+const liveReceipt = await liveTelemetry.finish({
+  status: 'complete',
+  phase: 'sharp-inference-complete',
+});
+assert.deepEqual(
+  liveRows,
+  [
+    { ordinal: 0, progress: 0.03, message: 'loading source' },
+    { ordinal: 1, progress: 0.925, message: 'gaussian stage' },
+  ],
+  'live progress must append in exact order without a client-side retention cap',
+);
+assert.equal(liveReceipt.traceArtifacts['progress-events'].count, 2);
+assert.equal(
+  liveRequests.filter(request => request.url.endsWith('/finish')).length,
+  1,
+  'live telemetry must seal only after every queued append is durable',
+);
+
+let liveFailureAbort = null;
+let liveFailureFinishAttempts = 0;
+const failingLiveTelemetry = await startSharpInlineLiveTelemetrySession({
+  fetchImpl: async (url, options) => {
+    const payload = JSON.parse(options.body);
+    if (url.endsWith('/start')) {
+      return response({
+        status: 'receiving',
+        sessionId: 'live-session-failure',
+        outputRoot: '/tmp/live-session-failure',
+        statePath: '/tmp/live-session-failure/sharp-inline-report-state.json',
+        stateReadUrl: '/api/read?root=pipeline-runs&path=live-session-failure%2Fsharp-inline-report-state.json',
+      });
+    }
+    if (url.endsWith('/chunk')) {
+      return response({ error: 'injected live telemetry append failure' }, 500);
+    }
+    if (url.endsWith('/abort')) {
+      liveFailureAbort = payload;
+      return response({
+        status: 'failed',
+        failureReportPath: '/tmp/live-session-failure/sharp-inline-report-failure.json',
+      });
+    }
+    if (url.endsWith('/finish')) {
+      liveFailureFinishAttempts += 1;
+      return response({ status: 'complete' });
+    }
+    throw new Error(`Unexpected failing live telemetry request: ${url}`);
+  },
+  firingId: 'live-firing-failure',
+  routeIdentity: {
+    requestedRoute: 'sharp-image-to-splat-live-v0',
+    effectiveRoute: 'same-browser-product-realm-shared-device',
+  },
+});
+failingLiveTelemetry.append({ ordinal: 0, progress: 0.4 });
+await assert.rejects(
+  failingLiveTelemetry.finish(),
+  /injected live telemetry append failure/,
+  'a failed append must not be laundered into a complete telemetry receipt',
+);
+assert.equal(liveFailureFinishAttempts, 0);
+assert.deepEqual(liveFailureAbort, {
+  sessionId: 'live-session-failure',
+  phase: 'live-telemetry-upload',
+  error: 'injected live telemetry append failure',
+  lastTrustworthyCounts: { 'progress-events': 0 },
+});
 
 const events = [
   {

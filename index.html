@@ -2946,6 +2946,7 @@ import {
 import {
   compactSharpInlineReportDocument,
   persistSharpInlineReportSession,
+  startSharpInlineLiveTelemetrySession,
 } from './lib/sharp-inline-trace-transport.mjs';
 import { indexSharpForegroundGapOverlaps } from './lib/sharp-foreground-gap-index.mjs';
 import {
@@ -13466,9 +13467,47 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
   const scheduler = sharpInlineSchedulerProfile(profileId);
   const foregroundEnabled = profileId !== 'baseline-default';
   let frameOrdinal = 0;
+  let progressOrdinal = 0;
   let opportunityHook = null;
   let foregroundModeActivated = false;
-  onProgress?.({ progress: 0.03, message: 'The shared-device SHARP route is loading the source.' });
+  const liveTelemetry = await startSharpInlineLiveTelemetrySession({
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId,
+    routeIdentity: {
+      requestedRoute: 'sharp-image-to-splat-live-v0',
+      effectiveRoute: 'same-browser-product-realm-shared-device',
+      sharpRevision: inline.mount.revision,
+      moduleUrl: inline.mount.moduleUrl,
+      weightsUrl: inline.mount.weightsUrl,
+      schedulerProfile: profileId,
+      scheduler,
+    },
+    sourceIdentity: {
+      id: source.id || null,
+      name: source.name || null,
+      source: source.source,
+    },
+  });
+  const liveTelemetryIdentity = {
+    schema: 'kaminos.sharp-inline-live-telemetry-reference.v0',
+    sessionId: liveTelemetry.sessionId,
+    outputRoot: liveTelemetry.outputRoot,
+    statePath: liveTelemetry.statePath,
+    stateReadUrl: liveTelemetry.stateReadUrl,
+    progressEventsPath: `${liveTelemetry.outputRoot}/traces/progress-events.ndjson`,
+  };
+  const reportProgress = event => {
+    const progressEvent = {
+      schema: 'kaminos.sharp-inline-live-progress-event.v0',
+      ordinal: progressOrdinal,
+      observedAtMs: performance.now(),
+      ...event,
+    };
+    progressOrdinal += 1;
+    liveTelemetry.append(progressEvent);
+    onProgress?.(event);
+  };
+  reportProgress({ progress: 0.03, message: 'The shared-device SHARP route is loading the source.' });
   try {
     if (foregroundEnabled) {
       opportunityHook = createSharpSameDeviceKilnOpportunityHook({
@@ -13481,19 +13520,40 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       });
       globalThis.__kaminosSharpForegroundOpportunity = opportunityHook;
     }
-    const sharpResult = await inline.run(sourceBlob, {
-      gpuContext,
-      weightsUrl: inline.mount.weightsUrl,
-      scheduler,
-      beforeInference: async () => {
-        if (!foregroundEnabled || foregroundModeActivated) return;
-        await volumePrototype.setForegroundOpportunityMode(true);
-        foregroundModeActivated = true;
-      },
-      onProgress: event => onProgress?.(event),
-      throwOnError: false,
-    });
+    let sharpResult;
+    try {
+      sharpResult = await inline.run(sourceBlob, {
+        gpuContext,
+        weightsUrl: inline.mount.weightsUrl,
+        scheduler,
+        beforeInference: async () => {
+          if (!foregroundEnabled || foregroundModeActivated) return;
+          await volumePrototype.setForegroundOpportunityMode(true);
+          foregroundModeActivated = true;
+        },
+        onProgress: reportProgress,
+        throwOnError: false,
+      });
+    } catch (error) {
+      try {
+        await liveTelemetry.abort({
+          phase: 'sharp-inference',
+          error: error?.message || String(error),
+        });
+      } catch (telemetryError) {
+        throw new Error(
+          `SHARP inline inference failed (${error?.message || String(error)}); `
+          + `live telemetry abort also failed (${telemetryError?.message || String(telemetryError)})`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
     if (!sharpResult?.ok) {
+      await liveTelemetry.abort({
+        phase: 'sharp-inference',
+        error: sharpResult?.error || 'SHARP inline route failed before PLY output',
+      });
       const failureDocument = {
         schema: 'kaminos.sharp-inline-failure-report.v0',
         status: 'failed',
@@ -13507,6 +13567,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           moduleUrl: inline.mount.moduleUrl,
           weightsUrl: inline.mount.weightsUrl,
         },
+        liveTelemetry: liveTelemetryIdentity,
         sharpRunDebug: sharpResult?.runDebug || null,
         lastTrustworthyEvidence: sharpResult?.runDebug?.outputs || null,
       };
@@ -13530,6 +13591,14 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         reportReadUrl: failureReceipt.readUrl,
       };
     }
+    const liveTelemetryReceipt = await liveTelemetry.finish({
+      status: 'complete',
+      phase: 'sharp-inference-complete',
+    });
+    liveTelemetryIdentity.status = liveTelemetryReceipt.status;
+    liveTelemetryIdentity.reportPath = liveTelemetryReceipt.path;
+    liveTelemetryIdentity.reportReadUrl = liveTelemetryReceipt.readUrl;
+    liveTelemetryIdentity.progressEvents = liveTelemetryReceipt.traceArtifacts?.['progress-events'] || null;
     if (sharpResult.mode !== 'spn') {
       throw new Error('SHARP inline route did not complete the real SPN-to-PLY path');
     }
@@ -13556,6 +13625,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           moduleUrl: inline.mount.moduleUrl,
           weightsUrl: inline.mount.weightsUrl,
         },
+        liveTelemetry: liveTelemetryIdentity,
         terminalOutput,
         sharpRunDebug: sharpResult.runDebug,
         lastTrustworthyEvidence: {
@@ -13615,6 +13685,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           moduleUrl: inline.mount.moduleUrl,
           weightsUrl: inline.mount.weightsUrl,
         },
+        liveTelemetry: liveTelemetryIdentity,
         artifacts: { splat: artifact },
         sharpRunDebug: sharpResult.runDebug,
         lastTrustworthyEvidence: {
@@ -13676,6 +13747,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
       sharpRunDebug: sharpResult.runDebug,
       backgroundHeartbeat,
       pipelineScheduler,
+      liveTelemetry: liveTelemetryIdentity,
     };
     const persistedEvidence = createSharpInlinePersistedEvidence({
       adapterReport,
@@ -13724,6 +13796,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           moduleUrl: inline.mount.moduleUrl,
           weightsUrl: inline.mount.weightsUrl,
         },
+        liveTelemetry: liveTelemetryIdentity,
         artifacts: { splat: artifact },
         rejectedArchive: {
           schema: schedulerTelemetryArchive?.schema || null,

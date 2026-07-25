@@ -73,8 +73,18 @@ assert.match(
 );
 assert.match(
   page,
-  /const sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*event\s*=>\s*onProgress\?\.\(event\)/,
-  'the product route must forward uncapped SHARP inference progress instead of jumping from setup to storage',
+  /const liveTelemetry = await startSharpInlineLiveTelemetrySession\([\s\S]{0,2500}reportProgress\([\s\S]{0,2500}sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*reportProgress/,
+  'the product route must start durable telemetry before forwarding uncapped SHARP inference progress',
+);
+assert.match(
+  page,
+  /const reportProgress = event => \{[\s\S]{0,800}liveTelemetry\.append\(progressEvent\)[\s\S]{0,300}onProgress\?\.\(event\)/,
+  'every live progress row must enter the durable append queue and the existing UI updater',
+);
+assert.match(
+  page,
+  /catch \(error\) \{[\s\S]{0,700}liveTelemetry\.abort\([\s\S]{0,2500}liveTelemetry\.finish\([\s\S]{0,600}sharp-inference-complete/,
+  'thrown inference failures must abort the journal while successful inference seals it',
 );
 const progressUpdaterSource = page.match(
   /function setKilnRouteBenchProgress\([\s\S]*?\n}\n(?=\nfunction )/,
@@ -125,7 +135,7 @@ assert.equal(
 );
 assert.match(
   page,
-  /let foregroundModeActivated = false[\s\S]{0,14000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
+  /let foregroundModeActivated = false[\s\S]{0,20000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
 assert.match(

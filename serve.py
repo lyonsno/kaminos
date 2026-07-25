@@ -1599,7 +1599,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 if collection_id in collections:
                     raise ValueError(f"Duplicate SHARP inline collection id: {collection_id}")
                 expected_count = raw_collection.get("expectedCount")
-                if (
+                live_append = raw_collection.get("liveAppend") is True
+                if expected_count is None and not live_append:
+                    raise ValueError(f"Invalid expectedCount for {collection_id}")
+                if expected_count is not None and (
                     not isinstance(expected_count, int)
                     or isinstance(expected_count, bool)
                     or expected_count < 0
@@ -1610,6 +1613,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 collections[collection_id] = {
                     "jsonPointer": raw_collection.get("jsonPointer"),
                     "expectedCount": expected_count,
+                    "liveAppend": live_append,
                     "receivedCount": 0,
                     "committedBytes": 0,
                     "retention": "uncapped",
@@ -1684,6 +1688,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "sessionId": session_id,
             "outputRoot": str(run_dir),
             "statePath": str(run_dir / "sharp-inline-report-state.json"),
+            "stateReadUrl": _pipeline_run_read_url(
+                run_dir / "sharp-inline-report-state.json"
+            ),
         })
 
     def handle_sharp_inline_run_report_chunk(self):
@@ -1712,7 +1719,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         f"Non-contiguous SHARP inline chunk for {collection_id}: "
                         f"expectedStart {expected_start}, receivedCount {received_count}"
                     )
-                if received_count + len(rows) > expected_count:
+                if (
+                    expected_count is not None
+                    and received_count + len(rows) > expected_count
+                ):
                     raise ValueError(
                         f"SHARP inline chunk exceeds expectedCount for {collection_id}"
                     )
@@ -1768,6 +1778,57 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 elif state.get("status") != "receiving":
                     raise ValueError(f"SHARP inline report session is {state.get('status')}")
                 else:
+                    expected_counts = payload.get("expectedCounts")
+                    if expected_counts is not None and not isinstance(expected_counts, dict):
+                        raise ValueError("SHARP inline expectedCounts must be an object")
+                    document_patch = payload.get("documentPatch")
+                    if document_patch is not None:
+                        if not isinstance(document_patch, dict):
+                            raise ValueError("SHARP inline documentPatch must be an object")
+                        unsupported_patch_keys = set(document_patch) - {"status", "phase"}
+                        if unsupported_patch_keys:
+                            raise ValueError(
+                                "SHARP inline documentPatch contains unsupported keys: "
+                                + ", ".join(sorted(unsupported_patch_keys))
+                            )
+                    for collection_id, collection in state.get("collections", {}).items():
+                        if collection.get("expectedCount") is not None:
+                            if (
+                                isinstance(expected_counts, dict)
+                                and collection_id in expected_counts
+                                and expected_counts[collection_id]
+                                != collection.get("expectedCount")
+                            ):
+                                raise ValueError(
+                                    f"SHARP inline expectedCount cannot change for {collection_id}"
+                                )
+                            continue
+                        final_count = (
+                            expected_counts.get(collection_id)
+                            if isinstance(expected_counts, dict)
+                            else None
+                        )
+                        if (
+                            not isinstance(final_count, int)
+                            or isinstance(final_count, bool)
+                            or final_count < 0
+                        ):
+                            raise ValueError(
+                                f"SHARP inline live collection {collection_id} "
+                                "requires a final expectedCount"
+                            )
+                        if final_count != collection.get("receivedCount"):
+                            raise ValueError(
+                                f"SHARP inline live collection {collection_id} "
+                                f"received {collection.get('receivedCount')}, "
+                                f"not final expectedCount {final_count}"
+                            )
+                        collection["expectedCount"] = final_count
+                    if document_patch:
+                        state["document"] = {
+                            **state["document"],
+                            **document_patch,
+                        }
                     incomplete = [
                         collection_id
                         for collection_id, collection in state.get("collections", {}).items()
