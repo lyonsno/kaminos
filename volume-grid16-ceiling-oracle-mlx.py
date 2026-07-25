@@ -385,6 +385,8 @@ def fit_modes(
     optimizer = optim.Adam(learning_rate=learning_rate)
     history: list[float] = []
     initial_loss = None
+    arm_label = f"n{mode_count}-{init}-s{seed}"
+    log_every = max(1, iterations // 15)
     for step in range(iterations):
         batch = camera_batches[step % len(camera_batches)]
         loss, gradients = loss_and_grad(parameters, batch)
@@ -395,6 +397,11 @@ def fit_modes(
         history.append(value)
         if initial_loss is None:
             initial_loss = value
+        if step % log_every == 0 or step == iterations - 1:
+            print(
+                f"[fit {arm_label}] step {step + 1}/{iterations} loss {value:.6f}",
+                flush=True,
+            )
 
     require_lattice_identity(target_lattice, digest)
     fitted_raw = {
@@ -576,6 +583,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
     for mode_count in mode_counts:
         arm_specs = [("analytical", args.seed)] + [("random", args.seed + 1 + r) for r in range(args.random_restarts)]
         for init, seed in arm_specs:
+            print(f"[arm] starting n{mode_count}-{init}-s{seed} ({args.iterations} iterations)", flush=True)
             result = fit_modes(
                 medium,
                 target_lattice,
