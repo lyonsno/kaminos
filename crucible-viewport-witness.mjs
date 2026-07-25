@@ -200,6 +200,49 @@ function expectedSchedulerForProfile(profileId) {
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
 }
 
+function classifyTerminalRouteObservation({
+  routeState,
+  observedRunning,
+  lastTrustworthyEvidence,
+}) {
+  const status = routeState?.status || null;
+  const terminal = !routeState?.runningProfileId
+    && ['complete', 'error', 'evidence-only'].includes(status);
+  const shouldExit = terminal && (observedRunning || status === 'error');
+  if (!shouldExit) {
+    return {
+      shouldExit: false,
+      lastTrustworthyEvidence,
+      error: null,
+    };
+  }
+  const terminalRouteState = {
+    status,
+    message: routeState?.message || null,
+    observedRunning: Boolean(observedRunning),
+    routeId: routeState?.routeId || null,
+    runningProfileId: routeState?.runningProfileId || null,
+    source: routeState?.source || null,
+    result: routeState?.result || null,
+    error: routeState?.error || null,
+  };
+  const resultPhase = terminalRouteState.result?.phase || null;
+  const resultError = terminalRouteState.result?.error
+    || terminalRouteState.error
+    || terminalRouteState.message
+    || 'product route entered terminal error state';
+  return {
+    shouldExit: true,
+    lastTrustworthyEvidence: {
+      ...(lastTrustworthyEvidence || {}),
+      terminalRouteState,
+    },
+    error: status === 'error'
+      ? `Friendly firing route failed${observedRunning ? '' : ' before running'}${resultPhase ? ` during ${resultPhase}` : ''}: ${resultError}`
+      : null,
+  };
+}
+
 function validateSpnFusionTileEvidence({ expectedChunkItems, fullRoute }) {
   if (!Number.isInteger(expectedChunkItems) || expectedChunkItems <= 0) return [];
   const failures = [];
@@ -1613,11 +1656,33 @@ try {
     while (Date.now() < deadline) {
       await sleep(1000);
       routeState = await evaluate(ws, `(() => {
+        const bench = window.__kaminosKilnRouteBenchState || {};
+        const result = bench.result || null;
         const liveVolume = window.__kaminosVolumePrototype?.debugState?.() || null;
         return ({
-        status: window.__kaminosKilnRouteBenchState?.status || null,
-        message: window.__kaminosKilnRouteBenchState?.message || null,
-        runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
+        status: bench.status || null,
+        message: bench.message || null,
+        routeId: bench.routeId || bench.selectedRouteId || null,
+        runningProfileId: bench.runningProfileId || null,
+        source: bench.source ? {
+          assetId: bench.source.assetId || null,
+          rootId: bench.source.rootId || null,
+          path: bench.source.path || null,
+          label: bench.source.label || null,
+          source: bench.source.source || null,
+        } : null,
+        result: result ? {
+          ok: typeof result.ok === 'boolean' ? result.ok : null,
+          pipelineId: result.pipelineId || null,
+          phase: result.phase || result.report?.document?.phase || null,
+          error: typeof result.error === 'string'
+            ? result.error
+            : (result.error?.message || null),
+          reportPath: result.report?.path || null,
+        } : null,
+        error: typeof bench.error === 'string'
+          ? bench.error
+          : (bench.error?.message || null),
         firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
         firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
@@ -1735,9 +1800,16 @@ try {
           phase = 'waiting-for-friendly-firing';
         }
       }
-      if (!routeState.runningProfileId
-        && ['complete', 'error', 'evidence-only'].includes(routeState.status)
-        && (observedRunning || routeState.status === 'error')) break;
+      const terminalObservation = classifyTerminalRouteObservation({
+        routeState,
+        observedRunning,
+        lastTrustworthyEvidence,
+      });
+      if (terminalObservation.shouldExit) {
+        lastTrustworthyEvidence = terminalObservation.lastTrustworthyEvidence;
+        if (terminalObservation.error) throw new Error(terminalObservation.error);
+        break;
+      }
     }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       inFlightCapture = {
