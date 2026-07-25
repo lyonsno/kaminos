@@ -237,6 +237,7 @@ def fit_modes(
     ray_chunk: int = 4096,
     initial_state: dict[str, np.ndarray] | None = None,
     anchor_weight: float = 0.0,
+    background_state: dict[str, np.ndarray] | None = None,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -304,6 +305,24 @@ def fit_modes(
     eye3 = mx.array(np.eye(3, dtype=np.float32))
     anchor_reference = {key: mx.array(np.asarray(value)) for key, value in parameters.items()}
 
+    # Frozen background mixture (hierarchical residual fitting): densities are
+    # additive before transport, so a coarser level's solution enters the
+    # forward march as constant emission/extinction fields with no gradients.
+    background = None
+    if background_state is not None:
+        bg_covariances = np.asarray(background_state["covariances"], dtype=np.float64)
+        bg_precision = np.linalg.inv(bg_covariances)
+        bg_norm = (2.0 * np.pi) ** -1.5 / np.sqrt(
+            np.maximum(np.linalg.det(bg_covariances), 1e-20)
+        )
+        background = {
+            "centers": mx.array(np.asarray(background_state["centers"], dtype=np.float32)),
+            "precision": mx.array(bg_precision.astype(np.float32)),
+            "norm": mx.array(bg_norm.astype(np.float32)),
+            "emission": mx.array(np.asarray(background_state["emission"], dtype=np.float32)),
+            "extinction": mx.array(np.asarray(background_state["extinction"], dtype=np.float32)),
+        }
+
     def decode(params: dict[str, Any]) -> tuple[Any, Any, Any, Any]:
         raw_chol = params["rawCholesky"] * tril_mask[None, :, :]
         diagonal = mlx_nn.softplus(mx.diagonal(params["rawCholesky"], axis1=1, axis2=2))
@@ -344,6 +363,12 @@ def fit_modes(
         kernel = norm[None, None, :] * mx.exp(-0.5 * mahalanobis) * source_cell_volume
         emission_field = kernel @ emission
         extinction_field = kernel @ extinction
+        if background is not None:
+            bg_delta = points[:, :, None, :] - background["centers"][None, None, :, :]
+            bg_mahalanobis = mx.einsum("rsmi,mij,rsmj->rsm", bg_delta, background["precision"], bg_delta)
+            bg_kernel = background["norm"][None, None, :] * mx.exp(-0.5 * bg_mahalanobis) * source_cell_volume
+            emission_field = emission_field + bg_kernel @ background["emission"]
+            extinction_field = extinction_field + bg_kernel @ background["extinction"]
         optical_depth = extinction_field * segment[:, None]
         cumulative = mx.cumsum(optical_depth, axis=1)
         transmittance = mx.exp(-(cumulative - optical_depth))
@@ -431,6 +456,7 @@ def fit_modes(
         "fitSamplesPerCell": fit_samples_per_cell,
         "learningRate": learning_rate,
         "anchorWeight": float(anchor_weight),
+        "backgroundModeCount": 0 if background_state is None else int(background_state["centers"].shape[0]),
         "cameraCount": len(cameras),
         "targetLatticeSha256": digest,
         "initialLoss": float(initial_loss),
