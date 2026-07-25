@@ -60,6 +60,14 @@ function positiveNumber(value, label) {
   return number;
 }
 
+function nonNegativeNumber(value, label) {
+  const number = finiteNumber(value, label);
+  if (number < 0) {
+    throw contractError('negative_contract_value', `${label} cannot be negative`, { label, value });
+  }
+  return number;
+}
+
 function exactSha256(value, label) {
   const digest = String(value ?? '');
   if (!/^[0-9a-f]{64}$/i.test(digest)) {
@@ -127,6 +135,12 @@ function normalizeSupportIdentity(value) {
   );
   if (value.stale === true) {
     throw contractError('stale_support_identity', 'analytic carrier refuses stale support identity');
+  }
+  if (value.stale !== false) {
+    throw contractError(
+      'partial_support_identity',
+      'support identity must explicitly attest stale false',
+    );
   }
   if (value.fallbackRoute !== null) {
     throw contractError('fallback_support_route', 'analytic carrier refuses fallback support authority', {
@@ -448,9 +462,25 @@ export function measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuer
   const maximumTime = positiveNumber(maximumFlightSeconds, 'maximum flight seconds');
   const bracketStep = positiveNumber(bracketStepSeconds, 'impact bracket step seconds');
   const tolerance = positiveNumber(timeToleranceSeconds, 'impact time tolerance seconds');
-  const signedDistanceRate = positiveNumber(
+  const spatialLipschitz = positiveNumber(
+    supportQuery?.maximumSpatialLipschitz,
+    'support maximum spatial Lipschitz bound',
+  );
+  const signedDistanceRate = nonNegativeNumber(
     supportQuery?.maximumSignedDistanceRate,
     'support maximum signed-distance rate',
+  );
+  const maximumCarrierSpeed = (
+    magnitude(descriptor.inlet.velocity)
+    + magnitude(descriptor.gravity) * maximumTime
+  );
+  const maximumCombinedDistanceRate = positiveNumber(
+    spatialLipschitz * maximumCarrierSpeed + signedDistanceRate,
+    'combined carrier-to-support signed-distance rate',
+  );
+  const maximumUnresolvedDistance = positiveNumber(
+    maximumCombinedDistanceRate * tolerance,
+    'maximum unresolved impact distance',
   );
   const sampleAt = flightSeconds => {
     const jet = sampleFingerFluidAnalyticJetAtTime(descriptor, flightSeconds, sourceEmissionTime);
@@ -464,18 +494,30 @@ export function measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuer
   }
   let currentTime = 0;
   let current = previous;
-  while (current.support.distance > 0 && currentTime < maximumTime) {
+  let resolution = 'signed_distance_crossing';
+  while (
+    current.support.distance > maximumUnresolvedDistance
+    && currentTime < maximumTime
+  ) {
     previousTime = currentTime;
     previous = current;
     const remaining = maximumTime - currentTime;
-    const conservativeStep = Math.max(
-      tolerance,
-      Math.min(bracketStep, current.support.distance * 0.8 / signedDistanceRate),
+    const conservativeStep = Math.min(
+      bracketStep,
+      current.support.distance * 0.8 / maximumCombinedDistanceRate,
     );
-    currentTime += Math.min(remaining, conservativeStep);
+    const nextTime = currentTime + Math.min(remaining, conservativeStep);
+    if (nextTime === currentTime) {
+      throw contractError(
+        'conservative_advancement_stalled',
+        'analytic first-impact advancement exhausted floating-point time resolution',
+        { currentTime, signedDistance: current.support.distance },
+      );
+    }
+    currentTime = nextTime;
     current = sampleAt(currentTime);
   }
-  if (current.support.distance > 0) {
+  if (current.support.distance > maximumUnresolvedDistance) {
     throw contractError('no_first_support_hit', 'analytic carrier did not hit support within the flight horizon', {
       maximumFlightSeconds: maximumTime,
       finalSignedDistance: current.support.distance,
@@ -483,13 +525,17 @@ export function measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuer
   }
   let low = previousTime;
   let high = currentTime;
-  while (high - low > tolerance) {
-    const middle = (low + high) * 0.5;
-    const middleSample = sampleAt(middle);
-    if (middleSample.support.distance > 0) {
-      low = middle;
-    } else {
-      high = middle;
+  if (current.support.distance > 0) {
+    resolution = 'signed_distance_within_time_tolerance';
+  } else {
+    while (high - low > tolerance) {
+      const middle = (low + high) * 0.5;
+      const middleSample = sampleAt(middle);
+      if (middleSample.support.distance > 0) {
+        low = middle;
+      } else {
+        high = middle;
+      }
     }
   }
   const hit = sampleAt(high);
@@ -515,8 +561,13 @@ export function measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuer
     signedDistance: hit.support.distance,
     bracket: Object.freeze([previousTime, currentTime]),
     stepping: Object.freeze({
-      contract: 'signed-distance-conservative-advancement-v0',
+      contract: 'signed-distance-spatiotemporal-conservative-advancement-v1',
+      resolution,
+      maximumSpatialLipschitz: spatialLipschitz,
       maximumSignedDistanceRate: signedDistanceRate,
+      maximumCarrierSpeed,
+      maximumCombinedDistanceRate,
+      maximumUnresolvedDistance,
       maximumFlightSeconds: maximumTime,
       maximumStepSeconds: bracketStep,
       timeToleranceSeconds: tolerance,
@@ -531,7 +582,10 @@ function revalidateFingerFluidAnalyticImpact(descriptor, impact, supportQuery) {
   assertSameSourceIdentity(descriptor.source, impact.source);
   assertSameSupportIdentity(descriptor.supportIdentity, impact.supportIdentity);
   assertSameSupportIdentity(descriptor.supportIdentity, supportQuery?.identity);
-  if (impact.stepping?.contract !== 'signed-distance-conservative-advancement-v0') {
+  if (
+    impact.stepping?.contract
+    !== 'signed-distance-spatiotemporal-conservative-advancement-v1'
+  ) {
     throw contractError('invalid_impact_receipt', 'impact omitted conservative first-hit evidence');
   }
   const canonicalImpact = measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuery, {
@@ -540,6 +594,7 @@ function revalidateFingerFluidAnalyticImpact(descriptor, impact, supportQuery) {
     timeToleranceSeconds: impact.stepping.timeToleranceSeconds,
     sourceEmissionTime: impact.sourceEmissionTime,
   });
+  const canonicalStepping = canonicalImpact.stepping;
   const tolerance = 1e-6;
   if (
     !valuesNear(impact.sourceEmissionTime, canonicalImpact.sourceEmissionTime, tolerance)
@@ -552,6 +607,19 @@ function revalidateFingerFluidAnalyticImpact(descriptor, impact, supportQuery) {
     || !valuesNear(impact.signedDistance, canonicalImpact.signedDistance, tolerance)
     || impact.carrierCutParameterization !== 'flight_seconds'
     || !valuesNear(impact.carrierCutParameter, canonicalImpact.flightSeconds, tolerance)
+    || impact.stepping.resolution !== canonicalStepping.resolution
+    || impact.stepping.maximumSpatialLipschitz
+      !== canonicalStepping.maximumSpatialLipschitz
+    || impact.stepping.maximumSignedDistanceRate
+      !== canonicalStepping.maximumSignedDistanceRate
+    || impact.stepping.maximumCarrierSpeed !== canonicalStepping.maximumCarrierSpeed
+    || impact.stepping.maximumCombinedDistanceRate
+      !== canonicalStepping.maximumCombinedDistanceRate
+    || impact.stepping.maximumUnresolvedDistance
+      !== canonicalStepping.maximumUnresolvedDistance
+    || impact.stepping.maximumFlightSeconds !== canonicalStepping.maximumFlightSeconds
+    || impact.stepping.maximumStepSeconds !== canonicalStepping.maximumStepSeconds
+    || impact.stepping.timeToleranceSeconds !== canonicalStepping.timeToleranceSeconds
   ) {
     throw contractError(
       'invalid_impact_receipt',
@@ -573,6 +641,7 @@ function revalidateFingerFluidAnalyticImpact(descriptor, impact, supportQuery) {
     normal: canonicalImpact.normal,
     incomingVelocity: canonicalImpact.incomingVelocity,
     signedDistance: canonicalImpact.signedDistance,
+    stepping: canonicalStepping,
   });
 }
 
@@ -748,6 +817,8 @@ export function createFingerFluidAnalyticImpactHandoffReceipt({
     source: descriptor.source,
     supportIdentity: descriptor.supportIdentity,
     impact: Object.freeze({
+      evidenceAuthority: 'producer_canonical_descriptor_bound_remeasurement',
+      detachedValidationScope: 'structural_consistency_not_live_support_remeasurement',
       point: validatedImpact.point,
       normal: validatedImpact.normal,
       carrierPosition: validatedImpact.carrierPosition,
@@ -758,6 +829,7 @@ export function createFingerFluidAnalyticImpactHandoffReceipt({
       carrierCutParameterization: validatedImpact.carrierCutParameterization,
       incomingVelocity: validatedImpact.incomingVelocity,
       signedDistance: validatedImpact.signedDistance,
+      stepping: validatedImpact.stepping,
     }),
     transfer: Object.freeze({
       transitionGeneration: generation,
@@ -812,6 +884,103 @@ export function validateFingerFluidAnalyticImpactHandoffReceipt(receipt) {
   }
   if (receipt.state !== 'transferred') {
     throw contractError('partial_handoff', 'analytic impact handoff did not reach transferred state');
+  }
+  if (
+    receipt.impact?.evidenceAuthority
+      !== 'producer_canonical_descriptor_bound_remeasurement'
+    || receipt.impact?.detachedValidationScope
+      !== 'structural_consistency_not_live_support_remeasurement'
+  ) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached handoff misstates first-impact evidence authority',
+    );
+  }
+  let impactNormal;
+  try {
+    finiteVector(receipt.impact?.point, 'receipt impact point');
+    impactNormal = finiteVector(receipt.impact?.normal, 'receipt impact normal');
+    finiteVector(receipt.impact?.carrierPosition, 'receipt impact carrier position');
+  } catch (error) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached handoff impact geometry is malformed',
+      { causeCode: error?.code },
+    );
+  }
+  if (!valuesNear(magnitude(impactNormal), 1, 1e-6)) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached handoff impact normal must be normalized',
+    );
+  }
+  const impactStepping = receipt.impact?.stepping;
+  if (
+    impactStepping?.contract
+      !== 'signed-distance-spatiotemporal-conservative-advancement-v1'
+    || (
+      impactStepping.resolution !== 'signed_distance_crossing'
+      && impactStepping.resolution !== 'signed_distance_within_time_tolerance'
+    )
+  ) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached handoff omitted canonical first-impact stepping evidence',
+    );
+  }
+  const maximumSpatialLipschitz = positiveNumber(
+    impactStepping.maximumSpatialLipschitz,
+    'receipt support maximum spatial Lipschitz bound',
+  );
+  const maximumSignedDistanceRate = nonNegativeNumber(
+    impactStepping.maximumSignedDistanceRate,
+    'receipt support maximum signed-distance rate',
+  );
+  const maximumCarrierSpeed = positiveNumber(
+    impactStepping.maximumCarrierSpeed,
+    'receipt maximum carrier speed',
+  );
+  const maximumCombinedDistanceRate = positiveNumber(
+    impactStepping.maximumCombinedDistanceRate,
+    'receipt maximum combined distance rate',
+  );
+  const timeToleranceSeconds = positiveNumber(
+    impactStepping.timeToleranceSeconds,
+    'receipt impact time tolerance',
+  );
+  positiveNumber(
+    impactStepping.maximumFlightSeconds,
+    'receipt maximum flight seconds',
+  );
+  positiveNumber(
+    impactStepping.maximumStepSeconds,
+    'receipt maximum impact step seconds',
+  );
+  const maximumUnresolvedDistance = positiveNumber(
+    impactStepping.maximumUnresolvedDistance,
+    'receipt maximum unresolved distance',
+  );
+  const signedDistance = finiteNumber(
+    receipt.impact?.signedDistance,
+    'receipt impact signed distance',
+  );
+  if (
+    maximumCombinedDistanceRate
+      !== maximumSpatialLipschitz * maximumCarrierSpeed + maximumSignedDistanceRate
+    || maximumUnresolvedDistance !== maximumCombinedDistanceRate * timeToleranceSeconds
+    || (
+      impactStepping.resolution === 'signed_distance_crossing'
+      && signedDistance > 0
+    )
+    || (
+      impactStepping.resolution === 'signed_distance_within_time_tolerance'
+      && (signedDistance <= 0 || signedDistance > maximumUnresolvedDistance)
+    )
+  ) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached first-impact stepping evidence is internally inconsistent',
+    );
   }
   if (
     receipt.ownership?.contract !== KAMINOS_FINGER_FLUID_ANALYTIC_OWNERSHIP_CONTRACT
@@ -935,6 +1104,24 @@ export function validateFingerFluidAnalyticImpactHandoffReceipt(receipt) {
     receipt.impact?.flightSeconds,
     'receipt impact flight seconds',
   );
+  const worldTime = finiteNumber(
+    receipt.impact?.worldTime,
+    'receipt impact world time',
+  );
+  const carrierCutParameter = finiteNumber(
+    receipt.impact?.carrierCutParameter,
+    'receipt impact carrier cut parameter',
+  );
+  if (
+    !valuesNear(worldTime, sourceEmissionTime + flightSeconds, 1e-12)
+    || receipt.impact?.carrierCutParameterization !== 'flight_seconds'
+    || !valuesNear(carrierCutParameter, flightSeconds, 1e-12)
+  ) {
+    throw contractError(
+      'invalid_impact_receipt',
+      'detached impact timing or carrier cut metadata is inconsistent',
+    );
+  }
   const arrivalInterval = receipt.transfer?.arrivalInterval;
   if (
     !valuesNear(sourceEmissionTime, interval[0], 1e-12)

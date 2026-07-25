@@ -103,6 +103,7 @@ assert.deepEqual(initialSample.velocity, descriptor.inlet.velocity);
 
 const supportQuery = {
   identity: supportIdentity,
+  maximumSpatialLipschitz: 1,
   maximumSignedDistanceRate: 32,
   sampleSignedDistance(position) {
     return {
@@ -155,6 +156,15 @@ assert.equal(receipt.transfer.particleCount, particleCount);
 assert.ok(Math.abs(receipt.transfer.volume - transferVolume) < 1e-12);
 assert.ok(receipt.conservation.volumeResidualAbsolute < 1e-12);
 assert.ok(receipt.conservation.momentumResidualMagnitude < 1e-9);
+assert.equal(
+  receipt.impact.evidenceAuthority,
+  'producer_canonical_descriptor_bound_remeasurement',
+);
+assert.equal(
+  receipt.impact.detachedValidationScope,
+  'structural_consistency_not_live_support_remeasurement',
+);
+assert.deepEqual(receipt.impact.stepping, impact.stepping);
 assert.doesNotThrow(() => validateFingerFluidAnalyticImpactHandoffReceipt(receipt));
 
 const roundTrippedDescriptor = JSON.parse(JSON.stringify(descriptor));
@@ -178,6 +188,88 @@ assert.doesNotThrow(
   'portable descriptor and impact receipts must survive a JSON boundary without relying on object identity',
 );
 
+for (const [label, mutateImpact] of [
+  ['point', candidate => { candidate.point = [Number.NaN, 0, 0]; }],
+  ['normal', candidate => { candidate.normal = [0, 0, 0]; }],
+  ['carrier position', candidate => { candidate.carrierPosition = [Number.POSITIVE_INFINITY, 0, 0]; }],
+  ['world time', candidate => { candidate.worldTime += 1; }],
+  ['carrier cut parameter', candidate => { candidate.carrierCutParameter += 0.1; }],
+  ['carrier cut parameterization', candidate => {
+    candidate.carrierCutParameterization = 'normalized_arc';
+  }],
+]) {
+  const forgedDetachedImpactReceipt = structuredClone(receipt);
+  mutateImpact(forgedDetachedImpactReceipt.impact);
+  assert.throws(
+    () => validateFingerFluidAnalyticImpactHandoffReceipt(forgedDetachedImpactReceipt),
+    error => error?.code === 'invalid_impact_receipt',
+    `detached validation must reject forged impact ${label}`,
+  );
+}
+
+const missingFlightHorizonReceipt = structuredClone(receipt);
+delete missingFlightHorizonReceipt.impact.stepping.maximumFlightSeconds;
+assert.throws(
+  () => validateFingerFluidAnalyticImpactHandoffReceipt(missingFlightHorizonReceipt),
+  error => error?.code === 'non_finite_contract_value',
+  'detached validation must reject missing conservative flight horizon evidence',
+);
+const nonFiniteMaximumStepReceipt = structuredClone(receipt);
+nonFiniteMaximumStepReceipt.impact.stepping.maximumStepSeconds = Number.POSITIVE_INFINITY;
+assert.throws(
+  () => validateFingerFluidAnalyticImpactHandoffReceipt(nonFiniteMaximumStepReceipt),
+  error => error?.code === 'non_finite_contract_value',
+  'detached validation must reject non-finite conservative step evidence',
+);
+
+const forgedResolutionImpact = structuredClone(impact);
+forgedResolutionImpact.stepping.resolution = (
+  impact.stepping.resolution === 'signed_distance_crossing'
+    ? 'signed_distance_within_time_tolerance'
+    : 'signed_distance_crossing'
+);
+assert.throws(
+  () => createFingerFluidAnalyticImpactHandoffReceipt({
+    descriptor,
+    impact: forgedResolutionImpact,
+    supportQuery,
+    transitionGeneration: 8,
+    transitionInterval: [41, 41 + transferDuration],
+    particleAllocation: {
+      allocationId: 'forged-resolution-pool',
+      particleIds: Array.from({ length: particleCount }, (_, index) => 1500 + index),
+      particleVolume: releasePlan.particleVolume,
+      velocities: Array.from({ length: particleCount }, () => introducedVelocity),
+      material: descriptor.material,
+    },
+    expectedParticleCount: particleCount,
+  }),
+  error => error?.code === 'invalid_impact_receipt',
+  'detached revalidation must reject a forged first-impact resolution class',
+);
+
+const forgedBoundImpact = structuredClone(impact);
+forgedBoundImpact.stepping.maximumCombinedDistanceRate *= 0.5;
+assert.throws(
+  () => createFingerFluidAnalyticImpactHandoffReceipt({
+    descriptor,
+    impact: forgedBoundImpact,
+    supportQuery,
+    transitionGeneration: 8,
+    transitionInterval: [41, 41 + transferDuration],
+    particleAllocation: {
+      allocationId: 'forged-bound-pool',
+      particleIds: Array.from({ length: particleCount }, (_, index) => 1600 + index),
+      particleVolume: releasePlan.particleVolume,
+      velocities: Array.from({ length: particleCount }, () => introducedVelocity),
+      material: descriptor.material,
+    },
+    expectedParticleCount: particleCount,
+  }),
+  error => error?.code === 'invalid_impact_receipt',
+  'detached revalidation must reject forged conservative advancement bounds',
+);
+
 assert.throws(
   () => measureFingerFluidAnalyticJetFirstImpact(descriptor, {
     ...supportQuery,
@@ -185,6 +277,40 @@ assert.throws(
   }),
   error => error?.code === 'stale_support_identity',
   'a remapped support cannot impersonate the descriptor-bound impact surface',
+);
+const missingStaleSupportIdentity = { ...supportIdentity };
+delete missingStaleSupportIdentity.stale;
+assert.throws(
+  () => createFingerFluidAnalyticJetDescriptor({
+    packet,
+    economics,
+    releasePlan,
+    publication,
+    sourceMechanicsRevision: '6b55c522e69f1896208511eae03abd7abfda7f52',
+    handId: 'operator-right-hand',
+    fingerId: 'index',
+    inletId: 'index-finger',
+    material: { id: 'juice-water-a', density: 998.2 },
+    sourceTimeInterval: [41, 41.5],
+    supportIdentity: missingStaleSupportIdentity,
+  }),
+  error => error?.code === 'partial_support_identity',
+  'a descriptor cannot normalize missing stale evidence into live support authority',
+);
+assert.throws(
+  () => measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+    ...supportQuery,
+    identity: missingStaleSupportIdentity,
+  }),
+  error => error?.code === 'partial_support_identity',
+  'a support query cannot omit explicit non-stale identity evidence',
+);
+const missingStaleDetachedReceipt = structuredClone(receipt);
+delete missingStaleDetachedReceipt.supportIdentity.stale;
+assert.throws(
+  () => validateFingerFluidAnalyticImpactHandoffReceipt(missingStaleDetachedReceipt),
+  error => error?.code === 'partial_support_identity',
+  'detached validation cannot promote missing stale evidence to exact support identity',
 );
 assert.throws(
   () => createFingerFluidAnalyticJetDescriptor({
@@ -308,6 +434,7 @@ assert.throws(
 
 const thinMovingImpact = measureFingerFluidAnalyticJetFirstImpact(descriptor, {
   identity: supportIdentity,
+  maximumSpatialLipschitz: 1,
   maximumSignedDistanceRate: 2,
   sampleSignedDistance(_position, worldTime) {
     const elapsed = worldTime - descriptor.sourceTimeInterval[0];
@@ -325,6 +452,105 @@ const thinMovingImpact = measureFingerFluidAnalyticJetFirstImpact(descriptor, {
 assert.ok(
   thinMovingImpact.flightSeconds >= 0.0109 && thinMovingImpact.flightSeconds <= 0.0111,
   `conservative advancement must not skip a thin moving support: ${thinMovingImpact.flightSeconds}`,
+);
+
+const subToleranceMovingImpact = measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+  identity: supportIdentity,
+  maximumSpatialLipschitz: 1,
+  maximumSignedDistanceRate: 2,
+  sampleSignedDistance(_position, worldTime) {
+    const elapsed = worldTime - descriptor.sourceTimeInterval[0];
+    return {
+      distance: Math.abs(elapsed - 0.01200005) - 1e-8,
+      point: [0, 0, 0],
+      normal: [0, 1, 0],
+    };
+  },
+}, {
+  maximumFlightSeconds: 0.02,
+  bracketStepSeconds: 0.01,
+  timeToleranceSeconds: 1e-7,
+});
+assert.ok(
+  subToleranceMovingImpact.flightSeconds < 0.01200004,
+  `conservative advancement must stop before crossing unresolved support: ${subToleranceMovingImpact.flightSeconds}`,
+);
+assert.equal(
+  subToleranceMovingImpact.stepping.resolution,
+  'signed_distance_within_time_tolerance',
+);
+assert.ok(
+  subToleranceMovingImpact.signedDistance
+    <= subToleranceMovingImpact.stepping.maximumUnresolvedDistance,
+);
+
+const thinStaticCenter = sampleFingerFluidAnalyticJetAtTime(
+  descriptor,
+  0.012,
+  descriptor.sourceTimeInterval[0],
+).position[0];
+const thinStaticImpact = measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+  identity: supportIdentity,
+  maximumSpatialLipschitz: 1,
+  maximumSignedDistanceRate: 0,
+  sampleSignedDistance(position) {
+    const signedOffset = position[0] - thinStaticCenter;
+    return {
+      distance: Math.abs(signedOffset) - 0.0001,
+      point: [thinStaticCenter, position[1], position[2]],
+      normal: [signedOffset < 0 ? -1 : 1, 0, 0],
+    };
+  },
+}, {
+  maximumFlightSeconds: 0.02,
+  bracketStepSeconds: 0.01,
+  timeToleranceSeconds: 1e-7,
+});
+assert.ok(
+  thinStaticImpact.flightSeconds > 0.011 && thinStaticImpact.flightSeconds < 0.012,
+  `spatiotemporal conservative advancement must not skip a thin static feature: ${thinStaticImpact.flightSeconds}`,
+);
+assert.equal(
+  thinStaticImpact.stepping.contract,
+  'signed-distance-spatiotemporal-conservative-advancement-v1',
+);
+assert.equal(thinStaticImpact.stepping.maximumSpatialLipschitz, 1);
+assert.equal(thinStaticImpact.stepping.maximumSignedDistanceRate, 0);
+assert.ok(thinStaticImpact.stepping.maximumCarrierSpeed > descriptor.inlet.maximumSpeed);
+assert.ok(thinStaticImpact.stepping.maximumCombinedDistanceRate > 0);
+assert.ok(thinStaticImpact.stepping.maximumUnresolvedDistance > 0);
+
+assert.throws(
+  () => measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+    identity: supportIdentity,
+    maximumSignedDistanceRate: 0,
+    sampleSignedDistance: supportQuery.sampleSignedDistance,
+  }),
+  error => error?.code === 'non_finite_contract_value',
+  'a provider without a positive spatial Lipschitz bound cannot authorize conservative advancement',
+);
+assert.throws(
+  () => measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+    ...supportQuery,
+    maximumSpatialLipschitz: 0,
+  }),
+  error => error?.code === 'non_positive_contract_value',
+  'a zero spatial Lipschitz bound cannot authorize a spatially varying support field',
+);
+assert.throws(
+  () => measureFingerFluidAnalyticJetFirstImpact(descriptor, {
+    ...supportQuery,
+    maximumSignedDistanceRate: -1,
+  }),
+  error => error?.code === 'negative_contract_value',
+  'a Hill temporal distance-rate bound may be static zero but cannot be negative',
+);
+assert.throws(
+  () => measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuery, {
+    timeToleranceSeconds: Number.MAX_VALUE,
+  }),
+  error => error?.code === 'non_finite_contract_value',
+  'derived unresolved distance overflow cannot authorize immediate proximity contact',
 );
 
 const foreignPacket = structuredClone(packet);
