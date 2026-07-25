@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.glyph-atlas.sources.v0",
+  "mohelIndicatorThreshold": 1000,
+  "sources": [
+    {
+      "id": "macos-installed",
+      "kind": "fontconfig",
+      "required": true,
+      "license": {
+        "status": "reference-only",
+        "id": "installed-font-license-varies",
+        "url": null
+      }
+    }
+  ]
+}

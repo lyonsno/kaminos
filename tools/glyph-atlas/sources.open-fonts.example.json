@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.glyph-atlas.sources.v0",
+  "mohelIndicatorThreshold": 1000,
+  "sources": [
+    {
+      "id": "macos-installed",
+      "kind": "fontconfig",
+      "required": true,
+      "license": {
+        "status": "reference-only",
+        "id": "installed-font-license-varies",
+        "url": null
+      }
+    },
+    {
+      "id": "google-fonts-ofl",
+      "kind": "directory",
+      "root": "~/Library/Caches/kaminos-fonts/google-fonts/ofl",
+      "url": "https://github.com/google/fonts",
+      "ref": "record-the-checked-out-commit",
+      "required": false,
+      "license": {
+        "status": "per-family-license-required",
+        "id": "OFL-1.1-with-family-terms",
+        "url": "https://github.com/google/fonts/tree/main/ofl"
+      }
+    },
+    {
+      "id": "velvetyne-libre",
+      "kind": "directory",
+      "root": "~/Library/Caches/kaminos-fonts/velvetyne",
+      "url": "https://velvetyne.fr/download/",
+      "ref": "record-the-downloaded-archive-or-repository-revisions",
+      "required": false,
+      "license": {
+        "status": "per-family-license-required",
+        "id": "libre-license-varies",
+        "url": "https://velvetyne.fr/about/"
+      }
+    }
+  ]
+}
