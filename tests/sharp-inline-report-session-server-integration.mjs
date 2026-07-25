@@ -70,6 +70,8 @@ try {
   assert.equal(firstLiveChunk.response.status, 200);
   const crashReadableState = JSON.parse(readFileSync(liveStatePath, 'utf8'));
   assert.equal(crashReadableState.status, 'receiving');
+  assert.equal(crashReadableState.statePath, liveStatePath);
+  assert.equal(crashReadableState.stateReadUrl, liveStart.body.stateReadUrl);
   assert.equal(crashReadableState.document.routeIdentity.sharpRevision, 'sharp-live-revision');
   assert.equal(crashReadableState.collections['progress-events'].expectedCount, null);
   assert.equal(crashReadableState.collections['progress-events'].receivedCount, 2);

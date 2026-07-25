@@ -1631,6 +1631,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             f"{stamp}-{time.time_ns()}-{os.getpid()}-{secrets.token_hex(6)}-{firing_id}"
         )
         run_dir = (KAMINOS_PIPELINE_RUNS_DIR / session_id).resolve()
+        state_path = run_dir / "sharp-inline-report-state.json"
+        state_read_url = _pipeline_run_read_url(state_path)
         state = {
             "schema": "kaminos.sharp-inline-report-state.v0",
             "status": "receiving",
@@ -1639,6 +1641,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "pipelineId": pipeline_id,
             "firingId": payload.get("firingId"),
             "outputRoot": str(run_dir),
+            "statePath": str(state_path),
+            "stateReadUrl": state_read_url,
             "reportPath": str(run_dir / "sharp-inline-report.json"),
             "startedAt": _utc_timestamp(),
             "document": document,
@@ -1687,10 +1691,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "status": "receiving",
             "sessionId": session_id,
             "outputRoot": str(run_dir),
-            "statePath": str(run_dir / "sharp-inline-report-state.json"),
-            "stateReadUrl": _pipeline_run_read_url(
-                run_dir / "sharp-inline-report-state.json"
-            ),
+            "statePath": str(state_path),
+            "stateReadUrl": state_read_url,
         })
 
     def handle_sharp_inline_run_report_chunk(self):
