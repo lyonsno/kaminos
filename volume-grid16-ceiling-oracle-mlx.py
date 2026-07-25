@@ -234,20 +234,26 @@ def fit_modes(
     init: str,
     learning_rate: float,
     ray_chunk: int = 4096,
+    initial_state: dict[str, np.ndarray] | None = None,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
     import mlx.optimizers as optim
 
-    require(init in ("analytical", "random"), f"unknown init arm: {init}")
+    require(init in ("analytical", "random", "warm"), f"unknown init arm: {init}")
+    require(init != "warm" or initial_state is not None, "warm init requires an explicit initial state")
     require(iterations > 0 and mode_count > 0, "iterations and mode count must be positive")
     digest = lattice_digest(target_lattice)
 
-    seed_state = (
-        analytical_seed_state(medium, mode_count=mode_count, seed=seed)
-        if init == "analytical"
-        else random_seed_state(medium, mode_count=mode_count, seed=seed)
-    )
+    if init == "warm":
+        require(int(initial_state["centers"].shape[0]) == mode_count, "warm state mode count mismatch")
+        seed_state = initial_state
+    else:
+        seed_state = (
+            analytical_seed_state(medium, mode_count=mode_count, seed=seed)
+            if init == "analytical"
+            else random_seed_state(medium, mode_count=mode_count, seed=seed)
+        )
     raw = state_to_raw(seed_state, medium)
 
     sample_count = medium.grid * fit_samples_per_cell
