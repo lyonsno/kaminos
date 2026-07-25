@@ -272,4 +272,54 @@ try {
   await rm(comparatorFixtureRoot, { recursive: true, force: true });
 }
 
+const loopOneRoot = new URL(
+  '../artifacts/lirm-bauplan-mass-authority-loop-one-v0/',
+  import.meta.url,
+);
+const loopOneFinalReceipt = JSON.parse(await readFile(
+  new URL('blind/final-assay-receipt.json', loopOneRoot),
+  'utf8',
+));
+assert.equal(
+  loopOneFinalReceipt.schema,
+  'kaminos.lirm-bauplan-mass-authority-loop-one-final-assay.v0',
+);
+assert.deepEqual(loopOneFinalReceipt.revealedCellMapping, {
+  'cell-a': 'bauplan-heavy',
+  'cell-b': 'bauplan-only',
+});
+assert.equal(loopOneFinalReceipt.staticAdmission.operatorExposure, 'prohibited');
+assert.equal(loopOneFinalReceipt.staticAdmission.motionSafe, 'unassayed');
+assert.deepEqual(loopOneFinalReceipt.staticAdmission.classifierConsensus, {
+  'cell-a': { safe: 'pass', happy: 'pass' },
+  'cell-b': { safe: 'fail', happy: 'fail' },
+});
+assert.equal(
+  loopOneFinalReceipt.massAuthority.spatialComparativeVerdict,
+  'classifier-contested',
+);
+assert.equal(loopOneFinalReceipt.massAuthority.authoredHeavyCell, 'cell-a');
+assert.deepEqual(loopOneFinalReceipt.massAuthority.classifierSelections, {
+  'primary-agent-inspector': 'cell-a',
+  'blind-independent-classifier': 'cell-b',
+});
+assert.equal(loopOneFinalReceipt.massAuthority.independentConsensus, 'fail');
+assert.equal(loopOneFinalReceipt.claims.generatedSupportTopology, 'inadmissible');
+
+const loopOneBlindManifest = JSON.parse(await readFile(
+  new URL('blind/manifest.json', loopOneRoot),
+  'utf8',
+));
+assert.equal(loopOneBlindManifest.status, 'classified-and-revealed');
+assert.deepEqual(loopOneBlindManifest.cellMapping, {
+  'cell-a': 'bauplan-heavy',
+  'cell-b': 'bauplan-only',
+});
+assert.equal(loopOneBlindManifest.operatorExposure, 'prohibited');
+assert.equal(loopOneBlindManifest.motionAdmission, 'prohibited');
+assert.equal(
+  loopOneBlindManifest.finalAssayReceipt,
+  'final-assay-receipt.json',
+);
+
 console.log('LIRM bauplan staged elaboration contracts passed');

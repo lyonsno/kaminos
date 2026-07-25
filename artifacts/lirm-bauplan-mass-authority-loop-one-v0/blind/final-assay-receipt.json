@@ -1,0 +1,125 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-final-assay.v0",
+  "status": "completed",
+  "researchVisibility": "agent_only",
+  "sourceContract": "../assay-contract.json",
+  "blindManifest": "manifest.json",
+  "revealedCellMapping": {
+    "cell-a": "bauplan-heavy",
+    "cell-b": "bauplan-only"
+  },
+  "mappingEvidence": {
+    "method": "exact GLB byte identity",
+    "cells": {
+      "cell-a": {
+        "sourceCandidateId": "bauplan-heavy",
+        "sha256": "sha256:8bc0fac1066c0b513717f1a6d00f72785e981c591754f4bcf9257141ee3e982f"
+      },
+      "cell-b": {
+        "sourceCandidateId": "bauplan-only",
+        "sha256": "sha256:20bda30858c5a658ca51dcee67dd269b00c07af018898e2a89738364c3228b74"
+      }
+    }
+  },
+  "classifiers": [
+    {
+      "classifier": "primary-agent-inspector",
+      "classificationPath": "primary-agent-classification.json",
+      "commit": "ccc9218979320d7dbe58efe5f8171f43e995ee24",
+      "classificationTiming": "completed-and-pushed-before-independent-result-consumption"
+    },
+    {
+      "classifier": "blind-independent-classifier",
+      "classificationArtifact": "private-durable-source-artifact",
+      "classificationSha256": "sha256:cd177570ab05d49a18fb371817a30403980af952492d704c4ae3da0794bc0bdd",
+      "classificationTiming": "completed-without-cell-mapping-or-primary-classification"
+    }
+  ],
+  "staticAdmission": {
+    "operatorExposure": "prohibited",
+    "motionSafe": "unassayed",
+    "motionAdmission": "prohibited",
+    "classifierConsensus": {
+      "cell-a": {
+        "safe": "pass",
+        "happy": "pass"
+      },
+      "cell-b": {
+        "safe": "fail",
+        "happy": "fail"
+      }
+    },
+    "sharedFailureLocus": {
+      "cellId": "cell-b",
+      "sourceCandidateId": "bauplan-only",
+      "classes": [
+        "clustered porous facial surface breakup",
+        "irregular eye and socket boundaries",
+        "ambiguous underside support attachments"
+      ]
+    },
+    "operatorInspectionEligibleCells": [],
+    "operatorInspectionRationale": "whole-pair exposure required both classifiers to pass both cells on safe and happy; both classifiers independently failed cell-b"
+  },
+  "massAuthority": {
+    "authoredHeavyCell": "cell-a",
+    "imageStageDirectionalMassAuthority": "strong-pass",
+    "spatialComparativeVerdict": "classifier-contested",
+    "classifierSelections": {
+      "primary-agent-inspector": "cell-a",
+      "blind-independent-classifier": "cell-b"
+    },
+    "independentConsensus": "fail",
+    "sameBroadOrganismalBasin": "pass",
+    "residualArmorPrior": "present-but-simplified",
+    "supportedClaim": "the authored heavy route produced a coherent cast with broader low-frequency mass cues that the primary classifier correctly traced through the blind mapping",
+    "claimBoundary": "the anonymous pair did not produce independent agreement about which cast was heavier, so spatial comparative mass authority is not robustly proved by this loop"
+  },
+  "claims": {
+    "bauplanLowFrequencyMassMutation": "proved-at-control-stage",
+    "matchedImageCompletionMassSurvival": "strong-pass",
+    "spatialCastOrganismalCoherence": "pass",
+    "spatialCastMassReadability": "classifier-contested",
+    "generatedSupportTopology": "inadmissible",
+    "staticOperatorAdmission": "fail",
+    "motionAdmission": "unassayed"
+  },
+  "routeIdentity": {
+    "imageCompletion": {
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "model": "flux2-klein-9b",
+      "quantize": 4,
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "guidance": 1,
+      "seed": 720501
+    },
+    "spatialCast": {
+      "jobType": "trellis2mlx_fast",
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "simplifyFirst": true,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "seed": 720501
+    },
+    "spatialWitness": {
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "viewsPerCell": 4,
+      "width": 1100,
+      "height": 900
+    }
+  },
+  "nextResearchPressure": {
+    "target": "friendly-founder inverse fitting",
+    "reason": "the heavy sibling proves a clean positive basin exists while the matched parent exposes a repeatable local facial and support-field failure class",
+    "reuse": [
+      "cell-a as the admitted friendly morphology founder",
+      "the explicit low-frequency mass controls",
+      "the shared facial and attachment failure classification"
+    ]
+  },
+  "lastTrustworthyEvidence": "two blind classifiers agree that cell-a is a strong positive static cast and cell-b fails safe and happy; exact byte identity reveals cell-a as bauplan-heavy, while disagreement over anonymous heavier-cell selection leaves spatial comparative mass authority classifier-contested"
+}

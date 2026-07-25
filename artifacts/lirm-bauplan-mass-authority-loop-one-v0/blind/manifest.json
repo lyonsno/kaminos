@@ -1,12 +1,28 @@
 {
   "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-blind-spatial-witness.v0",
-  "status": "awaiting-independent-static-classification",
+  "status": "classified-and-revealed",
   "researchVisibility": "blind-independent-classifiers",
-  "operatorExposure": "prohibited_pending_two_independent_safe_and_happy_passes",
-  "cellMapping": "withheld",
+  "operatorExposure": "prohibited",
+  "cellMapping": {
+    "cell-a": "bauplan-heavy",
+    "cell-b": "bauplan-only"
+  },
+  "finalAssayReceipt": "final-assay-receipt.json",
   "classificationOrder": [
     "blind-independent-classifier",
     "primary-agent-inspector"
+  ],
+  "classifications": [
+    {
+      "classifier": "primary-agent-inspector",
+      "path": "primary-agent-classification.json",
+      "commit": "ccc9218979320d7dbe58efe5f8171f43e995ee24"
+    },
+    {
+      "classifier": "blind-independent-classifier",
+      "artifact": "private-durable-source-artifact",
+      "sha256": "sha256:cd177570ab05d49a18fb371817a30403980af952492d704c4ae3da0794bc0bdd"
+    }
   ],
   "motionAdmission": "prohibited",
   "sourceRoute": {
@@ -119,5 +135,5 @@
       ]
     }
   ],
-  "lastTrustworthyEvidence": "both anonymous Trellis casts completed through one matched route and each has four complete route-identified 1100x900 Blender renders; no static visual classification has been consumed"
+  "lastTrustworthyEvidence": "both classifiers independently pass cell-a and fail cell-b on safe and happy; exact GLB identity reveals cell-a as bauplan-heavy and cell-b as bauplan-only; heavier-cell classification disagrees, so spatial comparative mass authority remains classifier-contested"
 }
