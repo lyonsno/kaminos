@@ -665,6 +665,7 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
             assert matched["moduleSha256"] == module_sha256
             assert matched["moduleSha256MatchesExpectation"] is True
             assert matched["moduleIdentityStatus"] == "matched"
+            assert matched["moduleUrl"] == f"/sharp-inline/sharp-inline.js?sha256={module_sha256}"
 
             os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256"] = "0" * 64
             stale_module = serve.runtime_config()["sharpInline"]

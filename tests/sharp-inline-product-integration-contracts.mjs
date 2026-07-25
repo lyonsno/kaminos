@@ -63,8 +63,8 @@ assert.match(
 );
 assert.match(
   page,
-  /instrumentationBundle:\s*\{[\s\S]{0,500}expectedSha256:\s*inline\?\.mount\?\.expectedModuleSha256[\s\S]{0,500}effectiveSha256:\s*inline\?\.mount\?\.moduleSha256[\s\S]{0,500}identityStatus:\s*inline\?\.mount\?\.moduleIdentityStatus/,
-  'Gate B must journal the requested and effective generated SHARP bundle identity',
+  /instrumentationBundle:\s*\{[\s\S]{0,500}expectedSha256:\s*assay\?\.expectedModuleSha256[\s\S]{0,500}effectiveSha256:\s*inline\?\.mount\?\.moduleSha256[\s\S]{0,500}identityStatus:\s*assay\?\.expectedModuleSha256 === inline\?\.mount\?\.moduleSha256\s*\?\s*'matched'\s*:\s*'mismatch'/,
+  'Gate B must compare the launcher-owned expected bundle hash with the mounted bytes',
 );
 assert.match(
   page,

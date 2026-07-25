@@ -42,7 +42,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--gate-b-journal] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--gate-b-journal] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-sharp-module-sha256 <sha256>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -81,6 +81,7 @@ const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
+const expectedSharpModuleSha256 = args.get('expected-sharp-module-sha256') || null;
 const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
 const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
 const expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || sourceLockedWebgpuKitVersion;
@@ -1630,8 +1631,10 @@ try {
   if (gateBJournal && schedulerProfileId !== 'cooperative-spn-gaussian') {
     throw new Error('--gate-b-journal requires --scheduler-profile cooperative-spn-gaussian');
   }
-  if (gateBJournal && (!requestedSourceAssetId || !expectedSharpRevision)) {
-    throw new Error('--gate-b-journal requires exact --source-asset-id and --expected-sharp-revision identities');
+  if (gateBJournal && (!requestedSourceAssetId
+      || !expectedSharpRevision
+      || !/^[a-f0-9]{64}$/.test(expectedSharpModuleSha256 || ''))) {
+    throw new Error('--gate-b-journal requires exact --source-asset-id, --expected-sharp-revision, and --expected-sharp-module-sha256 identities');
   }
   if (gateBJournal && (replayCastReportPath || captureInFlight)) {
     throw new Error('--gate-b-journal cannot be combined with replay or in-flight visual capture');
@@ -1961,6 +1964,7 @@ try {
         },
         sharpBaseRevision: GATE_B_SHARP_BASE_REVISION,
         expectedInstrumentationRevision: expectedSharpRevision,
+        expectedModuleSha256: expectedSharpModuleSha256,
         weightsSha256: GATE_B_WEIGHTS_SHA256,
         hostKitVersion: expectedWebgpuKitVersion,
         initialHostStats: lastGateBHostStats,

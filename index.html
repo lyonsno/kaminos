@@ -13248,9 +13248,11 @@ function sharpGateBRouteIdentity({
       baseRevision: assay?.sharpBaseRevision || null,
       instrumentationRevision: inline?.mount?.revision || null,
       instrumentationBundle: {
-        expectedSha256: inline?.mount?.expectedModuleSha256 || null,
+        expectedSha256: assay?.expectedModuleSha256 || null,
         effectiveSha256: inline?.mount?.moduleSha256 || null,
-        identityStatus: inline?.mount?.moduleIdentityStatus || null,
+        identityStatus: assay?.expectedModuleSha256 === inline?.mount?.moduleSha256
+          ? 'matched'
+          : 'mismatch',
       },
     },
     weights: {

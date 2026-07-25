@@ -20,7 +20,7 @@ assert.match(
 );
 assert.match(
   serve,
-  /"sharpInline": \{[\s\S]{0,1000}"registered":[\s\S]{0,1000}"moduleUrl": "\/sharp-inline\/sharp-inline\.js"[\s\S]{0,500}"weightsUrl": "\/sharp-inline\/weights\.bin"/,
+  /"sharpInline": \{[\s\S]{0,1000}"registered":[\s\S]{0,1500}"moduleUrl": sharp_module_url[\s\S]{0,500}"weightsUrl": "\/sharp-inline\/weights\.bin"/,
   'runtime config must expose requested/effective inline registration and stable browser URLs',
 );
 assert.match(
@@ -32,6 +32,11 @@ assert.match(
   serve,
   /KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256[\s\S]{0,4000}"expectedModuleSha256":[\s\S]{0,500}"moduleSha256":[\s\S]{0,500}"moduleSha256MatchesExpectation":[\s\S]{0,500}"moduleIdentityStatus":/,
   'runtime config must expose and enforce the requested/effective generated SHARP bundle identity',
+);
+assert.match(
+  serve,
+  /sharp_module_url = \([\s\S]{0,200}f"\/sharp-inline\/sharp-inline\.js\?sha256=\{module_sha256\}"[\s\S]{0,3000}"moduleUrl": sharp_module_url/,
+  'the browser module-map key must be content-addressed by the effective bundle hash',
 );
 assert.match(
   serve,

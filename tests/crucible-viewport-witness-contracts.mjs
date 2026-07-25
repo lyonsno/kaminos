@@ -1333,6 +1333,8 @@ for (const [pattern, message] of [
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
   [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
+  [/--expected-sharp-module-sha256/, 'Gate B must accept the launcher-owned expected generated bundle hash'],
+  [/expectedModuleSha256:\s*expectedSharpModuleSha256/, 'Gate B must inject the launcher-owned bundle hash independently of runtime config'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],
   [/id: 'crucible-viewport-workspace'/, 'Witness report must include the requested workspace selector'],
   [/data-crucible-workroom/, 'Witness must verify workroom identity, not just screenshot nonblankness'],

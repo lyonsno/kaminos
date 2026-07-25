@@ -395,6 +395,11 @@ def runtime_config():
         expected_module_sha256 is None
         or module_sha256_matches_expectation is True
     )
+    sharp_module_url = (
+        f"/sharp-inline/sharp-inline.js?sha256={module_sha256}"
+        if module_sha256
+        else "/sharp-inline/sharp-inline.js"
+    )
     weights_exist = SHARP_INLINE_WEIGHTS_PATH.is_file()
     return {
         "schema": "kaminos.runtime-config.v0",
@@ -419,7 +424,7 @@ def runtime_config():
             "moduleSha256": module_sha256,
             "moduleSha256MatchesExpectation": module_sha256_matches_expectation,
             "moduleIdentityStatus": module_identity_status,
-            "moduleUrl": "/sharp-inline/sharp-inline.js",
+            "moduleUrl": sharp_module_url,
             "weightsPath": str(SHARP_INLINE_WEIGHTS_PATH),
             "weightsExists": weights_exist,
             "weightsUrl": "/sharp-inline/weights.bin",
