@@ -57,6 +57,85 @@ assert.match(
   /while \(shouldContinueFiringObservation\(\{ gateBJournal, nowMs: Date\.now\(\), deadlineMs: firingObservationDeadlineMs \}\)\)/,
   'The live firing loop must consume the executable uncapped Gate B policy',
 );
+const chromeChildEnvironmentSource = witness.match(
+  /function buildChromeChildEnvironment\([\s\S]*?\n}\n(?=\nfunction sleep)/,
+)?.[0];
+assert.ok(
+  chromeChildEnvironmentSource,
+  'Witness must expose an executable positive Chrome child-environment policy',
+);
+const buildChromeChildEnvironment = vm.runInNewContext(`(${chromeChildEnvironmentSource})`);
+const chromeChildEnvironmentExercise = buildChromeChildEnvironment({
+  HOME: '/sentinel/home',
+  TMPDIR: '/sentinel/tmp',
+  PATH: '/sentinel/bin',
+  LANG: 'en_US.UTF-8',
+  LC_ALL: 'en_US.UTF-8',
+  LC_CTYPE: 'UTF-8',
+  __CF_USER_TEXT_ENCODING: '0x1F5:0x0:0x0',
+  OPENAI_API_KEY: 'sentinel-openai-api-key',
+  ANTHROPIC_API_KEY: 'sentinel-anthropic-api-key',
+  AWS_SECRET_ACCESS_KEY: 'sentinel-aws-secret',
+  GITHUB_TOKEN: 'sentinel-github-token',
+  DATABASE_PASSWORD: 'sentinel-database-password',
+  UNRELATED_PARENT_VALUE: 'sentinel-unrelated',
+});
+assert.deepEqual(
+  JSON.parse(JSON.stringify(chromeChildEnvironmentExercise.env)),
+  {
+    HOME: '/sentinel/home',
+    LANG: 'en_US.UTF-8',
+    LC_ALL: 'en_US.UTF-8',
+    LC_CTYPE: 'UTF-8',
+    PATH: '/sentinel/bin',
+    TMPDIR: '/sentinel/tmp',
+    __CF_USER_TEXT_ENCODING: '0x1F5:0x0:0x0',
+  },
+  'Chrome child environment must contain only explicitly enumerated process and locale necessities',
+);
+for (const excludedName of [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'AWS_SECRET_ACCESS_KEY',
+  'GITHUB_TOKEN',
+  'DATABASE_PASSWORD',
+  'UNRELATED_PARENT_VALUE',
+]) {
+  assert.equal(
+    Object.hasOwn(chromeChildEnvironmentExercise.env, excludedName),
+    false,
+    `${excludedName} must not cross the Chrome spawn boundary`,
+  );
+}
+assert.deepEqual(
+  JSON.parse(JSON.stringify(chromeChildEnvironmentExercise.receipt)),
+  {
+    schema: 'kaminos.chrome-child-environment-receipt.v0',
+    policyId: 'kaminos.chrome-child-environment.allowlist.v0',
+    includedVariableNames: [
+      'HOME',
+      'LANG',
+      'LC_ALL',
+      'LC_CTYPE',
+      'PATH',
+      'TMPDIR',
+      '__CF_USER_TEXT_ENCODING',
+    ],
+    includedVariableCount: 7,
+    valuesRecorded: false,
+  },
+  'Witness receipt must identify the effective allowlist without retaining values',
+);
+assert.doesNotMatch(
+  JSON.stringify(chromeChildEnvironmentExercise.receipt),
+  /sentinel-/,
+  'Chrome environment receipt must not retain any allowed or excluded value',
+);
+assert.match(
+  witness,
+  /spawn\(browserResolution\.effective\.executable,[\s\S]*\{ env: chromeChildEnvironment\.env, stdio: \['ignore', 'pipe', 'pipe'\] \}\)/,
+  'Chrome spawn must receive only the explicitly constructed child environment',
+);
 assert.doesNotMatch(
   witness,
   /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
@@ -162,6 +241,9 @@ try {
       source: 'independent-default',
       executable: null,
     },
+    browserChildEnvironment: JSON.parse(JSON.stringify(
+      buildChromeChildEnvironment(process.env).receipt,
+    )),
   });
   assert.deepEqual(argumentFailureDocument.effectiveIdentity, {
     browser: null,
@@ -204,6 +286,102 @@ try {
   assert.equal(existsSync(join(browserFailureRoot, 'should-not-exist.png')), false);
 } finally {
   rmSync(browserFailureRoot, { recursive: true, force: true });
+}
+const childEnvironmentProbeRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-child-env-'));
+try {
+  const childEnvironmentPath = join(childEnvironmentProbeRoot, 'child.env');
+  const requestedBrowser = join(childEnvironmentProbeRoot, 'browser');
+  writeFileSync(requestedBrowser, `#!/bin/sh\n/usr/bin/env > ${JSON.stringify(childEnvironmentPath)}\nexit 23\n`);
+  chmodSync(requestedBrowser, 0o755);
+  const childEnvironmentReport = join(childEnvironmentProbeRoot, 'witness.json');
+  const sentinelValues = [
+    'sentinel-openai-api-key',
+    'sentinel-anthropic-api-key',
+    'sentinel-aws-secret',
+    'sentinel-github-token',
+    'sentinel-database-password',
+    'sentinel-unrelated',
+  ];
+  const childEnvironmentFailure = spawnSync(process.execPath, [
+    witnessPath.pathname,
+    '--chrome', requestedBrowser,
+    '--report', childEnvironmentReport,
+    '--out', join(childEnvironmentProbeRoot, 'should-not-exist.png'),
+  ], {
+    encoding: 'utf8',
+    env: {
+      HOME: childEnvironmentProbeRoot,
+      TMPDIR: childEnvironmentProbeRoot,
+      PATH: '/usr/bin:/bin',
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
+      LC_CTYPE: 'UTF-8',
+      __CF_USER_TEXT_ENCODING: '0x1F5:0x0:0x0',
+      OPENAI_API_KEY: sentinelValues[0],
+      ANTHROPIC_API_KEY: sentinelValues[1],
+      AWS_SECRET_ACCESS_KEY: sentinelValues[2],
+      GITHUB_TOKEN: sentinelValues[3],
+      DATABASE_PASSWORD: sentinelValues[4],
+      UNRELATED_PARENT_VALUE: sentinelValues[5],
+    },
+  });
+  assert.notEqual(childEnvironmentFailure.status, 0, 'environment probe child must exit before DevTools');
+  const childEnvironmentText = readFileSync(childEnvironmentPath, 'utf8');
+  assert.match(childEnvironmentText, new RegExp(`^HOME=${childEnvironmentProbeRoot}$`, 'm'));
+  assert.match(childEnvironmentText, new RegExp(`^TMPDIR=${childEnvironmentProbeRoot}$`, 'm'));
+  assert.match(childEnvironmentText, /^PATH=\/usr\/bin:\/bin$/m);
+  assert.match(childEnvironmentText, /^LANG=en_US\.UTF-8$/m);
+  assert.match(childEnvironmentText, /^LC_CTYPE=UTF-8$/m);
+  for (const excludedName of [
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'AWS_SECRET_ACCESS_KEY',
+    'GITHUB_TOKEN',
+    'DATABASE_PASSWORD',
+    'UNRELATED_PARENT_VALUE',
+  ]) {
+    assert.doesNotMatch(
+      childEnvironmentText,
+      new RegExp(`^${excludedName}=`,'m'),
+      `${excludedName} must be absent from the actually spawned child`,
+    );
+  }
+  const childEnvironmentDocumentText = readFileSync(childEnvironmentReport, 'utf8');
+  const childEnvironmentDocument = JSON.parse(childEnvironmentDocumentText);
+  assert.equal(childEnvironmentDocument.ok, false);
+  assert.equal(childEnvironmentDocument.phase, 'launching-chrome');
+  assert.deepEqual(
+    childEnvironmentDocument.requestedInvocation.browserChildEnvironment,
+    {
+      schema: 'kaminos.chrome-child-environment-receipt.v0',
+      policyId: 'kaminos.chrome-child-environment.allowlist.v0',
+      includedVariableNames: [
+        'HOME',
+        'LANG',
+        'LC_ALL',
+        'LC_CTYPE',
+        'PATH',
+        'TMPDIR',
+        '__CF_USER_TEXT_ENCODING',
+      ],
+      includedVariableCount: 7,
+      valuesRecorded: false,
+    },
+  );
+  assert.deepEqual(
+    childEnvironmentDocument.effectiveIdentity.browser.childEnvironment,
+    childEnvironmentDocument.requestedInvocation.browserChildEnvironment,
+    'effective browser identity must confirm the exact value-free child-environment policy passed to spawn',
+  );
+  for (const sentinelValue of sentinelValues) {
+    assert.doesNotMatch(
+      childEnvironmentDocumentText,
+      new RegExp(sentinelValue),
+      'durable witness receipt must not retain child-environment values',
+    );
+  }
+} finally {
+  rmSync(childEnvironmentProbeRoot, { recursive: true, force: true });
 }
 const occupiedPortServer = createServer((_request, response) => {
   response.writeHead(200, { 'content-type': 'application/json' });
@@ -728,7 +906,7 @@ const effectiveIdentitySource = witness.match(
 );
 assert.ok(effectiveIdentitySource, 'witness must expose a testable compact effective identity projector');
 const bestKnownEffectiveIdentity = vm.runInNewContext(
-  `((lastTrustworthyEvidence, replayCastEvidence, browserResolution = null, browserSession = null) => (${effectiveIdentitySource[0]})())`,
+  `((lastTrustworthyEvidence, replayCastEvidence, browserResolution = null, browserSession = null, chromeChildEnvironment = { receipt: null }) => (${effectiveIdentitySource[0]})())`,
 );
 const replayIdentity = JSON.parse(JSON.stringify(bestKnownEffectiveIdentity({
   sourceSelectionExercise: { effectiveAssetId: 'image-inbox:21_img.png' },

@@ -130,6 +130,7 @@ let inFlightCapture = {
     : null,
 };
 const runtimeExceptions = [];
+const chromeChildEnvironment = buildChromeChildEnvironment(process.env);
 const requestedInvocation = {
   url,
   screenshot: out,
@@ -146,6 +147,7 @@ const requestedInvocation = {
   requireFrameStageLedger,
   requestedCdpPort,
   browserRequest,
+  browserChildEnvironment: chromeChildEnvironment.receipt,
 };
 
 function bestKnownEffectiveIdentity() {
@@ -161,6 +163,7 @@ function bestKnownEffectiveIdentity() {
     browser: browserResolution ? {
       resolution: browserResolution,
       session: browserSession,
+      childEnvironment: chromeChildEnvironment.receipt,
     } : null,
     sourceAssetId: replaySource ? null : workroomSourceAssetId,
     workroomSourceAssetId,
@@ -367,6 +370,38 @@ function validatedReplayCastReport(document, reportPath) {
     outputRoot: normalizedRoot,
     sourceArtifact: { ...sourceArtifact, path: normalize(sourceArtifact.path) },
     artifact: { ...artifact, path: normalizedArtifactPath },
+  };
+}
+
+function buildChromeChildEnvironment(parentEnv = {}) {
+  const allowlist = [
+    'HOME',
+    'TMPDIR',
+    'PATH',
+    'LANG',
+    'LC_ALL',
+    'LC_COLLATE',
+    'LC_CTYPE',
+    'LC_MESSAGES',
+    'LC_MONETARY',
+    'LC_NUMERIC',
+    'LC_TIME',
+    '__CF_USER_TEXT_ENCODING',
+  ];
+  const env = {};
+  for (const name of allowlist) {
+    if (typeof parentEnv[name] === 'string') env[name] = parentEnv[name];
+  }
+  const includedVariableNames = Object.keys(env).sort();
+  return {
+    env,
+    receipt: {
+      schema: 'kaminos.chrome-child-environment-receipt.v0',
+      policyId: 'kaminos.chrome-child-environment.allowlist.v0',
+      includedVariableNames,
+      includedVariableCount: includedVariableNames.length,
+      valuesRecorded: false,
+    },
   };
 }
 
@@ -1673,7 +1708,7 @@ try {
     '--no-first-run',
     `--window-size=${viewportWidth},${viewportHeight}`,
     'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  ], { env: chromeChildEnvironment.env, stdio: ['ignore', 'pipe', 'pipe'] });
   browser.on('error', error => { browserSpawnError = error; });
   browser.on('exit', (code, signal) => {
     browserExit = {
