@@ -258,6 +258,9 @@ def fit_modes(
     raw = state_to_raw(seed_state, medium)
 
     sample_count = medium.grid * fit_samples_per_cell
+    # Bound the per-chunk kernel tensor (~100MB float32) as mode count and
+    # sample depth grow with denser restriction rungs.
+    ray_chunk = max(256, min(ray_chunk, int(2.4e7 / max(sample_count * mode_count, 1))))
     fine_step_world = float(np.mean(medium.source_spacing))
     source_cell_volume = float(np.prod(medium.source_spacing))
     fractions = (np.arange(sample_count, dtype=np.float64) + 0.5) / sample_count
