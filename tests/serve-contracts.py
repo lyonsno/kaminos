@@ -1,5 +1,6 @@
 from http import HTTPStatus
 from io import BytesIO
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -624,6 +625,7 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 
 def test_runtime_config_enforces_optional_sharp_revision_contract():
     previous_expected = os.environ.get("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
+    previous_expected_module = os.environ.get("KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256")
     previous_revision_resolver = serve._sharp_inline_revision
     previous_module_path = serve.SHARP_INLINE_MODULE_PATH
     previous_weights_path = serve.SHARP_INLINE_WEIGHTS_PATH
@@ -637,6 +639,8 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
         serve.SHARP_INLINE_WEIGHTS_PATH = weights_path
         try:
             os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"] = "expected-revision"
+            module_sha256 = hashlib.sha256(module_path.read_bytes()).hexdigest()
+            os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256"] = module_sha256
 
             serve._sharp_inline_revision = lambda: "stale-revision"
             stale = serve.runtime_config()["sharpInline"]
@@ -657,8 +661,19 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
             assert matched["registered"] is True
             assert matched["revisionMatchesExpectation"] is True
             assert matched["revisionContractStatus"] == "matched"
+            assert matched["expectedModuleSha256"] == module_sha256
+            assert matched["moduleSha256"] == module_sha256
+            assert matched["moduleSha256MatchesExpectation"] is True
+            assert matched["moduleIdentityStatus"] == "matched"
+
+            os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256"] = "0" * 64
+            stale_module = serve.runtime_config()["sharpInline"]
+            assert stale_module["registered"] is False
+            assert stale_module["moduleSha256MatchesExpectation"] is False
+            assert stale_module["moduleIdentityStatus"] == "mismatch"
 
             os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
+            os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256")
             serve._sharp_inline_revision = lambda: "development-revision"
             unpinned = serve.runtime_config()["sharpInline"]
             assert unpinned["registered"] is True
@@ -673,6 +688,10 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
                 os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION", None)
             else:
                 os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"] = previous_expected
+            if previous_expected_module is None:
+                os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256", None)
+            else:
+                os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256"] = previous_expected_module
 
 
 def test_pipeline_manifest_endpoint_payload_is_route_identified():

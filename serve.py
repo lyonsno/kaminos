@@ -49,6 +49,7 @@ KAMINOS_SHARP_WEBGPU_REPO = Path(os.environ.get(
     os.path.expanduser("~/dev/sharp-webgpu"),
 )).expanduser().resolve()
 KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION_ENV = "KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"
+KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256_ENV = "KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256"
 SHARP_INLINE_MODULE_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "sharp-inline.js"
 SHARP_INLINE_ASSETS_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "assets"
 KAMINOS_SHARP_WEBGPU_WEIGHTS = Path(os.environ.get(
@@ -362,6 +363,38 @@ def runtime_config():
         expected_sharp_revision is None or revision_matches_expectation is True
     )
     module_exists = SHARP_INLINE_MODULE_PATH.is_file()
+    expected_module_sha256 = os.environ.get(
+        KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256_ENV,
+        "",
+    ).strip().lower() or None
+    module_sha256 = _sha256_file(SHARP_INLINE_MODULE_PATH) if module_exists else None
+    module_expectation_valid = (
+        expected_module_sha256 is None
+        or bool(re.fullmatch(r"[a-f0-9]{64}", expected_module_sha256))
+    )
+    module_sha256_matches_expectation = (
+        None
+        if expected_module_sha256 is None
+        else bool(
+            module_expectation_valid
+            and module_sha256
+            and module_sha256 == expected_module_sha256
+        )
+    )
+    if expected_module_sha256 is None:
+        module_identity_status = "unpinned"
+    elif not module_expectation_valid:
+        module_identity_status = "invalid-expectation"
+    elif not module_sha256:
+        module_identity_status = "missing"
+    elif module_sha256_matches_expectation:
+        module_identity_status = "matched"
+    else:
+        module_identity_status = "mismatch"
+    module_identity_allows_registration = (
+        expected_module_sha256 is None
+        or module_sha256_matches_expectation is True
+    )
     weights_exist = SHARP_INLINE_WEIGHTS_PATH.is_file()
     return {
         "schema": "kaminos.runtime-config.v0",
@@ -370,6 +403,7 @@ def runtime_config():
             "registered": (
                 bool(sharp_revision)
                 and revision_contract_allows_registration
+                and module_identity_allows_registration
                 and module_exists
                 and weights_exist
             ),
@@ -381,6 +415,10 @@ def runtime_config():
             "revisionContractStatus": revision_contract_status,
             "modulePath": str(SHARP_INLINE_MODULE_PATH),
             "moduleExists": module_exists,
+            "expectedModuleSha256": expected_module_sha256,
+            "moduleSha256": module_sha256,
+            "moduleSha256MatchesExpectation": module_sha256_matches_expectation,
+            "moduleIdentityStatus": module_identity_status,
             "moduleUrl": "/sharp-inline/sharp-inline.js",
             "weightsPath": str(SHARP_INLINE_WEIGHTS_PATH),
             "weightsExists": weights_exist,

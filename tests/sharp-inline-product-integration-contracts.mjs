@@ -63,6 +63,11 @@ assert.match(
 );
 assert.match(
   page,
+  /instrumentationBundle:\s*\{[\s\S]{0,500}expectedSha256:\s*inline\?\.mount\?\.expectedModuleSha256[\s\S]{0,500}effectiveSha256:\s*inline\?\.mount\?\.moduleSha256[\s\S]{0,500}identityStatus:\s*inline\?\.mount\?\.moduleIdentityStatus/,
+  'Gate B must journal the requested and effective generated SHARP bundle identity',
+);
+assert.match(
+  page,
   /const gpuContext = volumePrototype\.foregroundGpuContext\(\)[\s\S]{0,9000}inline\.run\(sourceBlob, \{[\s\S]{0,500}gpuContext,[\s\S]{0,500}weightsUrl:[\s\S]{0,500}scheduler,/,
   'the inline route must inject the product volume device, queue, weights URL, and requested scheduler',
 );

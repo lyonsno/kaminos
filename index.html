@@ -13247,6 +13247,11 @@ function sharpGateBRouteIdentity({
       name: 'SHARP',
       baseRevision: assay?.sharpBaseRevision || null,
       instrumentationRevision: inline?.mount?.revision || null,
+      instrumentationBundle: {
+        expectedSha256: inline?.mount?.expectedModuleSha256 || null,
+        effectiveSha256: inline?.mount?.moduleSha256 || null,
+        identityStatus: inline?.mount?.moduleIdentityStatus || null,
+      },
     },
     weights: {
       sha256: assay?.weightsSha256 || null,
@@ -13293,7 +13298,7 @@ async function loadSharpInlineProductRuntime() {
     const mount = runtimeConfig.sharpInline;
     if (!mount?.registered || !mount.moduleExists || !mount.weightsExists || !mount.revision) {
       const sourceIdentity = mount
-        ? `revision contract ${mount.revisionContractStatus || 'unknown'}; expected ${mount.expectedRevision || 'unpinned'}; effective ${mount.revision || 'missing'}`
+        ? `revision contract ${mount.revisionContractStatus || 'unknown'}; expected ${mount.expectedRevision || 'unpinned'}; effective ${mount.revision || 'missing'}; bundle contract ${mount.moduleIdentityStatus || 'unknown'}; expected ${mount.expectedModuleSha256 || 'unpinned'}; effective ${mount.moduleSha256 || 'missing'}`
         : 'runtime mount missing';
       throw new Error(`SHARP inline runtime is not registered with a reviewed source, module, and weights (${sourceIdentity})`);
     }

@@ -13,6 +13,7 @@ import { createSharpSameDeviceKilnOpportunityHook } from '../lib/sharp-same-devi
 
 const SOURCE_SHA256 = '134136dd4086cfc1b887ab0a134c4a2b906223762a0d5959a8b90cc68f11f4f0';
 const WEIGHTS_SHA256 = '98212168b105c4027aff54c635fe01f547974911deb0c1109d8c05df68a01caf';
+const MODULE_SHA256 = 'c'.repeat(64);
 
 assert.deepEqual(
   GATE_B_COLLECTIONS.map(collection => collection.id),
@@ -57,6 +58,11 @@ const identity = {
     name: 'SHARP',
     baseRevision: 'b689f485d5d6f6c8868f21ad3d56d17e81cba44a',
     instrumentationRevision: 'instrumentation-revision',
+    instrumentationBundle: {
+      expectedSha256: MODULE_SHA256,
+      effectiveSha256: MODULE_SHA256,
+      identityStatus: 'matched',
+    },
   },
   weights: {
     sha256: WEIGHTS_SHA256,
@@ -105,6 +111,20 @@ assert.match(
     source: { ...identity.source, sha256: '0'.repeat(64) },
   }).join('\n'),
   /frozen source hash/,
+);
+assert.match(
+  validateGateBRouteIdentity({
+    ...identity,
+    model: {
+      ...identity.model,
+      instrumentationBundle: {
+        ...identity.model.instrumentationBundle,
+        effectiveSha256: 'd'.repeat(64),
+        identityStatus: 'mismatch',
+      },
+    },
+  }).join('\n'),
+  /generated SHARP bundle/,
 );
 assert.match(
   validateGateBRouteIdentity({

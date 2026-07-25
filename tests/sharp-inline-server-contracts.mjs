@@ -30,7 +30,12 @@ assert.match(
 );
 assert.match(
   serve,
-  /def _sharp_inline_revision\(\):[\s\S]{0,1200}git[\s\S]{0,300}rev-parse[\s\S]{0,300}HEAD[\s\S]{0,1200}sharp_revision = _sharp_inline_revision\(\)[\s\S]{0,2400}"revision": sharp_revision/,
+  /KAMINOS_SHARP_WEBGPU_EXPECTED_MODULE_SHA256[\s\S]{0,4000}"expectedModuleSha256":[\s\S]{0,500}"moduleSha256":[\s\S]{0,500}"moduleSha256MatchesExpectation":[\s\S]{0,500}"moduleIdentityStatus":/,
+  'runtime config must expose and enforce the requested/effective generated SHARP bundle identity',
+);
+assert.match(
+  serve,
+  /def _sharp_inline_revision\(\):[\s\S]{0,1200}git[\s\S]{0,300}rev-parse[\s\S]{0,300}HEAD[\s\S]{0,1200}sharp_revision = _sharp_inline_revision\(\)[\s\S]{0,5000}"revision": sharp_revision/,
   'runtime config must expose the effective SHARP source revision rather than only its checkout path',
 );
 assert.match(
