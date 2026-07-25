@@ -106,6 +106,7 @@ let lastGateBHostStats = null;
 let forwardedRuntimeExceptionCount = 0;
 let forwardedRendererExitCount = 0;
 let gateBHostSampleTask = null;
+let gateBHostSampleAbortController = null;
 let gateBHostSampleStatus = null;
 let successfulReportPayload = null;
 let terminalSummary = null;
@@ -372,9 +373,9 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function readHostCommand(command, commandArgs = []) {
+function readHostCommand(command, commandArgs = [], { signal } = {}) {
   return new Promise(resolve => {
-    execFile(command, commandArgs, { encoding: 'utf8' }, (error, stdout) => {
+    execFile(command, commandArgs, { encoding: 'utf8', signal }, (error, stdout) => {
       if (error) {
         resolve({
           status: 'unavailable',
@@ -479,15 +480,15 @@ function parseAgxObservation(text) {
   };
 }
 
-async function sampleGateBHost(browserPid) {
+async function sampleGateBHost(browserPid, { signal } = {}) {
   const samplingStartedAtMs = performance.now();
   const [ps, vmStat, swap, thermal, powerSource, agx] = await Promise.all([
-    readHostCommand('ps', ['-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,vsz=,comm=']),
-    readHostCommand('vm_stat'),
-    readHostCommand('sysctl', ['-n', 'vm.swapusage']),
-    readHostCommand('pmset', ['-g', 'therm']),
-    readHostCommand('pmset', ['-g', 'batt']),
-    readHostCommand('ioreg', ['-r', '-c', 'AGXAccelerator', '-d', '1', '-l']),
+    readHostCommand('ps', ['-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,vsz=,comm='], { signal }),
+    readHostCommand('vm_stat', [], { signal }),
+    readHostCommand('sysctl', ['-n', 'vm.swapusage'], { signal }),
+    readHostCommand('pmset', ['-g', 'therm'], { signal }),
+    readHostCommand('pmset', ['-g', 'batt'], { signal }),
+    readHostCommand('ioreg', ['-r', '-c', 'AGXAccelerator', '-d', '1', '-l'], { signal }),
   ]);
   const processRows = ps.status === 'available' ? parseProcessRows(ps.output) : [];
   const browserProcesses = descendantProcesses(processRows, browserPid);
@@ -807,9 +808,17 @@ async function appendGateBWitnessTelemetry(ws) {
 
 function scheduleGateBHostSample(ws) {
   if (gateBHostSampleTask) return;
+  const abortController = new AbortController();
+  gateBHostSampleAbortController = abortController;
   gateBHostSampleStatus = 'sampling';
   gateBHostSampleTask = (async () => {
-    const hostStats = await sampleGateBHost(browserSession.spawnedPid);
+    const hostStats = await sampleGateBHost(browserSession.spawnedPid, {
+      signal: abortController.signal,
+    });
+    if (abortController.signal.aborted) {
+      gateBHostSampleStatus = 'cancelled-at-terminal-boundary';
+      return;
+    }
     lastGateBHostStats = hostStats;
     const result = await evaluate(ws, `(() => {
       const journal = globalThis.__KAMINOS_GATE_B_JOURNAL__;
@@ -823,8 +832,18 @@ function scheduleGateBHostSample(ws) {
   })().catch(error => {
     gateBHostSampleStatus = `failed: ${error?.message || String(error)}`;
   }).finally(() => {
-    gateBHostSampleTask = null;
+    if (gateBHostSampleAbortController === abortController) {
+      gateBHostSampleAbortController = null;
+      gateBHostSampleTask = null;
+    }
   });
+}
+
+async function settleGateBHostSample() {
+  if (!gateBHostSampleTask) return;
+  const task = gateBHostSampleTask;
+  gateBHostSampleAbortController?.abort();
+  await task;
 }
 
 async function clickVisibleElementCenter(ws, elementId) {
@@ -2617,6 +2636,13 @@ if (terminalFailure && gateBJournal && browserControlSocket && browserSocket) {
   }
 }
 
+await settleGateBHostSample();
+if (gateBJournal) {
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
+    gateBHostSampleStatus,
+  };
+}
 await cleanupBrowserResources();
 if (browserCleanup.errors.length && !terminalFailure) {
   terminalFailure = {

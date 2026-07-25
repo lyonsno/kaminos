@@ -1314,6 +1314,8 @@ for (const [pattern, message] of [
   [/appendHostStats/, 'Gate B witness must stream host CPU, memory, swap, thermal, power, and GPU observations outside the renderer'],
   [/initialHostStats/, 'Gate B must seed its pre-route host observation into the crash-safe live journal'],
   [/Promise\.all\([\s\S]{0,2000}readHostCommand\('ps'[\s\S]{0,2000}readHostCommand\('ioreg'/, 'Gate B host commands must run asynchronously and concurrently so they do not starve CDP'],
+  [/new AbortController\(\)[\s\S]{0,1200}sampleGateBHost\([\s\S]{0,300}signal[\s\S]{0,2500}const task = gateBHostSampleTask[\s\S]{0,300}abort\(\)[\s\S]{0,300}await task/, 'Periodic host subprocesses must be cancelled and drained at the terminal boundary'],
+  [/await settleGateBHostSample\(\)[\s\S]{0,600}await cleanupBrowserResources\(\)/, 'Gate B sampler lifecycle must settle before CDP sockets and browser resources close'],
   [/async function writeReport\([\s\S]{0,1800}await fileDescriptor\.sync\(\)[\s\S]{0,1000}await directoryDescriptor\.sync\(\)/, 'Crash-safe witness writes must fsync asynchronously instead of blocking CDP observation'],
   [/appendRuntimeError/, 'Gate B witness must stream CDP runtime exceptions while the renderer remains reachable'],
   [/browserExit[\s\S]{0,500}rendererProcessExits/, 'The crash-safe witness report must retain browser and renderer exit evidence'],
