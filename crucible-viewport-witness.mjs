@@ -374,6 +374,10 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function shouldContinueFiringObservation({ gateBJournal, nowMs, deadlineMs }) {
+  return gateBJournal || nowMs < deadlineMs;
+}
+
 function readHostCommand(command, commandArgs = [], { signal } = {}) {
   return new Promise(resolve => {
     execFile(command, commandArgs, { encoding: 'utf8', signal }, (error, stdout) => {
@@ -2019,10 +2023,10 @@ try {
       inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
     }
-    const deadline = Date.now() + fireTimeoutMs;
+    const firingObservationDeadlineMs = gateBJournal ? null : Date.now() + fireTimeoutMs;
     let observedRunning = false;
     let routeState = null;
-    while (Date.now() < deadline) {
+    while (shouldContinueFiringObservation({ gateBJournal, nowMs: Date.now(), deadlineMs: firingObservationDeadlineMs })) {
       await sleep(1000);
       if (gateBJournal) {
         scheduleGateBHostSample(ws);

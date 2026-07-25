@@ -21,6 +21,42 @@ import {
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
+const firingObservationPolicySource = witness.match(
+  /function shouldContinueFiringObservation\(\{ gateBJournal, nowMs, deadlineMs \}\) \{\n[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(
+  firingObservationPolicySource,
+  'Witness must expose an executable firing-observation policy so Gate B duration cannot hide behind loop syntax',
+);
+const shouldContinueFiringObservation = vm.runInNewContext(`(${firingObservationPolicySource})`);
+assert.equal(
+  shouldContinueFiringObservation({
+    gateBJournal: true,
+    nowMs: 420_001,
+    deadlineMs: 420_000,
+  }),
+  true,
+  'Gate B must remain under observation after the former 420-second total-duration deadline',
+);
+assert.equal(
+  shouldContinueFiringObservation({
+    gateBJournal: false,
+    nowMs: 420_001,
+    deadlineMs: 420_000,
+  }),
+  false,
+  'Ordinary visual smokes must retain their existing bounded firing behavior',
+);
+assert.match(
+  witness,
+  /const firingObservationDeadlineMs = gateBJournal \? null : Date\.now\(\) \+ fireTimeoutMs;/,
+  'Gate B must carry an explicit uncapped total-duration identity instead of a larger arbitrary deadline',
+);
+assert.match(
+  witness,
+  /while \(shouldContinueFiringObservation\(\{ gateBJournal, nowMs: Date\.now\(\), deadlineMs: firingObservationDeadlineMs \}\)\)/,
+  'The live firing loop must consume the executable uncapped Gate B policy',
+);
 assert.doesNotMatch(
   witness,
   /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
