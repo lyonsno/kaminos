@@ -2949,6 +2949,8 @@ import {
   startSharpInlineLiveTelemetrySession,
 } from './lib/sharp-inline-trace-transport.mjs';
 import {
+  bindGateBSourceBlobIdentity,
+  gateBSourceAssetId,
   normalizeGateBAdaptiveRange,
 } from './lib/sharp-gate-b-journal.mjs';
 import { indexSharpForegroundGapOverlaps } from './lib/sharp-foreground-gap-index.mjs';
@@ -13227,7 +13229,7 @@ function sharpGateBRouteIdentity({
     requestedRoute: 'sharp-image-to-splat-live-v0',
     effectiveRoute: 'same-browser-product-realm-shared-device',
     source: {
-      assetId: source?.id || null,
+      assetId: gateBSourceAssetId(source),
       path: source?.path || source?.name || null,
       sha256: source?.sha256 || null,
     },
@@ -13557,6 +13559,9 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
   const sourceBlob = await sourceResponse.blob();
   const scheduler = sharpInlineSchedulerProfile(profileId);
   const gateBAssay = sharpGateBAssayConfig();
+  const effectiveSource = gateBAssay
+    ? await bindGateBSourceBlobIdentity(source, sourceBlob)
+    : source;
   if (gateBAssay && profileId !== 'cooperative-spn-gaussian') {
     throw new Error('Gate B assay requires the cooperative-spn-gaussian scheduler profile');
   }
@@ -13575,7 +13580,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     ? sharpGateBRouteIdentity({
         assay: gateBAssay,
         inline,
-        source,
+        source: effectiveSource,
         scheduler,
         gpuContext,
       })
@@ -13593,10 +13598,10 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     firingId,
     routeIdentity,
     sourceIdentity: {
-      id: source.id || null,
-      name: source.name || null,
-      source: source.source,
-      sha256: source.sha256 || null,
+      id: gateBSourceAssetId(effectiveSource),
+      name: effectiveSource.name || null,
+      source: effectiveSource.source,
+      sha256: effectiveSource.sha256 || null,
     },
   });
   const liveTelemetryIdentity = {

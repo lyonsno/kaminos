@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import {
   GATE_B_COLLECTIONS,
+  bindGateBSourceBlobIdentity,
   createGateBBatchingState,
+  gateBSourceAssetId,
   normalizeGateBAdaptiveRange,
   validateGateBCompletion,
   validateGateBRouteIdentity,
@@ -14,6 +17,31 @@ import { createSharpSameDeviceKilnOpportunityHook } from '../lib/sharp-same-devi
 const SOURCE_SHA256 = '134136dd4086cfc1b887ab0a134c4a2b906223762a0d5959a8b90cc68f11f4f0';
 const WEIGHTS_SHA256 = '98212168b105c4027aff54c635fe01f547974911deb0c1109d8c05df68a01caf';
 const MODULE_SHA256 = 'c'.repeat(64);
+
+const indexedSourceBytes = new TextEncoder().encode('indexed-source-bytes');
+const indexedSourceHash = createHash('sha256').update(indexedSourceBytes).digest('hex');
+const boundSource = await bindGateBSourceBlobIdentity(
+  {
+    assetId: 'image-inbox:17_img.png',
+    source: '/api/read?root=image-inbox&path=17_img.png',
+    sha256: indexedSourceHash,
+  },
+  new Blob([indexedSourceBytes]),
+);
+assert.equal(boundSource.sha256, indexedSourceHash);
+await assert.rejects(
+  bindGateBSourceBlobIdentity(
+    {
+      assetId: 'image-inbox:17_img.png',
+      source: '/api/read?root=image-inbox&path=17_img.png',
+      sha256: indexedSourceHash,
+    },
+    new Blob(['replacement-source-bytes']),
+  ),
+  /fetched source SHA-256.*registered asset SHA-256/i,
+);
+assert.equal(gateBSourceAssetId({ assetId: 'image-inbox:17_img.png' }), 'image-inbox:17_img.png');
+assert.equal(gateBSourceAssetId({ id: 'legacy-image-id' }), 'legacy-image-id');
 
 assert.deepEqual(
   GATE_B_COLLECTIONS.map(collection => collection.id),
@@ -571,6 +599,21 @@ assert.match(
   page,
   /function pipelineBrowserAssetSource\(entry\)[\s\S]{0,500}sha256:\s*entry\.sha256\s*\|\|\s*null/,
   'the selected live source must preserve the server-computed file SHA-256 for Gate B route validation',
+);
+assert.match(
+  page,
+  /bindGateBSourceBlobIdentity\(source,\s*sourceBlob\)/,
+  'Gate B must authenticate the exact fetched source Blob before route validation and inference',
+);
+assert.match(
+  page,
+  /function sharpGateBRouteIdentity\([\s\S]{0,700}assetId:\s*gateBSourceAssetId\(source\)/,
+  'the page-generated route identity must preserve the registered source asset id',
+);
+assert.match(
+  page,
+  /sourceIdentity:\s*\{[\s\S]{0,220}id:\s*gateBSourceAssetId\(effectiveSource\)/,
+  'the page-generated live telemetry identity must preserve the registered source asset id',
 );
 assert.match(
   page,
