@@ -128,6 +128,16 @@ assert.match(
   /opticalWeight = in\.opticalUnitScale \* gaussian \/ max\(in\.projectedKernelIntegral, 1e-6\)/,
   'Gaussian deposition is not normalized by its effective projected kernel integral',
 );
+assert.doesNotMatch(
+  regularDepositor,
+  /if \(in\.unionEnabled > 0\.5\)/,
+  'ordinary Gaussian splats cannot bypass coefficient-space physical units when union mode is off',
+);
+assert.doesNotMatch(
+  regularDepositor,
+  /in\.colorOpacity\.rgb \* alpha/,
+  'ordinary Gaussian splats cannot fall back to premultiplied display color inside the optical recurrence',
+);
 assert.match(
   bilinearDepositor,
   /opticalWeight = in\.opticalUnitScale \* max\(in\.opticalDepositionWeight, 0\.0\)/,

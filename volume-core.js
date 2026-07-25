@@ -7252,21 +7252,15 @@ fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> 
   if (in.depthBin != OPTICAL_BIN) { discard; }
   let radius2 = dot(in.local, in.local);
   if (radius2 > 1.0) { discard; }
-  let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let gaussian = exp(-radius2 * kernelSharpness);
-  let energyCompensation = boundarySplatEnergyCompensation(footprintRadius, kernelSharpness);
-  if (in.unionEnabled > 0.5) {
-    let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
-    let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
-    let opticalWeight = in.opticalUnitScale * gaussian / max(in.projectedKernelIntegral, 1e-6);
-    return vec4<f32>(
-      sharedEmissionCoefficient * opticalWeight,
-      sharedTotalExtinctionCoefficient * opticalWeight,
-    );
-  }
-  let alpha = max(in.colorOpacity.a * gaussian * energyCompensation, 0.0);
-  return vec4<f32>(in.colorOpacity.rgb * alpha, alpha);
+  let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+  let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+  let opticalWeight = in.opticalUnitScale * gaussian / max(in.projectedKernelIntegral, 1e-6);
+  return vec4<f32>(
+    sharedEmissionCoefficient * opticalWeight,
+    sharedTotalExtinctionCoefficient * opticalWeight,
+  );
 }
 
 @fragment
@@ -20351,6 +20345,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
     const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
     const sampleNow = startNow + frameIndex * stepDeltaMs;
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount))
+      ? Number(options.baseFrameCount)
+      : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount))
+      ? Number(options.baseSimStepCount)
+      : state.simStepCount;
     updateUniforms(sampleNow);
     if (!presentToCanvas) ensureFrameTexture();
     const bytesPerPixel = 4;
@@ -20469,6 +20470,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-lean-frame-readback-v0',
       advanceSim,
       presentToCanvas,
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      sampleNowMs: sampleNow,
       frameIndex,
       width: state.width,
       height: state.height,

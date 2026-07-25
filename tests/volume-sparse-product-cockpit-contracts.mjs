@@ -13,6 +13,11 @@ assert.ok(existsSync(contractPath), 'the ordinary sparse product route has a reu
 const contract = await import(contractPath);
 
 assert.equal(contract.SPARSE_PRODUCT_ROUTE_IDENTITY, 'kaminos.volume.sparse-live-cockpit.v0');
+assert.equal(
+  contract.SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
+  'matched-optical-recurrence-v0',
+  'the ordinary live product route renders both optical-unit arms through the ordered recurrence',
+);
 assert.deepEqual(contract.SPARSE_PRODUCT_RESOLUTIONS, [32, 48, 64, 96, 128, 140, 160]);
 assert.deepEqual(Object.keys(contract.SPARSE_PRODUCT_GEOMETRY_MODES), [
   'historical-round',
@@ -100,6 +105,13 @@ const effectiveRuntimeState = {
   boundarySplatControlGeneration: 7,
   effectiveBoundarySplatOpticalUnitMode: requested.opticalUnitMode,
   boundarySplatOpticalUnitModeFallbackReason: null,
+  boundarySplatPresentationModeEffective: 'matched-optical-recurrence-v0',
+  boundarySplatPresentationReceipt: {
+    effectiveMode: 'matched-optical-recurrence-v0',
+    accumulationIdentity: 'depth-binned-emission-optical-depth-v0',
+    transportIdentity: 'depth-binned-exponential-self-transmittance-v0',
+    fallbackReason: null,
+  },
   selectiveHeadLiveRole: 'off',
   selectiveHeadLiveEffectiveRole: 'off',
   selectiveHeadLiveCompositionRequested: 'splat-only-v0',
@@ -130,6 +142,8 @@ for (const field of [
   'boundarySplatControlGeneration',
   'effectiveBoundarySplatOpticalUnitMode',
   'boundarySplatOpticalUnitModeFallbackReason',
+  'boundarySplatPresentationModeEffective',
+  'boundarySplatPresentationReceipt',
   'selectiveHeadLiveEffectiveRole',
   'selectiveHeadLiveCompositionEffective',
   'selectiveHeadLivePassReceipt',
@@ -231,6 +245,24 @@ assert.equal(receipt.material.authoredOverrideApplied, false);
 assert.equal(receipt.population.authority, 'ordinary-live-sparse-compaction-v0');
 assert.equal(receipt.population.candidates, 1200);
 assert.equal(receipt.diagnosticBootstrapApplied, false);
+assert.equal(receipt.effective.presentationMode, 'matched-optical-recurrence-v0');
+assert.equal(receipt.opticalTransport.accumulationIdentity, 'depth-binned-emission-optical-depth-v0');
+assert.equal(receipt.opticalTransport.transportIdentity, 'depth-binned-exponential-self-transmittance-v0');
+
+assert.throws(
+  () => contract.makeSparseProductRuntimeReceipt(requested, {
+    ...effectiveRuntimeState,
+    boundarySplatPresentationModeEffective: 'current-additive-v0',
+    boundarySplatPresentationReceipt: {
+      effectiveMode: 'current-additive-v0',
+      accumulationIdentity: 'additive-rgb-gaussian-alpha-v0',
+      transportIdentity: null,
+      fallbackReason: null,
+    },
+  }),
+  /sparse-product-optical-presentation-substitution/,
+  'a physical-unit label over the legacy additive presentation cannot settle as effective product optics',
+);
 
 const startupReceipt = contract.makeSparseProductRuntimeReceipt(requested, {
   ...effectiveRuntimeState,
@@ -421,6 +453,29 @@ assert.match(
   /replaceSparseProductInnerRouteParameter\('volume_optical_unit_mode', mode\)/,
   'optical-unit changes update the effective inner route identity',
 );
+assert.match(
+  cockpit,
+  /setBoundarySplatPresentationMode\?\.\(SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY\)/,
+  'the product optics control keeps both unit arms on the ordered optical recurrence',
+);
+const opticalUnitSetter = cockpit.match(
+  /function setOpticalUnitMode\(mode\) \{[\s\S]*?\n    \}\n\n    function setSparseProductGeometry/,
+)?.[0] || '';
+assert.match(
+  opticalUnitSetter,
+  /if \(sparseProductRequested\) \{[\s\S]*setBoundarySplatPresentationMode\?\.\(SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY\)/,
+  'the product recurrence is installed only on the sparse product route, never on an ordinary hybrid route',
+);
+assert.match(
+  cockpit,
+  /volume_boundary_splat_presentation_mode:\s*SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY/,
+  'the inner live route receives the product optical presentation before renderer initialization',
+);
+assert.match(
+  index,
+  /setBoundarySplatPresentationMode\?\.\(sparseProductRequest\.presentationMode\)/,
+  'the inner route applies the product optical presentation beside optical-unit initialization',
+);
 assert.match(cockpit, /makeSparseProductRuntimeReceipt/);
 assert.match(cockpit, /footprintAuthority: SPARSE_PRODUCT_GEOMETRY_MODES\[requestedSplatGeometry\]\.footprintAuthority/);
 assert.match(cockpit, /Ordinary sparse live renderer/);
@@ -499,6 +554,69 @@ assert.match(
   witness,
   /boundarySplatControlGeneration:\s*inner\.boundarySplatControlGeneration[\s\S]*appliedPassControlGeneration:\s*inner\.selectiveHeadLivePassReceipt\?\.controlGeneration/,
   'the headed witness preserves current and applied control generations for independent receipt audit',
+);
+assert.match(
+  witness,
+  /setCapturePaused\(true\)/,
+  'the Legacy/Physical witness holds simulation state while comparing optical laws',
+);
+assert.match(
+  witness,
+  /assertOpticalModePixelDelta/,
+  'the witness rejects a presentation-only optics toggle whose pixels do not change',
+);
+assert.match(
+  witness,
+  /const opticalSameStateCaptureId\s*=/,
+  'both optics arms share one explicit same-state capture identity',
+);
+assert.match(
+  witness,
+  /const opticalRenderTimeMs = await evaluate/,
+  'both optics arms use one explicit renderer timestamp rather than independent wall times',
+);
+assert.match(
+  witness,
+  /opticalHeldState,[\s\S]*opticalRenderTimeMs,[\s\S]*opticalSameStateCaptureId,[\s\S]*cameraProbe/,
+  'the final witness report exposes the fixed optical capture authority at top level',
+);
+assert.match(
+  witness,
+  /captureVolumeCanvasScreenshot/,
+  'the optics witness captures the actual presented Volume canvas instead of accepting an offscreen preview alone',
+);
+assert.match(
+  witness,
+  /inflateSync/,
+  'the witness decodes actual PNG pixels before accepting the visual discriminator',
+);
+assert.match(
+  witness,
+  /assertOpticalModePixelDelta\(\s*opticalCanvasSamples\[/,
+  'the accepted optical delta is computed from presented canvas pixels',
+);
+assert.match(
+  witness,
+  /assertOpticalComparisonFalsifiers\(\)/,
+  'the evidence harness proves identical and blank canvas pairs cannot close the witness',
+);
+const captureFrameImplementation = core.match(
+  /async function captureSelectiveHeadLiveFrame\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  async function controlledStepSequence/,
+)?.[0] || '';
+assert.match(
+  captureFrameImplementation,
+  /sameStateCaptureId/,
+  'a presented held frame preserves its caller-owned same-state identity',
+);
+assert.match(
+  captureFrameImplementation,
+  /baseFrameCount/,
+  'a presented held frame preserves its base-frame authority even though presentation advances the frame counter',
+);
+assert.match(
+  captureFrameImplementation,
+  /sampleNowMs/,
+  'a presented held frame reports the exact fixed renderer timestamp it consumed',
 );
 assert.match(
   witness,

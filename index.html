@@ -18020,6 +18020,16 @@ async function initKaminosVolumeRoute() {
   const requestedOpticalUnitMode = params.get('volume_optical_unit_mode')
     || 'projected-native-cell-area-integral-normalized-v0';
   window.__kaminosOpticalUnitModeReceipt = volumePrototype.setBoundarySplatOpticalUnitMode?.(requestedOpticalUnitMode) || null;
+  if (sparseProductRequest) {
+    const routedPresentationMode = params.get('volume_boundary_splat_presentation_mode');
+    if (routedPresentationMode !== sparseProductRequest.presentationMode) {
+      throw new Error(
+        `sparse-product-optical-presentation-route-mismatch:${sparseProductRequest.presentationMode}:${routedPresentationMode || 'missing'}`,
+      );
+    }
+    window.__kaminosBoundarySplatPresentationReceipt =
+      volumePrototype.setBoundarySplatPresentationMode?.(sparseProductRequest.presentationMode) || null;
+  }
   const requestedOpticalPathScale = params.has('volume_optical_path_scale')
     ? params.get('volume_optical_path_scale')
     : 1;

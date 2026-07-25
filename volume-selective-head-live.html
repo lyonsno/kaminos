@@ -111,6 +111,7 @@
       parseSparseProductRoute,
       runSparseProductResolutionTransition,
       SPARSE_PRODUCT_GEOMETRY_MODES,
+      SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
       SPARSE_PRODUCT_RESOLUTIONS,
     } from './volume-sparse-product-cockpit.mjs';
 
@@ -403,6 +404,7 @@
       volume_boundary_splat_radius: String(sparseProductRequest?.boundarySplatRadius ?? 1),
       volume_boundary_splat_sharpness: String(sparseProductRequest?.boundarySplatSharpness ?? 3.4),
       volume_optical_unit_mode: requestedOpticalUnitMode,
+      volume_boundary_splat_presentation_mode: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
       volume_boundary_sidecar_blur: '0',
       volume_boundary_sidecar_width: '0',
       volume_boundary_sidecar_ridge: '0.46',
@@ -647,6 +649,9 @@
       next.searchParams.set('volume_optical_unit_mode', mode);
       history.replaceState(null, '', next);
       const receipt = prototype()?.setBoundarySplatOpticalUnitMode?.(mode) || null;
+      if (sparseProductRequested) {
+        prototype()?.setBoundarySplatPresentationMode?.(SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY);
+      }
       replaceSparseProductInnerRouteParameter('volume_optical_unit_mode', mode);
       return receipt;
     }
@@ -1215,6 +1220,9 @@
       prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
       prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
       prototype().setBoundarySplatOpticalUnitMode(requestedOpticalUnitMode);
+      if (sparseProductRequested) {
+        prototype().setBoundarySplatPresentationMode(SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY);
+      }
       if (sparseProductRequested) setSparseProductGeometry(requestedSplatGeometry);
       await prototype().setActive(true);
       if (sparseProductRequested) basin.style.visibility = 'visible';

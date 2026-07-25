@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRouteRaw = String(
@@ -94,6 +95,7 @@ class CdpSocket {
 
 try {
   mkdirSync(outputDir, { recursive: true });
+  assertOpticalComparisonFalsifiers();
   requestedRoute = new URL(requestedRouteRaw);
   route = requestedRoute.href;
   initialResolution = Number(requestedRoute.searchParams.get('volume_resolution') || 96);
@@ -172,6 +174,107 @@ try {
   assertVisible(coldPixels, 'cold-load');
   const coldScreenshotPath = resolve(outputDir, `cold-${initialGeometry}-${initialResolution}.png`);
   await captureScreenshot(socket, coldScreenshotPath);
+
+  failurePhase = 'optical-modes';
+  const optics = {};
+  const opticalPixelSamples = {};
+  await evaluate(socket, `(() => {
+    return window.__kaminosSelectiveHeadLive.setCapturePaused(true);
+  })()`);
+  const opticalHeldState = await runtimeState(socket);
+  const opticalRenderTimeMs = await evaluate(
+    socket,
+    "document.querySelector('#basin')?.contentWindow?.performance.now()",
+  );
+  assert.ok(Number.isFinite(opticalRenderTimeMs), 'inner renderer did not expose a fixed optical timestamp');
+  const opticalSameStateCaptureId =
+    `sparse-product-optics-f${opticalHeldState.frameCount}-s${opticalHeldState.simStepCount}`;
+  const opticalCaptureAuthority = {
+    now: opticalRenderTimeMs,
+    sameStateCaptureId: opticalSameStateCaptureId,
+    baseFrameCount: opticalHeldState.frameCount,
+    baseSimStepCount: opticalHeldState.simStepCount,
+  };
+  const opticalCanvasSamples = {};
+  for (const mode of [
+    'legacy-global-path-scale-diagnostic-v0',
+    'projected-native-cell-area-integral-normalized-v0',
+  ]) {
+    const receipt = await evaluate(socket, `(() => {
+      return window.__kaminosSelectiveHeadLive.setOpticalUnitMode(${JSON.stringify(mode)});
+    })()`);
+    assert.equal(receipt.effectiveBoundarySplatOpticalUnitMode, mode);
+    await delay(350);
+    const state = await waitForRuntimeState(socket, timeoutMs);
+    assert.equal(state.opticalUnitMode, mode);
+    assertSparseProductState(state, initialResolution, initialGeometry, mode);
+    const pixels = await capturePixelSample(socket, opticalCaptureAuthority);
+    assertVisible(pixels, mode);
+    assert.equal(pixels.sameStateCaptureId, opticalSameStateCaptureId);
+    assert.equal(pixels.sampleNowMs, opticalRenderTimeMs);
+    assert.equal(pixels.baseFrameCount, opticalHeldState.frameCount);
+    assert.equal(pixels.baseSimStepCount, opticalHeldState.simStepCount);
+    assert.equal(
+      pixels.simStepCount,
+      opticalHeldState.simStepCount,
+      `${mode} advanced the held simulation during the optical comparison`,
+    );
+    assert.ok(
+      Number.isInteger(pixels.candidateCount) && pixels.candidateCount > 0,
+      `${mode} omitted the sampled candidate population`,
+    );
+    const path = resolve(
+      outputDir,
+      mode === 'projected-native-cell-area-integral-normalized-v0'
+        ? 'physical-historical-round.png'
+        : 'legacy-historical-round.png',
+    );
+    const presentedFrame = await presentHeldFrame(socket, opticalCaptureAuthority);
+    assert.equal(presentedFrame.ok, true, `${mode} did not present a held frame`);
+    assert.equal(presentedFrame.advanceSim, false);
+    assert.equal(presentedFrame.presentToCanvas, true);
+    assert.equal(presentedFrame.sameStateCaptureId, opticalSameStateCaptureId);
+    assert.equal(presentedFrame.baseFrameCount, opticalHeldState.frameCount);
+    assert.equal(presentedFrame.baseSimStepCount, opticalHeldState.simStepCount);
+    assert.equal(presentedFrame.sampleNowMs, opticalRenderTimeMs);
+    assert.equal(presentedFrame.simStepCount, opticalHeldState.simStepCount);
+    await delay(100);
+    const canvasPixels = await captureVolumeCanvasScreenshot(socket, path);
+    assertVisible(canvasPixels, `${mode}:presented-canvas`);
+    optics[mode] = {
+      receipt,
+      state,
+      pixels: stripPixels(pixels),
+      presentedFrame,
+      canvasPixels: stripPixels(canvasPixels),
+      screenshotPath: path,
+    };
+    opticalPixelSamples[mode] = pixels;
+    opticalCanvasSamples[mode] = canvasPixels;
+  }
+  const opticalFinalState = await runtimeState(socket);
+  assert.equal(opticalFinalState.simStepCount, opticalHeldState.simStepCount);
+  assert.equal(opticalFinalState.cameraSignature, opticalHeldState.cameraSignature);
+  assert.equal(
+    opticalPixelSamples['legacy-global-path-scale-diagnostic-v0'].candidateCount,
+    opticalPixelSamples['projected-native-cell-area-integral-normalized-v0'].candidateCount,
+    'Legacy/Physical optics did not use the same sampled candidate population',
+  );
+  const opticsComparison = assertOpticalModePixelDelta(
+    opticalCanvasSamples['legacy-global-path-scale-diagnostic-v0'],
+    opticalCanvasSamples['projected-native-cell-area-integral-normalized-v0'],
+  );
+  await evaluate(socket, `(() => {
+    return window.__kaminosSelectiveHeadLive.setCapturePaused(false);
+  })()`);
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
+    optics,
+    opticsComparison,
+    opticalHeldState,
+    opticalRenderTimeMs,
+    opticalSameStateCaptureId,
+  };
 
   failurePhase = 'resolution-transition';
   const resolutionRequest = await evaluate(socket, `(() => {
@@ -289,33 +392,6 @@ try {
   }
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, geometry };
 
-  failurePhase = 'optical-modes';
-  const optics = {};
-  for (const mode of [
-    'legacy-global-path-scale-diagnostic-v0',
-    'projected-native-cell-area-integral-normalized-v0',
-  ]) {
-    const receipt = await evaluate(socket, `(() => {
-      return window.__kaminosSelectiveHeadLive.setOpticalUnitMode(${JSON.stringify(mode)});
-    })()`);
-    assert.equal(receipt.effectiveBoundarySplatOpticalUnitMode, mode);
-    await delay(350);
-    const state = await waitForRuntimeState(socket, timeoutMs);
-    assert.equal(state.opticalUnitMode, mode);
-    assertSparseProductState(state, transitionResolution, 'historical-round', mode);
-    const pixels = await capturePixelSample(socket);
-    assertVisible(pixels, mode);
-    const path = resolve(
-      outputDir,
-      mode === 'projected-native-cell-area-integral-normalized-v0'
-        ? 'physical-historical-round.png'
-        : 'legacy-historical-round.png',
-    );
-    await captureScreenshot(socket, path);
-    optics[mode] = { receipt, state, pixels: stripPixels(pixels), screenshotPath: path };
-  }
-  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, optics };
-
   failurePhase = 'camera-interaction';
   const beforeCamera = await runtimeState(socket);
   const point = await evaluate(socket, `(() => {
@@ -365,6 +441,10 @@ try {
     controlProbe,
     geometry,
     optics,
+    opticsComparison,
+    opticalHeldState,
+    opticalRenderTimeMs,
+    opticalSameStateCaptureId,
     cameraProbe,
     screenshotPath,
     browserErrors,
@@ -479,6 +559,9 @@ function assertSparseProductState(state, resolution, geometry, opticalUnitMode) 
     assert.equal(state.boundarySplatSharpness, geometryDefinition.boundarySplatSharpness);
   }
   assert.equal(state.opticalUnitMode, opticalUnitMode);
+  assert.equal(state.opticalPresentationMode, 'matched-optical-recurrence-v0');
+  assert.equal(state.opticalAccumulationIdentity, 'depth-binned-emission-optical-depth-v0');
+  assert.equal(state.opticalTransportIdentity, 'depth-binned-exponential-self-transmittance-v0');
   assert.equal(state.sourceAuthority, 'live-baked-sidecar-plus-fluid-material-v0');
   assert.equal(state.populationAuthority, 'ordinary-live-sparse-compaction-v0');
   assert.equal(state.diagnosticCoefficientsActive, false);
@@ -602,6 +685,9 @@ async function captureRuntimeState(cdp) {
       boundarySplatAttributeModelIdentity: receipt?.material?.effective?.attributeModelIdentity || null,
       materialIdentity: receipt?.material || null,
       opticalUnitMode: receipt?.effective?.opticalUnitMode || null,
+      opticalPresentationMode: receipt?.effective?.presentationMode || null,
+      opticalAccumulationIdentity: receipt?.opticalTransport?.accumulationIdentity || null,
+      opticalTransportIdentity: receipt?.opticalTransport?.transportIdentity || null,
       sourceAuthority: receipt?.effective?.sourceAuthority || null,
       populationAuthority: receipt?.population?.authority || null,
       candidates: receipt?.population?.candidates || 0,
@@ -641,11 +727,20 @@ function summarizeBrowserEvents(events) {
     }));
 }
 
-async function capturePixelSample(cdp) {
+async function capturePixelSample(cdp, authority = {}) {
+  const encodedAuthority = JSON.stringify(authority);
   return evaluate(cdp, `(async () => {
     const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
     if (!prototype?.sampleFrame) throw new Error('sparse-product-sample-api-missing');
-    const sample = await prototype.sampleFrame({ advanceSim: false, includeRgba: false });
+    const authority = ${encodedAuthority};
+    const sample = await prototype.sampleFrame({
+      advanceSim: false,
+      includeRgba: false,
+      now: authority.now,
+      sameStateCaptureId: authority.sameStateCaptureId,
+      baseFrameCount: authority.baseFrameCount,
+      baseSimStepCount: authority.baseSimStepCount,
+    });
     if (!sample?.ok || !sample.preview?.rgba?.length) throw new Error('sparse-product-preview-readback-missing');
     let litPixels = 0;
     let lumaSum = 0;
@@ -669,13 +764,251 @@ async function capturePixelSample(cdp) {
       meanLuma: lumaSum / Math.max(1, pixels),
       maximumLuma,
       simStepCount: prototype.debugState().simStepCount,
+      candidateCount: sample.boundarySplatCandidateCount,
+      sameStateCaptureId: sample.sameStateCaptureId,
+      baseFrameCount: sample.baseFrameCount,
+      baseSimStepCount: sample.baseSimStepCount,
+      sampleNowMs: sample.sampleNowMs,
+      renderPhaseTimeMs: sample.renderPhaseTimeMs,
+      renderPhaseFrame: sample.renderPhaseFrame,
+      renderPhaseAuthority: sample.renderPhaseAuthority,
     };
+  })()`);
+}
+
+async function presentHeldFrame(cdp, authority) {
+  const encodedAuthority = JSON.stringify(authority);
+  return evaluate(cdp, `(async () => {
+    const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+    if (!prototype?.captureSelectiveHeadLiveFrame) {
+      throw new Error('sparse-product-presented-frame-api-missing');
+    }
+    const authority = ${encodedAuthority};
+    return prototype.captureSelectiveHeadLiveFrame({
+      advanceSim: false,
+      presentToCanvas: true,
+      startNow: authority.now,
+      frameIndex: 0,
+      sameStateCaptureId: authority.sameStateCaptureId,
+      baseFrameCount: authority.baseFrameCount,
+      baseSimStepCount: authority.baseSimStepCount,
+    });
   })()`);
 }
 
 function stripPixels(sample) {
   const { rgba: _rgba, ...metrics } = sample;
   return metrics;
+}
+
+function assertOpticalModePixelDelta(legacy, physical) {
+  assert.equal(legacy.width, physical.width);
+  assert.equal(legacy.height, physical.height);
+  assert.equal(legacy.rgba.length, physical.rgba.length);
+  let changedPixels = 0;
+  let absoluteRgbDelta = 0;
+  const pixelCount = legacy.rgba.length / 4;
+  for (let index = 0; index < legacy.rgba.length; index += 4) {
+    const red = Math.abs(legacy.rgba[index] - physical.rgba[index]);
+    const green = Math.abs(legacy.rgba[index + 1] - physical.rgba[index + 1]);
+    const blue = Math.abs(legacy.rgba[index + 2] - physical.rgba[index + 2]);
+    const maximum = Math.max(red, green, blue);
+    if (maximum > 2) changedPixels += 1;
+    absoluteRgbDelta += red + green + blue;
+  }
+  const changedPixelFraction = changedPixels / Math.max(1, pixelCount);
+  const meanAbsoluteRgbDelta = absoluteRgbDelta / Math.max(1, pixelCount * 3);
+  assert.ok(
+    changedPixelFraction > 0.01,
+    `Legacy/Physical optics changed too few held-state pixels:${changedPixelFraction}`,
+  );
+  assert.ok(
+    meanAbsoluteRgbDelta > 0.25,
+    `Legacy/Physical optics produced a presentation-only delta:${meanAbsoluteRgbDelta}`,
+  );
+  return {
+    identity: 'same-state-legacy-physical-pixel-delta-v0',
+    threshold: 2,
+    pixelCount,
+    changedPixels,
+    changedPixelFraction,
+    meanAbsoluteRgbDelta,
+  };
+}
+
+function assertOpticalComparisonFalsifiers() {
+  const visible = {
+    width: 2,
+    height: 2,
+    rgba: Uint8Array.from([
+      64, 32, 16, 255,
+      64, 32, 16, 255,
+      64, 32, 16, 255,
+      64, 32, 16, 255,
+    ]),
+  };
+  assert.throws(
+    () => assertOpticalModePixelDelta(visible, visible),
+    /changed too few held-state pixels/,
+    'identical canvas pixels must not close the optics witness',
+  );
+  assert.throws(
+    () => assertVisible({
+      width: 2,
+      height: 2,
+      rgba: new Uint8Array(16),
+      litFraction: 0,
+      maximumLuma: 0,
+    }, 'blank-canvas-falsifier'),
+    /blank-canvas-falsifier frame was blank/,
+    'blank canvas pixels must not close the optics witness',
+  );
+}
+
+function paethPredictor(left, up, upLeft) {
+  const prediction = left + up - upLeft;
+  const leftDistance = Math.abs(prediction - left);
+  const upDistance = Math.abs(prediction - up);
+  const upLeftDistance = Math.abs(prediction - upLeft);
+  if (leftDistance <= upDistance && leftDistance <= upLeftDistance) return left;
+  if (upDistance <= upLeftDistance) return up;
+  return upLeft;
+}
+
+function decodePngRgba(bytes) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(bytes.subarray(0, 8).compare(signature), 0, 'canvas screenshot is not PNG');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const compressed = [];
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    const data = bytes.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === 'IDAT') {
+      compressed.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+    offset += length + 12;
+  }
+  assert.ok(width > 0 && height > 0, 'canvas screenshot PNG omitted dimensions');
+  assert.equal(bitDepth, 8, 'canvas screenshot PNG must be 8-bit');
+  assert.ok(colorType === 2 || colorType === 6, `unsupported canvas PNG color type:${colorType}`);
+  assert.equal(interlace, 0, 'interlaced canvas screenshot PNG is unsupported');
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const encoded = inflateSync(Buffer.concat(compressed));
+  assert.equal(encoded.length, height * (stride + 1), 'canvas screenshot PNG payload is partial');
+  const rgba = new Uint8Array(width * height * 4);
+  let prior = Buffer.alloc(stride);
+  let litPixels = 0;
+  let lumaSum = 0;
+  let maximumLuma = 0;
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (stride + 1);
+    const filter = encoded[rowStart];
+    const row = Buffer.alloc(stride);
+    for (let x = 0; x < stride; x += 1) {
+      const raw = encoded[rowStart + 1 + x];
+      const left = x >= channels ? row[x - channels] : 0;
+      const up = prior[x] || 0;
+      const upLeft = x >= channels ? prior[x - channels] : 0;
+      let value = raw;
+      if (filter === 1) value += left;
+      else if (filter === 2) value += up;
+      else if (filter === 3) value += Math.floor((left + up) / 2);
+      else if (filter === 4) value += paethPredictor(left, up, upLeft);
+      else assert.equal(filter, 0, `unsupported canvas PNG filter:${filter}`);
+      row[x] = value & 255;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const source = x * channels;
+      const target = (y * width + x) * 4;
+      rgba[target] = row[source];
+      rgba[target + 1] = row[source + 1];
+      rgba[target + 2] = row[source + 2];
+      rgba[target + 3] = channels === 4 ? row[source + 3] : 255;
+      const luma = 0.2126 * rgba[target] + 0.7152 * rgba[target + 1] + 0.0722 * rgba[target + 2];
+      if (luma > 3) litPixels += 1;
+      lumaSum += luma;
+      maximumLuma = Math.max(maximumLuma, luma);
+    }
+    prior = row;
+  }
+  const pixels = width * height;
+  return {
+    rgba,
+    width,
+    height,
+    pixels,
+    litPixels,
+    litFraction: litPixels / Math.max(1, pixels),
+    meanLuma: lumaSum / Math.max(1, pixels),
+    maximumLuma,
+  };
+}
+
+async function captureVolumeCanvasScreenshot(cdp, path) {
+  const clip = await evaluate(cdp, `(() => {
+    const frame = document.querySelector('#basin');
+    const canvas = frame?.contentDocument?.querySelector('#kaminos-host-renderer-canvas');
+    if (!frame || !canvas) throw new Error('volume-canvas-missing');
+    const frameRect = frame.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const toolbarRect = document.getElementById('toolbar')?.getBoundingClientRect() || null;
+    const canvasLeft = frameRect.left + canvasRect.left;
+    const canvasTop = frameRect.top + canvasRect.top;
+    const canvasRight = canvasLeft + canvasRect.width;
+    const canvasBottom = canvasTop + canvasRect.height;
+    const visibleTop = Math.max(canvasTop, toolbarRect?.bottom ? toolbarRect.bottom + 4 : canvasTop);
+    const x = Math.max(0, canvasLeft);
+    const y = Math.max(0, visibleTop);
+    const right = Math.min(innerWidth, canvasRight);
+    const bottom = Math.min(innerHeight, canvasBottom);
+    if (!(right > x && bottom > y)) throw new Error('volume-canvas-clip-empty');
+    return {
+      x,
+      y,
+      width: right - x,
+      height: bottom - y,
+      scale: 1,
+      authority: 'presented-volume-canvas-below-toolbar-v0',
+    };
+  })()`);
+  const screenshot = await cdp.call('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+    clip: {
+      x: clip.x,
+      y: clip.y,
+      width: clip.width,
+      height: clip.height,
+      scale: 1,
+    },
+  });
+  const bytes = Buffer.from(screenshot.data, 'base64');
+  assert.ok(bytes.length > 1000, `canvas screenshot was partial:${path}`);
+  const pixels = decodePngRgba(bytes);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, bytes);
+  return {
+    ...pixels,
+    clip,
+    byteLength: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
 }
 
 async function captureScreenshot(cdp, path) {
@@ -690,7 +1023,11 @@ async function runtimeState(cdp) {
   return evaluate(cdp, `(() => {
     const state = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype?.debugState?.();
     if (!state) throw new Error('sparse-product-runtime-state-missing');
-    return { simStepCount: state.simStepCount, cameraSignature: state.cameraSignature };
+    return {
+      simStepCount: state.simStepCount,
+      frameCount: state.frameCount,
+      cameraSignature: state.cameraSignature,
+    };
   })()`);
 }
 

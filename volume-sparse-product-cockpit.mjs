@@ -8,6 +8,9 @@ export const SPARSE_PRODUCT_LEARNED_TANGENT_RENDERER_IDENTITY =
   'live-boundary-sidecar-world-tangent-covariance-splats-v0';
 export const SPARSE_PRODUCT_ATTRIBUTE_MODEL_IDENTITY =
   'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
+export const SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY = 'matched-optical-recurrence-v0';
+export const SPARSE_PRODUCT_OPTICAL_ACCUMULATION_IDENTITY = 'depth-binned-emission-optical-depth-v0';
+export const SPARSE_PRODUCT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self-transmittance-v0';
 
 export const SPARSE_PRODUCT_GEOMETRY_MODES = Object.freeze({
   'historical-round': Object.freeze({
@@ -106,6 +109,7 @@ export function parseSparseProductRoute(params) {
     rendererIdentity: geometryDefinition.rendererIdentity,
     attributeModelIdentity: geometryDefinition.attributeModelIdentity,
     opticalUnitMode,
+    presentationMode: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
     sourceAuthority: SPARSE_PRODUCT_SOURCE_AUTHORITY,
     populationAuthority: SPARSE_PRODUCT_POPULATION_AUTHORITY,
   };
@@ -130,6 +134,8 @@ export function makeSparseProductRuntimeReceipt(request, state = {}) {
     'boundarySplatControlGeneration',
     'effectiveBoundarySplatOpticalUnitMode',
     'boundarySplatOpticalUnitModeFallbackReason',
+    'boundarySplatPresentationModeEffective',
+    'boundarySplatPresentationReceipt',
     'selectiveHeadLiveEffectiveRole',
     'selectiveHeadLiveCompositionEffective',
     'selectiveHeadLivePassReceipt',
@@ -203,6 +209,29 @@ export function makeSparseProductRuntimeReceipt(request, state = {}) {
   });
   if (state.boundarySplatOpticalUnitModeFallbackReason) {
     throw new Error(`sparse-product-optical-unit-fallback:${state.boundarySplatOpticalUnitModeFallbackReason}`);
+  }
+  requireEffectiveIdentity({
+    effective: state.boundarySplatPresentationModeEffective,
+    requested: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
+    substitution: 'optical-presentation-substitution',
+  });
+  requireEffectiveIdentity({
+    effective: state.boundarySplatPresentationReceipt?.effectiveMode,
+    requested: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
+    substitution: 'optical-presentation-receipt-substitution',
+  });
+  requireEffectiveIdentity({
+    effective: state.boundarySplatPresentationReceipt?.accumulationIdentity,
+    requested: SPARSE_PRODUCT_OPTICAL_ACCUMULATION_IDENTITY,
+    substitution: 'optical-accumulation-substitution',
+  });
+  requireEffectiveIdentity({
+    effective: state.boundarySplatPresentationReceipt?.transportIdentity,
+    requested: SPARSE_PRODUCT_OPTICAL_TRANSPORT_IDENTITY,
+    substitution: 'optical-transport-substitution',
+  });
+  if (state.boundarySplatPresentationReceipt?.fallbackReason) {
+    throw new Error(`sparse-product-optical-presentation-fallback:${state.boundarySplatPresentationReceipt.fallbackReason}`);
   }
   const candidateCount = Number(state.boundarySplatCandidateCount);
   if (Number.isFinite(candidateCount) && candidateCount >= request.resolution ** 3) {
@@ -292,6 +321,7 @@ export function makeSparseProductRuntimeReceipt(request, state = {}) {
       boundarySplatMode: state.boundarySplatMode ?? null,
       footprintAuthority: state.boundarySplatFootprintAuthority ?? null,
       opticalUnitMode: state.effectiveBoundarySplatOpticalUnitMode ?? null,
+      presentationMode: state.boundarySplatPresentationModeEffective ?? null,
       sourceAuthority: state.boundarySplatSourceAuthority ?? null,
       simStepCount: state.simStepCount ?? 0,
       frameCount: state.frameCount ?? 0,
@@ -313,6 +343,12 @@ export function makeSparseProductRuntimeReceipt(request, state = {}) {
       candidates: Number.isFinite(candidateCount) ? candidateCount : null,
       fullGridCells: request.resolution ** 3,
       overflow: state.boundarySplatOverflowCount ?? null,
+    },
+    opticalTransport: {
+      presentationMode: state.boundarySplatPresentationReceipt.effectiveMode,
+      accumulationIdentity: state.boundarySplatPresentationReceipt.accumulationIdentity,
+      transportIdentity: state.boundarySplatPresentationReceipt.transportIdentity,
+      fallbackReason: state.boundarySplatPresentationReceipt.fallbackReason,
     },
     diagnosticBootstrapApplied: state.liveCompleteFlameOpticalCoefficientsEnabled === true,
     persistentCohortApplied: state.persistentSparseCohortGpuReceipt !== null,
