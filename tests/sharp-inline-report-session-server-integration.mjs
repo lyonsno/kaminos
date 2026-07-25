@@ -529,6 +529,168 @@ try {
     },
   );
 
+  const siblingValidationStart = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'gate-b-sibling-batching-validation-test',
+    document: {
+      schema: 'kaminos.sharp-inline-live-telemetry.v0',
+      gateB: {
+        schema: 'kaminos.sharp-gate-b-live-journal.v0',
+        batching: {
+          schema: 'kaminos.sharp-gate-b-batching.v0',
+          retention: 'uncapped',
+          overflowPolicy: 'none-all-rows-retained',
+          flushIntervalMs: 250,
+          maxRowsPerFlush: null,
+          flushOrdinal: 0,
+          lastFlushedAt: null,
+          collections: {},
+        },
+      },
+    },
+    collections: ['raf-opportunity-snapshots', 'runtime-errors'].map(id => ({
+      id,
+      jsonPointer: `#/gateB/${id}`,
+      expectedCount: null,
+      liveAppend: true,
+      retention: 'uncapped',
+      mediaType: 'application/x-ndjson',
+    })),
+  });
+  const validCurrentBatching = {
+    queued: 1,
+    flushed: 0,
+    inFlight: 1,
+    unflushed: 1,
+  };
+  const malformedSiblingChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: siblingValidationStart.body.sessionId,
+    collectionId: 'raf-opportunity-snapshots',
+    expectedStart: 0,
+    rows: [{ schema: 'test.raf-opportunity.v0', ordinal: 0 }],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 0,
+      lastFlushedAt: null,
+      collections: {
+        'raf-opportunity-snapshots': validCurrentBatching,
+        'runtime-errors': {
+          queued: 0,
+          flushed: 0,
+          inFlight: 0,
+          unflushed: -1,
+        },
+      },
+    },
+  });
+  assert.equal(
+    malformedSiblingChunk.response.status,
+    409,
+    'a valid current chunk must not launder malformed sibling batching into durable state',
+  );
+  const unknownSiblingChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: siblingValidationStart.body.sessionId,
+    collectionId: 'raf-opportunity-snapshots',
+    expectedStart: 0,
+    rows: [{ schema: 'test.raf-opportunity.v0', ordinal: 0 }],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 0,
+      lastFlushedAt: null,
+      collections: {
+        'raf-opportunity-snapshots': validCurrentBatching,
+        'unknown-collection': {
+          queued: 0,
+          flushed: 0,
+          inFlight: 0,
+          unflushed: 0,
+        },
+      },
+    },
+  });
+  assert.equal(
+    unknownSiblingChunk.response.status,
+    409,
+    'unknown sibling collection ids must fail before entering durable Gate B accounting',
+  );
+  const siblingValidationState = JSON.parse(readFileSync(
+    path.join(siblingValidationStart.body.outputRoot, 'sharp-inline-report-state.json'),
+    'utf8',
+  ));
+  assert.equal(siblingValidationState.collections['raf-opportunity-snapshots'].receivedCount, 0);
+  assert.deepEqual(siblingValidationState.document.gateB.batching.collections, {});
+  const committedSiblingChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: siblingValidationStart.body.sessionId,
+    collectionId: 'runtime-errors',
+    expectedStart: 0,
+    rows: [{ schema: 'test.runtime-error.v0', ordinal: 0 }],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 0,
+      lastFlushedAt: null,
+      collections: {
+        'runtime-errors': {
+          queued: 1,
+          flushed: 0,
+          inFlight: 1,
+          unflushed: 1,
+        },
+      },
+    },
+  });
+  assert.equal(committedSiblingChunk.response.status, 200);
+  const staleSiblingChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: siblingValidationStart.body.sessionId,
+    collectionId: 'raf-opportunity-snapshots',
+    expectedStart: 0,
+    rows: [{ schema: 'test.raf-opportunity.v0', ordinal: 0 }],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 1,
+      lastFlushedAt: null,
+      collections: {
+        'raf-opportunity-snapshots': validCurrentBatching,
+        'runtime-errors': {
+          queued: 1,
+          flushed: 0,
+          inFlight: 0,
+          unflushed: 1,
+        },
+      },
+    },
+  });
+  assert.equal(
+    staleSiblingChunk.response.status,
+    409,
+    'a sibling flushed count must match the server-durable collection prefix',
+  );
+  const staleSiblingState = JSON.parse(readFileSync(
+    path.join(siblingValidationStart.body.outputRoot, 'sharp-inline-report-state.json'),
+    'utf8',
+  ));
+  assert.equal(staleSiblingState.collections['raf-opportunity-snapshots'].receivedCount, 0);
+  assert.equal(staleSiblingState.collections['runtime-errors'].receivedCount, 1);
+  assert.equal(
+    staleSiblingState.document.gateB.batching.collections['runtime-errors'].flushed,
+    1,
+  );
+
   console.log('SHARP inline report session server integration passed');
 } finally {
   server.kill('SIGTERM');

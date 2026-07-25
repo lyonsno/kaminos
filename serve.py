@@ -1462,6 +1462,85 @@ def load_sharp_inline_report_state(session_id):
     return run_dir, state
 
 
+def validate_sharp_gate_b_chunk_batching(
+    batching,
+    *,
+    collection_id,
+    expected_start,
+    row_count,
+    durable_collection_counts,
+):
+    if not isinstance(batching, dict):
+        raise ValueError("SHARP Gate B chunk omitted batching state")
+    if batching.get("schema") != "kaminos.sharp-gate-b-batching.v0":
+        raise ValueError("SHARP Gate B chunk has wrong batching schema")
+    if batching.get("retention") != "uncapped":
+        raise ValueError("SHARP Gate B batching retention must be uncapped")
+    if batching.get("maxRowsPerFlush") is not None:
+        raise ValueError("SHARP Gate B batching must not cap rows per flush")
+    flush_interval_ms = batching.get("flushIntervalMs")
+    flush_ordinal = batching.get("flushOrdinal")
+    if (
+        not isinstance(flush_interval_ms, (int, float))
+        or isinstance(flush_interval_ms, bool)
+        or not math.isfinite(flush_interval_ms)
+        or flush_interval_ms <= 0
+    ):
+        raise ValueError("SHARP Gate B batching flushIntervalMs is invalid")
+    if (
+        not isinstance(flush_ordinal, int)
+        or isinstance(flush_ordinal, bool)
+        or flush_ordinal < 0
+    ):
+        raise ValueError("SHARP Gate B batching flushOrdinal is invalid")
+    batching_collections = batching.get("collections")
+    if not isinstance(batching_collections, dict):
+        raise ValueError("SHARP Gate B batching collections must be an object")
+    normalized_collections = {}
+    for sibling_id, sibling_counts in batching_collections.items():
+        if sibling_id not in durable_collection_counts:
+            raise ValueError(f"Unknown SHARP Gate B batching collection: {sibling_id}")
+        if not isinstance(sibling_counts, dict):
+            raise ValueError(f"SHARP Gate B batching {sibling_id} counts are invalid")
+        normalized_counts = {}
+        for count_name in ("queued", "flushed", "inFlight", "unflushed"):
+            count_value = sibling_counts.get(count_name)
+            if (
+                not isinstance(count_value, int)
+                or isinstance(count_value, bool)
+                or count_value < 0
+            ):
+                raise ValueError(
+                    f"SHARP Gate B batching {sibling_id}.{count_name} is invalid"
+                )
+            normalized_counts[count_name] = count_value
+        if (
+            normalized_counts["unflushed"]
+            != normalized_counts["queued"] - normalized_counts["flushed"]
+            or normalized_counts["inFlight"] > normalized_counts["unflushed"]
+            or normalized_counts["flushed"] != durable_collection_counts[sibling_id]
+        ):
+            raise ValueError(
+                f"SHARP Gate B batching counts contradict collection {sibling_id}"
+            )
+        normalized_collections[sibling_id] = normalized_counts
+    client_counts = normalized_collections.get(collection_id)
+    if client_counts is None:
+        raise ValueError(f"SHARP Gate B batching omitted {collection_id} counts")
+    if (
+        client_counts["queued"] < expected_start + row_count
+        or client_counts["flushed"] != expected_start
+        or client_counts["inFlight"] != row_count
+    ):
+        raise ValueError(
+            f"SHARP Gate B batching counts contradict chunk {collection_id}"
+        )
+    return {
+        **batching,
+        "collections": normalized_collections,
+    }
+
+
 def _pipeline_run_read_url(path):
     relative_path = path.resolve().relative_to(KAMINOS_PIPELINE_RUNS_DIR.resolve())
     return f"/api/read?root=pipeline-runs&path={urlencode({'path': str(relative_path)})[5:]}"
@@ -1775,6 +1854,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     raise ValueError(
                         f"SHARP inline chunk exceeds expectedCount for {collection_id}"
                     )
+                gate_b = state.get("document", {}).get("gateB")
+                validated_batching = None
+                if isinstance(gate_b, dict):
+                    validated_batching = validate_sharp_gate_b_chunk_batching(
+                        batching,
+                        collection_id=collection_id,
+                        expected_start=expected_start,
+                        row_count=len(rows),
+                        durable_collection_counts={
+                            sibling_id: sibling.get("receivedCount")
+                            for sibling_id, sibling in state.get("collections", {}).items()
+                        },
+                    )
                 trace_path = (run_dir / collection["relativePath"]).resolve()
                 if not trace_path.is_relative_to(run_dir):
                     raise ValueError("SHARP inline trace path escaped its run directory")
@@ -1798,74 +1890,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     os.fsync(stream.fileno())
                 collection["receivedCount"] = received_count + len(rows)
                 collection["committedBytes"] = committed_bytes + len(chunk_bytes)
-                gate_b = state.get("document", {}).get("gateB")
                 if isinstance(gate_b, dict):
-                    if not isinstance(batching, dict):
-                        raise ValueError("SHARP Gate B chunk omitted batching state")
-                    if batching.get("schema") != "kaminos.sharp-gate-b-batching.v0":
-                        raise ValueError("SHARP Gate B chunk has wrong batching schema")
-                    if batching.get("retention") != "uncapped":
-                        raise ValueError("SHARP Gate B batching retention must be uncapped")
-                    if batching.get("maxRowsPerFlush") is not None:
-                        raise ValueError("SHARP Gate B batching must not cap rows per flush")
-                    flush_interval_ms = batching.get("flushIntervalMs")
-                    flush_ordinal = batching.get("flushOrdinal")
-                    if (
-                        not isinstance(flush_interval_ms, (int, float))
-                        or isinstance(flush_interval_ms, bool)
-                        or not math.isfinite(flush_interval_ms)
-                        or flush_interval_ms <= 0
-                    ):
-                        raise ValueError("SHARP Gate B batching flushIntervalMs is invalid")
-                    if (
-                        not isinstance(flush_ordinal, int)
-                        or isinstance(flush_ordinal, bool)
-                        or flush_ordinal < 0
-                    ):
-                        raise ValueError("SHARP Gate B batching flushOrdinal is invalid")
-                    batching_collections = batching.get("collections")
-                    client_counts = (
-                        batching_collections.get(collection_id)
-                        if isinstance(batching_collections, dict)
-                        else None
-                    )
-                    if not isinstance(client_counts, dict):
-                        raise ValueError(
-                            f"SHARP Gate B batching omitted {collection_id} counts"
-                        )
-                    queued = client_counts.get("queued")
-                    flushed = client_counts.get("flushed")
-                    in_flight = client_counts.get("inFlight")
-                    unflushed = client_counts.get("unflushed")
-                    for count_name, count_value in {
-                        "queued": queued,
-                        "flushed": flushed,
-                        "inFlight": in_flight,
-                        "unflushed": unflushed,
-                    }.items():
-                        if (
-                            not isinstance(count_value, int)
-                            or isinstance(count_value, bool)
-                            or count_value < 0
-                        ):
-                            raise ValueError(
-                                f"SHARP Gate B batching {collection_id}.{count_name} is invalid"
-                            )
-                    if (
-                        queued < expected_start + len(rows)
-                        or flushed != expected_start
-                        or in_flight != len(rows)
-                        or unflushed != queued - flushed
-                    ):
-                        raise ValueError(
-                            f"SHARP Gate B batching counts contradict chunk {collection_id}"
-                        )
+                    client_counts = validated_batching["collections"][collection_id]
+                    queued = client_counts["queued"]
+                    flush_ordinal = validated_batching["flushOrdinal"]
                     flushed_at = _utc_timestamp()
                     durable_batching = {
-                        **batching,
+                        **validated_batching,
                         "lastFlushedAt": flushed_at,
                         "collections": {
-                            **batching_collections,
+                            **validated_batching["collections"],
                             collection_id: {
                                 "queued": queued,
                                 "flushed": collection["receivedCount"],
