@@ -25,6 +25,31 @@ assert.equal(plan.schema, 'kaminos.lirm-bauplan-staged-elaboration-plan.v0');
 assert.equal(plan.sourceCandidateId, 'lirm-armature-03');
 assert.equal(plan.sourceSeed, 'molten-lirm-seed-0707');
 assert.equal(plan.stages.length, 3);
+
+const massAuthorityAssaySource = await readFile(
+  new URL('../artifacts/lirm-bauplan-mass-authority-assay-v0/assay-result.json', import.meta.url),
+  'utf8',
+);
+const massAuthorityAssay = JSON.parse(massAuthorityAssaySource);
+assert.equal(massAuthorityAssay.visualInspection.operatorExposure, 'prohibited');
+assert.equal(massAuthorityAssay.visualInspection.researchVisibility, 'agent_only');
+assert.equal(
+  Object.hasOwn(massAuthorityAssay.visualInspection, 'operatorExposureClass'),
+  false,
+);
+assert.equal(massAuthorityAssaySource.includes('happy_safe'), false);
+assert.equal(massAuthorityAssay.visualInspection.safe.disposition, 'failed');
+assert.equal(massAuthorityAssay.visualInspection.happy.disposition, 'failed');
+assert.equal(massAuthorityAssay.visualInspection.motionSafe.disposition, 'unassayed');
+assert.deepEqual(
+  massAuthorityAssay.visualInspection.safe.failureClasses,
+  [
+    'clustered_cavities',
+    'porous_surface_defects',
+    'ambiguous_hollow_anatomy',
+  ],
+);
+
 assert.equal(
   plan.massAuthority?.schema,
   'kaminos.lirm-bauplan-mass-authority.v0',

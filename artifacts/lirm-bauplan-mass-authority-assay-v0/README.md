@@ -6,7 +6,7 @@ mass words in the generator prompt.
 
 ## Result
 
-The result is positive within a narrow claim boundary.
+The result is positive within a narrow, research-only claim boundary.
 
 - The procedural heavy control is visibly fuller than its accepted parent.
 - Fixed-seed neutral image completion preserves that mass difference while
@@ -15,8 +15,12 @@ The result is positive within a narrow claim boundary.
   remains long and low; the heavy branch becomes shorter, deeper, and fuller.
 - The route establishes low-frequency morphology authority. Exact dorsal-detail
   and support-topology authority remain unestablished.
-- Both outputs were inspected and classified `happy_safe`. Neither is admitted
-  as a finished hero creature.
+- Both branches fail the independent `safe` and `happy` visual gates. Operator
+  exposure is prohibited; the committed images and GLBs remain agent-only
+  research evidence.
+- The static witnesses contain ambiguous organismal anatomy, clustered
+  cavities, porous surface defects, malformed dorsal structures, and unresolved
+  support stubs. Motion safety is unassayed because static admission failed.
 
 The neutral completion prompt requested a four-support pattern while the
 procedural bauplan carries seven authored axial contacts. The assay therefore
@@ -24,8 +28,10 @@ admits no support-count or support-identity claim from the generated images or
 GLBs. Mushfinger's registration layer remains the named consumer for that
 question.
 
-## Evidence
+## Agent-Only Evidence
 
+- Do not present these artifacts to the operator as visual smoke, thumbnails,
+  contact sheets, or direct links.
 - `control-sheet.png`: parent and heavy clay, depth, and normal controls.
 - `imagegen/matched-seed720501/comparison-parent-left-heavy-right.png`: matched
   neutral image outputs.
@@ -45,6 +51,10 @@ the submitted Greenroom request and are labeled separately in the receipt.
 ## Interpretation
 
 Gross mass can live in the bauplan and survive both generative transitions.
-Imagegen remains useful for organismal completion and aesthetic treatment.
 Support identity still needs an explicit registration/admission layer because
 the generators may merge, split, or suppress visible support structures.
+
+Structural informativeness does not establish positive aesthetics or operator
+safety. The next morphology experiment should fit the same low-frequency mass
+operator to a positively admitted friendly founder, then require independent
+static `safe`, static `happy`, and motion `safe` gates before operator exposure.

@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.lirm-bauplan-mass-authority-assay-result.v0",
-  "status": "positive_bounded",
+  "status": "positive_bounded_research_only",
   "comparison": {
     "parentId": "bauplan-plus-dorsal-plates",
     "variantId": "bauplan-heavy-plus-dorsal-plates",
@@ -24,12 +24,30 @@
     "mechanicalConsumerAdmission": "deferred"
   },
   "visualInspection": {
-    "operatorExposureClass": "happy_safe",
+    "operatorExposure": "prohibited",
+    "researchVisibility": "agent_only",
+    "safe": {
+      "disposition": "failed",
+      "failureClasses": [
+        "clustered_cavities",
+        "porous_surface_defects",
+        "ambiguous_hollow_anatomy"
+      ],
+      "reason": "The 2D elaborations contain ambiguous organismal anatomy; Trellis amplifies it into open cavities, pitted surfaces, malformed dorsal structures, and unresolved support stubs."
+    },
+    "happy": {
+      "disposition": "failed",
+      "reason": "Neither branch is positively cute or aesthetically pleasing. Structural coherence and comparative research value do not satisfy the happy gate."
+    },
+    "motionSafe": {
+      "disposition": "unassayed",
+      "reason": "Static safe and happy gates failed, so no operator-facing motion witness is lawful."
+    },
     "parentImage": "longer lower body with more small support projections",
     "heavyImage": "deeper underside, broader center mass, and fuller terminal masses",
     "parentSpatial": "long low connected body with many small support projections",
     "heavySpatial": "shorter fuller connected body with enlarged terminal masses and fewer larger support nubs",
-    "sharedLimit": "head identity remains unresolved and dorsal/support details drift across inference"
+    "sharedLimit": "Head identity remains unresolved; dorsal and support details drift; local cavities and porous defects prohibit operator exposure."
   },
   "effectiveRoutes": {
     "imagegen": {
@@ -126,5 +144,5 @@
       "sha256": "f3a9ed8082466c33f28966e27c32f20edeaca1b64d9c4f52eee23cdb4960f000"
     }
   },
-  "nextConsumerQuestion": "Can downstream registration preserve authored support identities despite generator-level support-count drift?"
+  "nextConsumerQuestion": "Can downstream agent-only registration recover authored support identities from these research casts, and can the same low-frequency mass edit be transferred to a positively admitted friendly founder?"
 }
