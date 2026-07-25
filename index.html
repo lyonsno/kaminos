@@ -2949,9 +2949,9 @@ import {
   startSharpInlineLiveTelemetrySession,
 } from './lib/sharp-inline-trace-transport.mjs';
 import {
+  appendGateBSchedulerTelemetry,
   bindGateBSourceBlobIdentity,
   gateBSourceAssetId,
-  normalizeGateBAdaptiveRange,
 } from './lib/sharp-gate-b-journal.mjs';
 import { indexSharpForegroundGapOverlaps } from './lib/sharp-foreground-gap-index.mjs';
 import {
@@ -13631,10 +13631,11 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     onProgress?.(event);
   };
   const reportTelemetry = event => {
-    const row = event?.kind === 'decoder-kernel-range-observed'
-      ? normalizeGateBAdaptiveRange(event)
-      : event;
-    liveTelemetry.append('scheduler-events', row);
+    appendGateBSchedulerTelemetry({
+      event,
+      observedAtMs: performance.now(),
+      append: (collectionId, row) => liveTelemetry.append(collectionId, row),
+    });
     if (event?.kind === 'resource-lifecycle') {
       liveTelemetry.append('resource-snapshots', {
         schema: 'kaminos.sharp-gate-b-resource-snapshot.v0',

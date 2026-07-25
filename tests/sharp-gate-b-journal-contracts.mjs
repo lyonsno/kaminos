@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   GATE_B_COLLECTIONS,
+  appendGateBSchedulerTelemetry,
   bindGateBSourceBlobIdentity,
   createGateBBatchingState,
   gateBSourceAssetId,
@@ -196,7 +197,8 @@ const adaptiveRange = normalizeGateBAdaptiveRange({
   phase: 'gaussian-phase',
   kind: 'decoder-kernel-range-observed',
   role: 'decoder-kernel-output-tile-observation',
-  rangeId: 'sharp:run:gaussian:0:image-encoder:range:3',
+  // webgpu-inference-kit 0.1.38 emits `${plannerId}:${rangeIndex}`.
+  rangeId: 'sharp:run:gaussian:0:image-encoder:3',
   rangeIndex: 3,
   rangeTotal: null,
   rangeCountAuthority: 'terminal-only',
@@ -231,9 +233,68 @@ const adaptiveRange = normalizeGateBAdaptiveRange({
   epochMs: 2000,
 });
 assert.equal(adaptiveRange.plannerId, 'sharp:run:gaussian:0:image-encoder');
-assert.equal(adaptiveRange.rangeId, 'sharp:run:gaussian:0:image-encoder:range:3');
+assert.equal(adaptiveRange.rangeId, 'sharp:run:gaussian:0:image-encoder:3');
 assert.equal(adaptiveRange.outputEnd - adaptiveRange.outputStart, adaptiveRange.outputCount);
 assert.equal(adaptiveRange.retention, 'uncapped');
+const acceptedSchedulerRows = [];
+assert.equal(
+  appendGateBSchedulerTelemetry({
+    event: adaptiveRange,
+    observedAtMs: 1000,
+    append: (collectionId, row) => acceptedSchedulerRows.push({ collectionId, row }),
+  }).status,
+  'accepted',
+);
+assert.equal(acceptedSchedulerRows[0].collectionId, 'scheduler-events');
+const quarantinedSchedulerRows = [];
+const quarantinedSchedulerEvent = {
+  ...adaptiveRange,
+  rangeId: 'not-a-planner-scoped-range',
+};
+let quarantineDisposition = null;
+assert.doesNotThrow(
+  () => {
+    quarantineDisposition = appendGateBSchedulerTelemetry({
+      event: quarantinedSchedulerEvent,
+      observedAtMs: 1001,
+      append: (collectionId, row) => quarantinedSchedulerRows.push({ collectionId, row }),
+    });
+  },
+  'an observer-side schema disagreement must not terminate SHARP inference',
+);
+assert.equal(quarantineDisposition.status, 'quarantined');
+assert.equal(quarantinedSchedulerRows.at(-1).collectionId, 'runtime-errors');
+assert.equal(
+  quarantinedSchedulerRows.at(-1).row.kind,
+  'scheduler-telemetry-validation-error',
+);
+assert.equal(
+  quarantinedSchedulerRows.at(-1).row.event,
+  quarantinedSchedulerEvent,
+  'the rejected source event must remain attached to the durable diagnostic',
+);
+const failedAdaptiveSchedulerRows = [];
+const failedAdaptiveSchedulerEvent = {
+  kind: 'decoder-kernel-range-observed',
+  role: 'decoder-kernel-output-tile-failed',
+  rangeId: 'sharp:run:gaussian:0:image-encoder:4',
+  rangeIndex: 4,
+  failure: {
+    name: 'GPUValidationError',
+    message: 'injected kernel failure',
+  },
+};
+assert.equal(
+  appendGateBSchedulerTelemetry({
+    event: failedAdaptiveSchedulerEvent,
+    observedAtMs: 1002,
+    append: (collectionId, row) => failedAdaptiveSchedulerRows.push({ collectionId, row }),
+  }).status,
+  'accepted',
+  'a producer-authored adaptive failure row must remain scheduler evidence, not become an observer validation error',
+);
+assert.equal(failedAdaptiveSchedulerRows[0].collectionId, 'scheduler-events');
+assert.equal(failedAdaptiveSchedulerRows[0].row, failedAdaptiveSchedulerEvent);
 assert.throws(
   () => normalizeGateBAdaptiveRange({
     ...adaptiveRange,
@@ -622,8 +683,8 @@ assert.match(
 );
 assert.match(
   page,
-  /liveTelemetry\.append\('scheduler-events'/,
-  'scheduler events must enter their dedicated uncapped collection',
+  /const reportTelemetry = event => \{[\s\S]{0,500}appendGateBSchedulerTelemetry\(\{[\s\S]{0,300}liveTelemetry\.append/,
+  'Gate B scheduler observation must quarantine validation failures instead of throwing through SHARP inference',
 );
 assert.match(
   page,

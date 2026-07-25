@@ -1852,7 +1852,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                                 f"SHARP Gate B batching {collection_id}.{count_name} is invalid"
                             )
                     if (
-                        queued != expected_start + len(rows)
+                        queued < expected_start + len(rows)
                         or flushed != expected_start
                         or in_flight != len(rows)
                         or unflushed != queued - flushed

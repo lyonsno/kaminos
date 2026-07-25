@@ -458,6 +458,77 @@ try {
   assert.equal(gateBFailure.gateB.clientBatching.collections['scheduler-events'].unflushed, 1);
   assert.deepEqual(gateBFailure.gateB.flushReceipts, []);
 
+  const concurrentGrowthStart = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'gate-b-concurrent-growth-test',
+    document: {
+      schema: 'kaminos.sharp-inline-live-telemetry.v0',
+      gateB: {
+        schema: 'kaminos.sharp-gate-b-live-journal.v0',
+        batching: {
+          schema: 'kaminos.sharp-gate-b-batching.v0',
+          retention: 'uncapped',
+          overflowPolicy: 'none-all-rows-retained',
+          flushIntervalMs: 250,
+          maxRowsPerFlush: null,
+          flushOrdinal: 0,
+          lastFlushedAt: null,
+          collections: {},
+        },
+      },
+    },
+    collections: [{
+      id: 'raf-opportunity-snapshots',
+      jsonPointer: '#/gateB/raf-opportunity-snapshots',
+      expectedCount: null,
+      liveAppend: true,
+      retention: 'uncapped',
+      mediaType: 'application/x-ndjson',
+    }],
+  });
+  const concurrentGrowthChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: concurrentGrowthStart.body.sessionId,
+    collectionId: 'raf-opportunity-snapshots',
+    expectedStart: 0,
+    rows: [{ schema: 'test.raf-opportunity.v0', ordinal: 0 }],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 0,
+      lastFlushedAt: null,
+      collections: {
+        'raf-opportunity-snapshots': {
+          queued: 2,
+          flushed: 0,
+          inFlight: 1,
+          unflushed: 2,
+        },
+      },
+    },
+  });
+  assert.equal(
+    concurrentGrowthChunk.response.status,
+    200,
+    `legal concurrent queue growth must not kill the live journal: ${JSON.stringify(concurrentGrowthChunk.body)}`,
+  );
+  const concurrentGrowthState = JSON.parse(readFileSync(
+    path.join(concurrentGrowthStart.body.outputRoot, 'sharp-inline-report-state.json'),
+    'utf8',
+  ));
+  assert.equal(concurrentGrowthState.collections['raf-opportunity-snapshots'].receivedCount, 1);
+  assert.deepEqual(
+    concurrentGrowthState.document.gateB.batching.collections['raf-opportunity-snapshots'],
+    {
+      queued: 2,
+      flushed: 1,
+      inFlight: 0,
+      unflushed: 1,
+    },
+  );
+
   console.log('SHARP inline report session server integration passed');
 } finally {
   server.kill('SIGTERM');
