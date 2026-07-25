@@ -1,0 +1,28 @@
+{
+  "job_id": "a18c30a44462",
+  "job_type": "trellis2mlx_fast",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/imagegen/bauplan-heavy/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/trellis/bauplan-heavy",
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/imagegen/bauplan-heavy/output.png --output /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/trellis/bauplan-heavy/output.glb --seed 720501 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1785020256.1040041,
+  "finished_at": 1785020369.485753,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

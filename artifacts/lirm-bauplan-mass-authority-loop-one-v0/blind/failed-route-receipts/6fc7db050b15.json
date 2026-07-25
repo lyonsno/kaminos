@@ -1,0 +1,25 @@
+{
+  "job_id": "6fc7db050b15",
+  "job_type": "kaminos_blender_glb_witness_molten_0718",
+  "status": "failed",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/blind/cell-a/source.glb",
+  "output_dir": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/blind/cell-a/right",
+  "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/blind/cell-a/source.glb /private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/blind/cell-a/right/render.png 0.85 0.2",
+  "effective_cwd": "/private/tmp/kaminos-molten-silhouette-basin-0717",
+  "effective_env": {},
+  "effective_defaults": {
+    "pitch": "0.2",
+    "witness_script": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+    "yaw": "0.0"
+  },
+  "effective_timeout": 300,
+  "ignored_params": null,
+  "started_at": 1785020445.872957,
+  "finished_at": 1785020445.876328,
+  "exit_code": -1,
+  "failure_phase": "launch",
+  "error_message": "[Errno 2] No such file or directory: '/private/tmp/kaminos-molten-silhouette-basin-0717'",
+  "warnings": [
+    "volatile_output"
+  ]
+}

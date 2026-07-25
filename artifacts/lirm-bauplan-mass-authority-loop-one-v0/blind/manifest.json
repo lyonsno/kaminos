@@ -1,0 +1,123 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-blind-spatial-witness.v0",
+  "status": "awaiting-independent-static-classification",
+  "researchVisibility": "blind-independent-classifiers",
+  "operatorExposure": "prohibited_pending_two_independent_safe_and_happy_passes",
+  "cellMapping": "withheld",
+  "classificationOrder": [
+    "blind-independent-classifier",
+    "primary-agent-inspector"
+  ],
+  "motionAdmission": "prohibited",
+  "sourceRoute": {
+    "jobType": "trellis2mlx_fast",
+    "seed": "720501",
+    "resolution": "512",
+    "steps": "6",
+    "cascade": "disabled",
+    "targetFaces": "200000",
+    "textureSize": "1024",
+    "simplifyFirst": true
+  },
+  "witnessRoute": {
+    "jobType": "kaminos_blender_glb_witness_molten_0718",
+    "renderer": "/Applications/Blender.app/Contents/MacOS/Blender",
+    "script": "artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+    "pitchRadians": "0.2",
+    "views": {
+      "front": "0",
+      "right": "0.85",
+      "opposite": "3.141593",
+      "left": "-0.85"
+    }
+  },
+  "routeRecovery": {
+    "initialOutcome": "failed-before-primary-output",
+    "failurePhase": "launch",
+    "failureReason": "historical witness working directory no longer existed",
+    "failedReceiptDirectory": "failed-route-receipts",
+    "correction": "rebound invocation cwd and identical tracked witness script to the active Molten worktree",
+    "correctedOutcome": "eight-complete-route-identified-renders"
+  },
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "sourceGlb": "cell-a/source.glb",
+      "sourceBytes": 9190208,
+      "views": [
+        {
+          "viewId": "front",
+          "path": "cell-a/front/render.png",
+          "sha256": "sha256:078f688ff8d18fed514db7dfbd5d6ba346d07efc2f892b90e70092cb315c73d2",
+          "width": 1100,
+          "height": 900,
+          "jobId": "3d6e8430310e"
+        },
+        {
+          "viewId": "right",
+          "path": "cell-a/right/render.png",
+          "sha256": "sha256:9c188ed61b56e25f7c8c5a455df67e940da71e926e08d317ef2397f556c7c519",
+          "width": 1100,
+          "height": 900,
+          "jobId": "239a45536fee"
+        },
+        {
+          "viewId": "opposite",
+          "path": "cell-a/opposite/render.png",
+          "sha256": "sha256:edbdf3acc1117b5e75bad778bf4be14c9d9a3d6b3df8bc325d2b953b1464e99",
+          "width": 1100,
+          "height": 900,
+          "jobId": "219e34b4f856"
+        },
+        {
+          "viewId": "left",
+          "path": "cell-a/left/render.png",
+          "sha256": "sha256:a360593adaf61cda9ca62753c2468b90e9268a3b05fd8a6b1f9ebcd5844e0e50",
+          "width": 1100,
+          "height": 900,
+          "jobId": "098fcb2cfa1d"
+        }
+      ]
+    },
+    {
+      "cellId": "cell-b",
+      "sourceGlb": "cell-b/source.glb",
+      "sourceBytes": 8755388,
+      "views": [
+        {
+          "viewId": "front",
+          "path": "cell-b/front/render.png",
+          "sha256": "sha256:728b7cbd92be4039a8f811450aee52b984be5dbd493b04cb3cd5a394e54f5a77",
+          "width": 1100,
+          "height": 900,
+          "jobId": "f62aaa64426a"
+        },
+        {
+          "viewId": "right",
+          "path": "cell-b/right/render.png",
+          "sha256": "sha256:815b85ae2eca3daeebb1131baf646744afe0f06191667b99a51a9a03ab64eec4",
+          "width": 1100,
+          "height": 900,
+          "jobId": "8c6dfc74b6b6"
+        },
+        {
+          "viewId": "opposite",
+          "path": "cell-b/opposite/render.png",
+          "sha256": "sha256:32bd8b03d56fc44c194700b879ed3b0f942ddc1d4abf1e0b57ba846b6ff395ec",
+          "width": 1100,
+          "height": 900,
+          "jobId": "23ee764a8bf3"
+        },
+        {
+          "viewId": "left",
+          "path": "cell-b/left/render.png",
+          "sha256": "sha256:8091cb56151ade8e910c0d7066a6b87a81c9087c80093ae2653b2f7c962cc3e2",
+          "width": 1100,
+          "height": 900,
+          "jobId": "8f7ddfeaf9d2"
+        }
+      ]
+    }
+  ],
+  "lastTrustworthyEvidence": "both anonymous Trellis casts completed through one matched route and each has four complete route-identified 1100x900 Blender renders; no static visual classification has been consumed"
+}

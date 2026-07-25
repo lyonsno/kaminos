@@ -1,0 +1,18 @@
+{
+  "name": "source",
+  "job_type": "kaminos_blender_glb_witness_molten_0718",
+  "job_id": "239a45536fee",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-loop-one-v0/blind/cell-a/source.glb",
+  "input_name": "source.glb",
+  "params": {
+    "yaw": "0.85",
+    "pitch": "0.2",
+    "witness_script": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+    "cwd": "/private/tmp/kaminos-molten-support-atlas-admission-0724"
+  },
+  "output_files": [
+    "render.png"
+  ],
+  "created_at": 1785020540.1811461,
+  "duration_s": 1.3
+}
