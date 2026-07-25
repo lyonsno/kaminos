@@ -2948,6 +2948,9 @@ import {
   persistSharpInlineReportSession,
   startSharpInlineLiveTelemetrySession,
 } from './lib/sharp-inline-trace-transport.mjs';
+import {
+  normalizeGateBAdaptiveRange,
+} from './lib/sharp-gate-b-journal.mjs';
 import { indexSharpForegroundGapOverlaps } from './lib/sharp-foreground-gap-index.mjs';
 import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
@@ -13200,6 +13203,86 @@ function sharpInlineSchedulerProfile(profileId) {
   return { mode: 'default' };
 }
 
+function sharpGateBAssayConfig() {
+  const config = globalThis.__KAMINOS_GATE_B_ASSAY__ || null;
+  if (!config) return null;
+  if (config.enabled !== true || config.presentationIsolation !== 'no-render') {
+    throw new Error('Gate B assay injection must explicitly enable no-render isolation');
+  }
+  return config;
+}
+
+function sharpGateBRouteIdentity({
+  assay,
+  inline,
+  source,
+  scheduler,
+  gpuContext,
+} = {}) {
+  const adapterInfo = gpuContext?.adapter?.info || {};
+  const embeddedKit = inline?.module?.sharpKitRuntimeIdentity?.(null);
+  return {
+    schema: 'kaminos.sharp-gate-b-route-identity.v0',
+    requestedRoute: 'sharp-image-to-splat-live-v0',
+    effectiveRoute: 'same-browser-product-realm-shared-device',
+    source: {
+      assetId: source?.id || null,
+      path: source?.path || source?.name || null,
+      sha256: source?.sha256 || null,
+    },
+    browser: {
+      executable: assay?.browser?.executable || null,
+      version: assay?.browser?.version || null,
+      headed: assay?.browser?.headed === true,
+    },
+    adapter: {
+      vendor: adapterInfo.vendor || assay?.adapter?.vendor || null,
+      architecture: adapterInfo.architecture || assay?.adapter?.architecture || null,
+      deviceLimits: {
+        maxBufferSize: gpuContext?.device?.limits?.maxBufferSize || null,
+        maxStorageBufferBindingSize: gpuContext?.device?.limits?.maxStorageBufferBindingSize || null,
+      },
+    },
+    model: {
+      name: 'SHARP',
+      baseRevision: assay?.sharpBaseRevision || null,
+      instrumentationRevision: inline?.mount?.revision || null,
+    },
+    weights: {
+      sha256: assay?.weightsSha256 || null,
+    },
+    kitRuntime: {
+      embedded: {
+        package: '@kaminos/webgpu-inference-kit',
+        version: embeddedKit?.kitVersion || null,
+        source: 'sharp-runtime',
+        sourceRevision: embeddedKit?.kitSourceRevision || null,
+      },
+      host: {
+        package: '@kaminos/webgpu-inference-kit',
+        version: assay?.hostKitVersion || null,
+        source: 'kaminos-runtime',
+      },
+    },
+    scheduler: {
+      profileId: 'cooperative-spn-gaussian',
+      effective: scheduler,
+    },
+    presentationIsolation: {
+      mode: 'foreground-opportunity-no-render',
+      foregroundRafLease: true,
+      simulationQuiesced: true,
+      raymarchSubmissionQuiesced: true,
+    },
+    processes: {
+      witnessPid: assay?.processes?.witnessPid || null,
+      browserPid: assay?.processes?.browserPid || null,
+      gpuProcessPid: assay?.processes?.gpuProcessPid || null,
+      rendererPids: assay?.processes?.rendererPids || [],
+    },
+  };
+}
+
 async function loadSharpInlineProductRuntime() {
   if (sharpInlineRuntimePromise) return sharpInlineRuntimePromise;
   sharpInlineRuntimePromise = (async () => {
@@ -13465,27 +13548,47 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
   if (!sourceResponse.ok) throw new Error(`SHARP source image fetch failed: ${sourceResponse.status}`);
   const sourceBlob = await sourceResponse.blob();
   const scheduler = sharpInlineSchedulerProfile(profileId);
+  const gateBAssay = sharpGateBAssayConfig();
+  if (gateBAssay && profileId !== 'cooperative-spn-gaussian') {
+    throw new Error('Gate B assay requires the cooperative-spn-gaussian scheduler profile');
+  }
   const foregroundEnabled = profileId !== 'baseline-default';
   let frameOrdinal = 0;
   let progressOrdinal = 0;
   let opportunityHook = null;
   let foregroundModeActivated = false;
+  let liveTelemetrySettled = false;
+  let gateBSnapshotTimer = null;
+  let gateBRafSampleCursor = 0;
+  let gateBWindowErrorHandler = null;
+  let gateBUnhandledRejectionHandler = null;
+  let gateBExternalExit = null;
+  const routeIdentity = gateBAssay
+    ? sharpGateBRouteIdentity({
+        assay: gateBAssay,
+        inline,
+        source,
+        scheduler,
+        gpuContext,
+      })
+    : {
+        requestedRoute: 'sharp-image-to-splat-live-v0',
+        effectiveRoute: 'same-browser-product-realm-shared-device',
+        sharpRevision: inline.mount.revision,
+        moduleUrl: inline.mount.moduleUrl,
+        weightsUrl: inline.mount.weightsUrl,
+        schedulerProfile: profileId,
+        scheduler,
+      };
   const liveTelemetry = await startSharpInlineLiveTelemetrySession({
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId,
-    routeIdentity: {
-      requestedRoute: 'sharp-image-to-splat-live-v0',
-      effectiveRoute: 'same-browser-product-realm-shared-device',
-      sharpRevision: inline.mount.revision,
-      moduleUrl: inline.mount.moduleUrl,
-      weightsUrl: inline.mount.weightsUrl,
-      schedulerProfile: profileId,
-      scheduler,
-    },
+    routeIdentity,
     sourceIdentity: {
       id: source.id || null,
       name: source.name || null,
       source: source.source,
+      sha256: source.sha256 || null,
     },
   });
   const liveTelemetryIdentity = {
@@ -13495,6 +13598,13 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     statePath: liveTelemetry.statePath,
     stateReadUrl: liveTelemetry.stateReadUrl,
     progressEventsPath: `${liveTelemetry.outputRoot}/traces/progress-events.ndjson`,
+    ...(gateBAssay ? {
+      schedulerEventsPath: `${liveTelemetry.outputRoot}/traces/scheduler-events.ndjson`,
+      resourceSnapshotsPath: `${liveTelemetry.outputRoot}/traces/resource-snapshots.ndjson`,
+      rafOpportunitySnapshotsPath: `${liveTelemetry.outputRoot}/traces/raf-opportunity-snapshots.ndjson`,
+      hostStatsPath: `${liveTelemetry.outputRoot}/traces/host-stats.ndjson`,
+      runtimeErrorsPath: `${liveTelemetry.outputRoot}/traces/runtime-errors.ndjson`,
+    } : {}),
   };
   const reportProgress = event => {
     const progressEvent = {
@@ -13507,12 +13617,96 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     liveTelemetry.append(progressEvent);
     onProgress?.(event);
   };
+  const reportTelemetry = event => {
+    const row = event?.kind === 'decoder-kernel-range-observed'
+      ? normalizeGateBAdaptiveRange(event)
+      : event;
+    liveTelemetry.append('scheduler-events', row);
+    if (event?.kind === 'resource-lifecycle') {
+      liveTelemetry.append('resource-snapshots', {
+        schema: 'kaminos.sharp-gate-b-resource-snapshot.v0',
+        authority: 'sharp-runtime-resource-lifecycle-event',
+        observedAtMs: performance.now(),
+        event,
+      });
+    }
+  };
+  const appendGateBRafOpportunitySnapshot = () => {
+    if (!gateBAssay) return;
+    const heartbeat = activeForegroundKilnHeartbeat?.report({ phase: 'burning' }) || null;
+    const retainedSamples = Array.isArray(heartbeat?.samples) ? heartbeat.samples : [];
+    const samples = retainedSamples.slice(gateBRafSampleCursor);
+    gateBRafSampleCursor = retainedSamples.length;
+    liveTelemetry.append('raf-opportunity-snapshots', {
+      schema: 'kaminos.sharp-gate-b-raf-opportunity-snapshot.v0',
+      observedAtMs: performance.now(),
+      sampleStart: gateBRafSampleCursor - samples.length,
+      sampleEnd: gateBRafSampleCursor,
+      samples,
+      retention: 'uncapped',
+      heartbeat: heartbeat ? {
+        status: heartbeat.status || null,
+        phase: heartbeat.phase || null,
+        sampleCount: retainedSamples.length,
+      } : null,
+    });
+  };
+  if (gateBAssay) {
+    liveTelemetry.append('resource-snapshots', {
+      schema: 'kaminos.sharp-gate-b-resource-snapshot.v0',
+      authority: 'effective-device-limits-resource-counts-not-yet-available',
+      observedAtMs: performance.now(),
+      knownBufferCount: null,
+      knownDeclaredBytes: null,
+      deviceLimits: routeIdentity.adapter.deviceLimits,
+    });
+    appendGateBRafOpportunitySnapshot();
+    gateBSnapshotTimer = setInterval(appendGateBRafOpportunitySnapshot, 250);
+    const appendRuntimeError = row => liveTelemetry.append('runtime-errors', {
+      schema: 'kaminos.sharp-gate-b-runtime-error.v0',
+      observedAtMs: performance.now(),
+      ...row,
+    });
+    globalThis.__KAMINOS_GATE_B_JOURNAL__ = {
+      schema: 'kaminos.sharp-gate-b-cdp-bridge.v0',
+      sessionId: liveTelemetry.sessionId,
+      statePath: liveTelemetry.statePath,
+      appendHostStats: row => liveTelemetry.append('host-stats', row),
+      appendRuntimeError,
+      recordRendererExit: row => {
+        gateBExternalExit = {
+          kind: 'renderer-exit',
+          beforePrimaryOutput: true,
+          ...row,
+        };
+        appendRuntimeError({
+          kind: 'renderer-exit',
+          ...row,
+        });
+      },
+      batchingSnapshot: () => liveTelemetry.batchingSnapshot(),
+    };
+    gateBWindowErrorHandler = event => appendRuntimeError({
+      kind: 'window-error',
+      message: event?.message || null,
+      filename: event?.filename || null,
+      line: event?.lineno || null,
+      column: event?.colno || null,
+    });
+    gateBUnhandledRejectionHandler = event => appendRuntimeError({
+      kind: 'unhandled-rejection',
+      message: event?.reason?.message || String(event?.reason || 'unknown rejection'),
+    });
+    window.addEventListener('error', gateBWindowErrorHandler);
+    window.addEventListener('unhandledrejection', gateBUnhandledRejectionHandler);
+  }
   reportProgress({ progress: 0.03, message: 'The shared-device SHARP route is loading the source.' });
   try {
     if (foregroundEnabled) {
       opportunityHook = createSharpSameDeviceKilnOpportunityHook({
         volume: volumePrototype,
         firingId,
+        presentationIsolation: gateBAssay ? 'no-render' : 'render',
         nextFrameId: () => {
           frameOrdinal += 1;
           return volumePrototype.nextForegroundOpportunityFrameId({ firingId });
@@ -13532,6 +13726,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           foregroundModeActivated = true;
         },
         onProgress: reportProgress,
+        onTelemetry: gateBAssay ? reportTelemetry : undefined,
         throwOnError: false,
       });
     } catch (error) {
@@ -13540,6 +13735,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
           phase: 'sharp-inference',
           error: error?.message || String(error),
         });
+        liveTelemetrySettled = true;
       } catch (telemetryError) {
         throw new Error(
           `SHARP inline inference failed (${error?.message || String(error)}); `
@@ -13554,6 +13750,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         phase: 'sharp-inference',
         error: sharpResult?.error || 'SHARP inline route failed before PLY output',
       });
+      liveTelemetrySettled = true;
       const failureDocument = {
         schema: 'kaminos.sharp-inline-failure-report.v0',
         status: 'failed',
@@ -13591,14 +13788,6 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         reportReadUrl: failureReceipt.readUrl,
       };
     }
-    const liveTelemetryReceipt = await liveTelemetry.finish({
-      status: 'complete',
-      phase: 'sharp-inference-complete',
-    });
-    liveTelemetryIdentity.status = liveTelemetryReceipt.status;
-    liveTelemetryIdentity.reportPath = liveTelemetryReceipt.path;
-    liveTelemetryIdentity.reportReadUrl = liveTelemetryReceipt.readUrl;
-    liveTelemetryIdentity.progressEvents = liveTelemetryReceipt.traceArtifacts?.['progress-events'] || null;
     if (sharpResult.mode !== 'spn') {
       throw new Error('SHARP inline route did not complete the real SPN-to-PLY path');
     }
@@ -13868,9 +14057,42 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     rawResult.report.readUrl = reportReceipt.readUrl;
     rawResult.report.document = reportReceipt.document;
     rawResult.bundle.document.outputRoot = reportReceipt.outputRoot;
+    if (gateBAssay) appendGateBRafOpportunitySnapshot();
+    const liveTelemetryReceipt = await liveTelemetry.finish({
+      status: 'complete',
+      phase: gateBAssay ? 'sharp-route-complete' : 'sharp-inference-complete',
+      artifact,
+      browserExit: gateBExternalExit,
+    });
+    liveTelemetrySettled = true;
+    liveTelemetryIdentity.status = liveTelemetryReceipt.status;
+    liveTelemetryIdentity.reportPath = liveTelemetryReceipt.path;
+    liveTelemetryIdentity.reportReadUrl = liveTelemetryReceipt.readUrl;
+    liveTelemetryIdentity.traceArtifacts = liveTelemetryReceipt.traceArtifacts || {};
+    liveTelemetryIdentity.progressEvents = liveTelemetryReceipt.traceArtifacts?.['progress-events'] || null;
+    rawResult.liveTelemetry = { ...liveTelemetryIdentity };
     onProgress?.({ progress: 1, message: 'The shared-device cast is stored.' });
     return pipelineRememberRun(rawResult, source, pipeline, { generator });
   } finally {
+    if (gateBSnapshotTimer !== null) clearInterval(gateBSnapshotTimer);
+    if (gateBWindowErrorHandler) window.removeEventListener('error', gateBWindowErrorHandler);
+    if (gateBUnhandledRejectionHandler) {
+      window.removeEventListener('unhandledrejection', gateBUnhandledRejectionHandler);
+    }
+    if (globalThis.__KAMINOS_GATE_B_JOURNAL__?.sessionId === liveTelemetry.sessionId) {
+      delete globalThis.__KAMINOS_GATE_B_JOURNAL__;
+    }
+    if (!liveTelemetrySettled) {
+      try {
+        await liveTelemetry.abort({
+          phase: 'sharp-route-unsettled',
+          error: 'SHARP route exited without a sealed live journal',
+        });
+        liveTelemetrySettled = true;
+      } catch {
+        // The original route or telemetry failure remains authoritative.
+      }
+    }
     if (globalThis.__kaminosSharpForegroundOpportunity === opportunityHook) {
       delete globalThis.__kaminosSharpForegroundOpportunity;
     }

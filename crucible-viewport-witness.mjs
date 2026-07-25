@@ -1,9 +1,13 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
+  closeSync,
+  fsyncSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -20,6 +24,9 @@ import {
   resolveHeadlessBrowser,
 } from './lib/headless-browser-resolver.mjs';
 
+const GATE_B_SHARP_BASE_REVISION = 'b689f485d5d6f6c8868f21ad3d56d17e81cba44a';
+const GATE_B_WEIGHTS_SHA256 = '98212168b105c4027aff54c635fe01f547974911deb0c1109d8c05df68a01caf';
+
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
   const part = process.argv[i];
@@ -34,7 +41,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--gate-b-journal] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -52,6 +59,7 @@ const viewportWidth = Number(args.get('viewport-width') || 1600);
 const viewportHeight = Number(args.get('viewport-height') || 1100);
 const headed = args.has('headed');
 const fireFriendly = args.has('fire-friendly');
+const gateBJournal = args.has('gate-b-journal');
 const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
 const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
@@ -89,7 +97,13 @@ let browserResolution = null;
 let browserSession = null;
 let browserSpawnError = null;
 let browserExit = null;
+let rendererProcessExits = [];
 let browserSocket = null;
+let browserControlSocket = null;
+let gateBProcessIdentity = null;
+let lastGateBHostStats = null;
+let forwardedRuntimeExceptionCount = 0;
+let forwardedRendererExitCount = 0;
 let successfulReportPayload = null;
 let terminalSummary = null;
 let terminalFailure = null;
@@ -117,6 +131,7 @@ const requestedInvocation = {
   reportPath,
   headed,
   fireFriendly,
+  gateBJournal,
   replayCastReportPath,
   schedulerProfileId,
   sourceAssetId: requestedSourceAssetId,
@@ -354,13 +369,149 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function readHostCommand(command, commandArgs = []) {
+  try {
+    return {
+      status: 'available',
+      command: [command, ...commandArgs],
+      output: execFileSync(command, commandArgs, { encoding: 'utf8' }).trim(),
+    };
+  } catch (error) {
+    return {
+      status: 'unavailable',
+      command: [command, ...commandArgs],
+      reason: error?.message || String(error),
+    };
+  }
+}
+
+function parseProcessRows(text) {
+  return String(text || '')
+    .split('\n')
+    .map(line => {
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(.+)$/);
+      if (!match) return null;
+      return {
+        pid: Number(match[1]),
+        ppid: Number(match[2]),
+        cpuPercent: Number(match[3]),
+        memoryPercent: Number(match[4]),
+        residentBytes: Number(match[5]) * 1024,
+        virtualBytes: Number(match[6]) * 1024,
+        command: match[7],
+      };
+    })
+    .filter(Boolean);
+}
+
+function descendantProcesses(rows, rootPid) {
+  const selected = new Set([rootPid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (!selected.has(row.pid) && selected.has(row.ppid)) {
+        selected.add(row.pid);
+        changed = true;
+      }
+    }
+  }
+  return rows.filter(row => selected.has(row.pid));
+}
+
+function parseVmStat(text) {
+  const pageSizeMatch = String(text).match(/page size of (\d+) bytes/);
+  const pageSize = Number(pageSizeMatch?.[1] || 0);
+  const pages = {};
+  for (const line of String(text).split('\n')) {
+    const match = line.match(/^([^:]+):\s+(\d+)\./);
+    if (match) pages[match[1].trim()] = Number(match[2]);
+  }
+  const bytes = label => Number.isFinite(pages[label]) && pageSize > 0
+    ? pages[label] * pageSize
+    : null;
+  return {
+    pageSize,
+    freeBytes: bytes('Pages free'),
+    activeBytes: bytes('Pages active'),
+    inactiveBytes: bytes('Pages inactive'),
+    wiredBytes: bytes('Pages wired down'),
+    compressedBytes: bytes('Pages occupied by compressor'),
+    swapInPages: pages.Swapins ?? null,
+    swapOutPages: pages.Swapouts ?? null,
+  };
+}
+
+function parseSwapUsage(text) {
+  const match = String(text).match(/total = ([\d.]+)M\s+used = ([\d.]+)M\s+free = ([\d.]+)M/);
+  if (!match) return { raw: String(text).trim() };
+  return {
+    totalBytes: Number(match[1]) * 1024 * 1024,
+    usedBytes: Number(match[2]) * 1024 * 1024,
+    freeBytes: Number(match[3]) * 1024 * 1024,
+  };
+}
+
+function parseAgxObservation(text) {
+  const fields = {};
+  for (const field of [
+    'Device Utilization %',
+    'Renderer Utilization %',
+    'Tiler Utilization %',
+    'In use system memory',
+    'Allocated system memory',
+  ]) {
+    const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = String(text).match(new RegExp(`"${escapedField}"=(\\d+)`));
+    fields[field] = match ? Number(match[1]) : null;
+  }
+  return {
+    status: Object.values(fields).some(Number.isFinite) ? 'available' : 'unavailable',
+    authority: 'system-global-ioreg-agxaccelerator-not-process-exclusive',
+    fields,
+  };
+}
+
+function sampleGateBHost(browserPid) {
+  const samplingStartedAtMs = performance.now();
+  const ps = readHostCommand('ps', ['-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,vsz=,comm=']);
+  const processRows = ps.status === 'available' ? parseProcessRows(ps.output) : [];
+  const browserProcesses = descendantProcesses(processRows, browserPid);
+  const vmStat = readHostCommand('vm_stat');
+  const swap = readHostCommand('sysctl', ['-n', 'vm.swapusage']);
+  const thermal = readHostCommand('pmset', ['-g', 'therm']);
+  const powerSource = readHostCommand('pmset', ['-g', 'batt']);
+  const agx = readHostCommand('ioreg', ['-r', '-c', 'AGXAccelerator', '-d', '1', '-l']);
+  return {
+    schema: 'kaminos.sharp-gate-b-host-stat.v0',
+    observedAt: new Date().toISOString(),
+    samplingDurationMs: performance.now() - samplingStartedAtMs,
+    process: {
+      rootPid: browserPid,
+      rows: browserProcesses,
+      aggregateCpuPercent: browserProcesses.reduce((sum, row) => sum + row.cpuPercent, 0),
+      aggregateResidentBytes: browserProcesses.reduce((sum, row) => sum + row.residentBytes, 0),
+      crashpadHandlers: browserProcesses
+        .filter(row => row.command.includes('chrome_crashpad_handler'))
+        .map(row => ({ pid: row.pid, ppid: row.ppid })),
+    },
+    hostMemory: {
+      vmStat: vmStat.status === 'available' ? parseVmStat(vmStat.output) : vmStat,
+      swap: swap.status === 'available' ? parseSwapUsage(swap.output) : swap,
+    },
+    thermalPower: { thermal, powerSource },
+    gpu: agx.status === 'available' ? parseAgxObservation(agx.output) : agx,
+  };
+}
+
 function ensureParent(filePath) {
   mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
 function writeReport(payload) {
   ensureParent(reportPath);
-  writeFileSync(reportPath, JSON.stringify({
+  const temporaryPath = `${reportPath}.tmp-${process.pid}`;
+  writeFileSync(temporaryPath, `${JSON.stringify({
     schema: 'crucible-viewport-witness.v0',
     url,
     screenshot: primaryOutputWritten ? out : null,
@@ -374,8 +525,19 @@ function writeReport(payload) {
     requestedInvocation,
     effectiveIdentity: bestKnownEffectiveIdentity(),
     browserCleanup,
+    browserExit,
+    rendererProcessExits,
+    gateBProcessIdentity,
+    lastGateBHostStats,
     ...payload,
-  }, null, 2));
+  }, null, 2)}\n`);
+  const fileDescriptor = openSync(temporaryPath, 'r');
+  fsyncSync(fileDescriptor);
+  closeSync(fileDescriptor);
+  renameSync(temporaryPath, reportPath);
+  const directoryDescriptor = openSync(path.dirname(reportPath), 'r');
+  fsyncSync(directoryDescriptor);
+  closeSync(directoryDescriptor);
 }
 
 async function cdpAtPort(port, pathname) {
@@ -477,6 +639,14 @@ function waitForBrowserExit(timeoutMs) {
 
 async function cleanupBrowserResources() {
   browserCleanup.profilePath = userDataDir;
+  if (browserControlSocket) {
+    try {
+      browserControlSocket.close();
+    } catch (error) {
+      browserCleanup.errors.push(`browser-control-websocket-close: ${error.message}`);
+    }
+    browserControlSocket = null;
+  }
   if (browserSocket) {
     try {
       browserSocket.close();
@@ -546,6 +716,89 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
     throw new Error(`evaluation failed during ${phase}: ${result.exceptionDetails.text || 'exception'}`);
   }
   return result.result?.value;
+}
+
+async function gateBBrowserProcessSnapshot() {
+  if (!browserControlSocket) throw new Error('Gate B browser control socket is unavailable');
+  const result = await wsRequest(browserControlSocket, 'SystemInfo.getProcessInfo');
+  const rows = (result.processInfo || []).map(row => ({
+    type: row.type || null,
+    pid: Number(row.id),
+    cpuTimeSeconds: Number.isFinite(row.cpuTime) ? row.cpuTime : null,
+  })).filter(row => Number.isSafeInteger(row.pid) && row.pid > 0);
+  return {
+    observedAt: new Date().toISOString(),
+    rows,
+    gpuProcessPid: rows.find(row => row.type === 'GPU')?.pid ?? null,
+    rendererPids: rows.filter(row => row.type === 'renderer').map(row => row.pid),
+  };
+}
+
+async function appendGateBWitnessTelemetry(ws) {
+  const hostStats = sampleGateBHost(browserSession.spawnedPid);
+  lastGateBHostStats = hostStats;
+  const processSnapshot = await gateBBrowserProcessSnapshot();
+  const currentRendererPids = new Set(processSnapshot.rendererPids);
+  const previouslyKnownRendererPids = gateBProcessIdentity?.rendererPids || [];
+  for (const rendererPid of previouslyKnownRendererPids) {
+    if (!currentRendererPids.has(rendererPid)
+        && !rendererProcessExits.some(exit => exit.pid === rendererPid)) {
+      rendererProcessExits.push({
+        kind: 'renderer-exit',
+        pid: rendererPid,
+        observedAt: processSnapshot.observedAt,
+        beforePrimaryOutput: !primaryOutputWritten,
+        authority: 'SystemInfo.getProcessInfo-disappearance',
+      });
+    }
+  }
+  gateBProcessIdentity = {
+    ...gateBProcessIdentity,
+    gpuProcessPid: processSnapshot.gpuProcessPid ?? gateBProcessIdentity?.gpuProcessPid ?? null,
+    rendererPids: [...new Set([
+      ...(gateBProcessIdentity?.rendererPids || []),
+      ...processSnapshot.rendererPids,
+    ])],
+    lastProcessSnapshot: processSnapshot,
+  };
+  const pendingRuntimeErrors = runtimeExceptions.slice(forwardedRuntimeExceptionCount);
+  const pendingRendererExits = rendererProcessExits.slice(forwardedRendererExitCount);
+  const result = await evaluate(ws, `(() => {
+    const journal = globalThis.__KAMINOS_GATE_B_JOURNAL__;
+    if (!journal) return { ok: false, reason: 'gate-b-journal-bridge-missing' };
+    journal.appendHostStats(${JSON.stringify(hostStats)});
+    for (const runtimeError of ${JSON.stringify(pendingRuntimeErrors)}) {
+      journal.appendRuntimeError({
+        schema: 'kaminos.sharp-gate-b-runtime-error.v0',
+        observedAt: new Date().toISOString(),
+        source: 'cdp-runtime-exception',
+        message: runtimeError,
+      });
+    }
+    for (const rendererExit of ${JSON.stringify(pendingRendererExits)}) {
+      journal.recordRendererExit(rendererExit);
+    }
+    return {
+      ok: true,
+      batching: journal.batchingSnapshot(),
+    };
+  })()`);
+  if (!result?.ok) {
+    return {
+      hostStats,
+      processSnapshot,
+      batching: null,
+      liveJournalStatus: result?.reason || 'unavailable',
+    };
+  }
+  forwardedRuntimeExceptionCount += pendingRuntimeErrors.length;
+  forwardedRendererExitCount += pendingRendererExits.length;
+  return {
+    hostStats,
+    processSnapshot,
+    batching: result.batching,
+    liveJournalStatus: 'appended',
+  };
 }
 
 async function clickVisibleElementCenter(ws, elementId) {
@@ -1326,6 +1579,18 @@ try {
   if (replayCastReportPath && fireFriendly) {
     throw new Error('--replay-cast-report cannot be combined with --fire-friendly');
   }
+  if (gateBJournal && (!headed || !fireFriendly)) {
+    throw new Error('--gate-b-journal requires --headed and --fire-friendly');
+  }
+  if (gateBJournal && schedulerProfileId !== 'cooperative-spn-gaussian') {
+    throw new Error('--gate-b-journal requires --scheduler-profile cooperative-spn-gaussian');
+  }
+  if (gateBJournal && (!requestedSourceAssetId || !expectedSharpRevision)) {
+    throw new Error('--gate-b-journal requires exact --source-asset-id and --expected-sharp-revision identities');
+  }
+  if (gateBJournal && (replayCastReportPath || captureInFlight)) {
+    throw new Error('--gate-b-journal cannot be combined with replay or in-flight visual capture');
+  }
   if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
     throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
   }
@@ -1358,11 +1623,20 @@ try {
     'about:blank',
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   browser.on('error', error => { browserSpawnError = error; });
-  browser.on('exit', (code, signal) => { browserExit = { code, signal }; });
+  browser.on('exit', (code, signal) => {
+    browserExit = {
+      code,
+      signal,
+      observedAt: new Date().toISOString(),
+      beforePrimaryOutput: !primaryOutputWritten,
+    };
+  });
   browser.stderr.on('data', chunk => { stderr += chunk.toString(); });
 
   browserSession = await waitForSpawnedBrowserCdp();
   phase = 'opening-cdp';
+  browserControlSocket = await connectWebSocket(browserSession.browserWebSocketUrl);
+  await wsRequest(browserControlSocket, 'Browser.getVersion');
   const targets = await cdp('/json/list');
   const page = targets.find(target => target.type === 'page');
   if (!page) throw new Error('no CDP page target found');
@@ -1616,6 +1890,51 @@ try {
 
   if (fireFriendly) {
     const expectedScheduler = expectedSchedulerForProfile(schedulerProfileId);
+    if (gateBJournal) {
+      phase = 'arming-gate-b-journal';
+      const processSnapshot = await gateBBrowserProcessSnapshot();
+      if (!Number.isSafeInteger(processSnapshot.gpuProcessPid)
+          || processSnapshot.rendererPids.length === 0) {
+        throw new Error(`Gate B could not resolve GPU and renderer process identity: ${JSON.stringify(processSnapshot)}`);
+      }
+      gateBProcessIdentity = {
+        witnessPid: process.pid,
+        browserPid: browserSession.spawnedPid,
+        gpuProcessPid: processSnapshot.gpuProcessPid,
+        rendererPids: processSnapshot.rendererPids,
+        initialProcessSnapshot: processSnapshot,
+        lastProcessSnapshot: processSnapshot,
+      };
+      const assayInjection = {
+        enabled: true,
+        presentationIsolation: 'no-render',
+        browser: {
+          executable: browserResolution.effective.executable,
+          version: browserSession.attachedBrowserProduct,
+          headed: true,
+        },
+        sharpBaseRevision: GATE_B_SHARP_BASE_REVISION,
+        expectedInstrumentationRevision: expectedSharpRevision,
+        weightsSha256: GATE_B_WEIGHTS_SHA256,
+        hostKitVersion: expectedWebgpuKitVersion,
+        processes: gateBProcessIdentity,
+      };
+      await evaluate(ws, `(() => {
+        globalThis.__KAMINOS_GATE_B_ASSAY__ = Object.freeze(${JSON.stringify(assayInjection)});
+        return {
+          enabled: globalThis.__KAMINOS_GATE_B_ASSAY__.enabled,
+          presentationIsolation: globalThis.__KAMINOS_GATE_B_ASSAY__.presentationIsolation,
+        };
+      })()`);
+      lastGateBHostStats = sampleGateBHost(browserSession.spawnedPid);
+      writeReport({
+        ok: null,
+        status: 'gate-b-armed-before-primary-output',
+        lastTrustworthyEvidence,
+        runtimeExceptions,
+        stderrTail: stderr.slice(-1000),
+      });
+    }
     phase = 'starting-friendly-firing';
     await evaluate(ws, `(() => {
       const requestedFlameContinuity = ${JSON.stringify(requestedFlameContinuity)};
@@ -1655,6 +1974,20 @@ try {
     let routeState = null;
     while (Date.now() < deadline) {
       await sleep(1000);
+      if (gateBJournal) {
+        const witnessTelemetry = await appendGateBWitnessTelemetry(ws);
+        lastTrustworthyEvidence = {
+          ...lastTrustworthyEvidence,
+          gateBWitnessTelemetry: witnessTelemetry,
+        };
+        writeReport({
+          ok: null,
+          status: 'gate-b-in-progress',
+          lastTrustworthyEvidence,
+          runtimeExceptions,
+          stderrTail: stderr.slice(-1000),
+        });
+      }
       routeState = await evaluate(ws, `(() => {
         const bench = window.__kaminosKilnRouteBenchState || {};
         const result = bench.result || null;
@@ -2240,6 +2573,17 @@ try {
   terminalSummary = compactWitnessSummary({ state, out, inFlightCapture, reportPath });
 } catch (error) {
   terminalFailure = { error, phase };
+}
+
+if (terminalFailure && gateBJournal && browserControlSocket && browserSocket) {
+  try {
+    await appendGateBWitnessTelemetry(browserSocket);
+  } catch (error) {
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      gateBTerminalSamplingError: error?.message || String(error),
+    };
+  }
 }
 
 await cleanupBrowserResources();

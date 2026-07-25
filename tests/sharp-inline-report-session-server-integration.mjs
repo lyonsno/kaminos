@@ -43,15 +43,35 @@ try {
         effectiveRoute: 'same-browser-product-realm-shared-device',
         sharpRevision: 'sharp-live-revision',
       },
+      gateB: {
+        schema: 'kaminos.sharp-gate-b-live-journal.v0',
+        batching: {
+          schema: 'kaminos.sharp-gate-b-batching.v0',
+          retention: 'uncapped',
+          overflowPolicy: 'none-all-rows-retained',
+          flushIntervalMs: 250,
+          maxRowsPerFlush: null,
+          flushOrdinal: 0,
+          lastFlushedAt: null,
+          collections: {},
+        },
+      },
     },
-    collections: [{
-      id: 'progress-events',
-      jsonPointer: '#/liveTelemetry/progressEvents',
+    collections: [
+      'progress-events',
+      'scheduler-events',
+      'resource-snapshots',
+      'raf-opportunity-snapshots',
+      'host-stats',
+      'runtime-errors',
+    ].map(id => ({
+      id,
+      jsonPointer: `#/liveTelemetry/${id}`,
       expectedCount: null,
       liveAppend: true,
       retention: 'uncapped',
       mediaType: 'application/x-ndjson',
-    }],
+    })),
   });
   assert.equal(liveStart.response.status, 200);
   assert.match(liveStart.body.stateReadUrl, /sharp-inline-report-state/);
@@ -66,6 +86,23 @@ try {
       { ordinal: 0, progress: 0.03, message: 'loading source' },
       { ordinal: 1, progress: 0.925, message: 'gaussian stage' },
     ],
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      overflowPolicy: 'none-all-rows-retained',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      flushOrdinal: 0,
+      lastFlushedAt: null,
+      collections: {
+        'progress-events': {
+          queued: 2,
+          flushed: 0,
+          inFlight: 2,
+          unflushed: 2,
+        },
+      },
+    },
   });
   assert.equal(firstLiveChunk.response.status, 200);
   const crashReadableState = JSON.parse(readFileSync(liveStatePath, 'utf8'));
@@ -75,6 +112,16 @@ try {
   assert.equal(crashReadableState.document.routeIdentity.sharpRevision, 'sharp-live-revision');
   assert.equal(crashReadableState.collections['progress-events'].expectedCount, null);
   assert.equal(crashReadableState.collections['progress-events'].receivedCount, 2);
+  assert.equal(
+    crashReadableState.document.gateB.batching.collections['progress-events'].flushed,
+    2,
+  );
+  assert.equal(
+    crashReadableState.document.gateB.batching.collections['progress-events'].unflushed,
+    0,
+  );
+  assert.equal(crashReadableState.document.gateB.flushReceipts.length, 1);
+  assert.equal(crashReadableState.document.gateB.flushReceipts[0].collectionId, 'progress-events');
   assert.deepEqual(
     readFileSync(liveTracePath, 'utf8').trim().split('\n').map(line => JSON.parse(line)),
     [
@@ -85,7 +132,14 @@ try {
   );
   const falseComplete = await post('/api/sharp-inline-run-report/finish', {
     sessionId: liveStart.body.sessionId,
-    expectedCounts: { 'progress-events': 1 },
+    expectedCounts: {
+      'progress-events': 1,
+      'scheduler-events': 0,
+      'resource-snapshots': 0,
+      'raf-opportunity-snapshots': 0,
+      'host-stats': 0,
+      'runtime-errors': 0,
+    },
     documentPatch: {
       status: 'complete',
       phase: 'sharp-inference-complete',
@@ -98,19 +152,111 @@ try {
     false,
     'a stale client count must not seal a partial or contradictory live journal',
   );
-  const liveFinish = await post('/api/sharp-inline-run-report/finish', {
+  const emptyEvidenceCompletion = await post('/api/sharp-inline-run-report/finish', {
     sessionId: liveStart.body.sessionId,
-    expectedCounts: { 'progress-events': 2 },
+    expectedCounts: {
+      'progress-events': 2,
+      'scheduler-events': 0,
+      'resource-snapshots': 0,
+      'raf-opportunity-snapshots': 0,
+      'host-stats': 0,
+      'runtime-errors': 0,
+    },
     documentPatch: {
       status: 'complete',
-      phase: 'sharp-inference-complete',
+      phase: 'sharp-route-complete',
+      artifact: {
+        path: '/tmp/gate-b-live-crash-test/output.ply',
+        sha256: 'a'.repeat(64),
+        bytes: 66_060_836,
+      },
+      gateB: {
+        validationFailures: [],
+      },
+    },
+  });
+  assert.equal(emptyEvidenceCompletion.response.status, 409);
+  assert.match(emptyEvidenceCompletion.body.error, /empty live collections/);
+  for (const collectionId of [
+    'scheduler-events',
+    'resource-snapshots',
+    'raf-opportunity-snapshots',
+    'host-stats',
+  ]) {
+    const auxiliaryChunk = await post('/api/sharp-inline-run-report/chunk', {
+      sessionId: liveStart.body.sessionId,
+      collectionId,
+      expectedStart: 0,
+      rows: [{ schema: `test.${collectionId}.v0`, ordinal: 0 }],
+      batching: {
+        schema: 'kaminos.sharp-gate-b-batching.v0',
+        retention: 'uncapped',
+        overflowPolicy: 'none-all-rows-retained',
+        flushIntervalMs: 250,
+        maxRowsPerFlush: null,
+        flushOrdinal: 1,
+        lastFlushedAt: null,
+        collections: {
+          [collectionId]: {
+            queued: 1,
+            flushed: 0,
+            inFlight: 1,
+            unflushed: 1,
+          },
+        },
+      },
+    });
+    assert.equal(auxiliaryChunk.response.status, 200);
+  }
+  const forgedNoPly = await post('/api/sharp-inline-run-report/finish', {
+    sessionId: liveStart.body.sessionId,
+    expectedCounts: {
+      'progress-events': 2,
+      'scheduler-events': 1,
+      'resource-snapshots': 1,
+      'raf-opportunity-snapshots': 1,
+      'host-stats': 1,
+      'runtime-errors': 0,
+    },
+    documentPatch: {
+      status: 'complete',
+      phase: 'sharp-route-complete',
+      gateB: {
+        validationFailures: [],
+      },
+    },
+  });
+  assert.equal(forgedNoPly.response.status, 409);
+  assert.match(forgedNoPly.body.error, /PLY artifact/);
+  const liveFinish = await post('/api/sharp-inline-run-report/finish', {
+    sessionId: liveStart.body.sessionId,
+    expectedCounts: {
+      'progress-events': 2,
+      'scheduler-events': 1,
+      'resource-snapshots': 1,
+      'raf-opportunity-snapshots': 1,
+      'host-stats': 1,
+      'runtime-errors': 0,
+    },
+    documentPatch: {
+      status: 'complete',
+      phase: 'sharp-route-complete',
+      artifact: {
+        path: '/tmp/gate-b-live-crash-test/output.ply',
+        sha256: 'a'.repeat(64),
+        bytes: 66_060_836,
+      },
+      gateB: {
+        validationFailures: [],
+      },
     },
   });
   assert.equal(liveFinish.response.status, 200);
   assert.equal(liveFinish.body.traceArtifacts['progress-events'].count, 2);
   const liveReport = JSON.parse(readFileSync(liveFinish.body.path, 'utf8'));
   assert.equal(liveReport.status, 'complete');
-  assert.equal(liveReport.phase, 'sharp-inference-complete');
+  assert.equal(liveReport.phase, 'sharp-route-complete');
+  assert.equal(liveReport.artifact.sha256, 'a'.repeat(64));
 
   const start = await post('/api/sharp-inline-run-report/start', {
     pipelineId: 'sharp-image-to-splat-live-v0',
@@ -257,6 +403,60 @@ try {
     JSON.parse(readFileSync(path.join(abortStart.body.outputRoot, 'sharp-inline-report-state.json'), 'utf8')).status,
     'failed',
   );
+
+  const gateBAbortStart = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'gate-b-abort-test',
+    document: {
+      schema: 'kaminos.sharp-inline-live-telemetry.v0',
+      gateB: {
+        schema: 'kaminos.sharp-gate-b-live-journal.v0',
+        routeIdentity: { schema: 'kaminos.sharp-gate-b-route-identity.v0' },
+        batching: {
+          schema: 'kaminos.sharp-gate-b-batching.v0',
+          retention: 'uncapped',
+          flushIntervalMs: 250,
+          maxRowsPerFlush: null,
+          collections: {},
+        },
+      },
+    },
+    collections: ['progress-events', 'scheduler-events'].map(id => ({
+      id,
+      jsonPointer: `#/gateB/${id}`,
+      expectedCount: null,
+      liveAppend: true,
+      retention: 'uncapped',
+      mediaType: 'application/x-ndjson',
+    })),
+  });
+  const gateBAbort = await post('/api/sharp-inline-run-report/abort', {
+    sessionId: gateBAbortStart.body.sessionId,
+    phase: 'renderer-exit',
+    error: 'renderer exited before primary output',
+    lastTrustworthyCounts: {
+      'progress-events': 0,
+      'scheduler-events': 0,
+    },
+    batching: {
+      schema: 'kaminos.sharp-gate-b-batching.v0',
+      retention: 'uncapped',
+      flushIntervalMs: 250,
+      maxRowsPerFlush: null,
+      collections: {
+        'scheduler-events': {
+          queued: 1,
+          flushed: 0,
+          inFlight: 0,
+          unflushed: 1,
+        },
+      },
+    },
+  });
+  assert.equal(gateBAbort.response.status, 200);
+  const gateBFailure = JSON.parse(readFileSync(gateBAbort.body.failureReportPath, 'utf8'));
+  assert.equal(gateBFailure.gateB.clientBatching.collections['scheduler-events'].unflushed, 1);
+  assert.deepEqual(gateBFailure.gateB.flushReceipts, []);
 
   console.log('SHARP inline report session server integration passed');
 } finally {

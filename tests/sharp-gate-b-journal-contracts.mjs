@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   GATE_B_COLLECTIONS,
@@ -7,6 +8,8 @@ import {
   validateGateBCompletion,
   validateGateBRouteIdentity,
 } from '../lib/sharp-gate-b-journal.mjs';
+import { startSharpInlineLiveTelemetrySession } from '../lib/sharp-inline-trace-transport.mjs';
+import { createSharpSameDeviceKilnOpportunityHook } from '../lib/sharp-same-device-kiln-interlock.mjs';
 
 const SOURCE_SHA256 = '134136dd4086cfc1b887ab0a134c4a2b906223762a0d5959a8b90cc68f11f4f0';
 const WEIGHTS_SHA256 = '98212168b105c4027aff54c635fe01f547974911deb0c1109d8c05df68a01caf';
@@ -224,6 +227,185 @@ assert.throws(
   /flushed count cannot exceed queued count/,
 );
 
+function response(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return body;
+    },
+  };
+}
+
+const transportRequests = [];
+const receivedRows = new Map(GATE_B_COLLECTIONS.map(collection => [collection.id, []]));
+const transport = await startSharpInlineLiveTelemetrySession({
+  fetchImpl: async (url, options) => {
+    const payload = JSON.parse(options.body);
+    transportRequests.push({ url, payload });
+    if (url.endsWith('/start')) {
+      assert.deepEqual(
+        payload.collections.map(collection => collection.id),
+        GATE_B_COLLECTIONS.map(collection => collection.id),
+      );
+      assert.equal(payload.document.gateB.batching.flushIntervalMs, 250);
+      assert.equal(payload.document.gateB.batching.maxRowsPerFlush, null);
+      return response({
+        status: 'receiving',
+        sessionId: 'gate-b-live-session',
+        outputRoot: '/tmp/gate-b-live-session',
+        statePath: '/tmp/gate-b-live-session/sharp-inline-report-state.json',
+        stateReadUrl: '/api/read?root=pipeline-runs&path=gate-b-live-session%2Fsharp-inline-report-state.json',
+      });
+    }
+    if (url.endsWith('/chunk')) {
+      const rows = receivedRows.get(payload.collectionId);
+      assert.equal(payload.expectedStart, rows.length);
+      rows.push(...payload.rows);
+      assert.equal(payload.batching.retention, 'uncapped');
+      assert.equal(
+        payload.batching.collections[payload.collectionId].queued,
+        rows.length,
+      );
+      return response({
+        collectionId: payload.collectionId,
+        receivedCount: rows.length,
+      });
+    }
+    if (url.endsWith('/finish')) {
+      assert.deepEqual(
+        payload.expectedCounts,
+        Object.fromEntries([...receivedRows].map(([id, rows]) => [id, rows.length])),
+      );
+      assert.equal(payload.documentPatch.artifact.sha256, 'a'.repeat(64));
+      assert.equal(payload.documentPatch.gateB.validationFailures.length, 0);
+      return response({
+        status: 'complete',
+        path: '/tmp/gate-b-live-session/sharp-inline-report.json',
+        outputRoot: '/tmp/gate-b-live-session',
+        readUrl: '/api/read?root=pipeline-runs&path=gate-b-live-session%2Fsharp-inline-report.json',
+        traceArtifacts: Object.fromEntries(
+          [...receivedRows].map(([id, rows]) => [id, {
+            count: rows.length,
+            path: `/tmp/gate-b-live-session/traces/${id}.ndjson`,
+          }]),
+        ),
+      });
+    }
+    throw new Error(`Unexpected Gate B transport request: ${url}`);
+  },
+  firingId: 'gate-b-firing',
+  routeIdentity: identity,
+  sourceIdentity: identity.source,
+  flushIntervalMs: 250,
+});
+transport.append('progress-events', {
+  ordinal: 0,
+  progress: 0.4,
+  phase: 'gaussian-decoder',
+});
+transport.append('scheduler-events', adaptiveRange);
+transport.append('resource-snapshots', {
+  knownBufferCount: 41,
+  knownDeclaredBytes: 2_000_000_000,
+  authority: 'sharp-runtime-known-allocations',
+});
+transport.append('raf-opportunity-snapshots', {
+  raf: { sampleCount: 20, p99Ms: 16.1 },
+  opportunities: { requested: 8, served: 8 },
+});
+transport.append('host-stats', {
+  processCpuPercent: 92,
+  residentBytes: 1_200_000_000,
+  swapUsedBytes: 4_600_000_000,
+});
+assert.equal(
+  transport.batchingSnapshot().collections['scheduler-events'].unflushed,
+  1,
+);
+await transport.flush();
+assert.equal(
+  transport.batchingSnapshot().collections['scheduler-events'].unflushed,
+  0,
+);
+await assert.rejects(
+  transport.finish({
+    status: 'complete',
+    phase: 'sharp-route-complete',
+  }),
+  /PLY artifact/,
+  'a live journal must not seal a forged completion without a PLY',
+);
+await assert.rejects(
+  transport.finish({
+    status: 'complete',
+    phase: 'sharp-route-complete',
+    artifact: {
+      path: '/tmp/gate-b-live-session/output.ply',
+      sha256: 'a'.repeat(64),
+      bytes: 66_060_836,
+    },
+    browserExit: {
+      kind: 'renderer-exit',
+      pid: 4821,
+      beforePrimaryOutput: true,
+    },
+  }),
+  /renderer exited before primary output/,
+  'a renderer death must prevent a page-side false completion even when a PLY-shaped artifact is present',
+);
+const transportReceipt = await transport.finish({
+  status: 'complete',
+  phase: 'sharp-route-complete',
+  artifact: {
+    path: '/tmp/gate-b-live-session/output.ply',
+    sha256: 'a'.repeat(64),
+    bytes: 66_060_836,
+  },
+});
+assert.equal(transportReceipt.status, 'complete');
+assert.equal(
+  transportRequests.filter(request => request.url.endsWith('/chunk')).length,
+  5,
+  'one timer batch must flush each non-empty collection without capping any rows',
+);
+
+let abortedGateBPayload = null;
+const abortedTransport = await startSharpInlineLiveTelemetrySession({
+  fetchImpl: async (url, options) => {
+    const payload = JSON.parse(options.body);
+    if (url.endsWith('/start')) {
+      return response({
+        status: 'receiving',
+        sessionId: 'gate-b-aborted-session',
+        outputRoot: '/tmp/gate-b-aborted-session',
+        statePath: '/tmp/gate-b-aborted-session/sharp-inline-report-state.json',
+        stateReadUrl: '/api/read?root=pipeline-runs&path=gate-b-aborted-session%2Fsharp-inline-report-state.json',
+      });
+    }
+    if (url.endsWith('/abort')) {
+      abortedGateBPayload = payload;
+      return response({ status: 'failed' });
+    }
+    throw new Error(`Unexpected aborted Gate B transport request: ${url}`);
+  },
+  firingId: 'gate-b-aborted-firing',
+  routeIdentity: identity,
+  sourceIdentity: identity.source,
+  flushIntervalMs: 250,
+});
+abortedTransport.append('scheduler-events', adaptiveRange);
+await abortedTransport.abort({
+  phase: 'renderer-exit',
+  error: 'renderer exited before primary output',
+});
+assert.equal(
+  abortedGateBPayload.batching.collections['scheduler-events'].unflushed,
+  1,
+  'an abort must report renderer-local queued rows that never became durable',
+);
+assert.equal(abortedGateBPayload.batching.retention, 'uncapped');
+
 const completeCollections = Object.fromEntries(
   GATE_B_COLLECTIONS.map(collection => [
     collection.id,
@@ -278,6 +460,23 @@ assert.match(
   validateGateBCompletion({
     status: 'complete',
     routeIdentity: identity,
+    collections: {
+      ...completeCollections,
+      'resource-snapshots': {
+        ...completeCollections['resource-snapshots'],
+        receivedCount: 0,
+        expectedCount: 0,
+      },
+    },
+    artifact: completeArtifact,
+    browserExit: null,
+  }).join('\n'),
+  /empty resource-snapshots collection/,
+);
+assert.match(
+  validateGateBCompletion({
+    status: 'complete',
+    routeIdentity: identity,
     collections: completeCollections,
     artifact: completeArtifact,
     browserExit: {
@@ -287,6 +486,95 @@ assert.match(
     },
   }).join('\n'),
   /renderer exited before primary output/,
+);
+
+const fakeDevice = { queue: {} };
+let noRenderOpportunity = null;
+const noRenderVolume = {
+  foregroundGpuContext() {
+    return {
+      schema: 'kaminos.volume-foreground-gpu-context.v0',
+      device: fakeDevice,
+      queue: fakeDevice.queue,
+      deviceIdentity: 'gate-b-device',
+      queueIdentity: 'gate-b-queue',
+    };
+  },
+  async serveForegroundNoRenderOpportunity(options) {
+    noRenderOpportunity = options;
+    return {
+      schema: 'kaminos.volume-foreground-no-render-receipt.v0',
+      status: 'opportunity-served',
+      firingId: options.firingId,
+      frameId: options.frameId,
+      requestId: options.requestId,
+      commandBufferCount: 0,
+      simulationQuiesced: true,
+      raymarchSubmissionQuiesced: true,
+    };
+  },
+  async renderForegroundOpportunityFrame() {
+    throw new Error('no-render Gate B must not call renderForegroundOpportunityFrame');
+  },
+};
+const noRenderHook = createSharpSameDeviceKilnOpportunityHook({
+  volume: noRenderVolume,
+  firingId: 'gate-b-no-render',
+  nextFrameId: () => 'gate-b-no-render:1',
+  presentationIsolation: 'no-render',
+});
+const noRenderRequest = noRenderHook({
+  device: fakeDevice,
+  queue: fakeDevice.queue,
+  runId: 'gate-b-run',
+});
+const noRenderReceipt = await noRenderRequest.run({
+  device: fakeDevice,
+  queue: fakeDevice.queue,
+});
+assert.equal(noRenderReceipt.status, 'opportunity-served');
+assert.equal(noRenderReceipt.commandBufferCount, 0);
+assert.equal(noRenderReceipt.simulationQuiesced, true);
+assert.equal(noRenderReceipt.raymarchSubmissionQuiesced, true);
+assert.equal(noRenderOpportunity.firingId, 'gate-b-no-render');
+
+const [page, volumeCore] = await Promise.all([
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../volume-core.js', import.meta.url), 'utf8'),
+]);
+assert.match(
+  page,
+  /globalThis\.__KAMINOS_GATE_B_ASSAY__/,
+  'Gate B must remain an explicit witness-injected assay instead of changing ordinary Friendly runs',
+);
+assert.match(
+  page,
+  /onTelemetry:\s*gateBAssay\s*\?\s*reportTelemetry\s*:\s*undefined/,
+  'the SHARP caller must stream scheduler events into Gate B during inference',
+);
+assert.match(
+  page,
+  /liveTelemetry\.append\('scheduler-events'/,
+  'scheduler events must enter their dedicated uncapped collection',
+);
+assert.match(
+  page,
+  /__KAMINOS_GATE_B_JOURNAL__[\s\S]{0,1200}appendHostStats[\s\S]{0,600}appendRuntimeError/,
+  'the headed witness must have a CDP-safe bridge for host stats and runtime failures',
+);
+assert.match(
+  page,
+  /persistSharpInlineSplat\([\s\S]{0,12000}liveTelemetry\.finish\([\s\S]{0,800}artifact/,
+  'Gate B must not seal before the PLY is ingested and hash-bound',
+);
+const noRenderMethod = volumeCore.match(
+  /async function serveForegroundNoRenderOpportunity\([\s\S]*?\n  }\n/,
+);
+assert.ok(noRenderMethod, 'volume-core must expose an explicit no-render foreground opportunity');
+assert.doesNotMatch(
+  noRenderMethod[0],
+  /renderLiveFrame|createCommandEncoder|queue\.submit/,
+  'the no-render opportunity must not encode simulation or raymarch work',
 );
 
 console.log('SHARP Gate B journal contracts passed');

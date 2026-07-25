@@ -10772,6 +10772,61 @@ export function createKaminosVolumePrototype({
     return `${firingId}:${state.flameContinuityPresentationOrdinal + 1}`;
   }
 
+  async function serveForegroundNoRenderOpportunity(options = {}) {
+    if (!state.active || !gpuInitialized || !device) {
+      throw new Error('foreground no-render opportunity requires an active initialized volume');
+    }
+    if (!fireEpisodeFramesQuiescing) {
+      throw new Error('foreground no-render opportunity requires lease-driven volume mode');
+    }
+    if (options.signal?.aborted) {
+      throw new Error('foreground no-render opportunity was canceled before rAF');
+    }
+    const firingId = String(options.firingId || '');
+    const frameId = String(options.frameId || '');
+    const requestId = String(options.requestId || '');
+    if (!firingId || !frameId || !requestId) {
+      throw new Error('foreground no-render opportunity requires firing, frame, and request identity');
+    }
+    const expectedFrameId = nextForegroundOpportunityFrameId({ firingId });
+    if (frameId !== expectedFrameId) {
+      throw new Error(`foreground no-render frame identity mismatch: expected ${expectedFrameId}, got ${frameId}`);
+    }
+    const rafTimestampMs = await new Promise((resolve, reject) => {
+      let rafId = 0;
+      const onAbort = () => {
+        cancelAnimationFrame(rafId);
+        reject(new Error('foreground no-render opportunity was canceled during rAF'));
+      };
+      options.signal?.addEventListener?.('abort', onAbort, { once: true });
+      rafId = requestAnimationFrame(timestamp => {
+        options.signal?.removeEventListener?.('abort', onAbort);
+        resolve(timestamp);
+      });
+    });
+    if (kilnFrameStageLedgerRecording && lastKilnFrameStageId) {
+      kilnFrameStageLedger.recordPresentationOpportunity(lastKilnFrameStageId, {
+        timestampMs: rafTimestampMs,
+        authority: 'sharp-foreground-no-render-raf-opportunity',
+      });
+      lastKilnFrameStageId = null;
+    }
+    state.flameContinuityPresentationOrdinal += 1;
+    return {
+      schema: 'kaminos.volume-foreground-no-render-receipt.v0',
+      status: 'opportunity-served',
+      firingId,
+      frameId,
+      requestId,
+      commandBufferCount: 0,
+      simulationQuiesced: true,
+      raymarchSubmissionQuiesced: true,
+      rafTimestampMs,
+      deviceIdentity: foregroundDeviceIdentity,
+      queueIdentity: foregroundQueueIdentity,
+    };
+  }
+
   async function renderForegroundOpportunityFrame(options = {}) {
     if (!state.active || !gpuInitialized || !device) {
       throw new Error('foreground kiln frame requires an active initialized volume');
@@ -13689,6 +13744,7 @@ export function createKaminosVolumePrototype({
     },
     setForegroundOpportunityMode,
     nextForegroundOpportunityFrameId,
+    serveForegroundNoRenderOpportunity,
     renderForegroundOpportunityFrame,
     foregroundGpuContext,
     sampleFrame,

@@ -1702,6 +1702,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             collection_id = str(payload.get("collectionId") or "")
             expected_start = payload.get("expectedStart")
             rows = payload.get("rows")
+            batching = payload.get("batching")
             if not isinstance(expected_start, int) or isinstance(expected_start, bool):
                 raise ValueError("SHARP inline trace expectedStart must be an integer")
             if not isinstance(rows, list):
@@ -1751,6 +1752,100 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     os.fsync(stream.fileno())
                 collection["receivedCount"] = received_count + len(rows)
                 collection["committedBytes"] = committed_bytes + len(chunk_bytes)
+                gate_b = state.get("document", {}).get("gateB")
+                if isinstance(gate_b, dict):
+                    if not isinstance(batching, dict):
+                        raise ValueError("SHARP Gate B chunk omitted batching state")
+                    if batching.get("schema") != "kaminos.sharp-gate-b-batching.v0":
+                        raise ValueError("SHARP Gate B chunk has wrong batching schema")
+                    if batching.get("retention") != "uncapped":
+                        raise ValueError("SHARP Gate B batching retention must be uncapped")
+                    if batching.get("maxRowsPerFlush") is not None:
+                        raise ValueError("SHARP Gate B batching must not cap rows per flush")
+                    flush_interval_ms = batching.get("flushIntervalMs")
+                    flush_ordinal = batching.get("flushOrdinal")
+                    if (
+                        not isinstance(flush_interval_ms, (int, float))
+                        or isinstance(flush_interval_ms, bool)
+                        or not math.isfinite(flush_interval_ms)
+                        or flush_interval_ms <= 0
+                    ):
+                        raise ValueError("SHARP Gate B batching flushIntervalMs is invalid")
+                    if (
+                        not isinstance(flush_ordinal, int)
+                        or isinstance(flush_ordinal, bool)
+                        or flush_ordinal < 0
+                    ):
+                        raise ValueError("SHARP Gate B batching flushOrdinal is invalid")
+                    batching_collections = batching.get("collections")
+                    client_counts = (
+                        batching_collections.get(collection_id)
+                        if isinstance(batching_collections, dict)
+                        else None
+                    )
+                    if not isinstance(client_counts, dict):
+                        raise ValueError(
+                            f"SHARP Gate B batching omitted {collection_id} counts"
+                        )
+                    queued = client_counts.get("queued")
+                    flushed = client_counts.get("flushed")
+                    in_flight = client_counts.get("inFlight")
+                    unflushed = client_counts.get("unflushed")
+                    for count_name, count_value in {
+                        "queued": queued,
+                        "flushed": flushed,
+                        "inFlight": in_flight,
+                        "unflushed": unflushed,
+                    }.items():
+                        if (
+                            not isinstance(count_value, int)
+                            or isinstance(count_value, bool)
+                            or count_value < 0
+                        ):
+                            raise ValueError(
+                                f"SHARP Gate B batching {collection_id}.{count_name} is invalid"
+                            )
+                    if (
+                        queued != expected_start + len(rows)
+                        or flushed != expected_start
+                        or in_flight != len(rows)
+                        or unflushed != queued - flushed
+                    ):
+                        raise ValueError(
+                            f"SHARP Gate B batching counts contradict chunk {collection_id}"
+                        )
+                    flushed_at = _utc_timestamp()
+                    durable_batching = {
+                        **batching,
+                        "lastFlushedAt": flushed_at,
+                        "collections": {
+                            **batching_collections,
+                            collection_id: {
+                                "queued": queued,
+                                "flushed": collection["receivedCount"],
+                                "inFlight": 0,
+                                "unflushed": queued - collection["receivedCount"],
+                            },
+                        },
+                    }
+                    flush_receipts = gate_b.get("flushReceipts")
+                    if not isinstance(flush_receipts, list):
+                        flush_receipts = []
+                    flush_receipts.append({
+                        "schema": "kaminos.sharp-gate-b-flush-receipt.v0",
+                        "flushOrdinal": flush_ordinal,
+                        "collectionId": collection_id,
+                        "expectedStart": expected_start,
+                        "rowCount": len(rows),
+                        "receivedCount": collection["receivedCount"],
+                        "flushedAt": flushed_at,
+                        "retention": "uncapped",
+                    })
+                    state["document"]["gateB"] = {
+                        **gate_b,
+                        "batching": durable_batching,
+                        "flushReceipts": flush_receipts,
+                    }
                 state["phase"] = "trace-chunk-upload"
                 state["updatedAt"] = _utc_timestamp()
                 write_sharp_inline_report_state(run_dir, state)
@@ -1787,7 +1882,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     if document_patch is not None:
                         if not isinstance(document_patch, dict):
                             raise ValueError("SHARP inline documentPatch must be an object")
-                        unsupported_patch_keys = set(document_patch) - {"status", "phase"}
+                        unsupported_patch_keys = set(document_patch) - {
+                            "status",
+                            "phase",
+                            "artifact",
+                            "gateB",
+                        }
                         if unsupported_patch_keys:
                             raise ValueError(
                                 "SHARP inline documentPatch contains unsupported keys: "
@@ -1826,10 +1926,72 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                                 f"not final expectedCount {final_count}"
                             )
                         collection["expectedCount"] = final_count
+                    gate_b_document = state.get("document", {}).get("gateB")
+                    if isinstance(gate_b_document, dict):
+                        required_gate_b_collections = {
+                            "progress-events",
+                            "scheduler-events",
+                            "resource-snapshots",
+                            "raf-opportunity-snapshots",
+                            "host-stats",
+                            "runtime-errors",
+                        }
+                        missing_gate_b_collections = (
+                            required_gate_b_collections
+                            - set(state.get("collections", {}))
+                        )
+                        if missing_gate_b_collections:
+                            raise ValueError(
+                                "SHARP Gate B is missing live collections: "
+                                + ", ".join(sorted(missing_gate_b_collections))
+                            )
+                        empty_gate_b_collections = sorted(
+                            collection_id
+                            for collection_id in (
+                                required_gate_b_collections - {"runtime-errors"}
+                            )
+                            if state["collections"][collection_id].get("receivedCount") == 0
+                        )
+                        if empty_gate_b_collections:
+                            raise ValueError(
+                                "SHARP Gate B has empty live collections: "
+                                + ", ".join(empty_gate_b_collections)
+                            )
+                        artifact = (
+                            document_patch.get("artifact")
+                            if isinstance(document_patch, dict)
+                            else None
+                        )
+                        if (
+                            not isinstance(artifact, dict)
+                            or not artifact.get("path")
+                            or not re.fullmatch(r"[a-f0-9]{64}", str(artifact.get("sha256") or ""))
+                            or not isinstance(artifact.get("bytes"), int)
+                            or isinstance(artifact.get("bytes"), bool)
+                            or artifact.get("bytes") <= 0
+                        ):
+                            raise ValueError(
+                                "SHARP Gate B completion lacks a trustworthy PLY artifact"
+                            )
+                        gate_b_patch = document_patch.get("gateB")
+                        if not isinstance(gate_b_patch, dict):
+                            raise ValueError("SHARP Gate B completion omitted gateB disposition")
+                        validation_failures = gate_b_patch.get("validationFailures")
+                        if validation_failures != []:
+                            raise ValueError(
+                                "SHARP Gate B completion has unresolved validation failures"
+                            )
                     if document_patch:
+                        gate_b_patch = document_patch.get("gateB")
                         state["document"] = {
                             **state["document"],
                             **document_patch,
+                            **({
+                                "gateB": {
+                                    **state["document"].get("gateB", {}),
+                                    **gate_b_patch,
+                                },
+                            } if isinstance(gate_b_patch, dict) else {}),
                         }
                     incomplete = [
                         collection_id
@@ -1944,6 +2106,15 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     "failedAt": failed_at,
                     "statePath": str(run_dir / "sharp-inline-report-state.json"),
                 }
+                gate_b_document = state.get("document", {}).get("gateB")
+                if isinstance(gate_b_document, dict):
+                    failure_document["gateB"] = {
+                        "schema": "kaminos.sharp-gate-b-failure-state.v0",
+                        "routeIdentity": gate_b_document.get("routeIdentity"),
+                        "durableBatching": gate_b_document.get("batching"),
+                        "flushReceipts": gate_b_document.get("flushReceipts", []),
+                        "clientBatching": payload.get("batching"),
+                    }
                 _atomic_write_json(failure_path, failure_document)
                 state.update({
                     "status": "failed",

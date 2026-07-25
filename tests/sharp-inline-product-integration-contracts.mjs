@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 const schedulerProfileSource = page.match(
-  /function sharpInlineSchedulerProfile\([\s\S]*?\n}\n(?=\nasync function )/,
+  /function sharpInlineSchedulerProfile\([\s\S]*?\n}\n(?=\nfunction sharpGateBAssayConfig)/,
 );
 assert.ok(schedulerProfileSource, 'the inline product route must expose its scheduler profile as a testable contract');
 const sharpInlineSchedulerProfile = vm.runInNewContext(`(${schedulerProfileSource[0]})`);
@@ -63,7 +63,7 @@ assert.match(
 );
 assert.match(
   page,
-  /const gpuContext = volumePrototype\.foregroundGpuContext\(\)[\s\S]{0,5000}inline\.run\(sourceBlob, \{[\s\S]{0,500}gpuContext,[\s\S]{0,500}weightsUrl:[\s\S]{0,500}scheduler,/,
+  /const gpuContext = volumePrototype\.foregroundGpuContext\(\)[\s\S]{0,9000}inline\.run\(sourceBlob, \{[\s\S]{0,500}gpuContext,[\s\S]{0,500}weightsUrl:[\s\S]{0,500}scheduler,/,
   'the inline route must inject the product volume device, queue, weights URL, and requested scheduler',
 );
 assert.match(
@@ -73,7 +73,7 @@ assert.match(
 );
 assert.match(
   page,
-  /const liveTelemetry = await startSharpInlineLiveTelemetrySession\([\s\S]{0,2500}reportProgress\([\s\S]{0,2500}sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*reportProgress/,
+  /const liveTelemetry = await startSharpInlineLiveTelemetrySession\([\s\S]{0,6000}reportProgress\([\s\S]{0,1500}sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*reportProgress/,
   'the product route must start durable telemetry before forwarding uncapped SHARP inference progress',
 );
 assert.match(
@@ -83,7 +83,7 @@ assert.match(
 );
 assert.match(
   page,
-  /catch \(error\) \{[\s\S]{0,700}liveTelemetry\.abort\([\s\S]{0,2500}liveTelemetry\.finish\([\s\S]{0,600}sharp-inference-complete/,
+  /sharpResult = await inline\.run\([\s\S]{0,2000}catch \(error\) \{[\s\S]{0,700}liveTelemetry\.abort\([\s\S]{0,15000}liveTelemetry\.finish\([\s\S]{0,600}sharp-inference-complete/,
   'thrown inference failures must abort the journal while successful inference seals it',
 );
 const progressUpdaterSource = page.match(
@@ -135,7 +135,7 @@ assert.equal(
 );
 assert.match(
   page,
-  /let foregroundModeActivated = false[\s\S]{0,20000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
+  /let foregroundModeActivated = false[\s\S]{0,24000}finally \{[\s\S]{0,1800}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
 assert.match(
