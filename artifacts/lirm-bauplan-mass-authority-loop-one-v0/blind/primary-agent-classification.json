@@ -1,0 +1,69 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-loop-one-primary-static-classification.v0",
+  "classifierRole": "primary-agent-inspector",
+  "classificationState": "completed-before-independent-result-consumption",
+  "evidenceSurface": "manifest.json",
+  "cellMapping": "withheld",
+  "motionSafe": "unassayed",
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "safe": "pass",
+      "happy": "pass",
+      "organismalCoherence": "pass",
+      "polarity": "strong",
+      "operatorInspectionEligibility": "eligible-individually",
+      "lowFrequencyMassCharacter": [
+        "deep continuous midbody",
+        "broad shoulder mantle",
+        "full terminal mass",
+        "wide rounded ground-facing footprint"
+      ],
+      "residualArmorPrior": "four broad continuous dorsal bands with shallow seams",
+      "positiveRead": "strongly appealing plush caterpillar-like creature with a legible face and coherent low-frequency body hierarchy",
+      "localConcerns": [
+        "minor shallow surface scuffing on the lateral mantle",
+        "underside support count and exact attachment semantics remain unresolved"
+      ]
+    },
+    {
+      "cellId": "cell-b",
+      "safe": "fail",
+      "happy": "fail",
+      "organismalCoherence": "pass",
+      "polarity": "legible",
+      "operatorInspectionEligibility": "prohibited",
+      "lowFrequencyMassCharacter": [
+        "long arched axial body",
+        "narrower shoulder transition",
+        "smaller terminal mass",
+        "sparser ground-facing footprint"
+      ],
+      "residualArmorPrior": "three broad smooth dorsal masses with minimal high-frequency repetition",
+      "positiveRead": "coherent small crawler body with an understandable front and support field",
+      "failureLoci": [
+        "dense high-contrast dark speckling across the face and muzzle",
+        "irregular dark attachment transitions around both eyes",
+        "front and quarter views make the facial surface read as pitted or porous rather than cleanly modeled"
+      ],
+      "failureRationale": "the face is not a strong positive aesthetic result and presents the exact clustered porous-surface cue excluded by the static safety contract"
+    }
+  ],
+  "comparativeVerdict": {
+    "heavierCell": "cell-a",
+    "heavierCellEvidence": [
+      "deeper underside",
+      "broader central mantle",
+      "fuller anterior and posterior masses",
+      "wider visible contact footprint"
+    ],
+    "sameBroadOrganismalBasin": "pass",
+    "directionalMassAuthority": "spatial-pass",
+    "residualArmorPriorPresentButSimplified": "pass",
+    "bothCellsSafe": "fail",
+    "bothCellsHappy": "fail",
+    "operatorExposure": "prohibited",
+    "motionAdmission": "prohibited"
+  },
+  "lastTrustworthyEvidence": "both cells are coherent members of one friendly creature family and the heavier cast remains visually identifiable, but cell-b independently fails static safe and happy gates at the facial porous-surface locus"
+}
