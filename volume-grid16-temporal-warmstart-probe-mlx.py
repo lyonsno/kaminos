@@ -155,9 +155,27 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
 
     arm_specs = [
         {"name": "frozen", "iterations": 0},
-        {"name": f"warm-{args.warm_iterations}", "iterations": args.warm_iterations, "init": "warm"},
-        {"name": f"warm-{args.iterations}", "iterations": args.iterations, "init": "warm"},
-        {"name": "cold", "iterations": args.iterations, "init": "analytical"},
+        {
+            "name": f"warm-{args.warm_iterations}",
+            "iterations": args.warm_iterations,
+            "init": "warm",
+            "learningRate": args.learning_rate,
+        },
+        {
+            "name": f"warm-damped-{args.warm_iterations}",
+            "iterations": args.warm_iterations,
+            "init": "warm",
+            "learningRate": args.warm_learning_rate,
+        },
+        {
+            "name": f"warm-anchored-{args.warm_iterations}",
+            "iterations": args.warm_iterations,
+            "init": "warm",
+            "learningRate": args.warm_learning_rate,
+            "anchorWeight": args.anchor_weight,
+        },
+        {"name": f"warm-{args.iterations}", "iterations": args.iterations, "init": "warm", "learningRate": args.learning_rate},
+        {"name": "cold", "iterations": args.iterations, "init": "analytical", "learningRate": args.learning_rate},
     ]
     arms: list[dict[str, Any]] = []
     for spec_entry in arm_specs:
@@ -176,8 +194,9 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 fit_samples_per_cell=args.fit_samples_per_cell,
                 seed=args.seed,
                 init=spec_entry["init"],
-                learning_rate=args.learning_rate,
+                learning_rate=spec_entry.get("learningRate", args.learning_rate),
                 initial_state=source_solution if spec_entry["init"] == "warm" else None,
+                anchor_weight=spec_entry.get("anchorWeight", 0.0),
             )
             fitted_state = result["state"]
             fit_receipt = {
@@ -252,6 +271,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fit-samples-per-cell", type=int, default=4)
     parser.add_argument("--fit-cameras", type=int, default=6)
     parser.add_argument("--learning-rate", type=float, default=0.02)
+    parser.add_argument("--warm-learning-rate", type=float, default=0.002)
+    parser.add_argument("--anchor-weight", type=float, default=0.05)
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260724)

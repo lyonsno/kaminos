@@ -143,6 +143,29 @@ class CeilingOracleContracts(unittest.TestCase):
         blank_loss = float(np.mean(np.abs(flat)) + 0.25 * np.mean(np.square(flat)))
         self.assertLess(result["finalLoss"], 0.5 * blank_loss)
 
+    def test_anchor_weight_restrains_parameter_drift(self) -> None:
+        medium = synthetic_medium()
+        lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
+        seed_state = ORACLE.analytical_seed_state(medium, mode_count=4, seed=3)
+        shared = dict(
+            mode_count=4,
+            iterations=30,
+            fit_width=32,
+            fit_samples_per_cell=4,
+            seed=3,
+            init="warm",
+            learning_rate=0.05,
+            initial_state=seed_state,
+        )
+        free = ORACLE.fit_modes(medium, lattice, [synthetic_camera()], **shared)
+        anchored = ORACLE.fit_modes(medium, lattice, [synthetic_camera()], anchor_weight=50.0, **shared)
+        free_drift = float(np.mean(np.linalg.norm(free["state"]["centers"] - seed_state["centers"], axis=1)))
+        anchored_drift = float(
+            np.mean(np.linalg.norm(anchored["state"]["centers"] - seed_state["centers"], axis=1))
+        )
+        self.assertLess(anchored_drift, free_drift)
+        self.assertEqual(anchored["anchorWeight"], 50.0)
+
     def test_target_identity_binding_rejects_drifted_lattice(self) -> None:
         medium = synthetic_medium()
         lattice, receipt = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)

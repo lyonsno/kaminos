@@ -235,6 +235,7 @@ def fit_modes(
     learning_rate: float,
     ray_chunk: int = 4096,
     initial_state: dict[str, np.ndarray] | None = None,
+    anchor_weight: float = 0.0,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -297,6 +298,7 @@ def fit_modes(
     covariance_floor = (0.05 * fine_step_world) ** 2
     tril_mask = mx.array(np.tril(np.ones((3, 3), dtype=np.float32)))
     eye3 = mx.array(np.eye(3, dtype=np.float32))
+    anchor_reference = {key: mx.array(np.asarray(value)) for key, value in parameters.items()}
 
     def decode(params: dict[str, Any]) -> tuple[Any, Any, Any, Any]:
         raw_chol = params["rawCholesky"] * tril_mask[None, :, :]
@@ -364,9 +366,17 @@ def fit_modes(
                 )
             )
         predicted = mx.concatenate(predictions, axis=0)
-        return mx.mean(mx.abs(predicted - batch["target"])) + 0.25 * mx.mean(
+        data_loss = mx.mean(mx.abs(predicted - batch["target"])) + 0.25 * mx.mean(
             mx.square(predicted - batch["target"])
         )
+        if anchor_weight > 0.0:
+            # Temporal anchor: penalize raw-parameter departure from the warm
+            # seat so a short cadence budget cannot shatter the solution.
+            anchor = sum(
+                mx.mean(mx.square(params[key] - anchor_reference[key])) for key in anchor_reference
+            )
+            data_loss = data_loss + anchor_weight * anchor
+        return data_loss
 
     loss_and_grad = mx.value_and_grad(loss_fn)
     optimizer = optim.Adam(learning_rate=learning_rate)
@@ -400,6 +410,7 @@ def fit_modes(
         "fitWidth": fit_width,
         "fitSamplesPerCell": fit_samples_per_cell,
         "learningRate": learning_rate,
+        "anchorWeight": float(anchor_weight),
         "cameraCount": len(cameras),
         "targetLatticeSha256": digest,
         "initialLoss": float(initial_loss),
