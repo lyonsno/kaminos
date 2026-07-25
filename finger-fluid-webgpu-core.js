@@ -129,8 +129,8 @@ export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.flui
 export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_SCHEMA = 'kaminos.finger-fluid.portable-macro-geometry-provider.v1';
 export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_ROUTE = 'kaminos/finger-fluid/portable-macro-geometry-provider';
 export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_UPLOAD_SCHEMA = 'kaminos.finger-fluid.portable-macro-upload-snapshot.v1';
-export const KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_GEOMETRY_SCHEMA = 'kaminos.finger-fluid.analytic-carrier-optical-geometry.v1';
-export const KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_ROUTE = 'kaminos.finger-fluid.source-derived-swept-volume-quadrature.v0';
+export const KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_GEOMETRY_SCHEMA = 'kaminos.finger-fluid.analytic-carrier-optical-geometry.v2';
+export const KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_ROUTE = 'kaminos.finger-fluid.source-derived-tangent-capsule-quadrature.v0';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA = 'kaminos.finger-fluid.optical-representation-transition.v1';
 export const KAMINOS_FINGER_FLUID_OPTICAL_EXECUTION_SCHEMA = 'kaminos.finger-fluid.optical-execution.v1';
 export const KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE = 'webgpu-watershed-changing-frame-optics-v1';
@@ -280,6 +280,161 @@ function analyticCarrierSamplesMatch(expected, actual, tolerance = 1e-6) {
     && Array.isArray(actual)
     && expected.length === actual.length
     && expected.every((value, index) => Math.abs(value - actual[index]) <= tolerance);
+}
+
+export function reconstructFingerFluidAnalyticCarrierCapsuleSupport({
+  analyticCapsuleSupport,
+  position,
+  tangent,
+  radius,
+  backwardLengthRatio,
+  forwardLengthRatio,
+  quadratureWeight,
+  cameraRight,
+  cameraUp,
+} = {}) {
+  const diagnostics = {
+    phase: 'reconstruct-capsule-support',
+    requestedRoute: KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_ROUTE,
+    effectiveRoute: KAMINOS_FINGER_FLUID_ANALYTIC_CARRIER_OPTICAL_ROUTE,
+    lastTrustworthyEvidence: 'no-capsule-support-input-validated',
+  };
+  const safePosition = analyticCarrierFiniteVector(
+    position,
+    'analytic capsule position',
+    diagnostics,
+  );
+  const safeTangent = analyticCarrierNormalize(
+    analyticCarrierFiniteVector(tangent, 'analytic capsule tangent', diagnostics),
+    'analytic capsule tangent',
+    diagnostics,
+  );
+  const safeCameraRight = analyticCarrierNormalize(
+    analyticCarrierFiniteVector(cameraRight, 'analytic capsule camera right', diagnostics),
+    'analytic capsule camera right',
+    diagnostics,
+  );
+  const safeCameraUp = analyticCarrierNormalize(
+    analyticCarrierFiniteVector(cameraUp, 'analytic capsule camera up', diagnostics),
+    'analytic capsule camera up',
+    diagnostics,
+  );
+  const safeRadius = analyticCarrierFiniteNumber(
+    radius,
+    'analytic capsule radius',
+    diagnostics,
+    { positive: true },
+  );
+  const safeBackwardRatio = analyticCarrierFiniteNumber(
+    backwardLengthRatio,
+    'analytic capsule backward length ratio',
+    diagnostics,
+  );
+  const safeForwardRatio = analyticCarrierFiniteNumber(
+    forwardLengthRatio,
+    'analytic capsule forward length ratio',
+    diagnostics,
+  );
+  const safeQuadratureWeight = analyticCarrierFiniteNumber(
+    quadratureWeight,
+    'analytic capsule quadrature weight',
+    diagnostics,
+  );
+  if (
+    safeBackwardRatio < 0
+    || safeForwardRatio < 0
+    || safeQuadratureWeight <= 0
+    || safeQuadratureWeight > 1
+  ) {
+    analyticCarrierOpticalFailure(
+      'invalid_analytic_carrier_geometry',
+      'analytic capsule ratios and quadrature weight are outside their supported range',
+      diagnostics,
+      {
+        backwardLengthRatio,
+        forwardLengthRatio,
+        quadratureWeight,
+      },
+    );
+  }
+  const carrierTangent = analyticCapsuleSupport ? safeTangent : safeCameraRight;
+  const tangentScreen = [
+    carrierTangent.reduce(
+      (sum, component, axis) => sum + component * safeCameraRight[axis],
+      0,
+    ),
+    carrierTangent.reduce(
+      (sum, component, axis) => sum + component * safeCameraUp[axis],
+      0,
+    ),
+  ];
+  const projectedTangentMagnitude = Math.hypot(...tangentScreen);
+  const projectedTangentAxis = projectedTangentMagnitude > 1e-6
+    ? tangentScreen.map(component => component / projectedTangentMagnitude)
+    : [1, 0];
+  const projectedTangentWorld = safeCameraRight.map(
+    (component, axis) => (
+      component * projectedTangentAxis[0]
+      + safeCameraUp[axis] * projectedTangentAxis[1]
+    ),
+  );
+  const projectedTangentPerpendicular = safeCameraRight.map(
+    (component, axis) => (
+      component * -projectedTangentAxis[1]
+      + safeCameraUp[axis] * projectedTangentAxis[0]
+    ),
+  );
+  const segmentBackwardLength = analyticCapsuleSupport
+    ? safeBackwardRatio * safeRadius
+    : 0;
+  const segmentForwardLength = analyticCapsuleSupport
+    ? safeForwardRatio * safeRadius
+    : 0;
+  const effectiveQuadratureWeight = analyticCapsuleSupport ? safeQuadratureWeight : 1;
+  const segmentCenterOffset = (
+    segmentForwardLength - segmentBackwardLength
+  ) * 0.5;
+  const segmentHalfLength = (
+    segmentBackwardLength + segmentForwardLength
+  ) * 0.5;
+  const projectedHalfLength = segmentHalfLength * projectedTangentMagnitude;
+  const segmentCenter = safePosition.map(
+    (component, axis) => component + carrierTangent[axis] * segmentCenterOffset,
+  );
+  const capsuleHalfLengthRatio = projectedHalfLength / safeRadius;
+  const validateCorner = corner => {
+    if (
+      !Array.isArray(corner)
+      || corner.length !== 2
+      || !corner.every(Number.isFinite)
+    ) {
+      throw new TypeError('analytic capsule quad corner must contain two finite components');
+    }
+  };
+  return Object.freeze({
+    segmentLengths: Object.freeze([segmentBackwardLength, segmentForwardLength]),
+    segmentCenter: Object.freeze(segmentCenter),
+    segmentHalfLength,
+    projectedHalfLength,
+    capsuleHalfLengthRatio,
+    quadratureWeight: effectiveQuadratureWeight,
+    quadWorldPosition(corner) {
+      validateCorner(corner);
+      return segmentCenter.map((component, axis) => (
+        component
+        + carrierTangent[axis] * segmentHalfLength * corner[0]
+        + projectedTangentWorld[axis] * safeRadius * corner[0]
+        + projectedTangentPerpendicular[axis] * safeRadius * corner[1]
+      ));
+    },
+    quadUv(corner) {
+      validateCorner(corner);
+      return [
+        corner[0] * (capsuleHalfLengthRatio + 1),
+        corner[1],
+      ];
+    },
+  });
 }
 
 function validateAnalyticCarrierOpticalInputs({
@@ -480,7 +635,7 @@ export function createFingerFluidAnalyticCarrierOpticalGeometry({
   }
   const axialStep = inletRadius * stepRatio;
   const sampleCount = Math.max(2, Math.ceil(pathLength / axialStep) + 1);
-  const samples = [];
+  const rawSamples = [];
   for (let index = 0; index < sampleCount; index += 1) {
     const unit = index / (sampleCount - 1);
     const flightSeconds = impactFlightSeconds * unit;
@@ -519,26 +674,53 @@ export function createFingerFluidAnalyticCarrierOpticalGeometry({
     );
     const radius = inletRadius * Math.sqrt(initialSpeed / speed);
     const halfInterval = impactFlightSeconds / Math.max(1, sampleCount - 1) * 0.5;
-    samples.push(Object.freeze({
+    rawSamples.push({
       index,
       flightSeconds,
-      position: Object.freeze(position),
-      velocity: Object.freeze(velocity),
+      position,
+      velocity,
       speed,
-      tangent: Object.freeze(tangent),
-      tangentU: Object.freeze(tangentU),
-      tangentV: Object.freeze(tangentV),
+      tangent,
+      tangentU,
+      tangentV,
       radius,
-      entryExitInterval: Object.freeze([
+      entryExitInterval: [
         Math.max(0, flightSeconds - halfInterval),
         Math.min(impactFlightSeconds, flightSeconds + halfInterval),
-      ]),
+      ],
       thickness: radius * 2,
       material: descriptor.material,
       confidence: 1,
       sourceGeneration: descriptor.source.generation,
-    }));
+    });
   }
+  const samples = rawSamples.map((sample, index) => {
+    const backwardLength = index > 0
+      ? analyticCarrierVectorLength(sample.position.map(
+        (component, axis) => component - rawSamples[index - 1].position[axis],
+      )) * 0.5
+      : 0;
+    const forwardLength = index + 1 < rawSamples.length
+      ? analyticCarrierVectorLength(rawSamples[index + 1].position.map(
+        (component, axis) => component - sample.position[axis],
+      )) * 0.5
+      : 0;
+    const quadratureWeight = Math.min(
+      1,
+      (backwardLength + forwardLength) / Math.max(sample.radius * 2, Number.EPSILON),
+    );
+    return Object.freeze({
+      ...sample,
+      position: Object.freeze(sample.position),
+      velocity: Object.freeze(sample.velocity),
+      tangent: Object.freeze(sample.tangent),
+      tangentU: Object.freeze(sample.tangentU),
+      tangentV: Object.freeze(sample.tangentV),
+      entryExitInterval: Object.freeze(sample.entryExitInterval),
+      segmentHalfLengths: Object.freeze([backwardLength, forwardLength]),
+      quadratureWeight,
+    });
+  });
   if (
     samples.length < 2
     || !analyticCarrierSamplesMatch(samples[0].position, origin, 1e-9)
@@ -570,7 +752,7 @@ export function createFingerFluidAnalyticCarrierOpticalGeometry({
     sampleCount,
     samples: Object.freeze(samples),
     geometry: Object.freeze({
-      representation: 'source-derived-swept-sphere-quadrature',
+      representation: 'source-derived-tangent-capsule-quadrature',
       pathLength,
       axialStepRadiusRatio: stepRatio,
       noSampleCap: true,
@@ -662,17 +844,20 @@ export function createFingerFluidAnalyticCarrierGpuPayload(
     const tracerOffset = index * MATERIAL_TRACER_FLOATS;
     particles.set(sample.position, particleOffset);
     particles[particleOffset + 3] = sample.flightSeconds;
-    particles.set(sample.position, particleOffset + 4);
+    particles.set(sample.tangent, particleOffset + 4);
     particles[particleOffset + 7] = 1;
     particles.set(sample.velocity, particleOffset + 8);
     particles[particleOffset + 11] = 0;
     particles[particleOffset + 15] = 24.3;
     const shaderRadiusScale = sample.radius / (safeVisibleRadius * 1.78);
     neighborTopology[topologyOffset + 32] = shaderRadiusScale ** 3;
-    neighborTopology[topologyOffset + 33] = 3;
+    neighborTopology[topologyOffset + 33] = sample.segmentHalfLengths[0] / sample.radius;
+    neighborTopology[topologyOffset + 34] = sample.segmentHalfLengths[1] / sample.radius;
+    neighborTopology[topologyOffset + 35] = sample.quadratureWeight;
     materialTracers[tracerOffset] = Number(sample.material?.chemistry?.[0] ?? 0);
     materialTracers[tracerOffset + 2] = materialTracers[tracerOffset];
     materialTracers[tracerOffset + 10] = -1;
+    materialTracers[tracerOffset + 15] = 1;
   });
   const partial = (
     particles.some(value => !Number.isFinite(value))
@@ -688,7 +873,7 @@ export function createFingerFluidAnalyticCarrierGpuPayload(
   }
   diagnostics.lastTrustworthyEvidence = 'finite-nonblank-gpu-payload-constructed';
   return Object.freeze({
-    schema: 'kaminos.finger-fluid.analytic-carrier-gpu-payload.v1',
+    schema: 'kaminos.finger-fluid.analytic-carrier-gpu-payload.v2',
     route: geometry.route,
     source: geometry.source,
     supportIdentity: geometry.supportIdentity,
@@ -8055,6 +8240,8 @@ struct AccumVertexOutput {
   @location(3) speed: f32,
   @location(4) tracer: f32,
   @location(5) radius: f32,
+  @location(6) capsuleHalfLengthRatio: f32,
+  @location(7) quadratureWeight: f32,
 }
 
 @vertex
@@ -8069,7 +8256,45 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   let densityRadius = clamp(particle.delta.w / 24.3, 0.62, 1.55);
   let volumeRadiusScale = pow(max(neighborTopology[instanceIndex].refinement.x, 0.000001), 1.0 / 3.0);
   let radius = params.viewport.z * volumeRadiusScale * mix(1.22, 1.78, surface) * densityRadius;
-  let worldPosition = particle.position.xyz + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
+  let analyticCapsuleSupport =
+    materialTracers[instanceIndex].liveInletAgeState.w > 0.5;
+  let tangentMagnitude = length(particle.predicted.xyz);
+  var carrierTangent = params.cameraRight.xyz;
+  if (analyticCapsuleSupport && tangentMagnitude > 0.000001) {
+    carrierTangent = particle.predicted.xyz / tangentMagnitude;
+  }
+  let tangentScreen = vec2<f32>(
+    dot(carrierTangent, params.cameraRight.xyz),
+    dot(carrierTangent, params.cameraUp.xyz)
+  );
+  let projectedTangentMagnitude = length(tangentScreen);
+  var projectedTangentAxis = vec2<f32>(1.0, 0.0);
+  if (projectedTangentMagnitude > 0.000001) {
+    projectedTangentAxis = tangentScreen / projectedTangentMagnitude;
+  }
+  let projectedTangentWorld =
+    params.cameraRight.xyz * projectedTangentAxis.x
+    + params.cameraUp.xyz * projectedTangentAxis.y;
+  let projectedTangentPerpendicular =
+    params.cameraRight.xyz * -projectedTangentAxis.y
+    + params.cameraUp.xyz * projectedTangentAxis.x;
+  var segmentBackwardLength = 0.0;
+  var segmentForwardLength = 0.0;
+  var quadratureWeight = 1.0;
+  if (analyticCapsuleSupport) {
+    segmentBackwardLength = max(0.0, neighborTopology[instanceIndex].refinement.y) * radius;
+    segmentForwardLength = max(0.0, neighborTopology[instanceIndex].refinement.z) * radius;
+    quadratureWeight = clamp(neighborTopology[instanceIndex].refinement.w, 0.000001, 1.0);
+  }
+  let segmentCenterOffset = (segmentForwardLength - segmentBackwardLength) * 0.5;
+  let segmentHalfLength = (segmentBackwardLength + segmentForwardLength) * 0.5;
+  let projectedHalfLength = segmentHalfLength * projectedTangentMagnitude;
+  let segmentCenter = particle.position.xyz + carrierTangent * segmentCenterOffset;
+  let worldPosition =
+    segmentCenter
+    + carrierTangent * segmentHalfLength * corner.x
+    + projectedTangentWorld * radius * corner.x
+    + projectedTangentPerpendicular * radius * corner.y;
   var clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
   let analyticCarrierEnabled = params.analyticCarrierControls.x > 0.5;
   let matchingAnalyticCarrierSource =
@@ -8091,12 +8316,17 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   }
   var output: AccumVertexOutput;
   output.position = clip;
-  output.uv = corner;
+  output.uv = vec2<f32>(
+    corner.x * (projectedHalfLength / max(radius, 0.000001) + 1.0),
+    corner.y
+  );
   output.viewDepth = max(0.001, clip.w);
   output.surface = surface;
   output.speed = length(particle.velocity.xyz);
   output.tracer = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
   output.radius = radius;
+  output.capsuleHalfLengthRatio = projectedHalfLength / max(radius, 0.000001);
+  output.quadratureWeight = quadratureWeight;
   return output;
 }
 
@@ -8108,14 +8338,18 @@ struct AccumFragmentOutput {
 
 @fragment
 fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
-  let r2 = dot(input.uv, input.uv);
+  let capsuleDistance = vec2<f32>(
+    max(abs(input.uv.x) - input.capsuleHalfLengthRatio, 0.0),
+    input.uv.y
+  );
+  let r2 = dot(capsuleDistance, capsuleDistance);
   if (r2 > 1.0) { discard; }
   let cap = sqrt(max(0.0, 1.0 - r2));
   let edge = smoothstep(1.0, 0.46, r2);
   let surfaceWeight = mix(0.55, 1.0, input.surface);
-  let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
+  let thickness = edge * surfaceWeight * (0.35 + cap * 1.85) * input.quadratureWeight;
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE}, input.speed));
-  let depthWeight = edge * surfaceWeight;
+  let depthWeight = edge * surfaceWeight * input.quadratureWeight;
   let supportSafeViewDepth = input.viewDepth;
   let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius);
   var output: AccumFragmentOutput;
@@ -11864,6 +12098,7 @@ export async function createWebGPUFingerFluidSolver({
   let analyticCarrierOpticalGeometry = null;
   let analyticCarrierGpuPayload = null;
   let analyticCarrierSampleCount = 0;
+  let canonicalParticleVisibility = 'all';
   let analyticCarrierRouteEvidence = {
     schema: 'kaminos.finger-fluid.analytic-carrier-live-route-evidence.v1',
     status: 'inactive_not_requested',
@@ -12039,7 +12274,10 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
-  function setAnalyticCarrierOpticalGeometry(geometry) {
+  function setAnalyticCarrierOpticalGeometry(
+    geometry,
+    { canonicalParticleVisibility: requestedCanonicalParticleVisibility = 'matching_pre_impact_suppressed' } = {},
+  ) {
     if (safeTruthScene !== 'live_hand_inlets') {
       analyticCarrierRouteEvidence = {
         schema: 'kaminos.finger-fluid.analytic-carrier-live-route-evidence.v1',
@@ -12053,6 +12291,11 @@ export async function createWebGPUFingerFluidSolver({
         lastTrustworthyEvidence: `truth-scene:${safeTruthScene}`,
       };
       throw new Error('analytic carrier optics require the live_hand_inlets truth scene');
+    }
+    if (!['matching_pre_impact_suppressed', 'hidden'].includes(requestedCanonicalParticleVisibility)) {
+      throw new RangeError(
+        `Unsupported analytic carrier canonical particle visibility: ${requestedCanonicalParticleVisibility}`,
+      );
     }
     let payload;
     try {
@@ -12110,6 +12353,7 @@ export async function createWebGPUFingerFluidSolver({
     analyticCarrierOpticalGeometry = geometry;
     analyticCarrierGpuPayload = payload;
     analyticCarrierSampleCount = payload.sampleCount;
+    canonicalParticleVisibility = requestedCanonicalParticleVisibility;
     analyticCarrierRouteEvidence = {
       schema: 'kaminos.finger-fluid.analytic-carrier-live-route-evidence.v1',
       status: 'admitted',
@@ -12128,6 +12372,7 @@ export async function createWebGPUFingerFluidSolver({
       handoffReceiptId: payload.handoffReceiptId,
       sampleCount: payload.sampleCount,
       particleSuppressionContract: payload.particleSuppression.contract,
+      canonicalParticleVisibility,
       blank: false,
       partial: false,
       doubleRendered: false,
@@ -12141,6 +12386,7 @@ export async function createWebGPUFingerFluidSolver({
     analyticCarrierOpticalGeometry = null;
     analyticCarrierGpuPayload = null;
     analyticCarrierSampleCount = 0;
+    canonicalParticleVisibility = 'all';
     analyticCarrierRouteEvidence = {
       schema: 'kaminos.finger-fluid.analytic-carrier-live-route-evidence.v1',
       status: 'inactive_not_requested',
@@ -12159,6 +12405,7 @@ export async function createWebGPUFingerFluidSolver({
       handoffReceiptId: null,
       sampleCount: 0,
       particleSuppressionContract: null,
+      canonicalParticleVisibility,
       blank: null,
       partial: null,
       failurePhase: null,
@@ -12626,8 +12873,10 @@ export async function createWebGPUFingerFluidSolver({
         ],
       });
       accumulationPass.setPipeline(screenSpaceSurfaceAccumulationPipeline);
-      accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
-      accumulationPass.draw(6, safeParticleCount);
+      if (canonicalParticleVisibility !== 'hidden') {
+        accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
+        accumulationPass.draw(6, safeParticleCount);
+      }
       if (analyticCarrierAccumulationBindGroup && analyticCarrierSampleCount > 0) {
         accumulationPass.setBindGroup(0, analyticCarrierAccumulationBindGroup);
         accumulationPass.draw(6, analyticCarrierSampleCount);
@@ -13490,6 +13739,7 @@ export async function createWebGPUFingerFluidSolver({
         lastFrameDrawCount: analyticCarrierLastFrameDrawCount,
         accumulationDrawCount: analyticCarrierAccumulationDrawCount,
         particleSuppressionContract: analyticCarrierOpticalGeometry?.particleSuppression?.contract ?? null,
+        canonicalParticleVisibility,
         visualOwnership: analyticCarrierOpticalGeometry?.ownership ?? null,
       },
       linearHdrSceneEvidence: {

@@ -2954,6 +2954,7 @@ let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_ANALYTIC_CARRIER_MODES = Object.freeze([
   'particle_only',
+  'analytic_carrier_only',
   'hybrid_analytic_carrier',
 ]);
 const FINGER_FLUID_ANALYTIC_CARRIER_SOURCE_MECHANICS_REVISION =
@@ -3000,6 +3001,7 @@ let fingerFluidBenchAnalyticCarrierState = {
   effectiveRoute: null,
   fallbackRoute: null,
   status: 'inactive_not_requested',
+  canonicalParticleVisibility: 'all',
   primaryOutputWritten: false,
   failurePhase: null,
   lastTrustworthyEvidence: 'route-not-requested',
@@ -3087,6 +3089,24 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     && (!Number.isSafeInteger(requestedWitnessTargetStep) || requestedWitnessTargetStep < 1)) {
     throw new RangeError(`Finger Fluid witness target step must be a positive safe integer: ${requestedWitnessTargetStepValue}`);
   }
+  const requestedWitnessStartStepValue = params.get('finger_fluid_witness_start_step');
+  const requestedWitnessStartStep = requestedWitnessStartStepValue === null
+    ? null
+    : Number(requestedWitnessStartStepValue);
+  if (
+    requestedWitnessStartStep !== null
+    && (
+      !Number.isSafeInteger(requestedWitnessStartStep)
+      || requestedWitnessStartStep < 1
+      || requestedWitnessTargetStep === null
+      || requestedWitnessStartStep >= requestedWitnessTargetStep
+    )
+  ) {
+    throw new RangeError(
+      `Finger Fluid witness start step must be a positive safe integer below the routed target: `
+      + `${requestedWitnessStartStepValue}`,
+    );
+  }
   const requestedInletCutoffStepValue = params.get('finger_fluid_inlet_cutoff_step');
   const requestedInletCutoffStep = requestedInletCutoffStepValue === null
     ? null
@@ -3151,6 +3171,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedWitnessTargetStep,
     effectiveWitnessTargetStep: requestedWitnessTargetStep,
+    requestedWitnessStartStep,
+    effectiveWitnessStartStep: requestedWitnessStartStep,
     requestedInletCutoffStep,
     effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
     timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
@@ -10634,6 +10656,7 @@ function configureFingerFluidAnalyticCarrierSmoke() {
       sourceArtifactSha256: null,
       sourceGeneration: null,
       particleSuppressionContract: null,
+      canonicalParticleVisibility: 'all',
       sampleCount: 0,
       primaryOutputWritten: false,
       failurePhase: null,
@@ -10704,11 +10727,16 @@ function configureFingerFluidAnalyticCarrierSmoke() {
     handoffReceipt,
     sourceIndex: 0,
   });
-  const admission = fingerFluidBenchSolver.setAnalyticCarrierOpticalGeometry(geometry);
+  const canonicalParticleVisibility = requestedMode === 'analytic_carrier_only'
+    ? 'hidden'
+    : 'matching_pre_impact_suppressed';
+  const admission = fingerFluidBenchSolver.setAnalyticCarrierOpticalGeometry(geometry, {
+    canonicalParticleVisibility,
+  });
   fingerFluidBenchAnalyticCarrierState = {
     schema: 'kaminos.finger-fluid.analytic-carrier-browser-route.v1',
     requestedMode,
-    effectiveMode: 'hybrid_analytic_carrier',
+    effectiveMode: requestedMode,
     requestedRoute: geometry.route.requested,
     effectiveRoute: admission.effectiveRoute,
     fallbackRoute: admission.fallbackRoute,
@@ -10724,7 +10752,10 @@ function configureFingerFluidAnalyticCarrierSmoke() {
     remapEpoch: admission.remapEpoch,
     handoffReceiptId: admission.handoffReceiptId,
     sampleCount: admission.sampleCount,
-    particleSuppressionContract: admission.particleSuppressionContract,
+    particleSuppressionContract: requestedMode === 'hybrid_analytic_carrier'
+      ? admission.particleSuppressionContract
+      : null,
+    canonicalParticleVisibility: admission.canonicalParticleVisibility,
     primaryOutputWritten: false,
     failurePhase: admission.failurePhase,
     lastTrustworthyEvidence: admission.lastTrustworthyEvidence,
@@ -10735,7 +10766,9 @@ function configureFingerFluidAnalyticCarrierSmoke() {
 function setFingerFluidBenchAnalyticCarrierModeForWitness(mode) {
   const effectiveMode = resolveFingerFluidAnalyticCarrierMode(mode);
   if (effectiveMode === 'not_requested') {
-    throw new Error('Analytic carrier witness mode must be particle_only or hybrid_analytic_carrier');
+    throw new Error(
+      'Analytic carrier witness mode must be particle_only, analytic_carrier_only, or hybrid_analytic_carrier',
+    );
   }
   if (fingerFluidBenchConfig?.effectiveTruthScene !== 'live_hand_inlets') {
     throw new Error('Analytic carrier witness mode requires live_hand_inlets');
@@ -10755,6 +10788,10 @@ function setFingerFluidBenchAnalyticCarrierModeForWitness(mode) {
 
 function applyFingerFluidAnalyticCarrierRuntimeEvidence(runtime) {
   const rendererEvidence = runtime.analyticCarrierOptics || {};
+  const carrierActive = (
+    fingerFluidBenchAnalyticCarrierState.effectiveMode === 'hybrid_analytic_carrier'
+    || fingerFluidBenchAnalyticCarrierState.effectiveMode === 'analytic_carrier_only'
+  );
   const hybridActive =
     fingerFluidBenchAnalyticCarrierState.effectiveMode === 'hybrid_analytic_carrier';
   runtime.analyticCarrierOptics = {
@@ -10764,7 +10801,7 @@ function applyFingerFluidAnalyticCarrierRuntimeEvidence(runtime) {
     accumulationDrawCount: rendererEvidence.accumulationDrawCount ?? 0,
     carrierDrawCount: rendererEvidence.lastFrameDrawCount ?? 0,
     ...fingerFluidBenchAnalyticCarrierState,
-    admittedCarrierSourceIdentity: hybridActive ? {
+    admittedCarrierSourceIdentity: carrierActive ? {
       packetId: fingerFluidBenchAnalyticCarrierState.sourcePacketId,
       sourceRoute: fingerFluidBenchAnalyticCarrierState.sourceRoute,
       artifactSha256: fingerFluidBenchAnalyticCarrierState.sourceArtifactSha256,
@@ -10775,16 +10812,18 @@ function applyFingerFluidAnalyticCarrierRuntimeEvidence(runtime) {
     particleSuppressionContract: hybridActive
       ? fingerFluidBenchAnalyticCarrierState.particleSuppressionContract
       : null,
-    sampleCount: hybridActive ? fingerFluidBenchAnalyticCarrierState.sampleCount : 0,
+    sampleCount: carrierActive ? fingerFluidBenchAnalyticCarrierState.sampleCount : 0,
     primaryOutputWritten: (rendererEvidence.lastFrameDrawCount || 0) > 0
       || fingerFluidBenchAnalyticCarrierState.effectiveMode === 'particle_only',
   };
   if (runtime.analyticCarrierOptics.primaryOutputWritten) {
     fingerFluidBenchAnalyticCarrierState.primaryOutputWritten = true;
-    fingerFluidBenchAnalyticCarrierState.lastTrustworthyEvidence =
+      fingerFluidBenchAnalyticCarrierState.lastTrustworthyEvidence =
       fingerFluidBenchAnalyticCarrierState.effectiveMode === 'particle_only'
         ? 'particle-control-frame-rendered'
-        : 'hybrid-carrier-accumulation-frame-rendered';
+        : fingerFluidBenchAnalyticCarrierState.effectiveMode === 'analytic_carrier_only'
+          ? 'analytic-carrier-only-accumulation-frame-rendered'
+          : 'hybrid-carrier-accumulation-frame-rendered';
   }
   return runtime;
 }
@@ -10942,6 +10981,79 @@ function resumeFingerFluidBenchAfterWitness() {
   fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
 }
 
+function advanceFingerFluidBenchToStepForWitness(targetStep) {
+  if (!fingerFluidBenchSolver?.available) {
+    throw new Error('Finger Fluid solver unavailable for exact-step witness advance');
+  }
+  if (!fingerFluidBenchSimulationPaused) {
+    throw new Error('Finger Fluid exact-step witness advance requires a paused simulation');
+  }
+  if (!Number.isSafeInteger(targetStep) || targetStep < 1) {
+    throw new Error(`Finger Fluid exact-step witness target is invalid: ${targetStep}`);
+  }
+  if (
+    fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    && targetStep > fingerFluidBenchConfig.effectiveWitnessTargetStep
+  ) {
+    throw new Error(
+      `Finger Fluid exact-step witness target exceeds the routed target: `
+      + `${targetStep} > ${fingerFluidBenchConfig.effectiveWitnessTargetStep}`,
+    );
+  }
+  const startStep = fingerFluidBenchSolver.getDebugState().stepCount;
+  if (targetStep <= startStep) {
+    throw new Error(
+      `Finger Fluid exact-step witness target must advance the simulation: `
+      + `${targetStep} <= ${startStep}`,
+    );
+  }
+  let endStep = startStep;
+  while (endStep < targetStep) {
+    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+    endStep = fingerFluidBenchSolver.getDebugState().stepCount;
+  }
+  if (endStep !== targetStep) {
+    throw new Error(
+      `Finger Fluid exact-step witness advance overshot its target: ${endStep} != ${targetStep}`,
+    );
+  }
+  renderFingerFluidBenchCurrentStateForWitness(
+    fingerFluidBenchConfig.effectiveRendererMode,
+    fingerFluidBenchConfig.effectiveOpticalDebugMode,
+    fingerFluidBenchConfig.requestedOpticalLightingMode,
+    fingerFluidBenchConfig.requestedOpticalFootprintMode,
+    fingerFluidBenchConfig.requestedTransmissionFootprintMode,
+    fingerFluidBenchConfig.requestedBodyTransportMode,
+    fingerFluidBenchConfig.requestedInterfaceFrequencyMode,
+  );
+  const runtime = fingerFluidBenchState.runtime;
+  runtime.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
+  runtime.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  runtime.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
+  runtime.effectiveWitnessStartStep = fingerFluidBenchConfig.effectiveWitnessStartStep;
+  runtime.witnessStartAutoPaused = fingerFluidBenchConfig.effectiveWitnessStartStep !== null
+    && fingerFluidBenchSimulationPaused
+    && endStep === fingerFluidBenchConfig.effectiveWitnessStartStep;
+  runtime.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    && fingerFluidBenchSimulationPaused
+    && endStep === targetStep;
+  runtime.pulseControlReadout = createFingerFluidPulseControlReadout({
+    stepCount: endStep,
+    inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+    witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+    paused: fingerFluidBenchSimulationPaused,
+  });
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.exact-step-witness-advance.v0',
+    startStep,
+    endStep,
+    targetStep,
+    exact: endStep === targetStep,
+    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  };
+}
+
 function drawFingerFluidBenchFrame(now = performance.now()) {
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   const panel = document.getElementById('finger-fluid-bench-operator-panel');
@@ -10960,8 +11072,9 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   if (!fingerFluidBenchSimulationPaused) {
     fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
     const submittedState = fingerFluidBenchSolver.getDebugState();
-    if (fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
-      && submittedState.stepCount >= fingerFluidBenchConfig.effectiveWitnessTargetStep) {
+    const autoPauseStep = fingerFluidBenchConfig.effectiveWitnessStartStep
+      ?? fingerFluidBenchConfig.effectiveWitnessTargetStep;
+    if (autoPauseStep !== null && submittedState.stepCount >= autoPauseStep) {
       fingerFluidBenchSimulationPaused = true;
     }
   }
@@ -11019,6 +11132,11 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  gpuState.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
+  gpuState.effectiveWitnessStartStep = fingerFluidBenchConfig.effectiveWitnessStartStep;
+  gpuState.witnessStartAutoPaused = fingerFluidBenchConfig.effectiveWitnessStartStep !== null
+    && fingerFluidBenchSimulationPaused
+    && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessStartStep;
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
     && fingerFluidBenchSimulationPaused
     && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessTargetStep;
@@ -11345,6 +11463,8 @@ function initKaminosFingerFluidBenchRoute() {
     setFingerFluidBenchAnalyticCarrierModeForWitness;
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
+  window.kaminosFingerFluidBenchAdvanceToStepForWitness =
+    advanceFingerFluidBenchToStepForWitness;
   window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
     fingerFluidBenchSimulationPaused = paused === true;
     const runtime = fingerFluidBenchSolver?.getDebugState?.() || null;

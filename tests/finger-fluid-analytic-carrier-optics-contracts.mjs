@@ -8,11 +8,70 @@ import {
   measureFingerFluidAnalyticJetFirstImpact,
 } from '../finger-fluid-analytic-impact-handoff.js';
 
+function assertVectorClose(actual, expected, message) {
+  assert.equal(actual.length, expected.length, message);
+  assert.ok(
+    actual.every((value, index) => Math.abs(value - expected[index]) <= 1e-12),
+    `${message}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`,
+  );
+}
+
 assert.equal(
   typeof optics.createFingerFluidAnalyticCarrierOpticalGeometry,
   'function',
   'the renderer must expose a source-derived analytic carrier geometry builder',
 );
+assert.equal(
+  typeof optics.reconstructFingerFluidAnalyticCarrierCapsuleSupport,
+  'function',
+  'the renderer must expose a deterministic host mirror of tangent-capsule shader support',
+);
+
+const asymmetricCapsule = optics.reconstructFingerFluidAnalyticCarrierCapsuleSupport({
+  analyticCapsuleSupport: true,
+  position: [1, 2, 3],
+  tangent: [0.6, 0.8, 0],
+  radius: 0.5,
+  backwardLengthRatio: 2,
+  forwardLengthRatio: 4,
+  quadratureWeight: 0.75,
+  cameraRight: [1, 0, 0],
+  cameraUp: [0, 1, 0],
+});
+assert.deepEqual(asymmetricCapsule.segmentLengths, [1, 2]);
+assertVectorClose(asymmetricCapsule.segmentCenter, [1.3, 2.4, 3], 'capsule center');
+assert.equal(asymmetricCapsule.segmentHalfLength, 1.5);
+assert.equal(asymmetricCapsule.projectedHalfLength, 1.5);
+assert.equal(asymmetricCapsule.capsuleHalfLengthRatio, 3);
+assert.equal(asymmetricCapsule.quadratureWeight, 0.75);
+assertVectorClose(
+  asymmetricCapsule.quadWorldPosition([1, -1]),
+  [2.9, 3.7, 3],
+  'the off-axis asymmetric capsule must preserve the shader center-offset sign and vertex extent',
+);
+assertVectorClose(
+  asymmetricCapsule.quadWorldPosition([-1, 1]),
+  [-0.3, 1.1, 3],
+  'the opposite capsule corner must preserve backward support and perpendicular radius',
+);
+assert.deepEqual(asymmetricCapsule.quadUv([1, -1]), [4, -1]);
+assert.deepEqual(asymmetricCapsule.quadUv([-1, 1]), [-4, 1]);
+
+const canonicalParticleSupport = optics.reconstructFingerFluidAnalyticCarrierCapsuleSupport({
+  analyticCapsuleSupport: false,
+  position: [1, 2, 3],
+  tangent: [0.6, 0.8, 0],
+  radius: 0.5,
+  backwardLengthRatio: 2,
+  forwardLengthRatio: 4,
+  quadratureWeight: 0.2,
+  cameraRight: [1, 0, 0],
+  cameraUp: [0, 1, 0],
+});
+assert.deepEqual(canonicalParticleSupport.segmentLengths, [0, 0]);
+assert.equal(canonicalParticleSupport.quadratureWeight, 1);
+assert.deepEqual(canonicalParticleSupport.segmentCenter, [1, 2, 3]);
+assert.deepEqual(canonicalParticleSupport.quadUv([1, -1]), [1, -1]);
 
 const packet = {
   packet_id: 'analytic-optics-source-a',
@@ -122,11 +181,11 @@ const geometry = optics.createFingerFluidAnalyticCarrierOpticalGeometry({
 
 assert.equal(
   geometry.schema,
-  'kaminos.finger-fluid.analytic-carrier-optical-geometry.v1',
+  'kaminos.finger-fluid.analytic-carrier-optical-geometry.v2',
 );
 assert.deepEqual(geometry.route, {
-  requested: 'kaminos.finger-fluid.source-derived-swept-volume-quadrature.v0',
-  effective: 'kaminos.finger-fluid.source-derived-swept-volume-quadrature.v0',
+  requested: 'kaminos.finger-fluid.source-derived-tangent-capsule-quadrature.v0',
+  effective: 'kaminos.finger-fluid.source-derived-tangent-capsule-quadrature.v0',
   fallback: null,
 });
 assert.equal(geometry.source.packetId, descriptor.source.packetId);
@@ -148,10 +207,22 @@ assert.ok(
   geometry.samples.every(sample => (
     Number.isFinite(sample.radius)
     && sample.radius > 0
+    && Array.isArray(sample.segmentHalfLengths)
+    && sample.segmentHalfLengths.length === 2
+    && sample.segmentHalfLengths.every(length => Number.isFinite(length) && length >= 0)
+    && sample.segmentHalfLengths.some(length => length > 0)
+    && Array.isArray(sample.tangent)
+    && Math.abs(Math.hypot(...sample.tangent) - 1) < 1e-6
     && sample.flightSeconds >= 0
     && sample.flightSeconds <= impact.flightSeconds
   )),
-  'every quadrature sample must carry finite positive optical support inside the pre-impact interval',
+  'every quadrature sample must carry finite tangent-aligned support inside the pre-impact interval',
+);
+assert.equal(geometry.samples[0].segmentHalfLengths[0], 0);
+assert.equal(geometry.samples.at(-1).segmentHalfLengths[1], 0);
+assert.equal(
+  geometry.geometry.representation,
+  'source-derived-tangent-capsule-quadrature',
 );
 assert.equal(geometry.ownership.preImpactCarrierVisible, true);
 assert.equal(geometry.ownership.preImpactParticlesVisible, false);
@@ -180,7 +251,7 @@ const gpuPayload = optics.createFingerFluidAnalyticCarrierGpuPayload(
 );
 assert.equal(
   gpuPayload.schema,
-  'kaminos.finger-fluid.analytic-carrier-gpu-payload.v1',
+  'kaminos.finger-fluid.analytic-carrier-gpu-payload.v2',
 );
 assert.equal(gpuPayload.sampleCount, geometry.sampleCount);
 assert.equal(gpuPayload.particles.length, geometry.sampleCount * 16);
@@ -219,7 +290,17 @@ for (let index = 0; index < geometry.sampleCount; index += 1) {
     Array.from(gpuPayload.particles.subarray(particleOffset, particleOffset + 3)),
     geometry.samples[index].position.map(Math.fround),
   );
+  assert.deepEqual(
+    Array.from(gpuPayload.particles.subarray(particleOffset + 4, particleOffset + 7)),
+    geometry.samples[index].tangent.map(Math.fround),
+    'the carrier payload must preserve the analytic path tangent instead of substituting particle position',
+  );
   assert.equal(gpuPayload.materialTracers[tracerOffset + 10], -1);
+  assert.equal(
+    gpuPayload.materialTracers[tracerOffset + 15],
+    1,
+    'the carrier payload must mark tangent-capsule instances explicitly',
+  );
   const reconstructedRadius = visibleParticleRadius
     * Math.cbrt(gpuPayload.neighborTopology[topologyOffset + 32])
     * 1.78;
@@ -227,6 +308,25 @@ for (let index = 0; index < geometry.sampleCount; index += 1) {
     Math.abs(reconstructedRadius - geometry.samples[index].radius)
       <= Math.max(1e-7, geometry.samples[index].radius * 1e-5),
     'the accumulation shader must reconstruct the admitted flux-scaled carrier radius',
+  );
+  assert.ok(
+    Math.abs(
+      reconstructedRadius * gpuPayload.neighborTopology[topologyOffset + 33]
+        - geometry.samples[index].segmentHalfLengths[0],
+    ) <= Math.max(1e-7, geometry.samples[index].radius * 1e-5),
+    'the payload must preserve the source-facing capsule half length',
+  );
+  assert.ok(
+    Math.abs(
+      reconstructedRadius * gpuPayload.neighborTopology[topologyOffset + 34]
+        - geometry.samples[index].segmentHalfLengths[1],
+    ) <= Math.max(1e-7, geometry.samples[index].radius * 1e-5),
+    'the payload must preserve the impact-facing capsule half length',
+  );
+  assert.ok(
+    gpuPayload.neighborTopology[topologyOffset + 35] > 0
+      && gpuPayload.neighborTopology[topologyOffset + 35] <= 1,
+    'the carrier quadrature weight must be finite, positive, and bounded',
   );
 }
 
@@ -337,7 +437,17 @@ assert.match(
 );
 assert.match(
   rendererSource,
-  /function setAnalyticCarrierOpticalGeometry\(geometry\)[\s\S]*createFingerFluidAnalyticCarrierGpuPayload/,
+  /analyticCapsuleSupport[\s\S]*particle\.predicted\.xyz[\s\S]*segmentBackwardLength[\s\S]*segmentForwardLength/,
+  'the accumulation vertex route must reconstruct tangent-aligned asymmetric capsule support',
+);
+assert.match(
+  rendererSource,
+  /capsuleDistance[\s\S]*quadratureWeight[\s\S]*opticalThickness/,
+  'the accumulation fragment route must use capsule distance and represented-path quadrature weight',
+);
+assert.match(
+  rendererSource,
+  /function setAnalyticCarrierOpticalGeometry\(\s*geometry,[\s\S]*canonicalParticleVisibility[\s\S]*createFingerFluidAnalyticCarrierGpuPayload/,
   'the live renderer must admit carrier geometry through the tested GPU payload builder',
 );
 assert.match(
@@ -347,8 +457,13 @@ assert.match(
 );
 assert.match(
   browserSource,
-  /resolveFingerFluidAnalyticCarrierMode[\s\S]*hybrid_analytic_carrier/,
-  'the browser route must resolve an exact particle-only or hybrid analytic-carrier mode',
+  /FINGER_FLUID_ANALYTIC_CARRIER_MODES[\s\S]*particle_only[\s\S]*analytic_carrier_only[\s\S]*hybrid_analytic_carrier/,
+  'the browser route must resolve exact particle-only, analytic-only, and hybrid modes',
+);
+assert.match(
+  rendererSource,
+  /canonicalParticleVisibility !== 'hidden'[\s\S]*accumulationPass\.draw\(6, safeParticleCount\)/,
+  'analytic-only mode must omit the canonical particle draw instead of pretending shader suppression is isolation',
 );
 assert.match(
   browserSource,
@@ -357,13 +472,23 @@ assert.match(
 );
 assert.match(
   browserSource,
-  /fingerFluidBenchSolver\.setAnalyticCarrierOpticalGeometry\(geometry\)/,
+  /fingerFluidBenchSolver\.setAnalyticCarrierOpticalGeometry\(geometry,\s*\{\s*canonicalParticleVisibility/,
   'the live bench must explicitly admit the source-derived carrier after solver creation',
 );
 assert.match(
   browserSource,
   /analyticCarrierOptics[\s\S]*requestedMode[\s\S]*effectiveMode[\s\S]*fallbackRoute/,
   'the browser-visible witness state must expose exact requested/effective carrier identity with null fallback',
+);
+assert.match(
+  browserSource,
+  /function advanceFingerFluidBenchToStepForWitness\([\s\S]*fingerFluidBenchSimulationPaused[\s\S]*fingerFluidBenchSolver\.step\(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS\)[\s\S]*endStep === targetStep/,
+  'the visual witness must advance the canonical solver to an exact fixed-step boundary without relying on browser animation scheduling',
+);
+assert.match(
+  browserSource,
+  /requestedWitnessStartStep[\s\S]*effectiveWitnessStartStep[\s\S]*autoPauseStep[\s\S]*fingerFluidBenchSimulationPaused = true/,
+  'the browser must route an explicit deterministic dynamic-start pause separately from the final witness target',
 );
 
 console.log('finger fluid analytic carrier optics contracts passed');

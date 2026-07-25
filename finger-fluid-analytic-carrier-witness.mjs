@@ -18,14 +18,14 @@ const requestedUrl = args.get('--url')
     + '&finger_fluid_truth_scene=live_hand_inlets'
     + '&finger_fluid_renderer=screen_space_refraction'
     + '&finger_fluid_analytic_carrier=hybrid_analytic_carrier'
+    + '&finger_fluid_witness_start_step=64'
     + '&finger_fluid_witness_target_step=72';
-const requestedUrlObject = new URL(requestedUrl);
-const targetStep = Number(
-  requestedUrlObject.searchParams.get('finger_fluid_witness_target_step') || 72,
-);
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-analytic-carrier-${process.pid}`);
 const reportPath = resolve(args.get('--report') || join(outDir, 'report.json'));
+const dynamicStartPath = join(outDir, 'dynamic-hybrid-start.png');
+const dynamicEndPath = join(outDir, 'dynamic-hybrid-end.png');
 const hybridPath = join(outDir, 'hybrid-analytic-carrier.png');
+const analyticOnlyPath = join(outDir, 'analytic-carrier-only.png');
 const particlePath = join(outDir, 'particle-only.png');
 const debugPort = Number(args.get('--debug-port') || 9527);
 const viewportWidth = Number(args.get('--viewport-width') || 1800);
@@ -44,6 +44,9 @@ const fixedCamera = {
 
 let phase = 'validate-config';
 let primaryOutputWritten = false;
+let requestedUrlObject = null;
+let targetStep = null;
+let dynamicStartTargetStep = null;
 let effectiveUrl = null;
 let browserVersion = null;
 let servedSourceIdentity = null;
@@ -52,8 +55,19 @@ let sourceIdentity = null;
 let sameState = null;
 let captures = {};
 let visualDelta = null;
+let analyticOnlyVisualDelta = null;
+let dynamicOutput = null;
+const outputFiles = [];
 let stderr = '';
 const consoleEvents = [];
+let lastTrustworthyEvidence = {
+  schema: 'kaminos.finger-fluid.witness-last-trustworthy-evidence.v0',
+  phase: 'argument-parse',
+  evidence: {
+    requestedUrl,
+    reportPath,
+  },
+};
 
 function delay(milliseconds) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
@@ -63,10 +77,18 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function preserveLastTrustworthyEvidence(completedPhase, evidence) {
+  lastTrustworthyEvidence = {
+    schema: 'kaminos.finger-fluid.witness-last-trustworthy-evidence.v0',
+    phase: completedPhase,
+    evidence,
+  };
+}
+
 function writeReport(extra = {}) {
   mkdirSync(dirname(reportPath), { recursive: true });
   const report = {
-    schema: 'kaminos.finger-fluid.analytic-carrier-visual-witness.v1',
+    schema: 'kaminos.finger-fluid.analytic-carrier-visual-witness.v2',
     ok: false,
     requestedUrl,
     effectiveUrl,
@@ -89,9 +111,12 @@ function writeReport(extra = {}) {
     sameState,
     captures,
     visualDelta,
-    outputFiles: primaryOutputWritten ? [hybridPath, particlePath] : [],
+    analyticOnlyVisualDelta,
+    dynamicOutput,
+    outputFiles: [...outputFiles],
     consoleEvents,
     stderrTail: stderr.slice(-2000),
+    lastTrustworthyEvidence,
     lastDebugState,
     ...extra,
   };
@@ -308,7 +333,10 @@ async function captureCanvas(socket, path) {
 function carrierCaptureFromState(state, camera, visual) {
   const optics = state.runtime?.analyticCarrierOptics;
   const live = state.runtime?.liveInlets;
-  const hybridActive = optics?.effectiveMode === 'hybrid_analytic_carrier';
+  const carrierActive = (
+    optics?.effectiveMode === 'hybrid_analytic_carrier'
+    || optics?.effectiveMode === 'analytic_carrier_only'
+  );
   return {
     requestedMode: optics?.requestedMode,
     effectiveMode: optics?.effectiveMode,
@@ -323,12 +351,11 @@ function carrierCaptureFromState(state, camera, visual) {
       sourceMechanicsRevision: optics?.sourceMechanicsRevision,
       ageContract: optics?.ageContract ?? live?.ageContract,
     },
-    admittedCarrierSourceIdentity: hybridActive
+    admittedCarrierSourceIdentity: carrierActive
       ? optics?.admittedCarrierSourceIdentity ?? null
       : null,
-    particleSuppressionContract: hybridActive
-      ? optics?.particleSuppressionContract ?? null
-      : null,
+    particleSuppressionContract: optics?.particleSuppressionContract ?? null,
+    canonicalParticleVisibility: optics?.canonicalParticleVisibility ?? null,
     stepCount: state.runtime?.stepCount,
     camera,
     sampleCount: optics?.sampleCount ?? 0,
@@ -353,18 +380,44 @@ async function readDebugState(socket) {
 }
 
 async function main() {
+  requestedUrlObject = new URL(requestedUrl);
+  targetStep = Number(
+    requestedUrlObject.searchParams.get('finger_fluid_witness_target_step') || 72,
+  );
+  dynamicStartTargetStep = Number(
+    requestedUrlObject.searchParams.get('finger_fluid_witness_start_step'),
+  );
   if (
     requestedUrlObject.searchParams.get('finger_fluid_truth_scene') !== 'live_hand_inlets'
     || requestedUrlObject.searchParams.get('finger_fluid_renderer') !== 'screen_space_refraction'
     || requestedUrlObject.searchParams.get('finger_fluid_analytic_carrier') !== 'hybrid_analytic_carrier'
+    || requestedUrlObject.searchParams.get('finger_fluid_witness_start_step') === null
   ) {
     throw new Error(`analytic carrier witness URL is stale or defaulted: ${requestedUrl}`);
   }
   if (!Number.isSafeInteger(targetStep) || targetStep < 1) {
     throw new Error(`analytic carrier witness target step must be positive: ${targetStep}`);
   }
+  if (
+    !Number.isSafeInteger(dynamicStartTargetStep)
+    || dynamicStartTargetStep < 1
+    || dynamicStartTargetStep >= targetStep
+  ) {
+    throw new Error(
+      `analytic carrier dynamic start step must be positive and below the target: `
+      + `${dynamicStartTargetStep} >= ${targetStep}`,
+    );
+  }
+  preserveLastTrustworthyEvidence('validate-config', {
+    requestedUrl,
+    targetStep,
+    dynamicStartTargetStep,
+    debugPort,
+    viewport: { width: viewportWidth, height: viewportHeight },
+  });
   phase = 'bind-served-source';
   servedSourceIdentity = await bindServedSourceIdentity();
+  preserveLastTrustworthyEvidence('bind-served-source', servedSourceIdentity);
   phase = 'launch-browser';
   const chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${debugPort}`,
@@ -384,6 +437,10 @@ async function main() {
   try {
     phase = 'connect-cdp';
     browserVersion = await waitForCdp();
+    preserveLastTrustworthyEvidence('connect-cdp', {
+      browser: browserVersion?.Browser ?? null,
+      protocolVersion: browserVersion?.['Protocol-Version'] ?? null,
+    });
     const page = await waitForPage();
     const socket = new WebSocket(page.webSocketDebuggerUrl);
     await waitForWebSocketOpen(socket);
@@ -399,28 +456,44 @@ async function main() {
     phase = 'navigate';
     await wsRequest(socket, 'Page.navigate', { url: requestedUrl });
 
-    phase = 'wait-authoritative-hybrid';
+    phase = 'wait-dynamic-start';
     const deadline = Date.now() + hookWaitMs;
     while (Date.now() < deadline) {
       lastDebugState = await readDebugState(socket);
       const optics = lastDebugState?.runtime?.analyticCarrierOptics;
+      if (lastDebugState) {
+        preserveLastTrustworthyEvidence('wait-dynamic-start', {
+          status: lastDebugState.status ?? null,
+          stepCount: lastDebugState.runtime?.stepCount ?? null,
+          effectiveMode: optics?.effectiveMode ?? null,
+          effectiveRoute: optics?.effectiveRoute ?? null,
+          fallbackRoute: optics?.fallbackRoute ?? null,
+        });
+      }
       if (
         lastDebugState?.status === 'running'
-        && lastDebugState.runtime?.stepCount >= targetStep
+        && lastDebugState.runtime?.stepCount === dynamicStartTargetStep
+        && lastDebugState.runtime?.witnessStartAutoPaused === true
         && optics?.effectiveMode === 'hybrid_analytic_carrier'
         && optics?.primaryOutputWritten === true
       ) break;
       if (lastDebugState?.status === 'error') {
         throw new Error(`analytic carrier route failed before output: ${JSON.stringify(lastDebugState)}`);
       }
+      if (lastDebugState?.runtime?.stepCount > dynamicStartTargetStep) {
+        throw new Error(
+          `analytic carrier dynamic start boundary overshot: ${JSON.stringify(lastDebugState)}`,
+        );
+      }
       await delay(100);
     }
     if (
       lastDebugState?.status !== 'running'
-      || lastDebugState.runtime?.stepCount < targetStep
+      || lastDebugState.runtime?.stepCount !== dynamicStartTargetStep
+      || lastDebugState.runtime?.witnessStartAutoPaused !== true
       || lastDebugState.runtime?.analyticCarrierOptics?.effectiveMode !== 'hybrid_analytic_carrier'
     ) {
-      throw new Error(`hybrid carrier never became authoritative: ${JSON.stringify(lastDebugState)}`);
+      throw new Error(`hybrid carrier missed the dynamic start boundary: ${JSON.stringify(lastDebugState)}`);
     }
     effectiveUrl = await evaluate(socket, 'window.location.href');
     if (effectiveUrl !== requestedUrl) {
@@ -434,16 +507,6 @@ async function main() {
     ) {
       throw new Error(`fallback backend rejected: ${JSON.stringify(lastDebugState.runtime)}`);
     }
-    sourceIdentity = {
-      packetId: lastDebugState.runtime.liveInlets?.packetId,
-      sourceRoute: lastDebugState.runtime.liveInlets?.sourceRoute,
-      artifactSha256: lastDebugState.runtime.liveInlets?.artifactSha256,
-      generation: lastDebugState.runtime.liveInlets?.generation,
-      sourceMechanicsRevision:
-        lastDebugState.runtime.analyticCarrierOptics?.sourceMechanicsRevision,
-      ageContract: lastDebugState.runtime.analyticCarrierOptics?.ageContract
-        ?? lastDebugState.runtime.liveInlets?.ageContract,
-    };
     await evaluate(socket, 'window.kaminosFingerFluidBenchSetSimulationPausedForWitness?.(true)');
     const camera = await evaluate(
       socket,
@@ -456,6 +519,80 @@ async function main() {
       if (fps) fps.style.visibility = 'hidden';
       return true;
     })()`);
+    await evaluate(
+      socket,
+      `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.(
+        'screen_space_refraction',
+        'shaded'
+      )`,
+    );
+    const dynamicStartState = await readDebugState(socket);
+    const dynamicStartVisual = await captureCanvas(socket, dynamicStartPath);
+    outputFiles.push(dynamicStartPath);
+    preserveLastTrustworthyEvidence('capture-dynamic-start', {
+      output: dynamicStartPath,
+      stepCount: dynamicStartState.runtime?.stepCount ?? null,
+      visual: dynamicStartVisual,
+    });
+
+    phase = 'advance-dynamic-end';
+    const exactAdvance = await evaluate(
+      socket,
+      `window.kaminosFingerFluidBenchAdvanceToStepForWitness?.(${targetStep})`,
+    );
+    lastDebugState = await readDebugState(socket);
+    if (
+      exactAdvance?.schema !== 'kaminos.finger-fluid.exact-step-witness-advance.v0'
+      || exactAdvance?.startStep !== dynamicStartState.runtime?.stepCount
+      || exactAdvance?.endStep !== targetStep
+      || exactAdvance?.exact !== true
+      || lastDebugState?.status !== 'running'
+      || lastDebugState.runtime?.stepCount !== targetStep
+      || lastDebugState.runtime?.witnessTargetAutoPaused !== true
+    ) {
+      throw new Error(`hybrid carrier missed the exact dynamic end boundary: ${JSON.stringify({
+        exactAdvance,
+        lastDebugState,
+      })}`);
+    }
+    sourceIdentity = {
+      packetId: lastDebugState.runtime.liveInlets?.packetId,
+      sourceRoute: lastDebugState.runtime.liveInlets?.sourceRoute,
+      artifactSha256: lastDebugState.runtime.liveInlets?.artifactSha256,
+      generation: lastDebugState.runtime.liveInlets?.generation,
+      sourceMechanicsRevision:
+        lastDebugState.runtime.analyticCarrierOptics?.sourceMechanicsRevision,
+      ageContract: lastDebugState.runtime.analyticCarrierOptics?.ageContract
+        ?? lastDebugState.runtime.liveInlets?.ageContract,
+    };
+    await evaluate(
+      socket,
+      `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.(
+        'screen_space_refraction',
+        'shaded'
+      )`,
+    );
+    const dynamicEndVisual = await captureCanvas(socket, dynamicEndPath);
+    outputFiles.push(dynamicEndPath);
+    const dynamicEndState = await readDebugState(socket);
+    preserveLastTrustworthyEvidence('capture-dynamic-end', {
+      output: dynamicEndPath,
+      stepCount: dynamicEndState.runtime?.stepCount ?? null,
+      visual: dynamicEndVisual,
+    });
+    dynamicOutput = {
+      requestedMode: dynamicEndState.runtime?.analyticCarrierOptics?.requestedMode,
+      effectiveMode: dynamicEndState.runtime?.analyticCarrierOptics?.effectiveMode,
+      requestedRoute: dynamicEndState.runtime?.analyticCarrierOptics?.requestedRoute,
+      effectiveRoute: dynamicEndState.runtime?.analyticCarrierOptics?.effectiveRoute,
+      fallbackRoute: dynamicEndState.runtime?.analyticCarrierOptics?.fallbackRoute,
+      startStep: dynamicStartState.runtime?.stepCount,
+      endStep: dynamicEndState.runtime?.stepCount,
+      camera,
+      startVisual: dynamicStartVisual,
+      endVisual: dynamicEndVisual,
+      visualDelta: measurePngDelta(dynamicStartPath, dynamicEndPath),
+    };
 
     phase = 'capture-hybrid';
     const hybridReceipt = await evaluate(
@@ -466,8 +603,13 @@ async function main() {
       )`,
     );
     const hybridVisual = await captureCanvas(socket, hybridPath);
-    primaryOutputWritten = true;
+    outputFiles.push(hybridPath);
     lastDebugState = await readDebugState(socket);
+    preserveLastTrustworthyEvidence('capture-hybrid', {
+      output: hybridPath,
+      stepCount: lastDebugState.runtime?.stepCount ?? null,
+      visual: hybridVisual,
+    });
     captures.hybrid_analytic_carrier = carrierCaptureFromState(
       lastDebugState,
       camera,
@@ -475,6 +617,48 @@ async function main() {
     );
     if (hybridReceipt?.stepCount !== captures.hybrid_analytic_carrier.stepCount) {
       throw new Error('hybrid capture receipt and browser state disagree');
+    }
+
+    phase = 'switch-analytic-only';
+    const analyticOnlyAdmission = await evaluate(
+      socket,
+      `window.kaminosFingerFluidBenchSetAnalyticCarrierModeForWitness?.('analytic_carrier_only')`,
+    );
+    if (
+      analyticOnlyAdmission?.requestedMode !== 'analytic_carrier_only'
+      || analyticOnlyAdmission?.effectiveMode !== 'analytic_carrier_only'
+      || analyticOnlyAdmission?.fallbackRoute !== null
+      || analyticOnlyAdmission?.canonicalParticleVisibility !== 'hidden'
+    ) {
+      throw new Error(`analytic-only admission disagrees: ${JSON.stringify(analyticOnlyAdmission)}`);
+    }
+    phase = 'capture-analytic-only';
+    const analyticOnlyReceipt = await evaluate(
+      socket,
+      `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.(
+        'screen_space_refraction',
+        'shaded'
+      )`,
+    );
+    const analyticOnlyVisual = await captureCanvas(socket, analyticOnlyPath);
+    outputFiles.push(analyticOnlyPath);
+    lastDebugState = await readDebugState(socket);
+    preserveLastTrustworthyEvidence('capture-analytic-only', {
+      output: analyticOnlyPath,
+      stepCount: lastDebugState.runtime?.stepCount ?? null,
+      visual: analyticOnlyVisual,
+    });
+    captures.analytic_carrier_only = carrierCaptureFromState(
+      lastDebugState,
+      camera,
+      analyticOnlyVisual,
+    );
+    if (
+      analyticOnlyReceipt?.stepCount !== captures.analytic_carrier_only.stepCount
+      || captures.analytic_carrier_only.stepCount
+        !== captures.hybrid_analytic_carrier.stepCount
+    ) {
+      throw new Error('analytic-only capture advanced or substituted the fixed state');
     }
 
     phase = 'switch-particle-control';
@@ -499,14 +683,21 @@ async function main() {
       )`,
     );
     const particleVisual = await captureCanvas(socket, particlePath);
+    outputFiles.push(particlePath);
     lastDebugState = await readDebugState(socket);
+    preserveLastTrustworthyEvidence('capture-particle-control', {
+      output: particlePath,
+      stepCount: lastDebugState.runtime?.stepCount ?? null,
+      visual: particleVisual,
+    });
     captures.particle_only = carrierCaptureFromState(lastDebugState, camera, particleVisual);
     if (
       particleReceipt?.stepCount !== captures.particle_only.stepCount
-      || captures.particle_only.stepCount !== captures.hybrid_analytic_carrier.stepCount
+      || captures.particle_only.stepCount !== captures.analytic_carrier_only.stepCount
     ) {
       throw new Error(`same-state carrier A/B advanced the simulation: ${JSON.stringify({
         hybrid: captures.hybrid_analytic_carrier.stepCount,
+        analyticOnly: captures.analytic_carrier_only.stepCount,
         particleOnly: captures.particle_only.stepCount,
       })}`);
     }
@@ -516,6 +707,15 @@ async function main() {
       camera,
     };
     visualDelta = measurePngDelta(hybridPath, particlePath);
+    analyticOnlyVisualDelta = measurePngDelta(analyticOnlyPath, particlePath);
+    primaryOutputWritten = true;
+    preserveLastTrustworthyEvidence('complete-primary-output', {
+      outputFiles: [...outputFiles],
+      sameState,
+      visualDelta,
+      analyticOnlyVisualDelta,
+      dynamicVisualDelta: dynamicOutput.visualDelta,
+    });
     if (consoleEvents.some(event => ['error', 'exception'].includes(event.type))) {
       throw new Error(`browser console contains runtime errors: ${JSON.stringify(consoleEvents)}`);
     }
