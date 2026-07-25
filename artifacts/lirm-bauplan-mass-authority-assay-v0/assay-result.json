@@ -1,0 +1,130 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-assay-result.v0",
+  "status": "positive_bounded",
+  "comparison": {
+    "parentId": "bauplan-plus-dorsal-plates",
+    "variantId": "bauplan-heavy-plus-dorsal-plates",
+    "imagegenSeed": 720501,
+    "trellisSeed": 720501,
+    "neutralPromptContainsMassWords": false,
+    "supportPromptContract": {
+      "requestedVisibleSupportPattern": "four-support",
+      "authoredContactTopology": "seven-axial-supports",
+      "generatedSupportClaim": "inadmissible"
+    }
+  },
+  "verdicts": {
+    "controlMassDelta": "pass",
+    "neutralImagegenMassSurvival": "pass",
+    "matchedTrellisMassSurvival": "pass",
+    "sameOrganismalBasin": "pass",
+    "exactAccessoryPreservation": "fail",
+    "supportTopologyPreservation": "fail",
+    "heroCreatureAdmission": "not_claimed",
+    "mechanicalConsumerAdmission": "deferred"
+  },
+  "visualInspection": {
+    "operatorExposureClass": "happy_safe",
+    "parentImage": "longer lower body with more small support projections",
+    "heavyImage": "deeper underside, broader center mass, and fuller terminal masses",
+    "parentSpatial": "long low connected body with many small support projections",
+    "heavySpatial": "shorter fuller connected body with enlarged terminal masses and fewer larger support nubs",
+    "sharedLimit": "head identity remains unresolved and dorsal/support details drift across inference"
+  },
+  "effectiveRoutes": {
+    "imagegen": {
+      "jobType": "mflux_flux2_edit_promptfile_3ref",
+      "parentJobId": "246a3662399f",
+      "heavyJobId": "f2c4c8f25b17"
+    },
+    "trellis": {
+      "jobType": "trellis2mlx_fast",
+      "parentJobId": "dd68c8052086",
+      "heavyJobId": "6b8d5152d0e2",
+      "perJobMetadataParams": {
+        "seed": 720501,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024
+      },
+      "submittedRequestParams": {
+        "resolution": 512,
+        "cascade": false,
+        "simplifyFirst": true
+      }
+    },
+    "spatialWitness": {
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "parentJobIds": [
+        "6341c5666b4c",
+        "eeab2f8354c7",
+        "cf01008aa554",
+        "2295be61404c"
+      ],
+      "heavyJobIds": [
+        "20285fa6b29e",
+        "5c41cae085d0",
+        "839a2a08c328",
+        "f61d89da2b43"
+      ],
+      "yaws": [
+        0.55,
+        1.6,
+        2.9,
+        4.15
+      ],
+      "pitch": 0.2
+    }
+  },
+  "rejectedSubmissions": [
+    {
+      "jobId": "290c1a97896b",
+      "phase": "imagegen",
+      "reason": "Malformed repeated parameter flags left unresolved placeholders and silently restored seed 42."
+    },
+    {
+      "jobId": "76990512c12d",
+      "phase": "imagegen",
+      "reason": "Matching malformed request was cancelled before execution."
+    },
+    {
+      "jobId": "31fbf9e5a981",
+      "phase": "trellis",
+      "reason": "Incorrect cwd override resolved generate.py against the Kaminos worktree; inference never began."
+    },
+    {
+      "jobIds": [
+        "43dc28be46f3",
+        "79df135ef149",
+        "090c9fca4df5",
+        "c4a3c3627f3d"
+      ],
+      "phase": "spatial_witness",
+      "reason": "The route default referenced a removed worktree; replacement jobs used the current explicit cwd."
+    }
+  ],
+  "artifacts": {
+    "controlSheet": "control-sheet.png",
+    "imageComparison": "imagegen/matched-seed720501/comparison-parent-left-heavy-right.png",
+    "spatialFrontSideComparison": "spatial/matched-seed720501/comparison/parent-left-heavy-right-front-side.png",
+    "spatialRearOppositeComparison": "spatial/matched-seed720501/comparison/parent-left-heavy-right-rear-opposite.png",
+    "glbFolder": "spatial/matched-seed720501/glbs",
+    "parentImage": {
+      "path": "imagegen/matched-seed720501/bauplan-plus-dorsal-plates/output.png",
+      "sha256": "2949f9777a7cc8bfe71c5e00030dbec265c57ce309804f8ab4c4b630f6bb9c5c"
+    },
+    "heavyImage": {
+      "path": "imagegen/matched-seed720501/bauplan-heavy-plus-dorsal-plates/output.png",
+      "sha256": "c194c0c4ed337f60a2677151ba63eac4ebf70cde7fb2b529380ce4b65dff1501"
+    },
+    "parentGlb": {
+      "path": "spatial/matched-seed720501/bauplan-plus-dorsal-plates/output.glb",
+      "sha256": "c63f3d28790edc82d231c5c3745a081aa07aecb7324e8f61d8105033925ab630"
+    },
+    "heavyGlb": {
+      "path": "spatial/matched-seed720501/bauplan-heavy-plus-dorsal-plates/output.glb",
+      "sha256": "f3a9ed8082466c33f28966e27c32f20edeaca1b64d9c4f52eee23cdb4960f000"
+    }
+  },
+  "nextConsumerQuestion": "Can downstream registration preserve authored support identities despite generator-level support-count drift?"
+}

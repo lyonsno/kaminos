@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "6b8d5152d0e2",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/imagegen/matched-seed720501/bauplan-heavy-plus-dorsal-plates/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "720501",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1784940686.969573,
+  "duration_s": 288.1
+}

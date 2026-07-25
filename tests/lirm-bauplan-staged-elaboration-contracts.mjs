@@ -25,6 +25,13 @@ assert.equal(plan.schema, 'kaminos.lirm-bauplan-staged-elaboration-plan.v0');
 assert.equal(plan.sourceCandidateId, 'lirm-armature-03');
 assert.equal(plan.sourceSeed, 'molten-lirm-seed-0707');
 assert.equal(plan.stages.length, 3);
+assert.equal(
+  plan.massAuthority?.schema,
+  'kaminos.lirm-bauplan-mass-authority.v0',
+  'bauplan plan must expose a deterministic low-frequency mass-authority sibling',
+);
+assert.equal(plan.massAuthority.parentStageId, 'bauplan-plus-dorsal-plates');
+assert.equal(plan.massAuthority.variant.id, 'bauplan-heavy-plus-dorsal-plates');
 
 const [bauplan, armored, tactile] = plan.stages;
 assert.deepEqual(
@@ -58,6 +65,53 @@ assert.equal(handleCount(tactile, 'limb_bud') - handleCount(armored, 'limb_bud')
 assert.deepEqual(armored.developmentalModules, ['dorsal-plate-series']);
 assert.deepEqual(tactile.developmentalModules, ['dorsal-plate-series', 'paired-anterior-tactile-fork']);
 
+const heavy = plan.massAuthority.variant;
+const heavyBody = heavy.candidate.bodyPlan;
+const parentBody = armored.candidate.bodyPlan;
+assert.ok(heavyBody.silhouette.bellyScale > parentBody.silhouette.bellyScale);
+assert.ok(heavyBody.silhouette.widthScale > parentBody.silhouette.widthScale);
+assert.ok(heavyBody.silhouette.heightScale > parentBody.silhouette.heightScale);
+assert.ok(heavyBody.bulkScale > parentBody.bulkScale);
+assert.ok(heavyBody.massDistribution.bellyDrop > parentBody.massDistribution.bellyDrop);
+assert.ok(heavyBody.contactWidth > parentBody.contactWidth);
+const heavyGestaltHandle = heavy.candidate.semanticHandles.find(
+  handle => handle.kind === 'gestalt_silhouette',
+);
+assert.deepEqual(
+  {
+    bellyScale: heavyGestaltHandle?.region.bellyScale,
+    widthScale: heavyGestaltHandle?.region.widthScale,
+    heightScale: heavyGestaltHandle?.region.heightScale,
+  },
+  {
+    bellyScale: heavyBody.silhouette.bellyScale,
+    widthScale: heavyBody.silhouette.widthScale,
+    heightScale: heavyBody.silhouette.heightScale,
+  },
+  'heavy bauplan semantic silhouette handle must carry the authored dimensions',
+);
+assert.deepEqual(heavyBody.axisSamples, parentBody.axisSamples);
+assert.equal(heavyBody.axialCurve, parentBody.axialCurve);
+assert.equal(heavyBody.limbPairCount, parentBody.limbPairCount);
+assert.equal(heavyBody.shellPlateCount, parentBody.shellPlateCount);
+assert.deepEqual(heavy.developmentalModules, armored.developmentalModules);
+assert.deepEqual(
+  heavy.candidate.contactPoints.map(({ id, t, role }) => ({ id, t, role })),
+  armored.candidate.contactPoints.map(({ id, t, role }) => ({ id, t, role })),
+);
+assert.deepEqual(
+  plan.massAuthority.preserved,
+  [
+    'axialCurve',
+    'axisSamples',
+    'head-and-mouth-polarity',
+    'limb-topology',
+    'shell-modules',
+    'contact-identities',
+    'motion-affordance-class',
+  ],
+);
+
 const forbiddenKinds = new Set(['cavity', 'aperture', 'floating_organ', 'suspended_organ']);
 for (const stage of plan.stages) {
   assert.equal(stage.candidate.semanticHandles.some(handle => forbiddenKinds.has(handle.kind)), false);
@@ -79,6 +133,20 @@ assert.equal(bundles[2].implicitPrimitiveCount, bundles[1].implicitPrimitiveCoun
 assert.deepEqual(
   bundles.map(bundle => bundle.renderMaps.map(map => map.kind)),
   Array(3).fill(['clay', 'depth', 'normal', 'mask', 'semantic']),
+);
+const heavyBundle = createLirmSpeciationArmatureImplicitBodyBundle({
+  witness: plan.sourceWitness,
+  candidate: heavy.candidate,
+});
+assert.equal(heavyBundle.candidateId, heavy.id);
+assert.deepEqual(heavyBundle.silhouette, heavyBody.silhouette);
+assert.deepEqual(
+  heavyBundle.renderMaps.map(map => map.kind),
+  ['clay', 'depth', 'normal', 'mask', 'semantic'],
+);
+assert.equal(
+  heavyBundle.semanticHandles.some(handle => handle.kind === 'low_frequency_mass'),
+  true,
 );
 
 const repeat = buildLirmBauplanStagedElaborationPlan();

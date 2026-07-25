@@ -1,0 +1,761 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority.v0",
+  "authority": "deterministic-low-frequency-bauplan-mutation",
+  "parentStageId": "bauplan-plus-dorsal-plates",
+  "variant": {
+    "id": "bauplan-heavy-plus-dorsal-plates",
+    "lineageId": "lirm-armature-03-bauplan",
+    "parentId": "bauplan-plus-dorsal-plates",
+    "generation": 2,
+    "stageKind": "low-frequency-morphology",
+    "developmentalModules": [
+      "dorsal-plate-series"
+    ],
+    "bauplanContract": {
+      "enclosure": "single-connected-body",
+      "polarity": "terminal-head-and-mouth",
+      "contactTopology": "seven-axial-supports"
+    },
+    "candidate": {
+      "schema": "kaminos.lirm-speciation-armature-candidate.v0",
+      "id": "bauplan-heavy-plus-dorsal-plates",
+      "label": "lineage 04 / heavy bauplan",
+      "seed": "molten-lirm-seed-0707:3:bauplan-plus-dorsal-plates:low-frequency-heavy-v0",
+      "lineage": {
+        "rootSeed": "molten-lirm-seed-0707",
+        "parentId": "root-soft-crawling-hoard-thief",
+        "generation": 0,
+        "siblingIndex": 3,
+        "phase": 0.125,
+        "mutationPath": [
+          "gestalt:lirm-trilobite-flat",
+          "silhouette:flat-wide-side-plates",
+          "fall-forward:gestalt-leap",
+          "segments:13",
+          "axis:arched",
+          "limbs:5",
+          "contact:broad-belly",
+          "armor:7-plates",
+          "mouth:hungry",
+          "temper:gross-cute"
+        ]
+      },
+      "bodyPlan": {
+        "family": "small-ground-hoard-thief",
+        "gestalt": {
+          "kind": "lirm-trilobite-flat",
+          "label": "trilobite flatback",
+          "priorHooks": [
+            "trilobite",
+            "flat armored back",
+            "side plates",
+            "ancient arthropod"
+          ],
+          "source": "seeded_gestalt_archetype_v0"
+        },
+        "silhouette": {
+          "class": "flat-wide-side-plates",
+          "gestaltPressure": 0.929,
+          "headScale": 0.828,
+          "bellyScale": 1.418,
+          "tailScale": 0.737,
+          "widthScale": 1.504,
+          "heightScale": 0.619,
+          "dorsalLift": -0.02,
+          "mouthOffset": 0.056,
+          "outlineWords": [
+            "trilobite",
+            "flat armored back",
+            "side plates",
+            "ancient arthropod"
+          ]
+        },
+        "axialCurve": "low-belly-crawler",
+        "segmentCount": 13,
+        "axisSamples": [
+          {
+            "t": 0,
+            "x": 0.082,
+            "y": 0.468
+          },
+          {
+            "t": 0.083,
+            "x": 0.154,
+            "y": 0.412
+          },
+          {
+            "t": 0.167,
+            "x": 0.227,
+            "y": 0.376
+          },
+          {
+            "t": 0.25,
+            "x": 0.299,
+            "y": 0.369
+          },
+          {
+            "t": 0.333,
+            "x": 0.371,
+            "y": 0.391
+          },
+          {
+            "t": 0.417,
+            "x": 0.444,
+            "y": 0.435
+          },
+          {
+            "t": 0.5,
+            "x": 0.516,
+            "y": 0.489
+          },
+          {
+            "t": 0.583,
+            "x": 0.588,
+            "y": 0.539
+          },
+          {
+            "t": 0.667,
+            "x": 0.661,
+            "y": 0.571
+          },
+          {
+            "t": 0.75,
+            "x": 0.733,
+            "y": 0.579
+          },
+          {
+            "t": 0.833,
+            "x": 0.805,
+            "y": 0.561
+          },
+          {
+            "t": 0.917,
+            "x": 0.878,
+            "y": 0.524
+          },
+          {
+            "t": 1,
+            "x": 0.95,
+            "y": 0.48
+          }
+        ],
+        "massDistribution": {
+          "headBias": 0.297,
+          "bellyDrop": 0.661,
+          "tailDrag": 0.645
+        },
+        "limbPairCount": 5,
+        "limbScale": 0.603,
+        "shellPlateCount": 7,
+        "armorPressure": 0.95,
+        "mouthIntensity": 0.864,
+        "cuteGrossBlend": 0.607,
+        "asymmetry": 0.118,
+        "contactWidth": 0.93,
+        "sensoryNubCount": 2,
+        "bodyLength": 0.94,
+        "bodyCenter": 0.552,
+        "postureLift": -0.051,
+        "bulkScale": 1.039,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-trilobite-flat",
+          "semanticAdherence": 0.779,
+          "silhouetteFallForward": 0.905,
+          "priorInvitation": 0.98,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "trilobite",
+            "flat armored back",
+            "side plates"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
+      },
+      "semanticHandles": [
+        {
+          "id": "lirm-armature-03:gestalt",
+          "kind": "gestalt_silhouette",
+          "label": "trilobite flatback / flat-wide-side-plates",
+          "strength": 0.929,
+          "region": {
+            "class": "flat-wide-side-plates",
+            "headScale": 0.828,
+            "bellyScale": 1.418,
+            "tailScale": 0.737,
+            "widthScale": 1.504,
+            "heightScale": 0.619
+          },
+          "futureUse": [
+            "imagegen_prior_hook",
+            "trellis_prior_assay",
+            "whole_body_selection"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:axis",
+          "kind": "axis",
+          "label": "axial body curve",
+          "strength": 0.625,
+          "region": {
+            "samples": [
+              {
+                "x": 0.082,
+                "y": 0.468
+              },
+              {
+                "x": 0.154,
+                "y": 0.412
+              },
+              {
+                "x": 0.227,
+                "y": 0.376
+              },
+              {
+                "x": 0.299,
+                "y": 0.369
+              },
+              {
+                "x": 0.371,
+                "y": 0.391
+              },
+              {
+                "x": 0.444,
+                "y": 0.435
+              },
+              {
+                "x": 0.516,
+                "y": 0.489
+              },
+              {
+                "x": 0.588,
+                "y": 0.539
+              },
+              {
+                "x": 0.661,
+                "y": 0.571
+              },
+              {
+                "x": 0.733,
+                "y": 0.579
+              },
+              {
+                "x": 0.805,
+                "y": 0.561
+              },
+              {
+                "x": 0.878,
+                "y": 0.524
+              },
+              {
+                "x": 0.95,
+                "y": 0.48
+              }
+            ]
+          },
+          "futureUse": [
+            "silhouette_conditioning",
+            "motion_spine_guess"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:head",
+          "kind": "head",
+          "label": "head / desire orientation",
+          "strength": 0.847,
+          "region": {
+            "x": 0.95,
+            "y": 0.48,
+            "radius": 0.102
+          },
+          "futureUse": [
+            "orientation",
+            "attention",
+            "appetite"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:mouth",
+          "kind": "mouth",
+          "label": "terminal mouth concentration",
+          "strength": 0.864,
+          "region": {
+            "x": 0.985,
+            "y": 0.488,
+            "radius": 0.048,
+            "placement": "terminal_front_cap"
+          },
+          "futureUse": [
+            "hoard_theft",
+            "bite_pose",
+            "face_prompt"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:belly-contact",
+          "kind": "belly_contact",
+          "label": "belly contact patch",
+          "strength": 0.93,
+          "region": {
+            "x": 0.444,
+            "y": 0.555,
+            "width": 0.93,
+            "height": 0.095
+          },
+          "futureUse": [
+            "crawl_contact",
+            "terrain_desire",
+            "shadow_anchor"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:locomotion",
+          "kind": "locomotion",
+          "label": "motion affordance field",
+          "strength": 0.947,
+          "region": {
+            "contactCount": 7,
+            "primary": "inch"
+          },
+          "futureUse": [
+            "motion_transposition",
+            "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.842,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.779,
+            "silhouetteFallForward": 0.905,
+            "priorInvitation": 0.98
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:limb-bud-0",
+          "kind": "limb_bud",
+          "label": "paired limb bud 1",
+          "strength": 0.513,
+          "region": {
+            "x": 0.227,
+            "y": 0.376,
+            "t": 0.167,
+            "side": "paired",
+            "length": 0.118
+          },
+          "futureUse": [
+            "step",
+            "brace",
+            "drag",
+            "gesture"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:limb-bud-1",
+          "kind": "limb_bud",
+          "label": "paired limb bud 2",
+          "strength": 0.537,
+          "region": {
+            "x": 0.371,
+            "y": 0.391,
+            "t": 0.333,
+            "side": "paired",
+            "length": 0.118
+          },
+          "futureUse": [
+            "step",
+            "brace",
+            "drag",
+            "gesture"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:limb-bud-2",
+          "kind": "limb_bud",
+          "label": "paired limb bud 3",
+          "strength": 0.561,
+          "region": {
+            "x": 0.516,
+            "y": 0.489,
+            "t": 0.5,
+            "side": "paired",
+            "length": 0.118
+          },
+          "futureUse": [
+            "step",
+            "brace",
+            "drag",
+            "gesture"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:limb-bud-3",
+          "kind": "limb_bud",
+          "label": "paired limb bud 4",
+          "strength": 0.585,
+          "region": {
+            "x": 0.661,
+            "y": 0.571,
+            "t": 0.667,
+            "side": "paired",
+            "length": 0.118
+          },
+          "futureUse": [
+            "step",
+            "brace",
+            "drag",
+            "gesture"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:limb-bud-4",
+          "kind": "limb_bud",
+          "label": "paired limb bud 5",
+          "strength": 0.609,
+          "region": {
+            "x": 0.805,
+            "y": 0.561,
+            "t": 0.833,
+            "side": "paired",
+            "length": 0.118
+          },
+          "futureUse": [
+            "step",
+            "brace",
+            "drag",
+            "gesture"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-0",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 1",
+          "strength": 0.95,
+          "region": {
+            "x": 0.227,
+            "y": 0.291,
+            "t": 0.125,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-1",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 2",
+          "strength": 0.95,
+          "region": {
+            "x": 0.299,
+            "y": 0.284,
+            "t": 0.25,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-2",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 3",
+          "strength": 0.95,
+          "region": {
+            "x": 0.444,
+            "y": 0.35,
+            "t": 0.375,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-3",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 4",
+          "strength": 0.95,
+          "region": {
+            "x": 0.516,
+            "y": 0.404,
+            "t": 0.5,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-4",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 5",
+          "strength": 0.95,
+          "region": {
+            "x": 0.661,
+            "y": 0.486,
+            "t": 0.625,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-5",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 6",
+          "strength": 0.95,
+          "region": {
+            "x": 0.733,
+            "y": 0.494,
+            "t": 0.75,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:shell-plate-6",
+          "kind": "shell_plate",
+          "label": "dorsal shell plate 7",
+          "strength": 0.95,
+          "region": {
+            "x": 0.878,
+            "y": 0.439,
+            "t": 0.875,
+            "width": 0.166
+          },
+          "futureUse": [
+            "material_region",
+            "occlusion_read",
+            "trellis_detail_hook"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:tail-drag",
+          "kind": "tail_drag",
+          "label": "tail drag memory",
+          "strength": 0.643,
+          "region": {
+            "x": 0.082,
+            "y": 0.548,
+            "length": 0.183
+          },
+          "futureUse": [
+            "trail",
+            "panic_turn",
+            "swarm_spacing"
+          ]
+        },
+        {
+          "id": "bauplan-heavy-plus-dorsal-plates:mass-authority",
+          "kind": "low_frequency_mass",
+          "label": "authored torso mass / belly depth",
+          "strength": 1.418,
+          "region": {
+            "tMin": 0.18,
+            "tMax": 0.82,
+            "bellyScale": 1.418,
+            "widthScale": 1.504,
+            "heightScale": 0.619,
+            "bulkScale": 1.039,
+            "bellyDrop": 0.661,
+            "contactWidth": 0.93
+          },
+          "futureUse": [
+            "morphology_authoring",
+            "image_completion_conditioning",
+            "motion_fit_prior"
+          ]
+        }
+      ],
+      "contactPoints": [
+        {
+          "id": "contact-0",
+          "t": 0.071,
+          "x": 0.154,
+          "y": 0.548,
+          "radius": 0.038,
+          "role": "fore-brace"
+        },
+        {
+          "id": "contact-1",
+          "t": 0.214,
+          "x": 0.299,
+          "y": 0.513,
+          "radius": 0.038,
+          "role": "fore-brace"
+        },
+        {
+          "id": "contact-2",
+          "t": 0.357,
+          "x": 0.371,
+          "y": 0.527,
+          "radius": 0.038,
+          "role": "belly-crawl"
+        },
+        {
+          "id": "contact-3",
+          "t": 0.5,
+          "x": 0.516,
+          "y": 0.633,
+          "radius": 0.038,
+          "role": "belly-crawl"
+        },
+        {
+          "id": "contact-4",
+          "t": 0.643,
+          "x": 0.661,
+          "y": 0.707,
+          "radius": 0.038,
+          "role": "belly-crawl"
+        },
+        {
+          "id": "contact-5",
+          "t": 0.786,
+          "x": 0.733,
+          "y": 0.723,
+          "radius": 0.038,
+          "role": "belly-crawl"
+        },
+        {
+          "id": "contact-6",
+          "t": 0.929,
+          "x": 0.878,
+          "y": 0.66,
+          "radius": 0.038,
+          "role": "tail-drag"
+        }
+      ],
+      "motionAffordance": {
+        "primary": "inch",
+        "confidence": 0.765,
+        "secondary": [
+          "crawl",
+          "coil"
+        ]
+      },
+      "firingAffordances": {
+        "acceptsImagegenConditioning": true,
+        "acceptsSamIsolation": true,
+        "acceptsTrellisProbe": true,
+        "acceptsSharpProbe": true,
+        "controlMaps": [
+          "silhouette",
+          "gestalt-silhouette",
+          "semantic-map",
+          "axis-depth-cue",
+          "contact-points",
+          "proxy-primitives"
+        ],
+        "promptPacket": {
+          "subject": "small crawling hoard thief creature, trilobite flatback",
+          "preserve": [
+            "whole silhouette gestalt",
+            "body axis",
+            "belly contact patch",
+            "head orientation",
+            "terminal front mouth",
+            "limb bud count"
+          ],
+          "mutate": [
+            "surface material",
+            "gross-cute balance",
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
+          ]
+        }
+      }
+    }
+  },
+  "changed": {
+    "bodyPlan.silhouette.bellyScale": {
+      "from": 1.202,
+      "to": 1.418
+    },
+    "bodyPlan.silhouette.widthScale": {
+      "from": 1.419,
+      "to": 1.504
+    },
+    "bodyPlan.silhouette.heightScale": {
+      "from": 0.553,
+      "to": 0.619
+    },
+    "bodyPlan.bulkScale": {
+      "from": 0.962,
+      "to": 1.039
+    },
+    "bodyPlan.massDistribution.bellyDrop": {
+      "from": 0.541,
+      "to": 0.661
+    },
+    "bodyPlan.contactWidth": {
+      "from": 0.903,
+      "to": 0.93
+    }
+  },
+  "preserved": [
+    "axialCurve",
+    "axisSamples",
+    "head-and-mouth-polarity",
+    "limb-topology",
+    "shell-modules",
+    "contact-identities",
+    "motion-affordance-class"
+  ]
+}

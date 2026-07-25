@@ -1,0 +1,51 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-neutral-completion-request.v0",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+  "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "model": "flux2-klein-9b",
+  "quantize": 4,
+  "width": 512,
+  "height": 512,
+  "steps": 8,
+  "guidance": 1,
+  "seed": 720501,
+  "mlxCacheLimitGb": 48,
+  "promptPath": "neutral-completion-prompt.txt",
+  "variants": [
+    {
+      "id": "bauplan-plus-dorsal-plates",
+      "clayPath": "controls/bauplan-plus-dorsal-plates/clay-implicit.png",
+      "depthPath": "controls/bauplan-plus-dorsal-plates/depth-implicit.png",
+      "normalPath": "controls/bauplan-plus-dorsal-plates/normal-implicit.png",
+      "outputDir": "imagegen/matched-seed720501/bauplan-plus-dorsal-plates",
+      "jobId": "246a3662399f"
+    },
+    {
+      "id": "bauplan-heavy-plus-dorsal-plates",
+      "clayPath": "controls/bauplan-heavy-plus-dorsal-plates/clay-implicit.png",
+      "depthPath": "controls/bauplan-heavy-plus-dorsal-plates/depth-implicit.png",
+      "normalPath": "controls/bauplan-heavy-plus-dorsal-plates/normal-implicit.png",
+      "outputDir": "imagegen/matched-seed720501/bauplan-heavy-plus-dorsal-plates",
+      "jobId": "f2c4c8f25b17"
+    }
+  ],
+  "rejectedSubmissions": [
+    {
+      "jobId": "290c1a97896b",
+      "variantId": "bauplan-plus-dorsal-plates",
+      "reason": "Repeated -p flags collapsed to the final parameter; effective route retained unresolved reference and prompt placeholders and silently restored seed 42.",
+      "status": "done-invalid-route"
+    },
+    {
+      "jobId": "76990512c12d",
+      "variantId": "bauplan-heavy-plus-dorsal-plates",
+      "reason": "Same malformed request shape; cancelled before execution.",
+      "status": "cancelled-invalid-route"
+    }
+  ],
+  "claimBoundary": {
+    "controlRenderProvesImageSurvival": false,
+    "friendlyOutputAloneProvesMassAuthority": false,
+    "trellisAllowedBeforeMatchedImageInspection": false
+  }
+}

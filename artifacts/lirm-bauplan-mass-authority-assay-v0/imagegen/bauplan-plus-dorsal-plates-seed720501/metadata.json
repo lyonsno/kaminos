@@ -1,0 +1,13 @@
+{
+  "name": "clay-implicit",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "290c1a97896b",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-plus-dorsal-plates/clay-implicit.png",
+  "input_name": "clay-implicit.png",
+  "params": {
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [],
+  "created_at": 1784939821.420074,
+  "duration_s": 126.1
+}

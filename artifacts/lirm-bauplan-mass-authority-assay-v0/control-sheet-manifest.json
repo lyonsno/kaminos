@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-bauplan-mass-authority-control-sheet.v0",
+  "columns": 3,
+  "rows": 2,
+  "width": 1080,
+  "cellWidth": 360,
+  "cellHeight": 342,
+  "imageHeight": 288,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-plus-dorsal-plates/clay-implicit.png",
+      "title": "bauplan-plus-dorsal-plates / clay",
+      "viewLabel": "accepted bauplan parent"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-plus-dorsal-plates/depth-implicit.png",
+      "title": "bauplan-plus-dorsal-plates / depth",
+      "viewLabel": "accepted bauplan parent"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-plus-dorsal-plates/normal-implicit.png",
+      "title": "bauplan-plus-dorsal-plates / normal",
+      "viewLabel": "accepted bauplan parent"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-heavy-plus-dorsal-plates/clay-implicit.png",
+      "title": "bauplan-heavy-plus-dorsal-plates / clay",
+      "viewLabel": "deterministic low-frequency heavy"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-heavy-plus-dorsal-plates/depth-implicit.png",
+      "title": "bauplan-heavy-plus-dorsal-plates / depth",
+      "viewLabel": "deterministic low-frequency heavy"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/controls/bauplan-heavy-plus-dorsal-plates/normal-implicit.png",
+      "title": "bauplan-heavy-plus-dorsal-plates / normal",
+      "viewLabel": "deterministic low-frequency heavy"
+    }
+  ]
+}

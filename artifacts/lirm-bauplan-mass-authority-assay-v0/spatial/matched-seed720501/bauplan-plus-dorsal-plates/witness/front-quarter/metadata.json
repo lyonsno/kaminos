@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "job_type": "kaminos_blender_glb_witness_molten_0718",
+  "job_id": "6341c5666b4c",
+  "input_path": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/lirm-bauplan-mass-authority-assay-v0/spatial/matched-seed720501/bauplan-plus-dorsal-plates/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "witness_script": "/private/tmp/kaminos-molten-support-atlas-admission-0724/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+    "yaw": "0.55",
+    "pitch": "0.2",
+    "cwd": "/private/tmp/kaminos-molten-support-atlas-admission-0724"
+  },
+  "output_files": [
+    "render.png"
+  ],
+  "created_at": 1784942866.481094,
+  "duration_s": 2.3
+}
