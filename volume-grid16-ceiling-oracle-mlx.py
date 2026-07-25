@@ -22,6 +22,7 @@ Contract choices that keep the comparison lawful:
 from __future__ import annotations
 
 import argparse
+from functools import partial
 import hashlib
 import importlib.util
 import json
@@ -351,16 +352,16 @@ def fit_modes(
         weighted = transmittance * source_scale * segment[:, None]
         return mx.sum(weighted[:, :, None] * emission_field, axis=1)
 
-    def loss_fn(params, batch):
+    def loss_fn(params, points, segment, target):
         centers, precision, norm, (emission, extinction) = decode(params)
         predictions = []
-        ray_count = batch["rayCount"]
+        ray_count = points.shape[0]
         for start in range(0, ray_count, ray_chunk):
             stop = min(start + ray_chunk, ray_count)
             predictions.append(
                 render_chunk(
-                    batch["points"][start:stop],
-                    batch["segment"][start:stop],
+                    points[start:stop],
+                    segment[start:stop],
                     centers,
                     precision,
                     norm,
@@ -369,8 +370,8 @@ def fit_modes(
                 )
             )
         predicted = mx.concatenate(predictions, axis=0)
-        data_loss = mx.mean(mx.abs(predicted - batch["target"])) + 0.25 * mx.mean(
-            mx.square(predicted - batch["target"])
+        data_loss = mx.mean(mx.abs(predicted - target)) + 0.25 * mx.mean(
+            mx.square(predicted - target)
         )
         if anchor_weight > 0.0:
             # Temporal anchor: penalize raw-parameter departure from the warm
@@ -383,15 +384,24 @@ def fit_modes(
 
     loss_and_grad = mx.value_and_grad(loss_fn)
     optimizer = optim.Adam(learning_rate=learning_rate)
+    compile_state = [parameters, optimizer.state]
+
+    # Compile the whole train step so the chunked autograd graph is built once
+    # per batch shape and replayed, instead of rebuilt in Python every step.
+    @partial(mx.compile, inputs=compile_state, outputs=compile_state)
+    def train_step(points, segment, target):
+        loss, gradients = loss_and_grad(parameters, points, segment, target)
+        optimizer.update(parameters, gradients)
+        return loss
+
     history: list[float] = []
     initial_loss = None
     arm_label = f"n{mode_count}-{init}-s{seed}"
     log_every = max(1, iterations // 15)
     for step in range(iterations):
         batch = camera_batches[step % len(camera_batches)]
-        loss, gradients = loss_and_grad(parameters, batch)
-        optimizer.update(parameters, gradients)
-        mx.eval(parameters, optimizer.state)
+        loss = train_step(batch["points"], batch["segment"], batch["target"])
+        mx.eval(compile_state)
         value = float(loss)
         require(np.isfinite(value), f"loss became nonfinite at step {step}")
         history.append(value)
