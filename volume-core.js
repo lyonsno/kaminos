@@ -90,6 +90,125 @@ const CANONICAL_CONTENT_MODE_VALUES = {
   fire_smoke: 2,
 };
 
+export function projectVolumeRaymarchScissor({
+  viewProjectionMatrix,
+  width,
+  height,
+  cameraPosition,
+  boundsMin = [-1, -1, -1],
+  boundsMax = [1, 1, 1],
+  paddingPixels = 1,
+} = {}) {
+  const viewportWidth = Math.max(1, Math.floor(Number(width) || 1));
+  const viewportHeight = Math.max(1, Math.floor(Number(height) || 1));
+  const matrix = viewProjectionMatrix?.elements || viewProjectionMatrix;
+  const cameraIsArray = Array.isArray(cameraPosition) || ArrayBuffer.isView(cameraPosition);
+  const cameraX = cameraIsArray ? cameraPosition[0] : cameraPosition?.x;
+  const cameraY = cameraIsArray ? cameraPosition[1] : cameraPosition?.y;
+  const cameraZ = cameraIsArray ? cameraPosition[2] : cameraPosition?.z;
+  const fullViewport = reason => ({
+    schema: 'kaminos.volume-raymarch-scissor.v0',
+    mode: 'full-viewport',
+    reason,
+    x: 0,
+    y: 0,
+    width: viewportWidth,
+    height: viewportHeight,
+    viewportWidth,
+    viewportHeight,
+    pixelCoverageRatio: 1,
+  });
+  if (
+    !matrix
+    || matrix.length !== 16
+  ) {
+    return fullViewport('invalid-projection');
+  }
+  for (let index = 0; index < 16; index += 1) {
+    if (!Number.isFinite(matrix[index])) return fullViewport('invalid-projection');
+  }
+  const cameraInside = (
+    Number.isFinite(cameraX)
+    && Number.isFinite(cameraY)
+    && Number.isFinite(cameraZ)
+    && cameraX >= boundsMin[0] && cameraX <= boundsMax[0]
+    && cameraY >= boundsMin[1] && cameraY <= boundsMax[1]
+    && cameraZ >= boundsMin[2] && cameraZ <= boundsMax[2]
+  );
+  if (cameraInside) return fullViewport('camera-inside-volume');
+
+  let minScreenX = Infinity;
+  let minScreenY = Infinity;
+  let maxScreenX = -Infinity;
+  let maxScreenY = -Infinity;
+  for (let xIndex = 0; xIndex < 2; xIndex += 1) {
+    const x = xIndex === 0 ? boundsMin[0] : boundsMax[0];
+    for (let yIndex = 0; yIndex < 2; yIndex += 1) {
+      const y = yIndex === 0 ? boundsMin[1] : boundsMax[1];
+      for (let zIndex = 0; zIndex < 2; zIndex += 1) {
+        const z = zIndex === 0 ? boundsMin[2] : boundsMax[2];
+        const clipX = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+        const clipY = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+        const clipW = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+        if (!Number.isFinite(clipW) || clipW <= 1e-6) {
+          return fullViewport('near-plane-ambiguity');
+        }
+        const screenX = (clipX / clipW * 0.5 + 0.5) * viewportWidth;
+        const screenY = (0.5 - clipY / clipW * 0.5) * viewportHeight;
+        if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) {
+          return fullViewport('invalid-projection');
+        }
+        minScreenX = Math.min(minScreenX, screenX);
+        minScreenY = Math.min(minScreenY, screenY);
+        maxScreenX = Math.max(maxScreenX, screenX);
+        maxScreenY = Math.max(maxScreenY, screenY);
+      }
+    }
+  }
+  if (
+    maxScreenX <= 0
+    || maxScreenY <= 0
+    || minScreenX >= viewportWidth
+    || minScreenY >= viewportHeight
+  ) {
+    return {
+      schema: 'kaminos.volume-raymarch-scissor.v0',
+      mode: 'culled',
+      reason: 'projected-volume-offscreen',
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      viewportWidth,
+      viewportHeight,
+      pixelCoverageRatio: 0,
+    };
+  }
+
+  const padding = Math.max(0, Math.ceil(Number(paddingPixels) || 0));
+  const x = Math.max(0, Math.floor(minScreenX) - padding);
+  const y = Math.max(0, Math.floor(minScreenY) - padding);
+  const right = Math.min(viewportWidth, Math.ceil(maxScreenX) + padding);
+  const bottom = Math.min(viewportHeight, Math.ceil(maxScreenY) + padding);
+  const scissorWidth = Math.max(0, right - x);
+  const scissorHeight = Math.max(0, bottom - y);
+  if (x === 0 && y === 0 && scissorWidth === viewportWidth && scissorHeight === viewportHeight) {
+    return fullViewport('projected-volume-fills-viewport');
+  }
+  return {
+    schema: 'kaminos.volume-raymarch-scissor.v0',
+    mode: 'projected-volume',
+    reason: 'projected-volume-bounds',
+    x,
+    y,
+    width: scissorWidth,
+    height: scissorHeight,
+    viewportWidth,
+    viewportHeight,
+    pixelCoverageRatio: (scissorWidth * scissorHeight) / (viewportWidth * viewportHeight),
+  };
+}
+
 function normalizeGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
@@ -5529,6 +5648,18 @@ export function createKaminosVolumePrototype({
     renderHeight: 0,
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
     renderPixelRatio: 1,
+    raymarchScissor: {
+      schema: 'kaminos.volume-raymarch-scissor.v0',
+      mode: 'full-viewport',
+      reason: 'projection-not-initialized',
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      viewportWidth: 0,
+      viewportHeight: 0,
+      pixelCoverageRatio: 1,
+    },
     volumeReconstructionStyle: 'linear-css-upscale',
     volumeResidualMode: normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode),
     volumeResidualModelUrl: String(controlsSnapshot.volumeResidualModelUrl || ''),
@@ -8259,6 +8390,12 @@ export function createKaminosVolumePrototype({
       state.lookFreezeTimeSeconds = null;
     }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    state.raymarchScissor = projectVolumeRaymarchScissor({
+      viewProjectionMatrix: viewProj.elements,
+      width: state.width,
+      height: state.height,
+      cameraPosition: camera.position,
+    });
     invViewProj.copy(viewProj).invert();
     if (!previousViewProjReady) {
       previousViewProj.copy(viewProj);
@@ -9712,7 +9849,7 @@ export function createKaminosVolumePrototype({
     smokePass.setPipeline(hybridSmokePipeline);
     smokePass.setBindGroup(0, bindGroups[currentFluid]);
     smokePass.setBindGroup(1, hybridSmokeSplitBindGroup);
-    smokePass.draw(3);
+    if (applyVolumeRaymarchScissor(smokePass)) smokePass.draw(3);
     smokePass.end();
     recordKilnFrameStage(
       options.stageLedgerFrameId,
@@ -10359,10 +10496,21 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(targetPipeline);
-    pass.setBindGroup(0, bindGroups[currentFluid]);
-    pass.draw(3);
+    if (applyVolumeRaymarchScissor(pass)) {
+      pass.setPipeline(targetPipeline);
+      pass.setBindGroup(0, bindGroups[currentFluid]);
+      pass.draw(3);
+    }
     pass.end();
+  }
+
+  function applyVolumeRaymarchScissor(pass) {
+    const scissor = state.raymarchScissor;
+    if (scissor?.mode === 'culled') return false;
+    if (scissor?.mode === 'projected-volume') {
+      pass.setScissorRect(scissor.x, scissor.y, scissor.width, scissor.height);
+    }
+    return true;
   }
 
   function encodeBrowserResidualSourcePass(encoder, colorView, featureView) {
@@ -10383,9 +10531,11 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
-    pass.setPipeline(browserResidualSourcePipeline);
-    pass.setBindGroup(0, bindGroups[currentFluid]);
-    pass.draw(3);
+    if (applyVolumeRaymarchScissor(pass)) {
+      pass.setPipeline(browserResidualSourcePipeline);
+      pass.setBindGroup(0, bindGroups[currentFluid]);
+      pass.draw(3);
+    }
     pass.end();
   }
 

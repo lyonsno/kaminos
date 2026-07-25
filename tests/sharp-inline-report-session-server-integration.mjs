@@ -31,6 +31,85 @@ server.stderr.on('data', chunk => {
 
 try {
   await waitForServer(`http://127.0.0.1:${port}/api/runtime-config`);
+  const liveStart = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'live-crash-test',
+    document: {
+      schema: 'kaminos.sharp-inline-live-telemetry.v0',
+      status: 'running',
+      phase: 'sharp-inference',
+      routeIdentity: {
+        requestedRoute: 'sharp-image-to-splat-live-v0',
+        effectiveRoute: 'same-browser-product-realm-shared-device',
+        sharpRevision: 'sharp-live-revision',
+      },
+    },
+    collections: [{
+      id: 'progress-events',
+      jsonPointer: '#/liveTelemetry/progressEvents',
+      expectedCount: null,
+      liveAppend: true,
+      retention: 'uncapped',
+      mediaType: 'application/x-ndjson',
+    }],
+  });
+  assert.equal(liveStart.response.status, 200);
+  assert.match(liveStart.body.stateReadUrl, /sharp-inline-report-state/);
+  const liveRunDirectory = liveStart.body.outputRoot;
+  const liveStatePath = path.join(liveRunDirectory, 'sharp-inline-report-state.json');
+  const liveTracePath = path.join(liveRunDirectory, 'traces', 'progress-events.ndjson');
+  const firstLiveChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: liveStart.body.sessionId,
+    collectionId: 'progress-events',
+    expectedStart: 0,
+    rows: [
+      { ordinal: 0, progress: 0.03, message: 'loading source' },
+      { ordinal: 1, progress: 0.925, message: 'gaussian stage' },
+    ],
+  });
+  assert.equal(firstLiveChunk.response.status, 200);
+  const crashReadableState = JSON.parse(readFileSync(liveStatePath, 'utf8'));
+  assert.equal(crashReadableState.status, 'receiving');
+  assert.equal(crashReadableState.document.routeIdentity.sharpRevision, 'sharp-live-revision');
+  assert.equal(crashReadableState.collections['progress-events'].expectedCount, null);
+  assert.equal(crashReadableState.collections['progress-events'].receivedCount, 2);
+  assert.deepEqual(
+    readFileSync(liveTracePath, 'utf8').trim().split('\n').map(line => JSON.parse(line)),
+    [
+      { ordinal: 0, progress: 0.03, message: 'loading source' },
+      { ordinal: 1, progress: 0.925, message: 'gaussian stage' },
+    ],
+    'a renderer can disappear here without taking already-fsynced progress with it',
+  );
+  const falseComplete = await post('/api/sharp-inline-run-report/finish', {
+    sessionId: liveStart.body.sessionId,
+    expectedCounts: { 'progress-events': 1 },
+    documentPatch: {
+      status: 'complete',
+      phase: 'sharp-inference-complete',
+    },
+  });
+  assert.equal(falseComplete.response.status, 409);
+  assert.match(falseComplete.body.error, /received 2, not final expectedCount 1/);
+  assert.equal(
+    existsSync(path.join(liveRunDirectory, 'sharp-inline-report.json')),
+    false,
+    'a stale client count must not seal a partial or contradictory live journal',
+  );
+  const liveFinish = await post('/api/sharp-inline-run-report/finish', {
+    sessionId: liveStart.body.sessionId,
+    expectedCounts: { 'progress-events': 2 },
+    documentPatch: {
+      status: 'complete',
+      phase: 'sharp-inference-complete',
+    },
+  });
+  assert.equal(liveFinish.response.status, 200);
+  assert.equal(liveFinish.body.traceArtifacts['progress-events'].count, 2);
+  const liveReport = JSON.parse(readFileSync(liveFinish.body.path, 'utf8'));
+  assert.equal(liveReport.status, 'complete');
+  assert.equal(liveReport.phase, 'sharp-inference-complete');
+
   const start = await post('/api/sharp-inline-run-report/start', {
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId: 'integration-test',
