@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  copyFileSync,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -16,9 +17,12 @@ assert.ok(
   'HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report',
 );
 const exactPackageReportPath = resolve(packageReportPath);
-const witnessPath = resolve('hill-moving-support-consumer-witness.mjs');
+const repoRoot = resolve('.');
 const hillRevision = '26b79567597538996b0b8b9f58ef59ea12c5c3a9';
 const bigPapaRevision = 'f8e1f6db64fb3a505151d16f83d5131b588d2516';
+let witnessPath;
+let witnessCwd;
+let consumerRevision;
 
 function runWitness(outputDir, packageReport = exactPackageReportPath, extra = []) {
   return spawnSync(
@@ -33,10 +37,12 @@ function runWitness(outputDir, packageReport = exactPackageReportPath, extra = [
       hillRevision,
       '--expected-big-papa-revision',
       bigPapaRevision,
+      '--expected-consumer-revision',
+      consumerRevision,
       ...extra,
     ],
     {
-      cwd: resolve('.'),
+      cwd: witnessCwd,
       encoding: 'utf8',
     },
   );
@@ -47,12 +53,82 @@ function readJson(path, label) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function runWitnessWithoutConsumerRevision(outputDir) {
+  return spawnSync(
+    process.execPath,
+    [
+      witnessPath,
+      '--output-dir',
+      outputDir,
+      '--package-report',
+      exactPackageReportPath,
+      '--expected-hill-revision',
+      hillRevision,
+      '--expected-big-papa-revision',
+      bigPapaRevision,
+    ],
+    {
+      cwd: witnessCwd,
+      encoding: 'utf8',
+    },
+  );
+}
+
 const testRoot = mkdtempSync(
   join(tmpdir(), 'kaminos-hill-moving-support-witness-contract-'),
 );
 const outputDir = join(testRoot, 'output');
 
 try {
+  witnessCwd = join(testRoot, 'consumer-repo');
+  const clone = spawnSync(
+    'git',
+    ['clone', '--shared', repoRoot, witnessCwd],
+    { encoding: 'utf8' },
+  );
+  assert.equal(
+    clone.status,
+    0,
+    `consumer fixture clone failed: ${clone.stderr || clone.stdout}`,
+  );
+  for (const sourcePath of [
+    'hill-moving-support-consumer.mjs',
+    'hill-moving-support-consumer-witness.mjs',
+  ]) {
+    copyFileSync(
+      join(repoRoot, sourcePath),
+      join(witnessCwd, sourcePath),
+    );
+  }
+  const fixtureCommit = spawnSync(
+    'git',
+    [
+      '-c',
+      'user.name=Hill Witness Contracts',
+      '-c',
+      'user.email=hill-witness-contracts@example.invalid',
+      'commit',
+      '--all',
+      '--allow-empty',
+      '--message',
+      'test: seat current consumer witness',
+    ],
+    { cwd: witnessCwd, encoding: 'utf8' },
+  );
+  assert.equal(
+    fixtureCommit.status,
+    0,
+    `consumer fixture commit failed: ${fixtureCommit.stderr || fixtureCommit.stdout}`,
+  );
+  const fixtureHead = spawnSync(
+    'git',
+    ['rev-parse', 'HEAD'],
+    { cwd: witnessCwd, encoding: 'utf8' },
+  );
+  assert.equal(fixtureHead.status, 0);
+  consumerRevision = fixtureHead.stdout.trim();
+  witnessPath = join(witnessCwd, 'hill-moving-support-consumer-witness.mjs');
+
   const success = runWitness(outputDir);
   assert.equal(
     success.status,
@@ -75,6 +151,9 @@ try {
   assert.equal(report.effective.hillSourceRevision, hillRevision);
   assert.equal(report.requested.bigPapaRevision, bigPapaRevision);
   assert.equal(report.effective.bigPapaBaseRevision, bigPapaRevision);
+  assert.equal(report.requested.consumerRevision, consumerRevision);
+  assert.equal(report.effective.consumerRevision, consumerRevision);
+  assert.equal(report.effective.consumerHead, consumerRevision);
   assert.equal(
     report.requested.hillPackageCoordinate,
     '@lerms/hill-of-hills-support/hill-of-hills/analytic-impact-support',
@@ -85,9 +164,38 @@ try {
   );
   assert.equal(report.effective.fallbackRoute, null);
   assert.match(report.effective.bigPapaHandoffBlobSha, /^[0-9a-f]{40}$/);
+  assert.match(report.effective.bigPapaCoreBlobSha, /^[0-9a-f]{40}$/);
+  assert.match(
+    report.effective.consumerSourceTreeSha256,
+    /^[0-9a-f]{64}$/,
+  );
+  assert.deepEqual(
+    report.effective.consumerSourcePaths,
+    [
+      'finger-fluid-analytic-impact-handoff.js',
+      'finger-fluid-webgpu-core.js',
+      'hill-moving-support-consumer-witness.mjs',
+      'hill-moving-support-consumer.mjs',
+    ],
+  );
   assert.match(report.primaryArtifact.sha256, /^[0-9a-f]{64}$/);
   assert.equal(exercise.schema, report.primaryArtifact.schema);
   assert.equal(exercise.status, 'passed');
+
+  const missingConsumerRevision = runWitnessWithoutConsumerRevision(outputDir);
+  assert.notEqual(missingConsumerRevision.status, 0);
+  const missingConsumerRevisionReport = readJson(
+    reportPath,
+    'missing consumer-revision failure report',
+  );
+  assert.equal(missingConsumerRevisionReport.ok, false);
+  assert.equal(
+    missingConsumerRevisionReport.failurePhase,
+    'validate-config',
+  );
+  assert.equal(missingConsumerRevisionReport.primaryOutputWritten, false);
+  assert.equal(missingConsumerRevisionReport.artifactFreshness, 'not_built');
+  assert.equal(existsSync(exercisePath), false);
 
   writeFileSync(
     reportPath,
@@ -114,10 +222,59 @@ try {
   );
   assert.equal(existsSync(exercisePath), false);
 
+  const wrongConsumerRevision = 'd'.repeat(40);
+  const wrongConsumer = runWitness(
+    outputDir,
+    exactPackageReportPath,
+    ['--expected-consumer-revision', wrongConsumerRevision],
+  );
+  assert.notEqual(wrongConsumer.status, 0);
+  const wrongConsumerRevisionReport = readJson(
+    reportPath,
+    'consumer-revision failure report',
+  );
+  assert.equal(wrongConsumerRevisionReport.ok, false);
+  assert.equal(
+    wrongConsumerRevisionReport.failurePhase,
+    'verify-consumer-source',
+  );
+  assert.equal(
+    wrongConsumerRevisionReport.requested.consumerRevision,
+    wrongConsumerRevision,
+  );
+  assert.equal(wrongConsumerRevisionReport.primaryOutputWritten, false);
+
   const exactPackageReport = readJson(
     exactPackageReportPath,
     'exact package report',
   );
+  const fixtureConsumerPath = join(
+    witnessCwd,
+    'hill-moving-support-consumer.mjs',
+  );
+  const cleanFixtureConsumer = readFileSync(fixtureConsumerPath, 'utf8');
+  writeFileSync(
+    fixtureConsumerPath,
+    `${cleanFixtureConsumer}\n// dirty adapter false-closure probe\n`,
+  );
+  const dirtyConsumer = runWitness(outputDir);
+  assert.notEqual(
+    dirtyConsumer.status,
+    0,
+    'witness accepted a dirty consumer adapter under an unchanged consumer revision',
+  );
+  const dirtyConsumerReport = readJson(
+    reportPath,
+    'dirty consumer failure report',
+  );
+  assert.equal(dirtyConsumerReport.ok, false);
+  assert.equal(
+    dirtyConsumerReport.failurePhase,
+    'verify-consumer-source',
+  );
+  assert.equal(dirtyConsumerReport.primaryOutputWritten, false);
+  writeFileSync(fixtureConsumerPath, cleanFixtureConsumer);
+
   const wrongRouteReportPath = join(testRoot, 'wrong-route-report.json');
   writeFileSync(
     wrongRouteReportPath,

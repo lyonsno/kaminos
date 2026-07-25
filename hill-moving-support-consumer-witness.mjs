@@ -23,6 +23,13 @@ const WITNESS_SCHEMA =
 const PACKAGE_REPORT_SCHEMA =
   'lerms.hill-of-hills.analytic-impact-package-witness.v1';
 const HANDOFF_SOURCE_PATH = 'finger-fluid-analytic-impact-handoff.js';
+const BIG_PAPA_CORE_SOURCE_PATH = 'finger-fluid-webgpu-core.js';
+const CONSUMER_SOURCE_PATHS = Object.freeze([
+  'finger-fluid-analytic-impact-handoff.js',
+  'finger-fluid-webgpu-core.js',
+  'hill-moving-support-consumer-witness.mjs',
+  'hill-moving-support-consumer.mjs',
+]);
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
@@ -39,21 +46,17 @@ function parseArgs(argv) {
     values.set(key, value);
     index += 1;
   }
-  for (const required of [
-    '--output-dir',
-    '--package-report',
-    '--expected-hill-revision',
-    '--expected-big-papa-revision',
-  ]) {
-    if (!values.has(required)) {
-      throw new Error(`${required} is required`);
-    }
+  if (!values.has('--output-dir')) {
+    throw new Error('--output-dir is required');
   }
   return {
     outputDir: resolve(values.get('--output-dir')),
-    packageReportPath: resolve(values.get('--package-report')),
+    packageReportPath: values.has('--package-report')
+      ? resolve(values.get('--package-report'))
+      : null,
     expectedHillRevision: values.get('--expected-hill-revision'),
     expectedBigPapaRevision: values.get('--expected-big-papa-revision'),
+    expectedConsumerRevision: values.get('--expected-consumer-revision'),
   };
 }
 
@@ -75,6 +78,20 @@ function exactDigest(value, label) {
   return String(value);
 }
 
+function sourceTreeSha256(repositoryRoot, repositoryPaths) {
+  const hash = createHash('sha256');
+  for (const repositoryPath of [...repositoryPaths].sort()) {
+    const bytes = readFileSync(join(repositoryRoot, repositoryPath));
+    hash.update(repositoryPath);
+    hash.update('\0');
+    hash.update(String(bytes.length));
+    hash.update('\0');
+    hash.update(bytes);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
@@ -93,6 +110,51 @@ function run(command, args, options = {}) {
     throw error;
   }
   return result.stdout.trim();
+}
+
+function consumerSourceIdentity(expectedRevision) {
+  const exactExpectedRevision = exactRevision(
+    expectedRevision,
+    'expected Kaminos consumer revision',
+  );
+  const repositoryRoot = run('git', ['rev-parse', '--show-toplevel']);
+  const repositoryHead = run('git', ['rev-parse', 'HEAD']);
+  if (repositoryHead !== exactExpectedRevision) {
+    throw new Error(
+      `expected Kaminos consumer revision ${exactExpectedRevision} differs from repository HEAD ${repositoryHead}`,
+    );
+  }
+  run(
+    'git',
+    [
+      'ls-files',
+      '--error-unmatch',
+      '--',
+      ...CONSUMER_SOURCE_PATHS,
+    ],
+  );
+  const dirty = run(
+    'git',
+    [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+      '--',
+      ...CONSUMER_SOURCE_PATHS,
+    ],
+  );
+  if (dirty.length > 0) {
+    throw new Error(`Kaminos consumer-relevant source is dirty:\n${dirty}`);
+  }
+  return Object.freeze({
+    repositoryRoot,
+    repositoryHead,
+    repositoryPaths: CONSUMER_SOURCE_PATHS,
+    sourceTreeSha256: sourceTreeSha256(
+      repositoryRoot,
+      CONSUMER_SOURCE_PATHS,
+    ),
+  });
 }
 
 function writeJson(path, value) {
@@ -125,6 +187,7 @@ if (config) {
       hillPackageCoordinate: HILL_SUPPORT_PACKAGE_COORDINATE,
       hillSourceRevision: config.expectedHillRevision,
       bigPapaRevision: config.expectedBigPapaRevision,
+      consumerRevision: config.expectedConsumerRevision,
       packageReportPath: config.packageReportPath,
       outputDir: config.outputDir,
       fallbackRoute: null,
@@ -141,6 +204,13 @@ if (config) {
       config.expectedBigPapaRevision,
       'expected Big Papa source revision',
     );
+    exactRevision(
+      config.expectedConsumerRevision,
+      'expected Kaminos consumer revision',
+    );
+    if (!config.packageReportPath) {
+      throw new Error('--package-report is required');
+    }
     if (
       config.expectedBigPapaRevision !== BIG_PAPA_MOVING_SUPPORT_REVISION
     ) {
@@ -237,6 +307,16 @@ if (config) {
       byteLength: tarballBytes.length,
     };
 
+    report.failurePhase = 'verify-consumer-source';
+    const consumerSource = consumerSourceIdentity(
+      config.expectedConsumerRevision,
+    );
+    report.lastTrustworthyEvidence = {
+      phase: 'consumer-source-identity-verified',
+      consumerRevision: consumerSource.repositoryHead,
+      consumerSourceTreeSha256: consumerSource.sourceTreeSha256,
+    };
+
     report.failurePhase = 'verify-big-papa-source';
     run(
       'git',
@@ -264,6 +344,22 @@ if (config) {
         'effective Big Papa handoff source differs from the requested revision',
       );
     }
+    const expectedBigPapaCoreBlobSha = run(
+      'git',
+      [
+        'rev-parse',
+        `${config.expectedBigPapaRevision}:${BIG_PAPA_CORE_SOURCE_PATH}`,
+      ],
+    );
+    const effectiveBigPapaCoreBlobSha = run(
+      'git',
+      ['hash-object', BIG_PAPA_CORE_SOURCE_PATH],
+    );
+    if (effectiveBigPapaCoreBlobSha !== expectedBigPapaCoreBlobSha) {
+      throw new Error(
+        'effective Big Papa core source differs from the requested revision',
+      );
+    }
 
     report.effective = {
       hillPackageCoordinate: HILL_SUPPORT_PACKAGE_COORDINATE,
@@ -276,7 +372,12 @@ if (config) {
       hillPackageArtifactPath: tarballPath,
       bigPapaBaseRevision: config.expectedBigPapaRevision,
       consumerHead,
+      consumerRevision: consumerSource.repositoryHead,
+      consumerRepositoryRoot: consumerSource.repositoryRoot,
+      consumerSourcePaths: consumerSource.repositoryPaths,
+      consumerSourceTreeSha256: consumerSource.sourceTreeSha256,
       bigPapaHandoffBlobSha: effectiveHandoffBlobSha,
+      bigPapaCoreBlobSha: effectiveBigPapaCoreBlobSha,
       fallbackRoute: null,
     };
     report.lastTrustworthyEvidence = {
@@ -286,6 +387,9 @@ if (config) {
       hillPackageArtifactSha256: actualSha256,
       bigPapaBaseRevision: config.expectedBigPapaRevision,
       bigPapaHandoffBlobSha: effectiveHandoffBlobSha,
+      bigPapaCoreBlobSha: effectiveBigPapaCoreBlobSha,
+      consumerRevision: consumerSource.repositoryHead,
+      consumerSourceTreeSha256: consumerSource.sourceTreeSha256,
     };
 
     report.failurePhase = 'clean-install-package';
@@ -367,6 +471,18 @@ if (config) {
       exerciseResult.resolution.analyticModuleUrl;
     report.effective.hillTerrainFixtureImportUrl =
       exerciseResult.resolution.terrainFixtureModuleUrl;
+
+    report.failurePhase = 'recheck-consumer-source';
+    const postExerciseConsumerSourceTreeSha256 = sourceTreeSha256(
+      consumerSource.repositoryRoot,
+      consumerSource.repositoryPaths,
+    );
+    if (
+      postExerciseConsumerSourceTreeSha256
+        !== consumerSource.sourceTreeSha256
+    ) {
+      throw new Error('Kaminos consumer-relevant source changed during exercise');
+    }
 
     const primaryBytes = Buffer.from(
       `${JSON.stringify(exercise, null, 2)}\n`,
