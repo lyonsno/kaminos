@@ -25,6 +25,16 @@ export const KAMINOS_FINGER_FLUID_LIVE_INLET_RELEASE_CONTRACT = 'gpu-dormant-poo
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT = 'new-release-fail-closed-emitted-material-persists-v0';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT = 'requested-effective-release-pool-residence-v1';
 export const KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT = 'gpu-particle-residence-cohort-v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT =
+  'gpu-spatial-first-support-contact-ownership-v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING =
+  'material-tracer-vec4-index-4-phase-source-generation-transition-frame-support-contact-v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES = Object.freeze({
+  dormant: 0,
+  preImpact: 1,
+  postImpact: 2,
+});
+export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD = 0.5;
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -2422,12 +2432,175 @@ const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS = 36;
 const NEIGHBOR_TOPOLOGY_WORDS = KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
-const MATERIAL_TRACER_FLOATS = 16;
+const MATERIAL_TRACER_FLOATS = 20;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
 const ENERGY_RECORD_FLOATS = 4;
 const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
+
+export function createFingerFluidInitialParticleOwnershipState({
+  active,
+  sourceOwned,
+  sourceGeneration = 0,
+} = {}) {
+  if (typeof active !== 'boolean' || typeof sourceOwned !== 'boolean') {
+    throw new TypeError('Finger fluid initial ownership requires explicit active and sourceOwned booleans');
+  }
+  if (!Number.isSafeInteger(sourceGeneration) || sourceGeneration < 0) {
+    throw new TypeError('Finger fluid initial ownership source generation must be a non-negative safe integer');
+  }
+  if (!active) {
+    return {
+      phase: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant,
+      sourceGeneration,
+      transitionFrame: 0,
+      supportContact: 0,
+    };
+  }
+  return {
+    phase: sourceOwned
+      ? KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.preImpact
+      : KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.postImpact,
+    sourceGeneration,
+    transitionFrame: 0,
+    supportContact: sourceOwned
+      ? 0
+      : KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD,
+  };
+}
+
+export function advanceFingerFluidParticleOwnershipState(state, {
+  active,
+  supportContact,
+  frameIndex,
+} = {}) {
+  const phase = Number(state?.phase);
+  const sourceGeneration = Number(state?.sourceGeneration);
+  const transitionFrame = Number(state?.transitionFrame);
+  const priorSupportContact = Number(state?.supportContact);
+  if (
+    !Object.values(KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES).includes(phase)
+    || !Number.isSafeInteger(sourceGeneration)
+    || sourceGeneration < 0
+    || !Number.isSafeInteger(transitionFrame)
+    || transitionFrame < 0
+    || !Number.isFinite(priorSupportContact)
+    || priorSupportContact < 0
+    || priorSupportContact > 1
+  ) {
+    throw new TypeError('Finger fluid particle ownership state is invalid');
+  }
+  if (!active) {
+    return {
+      phase: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant,
+      sourceGeneration,
+      transitionFrame: 0,
+      supportContact: 0,
+    };
+  }
+  if (phase !== KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.preImpact) {
+    return { phase, sourceGeneration, transitionFrame, supportContact: priorSupportContact };
+  }
+  const contact = Number(supportContact);
+  const frame = Number(frameIndex);
+  if (!Number.isFinite(contact) || contact < 0 || contact > 1) {
+    throw new TypeError('Finger fluid particle ownership support contact must be in [0, 1]');
+  }
+  if (!Number.isSafeInteger(frame) || frame < 0) {
+    throw new TypeError('Finger fluid particle ownership frame index must be a non-negative safe integer');
+  }
+  if (contact < KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD) {
+    return { phase, sourceGeneration, transitionFrame, supportContact: priorSupportContact };
+  }
+  return {
+    phase: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.postImpact,
+    sourceGeneration,
+    transitionFrame: frame,
+    supportContact: contact,
+  };
+}
+
+function fingerFluidParticleOwnershipStateValues(state, label) {
+  const values = {
+    phase: state?.phase,
+    sourceGeneration: state?.sourceGeneration,
+    transitionFrame: state?.transitionFrame,
+    supportContact: state?.supportContact,
+  };
+  if (
+    !Object.values(KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES).includes(values.phase)
+    || !Number.isSafeInteger(values.sourceGeneration)
+    || values.sourceGeneration < 0
+    || !Number.isSafeInteger(values.transitionFrame)
+    || values.transitionFrame < 0
+    || !Number.isFinite(values.supportContact)
+    || values.supportContact < 0
+    || values.supportContact > 1
+  ) {
+    throw new TypeError(`Finger fluid ${label} ownership state is invalid`);
+  }
+  return values;
+}
+
+export function mergeFingerFluidParticleOwnershipStates(parentState, childState) {
+  const parent = fingerFluidParticleOwnershipStateValues(parentState, 'parent');
+  const child = fingerFluidParticleOwnershipStateValues(childState, 'child');
+  if (child.phase > parent.phase) return child;
+  if (parent.phase > child.phase) return parent;
+  if (parent.phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.postImpact) {
+    if (child.transitionFrame < parent.transitionFrame) return child;
+    if (parent.transitionFrame < child.transitionFrame) return parent;
+  }
+  if (child.sourceGeneration > parent.sourceGeneration) return child;
+  return parent;
+}
+
+export function classifyFingerFluidParticleOwnershipRecord(state, { active } = {}) {
+  const phase = state?.phase;
+  const sourceGeneration = state?.sourceGeneration;
+  const transitionFrame = state?.transitionFrame;
+  const supportContact = state?.supportContact;
+  const invalid = reason => ({ valid: false, phase: null, reason });
+  if (typeof active !== 'boolean') return invalid('active_state_invalid');
+  if (!Object.values(KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES).includes(phase)) {
+    return invalid('phase_invalid');
+  }
+  if (!Number.isSafeInteger(sourceGeneration) || sourceGeneration < 0) {
+    return invalid('source_generation_invalid');
+  }
+  if (!Number.isSafeInteger(transitionFrame) || transitionFrame < 0) {
+    return invalid('transition_frame_invalid');
+  }
+  if (!Number.isFinite(supportContact) || supportContact < 0 || supportContact > 1) {
+    return invalid('support_contact_invalid');
+  }
+  if (!active && phase !== KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant) {
+    return invalid('inactive_phase_not_dormant');
+  }
+  if (active && phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant) {
+    return invalid('active_phase_dormant');
+  }
+  if (
+    phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant
+    && (transitionFrame !== 0 || supportContact !== 0)
+  ) {
+    return invalid('dormant_transition_payload_stale');
+  }
+  if (
+    phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.preImpact
+    && (transitionFrame !== 0 || supportContact !== 0)
+  ) {
+    return invalid('pre_impact_transition_completed');
+  }
+  if (
+    phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.postImpact
+    && supportContact < KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD
+  ) {
+    return invalid('post_impact_contact_below_threshold');
+  }
+  return { valid: true, phase, reason: null };
+}
 
 function adaptiveVector3(value, label) {
   if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(component))) {
@@ -5314,6 +5487,7 @@ struct MaterialTracerState {
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
   liveInletAgeState: vec4<f32>,
+  ownershipTransitionState: vec4<f32>,
 }
 
 struct LaminarInletSample {
@@ -5431,6 +5605,44 @@ fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
   let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
   let supportNormal = select(sphereNormal, floorNormal(position), floorSupport >= sphereSupport);
   return vec4<f32>(supportNormal, supportContact);
+}
+
+fn mark_particle_ownership_dormant(index: u32) {
+  let sourceGeneration = materialTracers[index].ownershipTransitionState.y;
+  materialTracers[index].ownershipTransitionState = vec4<f32>(0.0, sourceGeneration, 0.0, 0.0);
+}
+
+fn reset_particle_ownership_for_release(index: u32, liveInletScene: bool) {
+  let sourceGeneration = select(
+    f32(params.frameIndex + 1u),
+    f32(params.liveInletControl.x),
+    liveInletScene,
+  );
+  materialTracers[index].ownershipTransitionState = vec4<f32>(1.0, sourceGeneration, 0.0, 0.0);
+}
+
+fn transition_particle_ownership_on_support_contact(index: u32, supportContact: f32) {
+  var state = materialTracers[index];
+  if (state.ownershipTransitionState.x == 1.0 && supportContact >= 0.5) {
+    state.ownershipTransitionState = vec4<f32>(
+      2.0,
+      state.ownershipTransitionState.y,
+      f32(params.frameIndex),
+      supportContact,
+    );
+    materialTracers[index] = state;
+  }
+}
+
+fn merge_particle_ownership_state(parentState: vec4<f32>, childState: vec4<f32>) -> vec4<f32> {
+  if (childState.x > parentState.x) { return childState; }
+  if (parentState.x > childState.x) { return parentState; }
+  if (parentState.x == 2.0) {
+    if (childState.z < parentState.z) { return childState; }
+    if (parentState.z < childState.z) { return parentState; }
+  }
+  if (childState.y > parentState.y) { return childState; }
+  return parentState;
 }
 
 fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
@@ -6175,6 +6387,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
       );
       materialTracers[index].liveInletAgeState = vec4<f32>(0.0);
     }
+    reset_particle_ownership_for_release(index, liveInletScene);
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
@@ -6204,6 +6417,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
     particle.delta = vec4<f32>(0.0);
     particles[index] = particle;
+    mark_particle_ownership_dormant(index);
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
@@ -6215,6 +6429,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
     particle.delta = vec4<f32>(0.0);
     particles[index] = particle;
+    mark_particle_ownership_dormant(index);
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
@@ -6237,6 +6452,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
     particle.velocity = vec4<f32>(resetVelocity, resetPhase);
     particle.delta = vec4<f32>(0.0);
     particles[index] = particle;
+    reset_particle_ownership_for_release(index, false);
     restStates[index] = vec4<f32>(0.0);
     neighborTopology[index].neighborIds = vec4<u32>(${INVALID_NEIGHBOR_ID}u);
     neighborTopology[index].metrics = vec4<f32>(0.0);
@@ -6613,6 +6829,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportFrame = supportContactFrame(position);
   let supportContact = supportFrame.w;
   let supportNormal = supportFrame.xyz;
+  transition_particle_ownership_on_support_contact(index, supportContact);
   let supportNormalSpeed = dot(velocity, supportNormal);
   let supportTangentialVelocity = velocity - supportNormal * supportNormalSpeed;
   let supportTangentialRetention = exp(-params.particleShift.y * supportContact * params.dt);
@@ -6742,13 +6959,13 @@ fn classify_unsupported_sheet(@builtin(global_invocation_id) gid: vec3<u32>) {
     params.refinementControl.y != 0u,
   );
   neighborTopology[index].sheet = vec4<f32>(0.0);
-  if (classificationStrength <= 0.0 || params.particleShift.z <= 1.5) {
-    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+  if (particle.velocity.w < 0.0) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
   }
-  if (particle.velocity.w < 0.0) {
-    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
+  if (classificationStrength <= 0.0 || params.particleShift.z <= 1.5) {
+    write_sheet_release_diagnostics(index, ${KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled}.0, priorSheetActivity, 0.0, 0.0, kinematics, vec3<f32>(0.0), linkDiagnostics, topology);
     clear_unsupported_sheet_state(index);
     return;
   }
@@ -7090,10 +7307,12 @@ fn adaptive_refine_or_merge(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (parent.velocity.w < 0.0) {
     parentRefinement = vec4<f32>(1.0, 0.0, 0.0, 0.0);
     neighborTopology[index].refinement = parentRefinement;
+    mark_particle_ownership_dormant(index);
     if (childActive) {
       child.velocity = vec4<f32>(vec3<f32>(0.0), -abs(child.velocity.w));
       child.delta = vec4<f32>(0.0);
       particles[childIndex] = child;
+      mark_particle_ownership_dormant(childIndex);
       neighborTopology[childIndex].refinement = vec4<f32>(0.0, 2.0, 0.0, -1.0);
       atomicAdd(&interfaceCounters[4], 1u);
     }
@@ -7162,6 +7381,10 @@ fn adaptive_refine_or_merge(@builtin(global_invocation_id) gid: vec3<u32>) {
   let parentTracer = materialTracers[index].concentrationDeltaRecipeSource;
   let childTracer = materialTracers[childIndex].concentrationDeltaRecipeSource;
   let mergedTracer = (parentTracer * parentVolume + childTracer * childVolume) / totalVolume;
+  let mergedOwnership = merge_particle_ownership_state(
+    materialTracers[index].ownershipTransitionState,
+    materialTracers[childIndex].ownershipTransitionState,
+  );
   parent.position = vec4<f32>(mergedPosition, parent.position.w);
   parent.predicted = vec4<f32>(mergedPosition, max(parent.predicted.w, child.predicted.w));
   parent.velocity = vec4<f32>(mergedVelocity, parent.velocity.w);
@@ -7172,7 +7395,9 @@ fn adaptive_refine_or_merge(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index] = parent;
   particles[childIndex] = child;
   materialTracers[index].concentrationDeltaRecipeSource = mergedTracer;
+  materialTracers[index].ownershipTransitionState = mergedOwnership;
   materialTracers[childIndex].concentrationDeltaRecipeSource = vec4<f32>(0.0);
+  materialTracers[childIndex].ownershipTransitionState = vec4<f32>(0.0);
   restStates[index] = (restStates[index] * parentVolume + restStates[childIndex] * childVolume) / totalVolume;
   restStates[childIndex] = vec4<f32>(0.0);
   neighborTopology[index].refinement = vec4<f32>(1.0, 0.0, 0.0, -1.0);
@@ -7563,6 +7788,7 @@ struct MaterialTracerState {
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
   liveInletAgeState: vec4<f32>,
+  ownershipTransitionState: vec4<f32>,
 }
 
 struct RenderParams {
@@ -8188,6 +8414,7 @@ struct MaterialTracerState {
   liveInletOriginGeneration: vec4<f32>,
   liveInletLimitsSource: vec4<f32>,
   liveInletAgeState: vec4<f32>,
+  ownershipTransitionState: vec4<f32>,
 }
 
 struct RenderParams {
@@ -11195,15 +11422,34 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
   return receipt;
 }
 
-function createInitialMaterialTracers(particleData, particleCount, sourceParticleCount = particleCount) {
+function createInitialMaterialTracers(
+  particleData,
+  particleCount,
+  sourceParticleCount = particleCount,
+  {
+    sourceOwned = false,
+    sourceGeneration = 0,
+  } = {},
+) {
   const data = new Float32Array(particleCount * MATERIAL_TRACER_FLOATS);
   for (let index = 0; index < particleCount; index += 1) {
-    const phase = index < sourceParticleCount ? Math.abs(particleData[index * PARTICLE_FLOATS + 11]) : 0;
+    const particlePhase = particleData[index * PARTICLE_FLOATS + 11];
+    const phase = index < sourceParticleCount ? Math.abs(particlePhase) : 0;
+    const active = index < sourceParticleCount && particlePhase >= 0;
     const offset = index * MATERIAL_TRACER_FLOATS;
     data[offset] = phase;
     data[offset + 1] = 0;
     data[offset + 2] = phase;
     data[offset + 3] = 0;
+    const ownership = createFingerFluidInitialParticleOwnershipState({
+      active,
+      sourceOwned,
+      sourceGeneration: sourceOwned ? sourceGeneration : 0,
+    });
+    data[offset + 16] = ownership.phase;
+    data[offset + 17] = ownership.sourceGeneration;
+    data[offset + 18] = ownership.transitionFrame;
+    data[offset + 19] = ownership.supportContact;
   }
   return data;
 }
@@ -11386,7 +11632,15 @@ export async function createWebGPUFingerFluidSolver({
   const laminarSourcePopulation = safeTruthScene === 'laminar_inlets'
     ? createFingerFluidLaminarSourcePopulation(safeBaseParticleCount)
     : null;
-  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount, safeBaseParticleCount);
+  const materialTracerData = createInitialMaterialTracers(
+    particleData,
+    safeParticleCount,
+    safeBaseParticleCount,
+    {
+      sourceOwned: isFingerFluidLaminarSourceScene(safeTruthScene),
+      sourceGeneration: initialLiveInletPublicationState.generation || 1,
+    },
+  );
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
   const particleBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particles',
@@ -11518,6 +11772,10 @@ export async function createWebGPUFingerFluidSolver({
   for (let index = 0; index < safeParticleCount; index += 1) {
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS, index * NEIGHBOR_TOPOLOGY_WORDS + 4);
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS + 12, index * NEIGHBOR_TOPOLOGY_WORDS + 16);
+    const diagnosticOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 20;
+    initialTopologyFloats[diagnosticOffset] = index < safeBaseParticleCount
+      ? KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled
+      : KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant;
     const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
     initialTopologyFloats[refinementOffset] = index < safeBaseParticleCount ? 1 : 0;
     initialTopologyFloats[refinementOffset + 1] = index < safeBaseParticleCount ? 0 : 2;
@@ -13037,6 +13295,10 @@ export async function createWebGPUFingerFluidSolver({
       let refinedParentCount = 0;
       let activeChildCount = 0;
       let reservedChildCount = 0;
+      let dormantOwnershipParticleCount = 0;
+      let preImpactOwnershipParticleCount = 0;
+      let postImpactOwnershipParticleCount = 0;
+      let invalidOwnershipParticleCount = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         const restOffset = index * REST_STATE_FLOATS;
@@ -13054,8 +13316,23 @@ export async function createWebGPUFingerFluidSolver({
         chemistryMax = Math.max(chemistryMax, concentration);
         chemistryRecipeDeviationSum += Math.abs(concentration - recipe);
         chemistryHistogram[Math.min(7, Math.max(0, Math.floor(concentration * 8)))] += 1;
-        representedVolume += volumeScale;
         const active = values[offset + 11] >= 0 && volumeScale > 0;
+        const ownershipRecord = classifyFingerFluidParticleOwnershipRecord({
+          phase: materialTracerValues[chemistryOffset + 16],
+          sourceGeneration: materialTracerValues[chemistryOffset + 17],
+          transitionFrame: materialTracerValues[chemistryOffset + 18],
+          supportContact: materialTracerValues[chemistryOffset + 19],
+        }, { active });
+        if (!ownershipRecord.valid) {
+          invalidOwnershipParticleCount += 1;
+        } else if (ownershipRecord.phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.dormant) {
+          dormantOwnershipParticleCount += 1;
+        } else if (ownershipRecord.phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.preImpact) {
+          preImpactOwnershipParticleCount += 1;
+        } else if (ownershipRecord.phase === KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES.postImpact) {
+          postImpactOwnershipParticleCount += 1;
+        }
+        representedVolume += volumeScale;
         if (!active) {
           dormantParticleCount += 1;
           if (index >= safeBaseParticleCount) reservedChildCount += 1;
@@ -13263,6 +13540,25 @@ export async function createWebGPUFingerFluidSolver({
         activeParticleCount,
         dormantParticleCount,
         adaptiveDensityLedger,
+        particleOwnership: {
+          contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
+          packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
+          contactThreshold: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD,
+          dormantParticleCount: dormantOwnershipParticleCount,
+          preImpactParticleCount: preImpactOwnershipParticleCount,
+          postImpactParticleCount: postImpactOwnershipParticleCount,
+          invalidParticleCount: invalidOwnershipParticleCount,
+          recordsValid: invalidOwnershipParticleCount === 0,
+          populationAccountingValid: dormantOwnershipParticleCount
+            + preImpactOwnershipParticleCount
+            + postImpactOwnershipParticleCount
+            + invalidOwnershipParticleCount === safeParticleCount,
+          accountingValid: dormantOwnershipParticleCount
+            + preImpactOwnershipParticleCount
+            + postImpactOwnershipParticleCount
+            + invalidOwnershipParticleCount === safeParticleCount
+            && invalidOwnershipParticleCount === 0,
+        },
         averageSpeed: Number((speedSum / physicalParticleCount).toFixed(4)),
         maxSpeed: Number(maxSpeed.toFixed(4)),
         averageDensity: Number((densitySum / physicalParticleCount).toFixed(4)),
@@ -13430,6 +13726,28 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
+  function getParticleOwnershipDescriptor() {
+    return {
+      contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
+      packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
+      device,
+      queue: device.queue,
+      buffer: materialTracerBuffer,
+      recordFloats: MATERIAL_TRACER_FLOATS,
+      recordBytes: MATERIAL_TRACER_BYTES,
+      ownershipOffsetFloats: 16,
+      ownershipOffsetBytes: 16 * Float32Array.BYTES_PER_ELEMENT,
+      ownershipFloats: 4,
+      capacity: safeParticleCount,
+      states: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES,
+      contactThreshold: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD,
+      sourceFrame: LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID,
+      writeTick: Math.max(0, frameIndex - 1),
+      ownershipAuthority: 'solver_spatial_first_support_contact_v0',
+      consumerVisibilityRule: 'pre_impact_hidden_post_impact_visible_v0',
+    };
+  }
+
   function getDebugState() {
     return {
       available: true,
@@ -13468,6 +13786,20 @@ export async function createWebGPUFingerFluidSolver({
       liveInletSourceAuthorityContract: KAMINOS_FINGER_FLUID_LIVE_INLET_SOURCE_AUTHORITY_CONTRACT,
       liveInletEconomicsContract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
       liveInletCohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
+      particleOwnershipContract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
+      particleOwnershipPacking: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
+      particleOwnership: diagnostics?.particleOwnership || {
+        contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
+        packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
+        contactThreshold: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD,
+        dormantParticleCount: null,
+        preImpactParticleCount: null,
+        postImpactParticleCount: null,
+        invalidParticleCount: null,
+        recordsValid: null,
+        populationAccountingValid: null,
+        accountingValid: null,
+      },
       liveInlets: safeTruthScene === 'live_hand_inlets' ? {
         schema: 'kaminos.finger-fluid.live-inlet-economics.v1',
         contract: KAMINOS_FINGER_FLUID_LIVE_INLET_ECONOMICS_CONTRACT,
@@ -14139,6 +14471,7 @@ export async function createWebGPUFingerFluidSolver({
     clearAnalyticCarrierOpticalGeometry,
     getLiquidFireContactDescriptor,
     setReflectionMeshPhaseForWitness,
+    getParticleOwnershipDescriptor,
     getDebugState,
     destroy,
   };

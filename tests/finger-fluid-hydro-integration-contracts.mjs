@@ -103,10 +103,11 @@ assert.doesNotMatch(
   'ownership transition must not regress to residence-age visibility',
 );
 
-assert.match(portableMacroRendererSource, /KAMINOS_PORTABLE_MACRO_SCREEN_SPACE_OPTICS_ROUTE/);
+assert.match(portableMacroRendererSource, /KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE/);
 assert.match(portableMacroRendererSource, /wgsl-portable-macro-fresnel-refraction-absorption-v0/);
-assert.match(portableMacroRendererSource, /validatePortableMacroOpticalRendererInputs/);
-assert.match(portableMacroRendererSource, /fallbackReason/);
+assert.match(portableMacroRendererSource, /createFingerFluidPortableMacroOpticalRenderPlan/);
+assert.match(portableMacroRendererSource, /validateFingerFluidPortableMacroOpticalRenderAttachments/);
+assert.match(portableMacroRendererSource, /fallback:\s*null/);
 assert.match(portableMacroWitnessSource, /primary_output_written/);
 assert.match(portableMacroWitnessSource, /lastTrustworthyEvidence/);
 
