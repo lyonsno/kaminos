@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--neutral/shape-plus-control.png",
+      "title": "body-only--neutral",
+      "viewLabel": "body only | balanced | sidecar_only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--wide/shape-plus-control.png",
+      "title": "body-only--wide",
+      "viewLabel": "body only | wide set | sidecar_only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--tucked/shape-plus-control.png",
+      "title": "body-only--tucked",
+      "viewLabel": "body only | tucked | sidecar_only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--fore-loaded/shape-plus-control.png",
+      "title": "body-only--fore-loaded",
+      "viewLabel": "body only | fore loaded | sidecar_only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--rear-loaded/shape-plus-control.png",
+      "title": "body-only--rear-loaded",
+      "viewLabel": "body only | rear loaded | sidecar_only"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--diagonal/shape-plus-control.png",
+      "title": "body-only--diagonal",
+      "viewLabel": "body only | diagonal bias | sidecar_only"
+    }
+  ]
+}

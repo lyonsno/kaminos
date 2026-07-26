@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--neutral/shape-plus-control.png",
+      "title": "external-rig--neutral",
+      "viewLabel": "external rig | balanced | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--wide/shape-plus-control.png",
+      "title": "external-rig--wide",
+      "viewLabel": "external rig | wide set | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--tucked/shape-plus-control.png",
+      "title": "external-rig--tucked",
+      "viewLabel": "external rig | tucked | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--fore-loaded/shape-plus-control.png",
+      "title": "external-rig--fore-loaded",
+      "viewLabel": "external rig | fore loaded | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--rear-loaded/shape-plus-control.png",
+      "title": "external-rig--rear-loaded",
+      "viewLabel": "external rig | rear loaded | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--diagonal/shape-plus-control.png",
+      "title": "external-rig--diagonal",
+      "viewLabel": "external rig | diagonal bias | separate_reference"
+    }
+  ]
+}

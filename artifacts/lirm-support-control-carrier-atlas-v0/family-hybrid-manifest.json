@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--neutral/shape-plus-control.png",
+      "title": "hybrid--neutral",
+      "viewLabel": "field + rig | balanced | shape_plus_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--wide/shape-plus-control.png",
+      "title": "hybrid--wide",
+      "viewLabel": "field + rig | wide set | shape_plus_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--tucked/shape-plus-control.png",
+      "title": "hybrid--tucked",
+      "viewLabel": "field + rig | tucked | shape_plus_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--fore-loaded/shape-plus-control.png",
+      "title": "hybrid--fore-loaded",
+      "viewLabel": "field + rig | fore loaded | shape_plus_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--rear-loaded/shape-plus-control.png",
+      "title": "hybrid--rear-loaded",
+      "viewLabel": "field + rig | rear loaded | shape_plus_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--diagonal/shape-plus-control.png",
+      "title": "hybrid--diagonal",
+      "viewLabel": "field + rig | diagonal bias | shape_plus_reference"
+    }
+  ]
+}

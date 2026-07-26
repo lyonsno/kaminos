@@ -1,0 +1,192 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-overview-sheet.v0",
+  "columns": 6,
+  "rows": 6,
+  "width": 1920,
+  "cellWidth": 320,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--neutral/shape-carrier.png",
+      "title": "body-only--neutral",
+      "viewLabel": "body only | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--wide/shape-carrier.png",
+      "title": "body-only--wide",
+      "viewLabel": "body only | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--tucked/shape-carrier.png",
+      "title": "body-only--tucked",
+      "viewLabel": "body only | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--fore-loaded/shape-carrier.png",
+      "title": "body-only--fore-loaded",
+      "viewLabel": "body only | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--rear-loaded/shape-carrier.png",
+      "title": "body-only--rear-loaded",
+      "viewLabel": "body only | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/body-only--diagonal/shape-carrier.png",
+      "title": "body-only--diagonal",
+      "viewLabel": "body only | diagonal bias"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--neutral/shape-carrier.png",
+      "title": "external-rig--neutral",
+      "viewLabel": "external rig | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--wide/shape-carrier.png",
+      "title": "external-rig--wide",
+      "viewLabel": "external rig | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--tucked/shape-carrier.png",
+      "title": "external-rig--tucked",
+      "viewLabel": "external rig | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--fore-loaded/shape-carrier.png",
+      "title": "external-rig--fore-loaded",
+      "viewLabel": "external rig | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--rear-loaded/shape-carrier.png",
+      "title": "external-rig--rear-loaded",
+      "viewLabel": "external rig | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/external-rig--diagonal/shape-carrier.png",
+      "title": "external-rig--diagonal",
+      "viewLabel": "external rig | diagonal bias"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--neutral/shape-carrier.png",
+      "title": "attachment-fields--neutral",
+      "viewLabel": "attachment fields | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--wide/shape-carrier.png",
+      "title": "attachment-fields--wide",
+      "viewLabel": "attachment fields | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--tucked/shape-carrier.png",
+      "title": "attachment-fields--tucked",
+      "viewLabel": "attachment fields | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--fore-loaded/shape-carrier.png",
+      "title": "attachment-fields--fore-loaded",
+      "viewLabel": "attachment fields | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--rear-loaded/shape-carrier.png",
+      "title": "attachment-fields--rear-loaded",
+      "viewLabel": "attachment fields | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--diagonal/shape-carrier.png",
+      "title": "attachment-fields--diagonal",
+      "viewLabel": "attachment fields | diagonal bias"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--neutral/shape-carrier.png",
+      "title": "fused-carriers--neutral",
+      "viewLabel": "fused carriers | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--wide/shape-carrier.png",
+      "title": "fused-carriers--wide",
+      "viewLabel": "fused carriers | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--tucked/shape-carrier.png",
+      "title": "fused-carriers--tucked",
+      "viewLabel": "fused carriers | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--fore-loaded/shape-carrier.png",
+      "title": "fused-carriers--fore-loaded",
+      "viewLabel": "fused carriers | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--rear-loaded/shape-carrier.png",
+      "title": "fused-carriers--rear-loaded",
+      "viewLabel": "fused carriers | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--diagonal/shape-carrier.png",
+      "title": "fused-carriers--diagonal",
+      "viewLabel": "fused carriers | diagonal bias"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--neutral/shape-carrier.png",
+      "title": "stance-envelope--neutral",
+      "viewLabel": "stance envelope | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--wide/shape-carrier.png",
+      "title": "stance-envelope--wide",
+      "viewLabel": "stance envelope | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--tucked/shape-carrier.png",
+      "title": "stance-envelope--tucked",
+      "viewLabel": "stance envelope | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--fore-loaded/shape-carrier.png",
+      "title": "stance-envelope--fore-loaded",
+      "viewLabel": "stance envelope | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--rear-loaded/shape-carrier.png",
+      "title": "stance-envelope--rear-loaded",
+      "viewLabel": "stance envelope | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--diagonal/shape-carrier.png",
+      "title": "stance-envelope--diagonal",
+      "viewLabel": "stance envelope | diagonal bias"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--neutral/shape-carrier.png",
+      "title": "hybrid--neutral",
+      "viewLabel": "field + rig | balanced"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--wide/shape-carrier.png",
+      "title": "hybrid--wide",
+      "viewLabel": "field + rig | wide set"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--tucked/shape-carrier.png",
+      "title": "hybrid--tucked",
+      "viewLabel": "field + rig | tucked"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--fore-loaded/shape-carrier.png",
+      "title": "hybrid--fore-loaded",
+      "viewLabel": "field + rig | fore loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--rear-loaded/shape-carrier.png",
+      "title": "hybrid--rear-loaded",
+      "viewLabel": "field + rig | rear loaded"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/hybrid--diagonal/shape-carrier.png",
+      "title": "hybrid--diagonal",
+      "viewLabel": "field + rig | diagonal bias"
+    }
+  ]
+}

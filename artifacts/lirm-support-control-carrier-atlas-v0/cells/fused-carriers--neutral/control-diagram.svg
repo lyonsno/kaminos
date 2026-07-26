@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="fused carriers balanced control diagram" data-family="fused-carriers" data-stance="neutral">
+  <rect width="320" height="240" fill="#10201c"/>
+  <path d="M 34 120 H 286" stroke="#334d43" stroke-width="2"/>
+  <path d="M 160 28 V 212" stroke="#334d43" stroke-width="2"/>
+  
+    <rect x="82" y="82" width="156" height="76" rx="38" fill="#90bd77" stroke="#dcebb5" stroke-width="3"/>
+    <path d="M 94 111 Q 72 120 94 137" fill="none" stroke="#dcebb5" stroke-width="12" stroke-linecap="round"/>
+  
+  <path d="M 125.56 105.72 L 109.6 72.96000000000001" fill="none" stroke="#67d9cc" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+<path d="M 125.56 134.28 L 109.6 167.04" fill="none" stroke="#67d9cc" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+<path d="M 194.44 105.72 L 210.4 72.96000000000001" fill="none" stroke="#67d9cc" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+<path d="M 194.44 134.28 L 210.4 167.04" fill="none" stroke="#67d9cc" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+  <rect x="94.1" y="67.96000000000001" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="94.1" y="162.04" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="194.9" y="67.96000000000001" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="194.9" y="162.04" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+  <text x="14" y="24" fill="#eef5d4" font-family="Menlo, monospace" font-size="13">fused carriers</text>
+  <text x="306" y="24" fill="#f4c86a" text-anchor="end" font-family="Menlo, monospace" font-size="13">balanced</text>
+</svg>

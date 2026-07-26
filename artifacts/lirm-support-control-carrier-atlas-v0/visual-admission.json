@@ -1,0 +1,105 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-visual-admission.v0",
+  "atlasSchema": "kaminos.lirm-support-control-carrier-atlas.v0",
+  "requestedRoute": "kaminos/lirm-support-control-carrier-atlas/pre-flux-v0",
+  "effectiveRoute": "kaminos/lirm-support-control-carrier-atlas/pre-flux-v0",
+  "bauplanId": "friendly-continuous-bauplan-v0",
+  "cameraId": "fixed-front-three-quarter-yaw-0.42",
+  "overallClassification": "happy_safe",
+  "operatorExposure": "admitted_happy_safe_static_only",
+  "familyClassifications": [
+    {
+      "familyId": "body-only",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly continuous abstract body baseline; stance varies only in the semantic sidecar."
+    },
+    {
+      "familyId": "external-rig",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly body with explicit nonanatomical rig lines and target bars in a separate reference."
+    },
+    {
+      "familyId": "attachment-fields",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly low-frequency underside mass variation with subtle stance-dependent shape authority."
+    },
+    {
+      "familyId": "fused-carriers",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly rounded support carriers with the strongest visible stance authority and no cavities or orifice-like repetition."
+    },
+    {
+      "familyId": "stance-envelope",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly unchanged body paired with a clearly nonanatomical support polygon in the control reference."
+    },
+    {
+      "familyId": "hybrid",
+      "classification": "happy_safe",
+      "happy": true,
+      "safe": true,
+      "notes": "Friendly low-frequency attachment masses paired with explicit rig guidance in a separate reference."
+    }
+  ],
+  "inspectedEvidence": {
+    "overview": {
+      "path": "overview.png",
+      "byteSize": 441208,
+      "sha256": "sha256:9fc21b2ebcdbd343f36120810f0d0e7eabf3f94a29c1271172951f739c49e2a7"
+    },
+    "sheets": [
+      {
+        "familyId": "body-only",
+        "path": "family-body-only.png",
+        "byteSize": 156562,
+        "sha256": "sha256:c82ee33dacdde4cf74599ca69e9f03675d883fcaa52c3268ca2972cd8093730a"
+      },
+      {
+        "familyId": "external-rig",
+        "path": "family-external-rig.png",
+        "byteSize": 174945,
+        "sha256": "sha256:49449e6cd1480e5ada0554c905e4f2fbb17429e9bcfb2fe2b2a3744a5f88bfbd"
+      },
+      {
+        "familyId": "attachment-fields",
+        "path": "family-attachment-fields.png",
+        "byteSize": 205924,
+        "sha256": "sha256:30be4773767d58676b238056468b595ab5ade4af94fab33ee424de442aa0a966"
+      },
+      {
+        "familyId": "fused-carriers",
+        "path": "family-fused-carriers.png",
+        "byteSize": 221199,
+        "sha256": "sha256:a5bf8f21c72d1ce3380ce09fa881d0ae01cf4350c8efb664c43f27b36d4e921e"
+      },
+      {
+        "familyId": "stance-envelope",
+        "path": "family-stance-envelope.png",
+        "byteSize": 171181,
+        "sha256": "sha256:9a0ad3a192cc6d161e63538ded62c896e4506664586cd1e785bf81b12b7ac8d7"
+      },
+      {
+        "familyId": "hybrid",
+        "path": "family-hybrid.png",
+        "byteSize": 217374,
+        "sha256": "sha256:ee95439c4277100775d833946e87151af05f5b1507256e51a28d33926423a76a"
+      }
+    ]
+  },
+  "unassayed": [
+    "motion",
+    "three-dimensional generator behavior",
+    "downstream image-generator aesthetic behavior",
+    "mechanical support persistence"
+  ]
+}

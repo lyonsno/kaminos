@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--neutral/shape-plus-control.png",
+      "title": "stance-envelope--neutral",
+      "viewLabel": "stance envelope | balanced | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--wide/shape-plus-control.png",
+      "title": "stance-envelope--wide",
+      "viewLabel": "stance envelope | wide set | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--tucked/shape-plus-control.png",
+      "title": "stance-envelope--tucked",
+      "viewLabel": "stance envelope | tucked | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--fore-loaded/shape-plus-control.png",
+      "title": "stance-envelope--fore-loaded",
+      "viewLabel": "stance envelope | fore loaded | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--rear-loaded/shape-plus-control.png",
+      "title": "stance-envelope--rear-loaded",
+      "viewLabel": "stance envelope | rear loaded | separate_reference"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/stance-envelope--diagonal/shape-plus-control.png",
+      "title": "stance-envelope--diagonal",
+      "viewLabel": "stance envelope | diagonal bias | separate_reference"
+    }
+  ]
+}

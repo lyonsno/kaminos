@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="stance envelope fore loaded control diagram" data-family="stance-envelope" data-stance="fore-loaded">
+  <rect width="320" height="240" fill="#10201c"/>
+  <path d="M 34 120 H 286" stroke="#334d43" stroke-width="2"/>
+  <path d="M 160 28 V 212" stroke="#334d43" stroke-width="2"/>
+  <polygon points="85.6,64 193.6,79.68 193.6,160.32 85.6,176" fill="#6bb8d4" fill-opacity="0.2" stroke="#75d8df" stroke-width="5" stroke-linejoin="round"/>
+  
+    <rect x="82" y="82" width="156" height="76" rx="38" fill="#90bd77" stroke="#dcebb5" stroke-width="3"/>
+    <path d="M 94 111 Q 72 120 94 137" fill="none" stroke="#dcebb5" stroke-width="12" stroke-linecap="round"/>
+  
+  <rect x="67.31" y="59" width="36.58" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="67.31" y="171" width="36.58" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="180.57999999999998" y="74.68" width="26.04" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+<rect x="180.57999999999998" y="155.32" width="26.04" height="10" rx="3" fill="#f4c86a" opacity="0.95"/>
+  <text x="14" y="24" fill="#eef5d4" font-family="Menlo, monospace" font-size="13">stance envelope</text>
+  <text x="306" y="24" fill="#f4c86a" text-anchor="end" font-family="Menlo, monospace" font-size="13">fore loaded</text>
+</svg>

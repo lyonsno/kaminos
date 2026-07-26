@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--neutral/shape-plus-control.png",
+      "title": "attachment-fields--neutral",
+      "viewLabel": "attachment fields | balanced | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--wide/shape-plus-control.png",
+      "title": "attachment-fields--wide",
+      "viewLabel": "attachment fields | wide set | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--tucked/shape-plus-control.png",
+      "title": "attachment-fields--tucked",
+      "viewLabel": "attachment fields | tucked | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--fore-loaded/shape-plus-control.png",
+      "title": "attachment-fields--fore-loaded",
+      "viewLabel": "attachment fields | fore loaded | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--rear-loaded/shape-plus-control.png",
+      "title": "attachment-fields--rear-loaded",
+      "viewLabel": "attachment fields | rear loaded | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/attachment-fields--diagonal/shape-plus-control.png",
+      "title": "attachment-fields--diagonal",
+      "viewLabel": "attachment fields | diagonal bias | shape_pixels"
+    }
+  ]
+}

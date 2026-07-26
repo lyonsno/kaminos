@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="body only tucked control diagram" data-family="body-only" data-stance="tucked">
+  <rect width="320" height="240" fill="#10201c"/>
+  <path d="M 34 120 H 286" stroke="#334d43" stroke-width="2"/>
+  <path d="M 160 28 V 212" stroke="#334d43" stroke-width="2"/>
+  
+    <rect x="82" y="82" width="156" height="76" rx="38" fill="#90bd77" stroke="#dcebb5" stroke-width="3"/>
+    <path d="M 94 111 Q 72 120 94 137" fill="none" stroke="#dcebb5" stroke-width="12" stroke-linecap="round"/>
+  
+  <rect x="94.1" y="87" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.35"/>
+<rect x="94.1" y="143" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.35"/>
+<rect x="194.9" y="87" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.35"/>
+<rect x="194.9" y="143" width="31" height="10" rx="3" fill="#f4c86a" opacity="0.35"/>
+  <text x="14" y="24" fill="#eef5d4" font-family="Menlo, monospace" font-size="13">body only</text>
+  <text x="306" y="24" fill="#f4c86a" text-anchor="end" font-family="Menlo, monospace" font-size="13">tucked</text>
+</svg>

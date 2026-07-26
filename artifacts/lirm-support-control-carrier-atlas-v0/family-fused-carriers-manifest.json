@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.lirm-support-control-carrier-family-sheet.v0",
+  "columns": 2,
+  "rows": 3,
+  "width": 1280,
+  "cellWidth": 640,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--neutral/shape-plus-control.png",
+      "title": "fused-carriers--neutral",
+      "viewLabel": "fused carriers | balanced | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--wide/shape-plus-control.png",
+      "title": "fused-carriers--wide",
+      "viewLabel": "fused carriers | wide set | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--tucked/shape-plus-control.png",
+      "title": "fused-carriers--tucked",
+      "viewLabel": "fused carriers | tucked | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--fore-loaded/shape-plus-control.png",
+      "title": "fused-carriers--fore-loaded",
+      "viewLabel": "fused carriers | fore loaded | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--rear-loaded/shape-plus-control.png",
+      "title": "fused-carriers--rear-loaded",
+      "viewLabel": "fused carriers | rear loaded | shape_pixels"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-control-carrier-atlas-v0/cells/fused-carriers--diagonal/shape-plus-control.png",
+      "title": "fused-carriers--diagonal",
+      "viewLabel": "fused carriers | diagonal bias | shape_pixels"
+    }
+  ]
+}
