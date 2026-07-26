@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.visual-admission.v0",
+  "timestamp": "2026-07-26T04:02:39Z",
+  "sourceCommit": "50cb734b5113c846c91d8f968924c387283656c8",
+  "inspection": {
+    "inspector": "codex-agent-visual-inspection",
+    "surfaces": [
+      "repaired-sheet.png",
+      "cells/B0-L1-C1-V0/clay.png",
+      "cells/B0-L1-C1-V0/depth.png",
+      "cells/B0-L1-C1-V0/normal.png",
+      "cells/B0-L1-C1-V0/mask.png",
+      "cells/B0-L1-C1-V0/semantic.png",
+      "cells/B1-L1-C1-V1/clay.png",
+      "cells/B1-L1-C1-V1/depth.png",
+      "cells/B1-L1-C1-V1/normal.png",
+      "cells/B1-L1-C1-V1/mask.png",
+      "cells/B1-L1-C1-V1/semantic.png"
+    ],
+    "classification": "happy-safe-low-frequency",
+    "visibleResult": "single continuous organismal mass with smooth depth and normal fields",
+    "absentHazards": [
+      "repeated support rows",
+      "partial support occlusion",
+      "cavity-like marks",
+      "clustered orifice-like detail",
+      "detached anatomy"
+    ]
+  },
+  "admission": {
+    "operatorSafeSurface": "repaired-sheet.png",
+    "generatorFiring": "admitted-for-repaired-cells-only",
+    "legacyControlSheetOperatorExposure": "prohibited",
+    "legacyControlSheetAgentInspection": "completed"
+  },
+  "proofBoundary": {
+    "positiveGeneratorAesthetics": false,
+    "trellisSafety": false,
+    "supportRecoveryFromGeneratedMesh": false,
+    "motionSafety": false
+  }
+}

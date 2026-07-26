@@ -1,0 +1,92 @@
+{
+  "schema": "kaminos.lirm-projected-support-legibility-control-sheet.v0",
+  "columns": 4,
+  "rows": 4,
+  "width": 1280,
+  "cellWidth": 320,
+  "cellHeight": 292,
+  "imageHeight": 240,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L0-C0-V0/clay.png",
+      "title": "B0-L0-C0-V0",
+      "viewLabel": "bauplan-only | centerline | body-sdf | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L0-C0-V1/clay.png",
+      "title": "B0-L0-C0-V1",
+      "viewLabel": "bauplan-only | centerline | body-sdf | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L0-C1-V0/clay.png",
+      "title": "B0-L0-C1-V0",
+      "viewLabel": "bauplan-only | centerline | semantic-only | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L0-C1-V1/clay.png",
+      "title": "B0-L0-C1-V1",
+      "viewLabel": "bauplan-only | centerline | semantic-only | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C0-V0/clay.png",
+      "title": "B0-L1-C0-V0",
+      "viewLabel": "bauplan-only | bilateral-sidecar | body-sdf | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C0-V1/clay.png",
+      "title": "B0-L1-C0-V1",
+      "viewLabel": "bauplan-only | bilateral-sidecar | body-sdf | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png",
+      "title": "B0-L1-C1-V0",
+      "viewLabel": "bauplan-only | bilateral-sidecar | semantic-only | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V1/clay.png",
+      "title": "B0-L1-C1-V1",
+      "viewLabel": "bauplan-only | bilateral-sidecar | semantic-only | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L0-C0-V0/clay.png",
+      "title": "B1-L0-C0-V0",
+      "viewLabel": "bauplan-heavy | centerline | body-sdf | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L0-C0-V1/clay.png",
+      "title": "B1-L0-C0-V1",
+      "viewLabel": "bauplan-heavy | centerline | body-sdf | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L0-C1-V0/clay.png",
+      "title": "B1-L0-C1-V0",
+      "viewLabel": "bauplan-heavy | centerline | semantic-only | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L0-C1-V1/clay.png",
+      "title": "B1-L0-C1-V1",
+      "viewLabel": "bauplan-heavy | centerline | semantic-only | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C0-V0/clay.png",
+      "title": "B1-L1-C0-V0",
+      "viewLabel": "bauplan-heavy | bilateral-sidecar | body-sdf | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C0-V1/clay.png",
+      "title": "B1-L1-C0-V1",
+      "viewLabel": "bauplan-heavy | bilateral-sidecar | body-sdf | pairing-legible-yaw-pi-over-4"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C1-V0/clay.png",
+      "title": "B1-L1-C1-V0",
+      "viewLabel": "bauplan-heavy | bilateral-sidecar | semantic-only | legacy-yaw-0.42"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C1-V1/clay.png",
+      "title": "B1-L1-C1-V1",
+      "viewLabel": "bauplan-heavy | bilateral-sidecar | semantic-only | pairing-legible-yaw-pi-over-4"
+    }
+  ]
+}
