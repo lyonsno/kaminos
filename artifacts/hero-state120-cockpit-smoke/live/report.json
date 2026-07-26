@@ -1,0 +1,194 @@
+{
+  "schema": "kaminos.volume.authenticated-hero-state120-cockpit-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "startedAt": "2026-07-26T05:16:03.600Z",
+  "finishedAt": "2026-07-26T05:16:57.112Z",
+  "routeReceiptPath": "/private/tmp/kaminos-pyro-projected-area-optical-units-0723/scratch/hero-state120-cockpit-18831/route-receipt.json",
+  "requestedRoute": "http://127.0.0.1:18831/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&role=off&composition=splat-only-v0&warmup_steps=0&volume_presentation=beauty&volume_raymarch_smoke=off&volume_hero_pair=state120&kaminos_volume_smoke=1&volume_optical_unit_mode=projected-native-cell-area-integral-normalized-v0&volume_boundary_splat_presentation_mode=matched-optical-recurrence-v0&full_support_persistent_cohort_manifest=%2Fscratch%2Fhero-state120-cockpit-18831%2Fcohort%2Fcohort-manifest.json&full_support_persistent_cohort_manifest_sha256=4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20&full_support_persistent_cohort_state=coefficient-state-120&full_support_hero_target=%2Fscratch%2Fhero-state120-cockpit-18831%2Ftarget%2Fcoefficient-state-120-target.png&full_support_hero_target_sha256=c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+  "effectiveRoute": "http://127.0.0.1:18831/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&role=off&composition=splat-only-v0&warmup_steps=0&volume_presentation=beauty&volume_raymarch_smoke=off&volume_hero_pair=state120&kaminos_volume_smoke=1&volume_optical_unit_mode=projected-native-cell-area-integral-normalized-v0&volume_boundary_splat_presentation_mode=matched-optical-recurrence-v0&full_support_persistent_cohort_manifest=%2Fscratch%2Fhero-state120-cockpit-18831%2Fcohort%2Fcohort-manifest.json&full_support_persistent_cohort_manifest_sha256=4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20&full_support_persistent_cohort_state=coefficient-state-120&full_support_hero_target=%2Fscratch%2Fhero-state120-cockpit-18831%2Ftarget%2Fcoefficient-state-120-target.png&full_support_hero_target_sha256=c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+  "runtime": {
+    "pageStatus": "running",
+    "backend": "WebGPU:apple",
+    "effectiveRoute": "http://127.0.0.1:18831/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&role=off&composition=splat-only-v0&warmup_steps=0&volume_presentation=beauty&volume_raymarch_smoke=off&volume_hero_pair=state120&kaminos_volume_smoke=1&volume_optical_unit_mode=projected-native-cell-area-integral-normalized-v0&volume_boundary_splat_presentation_mode=matched-optical-recurrence-v0&full_support_persistent_cohort_manifest=%2Fscratch%2Fhero-state120-cockpit-18831%2Fcohort%2Fcohort-manifest.json&full_support_persistent_cohort_manifest_sha256=4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20&full_support_persistent_cohort_state=coefficient-state-120&full_support_hero_target=%2Fscratch%2Fhero-state120-cockpit-18831%2Ftarget%2Fcoefficient-state-120-target.png&full_support_hero_target_sha256=c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7&volume_appearance_selection=structural-a&volume_appearance_decomposition=off",
+    "frameCount": 318,
+    "simStepCount": 7,
+    "receipt": {
+      "schema": "kaminos.volume.authenticated-hero-state120-receipt.v0",
+      "status": "exact-fixed-pair",
+      "routeIdentity": "kaminos.volume.authenticated-hero-state120-cockpit.v0",
+      "stateId": "coefficient-state-120",
+      "fixedState": true,
+      "simulationHeldBy": "look-freeze-pinned-render-phase",
+      "presentationLoopActive": true,
+      "sameCamera": true,
+      "cameraSignature": "1.1800|0.2800|2.0500|-0.0529|0.2578|0.0141|0.9646|2.9306,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0002,-1.0000,0.0000,0.0000,-0.0200,0.0000",
+      "exactCameraSignature": "1.1800|0.2800|2.0500|-0.0529|0.2578|0.0141|0.9646|2.9306,0.0000,0.0000,0.0000,0.0000,2.7475,0.0000,0.0000,0.0000,0.0000,-1.0002,-1.0000,0.0000,0.0000,-0.0200,0.0000",
+      "source": {
+        "authority": "authenticated-persistent-sparse-cohort-gpu-source-v0",
+        "cohortSha256": "4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20",
+        "raymarchTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+        "actualServedTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+        "targetPresentationSourceAuthority": "verified-fetched-bytes-object-url-v0",
+        "attributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472"
+      },
+      "material": {
+        "boundarySplatMode": "learned",
+        "footprintAuthority": "learned-camera-facing-billboard-v0",
+        "geometryIdentity": "persistent-cohort-historical-round-base-radius-v0",
+        "radius": 0.98,
+        "sharpness": 12
+      },
+      "population": {
+        "candidates": 481447,
+        "rasterDeposits": 481447,
+        "depositsPerCandidate": 1,
+        "depositionIdentity": "flow-kernel-moment-gaussian-raster-v0"
+      },
+      "optics": {
+        "unitMode": "projected-native-cell-area-integral-normalized-v0",
+        "presentationMode": "matched-optical-recurrence-v0",
+        "depthBins": 16,
+        "accumulationIdentity": "depth-binned-emission-optical-depth-v0",
+        "transportIdentity": "depth-binned-exponential-self-transmittance-v0"
+      },
+      "renderPass": {
+        "identity": "selective-head-live-render-pass-receipt-v0",
+        "composition": "splat-only-v0",
+        "controlGeneration": 2,
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+        "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "raymarchFireAuthority": 0,
+        "raymarchEncoded": false,
+        "raymarchApplied": false,
+        "splatEncoded": true,
+        "splatApplied": true,
+        "fallbackReason": null
+      },
+      "fallbackReason": null
+    },
+    "visible": "visible",
+    "targetComplete": true,
+    "targetNaturalWidth": 900,
+    "targetNaturalHeight": 960,
+    "bodyView": "split",
+    "statusText": "EXACT FIXED PAIR | state coefficient-state-120 | 481,447 candidates | 481,447 raster deposits | 1/candidate | round learned splats | radius 0.98 | sharpness 12 | projected optics | 16 bins | fallback none"
+  },
+  "targetSourceReceipt": {
+    "requestedTargetUrl": "/scratch/hero-state120-cockpit-18831/target/coefficient-state-120-target.png",
+    "effectiveTargetUrl": "http://127.0.0.1:18831/scratch/hero-state120-cockpit-18831/target/coefficient-state-120-target.png",
+    "requestedTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+    "actualServedTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+    "actualServedTargetRawPixelSha256": "a24f7693046f115b53e1864db0bba5930332f86323ad9773178cd301fffafaef",
+    "upstreamRenderReportTargetPixelSha256": "f19fbd6489c935dde37bc6c0c82bf1fe9b438a0f0b3a64b8cfa43ed8c221f58f",
+    "upstreamRenderReportTargetPixelAuthority": "render-report-pre-png-target-buffer-claim-not-decoded-png-v0",
+    "byteLength": 790392,
+    "cacheMode": "no-store"
+  },
+  "canvasClip": {
+    "x": 380,
+    "y": 0,
+    "width": 900,
+    "height": 960,
+    "scale": 1,
+    "authority": "exact-authenticated-hero-canvas-bounds-v0"
+  },
+  "splatCapture": {
+    "path": "/private/tmp/kaminos-pyro-projected-area-optical-units-0723/artifacts/hero-state120-cockpit-smoke/live/splat-only.png",
+    "width": 900,
+    "height": 960,
+    "litPixels": 650575,
+    "litFraction": 0.7529803240740741,
+    "meanLuma": 53.83801067895388,
+    "maximumLuma": 254.99999999999997,
+    "pngSha256": "4bee9f0f2fe1bcc9e12518548e5102496d20802c32074e2b28cd23e010fd7d03",
+    "rawPixelSha256": "6f0a91e248f2f154acb6697b4b996eb7f138c9b5d0bac75fc89b3fc3b446f3a6",
+    "byteLength": 691145
+  },
+  "targetCapture": {
+    "path": "/private/tmp/kaminos-pyro-projected-area-optical-units-0723/artifacts/hero-state120-cockpit-smoke/live/raymarch-target-only.png",
+    "width": 900,
+    "height": 960,
+    "litPixels": 767384,
+    "litFraction": 0.888175925925926,
+    "meanLuma": 62.813636545131764,
+    "maximumLuma": 254.99999999999997,
+    "pngSha256": "d3b444e0bf5f436931780652db87d57e064ffc3f3d262372b5ef95c0d085e02a",
+    "rawPixelSha256": "ab4e3c7addb770af45aadcb91137fdf27e931eef3e8d454fa748e05fe53ecbf7",
+    "byteLength": 792950,
+    "requestedTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+    "actualServedTargetSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+    "sourcePngSha256": "c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+    "sourceRawPixelSha256": "a24f7693046f115b53e1864db0bba5930332f86323ad9773178cd301fffafaef",
+    "browserPresentedRawPixelSha256": "ab4e3c7addb770af45aadcb91137fdf27e931eef3e8d454fa748e05fe53ecbf7",
+    "browserPresentationAuthority": "chrome-color-managed-image-presentation-v0"
+  },
+  "comparatorCapture": {
+    "path": "/private/tmp/kaminos-pyro-projected-area-optical-units-0723/artifacts/hero-state120-cockpit-smoke/live/comparator.png",
+    "width": 1668,
+    "height": 960,
+    "litPixels": 1457452,
+    "litFraction": 0.9101793565147882,
+    "meanLuma": 45.24953188660823,
+    "maximumLuma": 254.99999999999997,
+    "pngSha256": "7cae944144f8a31cd24965f6c3a7c8a40d1b80e17fc93c48d8cb0eff5d9feca0",
+    "rawPixelSha256": "b9b99056c026e48175e7d0ebd5cbc61d2032e8a85c4c909712530a455649c6af",
+    "byteLength": 917169
+  },
+  "browserEvents": [
+    {
+      "method": "Runtime.consoleAPICalled",
+      "params": {
+        "type": "log",
+        "args": [
+          {
+            "type": "string",
+            "value": "WebGPU renderer initialized, backend:"
+          },
+          {
+            "type": "string",
+            "value": "WebGPUBackend"
+          }
+        ],
+        "executionContextId": 4,
+        "timestamp": 1785042964815.722,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "initScene",
+              "scriptId": "9",
+              "url": "http://127.0.0.1:18831/?kaminos_volume_smoke=1&volume_product_cockpit=0&volume_scene=tall_plume&volume_tall_preset=rgb_upscale_basin_0711&volume_resolution=160&volume_majorant_grid=24&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_splat_geometry=historical-round&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_optical_unit_mode=projected-native-cell-area-integral-normalized-v0&volume_boundary_splat_presentation_mode=matched-optical-recurrence-v0&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_render_scale=1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_residual_model_url=&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_presentation=beauty&volume_raymarch_smoke=off&volume_hero_pair=state120&full_support_persistent_cohort_manifest=%2Fscratch%2Fhero-state120-cockpit-18831%2Fcohort%2Fcohort-manifest.json&full_support_persistent_cohort_manifest_sha256=4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20&full_support_persistent_cohort_state=coefficient-state-120&full_support_hero_target=%2Fscratch%2Fhero-state120-cockpit-18831%2Ftarget%2Fcoefficient-state-120-target.png&full_support_hero_target_sha256=c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7",
+              "lineNumber": 8884,
+              "columnNumber": 10
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "lease": {
+    "owner": "pyro-integration",
+    "agent_id": "pyro-integration",
+    "repo_root": "/private/tmp/kaminos-pyro-projected-area-optical-units-0723",
+    "effective_route": "headless-owned-cdp authenticated-state120-hero-cockpit",
+    "backend": "webgpu",
+    "device": "apple-gpu",
+    "profile": "interactive-render",
+    "supports_checkpoints": true,
+    "interruptible": false,
+    "lease_id": "42442c6394b6",
+    "lifecycle_state": "active",
+    "pid": 24928,
+    "process_group": 24928,
+    "claimed_at": 1785042963.7364109,
+    "renewed_at": 1785042963.7364109,
+    "ttl_seconds": 600,
+    "handoff_bump_id": null,
+    "released_at": null,
+    "released_by": null,
+    "release_reason": null,
+    "unknown_at": null,
+    "unknown_reason": null
+  }
+}

@@ -11,6 +11,13 @@
     [hidden] { display: none !important; }
     body { margin: 0; overflow: hidden; background: #050607; }
     iframe { width: 100vw; height: 100vh; border: 0; display: block; }
+    #hero-target-panel { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 1; display: grid; place-items: center; overflow: hidden; pointer-events: none; background: #000; }
+    #hero-target-panel img { width: 100%; height: 100%; object-fit: contain; }
+    #hero-target-label { display: none; }
+    #hero-pair-controls { display: flex; align-items: center; gap: 3px; }
+    body[data-hero-view="split"] #hero-target-panel { clip-path: inset(0 0 0 50%); }
+    body[data-hero-view="splat"] #hero-target-panel { display: none; }
+    body[data-hero-view="target"] #hero-target-panel { clip-path: none; }
     #toolbar { position: fixed; z-index: 10; display: block; width: min(860px, calc(100vw - 24px)); padding: 8px 9px 7px; border: 1px solid rgba(153, 184, 192, .34); background: rgba(6, 9, 10, .88); backdrop-filter: blur(10px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
     #toolbar[hidden] { display: none; }
     #toolbar-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -53,6 +60,12 @@
       <div id="smoke-presentations" role="group" aria-label="Raymarch smoke presentation">
         <button type="button" data-smoke-presentation="on">Smoke On</button>
         <button type="button" data-smoke-presentation="off">Smoke Off</button>
+      </div>
+      <div id="hero-pair-controls" role="group" aria-label="Authenticated Hero pair view" hidden>
+        <button type="button" data-hero-view="split" aria-pressed="true">Compare</button>
+        <button type="button" data-hero-view="splat" aria-pressed="false">Splat</button>
+        <button type="button" data-hero-view="target" aria-pressed="false">Raymarch</button>
+        <button id="hero-reset-camera" type="button">Reset Camera</button>
       </div>
     </div>
     <div id="toolbar-controls">
@@ -101,19 +114,28 @@
     <div id="status">Starting exact basin...</div>
   </div>
   <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
+  <div id="hero-target-panel" hidden>
+    <img id="hero-target-image" alt="Authenticated state-120 Raymarch target">
+    <div id="hero-target-label">Authenticated state-120 Raymarch target</div>
+  </div>
   <script type="module">
     import {
       validateVolumeSettingsPresetDocument,
       validateVolumeSettingsPresetVisualTarget,
     } from './volume-settings-preset-contract.mjs';
     import {
+      HERO_STATE120_CAMERA,
+      HERO_STATE120_DEPOSITION_IDENTITY,
+      makeHeroState120RuntimeReceipt,
       makeSparseProductRuntimeReceipt,
+      parseHeroState120Route,
       parseSparseProductRoute,
       runSparseProductResolutionTransition,
       SPARSE_PRODUCT_APPEARANCE_ATTRACTOR,
       SPARSE_PRODUCT_GEOMETRY_MODES,
       SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
       SPARSE_PRODUCT_RESOLUTIONS,
+      verifyHeroState120TargetSource,
       validateSparseProductAppearanceTarget,
     } from './volume-sparse-product-cockpit.mjs';
 
@@ -160,15 +182,17 @@
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
     const params = new URLSearchParams(location.search);
+    const heroState120Request = parseHeroState120Route(params);
+    const heroState120Requested = Boolean(heroState120Request);
     const sparseProductRequest = parseSparseProductRoute(params);
     const sparseProductRequested = Boolean(sparseProductRequest);
     const liveFullSupportOpticsRequested = params.has('full_support_live_step');
-    let requestedRole = sparseProductRequested
+    let requestedRole = (sparseProductRequested || heroState120Requested)
       ? 'off'
       : (roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual');
     let requestedComposition = compositions.includes(params.get('composition'))
       ? params.get('composition')
-      : (sparseProductRequested ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0');
+      : ((sparseProductRequested || heroState120Requested) ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0');
     let legacyDiagnosticCompositionRequested = requestedComposition === 'full-raymarch-under-splats-diagnostic-v0';
     let requestedPresentation = presentations.includes(params.get('volume_presentation')) ? params.get('volume_presentation') : 'beauty';
     const requestedRaymarchSmokePresentationRaw = params.get('volume_raymarch_smoke');
@@ -181,7 +205,7 @@
       ? requestedOpticalUnitModeRaw
       : 'projected-native-cell-area-integral-normalized-v0';
     let requestedSplatGeometry = sparseProductRequest?.geometry || 'historical-round';
-    let requestedProductResolution = sparseProductRequest?.resolution || 160;
+    let requestedProductResolution = sparseProductRequest?.resolution || heroState120Request?.resolution || 160;
     const requestedAppearanceAssayRaw = params.get('volume_appearance_decomposition');
     let requestedAppearanceAssay = appearanceAssayModes.includes(requestedAppearanceAssayRaw)
       ? requestedAppearanceAssayRaw
@@ -192,13 +216,17 @@
       : (requestedAppearanceAssay !== 'off' ? requestedAppearanceAssay : 'structural-a');
     let requestedAppearanceAssayEnabled = requestedAppearanceAssay !== 'off';
     const warmupParam = params.get('warmup_steps');
-    const parsedWarmupTarget = warmupParam === null ? (sparseProductRequested ? 0 : 96) : Number(warmupParam);
+    const parsedWarmupTarget = warmupParam === null
+      ? ((sparseProductRequested || heroState120Requested) ? 0 : 96)
+      : Number(warmupParam);
     const warmupParamValid = warmupParam === null
       || warmupParam === '0'
       || (warmupParam.trim() !== '' && Number.isFinite(parsedWarmupTarget) && parsedWarmupTarget >= 1);
     const warmupTarget = sparseProductRequested
       ? 0
       : warmupParam === '0'
+      ? 0
+      : heroState120Requested
       ? 0
       : (warmupParamValid ? Math.max(1, Math.floor(parsedWarmupTarget)) : 96);
     const warmupAuthority = warmupTarget === 0
@@ -231,8 +259,15 @@
     const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
     let sourceSettingsPresetReceipt = null;
     let sparseProductAppearanceAdmission = null;
+    let heroState120BootstrapReceipt = null;
+    let heroState120RuntimeReceipt = null;
+    let heroState120ExactCameraSignature = null;
+    let heroState120RenderEvidence = null;
+    let heroState120TargetSourceReceipt = null;
+    let heroState120TargetObjectUrl = null;
+    let requestedHeroView = 'split';
     let basin = document.getElementById('basin');
-    if (sparseProductRequested) basin.style.visibility = 'hidden';
+    if (sparseProductRequested || heroState120Requested) basin.style.visibility = 'hidden';
     const status = document.getElementById('status');
     const operatorToolbar = document.getElementById('toolbar');
     let viewportResizeObserver = null;
@@ -357,7 +392,10 @@
     const operatorOverlayResizeObserver = new ResizeObserver(syncVolumeAssayViewportPlacement);
     operatorOverlayResizeObserver.observe(operatorToolbar);
     window.addEventListener('resize', syncVolumeAssayViewportPlacement);
-    document.getElementById('assay-source').textContent = sparseProductRequested
+    window.addEventListener('resize', syncHeroTargetPanelBounds);
+    document.getElementById('assay-source').textContent = heroState120Requested
+      ? 'Checksum-bound fixed state and camera | authenticated Raymarch target + projected-area physical splats'
+      : sparseProductRequested
       ? 'Ordinary sparse live renderer from routed basin settings; no late diagnostic bootstrap'
       : liveFullSupportOpticsRequested
         ? 'Genuinely evolving 160 simulation; dynamic analytical coefficients; no frozen cohort'
@@ -376,11 +414,19 @@
     const splatsEnabledButton = document.getElementById('splats-enabled');
     const splatGeometryControl = document.getElementById('splat-geometry-control');
     const splatGeometrySelect = document.getElementById('splat-geometry');
-    document.getElementById('cockpit-title').textContent = sparseProductRequested
+    const heroPairControls = document.getElementById('hero-pair-controls');
+    const heroTargetPanel = document.getElementById('hero-target-panel');
+    const heroTargetImage = document.getElementById('hero-target-image');
+    const heroViewButtons = Array.from(document.querySelectorAll('[data-hero-view]'));
+    const heroResetCameraButton = document.getElementById('hero-reset-camera');
+    document.getElementById('cockpit-title').textContent = heroState120Requested
+      ? 'Fixed authenticated state 120'
+      : sparseProductRequested
       ? 'Sparse Live Fire'
       : 'Continuous same-history live assay';
-    opticalUnitModesGroup.hidden = !(liveFullSupportOpticsRequested || sparseProductRequested);
-    liveOpticalAuthority.hidden = !(liveFullSupportOpticsRequested || sparseProductRequested);
+    opticalUnitModesGroup.hidden = heroState120Requested
+      || !(liveFullSupportOpticsRequested || sparseProductRequested);
+    liveOpticalAuthority.hidden = !(heroState120Requested || liveFullSupportOpticsRequested || sparseProductRequested);
     splatGeometryControl.hidden = !sparseProductRequested;
     if (sparseProductRequested) {
       document.getElementById('presentations').hidden = true;
@@ -390,7 +436,20 @@
       splatsEnabledButton.hidden = true;
       document.getElementById('roles-control').hidden = true;
     }
-    liveOpticalAuthority.textContent = sparseProductRequested
+    if (heroState120Requested) {
+      document.getElementById('presentations').hidden = true;
+      document.getElementById('smoke-presentations').hidden = true;
+      document.getElementById('appearance-assay-control').hidden = true;
+      appearanceAssayEnabledButton.hidden = true;
+      splatsEnabledButton.hidden = true;
+      splatGeometryControl.hidden = true;
+      document.getElementById('roles-control').hidden = true;
+      heroPairControls.hidden = false;
+      document.body.dataset.heroView = requestedHeroView;
+    }
+    liveOpticalAuthority.textContent = heroState120Requested
+      ? 'Loading authenticated cohort; viewport withheld until exact source, material, optics, pass, and camera apply'
+      : sparseProductRequested
       ? 'Ordinary sparse live renderer | no cohort | no full-grid coefficient takeover'
       : 'Dynamic analytical coefficients | source-authored kernel covariance | not frozen round cohort';
     const basinQuery = new URLSearchParams({
@@ -402,10 +461,20 @@
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
-      volume_boundary_splat_mode: sparseProductRequest?.boundarySplatMode || 'learned',
+      volume_boundary_splat_mode: heroState120Request?.boundarySplatMode
+        || sparseProductRequest?.boundarySplatMode
+        || 'learned',
       volume_splat_geometry: requestedSplatGeometry,
-      volume_boundary_splat_radius: String(sparseProductRequest?.boundarySplatRadius ?? 1),
-      volume_boundary_splat_sharpness: String(sparseProductRequest?.boundarySplatSharpness ?? 3.4),
+      volume_boundary_splat_radius: String(
+        heroState120Request?.boundarySplatRadius
+          ?? sparseProductRequest?.boundarySplatRadius
+          ?? 1,
+      ),
+      volume_boundary_splat_sharpness: String(
+        heroState120Request?.boundarySplatSharpness
+          ?? sparseProductRequest?.boundarySplatSharpness
+          ?? 3.4,
+      ),
       volume_optical_unit_mode: requestedOpticalUnitMode,
       volume_boundary_splat_presentation_mode: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
       volume_boundary_sidecar_blur: '0',
@@ -483,6 +552,52 @@
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
+    }
+
+    function syncHeroTargetPanelBounds() {
+      if (!heroState120Requested || !heroTargetPanel || !prototype()?.canvasElement) return null;
+      const canvasRect = prototype().canvasElement().getBoundingClientRect();
+      const basinRect = basin.getBoundingClientRect();
+      const bounds = {
+        left: basinRect.left + canvasRect.left,
+        top: basinRect.top + canvasRect.top,
+        width: canvasRect.width,
+        height: canvasRect.height,
+      };
+      heroTargetPanel.style.left = `${bounds.left}px`;
+      heroTargetPanel.style.top = `${bounds.top}px`;
+      heroTargetPanel.style.width = `${bounds.width}px`;
+      heroTargetPanel.style.height = `${bounds.height}px`;
+      return bounds;
+    }
+
+    function setHeroView(view) {
+      if (!heroState120Requested || !['split', 'splat', 'target'].includes(view)) return null;
+      requestedHeroView = view;
+      document.body.dataset.heroView = view;
+      for (const button of heroViewButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.heroView === view));
+      }
+      syncHeroTargetPanelBounds();
+      return view;
+    }
+
+    function resetHeroCamera() {
+      if (!heroState120Requested) return null;
+      const camera = basin.contentWindow?.kaminosSetCameraDebugPose?.(HERO_STATE120_CAMERA);
+      if (!camera) throw new Error('hero-exact-camera-reset-unavailable');
+      const projection = camera.projectionMatrix;
+      if (
+        !Array.isArray(projection)
+        || projection.length !== HERO_STATE120_CAMERA.projectionMatrix.length
+        || projection.some((value, index) =>
+          Math.abs(Number(value) - HERO_STATE120_CAMERA.projectionMatrix[index]) > 1e-12)
+      ) {
+        throw new Error(`hero-exact-camera-projection-substitution:${JSON.stringify(projection)}`);
+      }
+      heroState120ExactCameraSignature = prototype()?.debugState?.()?.cameraSignature || null;
+      if (!heroState120ExactCameraSignature) throw new Error('hero-exact-camera-signature-missing');
+      return camera;
     }
 
     function replaceSparseProductInnerRouteParameter(name, value) {
@@ -1031,6 +1146,22 @@
 
     function debugState() {
       const state = prototype()?.debugState?.() || null;
+      let heroState120Error = null;
+      if (heroState120Requested && state && heroState120ExactCameraSignature) {
+        try {
+          heroState120RuntimeReceipt = makeHeroState120RuntimeReceipt(
+            heroState120Request,
+            { ...state, ...heroState120RenderEvidence },
+            {
+              exactCameraSignature: heroState120ExactCameraSignature,
+              targetSourceReceipt: heroState120TargetSourceReceipt,
+            },
+          );
+        } catch (error) {
+          heroState120RuntimeReceipt = null;
+          heroState120Error = error?.message || String(error);
+        }
+      }
       let sparseProductReceipt = null;
       let sparseProductError = null;
       if (sparseProductRequested && state) {
@@ -1077,7 +1208,8 @@
         : requestedPresentation === 'intrinsic'
           ? 'intrinsic-overrides-beauty-composition'
           : null;
-      const fallback = sparseProductResolutionError
+      const fallback = heroState120Error
+        || sparseProductResolutionError
         || sparseProductError
         || (effectiveRole !== requestedRole ? state?.selectiveHeadLiveFallbackReason : null)
         || (!compositionOverrideReason && effectiveComposition !== requestedComposition
@@ -1114,9 +1246,14 @@
         && state?.active
         && effectiveRole === requestedRole
         && presentationSettled
+        && (!heroState120Requested || Boolean(heroState120RuntimeReceipt))
         && (!sparseProductRequested || sparseProductReceipt?.status === 'effective');
       return {
         routeIdentity: ROUTE_IDENTITY,
+        heroState120Requested,
+        heroState120BootstrapReceipt,
+        heroState120RuntimeReceipt,
+        requestedHeroView,
         sparseProductRequested,
         sparseProductReceipt,
         requestedSplatGeometry,
@@ -1196,6 +1333,157 @@
       };
     }
 
+    async function initializeHeroState120() {
+      const host = basin.contentWindow;
+      const volumePrototype = prototype();
+      if (!host?.__kaminosBootstrapPersistentSparseCohort || !volumePrototype) {
+        throw new Error('hero-cohort-bootstrap-api-missing');
+      }
+      const verifiedTarget = await verifyHeroState120TargetSource(heroState120Request);
+      heroState120TargetSourceReceipt = verifiedTarget.receipt;
+      if (heroState120TargetObjectUrl) URL.revokeObjectURL(heroState120TargetObjectUrl);
+      heroState120TargetObjectUrl = URL.createObjectURL(
+        new Blob([verifiedTarget.bytes], { type: 'image/png' }),
+      );
+      heroTargetImage.src = heroState120TargetObjectUrl;
+      await heroTargetImage.decode();
+      if (heroTargetImage.naturalWidth !== 900 || heroTargetImage.naturalHeight !== 960) {
+        throw new Error(
+          `hero-target-dimensions-substitution:${heroTargetImage.naturalWidth}x${heroTargetImage.naturalHeight}`,
+        );
+      }
+      heroTargetPanel.hidden = false;
+      const cohortReceipt = await host.__kaminosBootstrapPersistentSparseCohort();
+      const uploadedCohort = volumePrototype.debugState()?.persistentSparseCohortGpuReceipt;
+      if (
+        uploadedCohort?.status !== 'complete'
+        || uploadedCohort?.stateId !== heroState120Request.stateId
+        || uploadedCohort?.manifestSha256 !== heroState120Request.cohortSha256
+        || uploadedCohort?.gpuUploadComplete !== true
+        || uploadedCohort?.fallbackReason
+      ) {
+        throw new Error(
+          `hero-cohort-upload-failed:${JSON.stringify({ cohortReceipt, uploadedCohort })}`,
+        );
+      }
+      volumePrototype.setControls({
+        boundarySplatMode: heroState120Request.boundarySplatMode,
+        boundarySplatRadius: heroState120Request.boundarySplatRadius,
+        boundarySplatSharpness: heroState120Request.boundarySplatSharpness,
+        lookFreeze: 1,
+      });
+      const depositionReceipt = volumePrototype.setFullSupportDepositionMode(
+        HERO_STATE120_DEPOSITION_IDENTITY,
+      );
+      if (
+        depositionReceipt?.normalized !== HERO_STATE120_DEPOSITION_IDENTITY
+        || depositionReceipt?.fallbackReason
+      ) {
+        throw new Error(`hero-deposition-bootstrap-failed:${JSON.stringify(depositionReceipt)}`);
+      }
+      volumePrototype.setBoundarySplatPresentationMode(heroState120Request.presentationMode);
+      volumePrototype.setBoundarySplatOpticalUnitMode(heroState120Request.opticalUnitMode);
+      volumePrototype.setSelectiveHeadLiveRole('off');
+      volumePrototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
+      volumePrototype.setVolumePresentationMode('beauty');
+      volumePrototype.setRaymarchSmokePresentationMode('off');
+      resetHeroCamera();
+      const presentationResumeReceipt = volumePrototype.setSelectiveHeadLiveCapturePaused(false);
+      if (presentationResumeReceipt?.paused !== false) {
+        throw new Error('hero-presentation-loop-resume-failed');
+      }
+      const before = volumePrototype.debugState();
+      const sample = await volumePrototype.sampleFrame({
+        advanceSim: false,
+        includeRgba: false,
+        sameStateCaptureId: 'authenticated-hero-state120-cockpit-v0',
+        baseFrameCount: before.frameCount,
+        baseSimStepCount: before.simStepCount,
+      });
+      if (!sample?.ok) throw new Error(`hero-initial-frame-failed:${sample?.reason || 'unknown'}`);
+      await new Promise(resolve => host.requestAnimationFrame(() => host.requestAnimationFrame(resolve)));
+      const state = volumePrototype.debugState();
+      const renderedDeposition = state.fullSupportDepositionReceipt || {};
+      heroState120RenderEvidence = {
+        fullSupportSourceCandidateCount:
+          sample.fullSupportSourceCandidateCount ?? renderedDeposition.sourceCandidateCount,
+        fullSupportRasterDepositCount:
+          sample.fullSupportRasterDepositCount ?? renderedDeposition.rasterDepositCount,
+        fullSupportDepositionReceipt: {
+          ...renderedDeposition,
+          requested: sample.fullSupportDepositionRequested ?? renderedDeposition.requested,
+          effective: sample.fullSupportDepositionEffective ?? renderedDeposition.effective,
+          fallbackReason:
+            sample.fullSupportDepositionFallbackReason ?? renderedDeposition.fallbackReason ?? null,
+          sourceCandidateCount:
+            sample.fullSupportSourceCandidateCount ?? renderedDeposition.sourceCandidateCount,
+          rasterDepositCount:
+            sample.fullSupportRasterDepositCount ?? renderedDeposition.rasterDepositCount,
+        },
+      };
+      heroState120RuntimeReceipt = makeHeroState120RuntimeReceipt(
+        heroState120Request,
+        { ...state, ...heroState120RenderEvidence },
+        {
+          exactCameraSignature: heroState120ExactCameraSignature,
+          targetSourceReceipt: heroState120TargetSourceReceipt,
+        },
+      );
+      heroState120BootstrapReceipt = {
+        schema: 'kaminos.volume.authenticated-hero-state120-bootstrap.v0',
+        status: heroState120RuntimeReceipt.status,
+        cohort: cohortReceipt,
+        deposition: depositionReceipt,
+        presentationResume: presentationResumeReceipt,
+        cameraSignature: heroState120ExactCameraSignature,
+        targetSource: heroState120TargetSourceReceipt,
+        runtime: heroState120RuntimeReceipt,
+      };
+      projectHeroState120HostReceipt(host, heroState120RuntimeReceipt);
+      liveOpticalAuthority.textContent =
+        'Exact state/camera | 481,447 round splats | radius 0.98 | sharpness 12 | projected optics | 16-bin recurrence';
+      basin.style.visibility = 'visible';
+      syncHeroTargetPanelBounds();
+      return heroState120BootstrapReceipt;
+    }
+
+    function projectHeroState120HostReceipt(host, receipt) {
+      host.__kaminosPersistentSparseCohortReceipt = {
+        status: 'effective',
+        stateId: receipt.stateId,
+        appliedRowCount: receipt.population.candidates,
+        appliedDepositCount: receipt.population.rasterDeposits,
+        rendererRequested: true,
+        rendererEncoded: true,
+        rendererApplied: true,
+        fallbackReason: receipt.fallbackReason,
+      };
+      const cohortStatus = host.document.getElementById('volume-persistent-cohort-status');
+      if (cohortStatus) {
+        cohortStatus.dataset.status = 'effective';
+        cohortStatus.textContent = [
+          receipt.stateId,
+          `${receipt.population.candidates.toLocaleString()} source candidates`,
+          `${receipt.population.rasterDeposits.toLocaleString()} raster deposits`,
+          `${receipt.population.depositsPerCandidate}/candidate`,
+          'authenticated Hero source effective',
+          'no fallback',
+        ].join(' | ');
+      }
+      const recurrenceStatus = host.document.getElementById('volume-stage-b-status');
+      if (recurrenceStatus) {
+        recurrenceStatus.dataset.status = 'effective';
+        recurrenceStatus.textContent = [
+          receipt.optics.presentationMode,
+          receipt.optics.unitMode,
+          `${receipt.optics.depthBins} depth bins`,
+          receipt.optics.transportIdentity,
+          'applied',
+          'no fallback',
+        ].join(' | ');
+      }
+    }
+
     async function initializeWarmup() {
       if (warmupStarted) return;
       if (warmupError) throw new Error(warmupError);
@@ -1230,6 +1518,10 @@
         }
       }
       warmupComplete = true;
+      if (heroState120Requested) {
+        await initializeHeroState120();
+        return;
+      }
       prototype().setSelectiveHeadLiveRole(sparseProductRequested ? 'off' : requestedRole);
       prototype().setSelectiveHeadLiveRenderComposition(deriveRequestedBeautyComposition());
       prototype().setVolumePresentationMode(requestedPresentation);
@@ -1261,6 +1553,16 @@
     for (const button of presentationButtons) button.addEventListener('click', () => setPresentation(button.dataset.presentation));
     for (const button of smokePresentationButtons) button.addEventListener('click', () => setRaymarchSmokePresentation(button.dataset.smokePresentation));
     for (const button of opticalUnitButtons) button.addEventListener('click', () => setOpticalUnitMode(button.dataset.opticalUnitMode));
+    for (const button of heroViewButtons) {
+      button.addEventListener('click', () => setHeroView(button.dataset.heroView));
+    }
+    heroResetCameraButton.addEventListener('click', () => {
+      try {
+        resetHeroCamera();
+      } catch (error) {
+        warmupError = error?.message || String(error);
+      }
+    });
     splatGeometrySelect.addEventListener('change', () => setSparseProductGeometry(splatGeometrySelect.value));
     appearanceAssaySelect.addEventListener('change', () => setAppearanceAssaySelection(appearanceAssaySelect.value));
     appearanceAssayEnabledButton.addEventListener('click', () => setAppearanceAssayEnabled(!requestedAppearanceAssayEnabled));
@@ -1287,6 +1589,31 @@
       const fallback = state.fallbackReason || state.compositionFallbackReason || state.boundarySplatFallbackReason;
       const appliedPass = state.volumePresentationReceipt?.application || state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
+      if (heroState120Requested) {
+        const heroReceipt = state.heroState120RuntimeReceipt;
+        status.textContent = fallback || state.error
+          ? `AUTHENTICATED HERO FAILED | ${fallback || state.error}`
+          : heroReceipt
+            ? [
+                heroReceipt.status === 'exact-fixed-pair'
+                  ? 'EXACT FIXED PAIR'
+                  : 'FIXED STATE / CAMERA EXPLORATION',
+                `state ${heroReceipt.stateId}`,
+                `${heroReceipt.population.candidates.toLocaleString()} candidates`,
+                `${heroReceipt.population.rasterDeposits.toLocaleString()} raster deposits`,
+                `${heroReceipt.population.depositsPerCandidate}/candidate`,
+                'round learned splats',
+                'radius 0.98',
+                'sharpness 12',
+                'projected optics',
+                '16 bins',
+                `fallback ${heroReceipt.fallbackReason || 'none'}`,
+              ].join(' | ')
+            : 'Loading authenticated state-120 cohort; viewport withheld';
+        status.title = status.textContent;
+        requestAnimationFrame(loop);
+        return;
+      }
       status.textContent = [
         state.sourceSettingsPresetId
           ? `settings preset: ${state.sourceSettingsPresetId} (${state.sourceSettingsPresetAuthority})`
@@ -1334,6 +1661,8 @@
       setAppearanceAssaySelection,
       setAppearanceAssayEnabled,
       setOpticalUnitMode,
+      setHeroView,
+      resetHeroCamera,
       setSparseProductGeometry,
       setSparseProductResolution,
       captureFrame,

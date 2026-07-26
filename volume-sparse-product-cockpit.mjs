@@ -11,6 +11,26 @@ export const SPARSE_PRODUCT_ATTRIBUTE_MODEL_IDENTITY =
 export const SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY = 'matched-optical-recurrence-v0';
 export const SPARSE_PRODUCT_OPTICAL_ACCUMULATION_IDENTITY = 'depth-binned-emission-optical-depth-v0';
 export const SPARSE_PRODUCT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self-transmittance-v0';
+export const HERO_STATE120_ROUTE_IDENTITY = 'kaminos.volume.authenticated-hero-state120-cockpit.v0';
+export const HERO_STATE120_COHORT_SHA256 =
+  '4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20';
+export const HERO_STATE120_TARGET_SHA256 =
+  'c8dc4dc0ab4b324a872989adf112cb5a87cf9e3083115fa5489615b2397e2dc7';
+export const HERO_STATE120_STATE_ID = 'coefficient-state-120';
+export const HERO_STATE120_CANDIDATE_COUNT = 481447;
+export const HERO_STATE120_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
+export const HERO_STATE120_GEOMETRY_IDENTITY = 'persistent-cohort-historical-round-base-radius-v0';
+export const HERO_STATE120_SOURCE_AUTHORITY = 'authenticated-persistent-sparse-cohort-gpu-source-v0';
+export const HERO_STATE120_CAMERA = Object.freeze({
+  position: Object.freeze([1.1799999999999993, 0.28, 2.049999999999998]),
+  target: Object.freeze([0, 0.02, 0]),
+  projectionMatrix: Object.freeze([
+    2.9306425807515972, 0, 0, 0,
+    0, 2.7474774194546225, 0, 0,
+    0, 0, -1.0002000200020003, -1,
+    0, 0, -0.020002000200020003, 0,
+  ]),
+});
 export const SPARSE_PRODUCT_APPEARANCE_ATTRACTOR = Object.freeze({
   identity: 'fat-bonfire-splat-appearance-attractor-2026-07-16-v0',
   authority: 'operator-accepted-historical-splat-appearance-v0',
@@ -92,6 +112,263 @@ const SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY = Object.freeze({
   volume_presentation: 'beauty',
   volume_raymarch_smoke: 'off',
 });
+
+export function parseHeroState120Route(params) {
+  const route = params instanceof URLSearchParams ? params : new URLSearchParams(params);
+  const requested = String(route.get('volume_hero_pair') || '').toLowerCase();
+  if (!requested) return null;
+  if (requested !== 'state120') throw new Error(`hero-pair-unsupported:${requested}`);
+  if (route.get('full_support_persistent_cohort_state') !== HERO_STATE120_STATE_ID) {
+    throw new Error(`hero-state-substitution:${route.get('full_support_persistent_cohort_state') || 'missing'}`);
+  }
+  if (route.get('full_support_persistent_cohort_manifest_sha256') !== HERO_STATE120_COHORT_SHA256) {
+    throw new Error('hero-cohort-substitution');
+  }
+  if (!route.get('full_support_persistent_cohort_manifest')) {
+    throw new Error('hero-cohort-manifest-missing');
+  }
+  if (route.get('full_support_hero_target_sha256') !== HERO_STATE120_TARGET_SHA256) {
+    throw new Error('hero-target-substitution');
+  }
+  if (!route.get('full_support_hero_target')) {
+    throw new Error('hero-target-missing');
+  }
+  const materialIsExact = route.get('volume_boundary_splat_mode') === 'learned'
+    && Number(route.get('volume_boundary_splat_radius')) === 0.98
+    && Number(route.get('volume_boundary_splat_sharpness')) === 12;
+  if (!materialIsExact) throw new Error('hero-material-substitution');
+  if (
+    route.get('volume_optical_unit_mode')
+      !== 'projected-native-cell-area-integral-normalized-v0'
+    || route.get('volume_boundary_splat_presentation_mode')
+      !== SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY
+  ) {
+    throw new Error('hero-optical-substitution');
+  }
+  if (route.get('composition') !== 'splat-only-v0' || route.get('volume_raymarch_smoke') !== 'off') {
+    throw new Error('hero-composition-substitution');
+  }
+  if (route.get('warmup_steps') !== '0' || Number(route.get('volume_resolution')) !== 160) {
+    throw new Error('hero-live-bootstrap-substitution');
+  }
+  return Object.freeze({
+    schema: 'kaminos.volume.authenticated-hero-state120-request.v0',
+    routeIdentity: HERO_STATE120_ROUTE_IDENTITY,
+    requested: true,
+    fixedState: true,
+    stateId: HERO_STATE120_STATE_ID,
+    cohortManifest: route.get('full_support_persistent_cohort_manifest'),
+    cohortSha256: HERO_STATE120_COHORT_SHA256,
+    raymarchTarget: route.get('full_support_hero_target'),
+    raymarchTargetSha256: HERO_STATE120_TARGET_SHA256,
+    candidateCount: HERO_STATE120_CANDIDATE_COUNT,
+    depositionIdentity: HERO_STATE120_DEPOSITION_IDENTITY,
+    depositsPerCandidate: 1,
+    geometryIdentity: HERO_STATE120_GEOMETRY_IDENTITY,
+    boundarySplatMode: 'learned',
+    footprintAuthority: 'learned-camera-facing-billboard-v0',
+    boundarySplatRadius: 0.98,
+    boundarySplatSharpness: 12,
+    rendererIdentity: SPARSE_PRODUCT_RENDERER_IDENTITY,
+    attributeModelIdentity: SPARSE_PRODUCT_ATTRIBUTE_MODEL_IDENTITY,
+    opticalUnitMode: 'projected-native-cell-area-integral-normalized-v0',
+    presentationMode: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
+    depthBins: 16,
+    sourceAuthority: HERO_STATE120_SOURCE_AUTHORITY,
+    camera: HERO_STATE120_CAMERA,
+  });
+}
+
+export async function verifyHeroState120TargetSource(request, {
+  fetchImpl = globalThis.fetch,
+  digestImpl = bytes => globalThis.crypto?.subtle?.digest('SHA-256', bytes),
+} = {}) {
+  if (!request?.requested || request.routeIdentity !== HERO_STATE120_ROUTE_IDENTITY) {
+    throw new Error('hero-request-missing');
+  }
+  if (typeof fetchImpl !== 'function') throw new Error('hero-target-fetch-unavailable');
+  if (typeof digestImpl !== 'function') throw new Error('hero-target-digest-unavailable');
+  const response = await fetchImpl(request.raymarchTarget, { cache: 'no-store' });
+  if (!response?.ok) {
+    throw new Error(`hero-target-fetch-failed:${response?.status ?? 'unknown'}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0) throw new Error('hero-target-bytes-empty');
+  const digest = await digestImpl(bytes);
+  if (!digest) throw new Error('hero-target-digest-unavailable');
+  const actualServedTargetSha256 = Array.from(new Uint8Array(digest), byte =>
+    byte.toString(16).padStart(2, '0')).join('');
+  if (actualServedTargetSha256 !== HERO_STATE120_TARGET_SHA256) {
+    throw new Error(
+      `hero-target-bytes-substitution:${HERO_STATE120_TARGET_SHA256}:${actualServedTargetSha256}`,
+    );
+  }
+  return {
+    bytes,
+    receipt: Object.freeze({
+      schema: 'kaminos.volume.authenticated-hero-state120-target-source.v0',
+      status: 'verified',
+      requestedTargetUrl: request.raymarchTarget,
+      effectiveTargetUrl: response.url || request.raymarchTarget,
+      requestedTargetSha256: request.raymarchTargetSha256,
+      actualServedTargetSha256,
+      byteLength: bytes.byteLength,
+      cacheMode: 'no-store',
+      presentationSourceAuthority: 'verified-fetched-bytes-object-url-v0',
+      fallbackReason: null,
+    }),
+  };
+}
+
+export function makeHeroState120RuntimeReceipt(request, state = {}, {
+  exactCameraSignature,
+  targetSourceReceipt,
+} = {}) {
+  if (!request?.requested || request.routeIdentity !== HERO_STATE120_ROUTE_IDENTITY) {
+    throw new Error('hero-request-missing');
+  }
+  if (!exactCameraSignature) throw new Error('hero-exact-camera-signature-missing');
+  if (
+    targetSourceReceipt?.status !== 'verified'
+    || targetSourceReceipt?.requestedTargetSha256 !== HERO_STATE120_TARGET_SHA256
+    || targetSourceReceipt?.actualServedTargetSha256 !== HERO_STATE120_TARGET_SHA256
+    || targetSourceReceipt?.presentationSourceAuthority
+      !== 'verified-fetched-bytes-object-url-v0'
+    || targetSourceReceipt?.fallbackReason
+  ) {
+    throw new Error('hero-target-bytes-substitution');
+  }
+  if (state.boundarySplatFallbackReason) {
+    throw new Error(`hero-renderer-fallback:${state.boundarySplatFallbackReason}`);
+  }
+  const cohortReceipt = state.persistentSparseCohortGpuReceipt;
+  const cohortManifestSha256 =
+    cohortReceipt?.manifestSha256 || cohortReceipt?.effectiveManifestSha256 || null;
+  if (
+    cohortReceipt?.status !== 'complete'
+    || cohortReceipt?.stateId !== HERO_STATE120_STATE_ID
+    || cohortManifestSha256 !== HERO_STATE120_COHORT_SHA256
+    || cohortReceipt?.fallbackReason
+    || cohortReceipt?.rendererApplied !== true
+    || state.boundarySplatSourceAuthority !== HERO_STATE120_SOURCE_AUTHORITY
+  ) {
+    throw new Error('hero-source-substitution');
+  }
+  if (
+    state.boundarySplatMode !== request.boundarySplatMode
+    || state.boundarySplatFootprintAuthority !== request.footprintAuthority
+    || state.boundarySplatRendererIdentity !== request.rendererIdentity
+    || state.boundarySplatAttributeModelIdentity !== request.attributeModelIdentity
+    || Number(state.boundarySplatRadius) !== request.boundarySplatRadius
+    || Number(state.boundarySplatSharpness) !== request.boundarySplatSharpness
+  ) {
+    throw new Error('hero-material-substitution');
+  }
+  const depositionReceipt = state.fullSupportDepositionReceipt;
+  const sourceCandidateCount = Number(
+    state.fullSupportSourceCandidateCount ?? depositionReceipt?.sourceCandidateCount,
+  );
+  const rasterDepositCount = Number(
+    state.fullSupportRasterDepositCount ?? depositionReceipt?.rasterDepositCount,
+  );
+  if (
+    state.fullSupportDepositionRequested !== HERO_STATE120_DEPOSITION_IDENTITY
+    || state.fullSupportDepositionEffective !== HERO_STATE120_DEPOSITION_IDENTITY
+    || state.fullSupportDepositionFallbackReason
+    || state.fullSupportGaussianGeometryIdentity !== HERO_STATE120_GEOMETRY_IDENTITY
+    || depositionReceipt?.requested !== HERO_STATE120_DEPOSITION_IDENTITY
+    || depositionReceipt?.effective !== HERO_STATE120_DEPOSITION_IDENTITY
+    || depositionReceipt?.fallbackReason
+    || sourceCandidateCount !== HERO_STATE120_CANDIDATE_COUNT
+    || rasterDepositCount !== HERO_STATE120_CANDIDATE_COUNT
+  ) {
+    throw new Error('hero-deposition-substitution');
+  }
+  const opticalReceipt = state.boundarySplatPresentationReceipt;
+  const effectiveDepthBins = Number(
+    opticalReceipt?.depthBins?.effective ?? opticalReceipt?.depthBins,
+  );
+  if (
+    state.effectiveBoundarySplatOpticalUnitMode !== request.opticalUnitMode
+    || state.boundarySplatOpticalUnitModeFallbackReason
+    || state.boundarySplatPresentationModeEffective !== request.presentationMode
+    || opticalReceipt?.effectiveMode !== request.presentationMode
+    || effectiveDepthBins !== request.depthBins
+    || opticalReceipt?.accumulationIdentity !== SPARSE_PRODUCT_OPTICAL_ACCUMULATION_IDENTITY
+    || opticalReceipt?.transportIdentity !== SPARSE_PRODUCT_OPTICAL_TRANSPORT_IDENTITY
+    || opticalReceipt?.fallbackReason
+  ) {
+    throw new Error('hero-optical-substitution');
+  }
+  const pass = state.selectiveHeadLivePassReceipt;
+  if (
+    state.selectiveHeadLiveCompositionEffective !== 'splat-only-v0'
+    || pass?.composition !== 'splat-only-v0'
+    || pass?.splatEncoded !== true
+    || pass?.splatApplied !== true
+    || pass?.raymarchApplied === true
+    || pass?.fallbackReason
+  ) {
+    throw new Error('hero-composition-substitution');
+  }
+  if (Number(state.lookFreeze) !== 1) {
+    throw new Error('hero-fixed-state-not-held');
+  }
+  if (state.selectiveHeadLiveCapturePaused === true) {
+    throw new Error('hero-presentation-loop-paused');
+  }
+  if (
+    state.active !== true
+    || !String(state.backend || '').startsWith('WebGPU')
+    || state.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
+    || Number(state.simGrid) !== 160
+  ) {
+    throw new Error('hero-runtime-substitution');
+  }
+  const sameCamera = state.cameraSignature === exactCameraSignature;
+  return Object.freeze({
+    schema: 'kaminos.volume.authenticated-hero-state120-receipt.v0',
+    status: sameCamera ? 'exact-fixed-pair' : 'fixed-state-camera-exploration',
+    routeIdentity: HERO_STATE120_ROUTE_IDENTITY,
+    stateId: HERO_STATE120_STATE_ID,
+    fixedState: true,
+    simulationHeldBy: 'look-freeze-pinned-render-phase',
+    presentationLoopActive: true,
+    sameCamera,
+    cameraSignature: state.cameraSignature,
+    exactCameraSignature,
+    source: {
+      authority: state.boundarySplatSourceAuthority,
+      cohortSha256: cohortManifestSha256,
+      raymarchTargetSha256: request.raymarchTargetSha256,
+      actualServedTargetSha256: targetSourceReceipt.actualServedTargetSha256,
+      targetPresentationSourceAuthority: targetSourceReceipt.presentationSourceAuthority,
+      attributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+    },
+    material: {
+      boundarySplatMode: state.boundarySplatMode,
+      footprintAuthority: state.boundarySplatFootprintAuthority,
+      geometryIdentity: state.fullSupportGaussianGeometryIdentity,
+      radius: Number(state.boundarySplatRadius),
+      sharpness: Number(state.boundarySplatSharpness),
+    },
+    population: {
+      candidates: sourceCandidateCount,
+      rasterDeposits: rasterDepositCount,
+      depositsPerCandidate: 1,
+      depositionIdentity: state.fullSupportDepositionEffective,
+    },
+    optics: {
+      unitMode: state.effectiveBoundarySplatOpticalUnitMode,
+      presentationMode: state.boundarySplatPresentationModeEffective,
+      depthBins: effectiveDepthBins,
+      accumulationIdentity: opticalReceipt.accumulationIdentity,
+      transportIdentity: opticalReceipt.transportIdentity,
+    },
+    renderPass: { ...pass },
+    fallbackReason: null,
+  });
+}
 
 function requireSparseProductAppearancePreset(receipt) {
   if (!receipt || receipt.presetId !== SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId) {
