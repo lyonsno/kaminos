@@ -525,6 +525,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .finger-fluid-oracle-cockpit-readout .field-key { margin-right: 6px; }
 .finger-fluid-oracle-cockpit-readout .field-val { overflow-wrap: anywhere; }
 .finger-fluid-oracle-cockpit-warn { margin-top: 6px; color: #ffcb7c; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.sf3d-live-smoke-panel { position: absolute; top: 54px; right: 14px; z-index: 32; width: min(390px, calc(100% - 28px)); box-sizing: border-box; border: 1px solid #3d454b; border-radius: 8px; background: rgba(13, 15, 17, 0.94); color: #ddd; padding: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38); backdrop-filter: blur(8px); }
+.sf3d-live-smoke-panel[hidden] { display: none; }
+.sf3d-live-smoke-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.sf3d-live-smoke-title { font-size: 13px; font-weight: 750; }
+.sf3d-live-smoke-status { color: #8fc7d6; font: 10px 'SF Mono', monospace; text-align: right; overflow-wrap: anywhere; }
+.sf3d-live-smoke-identity { display: grid; grid-template-columns: 72px 1fr; gap: 4px 8px; margin-bottom: 9px; font: 9px 'SF Mono', monospace; }
+.sf3d-live-smoke-identity span:nth-child(odd) { color: #6e7478; text-transform: uppercase; }
+.sf3d-live-smoke-identity span:nth-child(even) { color: #aeb7bd; overflow-wrap: anywhere; }
+.sf3d-live-smoke-progress { height: 5px; overflow: hidden; background: #262a2d; margin-bottom: 6px; }
+.sf3d-live-smoke-progress > div { width: 0; height: 100%; background: #38a6b7; transition: width 0.12s linear; }
+.sf3d-live-smoke-phase { min-height: 14px; color: #aeb7bd; font: 9px 'SF Mono', monospace; margin-bottom: 9px; }
+.sf3d-live-smoke-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 9px; }
+.sf3d-live-smoke-metric { min-width: 0; border-left: 2px solid #343a3e; padding-left: 6px; }
+.sf3d-live-smoke-metric span { display: block; color: #687078; font: 8px 'SF Mono', monospace; text-transform: uppercase; }
+.sf3d-live-smoke-metric strong { display: block; color: #e7e7e7; font: 11px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.sf3d-live-smoke-actions { display: flex; gap: 7px; align-items: center; margin-bottom: 8px; }
+.sf3d-live-smoke-stages { max-height: 116px; overflow: auto; border-top: 1px solid #292d30; font: 9px 'SF Mono', monospace; }
+.sf3d-live-smoke-stages div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #23272a; }
+.sf3d-live-smoke-stages span:first-child { color: #90999f; }
+.sf3d-live-smoke-stages span:last-child { color: #c8d0d5; text-align: right; }
+.sf3d-live-smoke-report { color: #656d72; font: 8px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.sf3d-live-smoke-panel[data-status="failed"] { border-color: #a94e4e; }
+.sf3d-live-smoke-panel[data-status="complete"] { border-color: #41875a; }
 </style>
 </head>
 <body>
@@ -2419,6 +2442,31 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <section class="sf3d-live-smoke-panel" id="sf3d-live-smoke-panel" data-status="loading" hidden>
+    <div class="sf3d-live-smoke-head">
+      <div class="sf3d-live-smoke-title">SF3D Live Contention</div>
+      <div class="sf3d-live-smoke-status" id="sf3d-live-smoke-status">Initializing</div>
+    </div>
+    <div class="sf3d-live-smoke-identity">
+      <span>Route</span><span id="sf3d-live-smoke-route">pending</span>
+      <span>Source</span><span id="sf3d-live-smoke-revision">pending</span>
+    </div>
+    <div class="sf3d-live-smoke-progress"><div id="sf3d-live-smoke-progress-fill"></div></div>
+    <div class="sf3d-live-smoke-phase" id="sf3d-live-smoke-phase">Preparing shared GPU device</div>
+    <div class="sf3d-live-smoke-metrics">
+      <div class="sf3d-live-smoke-metric"><span>Total wall</span><strong id="sf3d-live-smoke-wall">pending</strong></div>
+      <div class="sf3d-live-smoke-metric"><span>Frame p95</span><strong id="sf3d-live-smoke-p95">pending</strong></div>
+      <div class="sf3d-live-smoke-metric"><span>Frame p99</span><strong id="sf3d-live-smoke-p99">pending</strong></div>
+      <div class="sf3d-live-smoke-metric"><span>Frame max</span><strong id="sf3d-live-smoke-max">pending</strong></div>
+      <div class="sf3d-live-smoke-metric"><span>&gt;50 / 100 / 250</span><strong id="sf3d-live-smoke-hitches">0 / 0 / 0</strong></div>
+    </div>
+    <div class="sf3d-live-smoke-actions">
+      <button type="button" class="btn" id="sf3d-live-smoke-fire" disabled>Fire SF3D</button>
+      <button type="button" class="btn" id="sf3d-live-smoke-download" disabled>Download GLB</button>
+    </div>
+    <div class="sf3d-live-smoke-stages" id="sf3d-live-smoke-stages"></div>
+    <div class="sf3d-live-smoke-report" id="sf3d-live-smoke-report"></div>
+  </section>
   <div id="pipeline-main-browser" hidden>
     <div class="pipeline-browser-shell">
       <div class="pipeline-browser-head">
@@ -2819,6 +2867,11 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import {
+  createSf3dLiveSmokeController,
+  isSf3dLiveSmokeRoute,
+  prepareSf3dLiveSmokeDevice,
+} from './sf3d-live-smoke.js';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -2856,6 +2909,8 @@ let motionTemporalState = null;
 let forgeHostState = null;
 let generatedPoseTemporalRegistryPromise = null;
 let worldChambersRegistry = createDefaultWorldChambersRegistry();
+let sf3dLiveSmokePrepared = null;
+let sf3dLiveSmokeController = null;
 let lermsPreviewRouteState = {
   benchId: 'terrain-preview',
   posture: 'inspect',
@@ -8808,13 +8863,17 @@ const envCache = {};
 // --- Three.js Setup ---
 async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
+  sf3dLiveSmokePrepared = await prepareSf3dLiveSmokeDevice();
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer = new THREE.WebGPURenderer({
+    antialias: true,
+    ...(sf3dLiveSmokePrepared?.device ? { device: sf3dLiveSmokePrepared.device } : {}),
+  });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8846,6 +8905,10 @@ async function initScene() {
   controls.minDistance = 0.5;
   controls.maxDistance = 10;
   controls.target.set(0, 0, 0);
+  if (sf3dLiveSmokePrepared) {
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1;
+  }
 
   pmremGenerator = new THREE.PMREMGenerator(renderer);
 
@@ -8995,6 +9058,7 @@ async function initScene() {
     controls.update();
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
+    const sf3dLiveSmokeRouteActive = isSf3dLiveSmokeRoute();
     updateHybridSplatOverlayFrame();
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
@@ -9004,14 +9068,15 @@ async function initScene() {
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || sf3dLiveSmokeRouteActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || sf3dLiveSmokeRouteActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
 
       const frameMs = performance.now() - t0;
+      sf3dLiveSmokeController?.noteRenderedFrame(performance.now(), frameMs);
       fpsFrames++;
       const elapsed = performance.now() - fpsLast;
       if (elapsed >= 500) {
@@ -22111,6 +22176,30 @@ grInit();
 initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 initScene().then(() => {
+  createSf3dLiveSmokeController({
+    prepared: sf3dLiveSmokePrepared,
+    onOutput: file => showGLB(file, {
+      clear: true,
+      metadata: {
+        source: 'sf3d.image-to-mesh.webgpu-local.v0',
+        type: 'glb',
+        fileName: file.name,
+        label: 'SF3D Live Smoke Output',
+      },
+    }),
+  }).then(controller => {
+    sf3dLiveSmokeController = controller;
+    window.kaminosSf3dLiveSmokeController = controller;
+  }).catch(error => {
+    const panel = document.getElementById('sf3d-live-smoke-panel');
+    if (panel) {
+      panel.hidden = false;
+      panel.dataset.status = 'failed';
+    }
+    const status = document.getElementById('sf3d-live-smoke-status');
+    if (status) status.textContent = `Failed: ${error.message || error}`;
+    console.error('SF3D live smoke activation failed:', error);
+  });
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();

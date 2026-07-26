@@ -117,6 +117,8 @@ JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
+SF3D_LIVE_SMOKE_ROUTE_ID = "sf3d.image-to-mesh.webgpu-local.v0"
+SF3D_LIVE_SMOKE_SOURCE_REVISION = "35eb1b003072dd5adbda9e001d5ede4ca3cfe09a"
 
 
 def runtime_config():
@@ -130,6 +132,54 @@ def runtime_config():
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
     }
+
+
+def sf3d_live_smoke_config():
+    """Resolve the launch-owned SF3D server to a clean, exact source checkout."""
+    repo_value = os.environ.get("KAMINOS_SF3D_REPO", "").strip()
+    origin = os.environ.get("KAMINOS_SF3D_ORIGIN", "").strip()
+    requested_revision = os.environ.get(
+        "KAMINOS_SF3D_EXPECTED_REVISION",
+        SF3D_LIVE_SMOKE_SOURCE_REVISION,
+    ).strip()
+    base = {
+        "schema": "kaminos.sf3d-live-smoke-config.v0",
+        "ok": False,
+        "routeId": SF3D_LIVE_SMOKE_ROUTE_ID,
+        "requestedRevision": requested_revision,
+        "effectiveRevision": None,
+        "clean": False,
+        "origin": origin or None,
+    }
+    if not repo_value or not origin:
+        return {**base, "error": "KAMINOS_SF3D_REPO and KAMINOS_SF3D_ORIGIN are required"}
+    repo = Path(repo_value).expanduser().resolve()
+    if not repo.is_dir():
+        return {**base, "error": f"SF3D repo does not exist: {repo}"}
+    try:
+        effective_revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+        ).strip()
+        dirty = subprocess.check_output(
+            ["git", "status", "--short"], cwd=repo, text=True
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        return {**base, "error": f"SF3D source identity failed: {error}"}
+    resolved = {
+        **base,
+        "effectiveRevision": effective_revision,
+        "clean": not bool(dirty),
+        "repo": str(repo),
+        "weightsUrl": f"{origin.rstrip('/')}/weights.bin",
+        "imageUrl": f"{origin.rstrip('/')}/demo_chair.png",
+    }
+    if requested_revision != SF3D_LIVE_SMOKE_SOURCE_REVISION:
+        return {**resolved, "error": "requested SF3D revision is not the accepted smoke revision"}
+    if effective_revision != requested_revision:
+        return {**resolved, "error": "effective SF3D revision does not match requested revision"}
+    if dirty:
+        return {**resolved, "error": "SF3D source checkout is dirty", "dirty": dirty.splitlines()}
+    return {**resolved, "ok": True}
 
 
 def _read_json_file(path):
@@ -937,6 +987,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/sf3d-live-smoke-config":
+            self.handle_sf3d_live_smoke_config()
         elif parsed.path == "/api/pipeline-manifest":
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
@@ -978,11 +1030,39 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
             self.handle_volume_capture()
+        elif parsed.path == "/api/sf3d-live-smoke-report":
+            self.handle_sf3d_live_smoke_report()
         else:
             self.send_json({"error": "Not found"}, 404)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_sf3d_live_smoke_config(self):
+        config = sf3d_live_smoke_config()
+        self.send_json(config, 200 if config.get("ok") else 503)
+
+    def handle_sf3d_live_smoke_report(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            document = json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"error": "Invalid SF3D live smoke report JSON"}, 400)
+            return
+        if not isinstance(document, dict) or document.get("schema") != "kaminos.sf3d-live-contention-report.v0":
+            self.send_json({"error": "SF3D live smoke report schema mismatch"}, 400)
+            return
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        status = "pass" if document.get("ok") is True else "fail"
+        report_dir = KAMINOS_PIPELINE_RUNS_DIR / "sf3d-live-smoke"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report_path = report_dir / f"{stamp}-{status}.json"
+        report_path.write_text(json.dumps(document, indent=2) + "\n")
+        self.send_json({
+            "ok": True,
+            "path": str(report_path),
+            "relativePath": str(report_path.relative_to(KAMINOS_ASSETS_DIR)),
+        })
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
