@@ -1,0 +1,50 @@
+{
+  "schema": "kaminos.visual-admission.v0",
+  "inspector": "codex-agent-visual-inspection",
+  "classification": "happy-safe-friendly-organism",
+  "operator_admission": true,
+  "cells": [
+    {
+      "name": "base-mass",
+      "source_cell": "B0-L1-C1-V0",
+      "seed": 725101,
+      "job_id": "02b4335b89ae",
+      "output_sha256": "209e0b889ac7c7d4bdae892a756a96e0847d1dea352c504a00c298608bfd528e",
+      "classification": "happy-safe",
+      "visible_read": "Sparse eyeless clay creature with a continuous low arched body and four broad attached supports."
+    },
+    {
+      "name": "heavy-mass",
+      "source_cell": "B1-L1-C1-V1",
+      "seed": 725102,
+      "job_id": "4c8f8455d26f",
+      "output_sha256": "438682f6b810b937814af19ca94024bb03d48d62778a4811b25402c9eab7a991",
+      "classification": "happy-safe",
+      "visible_read": "Cute rounded toy-like crawler with a continuous body and four broad attached supports."
+    },
+    {
+      "name": "base-mass-crossed",
+      "source_cell": "B0-L1-C1-V0",
+      "seed": 725102,
+      "job_id": "93817289d5a7",
+      "output_sha256": "99f50a8c24fbf1803d7ab867d3ab1854c2d8664b45a84b15195ba820b91d18b7",
+      "classification": "happy-safe",
+      "visible_read": "Friendly long-bodied toy creature with a low body span and four rounded supports."
+    },
+    {
+      "name": "heavy-mass-crossed",
+      "source_cell": "B1-L1-C1-V1",
+      "seed": 725101,
+      "job_id": "87f1e52f9e4f",
+      "output_sha256": "0cc79376dd3846b3b9100ecb332e403e1637abe4ade13ae722827f0656f1bbaf",
+      "classification": "happy-safe",
+      "visible_read": "Sparse eyeless clay creature with a compact high-mass trunk and four broad attached supports."
+    }
+  ],
+  "matched_seed_conclusion": {
+    "725101": "The heavy source produces a visibly more compact and centrally massive organism than the base source.",
+    "725102": "The heavy source remains stockier while the base source preserves a longer support span."
+  },
+  "observed_hazards": [],
+  "claim_boundary": "This assay establishes friendly organismal completion and visible low-frequency mass authority. It does not establish exact semantic-sidecar-to-generated-support correspondence."
+}

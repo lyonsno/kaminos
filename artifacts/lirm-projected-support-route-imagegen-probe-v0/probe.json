@@ -1,0 +1,61 @@
+{
+  "schema": "kaminos.lirm-projected-support-route-imagegen-probe.v0",
+  "question": "Can the image generator infer a friendly support-bearing creature from a continuous low-frequency body while preserving a controlled mass difference?",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "expected_runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "prompt_file": "prompt.txt",
+  "shared_params": {
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "mlx_cache_limit_gb": "48"
+  },
+  "cells": [
+    {
+      "name": "base-mass",
+      "source_cell": "B0-L1-C1-V0",
+      "input": "../lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png",
+      "input_sha256": "c7b5bb9acd940fc1beafd6f3bf27548c61e8d52af64850e550045da94cca9950",
+      "seed": "725101"
+    },
+    {
+      "name": "heavy-mass",
+      "source_cell": "B1-L1-C1-V1",
+      "input": "../lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C1-V1/clay.png",
+      "input_sha256": "d6af7b14b7fefe6dbad52af981490e5436534205c8aad1e401c8a2d49b21c9f7",
+      "seed": "725102"
+    },
+    {
+      "name": "base-mass-crossed",
+      "source_cell": "B0-L1-C1-V0",
+      "input": "../lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png",
+      "input_sha256": "c7b5bb9acd940fc1beafd6f3bf27548c61e8d52af64850e550045da94cca9950",
+      "seed": "725102"
+    },
+    {
+      "name": "heavy-mass-crossed",
+      "source_cell": "B1-L1-C1-V1",
+      "input": "../lirm-projected-support-legibility-preflight-v0/cells/B1-L1-C1-V1/clay.png",
+      "input_sha256": "d6af7b14b7fefe6dbad52af981490e5436534205c8aad1e401c8a2d49b21c9f7",
+      "seed": "725101"
+    }
+  ],
+  "operator_admission": {
+    "required_classification": "happy-safe",
+    "withhold_classes": [
+      "neutral",
+      "hostile",
+      "uncertain"
+    ]
+  },
+  "success_predicate": [
+    "At least one output is strongly happy and safe.",
+    "The output reads as one coherent organism rather than assembled repeated parts.",
+    "Support anatomy is sparse, broad, and visually attached.",
+    "No repeated cavity, aperture, clustered-organ, or partial-occlusion attractor appears.",
+    "The source body curve remains legible enough to compare the two mass states."
+  ]
+}

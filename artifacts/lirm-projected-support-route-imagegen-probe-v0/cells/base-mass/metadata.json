@@ -1,0 +1,24 @@
+{
+  "name": "clay",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "02b4335b89ae",
+  "input_path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png",
+  "input_name": "clay.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-route-imagegen-probe-v0/prompt.txt",
+    "seed": "725101",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785039715.8533351,
+  "duration_s": 63.6
+}

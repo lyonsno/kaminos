@@ -1,0 +1,29 @@
+{
+  "job_id": "93817289d5a7",
+  "status": "done",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "input_path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png",
+  "output_dir": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-route-imagegen-probe-v0/cells/base-mass-crossed",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-route-imagegen-probe-v0/prompt.txt",
+    "seed": "725102",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "submitted_at": 1785039872.4671948,
+  "started_at": 1785039873.708692,
+  "finished_at": 1785039926.443535,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-legibility-preflight-v0/cells/B0-L1-C1-V0/clay.png --prompt-file /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-route-imagegen-probe-v0/prompt.txt --output /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-projected-support-route-imagegen-probe-v0/cells/base-mass-crossed/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 725102 --mlx-cache-limit-gb 48",
+  "pid": 1133,
+  "warnings": [
+    "volatile_output"
+  ]
+}
