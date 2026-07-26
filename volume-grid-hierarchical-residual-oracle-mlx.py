@@ -245,7 +245,8 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
         evaluation["freeModeCount"] = args.free_modes
         evaluation["coarseModeCount"] = coarse_count
         arms.append(evaluation)
-        FITTER.write_json(output_dir / "report.json", {**report, "status": "running", "arms": arms})
+        report["arms"] = arms
+        FITTER.write_json(output_dir / "report.json", {**report, "status": "running"})
 
     report["failurePhase"] = "summary"
     best = min(arms, key=lambda arm: arm["meanHeldLinearMae"])

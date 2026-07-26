@@ -242,7 +242,8 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 "artifact": artifact,
             }
         )
-        FITTER.write_json(output_dir / "report.json", {**report, "status": "running", "arms": arms})
+        report["arms"] = arms
+        FITTER.write_json(output_dir / "report.json", {**report, "status": "running"})
 
     ORACLE.require_lattice_identity(adjacent_lattice, adjacent_digest)
     ORACLE.require_lattice_identity(source_lattice, source_digest)

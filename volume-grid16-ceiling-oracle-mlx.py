@@ -212,7 +212,9 @@ def raw_to_state(raw: dict[str, np.ndarray], medium: Any) -> dict[str, np.ndarra
     diag_indices = np.arange(3)
     cholesky = np.tril(raw_chol)
     cholesky[:, diag_indices, diag_indices] = np.logaddexp(0.0, raw_chol[:, diag_indices, diag_indices])
-    floor = (0.05 * float(np.mean(medium.source_spacing))) ** 2
+    # Bandlimit floor: the sigma=0.6 target contract contains nothing sharper
+    # than ~0.3 level-cells, so narrower kernels only alias and overflow.
+    floor = (0.3 * float(np.mean(medium.spacing))) ** 2
     covariances = cholesky @ np.transpose(cholesky, (0, 2, 1)) + floor * np.eye(3)[None, :, :]
     return {
         "centers": np.asarray(raw["centers"], dtype=np.float64),
@@ -301,7 +303,7 @@ def fit_modes(
         "rawEmission": mx.array(raw["rawEmission"].astype(np.float32)),
         "rawExtinction": mx.array(raw["rawExtinction"].astype(np.float32)),
     }
-    covariance_floor = (0.05 * fine_step_world) ** 2
+    covariance_floor = (0.3 * float(np.mean(medium.spacing))) ** 2
     tril_mask = mx.array(np.tril(np.ones((3, 3), dtype=np.float32)))
     eye3 = mx.array(np.eye(3, dtype=np.float32))
     anchor_reference = {key: mx.array(np.asarray(value)) for key, value in parameters.items()}
@@ -665,7 +667,8 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 samples_per_cell=args.samples_per_cell,
             )
             arms.append(evaluation)
-            FITTER.write_json(output_dir / "report.json", {**report, "status": "running", "arms": arms})
+            report["arms"] = arms
+            FITTER.write_json(output_dir / "report.json", {**report, "status": "running"})
             report["failurePhase"] = "fitting"
 
     report["failurePhase"] = "capacity-curve"
