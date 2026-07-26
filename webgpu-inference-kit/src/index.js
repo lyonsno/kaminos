@@ -39,6 +39,12 @@ export {
 } from './phase-resource-working-set.js';
 
 export {
+  WEBGPU_SCRATCH_ARENA_SCHEMA,
+  WEBGPU_SCRATCH_ARENA_USE_SCHEMA,
+  createWebGpuScratchArena,
+} from './scratch-arena.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,

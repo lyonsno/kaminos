@@ -560,6 +560,71 @@ packageLoader.close();
 
 The controller acquires required resources first and declared prefetch resources second, preserves existing leases across adjacent phases, and does not release the old phase until the complete target set has loaded. Acquisition failure or cancellation rolls back new leases and leaves the previous phase intact. If any release cannot be confirmed, the controller enters a recoverable `release-failed` or `close-failed` state, clears the phase claim, retains only unresolved leases in its snapshot, and lets `close()` retry that exact remainder. Device-loss invalidation clears non-retryable custody separately as `invalidatedResourceIds` and produces `prepared-after-invalidation` or `closed-after-invalidation` instead of relabeling invalidation as release. Residency diagnostics are caller-supplied and fail visibly without changing lease lifecycle. Plans, reports, transitions, and resource counts are uncapped.
 
+### Reuse GPU Scratch Across Cooperative Duties
+
+Preallocate a model adapter's proven scratch-slot graph once, reuse the same physical buffers across sequential command duties, and bind every reuse to the exact queue prefix that makes overwriting safe:
+
+```js
+import {
+  createWebGpuScratchArena,
+} from "@kaminos/webgpu-inference-kit";
+
+const decoderScratch = createWebGpuScratchArena({
+  arenaId: "sf3d.triplane-decoder.scratch",
+  slots: decoderSlotGraph.map(slot => ({
+    slotId: slot.slotId,
+    declaredBytes: slot.capacityBytes,
+    metadata: { role: slot.role },
+  })),
+  allocateSlot(slot) {
+    const buffer = device.createBuffer({
+      label: `scratch:${slot.slotId}`,
+      size: slot.declaredBytes,
+      usage: GPUBufferUsage.STORAGE |
+        GPUBufferUsage.COPY_SRC |
+        GPUBufferUsage.COPY_DST,
+    });
+    return {
+      resource: buffer,
+      allocatedBytes: buffer.size,
+      dispose(resource) {
+        resource.destroy();
+      },
+    };
+  },
+});
+
+for (const range of decoderRanges) {
+  const use = decoderScratch.beginUse({
+    useId: `decoder-range:${range.itemStart}:${range.itemEnd}`,
+    signal,
+  });
+
+  const encoder = device.createCommandEncoder();
+  encodeDecoderRange(encoder, {
+    range,
+    hidden: use.resource("decoder.hidden"),
+    output: use.resource("decoder.output"),
+  });
+  device.queue.submit([encoder.finish()]);
+
+  await use.markSubmitted({
+    completion: device.queue.onSubmittedWorkDone(),
+    authority: {
+      kind: "queue-prefix",
+      submissionId: range.submissionId,
+      clockId: routeClockId,
+    },
+  });
+}
+
+decoderScratch.close({ reason: "texture-bake-phase-complete" });
+```
+
+The arena allocates each declared slot exactly once. One use owns the graph at a time; a submitted use keeps ownership until its caller-provided completion authority settles. Completion failure invalidates and disposes the graph, while pre-submission cancellation can abandon the use or close its enclosing lease. Snapshots retain exact declared, allocated, and active bytes plus uncapped use history.
+
+Hold the arena as one resource in `createWebGpuPhaseResourceWorkingSet()`: construct it in `acquireResource()`, return it to the model adapter through the lease, and call `arena.close()` inside `lease.release()` before returning the working set's `released` status. This gives scratch the same phase lifetime, cancellation cleanup, and terminal retirement path as model weights without introducing a second residency controller.
+
 ### Stream Allocations As Authenticated Chunks
 
 When one allocation is itself too large to assemble before upload, pair its existing semantic manifest with a chunk plan. Every allocation is covered exactly by independently authenticated, allocation-relative chunks, and each verified chunk is written directly into its declared buffer range:
@@ -632,6 +697,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
 - `defineWebGpuPhaseResourcePlan(input)` and `createWebGpuPhaseResourceWorkingSet(input)`: declare phase-required and prefetched model resources, acquire complete target working sets before releasing departed leases, expose exact held-byte and residency pressure, and preserve recoverable unresolved custody after cancellation or release failure.
+- `createWebGpuScratchArena(input)`: allocate one named scratch-slot graph, reuse it only after caller-provided completion authority settles, compose it under a phase-resource lease, and preserve exact uncapped allocation, use, failure, and retirement accounting.
 - `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, issue independent route leases over the one resulting object, and optionally settle report-bearing cancellation from the creator's exact terminal failure.
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
