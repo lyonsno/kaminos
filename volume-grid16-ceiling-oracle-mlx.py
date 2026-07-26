@@ -238,6 +238,7 @@ def fit_modes(
     initial_state: dict[str, np.ndarray] | None = None,
     anchor_weight: float = 0.0,
     background_state: dict[str, np.ndarray] | None = None,
+    confine_to_medium: bool = True,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -304,6 +305,12 @@ def fit_modes(
     tril_mask = mx.array(np.tril(np.ones((3, 3), dtype=np.float32)))
     eye3 = mx.array(np.eye(3, dtype=np.float32))
     anchor_reference = {key: mx.array(np.asarray(value)) for key, value in parameters.items()}
+    box_lower = medium.origin
+    box_upper = medium.origin + medium.source_spacing * medium.source_grid
+    box_mid = mx.array(((box_lower + box_upper) / 2.0).astype(np.float32))
+    box_half = mx.array(((box_upper - box_lower) / 2.0).astype(np.float32))
+    confinement_scale = float(np.mean(medium.spacing))
+    width_cap = float(3.0 * (8.0 * np.mean(medium.spacing)) ** 2)
 
     # Frozen background mixture (hierarchical residual fitting): densities are
     # additive before transport, so a coarser level's solution enters the
@@ -355,7 +362,8 @@ def fit_modes(
         norm = (2.0 * np.pi) ** -1.5 * mx.rsqrt(mx.maximum(determinant, 1e-20))
         emission = mlx_nn.softplus(params["rawEmission"])
         extinction = mlx_nn.softplus(params["rawExtinction"])
-        return params["centers"], precision, norm, (emission, extinction)
+        trace = a + d + f
+        return params["centers"], precision, norm, (emission, extinction), trace
 
     def render_chunk(points, segment, centers, precision, norm, emission, extinction):
         delta = points[:, :, None, :] - centers[None, None, :, :]
@@ -378,7 +386,7 @@ def fit_modes(
         return mx.sum(weighted[:, :, None] * emission_field, axis=1)
 
     def loss_fn(params, points, segment, target):
-        centers, precision, norm, (emission, extinction) = decode(params)
+        centers, precision, norm, (emission, extinction), trace = decode(params)
         predictions = []
         ray_count = points.shape[0]
         for start in range(0, ray_count, ray_chunk):
@@ -405,6 +413,16 @@ def fit_modes(
                 mx.mean(mx.square(params[key] - anchor_reference[key])) for key in anchor_reference
             )
             data_loss = data_loss + anchor_weight * anchor
+        if confine_to_medium:
+            # Physical bounds: a mode whose center leaves the medium box or
+            # whose footprint exceeds the domain scale is not a representation
+            # candidate — it is an off-domain haze reservoir the optimizer
+            # discovered as a loss-dumping cheat (140/152 modes fled the box in
+            # the first hierarchical run). Confinement is contract, not tuning.
+            escape = mx.maximum(mx.abs(centers - box_mid[None, :]) - box_half[None, :], 0.0)
+            confinement = mx.mean(mx.sum(mx.square(escape / confinement_scale), axis=1))
+            width_excess = mx.maximum(trace - width_cap, 0.0)
+            data_loss = data_loss + 10.0 * confinement + 1.0 * mx.mean(width_excess / width_cap)
         return data_loss
 
     loss_and_grad = mx.value_and_grad(loss_fn)
@@ -457,6 +475,7 @@ def fit_modes(
         "learningRate": learning_rate,
         "anchorWeight": float(anchor_weight),
         "backgroundModeCount": 0 if background_state is None else int(background_state["centers"].shape[0]),
+        "confinedToMedium": bool(confine_to_medium),
         "cameraCount": len(cameras),
         "targetLatticeSha256": digest,
         "initialLoss": float(initial_loss),

@@ -104,6 +104,36 @@ class HierarchicalResidualContracts(unittest.TestCase):
         np.testing.assert_allclose(composed["centers"][:2], coarse["centers"])
         np.testing.assert_allclose(composed["centers"][2:], fine["centers"])
 
+    def test_confinement_keeps_free_modes_inside_the_medium(self) -> None:
+        medium = synthetic_medium()
+        lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
+        coarse = ORACLE.analytical_seed_state(medium, mode_count=2, seed=0)
+        free_seed = ORACLE.random_seed_state(medium, mode_count=4, seed=9)
+        result = ORACLE.fit_modes(
+            medium,
+            lattice,
+            [synthetic_camera()],
+            mode_count=4,
+            iterations=40,
+            fit_width=32,
+            fit_samples_per_cell=4,
+            seed=9,
+            init="warm",
+            learning_rate=0.05,
+            initial_state=free_seed,
+            background_state=coarse,
+            confine_to_medium=True,
+        )
+        self.assertTrue(result["confinedToMedium"])
+        lower = medium.origin - np.mean(medium.spacing)
+        upper = medium.origin + medium.source_spacing * medium.source_grid + np.mean(medium.spacing)
+        centers = result["state"]["centers"]
+        self.assertTrue(np.all(centers >= lower[None, :]), f"centers escaped low: {centers.min(axis=0)}")
+        self.assertTrue(np.all(centers <= upper[None, :]), f"centers escaped high: {centers.max(axis=0)}")
+        trace = np.trace(result["state"]["covariances"], axis1=1, axis2=2)
+        width_cap = 3.0 * (8.0 * float(np.mean(medium.spacing))) ** 2
+        self.assertTrue(np.all(trace <= width_cap * 1.5))
+
     def test_failure_before_primary_output_writes_durable_report(self) -> None:
         with tempfile.TemporaryDirectory() as scratch:
             output_dir = Path(scratch) / "hier-out"
