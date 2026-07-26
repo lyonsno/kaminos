@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import * as cockpit from '../volume-sparse-product-cockpit.mjs';
 
@@ -23,6 +30,17 @@ assert.equal(
   typeof cockpit.verifyHeroState120TargetSource,
   'function',
   'the cockpit must verify the bytes actually served to the Hero target presentation',
+);
+assert.deepEqual(
+  cockpit.HERO_STATE120_HOST_VIEWPORT,
+  {
+    width: 1668,
+    height: 960,
+    canvasWidth: 900,
+    canvasHeight: 960,
+    authority: 'authenticated-hero-state120-fixed-host-viewport-v0',
+  },
+  'the exact Hero pair must preserve the host and canvas geometry that produced its camera projection',
 );
 
 const exactParams = new URLSearchParams({
@@ -165,6 +183,16 @@ const runtimeState = {
   },
   lookFreeze: 1,
   selectiveHeadLiveCapturePaused: false,
+  heroState120HostViewportReceipt: {
+    requestedWidth: 1668,
+    requestedHeight: 960,
+    effectiveWidth: 1668,
+    effectiveHeight: 960,
+    canvasWidth: 900,
+    canvasHeight: 960,
+    authority: 'authenticated-hero-state120-fixed-host-viewport-v0',
+    fallbackReason: null,
+  },
 };
 
 const exactReceipt = cockpit.makeHeroState120RuntimeReceipt(request, runtimeState, {
@@ -176,6 +204,8 @@ assert.equal(exactReceipt.sameCamera, true);
 assert.equal(exactReceipt.fixedState, true);
 assert.equal(exactReceipt.population.rasterDeposits, 481447);
 assert.equal(exactReceipt.population.depositsPerCandidate, 1);
+assert.equal(exactReceipt.viewport.effectiveWidth, 1668);
+assert.equal(exactReceipt.viewport.canvasWidth, 900);
 assert.equal(exactReceipt.fallbackReason, null);
 
 const orbitReceipt = cockpit.makeHeroState120RuntimeReceipt(
@@ -241,6 +271,17 @@ assert.throws(
 assert.throws(
   () => cockpit.makeHeroState120RuntimeReceipt(
     request,
+    { ...runtimeState, heroState120HostViewportReceipt: null },
+    {
+      exactCameraSignature: 'exact-camera',
+      targetSourceReceipt: verifiedTarget.receipt,
+    },
+  ),
+  /hero-host-viewport-substitution/,
+);
+assert.throws(
+  () => cockpit.makeHeroState120RuntimeReceipt(
+    request,
     runtimeState,
     {
       exactCameraSignature: 'exact-camera',
@@ -271,6 +312,26 @@ assert.match(
   outerViewer,
   /sample\.fullSupportSourceCandidateCount/,
   'the Hero runtime must preserve post-render candidate accounting from the sampled pass',
+);
+assert.match(
+  outerViewer,
+  /body\[data-hero-pair="state120"\]\s+#basin/,
+  'the authenticated Hero route must own a fixed host shell independent of the browser viewport',
+);
+assert.match(
+  outerViewer,
+  /hero-host-viewport-too-small/,
+  'a browser viewport that cannot contain the authenticated shell must fail loud',
+);
+const targetReveal = outerViewer.indexOf('heroTargetPanel.hidden = false');
+const runtimeAdmission = outerViewer.indexOf(
+  'heroState120RuntimeReceipt = makeHeroState120RuntimeReceipt',
+  outerViewer.indexOf('async function initializeHeroState120'),
+);
+assert.ok(runtimeAdmission >= 0, 'the Hero runtime admission point is missing');
+assert.ok(
+  targetReveal > runtimeAdmission,
+  'the Raymarch target must remain withheld until the splat and pair runtime admission completes',
 );
 assert.match(witness, /failurePhase/);
 assert.match(witness, /Hero cockpit used a fallback backend/);
@@ -343,6 +404,60 @@ assert.match(
 );
 assert.match(witness, /authenticated Hero route is not serving/);
 assert.match(witness, /lease', 'release'/);
+assert.ok(
+  witness.indexOf("failurePhase = 'greenroom-lease'") < witness.indexOf("failurePhase = 'browser-launch'"),
+  'the witness must acquire GPU custody before launching Chrome',
+);
+assert.match(
+  witness,
+  /'--pid', String\(process\.pid\)/,
+  'the pre-browser lease must remain bound to the live witness process',
+);
+assert.match(
+  witness,
+  /--viewport-width/,
+  'the visual witness must exercise larger operator viewports without changing the authenticated shell',
+);
+assert.match(
+  witness,
+  /--viewport-height/,
+  'the visual witness must exercise larger operator viewports without changing the authenticated shell',
+);
+const invalidViewportOutput = mkdtempSync(join(tmpdir(), 'hero-invalid-viewport-'));
+try {
+  const invalidViewport = spawnSync(
+    process.execPath,
+    [
+      join(root, 'volume-hero-state120-cockpit-witness.mjs'),
+      '--viewport-width', '1600',
+      '--viewport-height', '960',
+      '--output', invalidViewportOutput,
+      '--route-receipt', join(invalidViewportOutput, 'unused-route-receipt.json'),
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(invalidViewport.status, 1);
+  const invalidViewportReportPath = join(invalidViewportOutput, 'report.json');
+  assert.equal(
+    existsSync(invalidViewportReportPath),
+    true,
+    'a rejected witness viewport must still write a durable failure report',
+  );
+  const invalidViewportReport = JSON.parse(readFileSync(invalidViewportReportPath, 'utf8'));
+  assert.equal(invalidViewportReport.status, 'failed');
+  assert.equal(invalidViewportReport.failurePhase, 'viewport-admission');
+  assert.deepEqual(invalidViewportReport.requestedBrowserViewport, {
+    width: 1600,
+    height: 960,
+  });
+  assert.deepEqual(invalidViewportReport.requiredHostViewport, {
+    width: 1668,
+    height: 960,
+  });
+  assert.match(invalidViewportReport.reason, /authenticated shell:1600/);
+} finally {
+  rmSync(invalidViewportOutput, { recursive: true, force: true });
+}
 assert.match(
   session,
   /operatorRoute/,

@@ -11,6 +11,14 @@
     [hidden] { display: none !important; }
     body { margin: 0; overflow: hidden; background: #050607; }
     iframe { width: 100vw; height: 100vh; border: 0; display: block; }
+    body[data-hero-pair="state120"] #basin {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: var(--hero-host-width);
+      height: var(--hero-host-height);
+      transform: translate(-50%, -50%);
+    }
     #hero-target-panel { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 1; display: grid; place-items: center; overflow: hidden; pointer-events: none; background: #000; }
     #hero-target-panel img { width: 100%; height: 100%; object-fit: contain; }
     #hero-target-label { display: none; }
@@ -126,6 +134,7 @@
     import {
       HERO_STATE120_CAMERA,
       HERO_STATE120_DEPOSITION_IDENTITY,
+      HERO_STATE120_HOST_VIEWPORT,
       makeHeroState120RuntimeReceipt,
       makeSparseProductRuntimeReceipt,
       parseHeroState120Route,
@@ -265,6 +274,7 @@
     let heroState120RenderEvidence = null;
     let heroState120TargetSourceReceipt = null;
     let heroState120TargetObjectUrl = null;
+    let heroState120HostViewportReceipt = null;
     let requestedHeroView = 'split';
     let basin = document.getElementById('basin');
     if (sparseProductRequested || heroState120Requested) basin.style.visibility = 'hidden';
@@ -437,6 +447,15 @@
       document.getElementById('roles-control').hidden = true;
     }
     if (heroState120Requested) {
+      document.body.dataset.heroPair = 'state120';
+      document.body.style.setProperty(
+        '--hero-host-width',
+        `${HERO_STATE120_HOST_VIEWPORT.width}px`,
+      );
+      document.body.style.setProperty(
+        '--hero-host-height',
+        `${HERO_STATE120_HOST_VIEWPORT.height}px`,
+      );
       document.getElementById('presentations').hidden = true;
       document.getElementById('smoke-presentations').hidden = true;
       document.getElementById('appearance-assay-control').hidden = true;
@@ -552,6 +571,58 @@
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
+    }
+
+    function admitHeroState120HostViewport() {
+      if (!heroState120Requested) return null;
+      if (
+        window.innerWidth < HERO_STATE120_HOST_VIEWPORT.width
+        || window.innerHeight < HERO_STATE120_HOST_VIEWPORT.height
+      ) {
+        throw new Error(
+          `hero-host-viewport-too-small:${window.innerWidth}x${window.innerHeight}:required=`
+            + `${HERO_STATE120_HOST_VIEWPORT.width}x${HERO_STATE120_HOST_VIEWPORT.height}`,
+        );
+      }
+      const basinRect = basin.getBoundingClientRect();
+      const canvasRect = prototype()?.canvasElement?.()?.getBoundingClientRect();
+      const effectiveWidth = basin.contentWindow?.innerWidth;
+      const effectiveHeight = basin.contentWindow?.innerHeight;
+      const exact = (actual, expected) => Math.abs(Number(actual) - expected) <= 0.01;
+      if (
+        !canvasRect
+        || !exact(basinRect.width, HERO_STATE120_HOST_VIEWPORT.width)
+        || !exact(basinRect.height, HERO_STATE120_HOST_VIEWPORT.height)
+        || !exact(effectiveWidth, HERO_STATE120_HOST_VIEWPORT.width)
+        || !exact(effectiveHeight, HERO_STATE120_HOST_VIEWPORT.height)
+        || !exact(canvasRect.width, HERO_STATE120_HOST_VIEWPORT.canvasWidth)
+        || !exact(canvasRect.height, HERO_STATE120_HOST_VIEWPORT.canvasHeight)
+      ) {
+        throw new Error(`hero-host-viewport-substitution:${JSON.stringify({
+          host: {
+            outerWidth: window.innerWidth,
+            outerHeight: window.innerHeight,
+            frameWidth: basinRect.width,
+            frameHeight: basinRect.height,
+            effectiveWidth,
+            effectiveHeight,
+          },
+          canvas: canvasRect && {
+            width: canvasRect.width,
+            height: canvasRect.height,
+          },
+        })}`);
+      }
+      return Object.freeze({
+        requestedWidth: HERO_STATE120_HOST_VIEWPORT.width,
+        requestedHeight: HERO_STATE120_HOST_VIEWPORT.height,
+        effectiveWidth,
+        effectiveHeight,
+        canvasWidth: canvasRect.width,
+        canvasHeight: canvasRect.height,
+        authority: HERO_STATE120_HOST_VIEWPORT.authority,
+        fallbackReason: null,
+      });
     }
 
     function syncHeroTargetPanelBounds() {
@@ -1151,7 +1222,11 @@
         try {
           heroState120RuntimeReceipt = makeHeroState120RuntimeReceipt(
             heroState120Request,
-            { ...state, ...heroState120RenderEvidence },
+            {
+              ...state,
+              ...heroState120RenderEvidence,
+              heroState120HostViewportReceipt,
+            },
             {
               exactCameraSignature: heroState120ExactCameraSignature,
               targetSourceReceipt: heroState120TargetSourceReceipt,
@@ -1339,6 +1414,7 @@
       if (!host?.__kaminosBootstrapPersistentSparseCohort || !volumePrototype) {
         throw new Error('hero-cohort-bootstrap-api-missing');
       }
+      heroState120HostViewportReceipt = admitHeroState120HostViewport();
       const verifiedTarget = await verifyHeroState120TargetSource(heroState120Request);
       heroState120TargetSourceReceipt = verifiedTarget.receipt;
       if (heroState120TargetObjectUrl) URL.revokeObjectURL(heroState120TargetObjectUrl);
@@ -1352,7 +1428,6 @@
           `hero-target-dimensions-substitution:${heroTargetImage.naturalWidth}x${heroTargetImage.naturalHeight}`,
         );
       }
-      heroTargetPanel.hidden = false;
       const cohortReceipt = await host.__kaminosBootstrapPersistentSparseCohort();
       const uploadedCohort = volumePrototype.debugState()?.persistentSparseCohortGpuReceipt;
       if (
@@ -1423,7 +1498,11 @@
       };
       heroState120RuntimeReceipt = makeHeroState120RuntimeReceipt(
         heroState120Request,
-        { ...state, ...heroState120RenderEvidence },
+        {
+          ...state,
+          ...heroState120RenderEvidence,
+          heroState120HostViewportReceipt,
+        },
         {
           exactCameraSignature: heroState120ExactCameraSignature,
           targetSourceReceipt: heroState120TargetSourceReceipt,
@@ -1435,6 +1514,7 @@
         cohort: cohortReceipt,
         deposition: depositionReceipt,
         presentationResume: presentationResumeReceipt,
+        viewport: heroState120HostViewportReceipt,
         cameraSignature: heroState120ExactCameraSignature,
         targetSource: heroState120TargetSourceReceipt,
         runtime: heroState120RuntimeReceipt,
@@ -1442,8 +1522,9 @@
       projectHeroState120HostReceipt(host, heroState120RuntimeReceipt);
       liveOpticalAuthority.textContent =
         'Exact state/camera | 481,447 round splats | radius 0.98 | sharpness 12 | projected optics | 16-bin recurrence';
-      basin.style.visibility = 'visible';
       syncHeroTargetPanelBounds();
+      basin.style.visibility = 'visible';
+      heroTargetPanel.hidden = false;
       return heroState120BootstrapReceipt;
     }
 
@@ -1670,7 +1751,13 @@
       stepCaptureFrame,
     };
     loop();
-    initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
+    initializeWarmup().catch(error => {
+      warmupError = error?.message || String(error);
+      if (heroState120Requested) {
+        basin.style.visibility = 'hidden';
+        heroTargetPanel.hidden = true;
+      }
+    });
   </script>
 </body>
 </html>

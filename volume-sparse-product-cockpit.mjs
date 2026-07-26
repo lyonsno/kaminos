@@ -21,6 +21,13 @@ export const HERO_STATE120_CANDIDATE_COUNT = 481447;
 export const HERO_STATE120_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
 export const HERO_STATE120_GEOMETRY_IDENTITY = 'persistent-cohort-historical-round-base-radius-v0';
 export const HERO_STATE120_SOURCE_AUTHORITY = 'authenticated-persistent-sparse-cohort-gpu-source-v0';
+export const HERO_STATE120_HOST_VIEWPORT = Object.freeze({
+  width: 1668,
+  height: 960,
+  canvasWidth: 900,
+  canvasHeight: 960,
+  authority: 'authenticated-hero-state120-fixed-host-viewport-v0',
+});
 export const HERO_STATE120_CAMERA = Object.freeze({
   position: Object.freeze([1.1799999999999993, 0.28, 2.049999999999998]),
   target: Object.freeze([0, 0.02, 0]),
@@ -176,6 +183,7 @@ export function parseHeroState120Route(params) {
     depthBins: 16,
     sourceAuthority: HERO_STATE120_SOURCE_AUTHORITY,
     camera: HERO_STATE120_CAMERA,
+    hostViewport: HERO_STATE120_HOST_VIEWPORT,
   });
 }
 
@@ -228,6 +236,19 @@ export function makeHeroState120RuntimeReceipt(request, state = {}, {
     throw new Error('hero-request-missing');
   }
   if (!exactCameraSignature) throw new Error('hero-exact-camera-signature-missing');
+  const viewport = state.heroState120HostViewportReceipt;
+  if (
+    viewport?.requestedWidth !== HERO_STATE120_HOST_VIEWPORT.width
+    || viewport?.requestedHeight !== HERO_STATE120_HOST_VIEWPORT.height
+    || viewport?.effectiveWidth !== HERO_STATE120_HOST_VIEWPORT.width
+    || viewport?.effectiveHeight !== HERO_STATE120_HOST_VIEWPORT.height
+    || viewport?.canvasWidth !== HERO_STATE120_HOST_VIEWPORT.canvasWidth
+    || viewport?.canvasHeight !== HERO_STATE120_HOST_VIEWPORT.canvasHeight
+    || viewport?.authority !== HERO_STATE120_HOST_VIEWPORT.authority
+    || viewport?.fallbackReason
+  ) {
+    throw new Error('hero-host-viewport-substitution');
+  }
   if (
     targetSourceReceipt?.status !== 'verified'
     || targetSourceReceipt?.requestedTargetSha256 !== HERO_STATE120_TARGET_SHA256
@@ -337,6 +358,7 @@ export function makeHeroState120RuntimeReceipt(request, state = {}, {
     sameCamera,
     cameraSignature: state.cameraSignature,
     exactCameraSignature,
+    viewport: { ...viewport },
     source: {
       authority: state.boundarySplatSourceAuthority,
       cohortSha256: cohortManifestSha256,

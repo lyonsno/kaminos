@@ -76,6 +76,8 @@ const outputDirectory = resolve(String(
 ));
 const timeoutMs = Number(args.get('--timeout-ms') || 300_000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42_000, 62_000));
+const viewportWidth = Number(args.get('--viewport-width') || 1668);
+const viewportHeight = Number(args.get('--viewport-height') || 960);
 const profilePath = `/tmp/kaminos-hero-state120-cockpit-${process.pid}-${Date.now()}`;
 const screenshotPath = join(outputDirectory, 'comparator.png');
 const splatScreenshotPath = join(outputDirectory, 'splat-only.png');
@@ -90,13 +92,34 @@ const upstreamRenderReportTargetPixelSha256 =
 
 mkdirSync(outputDirectory, { recursive: true });
 
-let failurePhase = 'route-admission';
+const requestedBrowserViewport = {
+  width: viewportWidth,
+  height: viewportHeight,
+};
+const requiredHostViewport = {
+  width: 1668,
+  height: 960,
+};
+let failurePhase = 'viewport-admission';
 let browser = null;
 let socket = null;
 let lease = null;
-let lastTrustworthyEvidence = { routeReceiptPath };
+let lastTrustworthyEvidence = {
+  routeReceiptPath,
+  requestedBrowserViewport,
+  requiredHostViewport,
+};
 
 try {
+  assert.ok(
+    Number.isInteger(viewportWidth) && viewportWidth >= requiredHostViewport.width,
+    `Hero witness viewport width must contain the authenticated shell:${viewportWidth}`,
+  );
+  assert.ok(
+    Number.isInteger(viewportHeight) && viewportHeight >= requiredHostViewport.height,
+    `Hero witness viewport height must contain the authenticated shell:${viewportHeight}`,
+  );
+  failurePhase = 'route-admission';
   assert.equal(existsSync(routeReceiptPath), true, 'authenticated Hero route receipt is missing');
   const routeReceipt = JSON.parse(readFileSync(routeReceiptPath, 'utf8'));
   assert.equal(routeReceipt.status, 'serving', 'authenticated Hero route is not serving');
@@ -141,6 +164,22 @@ try {
   };
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, routeReceipt, targetSourceReceipt };
 
+  failurePhase = 'greenroom-lease';
+  lease = JSON.parse(execFileSync(greenroom, [
+    'lease', 'claim',
+    '--owner', 'pyro-integration',
+    '--agent-id', 'pyro-integration',
+    '--repo-root', repoRoot,
+    '--pid', String(process.pid),
+    '--process-group', String(process.pid),
+    '--effective-route', 'headless-owned-cdp authenticated-state120-hero-cockpit',
+    '--backend', 'webgpu',
+    '--device', 'apple-gpu',
+    '--profile', 'interactive-render',
+    '--supports-checkpoints',
+    '--ttl-seconds', '600',
+  ], { encoding: 'utf8' }));
+
   failurePhase = 'browser-launch';
   browser = spawn(chromeExecutable(), [
     '--headless=new',
@@ -150,27 +189,11 @@ try {
     '--disable-backgrounding-occluded-windows',
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${profilePath}`,
-    '--window-size=1668,960',
+    `--window-size=${viewportWidth},${viewportHeight}`,
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank',
   ], { stdio: 'ignore' });
-
-  failurePhase = 'greenroom-lease';
-  lease = JSON.parse(execFileSync(greenroom, [
-    'lease', 'claim',
-    '--owner', 'pyro-integration',
-    '--agent-id', 'pyro-integration',
-    '--repo-root', repoRoot,
-    '--pid', String(browser.pid),
-    '--process-group', String(browser.pid),
-    '--effective-route', 'headless-owned-cdp authenticated-state120-hero-cockpit',
-    '--backend', 'webgpu',
-    '--device', 'apple-gpu',
-    '--profile', 'interactive-render',
-    '--supports-checkpoints',
-    '--ttl-seconds', '600',
-  ], { encoding: 'utf8' }));
 
   const target = await waitForTarget(debugPort, timeoutMs, browser);
   socket = new CdpSocket(target.webSocketDebuggerUrl, timeoutMs);
@@ -179,8 +202,8 @@ try {
   await socket.call('Runtime.enable');
   await socket.call('Log.enable');
   await socket.call('Emulation.setDeviceMetricsOverride', {
-    width: 1668,
-    height: 960,
+    width: viewportWidth,
+    height: viewportHeight,
     deviceScaleFactor: 1,
     mobile: false,
   });
@@ -205,6 +228,10 @@ try {
       targetNaturalHeight: document.querySelector('#hero-target-image')?.naturalHeight || 0,
       bodyView: document.body.dataset.heroView || null,
       statusText: document.querySelector('#status')?.textContent || null,
+      outerViewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      },
     };
   })()`);
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, runtime };
@@ -216,6 +243,14 @@ try {
   assert.equal(runtime.receipt.material.radius, 0.98);
   assert.equal(runtime.receipt.material.sharpness, 12);
   assert.equal(runtime.receipt.optics.depthBins, 16);
+  assert.equal(runtime.receipt.viewport.effectiveWidth, 1668);
+  assert.equal(runtime.receipt.viewport.effectiveHeight, 960);
+  assert.equal(runtime.receipt.viewport.canvasWidth, 900);
+  assert.equal(runtime.receipt.viewport.canvasHeight, 960);
+  assert.deepEqual(runtime.outerViewport, {
+    width: viewportWidth,
+    height: viewportHeight,
+  });
   assert.equal(
     runtime.receipt.source.actualServedTargetSha256,
     actualServedTargetSha256,
@@ -295,6 +330,7 @@ try {
     routeReceiptPath,
     requestedRoute: routeReceipt.requestedRoute,
     effectiveRoute: routeReceipt.effectiveRoute,
+    requestedBrowserViewport,
     runtime,
     targetSourceReceipt,
     canvasClip,
@@ -314,6 +350,8 @@ try {
     reason: error?.message || String(error),
     startedAt,
     finishedAt: new Date().toISOString(),
+    requestedBrowserViewport,
+    requiredHostViewport,
     lastTrustworthyEvidence,
     browserExitCode: browser?.exitCode ?? null,
     browserEvents: socket?.browserEvents || [],
