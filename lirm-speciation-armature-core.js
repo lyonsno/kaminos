@@ -768,7 +768,73 @@ function proxyPoint(region, z = 0) {
   };
 }
 
-function createProxyPrimitives(candidate) {
+const SUPPORT_CONTROL_DEFAULTS = Object.freeze({
+  limbEmission: 'centerline',
+  contactGeometry: 'body-sdf',
+  projection: 'legacy-yaw-0.42',
+});
+
+const SUPPORT_CONTROL_LEVELS = Object.freeze({
+  limbEmission: new Set(['centerline', 'bilateral-sidecar']),
+  contactGeometry: new Set(['body-sdf', 'semantic-only']),
+  projection: new Set(['legacy-yaw-0.42', 'pairing-legible-yaw-pi-over-4']),
+});
+
+function normalizeSupportControlFactors(requested = {}) {
+  const normalized = {
+    ...SUPPORT_CONTROL_DEFAULTS,
+    ...requested,
+  };
+  for (const [factor, levels] of Object.entries(SUPPORT_CONTROL_LEVELS)) {
+    if (!levels.has(normalized[factor])) {
+      throw new Error(`unsupported support control ${factor}: ${normalized[factor]}`);
+    }
+  }
+  return {
+    requested: normalized,
+    effective: {
+      ...normalized,
+      cameraYawRadians: normalized.projection === 'pairing-legible-yaw-pi-over-4'
+        ? Math.PI / 4
+        : 0.42,
+    },
+    sourceEquality: {
+      bodyMass: 'unchanged',
+      headAndMouth: 'unchanged',
+      prompt: 'unchanged',
+      route: 'unchanged',
+      cropAndScale: 'unchanged',
+    },
+  };
+}
+
+function createSupportSemanticInventory(candidate) {
+  return candidate.semanticHandles
+    .filter(handle => handle.kind === 'limb_bud')
+    .flatMap(handle => {
+      const members = handle.region.side === 'paired'
+        ? ['left', 'right']
+        : [handle.region.side || 'centerline'];
+      return members.map(pairMember => ({
+        id: `${handle.id}:${pairMember}`,
+        pairId: handle.id,
+        pairMember,
+        sourceHandleId: handle.id,
+        bodyStation: handle.region.t,
+        intendedAttachmentRole: 'body_mass',
+        intendedAttachmentRegion: {
+          x: handle.region.x,
+          y: handle.region.y,
+          t: handle.region.t,
+        },
+        strength: handle.strength,
+        futureUse: handle.futureUse,
+        entersBodySdf: false,
+      }));
+    });
+}
+
+function createProxyPrimitives(candidate, controlFactors) {
   const primitives = [];
   const width = 0.09 + candidate.bodyPlan.contactWidth * 0.08;
   for (const sample of candidate.bodyPlan.axisSamples) {
@@ -799,17 +865,23 @@ function createProxyPrimitives(candidate) {
     materialHint: 'mouth_dark_wet_terminal',
   });
 
-  for (const handle of candidate.semanticHandles.filter(item => item.kind === 'limb_bud')) {
-    primitives.push({
-      kind: 'capsule',
-      role: 'limb_bud',
-      center: proxyPoint(handle.region, -0.015),
-      radius: round(0.018 + handle.strength * 0.018),
-      length: round(handle.region.length * 1.7),
-      side: handle.region.side,
-      t: handle.region.t,
-      materialHint: 'brace_drag_nub',
-    });
+  if (controlFactors.effective.limbEmission === 'centerline') {
+    for (const handle of candidate.semanticHandles.filter(item => item.kind === 'limb_bud')) {
+      primitives.push({
+        kind: 'capsule',
+        role: 'limb_bud',
+        id: `${handle.id}:centerline`,
+        center: proxyPoint(handle.region, -0.015),
+        radius: round(0.018 + handle.strength * 0.018),
+        length: round(handle.region.length * 1.7),
+        t: handle.region.t,
+        sourceHandleId: handle.id,
+        pairId: handle.id,
+        side: handle.region.side,
+        pairMember: 'centerline',
+        materialHint: 'brace_drag_nub',
+      });
+    }
   }
 
   for (const handle of candidate.semanticHandles.filter(item => item.kind === 'shell_plate')) {
@@ -827,27 +899,37 @@ function createProxyPrimitives(candidate) {
     });
   }
 
-  for (const point of candidate.contactPoints) {
-    primitives.push({
-      kind: 'sphere',
-      role: 'contact_point',
-      contactRole: point.role,
-      center: proxyPoint(point, -0.08),
-      radius: round(point.radius * 1.4),
-      materialHint: 'ground_contact_marker',
-    });
+  if (controlFactors.effective.contactGeometry === 'body-sdf') {
+    for (const point of candidate.contactPoints) {
+      primitives.push({
+        id: point.id,
+        kind: 'sphere',
+        role: 'contact_point',
+        contactRole: point.role,
+        center: proxyPoint(point, -0.08),
+        radius: round(point.radius * 1.4),
+        materialHint: 'ground_contact_marker',
+      });
+    }
   }
 
   return primitives;
 }
 
-export function createLirmSpeciationArmatureControlPacket({ witness, candidate, candidateId } = {}) {
+export function createLirmSpeciationArmatureControlPacket({
+  witness,
+  candidate,
+  candidateId,
+  controlFactors: requestedControlFactors,
+} = {}) {
   const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
   if (!witness || !selectedCandidate) {
     throw new Error('createLirmSpeciationArmatureControlPacket requires a witness and candidate or candidateId');
   }
   const candidateDir = `control-packets/${selectedCandidate.id}`;
-  const proxyPrimitives = createProxyPrimitives(selectedCandidate);
+  const controlFactors = normalizeSupportControlFactors(requestedControlFactors);
+  const proxyPrimitives = createProxyPrimitives(selectedCandidate, controlFactors);
+  const supportSemanticInventory = createSupportSemanticInventory(selectedCandidate);
   return {
     schema: LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA,
     route: LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE,
@@ -862,6 +944,8 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
     motionAffordance: selectedCandidate.motionAffordance,
     semanticHandles: selectedCandidate.semanticHandles,
     contactPoints: selectedCandidate.contactPoints,
+    supportSemanticInventory,
+    controlFactors,
     proxyPrimitives,
     conditioningMaps: [
       { kind: 'semantic-svg', path: `${candidateDir}/semantic-control.svg`, effectiveSource: 'local-procedural-svg' },
@@ -1129,13 +1213,23 @@ function smoothMin(a, b, k) {
 }
 
 function primitiveAxis(primitive) {
+  if (primitive.pairMember === 'left' || primitive.pairMember === 'right') {
+    const lateral = primitive.pairMember === 'right' ? 0.28 : -0.28;
+    const forward = primitive.t ? (primitive.t - 0.5) * 0.28 : 0;
+    return norm3(vec3(forward, -1, lateral));
+  }
   const side = primitive.side === 'right' ? 1 : primitive.side === 'left' ? -1 : 0;
   const forward = primitive.t ? (primitive.t - 0.5) * 0.28 : 0;
   return norm3(vec3(forward, side || 0.3, 0.18));
 }
 
-function createImplicitPrimitives(candidate) {
-  const packet = createLirmSpeciationArmatureControlPacket({ witness: { candidates: [candidate], witnessId: 'inline' }, candidate });
+function createImplicitPrimitives(candidate, controlFactors) {
+  const normalizedControlFactors = controlFactors || normalizeSupportControlFactors();
+  const packet = createLirmSpeciationArmatureControlPacket({
+    witness: { candidates: [candidate], witnessId: 'inline' },
+    candidate,
+    controlFactors: normalizedControlFactors.requested,
+  });
   return packet.proxyPrimitives.map((primitive, index) => {
     const center = vec3(primitive.center.x, primitive.center.y, primitive.center.z);
     if (primitive.kind === 'capsule') {
@@ -1374,10 +1468,17 @@ function implicitNormal(point, primitives, gestaltEnvelope = null) {
   return norm3(vec3(dx, dy, dz));
 }
 
-function raymarchImplicitPixel({ pixelX, pixelY, width, height, primitives, gestaltEnvelope = null }) {
+function raymarchImplicitPixel({
+  pixelX,
+  pixelY,
+  width,
+  height,
+  primitives,
+  gestaltEnvelope = null,
+  cameraYaw = 0.42,
+}) {
   const screenX = ((pixelX + 0.5) / width - 0.5) * 2.65;
   const screenY = (0.5 - (pixelY + 0.5) / height) * 2.05;
-  const cameraYaw = 0.42;
   const origin = rotateY(vec3(screenX, screenY, 1.46), cameraYaw);
   const direction = norm3(rotateY(vec3(0, 0, -1), cameraYaw));
   let travel = 0;
@@ -1476,7 +1577,14 @@ function implicitMapFill(hit, kind) {
   return implicitClayFill(hit);
 }
 
-function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, pixelWidth = 192, pixelHeight = 144 }) {
+function renderImplicitMapsSvg({
+  candidate,
+  primitives,
+  gestaltEnvelope = null,
+  pixelWidth = 192,
+  pixelHeight = 144,
+  cameraYaw = 0.42,
+}) {
   const displayWidth = 320;
   const displayHeight = 240;
   const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
@@ -1484,10 +1592,24 @@ function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, 
   const envelopeAttribute = gestaltEnvelope ? ` data-gestalt-envelope-id="${xml(gestaltEnvelope.id)}"` : '';
   const mapKinds = ['clay', 'depth', 'normal', 'mask', 'semantic'];
   const rectsByKind = Object.fromEntries(mapKinds.map(kind => [kind, []]));
+  const primitivePixels = new Map(primitives.map(primitive => [primitive.index, []]));
   for (let y = 0; y < pixelHeight; y += 1) {
     for (let x = 0; x < pixelWidth; x += 1) {
-      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives, gestaltEnvelope });
+      const hit = raymarchImplicitPixel({
+        pixelX: x,
+        pixelY: y,
+        width: pixelWidth,
+        height: pixelHeight,
+        primitives,
+        gestaltEnvelope,
+        cameraYaw,
+      });
       if (!hit.hit) continue;
+      primitivePixels.get(hit.primitive.index)?.push({
+        x,
+        y,
+        depth01: hit.depth01,
+      });
       for (const kind of mapKinds) {
         rectsByKind[kind].push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${implicitMapFill(hit, kind)}"/>`);
       }
@@ -1507,7 +1629,7 @@ function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, 
     mask: ' data-mask-mode="surface-hit-silhouette"',
     semantic: '',
   };
-  return mapKinds.map(kind => {
+  const renderMaps = mapKinds.map(kind => {
     const title = `${candidate.id} ${kind} implicit 3D control`;
     return {
       kind,
@@ -1521,9 +1643,58 @@ function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null, 
 </svg>`,
     };
   });
+  const primitiveVisibility = primitives.map(primitive => {
+    const pixels = primitivePixels.get(primitive.index) || [];
+    const sum = pixels.reduce((acc, pixel) => ({
+      x: acc.x + pixel.x,
+      y: acc.y + pixel.y,
+      depth: acc.depth + pixel.depth01,
+    }), { x: 0, y: 0, depth: 0 });
+    return {
+      id: primitive.id || `${primitive.role}-${primitive.index}`,
+      index: primitive.index,
+      role: primitive.role,
+      pairId: primitive.pairId || null,
+      pairMember: primitive.pairMember || null,
+      visiblePixelCount: pixels.length,
+      projectedCentroid: pixels.length > 0
+        ? {
+          x: round(sum.x / pixels.length),
+          y: round(sum.y / pixels.length),
+          depth01: round(sum.depth / pixels.length),
+        }
+        : null,
+    };
+  });
+  return {
+    renderMaps,
+    projectionEvidence: {
+      schema: 'kaminos.projected-support-identity-evidence.v0',
+      pixelGrid: { width: pixelWidth, height: pixelHeight },
+      cameraYawRadians: cameraYaw,
+      organismalMaskPixelCount: primitiveVisibility.reduce(
+        (sum, primitive) => sum + primitive.visiblePixelCount,
+        0,
+      ),
+      projectedContactMarkerOccupancy: primitiveVisibility
+        .filter(primitive => primitive.role === 'contact_point')
+        .reduce((sum, primitive) => sum + primitive.visiblePixelCount, 0),
+      projectedSupportGeometryOccupancy: primitiveVisibility
+        .filter(primitive => primitive.role === 'limb_bud')
+        .reduce((sum, primitive) => sum + primitive.visiblePixelCount, 0),
+      primitiveVisibility,
+    },
+  };
 }
 
-function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope = null, pixelWidth = 256, pixelHeight = 192 }) {
+function renderImplicitTrellisSourceSvg({
+  candidate,
+  primitives,
+  gestaltEnvelope = null,
+  pixelWidth = 256,
+  pixelHeight = 192,
+  cameraYaw = 0.42,
+}) {
   const displaySize = 512;
   const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
   const envelopeAttribute = gestaltEnvelope ? ` data-gestalt-envelope-id="${xml(gestaltEnvelope.id)}"` : '';
@@ -1534,7 +1705,15 @@ function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope
   let maxY = -1;
   for (let y = 0; y < pixelHeight; y += 1) {
     for (let x = 0; x < pixelWidth; x += 1) {
-      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives, gestaltEnvelope });
+      const hit = raymarchImplicitPixel({
+        pixelX: x,
+        pixelY: y,
+        width: pixelWidth,
+        height: pixelHeight,
+        primitives,
+        gestaltEnvelope,
+        cameraYaw,
+      });
       if (!hit.hit) continue;
       minX = Math.min(minX, x);
       minY = Math.min(minY, y);
@@ -1573,14 +1752,42 @@ function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope
   };
 }
 
-export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidate, candidateId } = {}) {
+export function createLirmSpeciationArmatureImplicitBodyBundle({
+  witness,
+  candidate,
+  candidateId,
+  controlFactors: requestedControlFactors,
+} = {}) {
   const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
   if (!witness || !selectedCandidate) {
     throw new Error('createLirmSpeciationArmatureImplicitBodyBundle requires a witness and candidate or candidateId');
   }
-  const implicitPrimitives = createImplicitPrimitives(selectedCandidate);
-  const renderMaps = renderImplicitMapsSvg({ candidate: selectedCandidate, primitives: implicitPrimitives });
-  const trellisSource = renderImplicitTrellisSourceSvg({ candidate: selectedCandidate, primitives: implicitPrimitives });
+  const controlFactors = normalizeSupportControlFactors(requestedControlFactors);
+  const implicitPrimitives = createImplicitPrimitives(selectedCandidate, controlFactors);
+  const cameraYaw = controlFactors.effective.cameraYawRadians;
+  const renderResult = renderImplicitMapsSvg({
+    candidate: selectedCandidate,
+    primitives: implicitPrimitives,
+    cameraYaw,
+  });
+  const renderMaps = renderResult.renderMaps;
+  const trellisSource = renderImplicitTrellisSourceSvg({
+    candidate: selectedCandidate,
+    primitives: implicitPrimitives,
+    cameraYaw,
+  });
+  const implicitPrimitiveInventory = implicitPrimitives.map(primitive => ({
+    id: primitive.id || `${primitive.role}-${primitive.index}`,
+    index: primitive.index,
+    role: primitive.role,
+    implicitKind: primitive.implicitKind,
+    sourceHandleId: primitive.sourceHandleId || null,
+    pairId: primitive.pairId || null,
+    pairMember: primitive.pairMember || null,
+    side: primitive.side || null,
+    contactRole: primitive.contactRole || null,
+    entersBodySdf: true,
+  }));
   return {
     schema: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_BUNDLE_SCHEMA,
     route: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
@@ -1591,19 +1798,40 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
     gestalt: selectedCandidate.bodyPlan.gestalt,
     silhouette: selectedCandidate.bodyPlan.silhouette,
     renderMode: 'raymarched-implicit-field',
+    controlFactors,
     fieldModel: {
       kind: 'smooth-sdf-metaball',
       surfaceThreshold: 0.0065,
       smoothUnionK: 0.075,
-      primitiveSources: ['gestalt_body_plan', 'body_mass_axis_samples', 'terminal_mouth_handle', 'head_handle', 'limb_buds', 'shell_plates', 'contact_points'],
+      primitiveSources: [
+        'gestalt_body_plan',
+        'body_mass_axis_samples',
+        'terminal_mouth_handle',
+        'head_handle',
+        ...(controlFactors.effective.limbEmission === 'centerline' ? ['limb_buds'] : []),
+        'shell_plates',
+        ...(controlFactors.effective.contactGeometry === 'body-sdf' ? ['contact_points'] : []),
+      ],
+      contactSemantics: controlFactors.effective.contactGeometry === 'body-sdf'
+        ? 'included-in-body-sdf'
+        : 'sidecar-only',
+      supportSemantics: controlFactors.effective.limbEmission === 'centerline'
+        ? 'sidecar-plus-centerline-body-sdf'
+        : 'bilateral-sidecar-only',
     },
     camera: {
       projection: 'orthographic',
-      view: 'front-three-quarter',
+      view: controlFactors.effective.projection === 'legacy-yaw-0.42'
+        ? 'front-three-quarter'
+        : 'pairing-legible-three-quarter',
+      yawRadians: cameraYaw,
       coordinateFrame: 'normalized-implicit-body',
       raySource: 'software-sdf-raymarch',
     },
     implicitPrimitiveCount: implicitPrimitives.length,
+    implicitPrimitiveInventory,
+    supportSemanticInventory: createSupportSemanticInventory(selectedCandidate),
+    projectionEvidence: renderResult.projectionEvidence,
     semanticHandles: selectedCandidate.semanticHandles,
     contactPoints: selectedCandidate.contactPoints,
     renderMaps,
@@ -1688,7 +1916,13 @@ export function createLirmArmatureProgramImplicitBodyBundle({
   }
   const implicitPrimitives = sourcePrimitives.map(adaptArmatureProgramPrimitive);
   const candidate = { id: candidateId };
-  const renderMaps = renderImplicitMapsSvg({ candidate, primitives: implicitPrimitives, pixelWidth, pixelHeight });
+  const renderResult = renderImplicitMapsSvg({
+    candidate,
+    primitives: implicitPrimitives,
+    pixelWidth,
+    pixelHeight,
+  });
+  const renderMaps = renderResult.renderMaps;
   const trellisSource = renderImplicitTrellisSourceSvg({
     candidate,
     primitives: implicitPrimitives,
@@ -1723,6 +1957,7 @@ export function createLirmArmatureProgramImplicitBodyBundle({
     },
     implicitPrimitiveCount: implicitPrimitives.length,
     semanticRoles: [...new Set(implicitPrimitives.map(primitive => primitive.role))],
+    projectionEvidence: renderResult.projectionEvidence,
     renderMaps,
     trellisSource,
     falseClosureGuards: {
@@ -1859,7 +2094,12 @@ export function createLirmSpeciationArmatureGestaltCompositeBundle({ witness, ca
   const compositeId = `${selectedCandidate.id}__${envelope.id}`;
   const renderCandidate = { ...selectedCandidate, id: compositeId };
   const implicitPrimitives = createImplicitPrimitives(selectedCandidate);
-  const renderMaps = renderImplicitMapsSvg({ candidate: renderCandidate, primitives: implicitPrimitives, gestaltEnvelope: envelope });
+  const renderResult = renderImplicitMapsSvg({
+    candidate: renderCandidate,
+    primitives: implicitPrimitives,
+    gestaltEnvelope: envelope,
+  });
+  const renderMaps = renderResult.renderMaps;
   const trellisSource = renderImplicitTrellisSourceSvg({ candidate: renderCandidate, primitives: implicitPrimitives, gestaltEnvelope: envelope });
   const silhouetteLineage = {
     id: envelope.id,
@@ -1912,6 +2152,7 @@ export function createLirmSpeciationArmatureGestaltCompositeBundle({ witness, ca
       silhouette: silhouetteLineage,
     },
     implicitPrimitiveCount: implicitPrimitives.length,
+    projectionEvidence: renderResult.projectionEvidence,
     semanticHandles: selectedCandidate.semanticHandles,
     contactPoints: selectedCandidate.contactPoints,
     renderMaps,
