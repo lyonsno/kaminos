@@ -19,6 +19,8 @@ export const PORTABLE_MACRO_SOURCE_CAPABILITY = 'kaminos.fluid.portable-macro-so
 export const PORTABLE_MACRO_SOURCE_ROUTE = 'kaminos/fluid/portable-macro-source';
 export const PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA = 'kaminos.fluid.portable-macro-source-handle.v1';
 export const PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-macro-source-snapshot.v1';
+export const MACRO_WET_BOUNDARY_SCHEMA = 'kaminos.fluid.macro-wet-boundary.v1';
+export const MACRO_WET_BOUNDARY_ROUTE = 'kaminos/fluid/macro-wet-boundary';
 
 const KAMINOS_FLUID_PACKAGE_VERSION = '0.3.0';
 const KAMINOS_FLUID_PRODUCER_REVISION = '854c57ee7086783c0b0d099058a2c985b71168cd';
@@ -155,6 +157,139 @@ function portableTypedArray(values, length, label, { nonNegative = false } = {})
     if (nonNegative) invariant(value >= 0, `${label}[${index}] must be non-negative`);
   }
   return values;
+}
+
+function portableBinaryArray(values, length, label) {
+  portableTypedArray(values, length, label, { nonNegative: true });
+  for (let index = 0; index < values.length; index += 1) {
+    invariant(values[index] === 0 || values[index] === 1, `${label}[${index}] must be 0 or 1`);
+  }
+  return values;
+}
+
+function validateWetBoundaryRoute(route) {
+  invariant(route && typeof route === 'object', 'wet boundary route identity is required');
+  invariant(route.requested === MACRO_WET_BOUNDARY_ROUTE, `wet boundary requested route mismatch: ${route.requested}`);
+  invariant(route.effective === route.requested, `wet boundary effective route mismatch: requested ${route.requested}, received ${route.effective}`);
+  return route;
+}
+
+function wetBoundaryThresholds(options = {}) {
+  const effectiveDryDepthMeters = finite(
+    options.dryDepthThresholdMeters ?? options.dryTolerance ?? DEFAULT_DRY_TOLERANCE,
+    'effectiveDryDepthMeters',
+  );
+  const effectiveWetActivationDepthMeters = finite(
+    options.wetActivationDepthThresholdMeters ?? Math.max(effectiveDryDepthMeters * 2, effectiveDryDepthMeters + Number.EPSILON),
+    'effectiveWetActivationDepthMeters',
+  );
+  invariant(effectiveDryDepthMeters >= 0, 'effectiveDryDepthMeters must be non-negative');
+  invariant(
+    effectiveWetActivationDepthMeters > effectiveDryDepthMeters,
+    'effectiveWetActivationDepthMeters must be greater than effectiveDryDepthMeters',
+  );
+  return Object.freeze({ effectiveDryDepthMeters, effectiveWetActivationDepthMeters });
+}
+
+function wetBoundaryCellSignature(wetState, width, x, y) {
+  const topLeft = y * width + x;
+  const topRight = topLeft + 1;
+  const bottomLeft = topLeft + width;
+  const bottomRight = bottomLeft + 1;
+  return wetState[topLeft]
+    | (wetState[topRight] << 1)
+    | (wetState[bottomRight] << 2)
+    | (wetState[bottomLeft] << 3);
+}
+
+function wetBoundaryResetId(topologyId, reset) {
+  const remapIdentity = reset.remapReceiptId ?? 'initial';
+  return `${topologyId}:reset:${reset.generation}:${reset.previousTerrainEpoch}->${reset.terrainEpoch}:${reset.kind}:${remapIdentity}`;
+}
+
+function updateWetBoundaryState(previous, state, terrainFrame, thresholds, reset = null) {
+  const sampleCount = terrainFrame.grid.width * terrainFrame.grid.height;
+  const cellWidth = Math.max(0, terrainFrame.grid.width - 1);
+  const cellHeight = Math.max(0, terrainFrame.grid.height - 1);
+  const cellCount = cellWidth * cellHeight;
+  const topologyId = `${terrainFrame.terrainId}:${terrainFrame.transformId}:${terrainFrame.grid.width}x${terrainFrame.grid.height}`;
+  const physicalDepthMeters = new Float64Array(sampleCount);
+  const signedDryMarginMeters = new Float64Array(sampleCount);
+  const wetState = new Uint8Array(sampleCount);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const depth = state.mappedDepth[index] / terrainFrame.fields.jacobian[index];
+    physicalDepthMeters[index] = depth;
+    signedDryMarginMeters[index] = depth - thresholds.effectiveDryDepthMeters;
+    wetState[index] = previous?.wetState[index] === 1
+      ? Number(depth > thresholds.effectiveDryDepthMeters)
+      : Number(depth >= thresholds.effectiveWetActivationDepthMeters);
+  }
+
+  const stableId = new Uint32Array(cellCount);
+  const signature = new Uint8Array(cellCount);
+  const activeState = new Uint8Array(cellCount);
+  const generation = new Uint32Array(cellCount);
+  let changed = previous == null;
+  for (let y = 0; y < cellHeight; y += 1) {
+    for (let x = 0; x < cellWidth; x += 1) {
+      const cellId = y * cellWidth + x;
+      const nextSignature = wetBoundaryCellSignature(wetState, terrainFrame.grid.width, x, y);
+      stableId[cellId] = cellId;
+      signature[cellId] = nextSignature;
+      activeState[cellId] = Number(nextSignature !== 0 && nextSignature !== 15);
+      const cellChanged = previous != null && previous.signature[cellId] !== nextSignature;
+      generation[cellId] = previous == null
+        ? 0
+        : previous.generation[cellId] + Number(cellChanged || reset != null);
+      changed ||= cellChanged;
+    }
+  }
+
+  const boundaryGeneration = previous == null
+    ? 0
+    : previous.boundaryGeneration + Number(changed || reset != null);
+  const resetGeneration = previous == null ? 0 : previous.reset.generation + Number(reset != null);
+  const resetRecord = reset == null
+    ? previous?.reset ?? {
+      generation: 0,
+      kind: 'initial',
+      previousTerrainEpoch: terrainFrame.priorEpoch,
+      terrainEpoch: terrainFrame.currentEpoch,
+      remapReceiptId: null,
+      shockId: terrainFrame.shockId ?? null,
+      boundaryGeneration,
+      discontinuous: true,
+    }
+    : {
+      generation: resetGeneration,
+      kind: reset.kind,
+      previousTerrainEpoch: reset.previousTerrainEpoch,
+      terrainEpoch: terrainFrame.currentEpoch,
+      remapReceiptId: reset.remapReceiptId,
+      shockId: terrainFrame.shockId ?? null,
+      boundaryGeneration,
+      discontinuous: true,
+    };
+  return {
+    topologyId,
+    terrainEpoch: terrainFrame.currentEpoch,
+    fluidEpoch: state.fluidEpoch,
+    ...thresholds,
+    physicalDepthMeters,
+    signedDryMarginMeters,
+    wetState,
+    cellWidth,
+    cellHeight,
+    stableId,
+    signature,
+    activeState,
+    generation,
+    boundaryGeneration,
+    reset: {
+      ...resetRecord,
+      id: wetBoundaryResetId(topologyId, resetRecord),
+    },
+  };
 }
 
 function length3(values, offset) {
@@ -972,6 +1107,21 @@ function validatePortableMacroSourceDescriptor(descriptor) {
     support.positionSource === 'terrain-fluid-frame.fields.worldPosition',
     `unsupported portable source position source: ${support.positionSource}`,
   );
+  const wetBoundary = descriptor.wetBoundary;
+  invariant(wetBoundary?.schema === MACRO_WET_BOUNDARY_SCHEMA, 'portable source wet boundary descriptor is required');
+  validateWetBoundaryRoute(wetBoundary.route);
+  invariant(wetBoundary.sourceAuthority === 'live_runtime', `unsupported wet boundary source authority: ${wetBoundary.sourceAuthority}`);
+  invariant(wetBoundary.fallbackStatus === 'none', `wet boundary fallback is forbidden: ${wetBoundary.fallbackStatus}`);
+  invariant(wetBoundary.hysteresis === 'schmitt-trigger-v1', `unsupported wet boundary hysteresis: ${wetBoundary.hysteresis}`);
+  const boundaryThresholds = wetBoundaryThresholds({
+    dryDepthThresholdMeters: wetBoundary.effectiveDryDepthMeters,
+    wetActivationDepthThresholdMeters: wetBoundary.effectiveWetActivationDepthMeters,
+  });
+  invariant(
+    boundaryThresholds.effectiveDryDepthMeters === wetBoundary.effectiveDryDepthMeters
+      && boundaryThresholds.effectiveWetActivationDepthMeters === wetBoundary.effectiveWetActivationDepthMeters,
+    'portable source wet boundary threshold identity mismatch',
+  );
   invariant(descriptor.lifetime?.releasePolicy === 'explicit-release-v1', 'portable source lifetime requires explicit release');
   integer(descriptor.lifetime?.retainedTerrainEpoch, 'lifetime.retainedTerrainEpoch');
   integer(descriptor.lifetime?.retainedFluidEpoch, 'lifetime.retainedFluidEpoch');
@@ -1073,6 +1223,136 @@ export function validatePortableMacroSourceSnapshot(snapshot, expectations = {})
   for (const [key, values] of Object.entries(snapshot.macro.materialMasses)) {
     portableTypedArray(values, sampleCount, `macro.materialMasses.${key}`, { nonNegative: true });
   }
+  const wetBoundary = snapshot.wetBoundary;
+  invariant(wetBoundary && typeof wetBoundary === 'object', 'wet boundary descriptor is required');
+  invariant(wetBoundary.schema === MACRO_WET_BOUNDARY_SCHEMA, `wet boundary schema mismatch: ${wetBoundary.schema}`);
+  validateWetBoundaryRoute(wetBoundary.route);
+  invariant(wetBoundary.sourceAuthority === 'live_runtime', `unsupported wet boundary source authority: ${wetBoundary.sourceAuthority}`);
+  invariant(wetBoundary.fallbackStatus === 'none', `wet boundary fallback is forbidden: ${wetBoundary.fallbackStatus}`);
+  invariant(wetBoundary.complete === true, 'wet boundary descriptor is incomplete');
+  invariant(wetBoundary.terrainEpoch === terrainEpoch, 'wet boundary terrain epoch mismatch');
+  invariant(wetBoundary.fluidEpoch === fluidEpoch, 'wet boundary fluid epoch mismatch');
+  invariant(wetBoundary.topologyId === support.topologyId, 'wet boundary topology identity mismatch');
+  const effectiveDryDepthMeters = finite(wetBoundary.effectiveDryDepthMeters, 'effectiveDryDepthMeters');
+  const effectiveWetActivationDepthMeters = finite(
+    wetBoundary.effectiveWetActivationDepthMeters,
+    'effectiveWetActivationDepthMeters',
+  );
+  invariant(effectiveDryDepthMeters >= 0, 'effectiveDryDepthMeters must be non-negative');
+  invariant(
+    effectiveWetActivationDepthMeters > effectiveDryDepthMeters,
+    'effectiveWetActivationDepthMeters must be greater than effectiveDryDepthMeters',
+  );
+  portableTypedArray(wetBoundary.physicalDepthMeters, sampleCount, 'wetBoundary.physicalDepthMeters', { nonNegative: true });
+  portableTypedArray(wetBoundary.signedDryMarginMeters, sampleCount, 'wetBoundary.signedDryMarginMeters');
+  portableBinaryArray(wetBoundary.wetState, sampleCount, 'wetBoundary.wetState');
+  for (let index = 0; index < sampleCount; index += 1) {
+    const physicalDepth = snapshot.macro.mappedDepth[index] / support.jacobian[index];
+    const tolerance = 1e-12 * Math.max(1, physicalDepth);
+    invariant(
+      Math.abs(wetBoundary.physicalDepthMeters[index] - physicalDepth) <= tolerance,
+      `wetBoundary.physicalDepthMeters[${index}] disagrees with mapped depth and Jacobian`,
+    );
+    invariant(
+      Math.abs(wetBoundary.signedDryMarginMeters[index] - (physicalDepth - effectiveDryDepthMeters)) <= tolerance,
+      `wetBoundary.signedDryMarginMeters[${index}] disagrees with effective dry threshold`,
+    );
+    if (physicalDepth <= effectiveDryDepthMeters) {
+      invariant(wetBoundary.wetState[index] === 0, `wetBoundary.wetState[${index}] is wet below the dry threshold`);
+    }
+    if (physicalDepth >= effectiveWetActivationDepthMeters) {
+      invariant(wetBoundary.wetState[index] === 1, `wetBoundary.wetState[${index}] is dry above the activation threshold`);
+    }
+  }
+  const cells = wetBoundary.cells;
+  invariant(cells && typeof cells === 'object', 'wetBoundary.cells is required');
+  invariant(cells.indexing === 'row-major-quad-v1', `unsupported wet boundary cell indexing: ${cells.indexing}`);
+  const cellWidth = Math.max(0, width - 1);
+  const cellHeight = Math.max(0, height - 1);
+  const cellCount = cellWidth * cellHeight;
+  invariant(cells.width === cellWidth && cells.height === cellHeight, 'wet boundary cell grid mismatch');
+  portableTypedArray(cells.stableId, cellCount, 'wetBoundary.cells.stableId', { nonNegative: true });
+  portableBinaryArray(cells.activeState, cellCount, 'wetBoundary.cells.activeState');
+  portableTypedArray(cells.generation, cellCount, 'wetBoundary.cells.generation', { nonNegative: true });
+  for (let y = 0; y < cellHeight; y += 1) {
+    for (let x = 0; x < cellWidth; x += 1) {
+      const cellId = y * cellWidth + x;
+      invariant(cells.stableId[cellId] === cellId, `wetBoundary.cells.stableId[${cellId}] is unstable`);
+      const signature = wetBoundaryCellSignature(wetBoundary.wetState, width, x, y);
+      const expectedActive = Number(signature !== 0 && signature !== 15);
+      invariant(cells.activeState[cellId] === expectedActive, `wetBoundary.cells.activeState[${cellId}] disagrees with wet state`);
+      invariant(Number.isInteger(cells.generation[cellId]), `wetBoundary.cells.generation[${cellId}] must be an integer`);
+    }
+  }
+  const boundaryGeneration = integer(wetBoundary.boundaryGeneration, 'wetBoundary.boundaryGeneration');
+  invariant(boundaryGeneration >= 0, 'wetBoundary.boundaryGeneration must be non-negative');
+  invariant(
+    wetBoundary.boundaryId === `${support.topologyId}:boundary:${boundaryGeneration}`,
+    'wet boundary identity does not match topology and generation',
+  );
+  const reset = wetBoundary.reset;
+  invariant(reset && typeof reset === 'object', 'wetBoundary.reset is required');
+  const resetGeneration = integer(reset.generation, 'wetBoundary.reset.generation');
+  invariant(resetGeneration >= 0, 'wetBoundary.reset.generation must be non-negative');
+  nonEmptyString(reset.id, 'wetBoundary.reset.id');
+  invariant(reset.id === wetBoundaryResetId(support.topologyId, reset), 'wet boundary reset identity mismatch');
+  invariant(
+    ['initial', 'ordinary_morph', 'phase_morph', 'shock_reset'].includes(reset.kind),
+    `unsupported wet boundary reset kind: ${reset.kind}`,
+  );
+  const resetPreviousTerrainEpoch = integer(
+    reset.previousTerrainEpoch,
+    'wetBoundary.reset.previousTerrainEpoch',
+  );
+  const resetTerrainEpoch = integer(reset.terrainEpoch, 'wetBoundary.reset.terrainEpoch');
+  invariant(
+    resetTerrainEpoch === terrainEpoch,
+    'wet boundary terrain transition identity mismatch',
+  );
+  invariant(
+    resetPreviousTerrainEpoch <= resetTerrainEpoch,
+    'wet boundary reset previous terrain epoch is newer than its current epoch',
+  );
+  invariant(reset.remapReceiptId == null || typeof reset.remapReceiptId === 'string', 'wet boundary reset remapReceiptId must be null or a string');
+  invariant(reset.shockId == null || typeof reset.shockId === 'string', 'wet boundary reset shockId must be null or a string');
+  const resetBoundaryGeneration = integer(
+    reset.boundaryGeneration,
+    'wetBoundary.reset.boundaryGeneration',
+  );
+  invariant(
+    resetBoundaryGeneration <= boundaryGeneration,
+    'wet boundary reset generation is newer than the boundary state',
+  );
+  invariant(
+    boundaryGeneration >= resetGeneration,
+    'wet boundary generation cannot precede reset generation',
+  );
+  for (let cellId = 0; cellId < cellCount; cellId += 1) {
+    invariant(
+      cells.generation[cellId] >= resetGeneration,
+      `wetBoundary.cells.generation[${cellId}] precedes the latest terrain reset`,
+    );
+  }
+  if (reset.kind === 'initial') {
+    invariant(
+      resetGeneration === 0 && reset.remapReceiptId == null,
+      'initial wet boundary reset cannot carry remap lineage',
+    );
+  } else {
+    invariant(resetGeneration > 0, 'remapped wet boundary reset generation must be positive');
+    nonEmptyString(reset.remapReceiptId, 'wetBoundary.reset.remapReceiptId');
+    invariant(
+      resetPreviousTerrainEpoch < resetTerrainEpoch,
+      'remapped wet boundary reset must advance the terrain epoch',
+    );
+  }
+  invariant(reset.discontinuous === true, 'wet boundary reset must declare its discontinuity');
+  invariant(
+    wetBoundary.derivation?.physicalDepth === 'mappedDepth / supportGeometry.jacobian'
+      && wetBoundary.derivation?.signedMargin === 'physicalDepthMeters - effectiveDryDepthMeters'
+      && wetBoundary.derivation?.hysteresis === 'schmitt-trigger-v1',
+    'wet boundary derivation identity mismatch',
+  );
   invariant(
     Number.isFinite(snapshot.confidence) && snapshot.confidence >= 0 && snapshot.confidence <= 1,
     'portable source confidence must be in [0, 1]',
@@ -1117,7 +1397,7 @@ function supportWorldPositions(terrainFrame) {
   return Float64Array.from(terrainFrame.fields.worldPosition);
 }
 
-function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
+function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor, boundaryState) {
   validateState(state, terrainFrame);
   validatePortableMacroSourceDescriptor(descriptor);
   const sampleCount = terrainFrame.grid.width * terrainFrame.grid.height;
@@ -1174,6 +1454,40 @@ function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
         Object.entries(state.materialMasses).map(([key, values]) => [key, Float64Array.from(values)]),
       ),
     },
+    wetBoundary: {
+      schema: MACRO_WET_BOUNDARY_SCHEMA,
+      route: {
+        requested: MACRO_WET_BOUNDARY_ROUTE,
+        effective: MACRO_WET_BOUNDARY_ROUTE,
+      },
+      sourceAuthority: 'live_runtime',
+      fallbackStatus: 'none',
+      terrainEpoch: boundaryState.terrainEpoch,
+      fluidEpoch: boundaryState.fluidEpoch,
+      topologyId: boundaryState.topologyId,
+      effectiveDryDepthMeters: boundaryState.effectiveDryDepthMeters,
+      effectiveWetActivationDepthMeters: boundaryState.effectiveWetActivationDepthMeters,
+      physicalDepthMeters: Float64Array.from(boundaryState.physicalDepthMeters),
+      signedDryMarginMeters: Float64Array.from(boundaryState.signedDryMarginMeters),
+      wetState: Uint8Array.from(boundaryState.wetState),
+      cells: {
+        indexing: 'row-major-quad-v1',
+        width: boundaryState.cellWidth,
+        height: boundaryState.cellHeight,
+        stableId: Uint32Array.from(boundaryState.stableId),
+        activeState: Uint8Array.from(boundaryState.activeState),
+        generation: Uint32Array.from(boundaryState.generation),
+      },
+      boundaryGeneration: boundaryState.boundaryGeneration,
+      boundaryId: `${boundaryState.topologyId}:boundary:${boundaryState.boundaryGeneration}`,
+      reset: { ...boundaryState.reset },
+      derivation: {
+        physicalDepth: 'mappedDepth / supportGeometry.jacobian',
+        signedMargin: 'physicalDepthMeters - effectiveDryDepthMeters',
+        hysteresis: 'schmitt-trigger-v1',
+      },
+      complete: true,
+    },
     physicalMaterial: copyPhysicalMaterial(descriptor.physicalMaterial),
     confidence: 1,
     dirtyRegions: terrainFrame.dirtyRegions.map(region => ({ ...region })),
@@ -1189,6 +1503,8 @@ function createPortableMacroSourceSnapshot(state, terrainFrame, descriptor) {
 export function createMappedMacroRuntime(options = {}) {
   let terrainFrame = validateTerrainFluidFrame(options.terrainFrame);
   let state = createMappedMacroState(options);
+  const boundaryThresholds = wetBoundaryThresholds(options);
+  let wetBoundaryState = updateWetBoundaryState(null, state, terrainFrame, boundaryThresholds);
   const producerRevision = options.producerRevision;
   invariant(typeof producerRevision === 'string' && producerRevision.length > 0, 'producerRevision must be a non-empty string');
   const receiptIds = [];
@@ -1205,6 +1521,17 @@ export function createMappedMacroRuntime(options = {}) {
     state = result.state;
     terrainFrame = nextTerrain;
     receiptIds.push(result.receipt.receiptId);
+    wetBoundaryState = updateWetBoundaryState(
+      wetBoundaryState,
+      state,
+      terrainFrame,
+      boundaryThresholds,
+      {
+        kind: result.receipt.mode,
+        previousTerrainEpoch: result.receipt.previousTerrainEpoch,
+        remapReceiptId: result.receipt.receiptId,
+      },
+    );
     return result.receipt;
   }
 
@@ -1224,6 +1551,12 @@ export function createMappedMacroRuntime(options = {}) {
     },
     updateTerrain,
     step(stepOptions = {}) {
+      if (stepOptions.dryTolerance != null) {
+        invariant(
+          stepOptions.dryTolerance === boundaryThresholds.effectiveDryDepthMeters,
+          `runtime dryTolerance ${stepOptions.dryTolerance} disagrees with retained wet-boundary threshold ${boundaryThresholds.effectiveDryDepthMeters}`,
+        );
+      }
       const nextTerrain = validateTerrainFluidFrame(stepOptions.terrainFrame ?? terrainFrame);
       let terrainRemapReceipt = null;
       if (nextTerrain.currentEpoch > terrainFrame.currentEpoch) {
@@ -1236,8 +1569,17 @@ export function createMappedMacroRuntime(options = {}) {
         invariant(nextTerrain.currentEpoch === terrainFrame.currentEpoch, `runtime rejected stale terrain epoch ${nextTerrain.currentEpoch}`);
         validateSameEpochTerrain(terrainFrame, nextTerrain);
       }
-      const result = advanceMappedMacroState(state, terrainFrame, stepOptions);
+      const result = advanceMappedMacroState(state, terrainFrame, {
+        ...stepOptions,
+        dryTolerance: boundaryThresholds.effectiveDryDepthMeters,
+      });
       state = result.state;
+      wetBoundaryState = updateWetBoundaryState(
+        wetBoundaryState,
+        state,
+        terrainFrame,
+        boundaryThresholds,
+      );
       return terrainRemapReceipt == null
         ? result.receipt
         : { ...result.receipt, terrainRemapReceipt };
@@ -1247,6 +1589,12 @@ export function createMappedMacroRuntime(options = {}) {
       state = result.state;
       receiptIds.push(result.receipt.transactionId);
       if (!lineageIds.includes(result.receipt.lineageId)) lineageIds.push(result.receipt.lineageId);
+      wetBoundaryState = updateWetBoundaryState(
+        wetBoundaryState,
+        state,
+        terrainFrame,
+        boundaryThresholds,
+      );
       return result.receipt;
     },
     feedback(frameOptions = {}) {
@@ -1318,6 +1666,18 @@ export function createMappedMacroRuntime(options = {}) {
             positionSource: 'terrain-fluid-frame.fields.worldPosition',
             sampleCount: terrainFrame.grid.width * terrainFrame.grid.height,
           },
+          wetBoundary: {
+            schema: MACRO_WET_BOUNDARY_SCHEMA,
+            route: {
+              requested: MACRO_WET_BOUNDARY_ROUTE,
+              effective: MACRO_WET_BOUNDARY_ROUTE,
+            },
+            sourceAuthority: 'live_runtime',
+            fallbackStatus: 'none',
+            effectiveDryDepthMeters: boundaryThresholds.effectiveDryDepthMeters,
+            effectiveWetActivationDepthMeters: boundaryThresholds.effectiveWetActivationDepthMeters,
+            hysteresis: 'schmitt-trigger-v1',
+          },
           physicalMaterial: copyPhysicalMaterial(physicalMaterial),
           lifetime: {
             releasePolicy: 'explicit-release-v1',
@@ -1351,7 +1711,12 @@ export function createMappedMacroRuntime(options = {}) {
                   `portable source has stale fluid epoch ${state.fluidEpoch}; minimum ${readOptions.minimumFluidEpoch}`,
                 );
               }
-              const snapshot = createPortableMacroSourceSnapshot(state, terrainFrame, descriptor);
+              const snapshot = createPortableMacroSourceSnapshot(
+                state,
+                terrainFrame,
+                descriptor,
+                wetBoundaryState,
+              );
               readGeneration += 1;
               return snapshot;
             } catch (error) {

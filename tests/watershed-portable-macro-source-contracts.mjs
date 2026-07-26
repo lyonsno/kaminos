@@ -15,6 +15,7 @@ function makeAnalyticTerrain({
   currentEpoch = 1,
   motionClass = 'stable',
   bedHeight = [0.1, 0.2, 0.3, 0.4],
+  jacobian = [1, 1, 1, 1],
 } = {}) {
   const width = 2;
   const height = 2;
@@ -48,10 +49,10 @@ function makeAnalyticTerrain({
         16, 17, 18,
         19, 20, 21,
       ]),
-      jacobian: new Float64Array(sampleCount).fill(1),
+      jacobian: Float64Array.from(jacobian),
       gradient: new Float64Array(sampleCount * 2),
-      tangentU: new Float64Array(Array.from({ length: sampleCount }, () => [1, 0, 0]).flat()),
-      tangentV: new Float64Array(Array.from({ length: sampleCount }, () => [0, 0, 1]).flat()),
+      tangentU: new Float64Array(jacobian.flatMap(value => [Math.sqrt(value), 0, 0])),
+      tangentV: new Float64Array(jacobian.flatMap(value => [0, 0, Math.sqrt(value)])),
       normal: new Float64Array(Array.from({ length: sampleCount }, () => [0, 1, 0]).flat()),
       supportVelocity: new Float64Array(sampleCount * 3),
       valid: new Uint8Array(sampleCount).fill(1),
@@ -96,6 +97,18 @@ assert.equal(handle.descriptor.ownershipIdentity, 'macro-local-parcel-exclusive-
 assert.equal(handle.descriptor.supportGeometry.transformId, terrain.transformId);
 assert.equal(handle.descriptor.supportGeometry.worldMetersPerUnit, 1);
 assert.equal(handle.descriptor.supportGeometry.sampleCount, 4);
+assert.deepEqual(handle.descriptor.wetBoundary, {
+  schema: 'kaminos.fluid.macro-wet-boundary.v1',
+  route: {
+    requested: 'kaminos/fluid/macro-wet-boundary',
+    effective: 'kaminos/fluid/macro-wet-boundary',
+  },
+  sourceAuthority: 'live_runtime',
+  fallbackStatus: 'none',
+  effectiveDryDepthMeters: 1e-8,
+  effectiveWetActivationDepthMeters: 2e-8,
+  hysteresis: 'schmitt-trigger-v1',
+});
 assert.equal(handle.descriptor.lifetime.releasePolicy, 'explicit-release-v1');
 assert.doesNotMatch(
   JSON.stringify(handle.descriptor),
@@ -129,6 +142,198 @@ assert.equal(first.supportGeometry.geometryId, 'analytic-saddle-to-world-v1:terr
 assert.deepEqual(first.dirtyRegions, [{ x: 0, y: 0, width: 2, height: 2 }]);
 assert.equal(Object.hasOwn(first, 'camera'), false);
 assert.equal(Object.hasOwn(first, 'projection'), false);
+
+const boundaryTerrain = makeAnalyticTerrain();
+const boundaryRuntime = createKaminosFluidRuntime({
+  terrainFrame: boundaryTerrain,
+  depth: new Float64Array([0.4, 0, 3e-8, 0]),
+  producerRevision: 'portable-boundary-test-revision',
+  dryDepthThresholdMeters: 1e-8,
+  wetActivationDepthThresholdMeters: 2e-8,
+});
+const boundaryHandle = boundaryRuntime.retainPortableMacroSource({
+  sourceHandleId: 'analytic-boundary-source-handle-1',
+});
+const boundaryFirst = boundaryHandle.read();
+assert.equal(boundaryFirst.wetBoundary.schema, 'kaminos.fluid.macro-wet-boundary.v1');
+assert.deepEqual(boundaryFirst.wetBoundary.route, {
+  requested: 'kaminos/fluid/macro-wet-boundary',
+  effective: 'kaminos/fluid/macro-wet-boundary',
+});
+assert.equal(boundaryFirst.wetBoundary.sourceAuthority, 'live_runtime');
+assert.equal(boundaryFirst.wetBoundary.fallbackStatus, 'none');
+assert.equal(boundaryFirst.wetBoundary.effectiveDryDepthMeters, 1e-8);
+assert.equal(boundaryFirst.wetBoundary.effectiveWetActivationDepthMeters, 2e-8);
+assert.deepEqual(Array.from(boundaryFirst.wetBoundary.physicalDepthMeters), [0.4, 0, 3e-8, 0]);
+assert.ok(
+  Array.from(boundaryFirst.wetBoundary.signedDryMarginMeters)
+    .every((value, index) => Math.abs(value - [0.4 - 1e-8, -1e-8, 2e-8, -1e-8][index]) <= 1e-15),
+  'signed dry margins retain physical-meter threshold arithmetic',
+);
+assert.deepEqual(Array.from(boundaryFirst.wetBoundary.wetState), [1, 0, 1, 0]);
+assert.deepEqual(Array.from(boundaryFirst.wetBoundary.cells.stableId), [0]);
+assert.deepEqual(Array.from(boundaryFirst.wetBoundary.cells.activeState), [1]);
+assert.deepEqual(Array.from(boundaryFirst.wetBoundary.cells.generation), [0]);
+assert.equal(boundaryFirst.wetBoundary.cells.indexing, 'row-major-quad-v1');
+assert.equal(boundaryFirst.wetBoundary.boundaryGeneration, 0);
+assert.equal(
+  boundaryFirst.wetBoundary.boundaryId,
+  `${boundaryFirst.supportGeometry.topologyId}:boundary:0`,
+);
+assert.deepEqual(boundaryFirst.wetBoundary.reset, {
+  generation: 0,
+  id: `${boundaryFirst.supportGeometry.topologyId}:reset:0:0->1:initial:initial`,
+  kind: 'initial',
+  previousTerrainEpoch: 0,
+  terrainEpoch: 1,
+  remapReceiptId: null,
+  shockId: null,
+  boundaryGeneration: 0,
+  discontinuous: true,
+});
+
+const boundaryTerrainRemapped = makeAnalyticTerrain({
+  priorEpoch: 1,
+  currentEpoch: 2,
+  motionClass: 'ordinary_morph',
+  jacobian: [1, 1, 2, 1],
+});
+const boundaryRemapReceipt = boundaryRuntime.updateTerrain({
+  terrainFrame: boundaryTerrainRemapped,
+  mode: 'ordinary_morph',
+});
+const boundaryRemapped = boundaryHandle.read({ minimumTerrainEpoch: 2 });
+assert.equal(boundaryRemapped.wetBoundary.physicalDepthMeters[2], 1.5e-8);
+assert.equal(
+  boundaryRemapped.wetBoundary.wetState[2],
+  1,
+  'a producer-activated sample remains wet inside the hysteresis band',
+);
+assert.equal(boundaryRemapped.wetBoundary.reset.generation, 1);
+assert.equal(boundaryRemapped.wetBoundary.reset.kind, 'ordinary_morph');
+assert.equal(boundaryRemapped.wetBoundary.reset.previousTerrainEpoch, 1);
+assert.equal(boundaryRemapped.wetBoundary.reset.terrainEpoch, 2);
+assert.equal(boundaryRemapped.wetBoundary.reset.remapReceiptId, boundaryRemapReceipt.receiptId);
+assert.equal(
+  boundaryRemapped.wetBoundary.reset.boundaryGeneration,
+  boundaryRemapped.wetBoundary.boundaryGeneration,
+);
+assert.equal(boundaryRemapped.wetBoundary.reset.discontinuous, true);
+assert.equal(boundaryRemapped.wetBoundary.terrainEpoch, 2);
+assert.equal(boundaryRemapped.wetBoundary.fluidEpoch, boundaryRemapped.fluidEpoch);
+assert.ok(
+  boundaryRemapped.wetBoundary.cells.generation[0] > boundaryFirst.wetBoundary.cells.generation[0],
+  'terrain remap resets active-boundary identity even when the wet mask survives hysteresis',
+);
+assert.throws(
+  () => validatePortableMacroSourceSnapshot({
+    ...boundaryRemapped,
+    wetBoundary: {
+      ...boundaryRemapped.wetBoundary,
+      reset: { ...boundaryFirst.wetBoundary.reset },
+      boundaryGeneration: boundaryFirst.wetBoundary.boundaryGeneration,
+      boundaryId: boundaryFirst.wetBoundary.boundaryId,
+      cells: {
+        ...boundaryRemapped.wetBoundary.cells,
+        generation: Uint32Array.from(boundaryFirst.wetBoundary.cells.generation),
+      },
+    },
+  }),
+  /wet boundary terrain transition identity mismatch/,
+  'a current terrain epoch cannot validate with pre-remap reset and generation identity',
+);
+
+for (const [label, mutation, pattern] of [
+  [
+    'missing boundary state',
+    snapshot => ({ ...snapshot, wetBoundary: undefined }),
+    /wet boundary descriptor is required/,
+  ],
+  [
+    'missing physical threshold',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: { ...snapshot.wetBoundary, effectiveDryDepthMeters: undefined },
+    }),
+    /effectiveDryDepthMeters must be finite/,
+  ],
+  [
+    'wet mask below dry threshold',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: {
+        ...snapshot.wetBoundary,
+        wetState: Uint8Array.from(snapshot.wetBoundary.wetState, (value, index) => index === 3 ? 1 : value),
+      },
+    }),
+    /wetState\[3\].*dry threshold/,
+  ],
+  [
+    'dry mask above activation threshold',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: {
+        ...snapshot.wetBoundary,
+        wetState: Uint8Array.from(snapshot.wetBoundary.wetState, (value, index) => index === 0 ? 0 : value),
+      },
+    }),
+    /wetState\[0\].*activation threshold/,
+  ],
+  [
+    'stale boundary epoch',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: { ...snapshot.wetBoundary, terrainEpoch: snapshot.terrainEpoch - 1 },
+    }),
+    /wet boundary terrain epoch mismatch/,
+  ],
+  [
+    'fallback boundary route',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: {
+        ...snapshot.wetBoundary,
+        route: {
+          requested: snapshot.wetBoundary.route.requested,
+          effective: 'fixture/macro-wet-boundary',
+        },
+        fallbackStatus: 'fallback',
+      },
+    }),
+    /wet boundary effective route mismatch|wet boundary fallback/,
+  ],
+  [
+    'partial cell identity',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: {
+        ...snapshot.wetBoundary,
+        cells: {
+          ...snapshot.wetBoundary.cells,
+          stableId: new Uint32Array(0),
+        },
+      },
+    }),
+    /wetBoundary\.cells\.stableId length/,
+  ],
+  [
+    'missing reset identity',
+    snapshot => ({
+      ...snapshot,
+      wetBoundary: {
+        ...snapshot.wetBoundary,
+        reset: { ...snapshot.wetBoundary.reset, id: '' },
+      },
+    }),
+    /wetBoundary\.reset\.id must be a non-empty string/,
+  ],
+]) {
+  assert.throws(
+    () => validatePortableMacroSourceSnapshot(mutation(boundaryRemapped)),
+    pattern,
+    `${label} cannot validate as complete producer boundary truth`,
+  );
+}
 
 first.macro.mappedDepth[0] = 999;
 first.supportGeometry.worldPosition[0] = 999;
