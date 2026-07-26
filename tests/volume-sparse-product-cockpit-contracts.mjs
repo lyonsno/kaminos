@@ -713,6 +713,61 @@ assert.match(
   /assertOpticalComparisonFalsifiers\(\)/,
   'the evidence harness proves identical and blank canvas pairs cannot close the witness',
 );
+assert.match(
+  witness,
+  /historicalDuplicateFireDiagnostic/,
+  'the named Fat Bonfire witness exposes the historical duplicate-fire attractor as a separate diagnostic arm',
+);
+assert.match(
+  witness,
+  /setSelectiveHeadLiveRenderComposition\(\s*['"]full-raymarch-under-splats-diagnostic-v0['"]\s*\)/,
+  'the witness drives the inner renderer diagnostic directly instead of admitting duplicate fire as product authority',
+);
+assert.match(
+  witness,
+  /setBoundarySplatPresentationMode\(\s*['"]current-additive-v0['"]\s*\)/,
+  'the historical arm explicitly restores the target-era additive splat presentation before composing over raymarch fire',
+);
+assert.match(
+  witness,
+  /diagnosticPresentationReceipt[\s\S]*direct-additive-presentation-v0/,
+  'the historical arm receipts the additive presentation identity instead of inheriting modern recurrence',
+);
+assert.match(
+  witness,
+  /diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0/,
+  'the diagnostic arm reports duplicate flame authority instead of presenting itself as a production hybrid',
+);
+assert.match(
+  witness,
+  /assertHistoricalDuplicateFireDiagnosticState/,
+  'the witness fails loud unless the requested diagnostic composition is the effective composition',
+);
+assert.match(
+  witness,
+  /raymarchEncoded[\s\S]*raymarchApplied[\s\S]*splatEncoded[\s\S]*splatApplied/,
+  'the diagnostic arm verifies that both the raymarch and splat passes were encoded and applied',
+);
+assert.match(
+  witness,
+  /historicalDuplicateFireDiagnostic[\s\S]*sameStateCaptureId:\s*opticalSameStateCaptureId/,
+  'the diagnostic arm is bound to the same held state identity as the honest optics arms',
+);
+assert.match(
+  witness,
+  /setSelectiveHeadLiveRenderComposition\(\s*['"]splat-only-v0['"]\s*\)[\s\S]*setBoundarySplatPresentationMode\(\s*['"]matched-optical-recurrence-v0['"]\s*\)[\s\S]*assertSparseProductState/,
+  'the witness restores and verifies honest splat-only product composition and modern recurrence after the diagnostic capture',
+);
+assert.match(
+  witness,
+  /restorePresentationReceipt[\s\S]*presentHeldFrame\(\s*socket,\s*opticalCaptureAuthority\s*\)[\s\S]*waitForRuntimeState/,
+  'the paused witness renders one restored held frame before asking the product shell to verify the restored pass receipt',
+);
+assert.match(
+  witness,
+  /assertHistoricalDuplicateFireFalsifiers\(\)/,
+  'the evidence harness proves substituted, partial, and fallback diagnostic receipts cannot close the witness',
+);
 const captureFrameImplementation = core.match(
   /async function captureSelectiveHeadLiveFrame\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  async function controlledStepSequence/,
 )?.[0] || '';

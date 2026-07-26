@@ -99,6 +99,7 @@ class CdpSocket {
 try {
   mkdirSync(outputDir, { recursive: true });
   assertOpticalComparisonFalsifiers();
+  assertHistoricalDuplicateFireFalsifiers();
   requestedRoute = new URL(requestedRouteRaw);
   route = requestedRoute.href;
   initialResolution = Number(requestedRoute.searchParams.get('volume_resolution') || 96);
@@ -201,6 +202,19 @@ try {
     baseFrameCount: opticalHeldState.frameCount,
     baseSimStepCount: opticalHeldState.simStepCount,
   };
+  const opticalToolbarPresentation = await evaluate(socket, `(() => {
+    const toolbar = document.getElementById('toolbar');
+    if (!toolbar) throw new Error('optical-witness-toolbar-missing');
+    const previousInlineDisplay = toolbar.style.display;
+    toolbar.style.display = 'none';
+    return {
+      identity: 'toolbar-suppressed-fixed-volume-canvas-clip-v0',
+      previousInlineDisplay,
+      effectiveDisplay: getComputedStyle(toolbar).display,
+    };
+  })()`);
+  assert.equal(opticalToolbarPresentation.effectiveDisplay, 'none');
+  const opticalCanvasClip = await resolveVolumeCanvasClip(socket);
   const opticalCanvasSamples = {};
   for (const mode of [
     'legacy-global-path-scale-diagnostic-v0',
@@ -245,7 +259,7 @@ try {
     assert.equal(presentedFrame.sampleNowMs, opticalRenderTimeMs);
     assert.equal(presentedFrame.simStepCount, opticalHeldState.simStepCount);
     await delay(100);
-    const canvasPixels = await captureVolumeCanvasScreenshot(socket, path);
+    const canvasPixels = await captureVolumeCanvasScreenshot(socket, path, opticalCanvasClip);
     assertVisible(canvasPixels, `${mode}:presented-canvas`);
     optics[mode] = {
       receipt,
@@ -270,6 +284,167 @@ try {
     opticalCanvasSamples['legacy-global-path-scale-diagnostic-v0'],
     opticalCanvasSamples['projected-native-cell-area-integral-normalized-v0'],
   );
+  let historicalDuplicateFireDiagnostic = null;
+  if (appearanceTargetRequested) {
+    failurePhase = 'historical-duplicate-fire-diagnostic';
+    const diagnosticOpticalReceipt = await evaluate(socket, `(() => {
+      return window.__kaminosSelectiveHeadLive.setOpticalUnitMode(
+        'legacy-global-path-scale-diagnostic-v0'
+      );
+    })()`);
+    assert.equal(
+      diagnosticOpticalReceipt.effectiveBoundarySplatOpticalUnitMode,
+      'legacy-global-path-scale-diagnostic-v0',
+    );
+    const diagnosticPresentationReceipt = await evaluate(socket, `(() => {
+      const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+      if (!prototype?.setBoundarySplatPresentationMode) {
+        throw new Error('historical-additive-presentation-api-missing');
+      }
+      return prototype.setBoundarySplatPresentationMode('current-additive-v0');
+    })()`);
+    assert.equal(diagnosticPresentationReceipt.requestedMode, 'current-additive-v0');
+    assert.equal(diagnosticPresentationReceipt.effectiveMode, 'current-additive-v0');
+    assert.equal(
+      diagnosticPresentationReceipt.resolveIdentity,
+      'direct-additive-presentation-v0',
+    );
+    assert.equal(
+      diagnosticPresentationReceipt.blendIdentity,
+      'additive-rgb-gaussian-alpha-v0',
+    );
+    assert.equal(diagnosticPresentationReceipt.fallbackReason, null);
+    const diagnosticCompositionRequest = await evaluate(socket, `(() => {
+      const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+      if (!prototype?.setSelectiveHeadLiveRenderComposition) {
+        throw new Error('historical-duplicate-fire-composition-api-missing');
+      }
+      return prototype.setSelectiveHeadLiveRenderComposition(
+        'full-raymarch-under-splats-diagnostic-v0'
+      );
+    })()`);
+    assert.equal(
+      diagnosticCompositionRequest.requestedComposition,
+      'full-raymarch-under-splats-diagnostic-v0',
+    );
+    assert.equal(
+      diagnosticCompositionRequest.effectiveComposition,
+      'full-raymarch-under-splats-diagnostic-v0',
+    );
+    assert.equal(
+      diagnosticCompositionRequest.compositionAuthority,
+      'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+    );
+    assert.equal(diagnosticCompositionRequest.compositionFallbackReason, null);
+
+    const diagnosticPixels = await capturePixelSample(socket, opticalCaptureAuthority);
+    assertHistoricalDuplicateFireDiagnosticState(diagnosticPixels);
+    assertVisible(diagnosticPixels, 'historical-duplicate-fire-diagnostic');
+    const diagnosticPresentedFrame = await presentHeldFrame(socket, opticalCaptureAuthority);
+    assertHistoricalDuplicateFireDiagnosticState({
+      ...diagnosticPresentedFrame,
+      presentationReceipt: diagnosticPresentationReceipt,
+    });
+    assert.equal(diagnosticPresentedFrame.ok, true);
+    assert.equal(diagnosticPresentedFrame.advanceSim, false);
+    assert.equal(diagnosticPresentedFrame.presentToCanvas, true);
+    assert.equal(diagnosticPresentedFrame.sameStateCaptureId, opticalSameStateCaptureId);
+    assert.equal(diagnosticPresentedFrame.sampleNowMs, opticalRenderTimeMs);
+    assert.equal(diagnosticPresentedFrame.simStepCount, opticalHeldState.simStepCount);
+    const diagnosticScreenshotPath = resolve(
+      outputDir,
+      'historical-full-fire-under-splats-diagnostic.png',
+    );
+    await delay(100);
+    const diagnosticCanvasPixels = await captureVolumeCanvasScreenshot(
+      socket,
+      diagnosticScreenshotPath,
+      opticalCanvasClip,
+    );
+    assertVisible(diagnosticCanvasPixels, 'historical-duplicate-fire-diagnostic:presented-canvas');
+    const duplicateFireComparison = assertOpticalModePixelDelta(
+      opticalCanvasSamples['legacy-global-path-scale-diagnostic-v0'],
+      diagnosticCanvasPixels,
+    );
+    duplicateFireComparison.identity =
+      'same-state-honest-splat-versus-duplicate-fire-diagnostic-pixel-delta-v0';
+
+    const restoreCompositionRequest = await evaluate(socket, `(() => {
+      const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+      return prototype.setSelectiveHeadLiveRenderComposition('splat-only-v0');
+    })()`);
+    assert.equal(restoreCompositionRequest.requestedComposition, 'splat-only-v0');
+    assert.equal(restoreCompositionRequest.effectiveComposition, 'splat-only-v0');
+    assert.equal(restoreCompositionRequest.compositionFallbackReason, null);
+    const restorePresentationReceipt = await evaluate(socket, `(() => {
+      const prototype = document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype;
+      return prototype.setBoundarySplatPresentationMode('matched-optical-recurrence-v0');
+    })()`);
+    assert.equal(restorePresentationReceipt.requestedMode, 'matched-optical-recurrence-v0');
+    assert.equal(restorePresentationReceipt.effectiveMode, 'matched-optical-recurrence-v0');
+    assert.equal(restorePresentationReceipt.fallbackReason, null);
+    const restoreOpticalReceipt = await evaluate(socket, `(() => {
+      return window.__kaminosSelectiveHeadLive.setOpticalUnitMode(
+        ${JSON.stringify(initialOpticalUnitMode)}
+      );
+    })()`);
+    assert.equal(
+      restoreOpticalReceipt.effectiveBoundarySplatOpticalUnitMode,
+      initialOpticalUnitMode,
+    );
+    const restoredPresentedFrame = await presentHeldFrame(socket, opticalCaptureAuthority);
+    assert.equal(restoredPresentedFrame.ok, true);
+    assert.equal(restoredPresentedFrame.advanceSim, false);
+    assert.equal(restoredPresentedFrame.presentToCanvas, true);
+    assert.equal(restoredPresentedFrame.sameStateCaptureId, opticalSameStateCaptureId);
+    assert.equal(restoredPresentedFrame.sampleNowMs, opticalRenderTimeMs);
+    assert.equal(restoredPresentedFrame.simStepCount, opticalHeldState.simStepCount);
+    const restoredProductState = await waitForRuntimeState(socket, timeoutMs);
+    assertSparseProductState(
+      restoredProductState,
+      initialResolution,
+      initialGeometry,
+      initialOpticalUnitMode,
+    );
+    assert.equal(restoredProductState.simStepCount, opticalHeldState.simStepCount);
+    assert.equal(restoredProductState.cameraSignature, opticalHeldState.cameraSignature);
+
+    historicalDuplicateFireDiagnostic = {
+      identity: 'fat-bonfire-historical-duplicate-fire-composition-discriminator-v0',
+      evidenceAuthority: 'diagnostic-historical-attractor-only',
+      productionAuthority: false,
+      duplicateFireAuthority:
+        'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+      requestedOpticalUnitMode: 'legacy-global-path-scale-diagnostic-v0',
+      effectiveOpticalUnitMode: diagnosticPixels.opticalUnitMode,
+      requestedComposition: 'full-raymarch-under-splats-diagnostic-v0',
+      effectiveComposition: diagnosticPixels.effectiveComposition,
+      sameStateCaptureId: opticalSameStateCaptureId,
+      baseFrameCount: opticalHeldState.frameCount,
+      baseSimStepCount: opticalHeldState.simStepCount,
+      sampleNowMs: opticalRenderTimeMs,
+      diagnosticOpticalReceipt,
+      diagnosticPresentationReceipt,
+      diagnosticCompositionRequest,
+      pixels: stripPixels(diagnosticPixels),
+      presentedFrame: diagnosticPresentedFrame,
+      canvasPixels: stripPixels(diagnosticCanvasPixels),
+      screenshotPath: diagnosticScreenshotPath,
+      honestLegacySplatComparison: duplicateFireComparison,
+      restoration: {
+        compositionRequest: restoreCompositionRequest,
+        presentationReceipt: restorePresentationReceipt,
+        opticalReceipt: restoreOpticalReceipt,
+        presentedFrame: restoredPresentedFrame,
+        state: restoredProductState,
+      },
+    };
+  }
+  await evaluate(socket, `(() => {
+    const toolbar = document.getElementById('toolbar');
+    toolbar.style.display = ${JSON.stringify(opticalToolbarPresentation.previousInlineDisplay)};
+    return getComputedStyle(toolbar).display;
+  })()`);
   await evaluate(socket, `(() => {
     return window.__kaminosSelectiveHeadLive.setCapturePaused(false);
   })()`);
@@ -280,6 +455,9 @@ try {
     opticalHeldState,
     opticalRenderTimeMs,
     opticalSameStateCaptureId,
+    opticalCanvasClip,
+    opticalToolbarPresentation,
+    historicalDuplicateFireDiagnostic,
   };
 
   let resolutionRequest = null;
@@ -481,6 +659,9 @@ try {
     opticalHeldState,
     opticalRenderTimeMs,
     opticalSameStateCaptureId,
+    opticalCanvasClip,
+    opticalToolbarPresentation,
+    historicalDuplicateFireDiagnostic,
     cameraProbe,
     screenshotPath,
     browserErrors,
@@ -764,6 +945,10 @@ async function captureRuntimeState(cdp) {
       effectiveRole: outer.effectiveRole || null,
       requestedComposition: outer.requestedComposition || null,
       effectiveComposition: outer.effectiveComposition || null,
+      compositionAuthority: inner.selectiveHeadLiveCompositionAuthority || null,
+      compositionFallbackReason: inner.selectiveHeadLiveCompositionFallbackReason || null,
+      passReceipt: inner.selectiveHeadLivePassReceipt || null,
+      cameraSignature: inner.cameraSignature || null,
       transition: outer.volumeResolutionTransitionReceipt || null,
       sourceSettingsPresetId: outer.sourceSettingsPresetId || null,
       sourceSettingsPresetAuthority: outer.sourceSettingsPresetAuthority || null,
@@ -804,6 +989,7 @@ async function capturePixelSample(cdp, authority = {}) {
       baseSimStepCount: authority.baseSimStepCount,
     });
     if (!sample?.ok || !sample.preview?.rgba?.length) throw new Error('sparse-product-preview-readback-missing');
+    const state = prototype.debugState();
     let litPixels = 0;
     let lumaSum = 0;
     let maximumLuma = 0;
@@ -825,7 +1011,7 @@ async function capturePixelSample(cdp, authority = {}) {
       litFraction: litPixels / Math.max(1, pixels),
       meanLuma: lumaSum / Math.max(1, pixels),
       maximumLuma,
-      simStepCount: prototype.debugState().simStepCount,
+      simStepCount: state.simStepCount,
       candidateCount: sample.boundarySplatCandidateCount,
       sameStateCaptureId: sample.sameStateCaptureId,
       baseFrameCount: sample.baseFrameCount,
@@ -834,6 +1020,17 @@ async function capturePixelSample(cdp, authority = {}) {
       renderPhaseTimeMs: sample.renderPhaseTimeMs,
       renderPhaseFrame: sample.renderPhaseFrame,
       renderPhaseAuthority: sample.renderPhaseAuthority,
+      opticalUnitMode: state.effectiveBoundarySplatOpticalUnitMode,
+      requestedComposition: state.selectiveHeadLiveCompositionRequested,
+      effectiveComposition: state.selectiveHeadLiveCompositionEffective,
+      compositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+      compositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+      passReceipt: sample.selectiveHeadLivePassReceipt,
+      presentationReceipt: sample.boundarySplatPresentationReceipt,
+      fallbackReason: sample.fallbackReason
+        || sample.boundarySplatFallbackReason
+        || sample.boundarySplatPresentationModeFallbackReason
+        || null,
     };
   })()`);
 }
@@ -924,6 +1121,104 @@ function assertOpticalComparisonFalsifiers() {
     }, 'blank-canvas-falsifier'),
     /blank-canvas-falsifier frame was blank/,
     'blank canvas pixels must not close the optics witness',
+  );
+}
+
+function assertHistoricalDuplicateFireDiagnosticState(evidence) {
+  assert.equal(
+    evidence.requestedComposition || evidence.selectiveHeadLiveCompositionRequested,
+    'full-raymarch-under-splats-diagnostic-v0',
+    'historical diagnostic requested composition was substituted',
+  );
+  assert.equal(
+    evidence.effectiveComposition || evidence.selectiveHeadLiveCompositionEffective,
+    'full-raymarch-under-splats-diagnostic-v0',
+    'historical diagnostic effective composition was substituted',
+  );
+  assert.equal(
+    evidence.compositionAuthority || evidence.selectiveHeadLiveCompositionAuthority,
+    'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+    'historical diagnostic omitted duplicate-fire authority',
+  );
+  const presentationReceipt = evidence.presentationReceipt
+    || evidence.boundarySplatPresentationReceipt;
+  assert.equal(presentationReceipt?.requestedMode, 'current-additive-v0');
+  assert.equal(presentationReceipt?.effectiveMode, 'current-additive-v0');
+  assert.equal(presentationReceipt?.resolveIdentity, 'direct-additive-presentation-v0');
+  assert.equal(presentationReceipt?.blendIdentity, 'additive-rgb-gaussian-alpha-v0');
+  assert.equal(presentationReceipt?.fallbackReason || null, null);
+  assert.equal(
+    evidence.compositionFallbackReason
+      || evidence.selectiveHeadLiveCompositionFallbackReason
+      || null,
+    null,
+    'historical diagnostic composition used a fallback',
+  );
+  assert.equal(evidence.fallbackReason || evidence.boundarySplatFallbackReason || null, null);
+  const passReceipt = evidence.passReceipt || evidence.selectiveHeadLivePassReceipt;
+  assert.equal(passReceipt?.composition, 'full-raymarch-under-splats-diagnostic-v0');
+  assert.equal(passReceipt?.raymarchEncoded, true);
+  assert.equal(passReceipt?.raymarchApplied, true);
+  assert.equal(passReceipt?.splatEncoded, true);
+  assert.equal(passReceipt?.splatApplied, true);
+  assert.equal(passReceipt?.fallbackReason || null, null);
+}
+
+function assertHistoricalDuplicateFireFalsifiers() {
+  const valid = {
+    requestedComposition: 'full-raymarch-under-splats-diagnostic-v0',
+    effectiveComposition: 'full-raymarch-under-splats-diagnostic-v0',
+    compositionAuthority:
+      'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+    compositionFallbackReason: null,
+    fallbackReason: null,
+    presentationReceipt: {
+      requestedMode: 'current-additive-v0',
+      effectiveMode: 'current-additive-v0',
+      resolveIdentity: 'direct-additive-presentation-v0',
+      blendIdentity: 'additive-rgb-gaussian-alpha-v0',
+      fallbackReason: null,
+    },
+    passReceipt: {
+      composition: 'full-raymarch-under-splats-diagnostic-v0',
+      raymarchEncoded: true,
+      raymarchApplied: true,
+      splatEncoded: true,
+      splatApplied: true,
+      fallbackReason: null,
+    },
+  };
+  assert.doesNotThrow(() => assertHistoricalDuplicateFireDiagnosticState(valid));
+  assert.throws(
+    () => assertHistoricalDuplicateFireDiagnosticState({
+      ...valid,
+      effectiveComposition: 'splat-only-v0',
+    }),
+    /effective composition was substituted/,
+  );
+  assert.throws(
+    () => assertHistoricalDuplicateFireDiagnosticState({
+      ...valid,
+      presentationReceipt: {
+        ...valid.presentationReceipt,
+        effectiveMode: 'matched-optical-recurrence-v0',
+      },
+    }),
+    /matched-optical-recurrence-v0/,
+  );
+  assert.throws(
+    () => assertHistoricalDuplicateFireDiagnosticState({
+      ...valid,
+      passReceipt: { ...valid.passReceipt, raymarchApplied: false },
+    }),
+    /false !== true/,
+  );
+  assert.throws(
+    () => assertHistoricalDuplicateFireDiagnosticState({
+      ...valid,
+      compositionFallbackReason: 'injected-composition-fallback',
+    }),
+    /used a fallback/,
   );
 }
 
@@ -1021,8 +1316,8 @@ function decodePngRgba(bytes) {
   };
 }
 
-async function captureVolumeCanvasScreenshot(cdp, path) {
-  const clip = await evaluate(cdp, `(() => {
+async function resolveVolumeCanvasClip(cdp) {
+  return evaluate(cdp, `(() => {
     const frame = document.querySelector('#basin');
     const canvas = frame?.contentDocument?.querySelector('#kaminos-host-renderer-canvas');
     if (!frame || !canvas) throw new Error('volume-canvas-missing');
@@ -1048,6 +1343,10 @@ async function captureVolumeCanvasScreenshot(cdp, path) {
       authority: 'presented-volume-canvas-below-toolbar-v0',
     };
   })()`);
+}
+
+async function captureVolumeCanvasScreenshot(cdp, path, fixedClip = null) {
+  const clip = fixedClip || await resolveVolumeCanvasClip(cdp);
   const screenshot = await cdp.call('Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
