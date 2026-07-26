@@ -80,6 +80,155 @@ const CANONICAL_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
+
+export function waitForForegroundNoRenderOpportunity({
+  signal = null,
+  fallbackDelayMs = 250,
+  hiddenDocumentPolicy = 'non-present-fallback',
+  requestFrame = callback => requestAnimationFrame(callback),
+  cancelFrame = handle => cancelAnimationFrame(handle),
+  scheduleFallback = (callback, delayMs) => setTimeout(callback, delayMs),
+  cancelFallback = handle => clearTimeout(handle),
+  readVisibilityState = () => globalThis.document?.visibilityState || 'unknown',
+  subscribeVisibilityChange = callback => {
+    if (!globalThis.document?.addEventListener) return () => {};
+    globalThis.document.addEventListener('visibilitychange', callback);
+    return () => globalThis.document.removeEventListener('visibilitychange', callback);
+  },
+  now = () => performance.now(),
+} = {}) {
+  if (!Number.isFinite(fallbackDelayMs) || fallbackDelayMs <= 0) {
+    throw new TypeError('foreground no-render fallbackDelayMs must be finite and positive');
+  }
+  if (!['non-present-fallback', 'pause-until-visible'].includes(hiddenDocumentPolicy)) {
+    throw new TypeError(`unsupported foreground no-render hidden document policy: ${hiddenDocumentPolicy}`);
+  }
+  for (const [label, value] of Object.entries({
+    requestFrame,
+    cancelFrame,
+    scheduleFallback,
+    cancelFallback,
+    readVisibilityState,
+    subscribeVisibilityChange,
+    now,
+  })) {
+    if (typeof value !== 'function') {
+      throw new TypeError(`foreground no-render ${label} must be a function`);
+    }
+  }
+
+  const visibilityStateAtRequest = String(readVisibilityState() || 'unknown');
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let rafHandle = null;
+    let fallbackHandle = null;
+    let unsubscribeVisibility = null;
+    let visibilityPause = {
+      status: 'not-paused',
+      pausedAtMs: null,
+      resumedAtMs: null,
+    };
+
+    const cleanup = () => {
+      if (rafHandle !== null) cancelFrame(rafHandle);
+      if (fallbackHandle !== null) cancelFallback(fallbackHandle);
+      unsubscribeVisibility?.();
+      signal?.removeEventListener?.('abort', onAbort);
+      rafHandle = null;
+      fallbackHandle = null;
+      unsubscribeVisibility = null;
+    };
+    const settle = receipt => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(Object.freeze({
+        schema: 'kaminos.foreground-no-render-opportunity-service.v0',
+        fallbackDelayMs,
+        hiddenDocumentPolicy,
+        visibilityStateAtRequest,
+        visibilityStateAtService: String(readVisibilityState() || 'unknown'),
+        visibilityPause: Object.freeze({ ...visibilityPause }),
+        ...receipt,
+      }));
+    };
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const onAbort = () => {
+      const reason = signal?.reason;
+      fail(reason instanceof Error
+        ? reason
+        : new Error(reason ? String(reason) : 'foreground no-render opportunity was aborted'));
+    };
+    const armOpportunity = () => {
+      if (settled || rafHandle !== null || fallbackHandle !== null) return;
+      try {
+        const requestedFrameHandle = requestFrame(timestampMs => {
+          settle({
+            serviceMode: 'presented-raf',
+            serviceAuthority: 'browser-request-animation-frame',
+            presentationObserved: true,
+            rafTimestampMs: timestampMs,
+            fallbackReason: null,
+            servicedAtMs: now(),
+          });
+        });
+        if (settled) {
+          cancelFrame(requestedFrameHandle);
+          return;
+        }
+        rafHandle = requestedFrameHandle;
+        const scheduledFallbackHandle = scheduleFallback(() => {
+          settle({
+            serviceMode: 'non-present-fallback',
+            serviceAuthority: 'browser-task-fallback-no-presentation',
+            presentationObserved: false,
+            rafTimestampMs: null,
+            fallbackReason: 'raf-suspended-or-delayed',
+            servicedAtMs: now(),
+          });
+        }, fallbackDelayMs);
+        if (settled) {
+          cancelFallback(scheduledFallbackHandle);
+          return;
+        }
+        fallbackHandle = scheduledFallbackHandle;
+      } catch (error) {
+        fail(error);
+      }
+    };
+
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    if (visibilityStateAtRequest === 'hidden' && hiddenDocumentPolicy === 'pause-until-visible') {
+      visibilityPause = {
+        status: 'paused',
+        pausedAtMs: now(),
+        resumedAtMs: null,
+      };
+      unsubscribeVisibility = subscribeVisibilityChange(() => {
+        if (settled || String(readVisibilityState() || 'unknown') === 'hidden') return;
+        visibilityPause = {
+          ...visibilityPause,
+          status: 'resumed',
+          resumedAtMs: now(),
+        };
+        unsubscribeVisibility?.();
+        unsubscribeVisibility = null;
+        armOpportunity();
+      });
+      return;
+    }
+    armOpportunity();
+  });
+}
 const CANONICAL_MOTION_MODE_VALUES = {
   animated: 0,
   frozen: 1,
@@ -10792,21 +10941,18 @@ export function createKaminosVolumePrototype({
     if (frameId !== expectedFrameId) {
       throw new Error(`foreground no-render frame identity mismatch: expected ${expectedFrameId}, got ${frameId}`);
     }
-    const rafTimestampMs = await new Promise((resolve, reject) => {
-      let rafId = 0;
-      const onAbort = () => {
-        cancelAnimationFrame(rafId);
-        reject(new Error('foreground no-render opportunity was canceled during rAF'));
-      };
-      options.signal?.addEventListener?.('abort', onAbort, { once: true });
-      rafId = requestAnimationFrame(timestamp => {
-        options.signal?.removeEventListener?.('abort', onAbort);
-        resolve(timestamp);
-      });
+    const opportunity = await waitForForegroundNoRenderOpportunity({
+      signal: options.signal,
+      fallbackDelayMs: options.fallbackDelayMs ?? 250,
+      hiddenDocumentPolicy: options.hiddenDocumentPolicy || 'non-present-fallback',
     });
-    if (kilnFrameStageLedgerRecording && lastKilnFrameStageId) {
+    if (
+      opportunity.presentationObserved
+      && kilnFrameStageLedgerRecording
+      && lastKilnFrameStageId
+    ) {
       kilnFrameStageLedger.recordPresentationOpportunity(lastKilnFrameStageId, {
-        timestampMs: rafTimestampMs,
+        timestampMs: opportunity.rafTimestampMs,
         authority: 'sharp-foreground-no-render-raf-opportunity',
       });
       lastKilnFrameStageId = null;
@@ -10821,7 +10967,16 @@ export function createKaminosVolumePrototype({
       commandBufferCount: 0,
       simulationQuiesced: true,
       raymarchSubmissionQuiesced: true,
-      rafTimestampMs,
+      serviceMode: opportunity.serviceMode,
+      serviceAuthority: opportunity.serviceAuthority,
+      presentationObserved: opportunity.presentationObserved,
+      rafTimestampMs: opportunity.rafTimestampMs,
+      fallbackReason: opportunity.fallbackReason,
+      fallbackDelayMs: opportunity.fallbackDelayMs,
+      hiddenDocumentPolicy: opportunity.hiddenDocumentPolicy,
+      visibilityStateAtRequest: opportunity.visibilityStateAtRequest,
+      visibilityStateAtService: opportunity.visibilityStateAtService,
+      visibilityPause: opportunity.visibilityPause,
       deviceIdentity: foregroundDeviceIdentity,
       queueIdentity: foregroundQueueIdentity,
     };

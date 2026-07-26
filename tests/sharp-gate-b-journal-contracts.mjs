@@ -236,6 +236,116 @@ assert.equal(adaptiveRange.plannerId, 'sharp:run:gaussian:0:image-encoder');
 assert.equal(adaptiveRange.rangeId, 'sharp:run:gaussian:0:image-encoder:3');
 assert.equal(adaptiveRange.outputEnd - adaptiveRange.outputStart, adaptiveRange.outputCount);
 assert.equal(adaptiveRange.retention, 'uncapped');
+
+const effectiveEmbeddedKitAdaptiveEvent = {
+  phase: 'project-feature',
+  boundary: 'monodepth-phase',
+  kind: 'decoder-kernel-range-observed',
+  index: 1,
+  inC: 256,
+  outC: 256,
+  H: 384,
+  W: 384,
+  role: 'decoder-kernel-output-tile-observation',
+  rangeId: 'sharp:sharp-webgpu-live:monodepth:0:project-feature:0',
+  rangeIndex: 0,
+  rangeTotal: null,
+  rangeCountAuthority: 'open-until-completion',
+  outputStart: 0,
+  outputEnd: 262_144,
+  outputCount: 262_144,
+  totalOutputItems: 37_748_736,
+  timingAuthority: 'queue-work-done',
+  queueWorkAttribution: 'submitted-range-prefix',
+  foregroundServiceStatus: 'serviced',
+  requestedAdjustmentGain: 0.375,
+  effectiveAdjustmentGain: 0.375,
+  observedDurationMs: 60.4,
+  targetDurationMs: 12,
+  fullGainCorrectionRatio: 0.19867549668874174,
+  effectiveCorrectionRatio: 0.5455117573027798,
+  observedChunkItems: 262_144,
+  rawNextChunkItems: 52_081.589403973514,
+  effectiveRawNextChunkItems: 143_002.6341063799,
+  nextChunkItems: 143_003,
+  adjustment: 'decrease',
+  boundApplication: null,
+  completedItems: 262_144,
+  progress: 0.006944444444444444,
+  actualRangeCount: null,
+  runId: 'sharp-webgpu-live',
+  tMs: 311_234.6,
+  epochMs: 1_785_028_393_992.6,
+};
+const normalizedEffectiveAdaptiveEvent = normalizeGateBAdaptiveRange(
+  effectiveEmbeddedKitAdaptiveEvent,
+);
+assert.equal(normalizedEffectiveAdaptiveEvent.plannedChunkItems, null);
+assert.equal(
+  normalizedEffectiveAdaptiveEvent.plannedChunkItemsAuthority,
+  'not-emitted-by-effective-producer',
+);
+assert.equal(normalizedEffectiveAdaptiveEvent.bounds, null);
+assert.equal(
+  normalizedEffectiveAdaptiveEvent.boundsAuthority,
+  'not-emitted-by-effective-producer',
+);
+const effectiveAdaptiveRows = [];
+assert.equal(
+  appendGateBSchedulerTelemetry({
+    event: effectiveEmbeddedKitAdaptiveEvent,
+    observedAtMs: 311_235,
+    append: (collectionId, row) => effectiveAdaptiveRows.push({ collectionId, row }),
+  }).status,
+  'accepted',
+  'a valid effective embedded-kit adaptive observation must not become a runtime diagnostic',
+);
+assert.deepEqual(
+  effectiveAdaptiveRows.map(({ collectionId }) => collectionId),
+  ['scheduler-events'],
+  'valid observed ranges must remain scheduler evidence without per-range runtime errors',
+);
+
+const effectiveEmbeddedKitTerminalAdaptiveEvent = {
+  ...effectiveEmbeddedKitAdaptiveEvent,
+  rangeId: 'sharp:sharp-webgpu-live:monodepth:0:project-feature:227',
+  rangeIndex: 227,
+  rangeCountAuthority: 'actual',
+  outputStart: 37_597_561,
+  outputEnd: 37_748_736,
+  outputCount: 151_175,
+  observedChunkItems: 151_175,
+  observedDurationMs: 10.5,
+  fullGainCorrectionRatio: null,
+  effectiveCorrectionRatio: null,
+  rawNextChunkItems: null,
+  effectiveRawNextChunkItems: null,
+  nextChunkItems: null,
+  adjustment: 'complete',
+  completedItems: 37_748_736,
+  progress: 1,
+  actualRangeCount: 228,
+};
+const normalizedEffectiveTerminalEvent = normalizeGateBAdaptiveRange(
+  effectiveEmbeddedKitTerminalAdaptiveEvent,
+);
+assert.equal(normalizedEffectiveTerminalEvent.adaptiveRangeStatus, 'complete');
+assert.equal(normalizedEffectiveTerminalEvent.nextChunkItems, null);
+const effectiveTerminalRows = [];
+assert.equal(
+  appendGateBSchedulerTelemetry({
+    event: effectiveEmbeddedKitTerminalAdaptiveEvent,
+    observedAtMs: 319_059,
+    append: (collectionId, row) => effectiveTerminalRows.push({ collectionId, row }),
+  }).status,
+  'accepted',
+  'the effective producer terminal range must not become a runtime diagnostic',
+);
+assert.deepEqual(
+  effectiveTerminalRows.map(({ collectionId }) => collectionId),
+  ['scheduler-events'],
+);
+
 const acceptedSchedulerRows = [];
 assert.equal(
   appendGateBSchedulerTelemetry({
@@ -620,6 +730,11 @@ const noRenderVolume = {
       commandBufferCount: 0,
       simulationQuiesced: true,
       raymarchSubmissionQuiesced: true,
+      serviceMode: 'presented-raf',
+      serviceAuthority: 'browser-request-animation-frame',
+      presentationObserved: true,
+      rafTimestampMs: 100,
+      fallbackReason: null,
     };
   },
   async renderForegroundOpportunityFrame() {
@@ -645,7 +760,49 @@ assert.equal(noRenderReceipt.status, 'opportunity-served');
 assert.equal(noRenderReceipt.commandBufferCount, 0);
 assert.equal(noRenderReceipt.simulationQuiesced, true);
 assert.equal(noRenderReceipt.raymarchSubmissionQuiesced, true);
+assert.equal(noRenderReceipt.serviceMode, 'presented-raf');
+assert.equal(noRenderReceipt.presentationObserved, true);
 assert.equal(noRenderOpportunity.firingId, 'gate-b-no-render');
+
+const forgedFallbackVolume = {
+  ...noRenderVolume,
+  async serveForegroundNoRenderOpportunity(options) {
+    return {
+      schema: 'kaminos.volume-foreground-no-render-receipt.v0',
+      status: 'opportunity-served',
+      firingId: options.firingId,
+      frameId: options.frameId,
+      requestId: options.requestId,
+      commandBufferCount: 0,
+      simulationQuiesced: true,
+      raymarchSubmissionQuiesced: true,
+      serviceMode: 'non-present-fallback',
+      serviceAuthority: 'browser-task-fallback-no-presentation',
+      presentationObserved: true,
+      rafTimestampMs: 100,
+      fallbackReason: 'raf-suspended-or-delayed',
+    };
+  },
+};
+const forgedFallbackHook = createSharpSameDeviceKilnOpportunityHook({
+  volume: forgedFallbackVolume,
+  firingId: 'gate-b-forged-fallback',
+  nextFrameId: () => 'gate-b-forged-fallback:1',
+  presentationIsolation: 'no-render',
+});
+const forgedFallbackRequest = forgedFallbackHook({
+  device: fakeDevice,
+  queue: fakeDevice.queue,
+  runId: 'gate-b-forged-run',
+});
+await assert.rejects(
+  () => forgedFallbackRequest.run({
+    device: fakeDevice,
+    queue: fakeDevice.queue,
+  }),
+  /did not prove a quiesced opportunity/,
+  'a non-present fallback must not forge presented-rAF authority',
+);
 
 const [page, volumeCore] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
@@ -704,6 +861,16 @@ assert.doesNotMatch(
   noRenderMethod[0],
   /renderLiveFrame|createCommandEncoder|queue\.submit/,
   'the no-render opportunity must not encode simulation or raymarch work',
+);
+assert.match(
+  noRenderMethod[0],
+  /presentationObserved[\s\S]{0,500}recordPresentationOpportunity/,
+  'the frame ledger must only record presentation when the browser actually delivered rAF',
+);
+assert.match(
+  noRenderMethod[0],
+  /serviceMode:[\s\S]{0,500}serviceAuthority:[\s\S]{0,500}presentationObserved:/,
+  'the product receipt must preserve presented-rAF versus non-present-fallback authority',
 );
 
 console.log('SHARP Gate B journal contracts passed');

@@ -153,6 +153,31 @@ assert.match(
 );
 assert.match(
   witness,
+  /--no-render-liveness-smoke/,
+  'Witness must expose an explicit bounded no-inference rAF-suspension mode',
+);
+assert.match(
+  witness,
+  /noRenderLivenessSmoke[\s\S]{0,1000}!headed[\s\S]{0,1000}fireFriendly[\s\S]{0,1000}replayCastReportPath/,
+  'The rAF-suspension witness must require headed Chrome and reject inference or replay combinations',
+);
+assert.match(
+  witness,
+  /waitForForegroundNoRenderOpportunity[\s\S]{0,1800}requestFrame\(\)[\s\S]{0,300}return 4242/,
+  'The bounded witness must inject a never-callback rAF request instead of depending on accidental tab occlusion',
+);
+assert.match(
+  witness,
+  /serviceMode !== 'non-present-fallback'[\s\S]{0,600}presentationObserved !== false/,
+  'The witness must reject fallback evidence that claims browser presentation',
+);
+assert.match(
+  witness,
+  /routeStatusBefore[\s\S]{0,600}routeStatusAfter[\s\S]{0,600}runningProfileIdAfter/,
+  'The suspension witness must record and reject any accidental inference route activation',
+);
+assert.match(
+  witness,
   /DevToolsActivePort/,
   'Crucible headless smoke must attach through the spawned profile endpoint',
 );
@@ -229,6 +254,7 @@ try {
     headed: false,
     fireFriendly: true,
     gateBJournal: false,
+    noRenderLivenessSmoke: false,
     replayCastReportPath: join(argumentFailureRoot, 'completed-pipeline-witness.json'),
     schedulerProfileId: 'cooperative-spn-gaussian',
     sourceAssetId: null,
@@ -255,6 +281,7 @@ try {
     scheduler: null,
     fireBudget: null,
     output: null,
+    noRenderLivenessSmoke: null,
   });
   assert.match(argumentFailureDocument.error, /cannot be combined/);
   assert.equal(existsSync(join(argumentFailureRoot, 'should-not-exist.png')), false, 'argument rejection must happen before browser capture');

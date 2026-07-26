@@ -42,7 +42,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--gate-b-journal] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-sharp-module-sha256 <sha256>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--headed] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--gate-b-journal] [--no-render-liveness-smoke] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-sharp-module-sha256 <sha256>] [--expected-webgpu-kit-version <version>] [--require-frame-stage-ledger]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -61,6 +61,7 @@ const viewportHeight = Number(args.get('viewport-height') || 1100);
 const headed = args.has('headed');
 const fireFriendly = args.has('fire-friendly');
 const gateBJournal = args.has('gate-b-journal');
+const noRenderLivenessSmoke = args.has('no-render-liveness-smoke');
 const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
 const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
@@ -138,6 +139,7 @@ const requestedInvocation = {
   headed,
   fireFriendly,
   gateBJournal,
+  noRenderLivenessSmoke,
   replayCastReportPath,
   schedulerProfileId,
   sourceAssetId: requestedSourceAssetId,
@@ -190,6 +192,7 @@ function bestKnownEffectiveIdentity() {
       sha256: output.sha256 ?? null,
       bytes: output.bytes ?? null,
     } : null,
+    noRenderLivenessSmoke: evidence.noRenderLivenessSmoke || null,
   };
 }
 
@@ -1678,6 +1681,15 @@ try {
   if (gateBJournal && (replayCastReportPath || captureInFlight)) {
     throw new Error('--gate-b-journal cannot be combined with replay or in-flight visual capture');
   }
+  if (noRenderLivenessSmoke && (
+    !headed
+    || fireFriendly
+    || gateBJournal
+    || replayCastReportPath
+    || captureInFlight
+  )) {
+    throw new Error('--no-render-liveness-smoke requires --headed and cannot be combined with inference, Gate B, replay, or in-flight capture');
+  }
   if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
     throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
   }
@@ -1864,6 +1876,107 @@ try {
   }
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, sourceSelectionExercise: state.sourceSelectionExercise };
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
+
+  if (noRenderLivenessSmoke) {
+    phase = 'exercising-no-render-raf-suspension';
+    state.noRenderLivenessSmoke = await evaluate(ws, `(async () => {
+      const before = window.kaminosCrucibleViewportDebugState?.() || null;
+      const routeStatusBefore = before?.routeStatus || null;
+      const runningProfileIdBefore = before?.runningProfileId || null;
+      let canceledFrameHandle = null;
+      const volumeCore = await import('/volume-core.js?no-render-liveness-smoke');
+      const startedAtMs = performance.now();
+      const receipt = await volumeCore.waitForForegroundNoRenderOpportunity({
+        fallbackDelayMs: 120,
+        hiddenDocumentPolicy: 'non-present-fallback',
+        requestFrame() {
+          return 4242;
+        },
+        cancelFrame(handle) {
+          canceledFrameHandle = handle;
+        },
+        scheduleFallback(callback, delayMs) {
+          return setTimeout(callback, delayMs);
+        },
+        cancelFallback(handle) {
+          clearTimeout(handle);
+        },
+        readVisibilityState() {
+          return document.visibilityState || 'unknown';
+        },
+        subscribeVisibilityChange(callback) {
+          document.addEventListener('visibilitychange', callback);
+          return () => document.removeEventListener('visibilitychange', callback);
+        },
+      });
+      const after = window.kaminosCrucibleViewportDebugState?.() || null;
+      const routeStatusAfter = after?.routeStatus || null;
+      const runningProfileIdAfter = after?.runningProfileId || null;
+      const banner = document.createElement('aside');
+      banner.id = 'no-render-liveness-witness-banner';
+      banner.style.cssText = [
+        'position:fixed',
+        'left:24px',
+        'right:24px',
+        'top:24px',
+        'z-index:2147483647',
+        'padding:16px 20px',
+        'border:2px solid #54e6a5',
+        'border-radius:12px',
+        'background:rgba(6,20,18,0.94)',
+        'color:#dfffee',
+        'font:600 16px/1.45 ui-monospace,monospace',
+        'box-shadow:0 12px 32px rgba(0,0,0,0.45)',
+      ].join(';');
+      banner.textContent = [
+        'NO-INFERENCE rAF SUSPENSION WITNESS',
+        receipt.serviceMode,
+        receipt.serviceAuthority,
+        'presentationObserved=' + receipt.presentationObserved,
+        'route=' + routeStatusAfter,
+      ].join(' · ');
+      document.body.appendChild(banner);
+      return {
+        schema: 'kaminos.no-render-raf-suspension-witness.v0',
+        status: 'complete',
+        authority: 'headed-browser-never-callback-raf-injection-no-inference',
+        suspensionInjection: 'never-callback-request-frame',
+        requestedFallbackDelayMs: 120,
+        elapsedMs: performance.now() - startedAtMs,
+        canceledFrameHandle,
+        serviceMode: receipt.serviceMode,
+        serviceAuthority: receipt.serviceAuthority,
+        presentationObserved: receipt.presentationObserved,
+        routeStatusBefore,
+        routeStatusAfter,
+        runningProfileIdBefore,
+        runningProfileIdAfter,
+        inferenceRequested: false,
+        receipt,
+      };
+    })()`, 5000);
+    if (
+      state.noRenderLivenessSmoke.serviceMode !== 'non-present-fallback'
+      || state.noRenderLivenessSmoke.receipt?.serviceMode !== 'non-present-fallback'
+      || state.noRenderLivenessSmoke.receipt?.serviceAuthority !== 'browser-task-fallback-no-presentation'
+      || state.noRenderLivenessSmoke.receipt?.presentationObserved !== false
+    ) {
+      throw new Error(`No-render liveness smoke forged fallback authority: ${JSON.stringify(state.noRenderLivenessSmoke)}`);
+    }
+    if (
+      state.noRenderLivenessSmoke.routeStatusBefore !== 'idle'
+      || state.noRenderLivenessSmoke.routeStatusAfter !== 'idle'
+      || state.noRenderLivenessSmoke.runningProfileIdBefore
+      || state.noRenderLivenessSmoke.runningProfileIdAfter
+      || state.noRenderLivenessSmoke.inferenceRequested !== false
+    ) {
+      throw new Error(`No-render liveness smoke activated an inference route: ${JSON.stringify(state.noRenderLivenessSmoke)}`);
+    }
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      noRenderLivenessSmoke: state.noRenderLivenessSmoke,
+    };
+  }
 
   if (replayCastEvidence) {
     phase = 'replaying-completed-real-cast';
