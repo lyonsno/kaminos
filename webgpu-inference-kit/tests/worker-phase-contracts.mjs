@@ -216,6 +216,14 @@ async function captureFailure(input) {
   assert.equal(worker.terminateCalls, 1);
 }
 
+await assert.rejects(
+  () => runWebGpuWorkerPhase(request({
+    worker: new FakeWorker(),
+    timeoutMs: 2_147_483_648,
+  })),
+  /platform timer ceiling/,
+);
+
 for (const field of ['maxProgressEvents', 'maxHistory', 'retentionLimit']) {
   await assert.rejects(
     () => runWebGpuWorkerPhase(request({
@@ -321,6 +329,25 @@ for (const field of ['maxProgressEvents', 'maxHistory', 'retentionLimit']) {
   }));
   assert.match(error.message, /must complete synchronously/);
   assert.equal(error.workerPhaseReport.phase, 'output-validation');
+}
+
+{
+  const worker = new FakeWorker({
+    onPost(instance, message) {
+      queueMicrotask(() => instance.emit('message', {
+        data: progressResult(message, 0, { completed: 1, total: 1 }),
+      }));
+    },
+  });
+  const error = await captureFailure(request({
+    worker,
+    onProgress() {
+      return Promise.resolve();
+    },
+  }));
+  assert.match(error.message, /onProgress must complete synchronously/);
+  assert.equal(error.workerPhaseReport.phase, 'progress-validation');
+  assert.equal(worker.terminateCalls, 1);
 }
 
 {

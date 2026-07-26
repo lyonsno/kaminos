@@ -3,6 +3,8 @@ export const WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA = 'kaminos.webgpu-worker-phase-
 export const WEBGPU_WORKER_PHASE_RESULT_SCHEMA = 'kaminos.webgpu-worker-phase-result.v0';
 export const WEBGPU_WORKER_PHASE_REPORT_SCHEMA = 'kaminos.webgpu-worker-phase-report.v0';
 
+const PLATFORM_TIMER_CEILING_MS = 2_147_483_647;
+
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -139,7 +141,27 @@ function normalizeTimeout(timeoutMs) {
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Error('worker phase timeoutMs must be a positive finite number when provided');
   }
+  if (timeoutMs > PLATFORM_TIMER_CEILING_MS) {
+    throw new Error(
+      `worker phase timeoutMs exceeds the ${PLATFORM_TIMER_CEILING_MS}ms platform timer ceiling`,
+    );
+  }
   return timeoutMs;
+}
+
+function requireSynchronousResult(value, label) {
+  if (value == null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+  const thenCapability = captureProperty(value, 'then');
+  if (thenCapability.error) throw thenCapability.error;
+  if (typeof thenCapability.value !== 'function') return value;
+
+  const catchCapability = captureCapability(value, 'catch');
+  if (catchCapability.value) {
+    try {
+      Reflect.apply(catchCapability.value, value, [() => {}]);
+    } catch {}
+  }
+  throw new Error(`${label} must complete synchronously`);
 }
 
 function normalizeSignal(signal) {
@@ -503,7 +525,8 @@ export async function runWebGpuWorkerPhase(rawInput = {}) {
           });
           state.progress.push(progress);
           record('progress', { sequence: progress.sequence, progress: progress.progress });
-          input.onProgress?.(progress);
+          const callbackResult = input.onProgress?.(progress);
+          requireSynchronousResult(callbackResult, 'worker phase onProgress');
         } catch (cause) {
           failResponse(cause, 'progress-validation');
         }
@@ -538,13 +561,7 @@ export async function runWebGpuWorkerPhase(rawInput = {}) {
       let output;
       try {
         output = input.validateOutput(message.output, message);
-        if (output != null && (typeof output === 'object' || typeof output === 'function')) {
-          const thenCapability = captureProperty(output, 'then');
-          if (thenCapability.error) throw thenCapability.error;
-          if (typeof thenCapability.value === 'function') {
-            throw new Error('worker phase validateOutput must complete synchronously');
-          }
-        }
+        requireSynchronousResult(output, 'worker phase validateOutput');
       } catch (cause) {
         failResponse(cause, 'output-validation');
         return;
