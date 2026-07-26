@@ -164,7 +164,16 @@ try {
   );
   assert.equal(report.effective.fallbackRoute, null);
   assert.match(report.effective.bigPapaHandoffBlobSha, /^[0-9a-f]{40}$/);
-  assert.match(report.effective.bigPapaCoreBlobSha, /^[0-9a-f]{40}$/);
+  assert.match(report.effective.bigPapaCoreBaseBlobSha, /^[0-9a-f]{40}$/);
+  assert.match(
+    report.effective.composedConsumerCoreBlobSha,
+    /^[0-9a-f]{40}$/,
+  );
+  assert.notEqual(
+    report.effective.composedConsumerCoreBlobSha,
+    report.effective.bigPapaCoreBaseBlobSha,
+    'composed consumer core should preserve its own source-tree identity after integration',
+  );
   assert.match(
     report.effective.consumerSourceTreeSha256,
     /^[0-9a-f]{64}$/,

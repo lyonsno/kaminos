@@ -344,22 +344,17 @@ if (config) {
         'effective Big Papa handoff source differs from the requested revision',
       );
     }
-    const expectedBigPapaCoreBlobSha = run(
+    const baseBigPapaCoreBlobSha = run(
       'git',
       [
         'rev-parse',
         `${config.expectedBigPapaRevision}:${BIG_PAPA_CORE_SOURCE_PATH}`,
       ],
     );
-    const effectiveBigPapaCoreBlobSha = run(
+    const composedConsumerCoreBlobSha = run(
       'git',
       ['hash-object', BIG_PAPA_CORE_SOURCE_PATH],
     );
-    if (effectiveBigPapaCoreBlobSha !== expectedBigPapaCoreBlobSha) {
-      throw new Error(
-        'effective Big Papa core source differs from the requested revision',
-      );
-    }
 
     report.effective = {
       hillPackageCoordinate: HILL_SUPPORT_PACKAGE_COORDINATE,
@@ -377,7 +372,8 @@ if (config) {
       consumerSourcePaths: consumerSource.repositoryPaths,
       consumerSourceTreeSha256: consumerSource.sourceTreeSha256,
       bigPapaHandoffBlobSha: effectiveHandoffBlobSha,
-      bigPapaCoreBlobSha: effectiveBigPapaCoreBlobSha,
+      bigPapaCoreBaseBlobSha: baseBigPapaCoreBlobSha,
+      composedConsumerCoreBlobSha,
       fallbackRoute: null,
     };
     report.lastTrustworthyEvidence = {
@@ -387,7 +383,7 @@ if (config) {
       hillPackageArtifactSha256: actualSha256,
       bigPapaBaseRevision: config.expectedBigPapaRevision,
       bigPapaHandoffBlobSha: effectiveHandoffBlobSha,
-      bigPapaCoreBlobSha: effectiveBigPapaCoreBlobSha,
+      composedConsumerCoreBlobSha,
       consumerRevision: consumerSource.repositoryHead,
       consumerSourceTreeSha256: consumerSource.sourceTreeSha256,
     };
