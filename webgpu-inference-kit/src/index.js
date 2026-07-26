@@ -45,6 +45,14 @@ export {
 } from './scratch-arena.js';
 
 export {
+  WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+  WEBGPU_WORKER_PHASE_REPORT_SCHEMA,
+  WEBGPU_WORKER_PHASE_REQUEST_SCHEMA,
+  WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+  runWebGpuWorkerPhase,
+} from './worker-phase.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,

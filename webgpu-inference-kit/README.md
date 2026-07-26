@@ -625,6 +625,110 @@ The arena allocates each declared slot exactly once. One use owns the graph at a
 
 Hold the arena as one resource in `createWebGpuPhaseResourceWorkingSet()`: construct it in `acquireResource()`, return it to the model adapter through the lease, and call `arena.close()` inside `lease.release()` before returning the working set's `released` status. This gives scratch the same phase lifetime, cancellation cleanup, and terminal retirement path as model weights without introducing a second residency controller.
 
+### Move CPU Materialization Off The Main Thread
+
+Run a one-shot CPU phase in a module Worker without surrendering request identity, transfer ownership, cancellation, progress, output validation, or terminal failure evidence:
+
+```js
+import {
+  WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+  WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+  runWebGpuWorkerPhase,
+} from "@kaminos/webgpu-inference-kit";
+
+const executionId = crypto.randomUUID();
+const { output, report } = await runWebGpuWorkerPhase({
+  executionId,
+  operationId: "texture-materialize",
+  moduleId: "sf3d.texture-materialize.v0",
+  createWorker() {
+    return {
+      worker: new Worker(
+        new URL("./texture-materialize-worker.js", import.meta.url),
+        { type: "module", name: "sf3d-texture-materialize" },
+      ),
+      identity: {
+        moduleId: "sf3d.texture-materialize.v0",
+        workerType: "module",
+        source: "texture-materialize-worker.js",
+      },
+    };
+  },
+  payload: {
+    features: features.buffer,
+    normals: normals.buffer,
+    resolution,
+  },
+  transfer: [features.buffer, normals.buffer],
+  signal,
+  timeoutMs: routePolicy.workerTimeoutMs,
+  onProgress(progress) {
+    routeProgress.publish(progress);
+  },
+  validateOutput(value) {
+    if (!(value?.albedo instanceof ArrayBuffer)) {
+      throw new Error("materializer output is missing albedo bytes");
+    }
+    if (!(value?.normalMap instanceof ArrayBuffer)) {
+      throw new Error("materializer output is missing normal-map bytes");
+    }
+    return value;
+  },
+});
+
+consumeTextures(output);
+recordWorkerPhase(report);
+```
+
+The worker module imports and speaks the same explicit protocol:
+
+```js
+import {
+  WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+  WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+} from "@kaminos/webgpu-inference-kit";
+
+self.onmessage = async event => {
+  const request = event.data;
+  const identity = {
+    executionId: request.executionId,
+    operationId: request.operationId,
+    moduleId: request.moduleId,
+  };
+
+  try {
+    self.postMessage({
+      schema: WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+      ...identity,
+      sequence: 0,
+      progress: { stage: "materialize", completed: 0, total: 1 },
+    });
+
+    const output = materializeTextures(request.payload);
+    self.postMessage({
+      schema: WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+      ...identity,
+      status: "completed",
+      output,
+    }, [output.albedo, output.normalMap]);
+  } catch (error) {
+    self.postMessage({
+      schema: WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+      ...identity,
+      status: "failed",
+      error: {
+        name: error?.name || "Error",
+        message: error?.message || String(error),
+      },
+    });
+  }
+};
+```
+
+`createWorker()` returns both the Worker and its effective module identity; a mismatch fails before input transfer. The runtime captures `addEventListener`, `removeEventListener`, `postMessage`, and `terminate` exactly once, installs all lifecycle listeners before dispatch, transfers the caller's exact list once, and terminates the one-shot Worker on every terminal path. Constructor, capability, listener, dispatch, crash, deserialization, stale identity, malformed progress/result, worker-reported failure, cancellation, timeout, output-validation, and cleanup failures retain phase-specific terminal reports. Cleanup failure never replaces the primary failure or discards a valid output.
+
+There is no default timeout and no progress/history cap. A timeout exists only when the caller supplies `timeoutMs`; otherwise the caller's `AbortSignal` and the Worker's own terminal events own settlement. After successful `postMessage()`, the report marks the transfer list `transferred`; canceled or failed work does not claim those inputs returned. The package does not silently fall back to main-thread execution.
+
 ### Stream Allocations As Authenticated Chunks
 
 When one allocation is itself too large to assemble before upload, pair its existing semantic manifest with a chunk plan. Every allocation is covered exactly by independently authenticated, allocation-relative chunks, and each verified chunk is written directly into its declared buffer range:
@@ -698,6 +802,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
 - `defineWebGpuPhaseResourcePlan(input)` and `createWebGpuPhaseResourceWorkingSet(input)`: declare phase-required and prefetched model resources, acquire complete target working sets before releasing departed leases, expose exact held-byte and residency pressure, and preserve recoverable unresolved custody after cancellation or release failure.
 - `createWebGpuScratchArena(input)`: allocate one named scratch-slot graph, reuse it only after caller-provided completion authority settles, compose it under a phase-resource lease, and preserve exact uncapped allocation, use, failure, and retirement accounting.
+- `runWebGpuWorkerPhase(input)`: run one transferable CPU phase in a model-identified Worker with exact request/progress/result identity, caller-owned cancellation or optional timeout, output validation, one-shot cleanup, and uncapped report-bearing terminal history.
 - `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, issue independent route leases over the one resulting object, and optionally settle report-bearing cancellation from the creator's exact terminal failure.
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
