@@ -40,6 +40,29 @@ assert.equal(ledger.sources.hillSupport.branch, 'cc/hill-analytic-impact-support
 assert.equal(ledger.sources.hillSupport.commitPrefix, '26b7956');
 assert.equal(ledger.sources.hillSupport.package, '@lerms/hill-of-hills-support/hill-of-hills/analytic-impact-support');
 
+assert.ok(
+  ledger.pendingCapabilities?.macroShoreline,
+  'Hydro ledger must track the published macro shoreline producer without claiming a renderer',
+);
+assert.deepEqual(ledger.pendingCapabilities.macroShoreline, {
+  status: 'producer_published_renderer_pending',
+  blocksPrimaryOwnershipMount: false,
+  producer: {
+    branch: 'cc/big-papa-macro-wet-boundary-0726',
+    packageCommit: 'c6baafabd6ea7413d83abd10e68ac160c0d7f584',
+    runtimeCommit: '4a863c6f9886fd113af9bc49a61b436f4dca571c',
+    package: '@kaminos/fluid-webgpu@0.4.0',
+    route: 'kaminos/fluid/macro-wet-boundary',
+    fallbackAuthority: 'null_fallback_required',
+  },
+  renderer: null,
+  requiredComparison: [
+    'regular_grid_debug',
+    'subcell_clipped_shoreline',
+  ],
+  consumable: false,
+});
+
 assert.deepEqual(ledger.materialOwnershipSequence, [
   'analytic_carrier_free_flight',
   'corrected_first_support_contact',
