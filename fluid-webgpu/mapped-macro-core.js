@@ -22,8 +22,8 @@ export const PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-mac
 export const MACRO_WET_BOUNDARY_SCHEMA = 'kaminos.fluid.macro-wet-boundary.v1';
 export const MACRO_WET_BOUNDARY_ROUTE = 'kaminos/fluid/macro-wet-boundary';
 
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.3.0';
-const KAMINOS_FLUID_PRODUCER_REVISION = '854c57ee7086783c0b0d099058a2c985b71168cd';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.4.0';
+const KAMINOS_FLUID_PRODUCER_REVISION = '4a863c6f9886fd113af9bc49a61b436f4dca571c';
 
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
   schema: KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA,
@@ -36,7 +36,7 @@ export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR = Object.freeze({
   cacheKey: `@kaminos/fluid-webgpu@${KAMINOS_FLUID_PACKAGE_VERSION}:${KAMINOS_FLUID_PRODUCER_REVISION}`,
   runtimeRoute: MAPPED_MACRO_SOLVER_ROUTE,
   representationRoutes: Object.freeze(['kaminos/fluid/representation-frame']),
-  sourceRoutes: Object.freeze([PORTABLE_MACRO_SOURCE_ROUTE]),
+  sourceRoutes: Object.freeze([PORTABLE_MACRO_SOURCE_ROUTE, MACRO_WET_BOUNDARY_ROUTE]),
   outputRoutes: Object.freeze(['kaminos/fluid/terrain-feedback']),
 });
 

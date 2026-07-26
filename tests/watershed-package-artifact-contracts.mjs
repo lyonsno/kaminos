@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = new URL('..', import.meta.url).pathname;
-const producerRevision = '854c57ee7086783c0b0d099058a2c985b71168cd';
+const producerRevision = '4a863c6f9886fd113af9bc49a61b436f4dca571c';
 const packageModule = await import('@kaminos/fluid-webgpu');
 
 assert.equal(
@@ -19,13 +19,16 @@ assert.deepEqual(packageModule.KAMINOS_FLUID_PACKAGE_DESCRIPTOR, {
   sourceAuthority: 'live_runtime',
   fallbackStatus: 'none',
   packageName: '@kaminos/fluid-webgpu',
-  packageVersion: '0.3.0',
-  artifactRevision: '@kaminos/fluid-webgpu@0.3.0',
+  packageVersion: '0.4.0',
+  artifactRevision: '@kaminos/fluid-webgpu@0.4.0',
   runtimeRevision: producerRevision,
-  cacheKey: `@kaminos/fluid-webgpu@0.3.0:${producerRevision}`,
+  cacheKey: `@kaminos/fluid-webgpu@0.4.0:${producerRevision}`,
   runtimeRoute: 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1',
   representationRoutes: ['kaminos/fluid/representation-frame'],
-  sourceRoutes: ['kaminos/fluid/portable-macro-source'],
+  sourceRoutes: [
+    'kaminos/fluid/portable-macro-source',
+    'kaminos/fluid/macro-wet-boundary',
+  ],
   outputRoutes: ['kaminos/fluid/terrain-feedback'],
 }, 'the package descriptor carries executable identity without pretending to know its enclosing tarball SRI');
 assert.equal(
@@ -54,7 +57,7 @@ try {
   ], { cwd: root, encoding: 'utf8' }))[0];
   const tarball = join(packageRoot, packResult.filename);
   assert.equal(packResult.name, '@kaminos/fluid-webgpu');
-  assert.equal(packResult.version, '0.3.0');
+  assert.equal(packResult.version, '0.4.0');
   assert.match(packResult.integrity, /^sha512-/);
   assert.equal(packResult.bundled.includes('@kaminos/fluid-contracts'), true, 'the installable artifact bundles its private contract dependency');
   assert.equal(packResult.manifest.schema, 'kaminos.fluid.package-artifact-manifest.v1');
@@ -64,12 +67,15 @@ try {
   assert.equal(manifest.status, 'complete');
   assert.equal(Object.hasOwn(manifest, 'requestedRepoRoot'), false, 'portable artifact evidence does not embed an ephemeral checkout path');
   assert.equal(Object.hasOwn(manifest, 'effectiveRepoRoot'), false, 'portable artifact evidence does not present a stale build checkout as a live route');
-  assert.equal(manifest.artifactRevision, '@kaminos/fluid-webgpu@0.3.0');
+  assert.equal(manifest.artifactRevision, '@kaminos/fluid-webgpu@0.4.0');
   assert.equal(manifest.artifact.filename, packResult.filename);
   assert.equal(manifest.artifact.integrity, packResult.integrity);
   assert.equal(manifest.runtimeRevision, producerRevision);
   assert.equal(manifest.runtimeRoute, packageModule.KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRoute);
-  assert.deepEqual(manifest.sourceRoutes, ['kaminos/fluid/portable-macro-source']);
+  assert.deepEqual(manifest.sourceRoutes, [
+    'kaminos/fluid/portable-macro-source',
+    'kaminos/fluid/macro-wet-boundary',
+  ]);
 
   execFileSync('mkdir', ['-p', consumerRoot]);
   writeFileSync(join(consumerRoot, 'package.json'), JSON.stringify({
@@ -82,7 +88,7 @@ try {
   }, null, 2));
   execFileSync('npm', ['install', '--ignore-scripts'], { cwd: consumerRoot, stdio: 'pipe' });
   const installedPackage = JSON.parse(readFileSync(join(consumerRoot, 'node_modules/@kaminos/fluid-webgpu/package.json'), 'utf8'));
-  assert.equal(installedPackage.version, '0.3.0');
+  assert.equal(installedPackage.version, '0.4.0');
   const installedContractsPackage = JSON.parse(readFileSync(join(
     consumerRoot,
     'node_modules/@kaminos/fluid-webgpu/node_modules/@kaminos/fluid-contracts/package.json',
@@ -156,6 +162,22 @@ try {
     installedModule.validatePortableMacroSourceSnapshot(installedSourceSnapshot),
     installedSourceSnapshot,
   );
+  assert.equal(
+    installedSourceSnapshot.wetBoundary.schema,
+    'kaminos.fluid.macro-wet-boundary.v1',
+  );
+  assert.deepEqual(installedSourceSnapshot.wetBoundary.route, {
+    requested: 'kaminos/fluid/macro-wet-boundary',
+    effective: 'kaminos/fluid/macro-wet-boundary',
+  });
+  assert.equal(installedSourceSnapshot.wetBoundary.reset.kind, 'phase_morph');
+  assert.equal(
+    installedSourceSnapshot.wetBoundary.reset.remapReceiptId,
+    installedRemapReceipt.receiptId,
+  );
+  assert.equal(installedSourceSnapshot.wetBoundary.reset.previousTerrainEpoch, 1);
+  assert.equal(installedSourceSnapshot.wetBoundary.reset.terrainEpoch, 2);
+  assert.equal(installedSourceSnapshot.wetBoundary.complete, true);
   assert.equal(installedSourceSnapshot.sourceHandleId, 'clean-install-portable-source');
   assert.equal(installedSourceSnapshot.supportGeometry.worldPosition.length, 3);
   assert.equal(installedSourceSnapshot.macro.mappedDepth.length, 1);
@@ -163,7 +185,7 @@ try {
 
   const lock = JSON.parse(readFileSync(join(consumerRoot, 'package-lock.json'), 'utf8'));
   const lockEntry = lock.packages['node_modules/@kaminos/fluid-webgpu'];
-  assert.equal(lockEntry.version, '0.3.0');
+  assert.equal(lockEntry.version, '0.4.0');
   assert.match(lockEntry.integrity, /^sha512-/);
   assert.ok(lockEntry.resolved, 'clean-checkout evidence records the resolved artifact');
 
