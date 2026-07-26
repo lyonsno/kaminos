@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.hydro-integration.compatibility-ledger.v0",
+  "owner": "hydro-integration",
+  "integrationBranch": {
+    "repo": "kaminos",
+    "branchLabel": "hydro-integration-0725",
+    "base": "5878abf050405bab8218c193f51867f1568b6127"
+  },
+  "namedConsumer": {
+    "owner": "fingerjuice-bootlegger",
+    "repo": "lerms",
+    "branch": "cc/fingerjuice-bootlegger-0723",
+    "lermsCommit": "aff2aec43dc00c5d1683588161751d3bd05becdc",
+    "hostRoute": "lerms/hill-of-hills/conservative-fluid-regime-v0"
+  },
+  "sources": {
+    "bigPapaOwnership": {
+      "repo": "kaminos",
+      "branch": "cc/big-papa-analytic-jet-handoff-0724",
+      "commit": "4dad7121917839151843a00ca176e0d1deab133c",
+      "descriptor": "solver.getParticleOwnershipDescriptor()",
+      "contract": "gpu-spatial-first-support-contact-ownership-v0",
+      "packing": "material-tracer-vec4-index-4-phase-source-generation-transition-frame-support-contact-v0",
+      "consumerVisibilityRule": "pre_impact_hidden_post_impact_visible_v0",
+      "deviceAuthority": "same_solver_gpu_device",
+      "visibilityAuthority": "gpu_descriptor_buffer_without_host_readback"
+    },
+    "outfoxedOptics": {
+      "repo": "kaminos",
+      "branch": "cc/big-papa-fluid-surface-renderer-0716",
+      "commit": "c7b3fdc1f761db3ab45eae5f25a72cb95f4c2d35",
+      "route": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "shader": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+      "fallbackAuthority": "null_fallback_required"
+    },
+    "hillSupport": {
+      "repo": "lerms",
+      "branch": "cc/hill-analytic-impact-support-0725",
+      "commitPrefix": "26b7956",
+      "package": "@lerms/hill-of-hills-support/hill-of-hills/analytic-impact-support",
+      "authority": "moving_support_samples_spatial_lipschitz_temporal_rate"
+    }
+  },
+  "materialOwnershipSequence": [
+    "analytic_carrier_free_flight",
+    "corrected_first_support_contact",
+    "source_authoritative_post_impact_particles",
+    "portable_macro_wet_body_inventory_transport"
+  ],
+  "requiredComparisonModes": [
+    "particle_only",
+    "hybrid_analytic_carrier"
+  ],
+  "falseClosureGates": [
+    "stale_or_default_source_revision",
+    "wrong_gpu_device_or_ownership_buffer",
+    "host_readback_visibility_substitution",
+    "duplicate_analytic_particle_material_ownership",
+    "skipped_ownership_state",
+    "mismatched_camera_or_attachment_epoch",
+    "fallback_backend_or_renderer",
+    "partial_blank_or_cached_output",
+    "pre_primary_failure_without_durable_report"
+  ],
+  "smokeHorizon": {
+    "routeClass": "real_moving_hill_route",
+    "animated": true,
+    "fullFrame": true,
+    "firstVisualPredicate": "same material history represented exactly once across analytic carrier, corrected impact, source-authoritative particles, and macro wet body",
+    "residualDefectsToPreserve": [
+      "pale_slab_like_macro_body",
+      "beauty_not_closed",
+      "display_latency_operator_gate",
+      "hybrid_ownership_not_yet_visually_smoked_on_hill"
+    ]
+  }
+}

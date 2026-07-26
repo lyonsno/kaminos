@@ -2270,6 +2270,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Solver</span><span class="field-val" id="finger-fluid-bench-solver">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Requested</span><span class="field-val" id="finger-fluid-bench-renderer-requested">pending</span></div>
       <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Effective</span><span class="field-val" id="finger-fluid-bench-renderer">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Lighting requested</span><span class="field-val" id="finger-fluid-bench-lighting-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Lighting effective</span><span class="field-val" id="finger-fluid-bench-lighting-effective">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Reflection footprint requested</span><span class="field-val" id="finger-fluid-bench-footprint-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Reflection footprint effective</span><span class="field-val" id="finger-fluid-bench-footprint-effective">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Transmission footprint requested</span><span class="field-val" id="finger-fluid-bench-transmission-footprint-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Transmission footprint effective</span><span class="field-val" id="finger-fluid-bench-transmission-footprint-effective">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Body transport requested</span><span class="field-val" id="finger-fluid-bench-body-transport-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Body transport effective</span><span class="field-val" id="finger-fluid-bench-body-transport-effective">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Interface frequency requested</span><span class="field-val" id="finger-fluid-bench-interface-frequency-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Interface frequency effective</span><span class="field-val" id="finger-fluid-bench-interface-frequency-effective">pending</span></div>
       <div class="field"><span class="field-key">Active</span><span class="field-val" id="finger-fluid-bench-active">0.00</span></div>
       <div class="field"><span class="field-key">Basin</span><span class="field-val" id="finger-fluid-bench-basin">0.00</span></div>
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="finger-fluid-bench-frame-ms">0 ms</span></div>
@@ -2773,6 +2783,11 @@ import {
   createFingerFluidBenchState,
 } from './finger-fluid-bench-core.js';
 import {
+  createFingerFluidAnalyticJetDescriptor,
+  measureFingerFluidAnalyticJetFirstImpact,
+  createFingerFluidAnalyticImpactHandoffReceipt,
+} from './finger-fluid-analytic-impact-handoff.js';
+import {
   FINGER_FLUID_ORACLE_COCKPIT_ADAPTER,
   clearFingerFluidOracleRestartRequired,
   createFingerFluidOracleABReplayUrls,
@@ -2791,13 +2806,23 @@ import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
   KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
+  KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA,
+  createFingerFluidAnalyticCarrierOpticalGeometry,
   createFingerFluidPulseControlReadout,
   createFingerFluidWaterfallOracleConfig,
+  measureFingerFluidLiveInletReleasePlan,
+  planFingerFluidLiveInletEconomics,
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
   resolveFingerFluidRendererMode,
   resolveFingerFluidOpticalDebugMode,
+  resolveFingerFluidOpticalLightingMode,
+  resolveFingerFluidOpticalFootprintMode,
+  resolveFingerFluidTransmissionFootprintMode,
+  resolveFingerFluidBodyTransportMode,
+  resolveFingerFluidInterfaceFrequencyMode,
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidSupportFriction,
   resolveFingerFluidChemistryDiffusion,
@@ -2927,6 +2952,60 @@ let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
+const FINGER_FLUID_ANALYTIC_CARRIER_MODES = Object.freeze([
+  'particle_only',
+  'analytic_carrier_only',
+  'hybrid_analytic_carrier',
+]);
+const FINGER_FLUID_ANALYTIC_CARRIER_SOURCE_MECHANICS_REVISION =
+  '3db86bc203c954fb76d301e21b0ba7126d5c36be';
+const FINGER_FLUID_ANALYTIC_CARRIER_SMOKE_PACKET = Object.freeze({
+  packet_id: 'outfoxed-analytic-carrier-smoke-source-v1',
+  route_identity: 'kaminos/finger-fluid-bench/analytic-carrier-smoke-source-v1',
+  artifact_sha256: '76b920f0af55234c2d64b8ec1807029409af3873b0d25ef702ec580f44da73f3',
+  simulation_authority: 'live_simulation',
+  authority: Object.freeze({ simulation_safe: true, stale: false }),
+  emitters: Object.freeze([Object.freeze({
+    id: 'index-finger',
+    origin_world: Object.freeze([-0.16, 0.62, -0.9]),
+    aim_world: Object.freeze([0.08, -0.3, 1]),
+    radius: 0.055,
+    strength: 1.05,
+    active: true,
+    emission_state: 'jet',
+    source_flux_particles_per_second: 720,
+    active_budget_particles: 720,
+    lifetime_seconds: 2,
+    residence_distance_world: 3,
+  })]),
+});
+const FINGER_FLUID_ANALYTIC_CARRIER_SUPPORT_IDENTITY = Object.freeze({
+  schema: 'kaminos.portable-macro-support-source.v1',
+  sourceId: 'finger-fluid-bench-toy-floor-v1',
+  providerRoute: 'kaminos/finger-fluid-bench/toy-floor-signed-distance-v1',
+  artifactSha256: 'c30a6700903800dbca456f8a48ef366dc9f59348b6017df2538509ce18be9059',
+  terrainId: 'multi-regime-playground-toy-floor',
+  terrainGeneration: 1,
+  transformEpoch: 1,
+  topologyEpoch: 1,
+  supportEpoch: 1,
+  remapEpoch: 0,
+  stale: false,
+  fallbackRoute: null,
+});
+let fingerFluidBenchAnalyticCarrierState = {
+  schema: 'kaminos.finger-fluid.analytic-carrier-browser-route.v1',
+  requestedMode: 'not_requested',
+  effectiveMode: 'not_requested',
+  requestedRoute: null,
+  effectiveRoute: null,
+  fallbackRoute: null,
+  status: 'inactive_not_requested',
+  canonicalParticleVisibility: 'all',
+  primaryOutputWritten: false,
+  failurePhase: null,
+  lastTrustworthyEvidence: 'route-not-requested',
+};
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP = 230;
@@ -2947,6 +3026,15 @@ let fingerFluidPyroCompositionState = {
 let fingerFluidPyroCompositionActivatedAtMs = null;
 let fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
 
+function resolveFingerFluidAnalyticCarrierMode(value) {
+  if (value === null || value === undefined || value === '') return 'not_requested';
+  const mode = String(value);
+  if (!FINGER_FLUID_ANALYTIC_CARRIER_MODES.includes(mode)) {
+    throw new RangeError(`Unsupported Finger Fluid analytic carrier mode: ${mode}`);
+  }
+  return mode;
+}
+
 function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
   const requestedTruthScene = params.get('finger_fluid_truth_scene') || 'multi_regime_playground';
   const oracleCockpitRequested = isFingerFluidOracleCockpitRoute(params)
@@ -2962,7 +3050,16 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     : null;
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
   const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
+  const requestedAnalyticCarrierMode = params.get('finger_fluid_analytic_carrier');
+  const effectiveAnalyticCarrierMode = resolveFingerFluidAnalyticCarrierMode(
+    requestedAnalyticCarrierMode,
+  );
   const requestedOpticalDebugMode = params.get('finger_fluid_optical_debug') || 'shaded';
+  const requestedOpticalLightingMode = params.get('finger_fluid_optical_lighting') || 'transport_only';
+  const requestedOpticalFootprintMode = params.get('finger_fluid_optical_footprint') || 'resolved_detail';
+  const requestedTransmissionFootprintMode = params.get('finger_fluid_transmission_footprint') || 'resolved_exit';
+  const requestedBodyTransportMode = params.get('finger_fluid_body_transport') || 'geometric_slab';
+  const requestedInterfaceFrequencyMode = params.get('finger_fluid_interface_frequency') || 'coupled_detail';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
@@ -2992,10 +3089,36 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     && (!Number.isSafeInteger(requestedWitnessTargetStep) || requestedWitnessTargetStep < 1)) {
     throw new RangeError(`Finger Fluid witness target step must be a positive safe integer: ${requestedWitnessTargetStepValue}`);
   }
+  const requestedWitnessStartStepValue = params.get('finger_fluid_witness_start_step');
+  const requestedWitnessStartStep = requestedWitnessStartStepValue === null
+    ? null
+    : Number(requestedWitnessStartStepValue);
+  if (
+    requestedWitnessStartStep !== null
+    && (
+      !Number.isSafeInteger(requestedWitnessStartStep)
+      || requestedWitnessStartStep < 1
+      || requestedWitnessTargetStep === null
+      || requestedWitnessStartStep >= requestedWitnessTargetStep
+    )
+  ) {
+    throw new RangeError(
+      `Finger Fluid witness start step must be a positive safe integer below the routed target: `
+      + `${requestedWitnessStartStepValue}`,
+    );
+  }
   const requestedInletCutoffStepValue = params.get('finger_fluid_inlet_cutoff_step');
   const requestedInletCutoffStep = requestedInletCutoffStepValue === null
     ? null
     : Number(requestedInletCutoffStepValue);
+  if (
+    effectiveAnalyticCarrierMode !== 'not_requested'
+    && effectiveTruthScene !== 'live_hand_inlets'
+  ) {
+    throw new Error(
+      `Finger Fluid analytic carrier mode ${effectiveAnalyticCarrierMode} requires live_hand_inlets, not ${effectiveTruthScene}`,
+    );
+  }
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
     oracleCockpitRequested,
@@ -3008,10 +3131,22 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveColorMode: resolveFingerFluidColorMode(requestedColorMode),
     requestedRendererMode,
     effectiveRendererMode: resolveFingerFluidRendererMode(requestedRendererMode),
+    requestedAnalyticCarrierMode: requestedAnalyticCarrierMode ?? 'not_requested',
+    effectiveAnalyticCarrierMode,
     sphereDebugRoute: 'finger_fluid_renderer=sphere_debug',
     refractionRoute: 'finger_fluid_renderer=screen_space_refraction',
     requestedOpticalDebugMode,
     effectiveOpticalDebugMode: resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode),
+    requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode),
+    requestedOpticalFootprintMode,
+    effectiveOpticalFootprintMode: resolveFingerFluidOpticalFootprintMode(requestedOpticalFootprintMode),
+    requestedTransmissionFootprintMode,
+    effectiveTransmissionFootprintMode: resolveFingerFluidTransmissionFootprintMode(requestedTransmissionFootprintMode),
+    requestedBodyTransportMode,
+    effectiveBodyTransportMode: resolveFingerFluidBodyTransportMode(requestedBodyTransportMode),
+    requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode),
     requestedParticleShiftStrength,
     effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
     requestedSupportFriction,
@@ -3036,6 +3171,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedWitnessTargetStep,
     effectiveWitnessTargetStep: requestedWitnessTargetStep,
+    requestedWitnessStartStep,
+    effectiveWitnessStartStep: requestedWitnessStartStep,
     requestedInletCutoffStep,
     effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
     timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
@@ -10010,6 +10147,26 @@ function updateFingerFluidBenchReadout() {
   const effectiveRendererModeLabel = state.renderer?.effectiveMode || state.renderer?.backend || 'pending';
   document.getElementById('finger-fluid-bench-renderer-requested').textContent = requestedRendererModeLabel;
   document.getElementById('finger-fluid-bench-renderer').textContent = effectiveRendererModeLabel;
+  const requestedOpticalLightingModeLabel = state.renderer?.requestedOpticalLightingMode || state.config?.requestedOpticalLightingMode || 'pending';
+  const effectiveOpticalLightingModeLabel = state.renderer?.effectiveOpticalLightingMode || state.config?.effectiveOpticalLightingMode || 'pending';
+  document.getElementById('finger-fluid-bench-lighting-requested').textContent = requestedOpticalLightingModeLabel;
+  document.getElementById('finger-fluid-bench-lighting-effective').textContent = effectiveOpticalLightingModeLabel;
+  const requestedOpticalFootprintModeLabel = state.renderer?.requestedOpticalFootprintMode || state.config?.requestedOpticalFootprintMode || 'pending';
+  const effectiveOpticalFootprintModeLabel = state.renderer?.effectiveOpticalFootprintMode || state.config?.effectiveOpticalFootprintMode || 'pending';
+  document.getElementById('finger-fluid-bench-footprint-requested').textContent = requestedOpticalFootprintModeLabel;
+  document.getElementById('finger-fluid-bench-footprint-effective').textContent = effectiveOpticalFootprintModeLabel;
+  const requestedTransmissionFootprintModeLabel = state.renderer?.requestedTransmissionFootprintMode || state.config?.requestedTransmissionFootprintMode || 'pending';
+  const effectiveTransmissionFootprintModeLabel = state.renderer?.effectiveTransmissionFootprintMode || state.config?.effectiveTransmissionFootprintMode || 'pending';
+  document.getElementById('finger-fluid-bench-transmission-footprint-requested').textContent = requestedTransmissionFootprintModeLabel;
+  document.getElementById('finger-fluid-bench-transmission-footprint-effective').textContent = effectiveTransmissionFootprintModeLabel;
+  const requestedBodyTransportModeLabel = state.renderer?.requestedBodyTransportMode || state.config?.requestedBodyTransportMode || 'pending';
+  const effectiveBodyTransportModeLabel = state.renderer?.effectiveBodyTransportMode || state.config?.effectiveBodyTransportMode || 'pending';
+  document.getElementById('finger-fluid-bench-body-transport-requested').textContent = requestedBodyTransportModeLabel;
+  document.getElementById('finger-fluid-bench-body-transport-effective').textContent = effectiveBodyTransportModeLabel;
+  const requestedInterfaceFrequencyModeLabel = state.renderer?.requestedInterfaceFrequencyMode || state.config?.requestedInterfaceFrequencyMode || 'pending';
+  const effectiveInterfaceFrequencyModeLabel = state.renderer?.effectiveInterfaceFrequencyMode || state.config?.effectiveInterfaceFrequencyMode || 'pending';
+  document.getElementById('finger-fluid-bench-interface-frequency-requested').textContent = requestedInterfaceFrequencyModeLabel;
+  document.getElementById('finger-fluid-bench-interface-frequency-effective').textContent = effectiveInterfaceFrequencyModeLabel;
   document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
@@ -10397,10 +10554,302 @@ async function requestFingerFluidBenchDiagnostics() {
   };
 }
 
-function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode) {
+function setFingerFluidBenchLiveInletPacket(packet) {
+  if (!fingerFluidBenchSolver?.available) {
+    throw new Error('Finger Fluid solver unavailable for live-inlet packet publication');
+  }
+  if (fingerFluidBenchConfig?.effectiveTruthScene !== 'live_hand_inlets') {
+    throw new Error(`Finger Fluid live-inlet packets require effective truth scene live_hand_inlets, not ${fingerFluidBenchConfig?.effectiveTruthScene || 'uninitialized'}`);
+  }
+  const receipt = fingerFluidBenchSolver.setLiveInletPacket(packet);
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  if (fingerFluidBenchState) fingerFluidBenchState.runtime = runtime;
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.live-inlet-publication-receipt.v0',
+    ...receipt,
+    runtimeEconomics: runtime.liveInlets,
+  };
+}
+
+function fingerFluidAnalyticCarrierToyFloorHeight(position) {
+  const [x, , z] = position;
+  const smoothstep = (edge0, edge1, value) => {
+    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  };
+  const radial = 0.15 * (x * x + z * z);
+  const sourceShelfWidth = 1 - smoothstep(1.55, 2.55, Math.abs(x + 0.35));
+  const sourceShelf = (1 - smoothstep(-1.54, -1.31, z)) * 0.94 * sourceShelfWidth;
+  const spillway = -0.17 * Math.exp(-x * x * 2.4) * Math.exp(-((z + 0.72) ** 2) * 1.1);
+  const shallowPool = -0.15 * Math.exp(
+    -((x - 1.42) ** 2) * 2 - ((z - 0.35) ** 2) * 1.7,
+  );
+  const deepPool = -0.34 * Math.exp(
+    -((x + 1.42) ** 2) * 1.8 - ((z - 0.48) ** 2) * 1.45,
+  );
+  const catchBasin = -0.27 * Math.exp(-x * x * 0.62 - ((z - 2.05) ** 2) * 2.2);
+  const leftGate = 0.22 * Math.exp(
+    -((x + 0.58) ** 2) * 11 - ((z - 0.48) ** 2) * 4,
+  );
+  const rightGate = 0.22 * Math.exp(
+    -((x - 0.58) ** 2) * 11 - ((z - 0.48) ** 2) * 4,
+  );
+  const toyRipple = 0.035 * Math.sin(x * 2.25) * Math.cos(z * 1.8);
+  return -1.02
+    + radial * 0.22
+    + sourceShelf
+    + spillway
+    + shallowPool
+    + deepPool
+    + catchBasin
+    + leftGate
+    + rightGate
+    + toyRipple;
+}
+
+function createFingerFluidAnalyticCarrierSmokeSupportQuery() {
+  const epsilon = 0.018;
+  return {
+    identity: FINGER_FLUID_ANALYTIC_CARRIER_SUPPORT_IDENTITY,
+    maximumSignedDistanceRate: 32,
+    sampleSignedDistance(position) {
+      const height = fingerFluidAnalyticCarrierToyFloorHeight(position);
+      const gradientX = (
+        fingerFluidAnalyticCarrierToyFloorHeight([position[0] + epsilon, 0, position[2]])
+        - fingerFluidAnalyticCarrierToyFloorHeight([position[0] - epsilon, 0, position[2]])
+      ) / (2 * epsilon);
+      const gradientZ = (
+        fingerFluidAnalyticCarrierToyFloorHeight([position[0], 0, position[2] + epsilon])
+        - fingerFluidAnalyticCarrierToyFloorHeight([position[0], 0, position[2] - epsilon])
+      ) / (2 * epsilon);
+      const length = Math.hypot(-gradientX, 1, -gradientZ);
+      return {
+        distance: position[1] - height,
+        point: [position[0], height, position[2]],
+        normal: [-gradientX / length, 1 / length, -gradientZ / length],
+      };
+    },
+  };
+}
+
+function configureFingerFluidAnalyticCarrierSmoke() {
+  const requestedMode = fingerFluidBenchConfig.effectiveAnalyticCarrierMode;
+  if (requestedMode === 'not_requested') return fingerFluidBenchAnalyticCarrierState;
+  if (!fingerFluidBenchSolver?.available) {
+    throw new Error('Finger Fluid solver unavailable for analytic carrier smoke admission');
+  }
+  if (requestedMode === 'particle_only') {
+    const cleared = fingerFluidBenchSolver.clearAnalyticCarrierOpticalGeometry();
+    fingerFluidBenchAnalyticCarrierState = {
+      schema: 'kaminos.finger-fluid.analytic-carrier-browser-route.v1',
+      requestedMode,
+      effectiveMode: 'particle_only',
+      requestedRoute: 'particle_only',
+      effectiveRoute: 'particle_only',
+      fallbackRoute: null,
+      status: 'admitted_control',
+      sourceMechanicsRevision: FINGER_FLUID_ANALYTIC_CARRIER_SOURCE_MECHANICS_REVISION,
+      ageContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
+      sourcePacketId: null,
+      sourceRoute: null,
+      sourceArtifactSha256: null,
+      sourceGeneration: null,
+      particleSuppressionContract: null,
+      canonicalParticleVisibility: 'all',
+      sampleCount: 0,
+      primaryOutputWritten: false,
+      failurePhase: null,
+      lastTrustworthyEvidence: cleared.lastTrustworthyEvidence,
+    };
+    return fingerFluidBenchAnalyticCarrierState;
+  }
+  const packet = FINGER_FLUID_ANALYTIC_CARRIER_SMOKE_PACKET;
+  const economics = planFingerFluidLiveInletEconomics(
+    packet,
+    fingerFluidBenchConfig.effectiveParticleCount,
+  );
+  const releasePlan = measureFingerFluidLiveInletReleasePlan(
+    packet,
+    fingerFluidBenchConfig.effectiveParticleCount,
+  );
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  const publication = {
+    generation: runtime.liveInlets?.generation,
+    packetId: runtime.liveInlets?.packetId,
+    sourceRoute: runtime.liveInlets?.sourceRoute,
+    artifactSha256: runtime.liveInlets?.artifactSha256,
+  };
+  const supportQuery = createFingerFluidAnalyticCarrierSmokeSupportQuery();
+  const descriptor = createFingerFluidAnalyticJetDescriptor({
+    packet,
+    economics,
+    releasePlan,
+    publication,
+    sourceMechanicsRevision: FINGER_FLUID_ANALYTIC_CARRIER_SOURCE_MECHANICS_REVISION,
+    handId: 'operator-right-hand',
+    fingerId: 'index',
+    inletId: 'index-finger',
+    material: {
+      id: 'kaminos-water-v1',
+      density: 998.2,
+      chemistry: [0.04, 0.62, 0.21, 0.13],
+    },
+    sourceTimeInterval: [0, 2],
+    gravity: [0, -9.81, 0],
+    supportIdentity: FINGER_FLUID_ANALYTIC_CARRIER_SUPPORT_IDENTITY,
+  });
+  const impact = measureFingerFluidAnalyticJetFirstImpact(descriptor, supportQuery, {
+    maximumFlightSeconds: 2,
+    bracketStepSeconds: 1 / 120,
+    timeToleranceSeconds: 1e-7,
+  });
+  const particleCount = 12;
+  const transferDuration = particleCount / releasePlan.inlets[0].expectedParticleReleaseRate;
+  const handoffReceipt = createFingerFluidAnalyticImpactHandoffReceipt({
+    descriptor,
+    impact,
+    supportQuery,
+    transitionGeneration: publication.generation + 1,
+    transitionInterval: [impact.sourceEmissionTime, impact.sourceEmissionTime + transferDuration],
+    particleAllocation: {
+      allocationId: `${publication.packetId}/canonical-pool-generation-${publication.generation + 1}`,
+      particleIds: Array.from({ length: particleCount }, (_, index) => index),
+      particleVolume: releasePlan.particleVolume,
+      velocities: Array.from({ length: particleCount }, () => impact.incomingVelocity),
+      material: descriptor.material,
+    },
+    expectedParticleCount: particleCount,
+  });
+  const geometry = createFingerFluidAnalyticCarrierOpticalGeometry({
+    descriptor,
+    impact,
+    handoffReceipt,
+    sourceIndex: 0,
+  });
+  const canonicalParticleVisibility = requestedMode === 'analytic_carrier_only'
+    ? 'hidden'
+    : 'matching_pre_impact_suppressed';
+  const admission = fingerFluidBenchSolver.setAnalyticCarrierOpticalGeometry(geometry, {
+    canonicalParticleVisibility,
+  });
+  fingerFluidBenchAnalyticCarrierState = {
+    schema: 'kaminos.finger-fluid.analytic-carrier-browser-route.v1',
+    requestedMode,
+    effectiveMode: requestedMode,
+    requestedRoute: geometry.route.requested,
+    effectiveRoute: admission.effectiveRoute,
+    fallbackRoute: admission.fallbackRoute,
+    status: admission.status,
+    sourcePacketId: admission.sourcePacketId,
+    sourceRoute: admission.sourceRoute,
+    sourceArtifactSha256: admission.sourceArtifactSha256,
+    sourceGeneration: admission.sourceGeneration,
+    sourceMechanicsRevision: admission.sourceMechanicsRevision,
+    ageContract: admission.ageContract,
+    supportSourceId: admission.supportSourceId,
+    supportEpoch: admission.supportEpoch,
+    remapEpoch: admission.remapEpoch,
+    handoffReceiptId: admission.handoffReceiptId,
+    sampleCount: admission.sampleCount,
+    particleSuppressionContract: requestedMode === 'hybrid_analytic_carrier'
+      ? admission.particleSuppressionContract
+      : null,
+    canonicalParticleVisibility: admission.canonicalParticleVisibility,
+    primaryOutputWritten: false,
+    failurePhase: admission.failurePhase,
+    lastTrustworthyEvidence: admission.lastTrustworthyEvidence,
+  };
+  return fingerFluidBenchAnalyticCarrierState;
+}
+
+function setFingerFluidBenchAnalyticCarrierModeForWitness(mode) {
+  const effectiveMode = resolveFingerFluidAnalyticCarrierMode(mode);
+  if (effectiveMode === 'not_requested') {
+    throw new Error(
+      'Analytic carrier witness mode must be particle_only, analytic_carrier_only, or hybrid_analytic_carrier',
+    );
+  }
+  if (fingerFluidBenchConfig?.effectiveTruthScene !== 'live_hand_inlets') {
+    throw new Error('Analytic carrier witness mode requires live_hand_inlets');
+  }
+  fingerFluidBenchConfig = {
+    ...fingerFluidBenchConfig,
+    requestedAnalyticCarrierMode: effectiveMode,
+    effectiveAnalyticCarrierMode: effectiveMode,
+  };
+  const evidence = configureFingerFluidAnalyticCarrierSmoke();
+  if (fingerFluidBenchState?.runtime) {
+    applyFingerFluidAnalyticCarrierRuntimeEvidence(fingerFluidBenchState.runtime);
+  }
+  updateFingerFluidBenchReadout();
+  return { ...evidence };
+}
+
+function applyFingerFluidAnalyticCarrierRuntimeEvidence(runtime) {
+  const rendererEvidence = runtime.analyticCarrierOptics || {};
+  const carrierActive = (
+    fingerFluidBenchAnalyticCarrierState.effectiveMode === 'hybrid_analytic_carrier'
+    || fingerFluidBenchAnalyticCarrierState.effectiveMode === 'analytic_carrier_only'
+  );
+  const hybridActive =
+    fingerFluidBenchAnalyticCarrierState.effectiveMode === 'hybrid_analytic_carrier';
+  runtime.analyticCarrierOptics = {
+    geometrySchema: rendererEvidence.geometrySchema ?? null,
+    gpuPayloadSchema: rendererEvidence.gpuPayloadSchema ?? null,
+    visualOwnership: rendererEvidence.visualOwnership ?? null,
+    accumulationDrawCount: rendererEvidence.accumulationDrawCount ?? 0,
+    carrierDrawCount: rendererEvidence.lastFrameDrawCount ?? 0,
+    ...fingerFluidBenchAnalyticCarrierState,
+    admittedCarrierSourceIdentity: carrierActive ? {
+      packetId: fingerFluidBenchAnalyticCarrierState.sourcePacketId,
+      sourceRoute: fingerFluidBenchAnalyticCarrierState.sourceRoute,
+      artifactSha256: fingerFluidBenchAnalyticCarrierState.sourceArtifactSha256,
+      generation: fingerFluidBenchAnalyticCarrierState.sourceGeneration,
+      sourceMechanicsRevision: fingerFluidBenchAnalyticCarrierState.sourceMechanicsRevision,
+      ageContract: fingerFluidBenchAnalyticCarrierState.ageContract,
+    } : null,
+    particleSuppressionContract: hybridActive
+      ? fingerFluidBenchAnalyticCarrierState.particleSuppressionContract
+      : null,
+    sampleCount: carrierActive ? fingerFluidBenchAnalyticCarrierState.sampleCount : 0,
+    primaryOutputWritten: (rendererEvidence.lastFrameDrawCount || 0) > 0
+      || fingerFluidBenchAnalyticCarrierState.effectiveMode === 'particle_only',
+  };
+  if (runtime.analyticCarrierOptics.primaryOutputWritten) {
+    fingerFluidBenchAnalyticCarrierState.primaryOutputWritten = true;
+      fingerFluidBenchAnalyticCarrierState.lastTrustworthyEvidence =
+      fingerFluidBenchAnalyticCarrierState.effectiveMode === 'particle_only'
+        ? 'particle-control-frame-rendered'
+        : fingerFluidBenchAnalyticCarrierState.effectiveMode === 'analytic_carrier_only'
+          ? 'analytic-carrier-only-accumulation-frame-rendered'
+          : 'hybrid-carrier-accumulation-frame-rendered';
+  }
+  return runtime;
+}
+
+function renderFingerFluidBenchCurrentStateForWitness(
+  rendererMode,
+  opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode,
+  opticalLightingMode = fingerFluidBenchConfig.effectiveOpticalLightingMode,
+  opticalFootprintMode = fingerFluidBenchConfig.effectiveOpticalFootprintMode,
+  transmissionFootprintMode = fingerFluidBenchConfig.effectiveTransmissionFootprintMode,
+  bodyTransportMode = fingerFluidBenchConfig.effectiveBodyTransportMode,
+  interfaceFrequencyMode = fingerFluidBenchConfig.effectiveInterfaceFrequencyMode,
+) {
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
   const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+  const requestedOpticalLightingMode = String(opticalLightingMode || fingerFluidBenchConfig.effectiveOpticalLightingMode);
+  const effectiveOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
+  const requestedOpticalFootprintMode = String(opticalFootprintMode || fingerFluidBenchConfig.effectiveOpticalFootprintMode);
+  const effectiveOpticalFootprintMode = resolveFingerFluidOpticalFootprintMode(requestedOpticalFootprintMode);
+  const requestedTransmissionFootprintMode = String(transmissionFootprintMode || fingerFluidBenchConfig.effectiveTransmissionFootprintMode);
+  const effectiveTransmissionFootprintMode = resolveFingerFluidTransmissionFootprintMode(requestedTransmissionFootprintMode);
+  const requestedBodyTransportMode = String(bodyTransportMode || fingerFluidBenchConfig.effectiveBodyTransportMode);
+  const effectiveBodyTransportMode = resolveFingerFluidBodyTransportMode(requestedBodyTransportMode);
+  const requestedInterfaceFrequencyMode = String(interfaceFrequencyMode || fingerFluidBenchConfig.effectiveInterfaceFrequencyMode);
+  const effectiveInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode);
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
@@ -10412,9 +10861,16 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     rendererMode: effectiveRendererMode,
     opticalDebugMode: effectiveOpticalDebugMode,
+    opticalLightingMode: requestedOpticalLightingMode,
+    opticalFootprintMode: requestedOpticalFootprintMode,
+    transmissionFootprintMode: requestedTransmissionFootprintMode,
+    bodyTransportMode: requestedBodyTransportMode,
+    interfaceFrequencyMode: requestedInterfaceFrequencyMode,
     ...fingerFluidBenchCamera,
   });
-  const runtime = fingerFluidBenchSolver.getDebugState();
+  const runtime = applyFingerFluidAnalyticCarrierRuntimeEvidence(
+    fingerFluidBenchSolver.getDebugState(),
+  );
   if (fingerFluidBenchState?.renderer) {
     fingerFluidBenchState.renderer.requestedMode = effectiveRendererMode;
     fingerFluidBenchState.renderer.effectiveMode = runtime.effectiveRendererMode;
@@ -10427,6 +10883,31 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     fingerFluidBenchState.renderer.screenSpaceRefractionRenderFrameCount = runtime.screenSpaceRefractionRenderFrameCount;
     fingerFluidBenchState.renderer.requestedOpticalDebugMode = effectiveOpticalDebugMode;
     fingerFluidBenchState.renderer.effectiveOpticalDebugMode = runtime.opticalDebugMode;
+    fingerFluidBenchState.renderer.requestedOpticalLightingMode = requestedOpticalLightingMode;
+    fingerFluidBenchState.renderer.effectiveOpticalLightingMode = runtime.effectiveOpticalLightingMode;
+    fingerFluidBenchState.renderer.requestedOpticalLightingRoute = runtime.requestedOpticalLightingRoute;
+    fingerFluidBenchState.renderer.effectiveOpticalLightingRoute = runtime.effectiveOpticalLightingRoute;
+    fingerFluidBenchState.renderer.opticalLightingFallbackReason = runtime.opticalLightingFallbackReason;
+    fingerFluidBenchState.renderer.requestedOpticalFootprintMode = requestedOpticalFootprintMode;
+    fingerFluidBenchState.renderer.effectiveOpticalFootprintMode = runtime.effectiveOpticalFootprintMode;
+    fingerFluidBenchState.renderer.requestedOpticalFootprintRoute = runtime.requestedOpticalFootprintRoute;
+    fingerFluidBenchState.renderer.effectiveOpticalFootprintRoute = runtime.effectiveOpticalFootprintRoute;
+    fingerFluidBenchState.renderer.opticalFootprintFallbackReason = runtime.opticalFootprintFallbackReason;
+    fingerFluidBenchState.renderer.requestedTransmissionFootprintMode = requestedTransmissionFootprintMode;
+    fingerFluidBenchState.renderer.effectiveTransmissionFootprintMode = runtime.effectiveTransmissionFootprintMode;
+    fingerFluidBenchState.renderer.requestedTransmissionFootprintRoute = runtime.requestedTransmissionFootprintRoute;
+    fingerFluidBenchState.renderer.effectiveTransmissionFootprintRoute = runtime.effectiveTransmissionFootprintRoute;
+    fingerFluidBenchState.renderer.transmissionFootprintFallbackReason = runtime.transmissionFootprintFallbackReason;
+    fingerFluidBenchState.renderer.requestedBodyTransportMode = requestedBodyTransportMode;
+    fingerFluidBenchState.renderer.effectiveBodyTransportMode = runtime.effectiveBodyTransportMode;
+    fingerFluidBenchState.renderer.requestedBodyTransportRoute = runtime.requestedBodyTransportRoute;
+    fingerFluidBenchState.renderer.effectiveBodyTransportRoute = runtime.effectiveBodyTransportRoute;
+    fingerFluidBenchState.renderer.bodyTransportFallbackReason = runtime.bodyTransportFallbackReason;
+    fingerFluidBenchState.renderer.requestedInterfaceFrequencyMode = requestedInterfaceFrequencyMode;
+    fingerFluidBenchState.renderer.effectiveInterfaceFrequencyMode = runtime.effectiveInterfaceFrequencyMode;
+    fingerFluidBenchState.renderer.requestedInterfaceFrequencyRoute = runtime.requestedInterfaceFrequencyRoute;
+    fingerFluidBenchState.renderer.effectiveInterfaceFrequencyRoute = runtime.effectiveInterfaceFrequencyRoute;
+    fingerFluidBenchState.renderer.interfaceFrequencyFallbackReason = runtime.interfaceFrequencyFallbackReason;
   }
   fingerFluidBenchState.runtime = runtime;
   updateFingerFluidBenchReadout();
@@ -10444,10 +10925,53 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     screenSpaceRefractionRenderFrameCount: runtime.screenSpaceRefractionRenderFrameCount,
     requestedOpticalDebugMode: effectiveOpticalDebugMode,
     effectiveOpticalDebugMode: runtime.opticalDebugMode,
+    requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: runtime.effectiveOpticalLightingMode,
+    requestedOpticalLightingRoute: runtime.requestedOpticalLightingRoute,
+    effectiveOpticalLightingRoute: runtime.effectiveOpticalLightingRoute,
+    opticalLightingFallbackReason: runtime.opticalLightingFallbackReason,
+    requestedOpticalFootprintMode,
+    effectiveOpticalFootprintMode: runtime.effectiveOpticalFootprintMode,
+    requestedOpticalFootprintRoute: runtime.requestedOpticalFootprintRoute,
+    effectiveOpticalFootprintRoute: runtime.effectiveOpticalFootprintRoute,
+    opticalFootprintFallbackReason: runtime.opticalFootprintFallbackReason,
+    requestedTransmissionFootprintMode,
+    effectiveTransmissionFootprintMode: runtime.effectiveTransmissionFootprintMode,
+    requestedTransmissionFootprintRoute: runtime.requestedTransmissionFootprintRoute,
+    effectiveTransmissionFootprintRoute: runtime.effectiveTransmissionFootprintRoute,
+    transmissionFootprintFallbackReason: runtime.transmissionFootprintFallbackReason,
+    requestedBodyTransportMode,
+    effectiveBodyTransportMode: runtime.effectiveBodyTransportMode,
+    requestedBodyTransportRoute: runtime.requestedBodyTransportRoute,
+    effectiveBodyTransportRoute: runtime.effectiveBodyTransportRoute,
+    bodyTransportFallbackReason: runtime.bodyTransportFallbackReason,
+    requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: runtime.effectiveInterfaceFrequencyMode,
+    requestedInterfaceFrequencyRoute: runtime.requestedInterfaceFrequencyRoute,
+    effectiveInterfaceFrequencyRoute: runtime.effectiveInterfaceFrequencyRoute,
+    interfaceFrequencyFallbackReason: runtime.interfaceFrequencyFallbackReason,
     supportPresentationEvidence: runtime.supportPresentationEvidence,
+    linearHdrSceneEvidence: runtime.linearHdrSceneEvidence,
+    finalPresentationEvidence: runtime.finalPresentationEvidence,
+    deferredSceneEvidence: runtime.deferredSceneEvidence,
     screenSpaceSurfaceEvidence: runtime.screenSpaceSurfaceEvidence,
     refractionEvidence: runtime.refractionEvidence,
+    ...(runtime.worldSpaceReflectionEvidence ? {
+      worldSpaceReflectionEvidence: runtime.worldSpaceReflectionEvidence,
+    } : {}),
+    ...(runtime.opticalQueryEvidence ? {
+      opticalQueryEvidence: runtime.opticalQueryEvidence,
+    } : {}),
+    ...(runtime.environmentMapEvidence ? {
+      environmentMapEvidence: runtime.environmentMapEvidence,
+    } : {}),
+    analyticCarrierOptics: runtime.analyticCarrierOptics,
   };
+}
+
+function setFingerFluidBenchReflectionMeshPhaseForWitness(phase) {
+  if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for reflection mesh witness');
+  return fingerFluidBenchSolver.setReflectionMeshPhaseForWitness(phase);
 }
 
 function resumeFingerFluidBenchAfterWitness() {
@@ -10455,6 +10979,79 @@ function resumeFingerFluidBenchAfterWitness() {
   fingerFluidBenchRunning = true;
   drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
   fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+}
+
+function advanceFingerFluidBenchToStepForWitness(targetStep) {
+  if (!fingerFluidBenchSolver?.available) {
+    throw new Error('Finger Fluid solver unavailable for exact-step witness advance');
+  }
+  if (!fingerFluidBenchSimulationPaused) {
+    throw new Error('Finger Fluid exact-step witness advance requires a paused simulation');
+  }
+  if (!Number.isSafeInteger(targetStep) || targetStep < 1) {
+    throw new Error(`Finger Fluid exact-step witness target is invalid: ${targetStep}`);
+  }
+  if (
+    fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    && targetStep > fingerFluidBenchConfig.effectiveWitnessTargetStep
+  ) {
+    throw new Error(
+      `Finger Fluid exact-step witness target exceeds the routed target: `
+      + `${targetStep} > ${fingerFluidBenchConfig.effectiveWitnessTargetStep}`,
+    );
+  }
+  const startStep = fingerFluidBenchSolver.getDebugState().stepCount;
+  if (targetStep <= startStep) {
+    throw new Error(
+      `Finger Fluid exact-step witness target must advance the simulation: `
+      + `${targetStep} <= ${startStep}`,
+    );
+  }
+  let endStep = startStep;
+  while (endStep < targetStep) {
+    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+    endStep = fingerFluidBenchSolver.getDebugState().stepCount;
+  }
+  if (endStep !== targetStep) {
+    throw new Error(
+      `Finger Fluid exact-step witness advance overshot its target: ${endStep} != ${targetStep}`,
+    );
+  }
+  renderFingerFluidBenchCurrentStateForWitness(
+    fingerFluidBenchConfig.effectiveRendererMode,
+    fingerFluidBenchConfig.effectiveOpticalDebugMode,
+    fingerFluidBenchConfig.requestedOpticalLightingMode,
+    fingerFluidBenchConfig.requestedOpticalFootprintMode,
+    fingerFluidBenchConfig.requestedTransmissionFootprintMode,
+    fingerFluidBenchConfig.requestedBodyTransportMode,
+    fingerFluidBenchConfig.requestedInterfaceFrequencyMode,
+  );
+  const runtime = fingerFluidBenchState.runtime;
+  runtime.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
+  runtime.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  runtime.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
+  runtime.effectiveWitnessStartStep = fingerFluidBenchConfig.effectiveWitnessStartStep;
+  runtime.witnessStartAutoPaused = fingerFluidBenchConfig.effectiveWitnessStartStep !== null
+    && fingerFluidBenchSimulationPaused
+    && endStep === fingerFluidBenchConfig.effectiveWitnessStartStep;
+  runtime.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    && fingerFluidBenchSimulationPaused
+    && endStep === targetStep;
+  runtime.pulseControlReadout = createFingerFluidPulseControlReadout({
+    stepCount: endStep,
+    inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+    witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+    paused: fingerFluidBenchSimulationPaused,
+  });
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.exact-step-witness-advance.v0',
+    startStep,
+    endStep,
+    targetStep,
+    exact: endStep === targetStep,
+    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  };
 }
 
 function drawFingerFluidBenchFrame(now = performance.now()) {
@@ -10475,8 +11072,9 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   if (!fingerFluidBenchSimulationPaused) {
     fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
     const submittedState = fingerFluidBenchSolver.getDebugState();
-    if (fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
-      && submittedState.stepCount >= fingerFluidBenchConfig.effectiveWitnessTargetStep) {
+    const autoPauseStep = fingerFluidBenchConfig.effectiveWitnessStartStep
+      ?? fingerFluidBenchConfig.effectiveWitnessTargetStep;
+    if (autoPauseStep !== null && submittedState.stepCount >= autoPauseStep) {
       fingerFluidBenchSimulationPaused = true;
     }
   }
@@ -10487,9 +11085,16 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
     opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+    opticalLightingMode: fingerFluidBenchConfig.requestedOpticalLightingMode,
+    opticalFootprintMode: fingerFluidBenchConfig.requestedOpticalFootprintMode,
+    transmissionFootprintMode: fingerFluidBenchConfig.requestedTransmissionFootprintMode,
+    bodyTransportMode: fingerFluidBenchConfig.requestedBodyTransportMode,
+    interfaceFrequencyMode: fingerFluidBenchConfig.requestedInterfaceFrequencyMode,
     ...fingerFluidBenchCamera,
   });
-  const gpuState = fingerFluidBenchSolver.getDebugState();
+  const gpuState = applyFingerFluidAnalyticCarrierRuntimeEvidence(
+    fingerFluidBenchSolver.getDebugState(),
+  );
   advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
   gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
   gpuState.effectiveColorMode = gpuState.colorMode;
@@ -10498,6 +11103,11 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
   gpuState.requestedOpticalDebugMode = fingerFluidBenchConfig.requestedOpticalDebugMode;
   gpuState.effectiveOpticalDebugMode = gpuState.opticalDebugMode;
+  gpuState.requestedOpticalLightingMode = fingerFluidBenchConfig.requestedOpticalLightingMode;
+  gpuState.requestedOpticalFootprintMode = fingerFluidBenchConfig.requestedOpticalFootprintMode;
+  gpuState.requestedTransmissionFootprintMode = fingerFluidBenchConfig.requestedTransmissionFootprintMode;
+  gpuState.requestedBodyTransportMode = fingerFluidBenchConfig.requestedBodyTransportMode;
+  gpuState.requestedInterfaceFrequencyMode = fingerFluidBenchConfig.requestedInterfaceFrequencyMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedSupportFriction = fingerFluidBenchConfig.requestedSupportFriction;
@@ -10522,6 +11132,11 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  gpuState.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
+  gpuState.effectiveWitnessStartStep = fingerFluidBenchConfig.effectiveWitnessStartStep;
+  gpuState.witnessStartAutoPaused = fingerFluidBenchConfig.effectiveWitnessStartStep !== null
+    && fingerFluidBenchSimulationPaused
+    && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessStartStep;
   gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
     && fingerFluidBenchSimulationPaused
     && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessTargetStep;
@@ -10556,6 +11171,31 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     requestedRenderer: gpuState.requestedRenderer,
     effectiveRenderer: gpuState.effectiveRenderer,
     rendererFallbackReason: gpuState.fallbackReason,
+    requestedOpticalLightingMode: gpuState.requestedOpticalLightingMode,
+    effectiveOpticalLightingMode: gpuState.effectiveOpticalLightingMode,
+    requestedOpticalLightingRoute: gpuState.requestedOpticalLightingRoute,
+    effectiveOpticalLightingRoute: gpuState.effectiveOpticalLightingRoute,
+    opticalLightingFallbackReason: gpuState.opticalLightingFallbackReason,
+    requestedOpticalFootprintMode: gpuState.requestedOpticalFootprintMode,
+    effectiveOpticalFootprintMode: gpuState.effectiveOpticalFootprintMode,
+    requestedOpticalFootprintRoute: gpuState.requestedOpticalFootprintRoute,
+    effectiveOpticalFootprintRoute: gpuState.effectiveOpticalFootprintRoute,
+    opticalFootprintFallbackReason: gpuState.opticalFootprintFallbackReason,
+    requestedTransmissionFootprintMode: gpuState.requestedTransmissionFootprintMode,
+    effectiveTransmissionFootprintMode: gpuState.effectiveTransmissionFootprintMode,
+    requestedTransmissionFootprintRoute: gpuState.requestedTransmissionFootprintRoute,
+    effectiveTransmissionFootprintRoute: gpuState.effectiveTransmissionFootprintRoute,
+    transmissionFootprintFallbackReason: gpuState.transmissionFootprintFallbackReason,
+    requestedBodyTransportMode: gpuState.requestedBodyTransportMode,
+    effectiveBodyTransportMode: gpuState.effectiveBodyTransportMode,
+    requestedBodyTransportRoute: gpuState.requestedBodyTransportRoute,
+    effectiveBodyTransportRoute: gpuState.effectiveBodyTransportRoute,
+    bodyTransportFallbackReason: gpuState.bodyTransportFallbackReason,
+    requestedInterfaceFrequencyMode: gpuState.requestedInterfaceFrequencyMode,
+    effectiveInterfaceFrequencyMode: gpuState.effectiveInterfaceFrequencyMode,
+    requestedInterfaceFrequencyRoute: gpuState.requestedInterfaceFrequencyRoute,
+    effectiveInterfaceFrequencyRoute: gpuState.effectiveInterfaceFrequencyRoute,
+    interfaceFrequencyFallbackReason: gpuState.interfaceFrequencyFallbackReason,
     rendererSurface: gpuState.effectiveRendererMode === 'sphere_debug'
       ? 'direct_webgpu_particle_sphere_billboards_debug_in_kaminos_viewport'
       : gpuState.effectiveRendererMode === 'screen_space_refraction'
@@ -10634,6 +11274,10 @@ async function startFingerFluidBench() {
         const camera = fingerFluidBenchConfig.waterfallOracleConfig.camera;
         fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
       }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'live_hand_inlets') {
+        const camera = KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA;
+        fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
+      }
       if (fingerFluidBenchConfig.oracleCockpitRequested) {
         fingerFluidBenchSimulationPaused = fingerFluidBenchConfig.oracleCockpitRequested.paused;
         if (fingerFluidBenchConfig.oracleCockpitRequested.fixedCamera) {
@@ -10642,10 +11286,62 @@ async function startFingerFluidBench() {
         }
       }
     } catch (error) {
+      const rejectedParams = new URLSearchParams(window.location.search);
+      const rejectedOpticalLightingMode = rejectedParams.get('finger_fluid_optical_lighting') || 'transport_only';
+      const rejectedOpticalFootprintMode = rejectedParams.get('finger_fluid_optical_footprint') || 'resolved_detail';
+      const rejectedTransmissionFootprintMode = rejectedParams.get('finger_fluid_transmission_footprint') || 'resolved_exit';
+      const rejectedBodyTransportMode = rejectedParams.get('finger_fluid_body_transport') || 'geometric_slab';
+      const rejectedInterfaceFrequencyMode = rejectedParams.get('finger_fluid_interface_frequency') || 'coupled_detail';
+      const rejectedOpticalLightingRoute = {
+        transport_only: 'wgsl-liquid-transport-only-lighting-v0',
+        bounded_ggx: 'wgsl-liquid-bounded-ggx-lighting-v0',
+        legacy_shading: 'wgsl-liquid-legacy-shading-v0',
+      }[rejectedOpticalLightingMode] || `unsupported-optical-lighting-mode:${rejectedOpticalLightingMode}`;
+      const rejectedOpticalFootprintRoute = {
+        resolved_detail: 'wgsl-liquid-resolved-detail-reflection-footprint-v0',
+        variance_filtered: 'wgsl-liquid-dense-variance-filtered-reflection-footprint-v0',
+      }[rejectedOpticalFootprintMode] || `unsupported-optical-footprint-mode:${rejectedOpticalFootprintMode}`;
+      const rejectedTransmissionFootprintRoute = {
+        resolved_exit: 'wgsl-liquid-resolved-exit-transmission-footprint-v0',
+        dense_exit_filtered: 'wgsl-liquid-dense-variance-filtered-exit-transmission-footprint-v0',
+      }[rejectedTransmissionFootprintMode] || `unsupported-transmission-footprint-mode:${rejectedTransmissionFootprintMode}`;
+      const rejectedBodyTransportRoute = {
+        geometric_slab: 'wgsl-liquid-geometric-slab-body-transport-v0',
+        robust_dense_body: 'wgsl-liquid-robust-dense-body-transport-v1',
+      }[rejectedBodyTransportMode] || `unsupported-body-transport-mode:${rejectedBodyTransportMode}`;
+      const rejectedInterfaceFrequencyRoute = {
+        coupled_detail: 'wgsl-liquid-coupled-detail-interface-frequency-v0',
+        macro_micro_separated: 'wgsl-liquid-macro-micro-interface-frequency-v1',
+      }[rejectedInterfaceFrequencyMode] || `unsupported-interface-frequency-mode:${rejectedInterfaceFrequencyMode}`;
       fingerFluidBenchState = createFingerFluidBenchState({
         status: 'error',
         solverBackend: 'config_rejected',
         renderBackend: 'config_rejected',
+        requestedOpticalLightingMode: rejectedOpticalLightingMode,
+        effectiveOpticalLightingMode: 'config_rejected',
+        requestedOpticalLightingRoute: rejectedOpticalLightingRoute,
+        effectiveOpticalLightingRoute: 'not-executed-config-rejected-v0',
+        opticalLightingFallbackReason: `config_rejected:${error.message || String(error)}`,
+        requestedOpticalFootprintMode: rejectedOpticalFootprintMode,
+        effectiveOpticalFootprintMode: 'config_rejected',
+        requestedOpticalFootprintRoute: rejectedOpticalFootprintRoute,
+        effectiveOpticalFootprintRoute: 'not-executed-config-rejected-v0',
+        opticalFootprintFallbackReason: `config_rejected:${error.message || String(error)}`,
+        requestedTransmissionFootprintMode: rejectedTransmissionFootprintMode,
+        effectiveTransmissionFootprintMode: 'config_rejected',
+        requestedTransmissionFootprintRoute: rejectedTransmissionFootprintRoute,
+        effectiveTransmissionFootprintRoute: 'not-executed-config-rejected-v0',
+        transmissionFootprintFallbackReason: `config_rejected:${error.message || String(error)}`,
+        requestedBodyTransportMode: rejectedBodyTransportMode,
+        effectiveBodyTransportMode: 'config_rejected',
+        requestedBodyTransportRoute: rejectedBodyTransportRoute,
+        effectiveBodyTransportRoute: 'not-executed-config-rejected-v0',
+        bodyTransportFallbackReason: `config_rejected:${error.message || String(error)}`,
+        requestedInterfaceFrequencyMode: rejectedInterfaceFrequencyMode,
+        effectiveInterfaceFrequencyMode: 'config_rejected',
+        requestedInterfaceFrequencyRoute: rejectedInterfaceFrequencyRoute,
+        effectiveInterfaceFrequencyRoute: 'not-executed-config-rejected-v0',
+        interfaceFrequencyFallbackReason: `config_rejected:${error.message || String(error)}`,
         downgrades: [`finger_fluid_route_config_rejected:${error.message || String(error)}`],
       });
       fingerFluidBenchState.runtime = { available: false, configError: error.message || String(error) };
@@ -10663,6 +11359,11 @@ async function startFingerFluidBench() {
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
       rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
       opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+      opticalLightingMode: fingerFluidBenchConfig.effectiveOpticalLightingMode,
+      opticalFootprintMode: fingerFluidBenchConfig.effectiveOpticalFootprintMode,
+      transmissionFootprintMode: fingerFluidBenchConfig.effectiveTransmissionFootprintMode,
+      bodyTransportMode: fingerFluidBenchConfig.effectiveBodyTransportMode,
+      interfaceFrequencyMode: fingerFluidBenchConfig.effectiveInterfaceFrequencyMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
@@ -10674,6 +11375,9 @@ async function startFingerFluidBench() {
       adaptiveDensity: fingerFluidBenchConfig.effectiveAdaptiveDensity,
       inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
       waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
+      liveInletPacket: fingerFluidBenchConfig.effectiveAnalyticCarrierMode !== 'not_requested'
+        ? FINGER_FLUID_ANALYTIC_CARRIER_SMOKE_PACKET
+        : null,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });
     fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
@@ -10696,7 +11400,36 @@ async function startFingerFluidBench() {
       updateFingerFluidBenchReadout();
       return;
     }
-    await activateFingerFluidPyroComposition();
+    try {
+      configureFingerFluidAnalyticCarrierSmoke();
+    } catch (error) {
+      fingerFluidBenchRunning = false;
+      fingerFluidBenchAnalyticCarrierState = {
+        schema: 'kaminos.finger-fluid.analytic-carrier-browser-route.v1',
+        requestedMode: fingerFluidBenchConfig.effectiveAnalyticCarrierMode,
+        effectiveMode: 'failed_before_primary_output',
+        requestedRoute: fingerFluidBenchConfig.effectiveAnalyticCarrierMode,
+        effectiveRoute: null,
+        fallbackRoute: null,
+        status: 'failed_before_primary_output',
+        primaryOutputWritten: false,
+        failurePhase: error?.report?.phase || 'carrier-browser-admission',
+        lastTrustworthyEvidence: error?.report?.lastTrustworthyEvidence
+          || 'solver-source-published-carrier-not-admitted',
+        error: error?.message || String(error),
+      };
+      fingerFluidBenchState = createFingerFluidBenchState({
+        status: 'error',
+        solverBackend: fingerFluidBenchSolver.solver_backend,
+        renderBackend: fingerFluidBenchSolver.render_backend,
+        downgrades: [`analytic_carrier_admission_failed_no_fallback:${error?.message || String(error)}`],
+      });
+      fingerFluidBenchState.runtime = applyFingerFluidAnalyticCarrierRuntimeEvidence(
+        fingerFluidBenchSolver.getDebugState(),
+      );
+      updateFingerFluidBenchReadout();
+      return;
+    }
   }
   await activateFingerFluidPyroComposition();
   if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
@@ -10722,8 +11455,16 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchSetLiveInletPacket = setFingerFluidBenchLiveInletPacket;
+  window.kaminosFingerFluidBenchAnalyticCarrierState = () => ({
+    ...fingerFluidBenchAnalyticCarrierState,
+  });
+  window.kaminosFingerFluidBenchSetAnalyticCarrierModeForWitness =
+    setFingerFluidBenchAnalyticCarrierModeForWitness;
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
+  window.kaminosFingerFluidBenchAdvanceToStepForWitness =
+    advanceFingerFluidBenchToStepForWitness;
   window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
     fingerFluidBenchSimulationPaused = paused === true;
     const runtime = fingerFluidBenchSolver?.getDebugState?.() || null;
@@ -10748,6 +11489,7 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidOracleCockpitDebugState = () => fingerFluidOracleCockpitState || updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
   window.__kaminosFingerFluidOracleCockpitDebugState = window.kaminosFingerFluidOracleCockpitDebugState;
   window.restartFingerFluidBenchForOracleCockpit = restartFingerFluidBenchForOracleCockpit;
+  window.kaminosFingerFluidBenchSetReflectionMeshPhaseForWitness = setFingerFluidBenchReflectionMeshPhaseForWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
     volume: volumePrototype?.debugState?.() || null,
