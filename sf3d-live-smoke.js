@@ -1,7 +1,9 @@
 import {
   SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
+  SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
   SF3D_LIVE_SMOKE_ROUTE_ID,
+  canFireSf3dLiveSmoke,
   frameGapsWithinStage,
   progressFromSf3dMessage,
   summarizeSf3dFrameGaps,
@@ -19,7 +21,20 @@ export async function prepareSf3dLiveSmokeDevice() {
   const config = validateSf3dLiveSmokeConfig(payload);
   const gpuModule = await import(`${config.origin}/src/lib/gpu.js`);
   const gpu = await gpuModule.initGPU();
-  return Object.freeze({ config, adapter: gpu.adapter, device: gpu.device });
+  const deviceLoss = {
+    lost: false,
+    info: null,
+    promise: null,
+  };
+  deviceLoss.promise = gpu.device.lost.then(info => {
+    deviceLoss.lost = true;
+    deviceLoss.info = {
+      reason: info.reason || null,
+      message: info.message || null,
+    };
+    return deviceLoss.info;
+  });
+  return Object.freeze({ config, adapter: gpu.adapter, device: gpu.device, deviceLoss });
 }
 
 function setText(id, value) {
@@ -90,6 +105,50 @@ async function persistReport(report) {
   }
 }
 
+async function probeDevice(device, {
+  size = 4,
+  mappedAtCreation = false,
+} = {}) {
+  let errorScopeOpen = false;
+  try {
+    device.pushErrorScope('validation');
+    errorScopeOpen = true;
+    const buffer = device.createBuffer({
+      size,
+      usage: GPUBufferUsage.COPY_DST,
+      mappedAtCreation,
+    });
+    if (mappedAtCreation) {
+      buffer.getMappedRange(0, Math.min(size, 4));
+      buffer.unmap();
+    }
+    buffer.destroy();
+    const validationError = await device.popErrorScope();
+    errorScopeOpen = false;
+    return {
+      usable: validationError === null,
+      size,
+      mappedAtCreation,
+      error: validationError?.message || null,
+    };
+  } catch (error) {
+    let validationError = null;
+    if (errorScopeOpen) {
+      try {
+        validationError = await device.popErrorScope();
+      } catch {
+        // The synchronous exception remains the strongest available evidence.
+      }
+    }
+    return {
+      usable: false,
+      size,
+      mappedAtCreation,
+      error: error.message || validationError?.message || String(error),
+    };
+  }
+}
+
 function renderFinalMetrics(report) {
   const frame = report.renderer;
   setText('sf3d-live-smoke-wall', `${(report.totalWallMs / 1000).toFixed(1)} s`);
@@ -116,6 +175,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   panel.dataset.status = 'loading';
   setText('sf3d-live-smoke-revision', prepared.config.effectiveRevision.slice(0, 10));
   setText('sf3d-live-smoke-route', SF3D_LIVE_SMOKE_ROUTE_ID);
+  setText('sf3d-live-smoke-topology', SF3D_LIVE_SMOKE_GPU_TOPOLOGY);
   setText('sf3d-live-smoke-status', 'Loading model');
 
   const [weightsModule, inferenceModule, pipelineModule] = await Promise.all([
@@ -139,9 +199,11 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   const downloadButton = document.getElementById('sf3d-live-smoke-download');
   let outputUrl = null;
   let running = false;
+  let attempted = false;
   let frameTimes = [];
   let frameCpuTimes = [];
   let lastReport = null;
+  let lastProgress = { percent: 0, label: 'Model loaded', message: null };
 
   const controller = {
     get active() {
@@ -149,6 +211,26 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
     },
     get report() {
       return lastReport;
+    },
+    debugState() {
+      return {
+        routeId: SF3D_LIVE_SMOKE_ROUTE_ID,
+        revision: prepared.config.effectiveRevision,
+        gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+        running,
+        attempted,
+        deviceLoss: prepared.deviceLoss.info,
+      };
+    },
+    async probeInferenceDevice(options) {
+      if (running || attempted) {
+        return {
+          usable: false,
+          refused: true,
+          error: 'Inference-device probes are only valid before the one-shot firing',
+        };
+      }
+      return await probeDevice(prepared.device, options);
     },
     noteRenderedFrame(timestamp, cpuMs) {
       if (!running) return;
@@ -165,7 +247,15 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
       );
     },
     async fire() {
-      if (running) return null;
+      if (!canFireSf3dLiveSmoke({
+        running,
+        attempted,
+        deviceLost: prepared.deviceLoss.lost,
+      })) {
+        setText('sf3d-live-smoke-status', 'Refresh required before another firing');
+        return null;
+      }
+      attempted = true;
       running = true;
       frameTimes = [];
       frameCpuTimes = [];
@@ -180,6 +270,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
       setText('sf3d-live-smoke-p99', 'sampling');
       setText('sf3d-live-smoke-max', 'sampling');
       setText('sf3d-live-smoke-hitches', '0 / 0 / 0');
+      lastProgress = { percent: 0, label: 'Starting exact SF3D route', message: null };
       const startedAt = performance.now();
       const workerHandle = createCrossOriginModuleWorker(`${prepared.config.origin}/src/lib/materialize_worker.js`);
       let phase = 'route-execution';
@@ -199,6 +290,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           },
           message => {
             const progress = progressFromSf3dMessage(message);
+            lastProgress = { ...progress, message };
             setProgress(progress.percent, progress.label);
           },
         );
@@ -220,6 +312,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
+          gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
           totalWallMs,
           output: {
@@ -237,6 +330,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           stages: stageRows(output.stageSpans, frameTimes),
           cooperativeReports: output.cooperativeReports || {},
           arenaSnapshot: output.arenaSnapshot || null,
+          lastProgress,
+          deviceLoss: prepared.deviceLoss.info,
         };
         const persisted = await persistReport(lastReport);
         lastReport.reportPath = persisted.path || null;
@@ -262,6 +357,11 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         return lastReport;
       } catch (error) {
         running = false;
+        await Promise.race([
+          prepared.deviceLoss.promise,
+          new Promise(resolve => setTimeout(resolve, 100)),
+        ]);
+        const deviceProbe = await probeDevice(prepared.device);
         lastReport = {
           schema: 'kaminos.sf3d-live-contention-report.v0',
           ok: false,
@@ -272,8 +372,12 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
+          gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
           elapsedMs: performance.now() - startedAt,
+          lastProgress,
+          deviceLoss: prepared.deviceLoss.info,
+          deviceProbe,
           renderer: summarizeSf3dFrameGaps(frameTimes.slice(1).map((time, index) => time - frameTimes[index])),
         };
         const persisted = await persistReport(lastReport);
@@ -284,7 +388,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         throw error;
       } finally {
         workerHandle.terminate();
-        fireButton.disabled = false;
+        fireButton.disabled = true;
       }
     },
   };

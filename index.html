@@ -2450,9 +2450,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="sf3d-live-smoke-identity">
       <span>Route</span><span id="sf3d-live-smoke-route">pending</span>
       <span>Source</span><span id="sf3d-live-smoke-revision">pending</span>
+      <span>GPU</span><span id="sf3d-live-smoke-topology">pending</span>
     </div>
     <div class="sf3d-live-smoke-progress"><div id="sf3d-live-smoke-progress-fill"></div></div>
-    <div class="sf3d-live-smoke-phase" id="sf3d-live-smoke-phase">Preparing shared GPU device</div>
+    <div class="sf3d-live-smoke-phase" id="sf3d-live-smoke-phase">Preparing contention devices</div>
     <div class="sf3d-live-smoke-metrics">
       <div class="sf3d-live-smoke-metric"><span>Total wall</span><strong id="sf3d-live-smoke-wall">pending</strong></div>
       <div class="sf3d-live-smoke-metric"><span>Frame p95</span><strong id="sf3d-live-smoke-p95">pending</strong></div>
@@ -8872,7 +8873,6 @@ async function initScene() {
 
   renderer = new THREE.WebGPURenderer({
     antialias: true,
-    ...(sf3dLiveSmokePrepared?.device ? { device: sf3dLiveSmokePrepared.device } : {}),
   });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
