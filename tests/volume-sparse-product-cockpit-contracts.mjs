@@ -51,6 +51,119 @@ assert.equal(
   'live-boundary-sidecar-world-tangent-covariance-splats-v0',
 );
 
+assert.equal(
+  contract.SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.identity,
+  'fat-bonfire-splat-appearance-attractor-2026-07-16-v0',
+);
+assert.equal(
+  contract.SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId,
+  'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2',
+);
+assert.deepEqual(
+  contract.SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.missingExactAuthority,
+  ['evolvedState', 'camera', 'producerCommit', 'candidatePopulation', 'presentationToggles'],
+  'the accepted visual attractor cannot impersonate an exact scientific target',
+);
+assert.match(
+  witness,
+  /appearanceTargetRequested/,
+  'the visual witness detects the named appearance target instead of treating it as a generic integration route',
+);
+assert.match(
+  witness,
+  /sparseProductAppearanceAdmission/,
+  'the visual witness preserves the target admission receipt',
+);
+assert.match(
+  witness,
+  /settingsAnchorId/,
+  'the visual witness binds the effective route to the named settings anchor',
+);
+assert.match(
+  witness,
+  /skippedForNamedAppearanceTarget/,
+  'the visual witness records that mutating integration probes were skipped for the fixed appearance comparison',
+);
+
+const appearancePresetReceipt = {
+  presetId: contract.SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId,
+  sourcePresetAuthority: 'shared-volume-settings-preset-v2',
+  routeVolumeEntries: [
+    ['volume_scene', 'tall_plume'],
+    ['volume_resolution', '128'],
+    ['volume_boundary_splat_mode', 'learned'],
+    ['volume_boundary_splat_radius', '0.98'],
+    ['volume_boundary_splat_sharpness', '12'],
+    ['volume_reaction_boundary_support_thermal', '0.98'],
+    ['volume_reaction_boundary_support_reaction', '1'],
+    ['volume_reaction_boundary_support_front', '0.66'],
+    ['volume_reaction_boundary_support_interface', '0.78'],
+    ['volume_reaction_boundary_fire_luma', '5'],
+    ['volume_density', '0.35'],
+    ['volume_fire', '2.25'],
+    ['volume_smoke', '0.1'],
+    ['volume_steps', '160'],
+    ['volume_render_scale', '0.296917052331791'],
+  ],
+};
+const appearanceTarget = contract.buildSparseProductAppearanceTarget(
+  appearancePresetReceipt,
+  'http://127.0.0.1:18825',
+);
+assert.equal(appearanceTarget.pathname, '/volume-selective-head-live.html');
+assert.equal(appearanceTarget.searchParams.get('volume_product_cockpit'), '1');
+assert.equal(appearanceTarget.searchParams.get('volume_splat_geometry'), 'historical-round');
+assert.equal(
+  appearanceTarget.searchParams.get('volume_optical_unit_mode'),
+  'projected-native-cell-area-integral-normalized-v0',
+);
+assert.equal(appearanceTarget.searchParams.get('volume_boundary_splat_presentation_mode'), 'matched-optical-recurrence-v0');
+assert.equal(appearanceTarget.searchParams.get('settings_preset'), appearancePresetReceipt.presetId);
+assert.equal(appearanceTarget.searchParams.get('settings_preset_authority'), appearancePresetReceipt.sourcePresetAuthority);
+for (const [key, value] of appearancePresetReceipt.routeVolumeEntries) {
+  assert.equal(appearanceTarget.searchParams.get(key), value, `appearance target preserves ${key}`);
+}
+const appearanceAdmission = contract.validateSparseProductAppearanceTarget(
+  appearancePresetReceipt,
+  appearanceTarget.searchParams,
+);
+assert.equal(appearanceAdmission.ok, true);
+assert.equal(appearanceAdmission.appearanceAttractor.identity, contract.SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.identity);
+assert.equal(appearanceAdmission.settingsAnchorId, appearancePresetReceipt.presetId);
+assert.equal(appearanceAdmission.request.geometry, 'historical-round');
+assert.equal(appearanceAdmission.request.resolution, 128);
+
+const partialAppearanceTarget = new URL(appearanceTarget);
+partialAppearanceTarget.searchParams.delete('volume_reaction_boundary_support_interface');
+assert.throws(
+  () => contract.validateSparseProductAppearanceTarget(
+    appearancePresetReceipt,
+    partialAppearanceTarget.searchParams,
+  ),
+  /sparse-product-appearance-settings-route-mismatch:volume_reaction_boundary_support_interface/,
+  'a partial basin cannot retain Fat Bonfire target context',
+);
+const legacyAppearanceTarget = new URL(appearanceTarget);
+legacyAppearanceTarget.searchParams.set('volume_optical_unit_mode', 'legacy-global-path-scale-diagnostic-v0');
+assert.throws(
+  () => contract.validateSparseProductAppearanceTarget(
+    appearancePresetReceipt,
+    legacyAppearanceTarget.searchParams,
+  ),
+  /sparse-product-appearance-optical-units-substitution/,
+  'legacy additive optics cannot impersonate the target-era-under-physical-optics treatment',
+);
+const extraAppearanceTarget = new URL(appearanceTarget);
+extraAppearanceTarget.searchParams.set('volume_density_override', '9');
+assert.throws(
+  () => contract.validateSparseProductAppearanceTarget(
+    appearancePresetReceipt,
+    extraAppearanceTarget.searchParams,
+  ),
+  /sparse-product-appearance-route-unexpected:volume_density_override/,
+  'an unreceipted appearance override fails loud',
+);
+
 const flowTangentRequest = contract.parseSparseProductRoute(new URLSearchParams(
   'volume_product_cockpit=1&volume_resolution=96&volume_splat_geometry=flow-tangent',
 ));

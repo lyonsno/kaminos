@@ -11,6 +11,30 @@ export const SPARSE_PRODUCT_ATTRIBUTE_MODEL_IDENTITY =
 export const SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY = 'matched-optical-recurrence-v0';
 export const SPARSE_PRODUCT_OPTICAL_ACCUMULATION_IDENTITY = 'depth-binned-emission-optical-depth-v0';
 export const SPARSE_PRODUCT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self-transmittance-v0';
+export const SPARSE_PRODUCT_APPEARANCE_ATTRACTOR = Object.freeze({
+  identity: 'fat-bonfire-splat-appearance-attractor-2026-07-16-v0',
+  authority: 'operator-accepted-historical-splat-appearance-v0',
+  settingsAnchorId: 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2',
+  knownMechanism: Object.freeze({
+    geometry: 'learned-camera-facing-billboard-v0',
+    boundarySplatMode: 'learned',
+    radius: 0.98,
+    sharpness: 12,
+    opticalPresentation: 'legacy-additive-attractor-only-v0',
+    nearestSourceCommit: 'e7a567a7',
+  }),
+  referenceFrameIds: Object.freeze([
+    'fat-bonfire-view-01-splat',
+    'fat-bonfire-view-02-splat',
+  ]),
+  missingExactAuthority: Object.freeze([
+    'evolvedState',
+    'camera',
+    'producerCommit',
+    'candidatePopulation',
+    'presentationToggles',
+  ]),
+});
 
 export const SPARSE_PRODUCT_GEOMETRY_MODES = Object.freeze({
   'historical-round': Object.freeze({
@@ -57,6 +81,110 @@ const DIAGNOSTIC_ROUTE_PARAMETERS = Object.freeze([
   'full_support_stage_b_manifest_sha256',
   'full_support_persistent_cohort_manifest',
 ]);
+const SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY = Object.freeze({
+  volume_product_cockpit: '1',
+  volume_splat_geometry: 'historical-round',
+  volume_optical_unit_mode: 'projected-native-cell-area-integral-normalized-v0',
+  volume_boundary_splat_presentation_mode: SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
+  role: 'truthHigh',
+  composition: 'splat-only-v0',
+  warmup_steps: '0',
+  volume_presentation: 'beauty',
+  volume_raymarch_smoke: 'off',
+});
+
+function requireSparseProductAppearancePreset(receipt) {
+  if (!receipt || receipt.presetId !== SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId) {
+    throw new Error(
+      `sparse-product-appearance-settings-anchor-substitution:${SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId}:${receipt?.presetId || 'missing'}`,
+    );
+  }
+  if (receipt.sourcePresetAuthority !== 'shared-volume-settings-preset-v2') {
+    throw new Error(
+      `sparse-product-appearance-settings-authority-substitution:shared-volume-settings-preset-v2:${receipt.sourcePresetAuthority || 'missing'}`,
+    );
+  }
+  if (!Array.isArray(receipt.routeVolumeEntries) || receipt.routeVolumeEntries.length === 0) {
+    throw new Error('sparse-product-appearance-settings-route-missing');
+  }
+}
+
+export function buildSparseProductAppearanceTarget(receipt, origin) {
+  requireSparseProductAppearancePreset(receipt);
+  const target = new URL('/volume-selective-head-live.html', origin);
+  for (const [key, value] of receipt.routeVolumeEntries) {
+    target.searchParams.set(key, String(value));
+  }
+  for (const [key, value] of Object.entries(SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY)) {
+    target.searchParams.set(key, value);
+  }
+  target.searchParams.set('settings_preset', receipt.presetId);
+  target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
+  return target;
+}
+
+export function validateSparseProductAppearanceTarget(receipt, params) {
+  requireSparseProductAppearancePreset(receipt);
+  const route = params instanceof URLSearchParams ? params : new URLSearchParams(params);
+  if (route.get('settings_preset') !== receipt.presetId) {
+    throw new Error('sparse-product-appearance-settings-anchor-substitution');
+  }
+  if (route.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
+    throw new Error('sparse-product-appearance-settings-authority-substitution');
+  }
+  for (const [key, value] of receipt.routeVolumeEntries) {
+    const values = route.getAll(key);
+    if (values.length !== 1 || values[0] !== String(value)) {
+      throw new Error(`sparse-product-appearance-settings-route-mismatch:${key}`);
+    }
+  }
+  if (
+    route.get('volume_optical_unit_mode')
+      !== SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY.volume_optical_unit_mode
+  ) {
+    throw new Error('sparse-product-appearance-optical-units-substitution');
+  }
+  for (const [key, value] of Object.entries(SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY)) {
+    const values = route.getAll(key);
+    if (values.length !== 1 || values[0] !== value) {
+      throw new Error(`sparse-product-appearance-overlay-substitution:${key}`);
+    }
+  }
+  for (const key of ['settings_preset', 'settings_preset_authority']) {
+    if (route.getAll(key).length !== 1) {
+      throw new Error(`sparse-product-appearance-overlay-substitution:${key}`);
+    }
+  }
+  const allowed = new Set([
+    ...receipt.routeVolumeEntries.map(([key]) => key),
+    ...Object.keys(SPARSE_PRODUCT_APPEARANCE_ROUTE_OVERLAY),
+    'settings_preset',
+    'settings_preset_authority',
+  ]);
+  const unexpected = [...route].map(([key]) => key).filter(key => !allowed.has(key));
+  if (unexpected.length > 0) {
+    throw new Error(`sparse-product-appearance-route-unexpected:${unexpected.join(',')}`);
+  }
+  const request = parseSparseProductRoute(route);
+  if (
+    request.geometry !== 'historical-round'
+    || request.boundarySplatMode !== 'learned'
+    || request.boundarySplatRadius !== 0.98
+    || request.boundarySplatSharpness !== 12
+  ) {
+    throw new Error('sparse-product-appearance-material-substitution');
+  }
+  return Object.freeze({
+    ok: true,
+    identity: 'kaminos.volume.sparse-product-appearance-target-admission.v0',
+    appearanceAttractor: SPARSE_PRODUCT_APPEARANCE_ATTRACTOR,
+    settingsAnchorId: receipt.presetId,
+    settingsAnchorAuthority: receipt.sourcePresetAuthority,
+    settingsControlCount: receipt.routeVolumeEntries.length,
+    request,
+    exactVisualReplay: false,
+  });
+}
 
 export function parseSparseProductRoute(params) {
   const route = params instanceof URLSearchParams ? params : new URLSearchParams(params);

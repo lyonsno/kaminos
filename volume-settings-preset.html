@@ -34,6 +34,10 @@
       buildVolumeSettingsPresetVisualTarget,
       validateVolumeSettingsPresetDocument,
     } from './volume-settings-preset-contract.mjs';
+    import {
+      buildSparseProductAppearanceTarget,
+      SPARSE_PRODUCT_APPEARANCE_ATTRACTOR,
+    } from './volume-sparse-product-cockpit.mjs';
 
     const status = document.getElementById('status');
     const presetTitle = document.getElementById('preset-title');
@@ -65,7 +69,16 @@
         viewCommands.hidden = false;
         return;
       }
-      const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
+      const sparseProductAppearanceRequested = view === 'sparse-product-physical';
+      if (
+        sparseProductAppearanceRequested
+        && receipt.presetId !== SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId
+      ) {
+        throw new Error('sparse product appearance view requires the Fat Bonfire settings anchor');
+      }
+      const target = sparseProductAppearanceRequested
+        ? buildSparseProductAppearanceTarget(receipt, location.origin)
+        : buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
       status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin settings + ${receipt.rendererControlCount} renderer controls | effective ${view} view`;
       location.replace(target);
     }

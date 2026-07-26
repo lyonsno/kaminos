@@ -110,9 +110,11 @@
       makeSparseProductRuntimeReceipt,
       parseSparseProductRoute,
       runSparseProductResolutionTransition,
+      SPARSE_PRODUCT_APPEARANCE_ATTRACTOR,
       SPARSE_PRODUCT_GEOMETRY_MODES,
       SPARSE_PRODUCT_OPTICAL_PRESENTATION_IDENTITY,
       SPARSE_PRODUCT_RESOLUTIONS,
+      validateSparseProductAppearanceTarget,
     } from './volume-sparse-product-cockpit.mjs';
 
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
@@ -228,6 +230,7 @@
     }
     const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
     let sourceSettingsPresetReceipt = null;
+    let sparseProductAppearanceAdmission = null;
     let basin = document.getElementById('basin');
     if (sparseProductRequested) basin.style.visibility = 'hidden';
     const status = document.getElementById('status');
@@ -462,7 +465,16 @@
           sourceSettingsPresetRequestedId,
           await schemaResponse.json(),
         );
-        validateVolumeSettingsPresetVisualTarget(sourceSettingsPresetReceipt, params);
+        if (sparseProductRequested) {
+          sparseProductAppearanceAdmission = validateSparseProductAppearanceTarget(
+            sourceSettingsPresetReceipt,
+            params,
+          );
+          liveOpticalAuthority.textContent =
+            'Fat Bonfire settings anchor | physical optics | evolving state | appearance target is not an exact replay';
+        } else {
+          validateVolumeSettingsPresetVisualTarget(sourceSettingsPresetReceipt, params);
+        }
       } catch (error) {
         warmupError = `settings preset visual admission failed: ${error?.message || String(error)}`;
       }
@@ -1152,6 +1164,10 @@
         sourceSettingsPresetStorePath: sourceSettingsPresetReceipt?.storePath || null,
         sourceSettingsPresetSchemaIdentity: sourceSettingsPresetReceipt?.schemaIdentity || null,
         sourceSettingsPresetControlCount: Object.keys(sourceSettingsPresetReceipt?.preset?.domControls || {}).length,
+        sparseProductAppearanceAdmission,
+        appearanceAttractor: sparseProductAppearanceAdmission
+          ? SPARSE_PRODUCT_APPEARANCE_ATTRACTOR
+          : null,
         warmupAuthority,
         warmupTarget,
         warmupComplete,

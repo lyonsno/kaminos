@@ -5,6 +5,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { inflateSync } from 'node:zlib';
+import { SPARSE_PRODUCT_APPEARANCE_ATTRACTOR } from './volume-sparse-product-cockpit.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRouteRaw = String(
@@ -28,6 +29,8 @@ let initialResolution = null;
 let initialGeometry = null;
 let initialOpticalUnitMode = null;
 let transitionResolution = null;
+let appearanceTargetRequested = false;
+let appearanceSettingsAnchorId = null;
 let browserExecutable = null;
 let browser = null;
 let socket = null;
@@ -102,6 +105,9 @@ try {
   initialGeometry = requestedRoute.searchParams.get('volume_splat_geometry') || 'historical-round';
   initialOpticalUnitMode = requestedRoute.searchParams.get('volume_optical_unit_mode')
     || 'projected-native-cell-area-integral-normalized-v0';
+  appearanceSettingsAnchorId = requestedRoute.searchParams.get('settings_preset');
+  appearanceTargetRequested =
+    appearanceSettingsAnchorId === SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId;
   transitionResolution = initialResolution === 64 ? 96 : 64;
   browserExecutable = args.get('--chrome')
     ? String(args.get('--chrome'))
@@ -276,121 +282,131 @@ try {
     opticalSameStateCaptureId,
   };
 
-  failurePhase = 'resolution-transition';
-  const resolutionRequest = await evaluate(socket, `(() => {
-    return window.__kaminosSelectiveHeadLive.setSparseProductResolution(${transitionResolution});
-  })()`);
-  assert.equal(resolutionRequest.status, 'effective');
-  assert.equal(resolutionRequest.requestedResolution, transitionResolution);
-  assert.equal(resolutionRequest.stageIdentity, 'staged-sparse-product-iframe-handover-v0');
-  const resolutionState = await waitForRuntimeState(socket, timeoutMs, state =>
-    state.status === 'running'
-      && state.resolution === transitionResolution
-      && state.transition?.status === 'effective');
-  assertSparseProductState(
-    resolutionState,
-    transitionResolution,
-    initialGeometry,
-    initialOpticalUnitMode,
-  );
-  assert.equal(resolutionState.transition.requestedResolution, transitionResolution);
-  assert.equal(resolutionState.transition.effectiveResolution, transitionResolution);
-  assert.equal(resolutionState.transition.diagnosticCoefficientsActiveAfter, false);
-  const resolutionPixels = await capturePixelSample(socket);
-  assertVisible(resolutionPixels, 'resolution-64');
-  lastTrustworthyEvidence = {
-    ...lastTrustworthyEvidence,
-    resolutionRequest,
-    resolutionState,
-    resolutionPixels: stripPixels(resolutionPixels),
-  };
-
-  failurePhase = 'semantic-control-coupling';
-  const controlProbe = await evaluate(socket, `(() => {
-    const runtime = document.querySelector('#basin')?.contentWindow;
-    const input = runtime?.document?.getElementById('volume-reaction-boundary-fire-tip');
-    const prototype = runtime?.__kaminosVolumePrototype;
-    if (!input || !prototype) throw new Error('semantic-control-surface-missing');
-    const before = prototype.debugState();
-    const previous = Number(input.value);
-    const requested = previous > 1.2 ? 0.82 : 1.8;
-    input.value = String(requested);
-    input.dispatchEvent(new runtime.Event('input', { bubbles: true }));
-    input.dispatchEvent(new runtime.Event('change', { bubbles: true }));
-    const after = prototype.debugState();
-    return {
-      control: 'reactionBoundaryFireTip',
-      previous,
-      requested,
-      effective: after.controls?.reactionBoundaryFireTip,
-      simStepBefore: before.simStepCount,
-      simStepAfter: after.simStepCount,
-      sourceAuthorityBefore: before.boundarySplatSourceAuthority,
-      sourceAuthorityAfter: after.boundarySplatSourceAuthority,
-    };
-  })()`);
-  assert.equal(controlProbe.effective, controlProbe.requested);
-  assert.equal(controlProbe.sourceAuthorityBefore, 'live-baked-sidecar-plus-fluid-material-v0');
-  assert.equal(controlProbe.sourceAuthorityAfter, 'live-baked-sidecar-plus-fluid-material-v0');
-  await delay(500);
-  const controlState = await waitForRuntimeState(socket, timeoutMs);
-  assert.ok(controlState.simStepCount > controlProbe.simStepAfter, 'simulation stopped after semantic control update');
-  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, controlProbe, controlState };
-
-  failurePhase = 'geometry-modes';
+  let resolutionRequest = null;
+  let resolutionState = coldLoad.at(-1);
+  let resolutionPixels = null;
+  let controlProbe = null;
+  let controlState = null;
   const geometry = {};
-  for (const mode of ['flow-tangent', 'learned-tangent', 'historical-round']) {
-    await evaluate(socket, `(() => {
-      const runtime = document.querySelector('#basin')?.contentWindow;
-      const prototype = runtime?.__kaminosVolumePrototype;
-      if (!runtime || !prototype) throw new Error('geometry-authority-trace-runtime-missing');
-      runtime.__kaminosSparseProductGeometryAuthorityTrace = [];
-      if (!prototype.__kaminosSparseProductOriginalSetControls) {
-        prototype.__kaminosSparseProductOriginalSetControls = prototype.setControls.bind(prototype);
-        prototype.setControls = next => {
-          const result = prototype.__kaminosSparseProductOriginalSetControls(next);
-          const state = prototype.debugState();
-          runtime.__kaminosSparseProductGeometryAuthorityTrace.push({
-            atMs: performance.now(),
-            requestedBoundarySplatMode: next?.boundarySplatMode ?? null,
-            effectiveBoundarySplatMode: state.boundarySplatMode ?? null,
-            effectiveFootprintAuthority: state.boundarySplatFootprintAuthority ?? null,
-          });
-          return result;
-        };
-      }
-      return true;
+  const skippedForNamedAppearanceTarget = appearanceTargetRequested
+    ? ['resolution-transition', 'semantic-control-coupling', 'geometry-modes']
+    : [];
+  if (!appearanceTargetRequested) {
+    failurePhase = 'resolution-transition';
+    resolutionRequest = await evaluate(socket, `(() => {
+      return window.__kaminosSelectiveHeadLive.setSparseProductResolution(${transitionResolution});
     })()`);
-    const receipt = await evaluate(socket, `(() => {
-      return window.__kaminosSelectiveHeadLive.setSparseProductGeometry(${JSON.stringify(mode)});
-    })()`);
-    assert.ok(
-      receipt.status === 'settling' || receipt.status === 'effective',
-      `geometry request returned invalid status:${receipt.status}`,
+    assert.equal(resolutionRequest.status, 'effective');
+    assert.equal(resolutionRequest.requestedResolution, transitionResolution);
+    assert.equal(resolutionRequest.stageIdentity, 'staged-sparse-product-iframe-handover-v0');
+    resolutionState = await waitForRuntimeState(socket, timeoutMs, state =>
+      state.status === 'running'
+        && state.resolution === transitionResolution
+        && state.transition?.status === 'effective');
+    assertSparseProductState(
+      resolutionState,
+      transitionResolution,
+      initialGeometry,
+      initialOpticalUnitMode,
     );
-    await delay(350);
-    const state = await waitForRuntimeState(socket, timeoutMs);
-    const authorityTrace = await evaluate(socket, `(() => {
-      const runtime = document.querySelector('#basin')?.contentWindow;
-      const prototype = runtime?.__kaminosVolumePrototype;
-      const select = runtime?.document?.getElementById('volume-boundary-splat-mode');
-      return {
-        selectedBoundarySplatMode: select?.value || null,
-        effectiveBoundarySplatMode: prototype?.debugState?.()?.boundarySplatMode || null,
-        effectiveFootprintAuthority: prototype?.debugState?.()?.boundarySplatFootprintAuthority || null,
-        setControls: runtime?.__kaminosSparseProductGeometryAuthorityTrace || [],
-      };
-    })()`);
+    assert.equal(resolutionState.transition.requestedResolution, transitionResolution);
+    assert.equal(resolutionState.transition.effectiveResolution, transitionResolution);
+    assert.equal(resolutionState.transition.diagnosticCoefficientsActiveAfter, false);
+    resolutionPixels = await capturePixelSample(socket);
+    assertVisible(resolutionPixels, 'resolution-transition');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
-      geometryAttempt: { mode, receipt, state, authorityTrace },
+      resolutionRequest,
+      resolutionState,
+      resolutionPixels: stripPixels(resolutionPixels),
     };
-    assertSparseProductState(state, transitionResolution, mode, initialOpticalUnitMode);
-    const path = resolve(outputDir, `${mode}.png`);
-    await captureScreenshot(socket, path);
-    geometry[mode] = { receipt, state, authorityTrace, screenshotPath: path };
+
+    failurePhase = 'semantic-control-coupling';
+    controlProbe = await evaluate(socket, `(() => {
+      const runtime = document.querySelector('#basin')?.contentWindow;
+      const input = runtime?.document?.getElementById('volume-reaction-boundary-fire-tip');
+      const prototype = runtime?.__kaminosVolumePrototype;
+      if (!input || !prototype) throw new Error('semantic-control-surface-missing');
+      const before = prototype.debugState();
+      const previous = Number(input.value);
+      const requested = previous > 1.2 ? 0.82 : 1.8;
+      input.value = String(requested);
+      input.dispatchEvent(new runtime.Event('input', { bubbles: true }));
+      input.dispatchEvent(new runtime.Event('change', { bubbles: true }));
+      const after = prototype.debugState();
+      return {
+        control: 'reactionBoundaryFireTip',
+        previous,
+        requested,
+        effective: after.controls?.reactionBoundaryFireTip,
+        simStepBefore: before.simStepCount,
+        simStepAfter: after.simStepCount,
+        sourceAuthorityBefore: before.boundarySplatSourceAuthority,
+        sourceAuthorityAfter: after.boundarySplatSourceAuthority,
+      };
+    })()`);
+    assert.equal(controlProbe.effective, controlProbe.requested);
+    assert.equal(controlProbe.sourceAuthorityBefore, 'live-baked-sidecar-plus-fluid-material-v0');
+    assert.equal(controlProbe.sourceAuthorityAfter, 'live-baked-sidecar-plus-fluid-material-v0');
+    await delay(500);
+    controlState = await waitForRuntimeState(socket, timeoutMs);
+    assert.ok(controlState.simStepCount > controlProbe.simStepAfter, 'simulation stopped after semantic control update');
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, controlProbe, controlState };
+
+    failurePhase = 'geometry-modes';
+    for (const mode of ['flow-tangent', 'learned-tangent', 'historical-round']) {
+      await evaluate(socket, `(() => {
+        const runtime = document.querySelector('#basin')?.contentWindow;
+        const prototype = runtime?.__kaminosVolumePrototype;
+        if (!runtime || !prototype) throw new Error('geometry-authority-trace-runtime-missing');
+        runtime.__kaminosSparseProductGeometryAuthorityTrace = [];
+        if (!prototype.__kaminosSparseProductOriginalSetControls) {
+          prototype.__kaminosSparseProductOriginalSetControls = prototype.setControls.bind(prototype);
+          prototype.setControls = next => {
+            const result = prototype.__kaminosSparseProductOriginalSetControls(next);
+            const state = prototype.debugState();
+            runtime.__kaminosSparseProductGeometryAuthorityTrace.push({
+              atMs: performance.now(),
+              requestedBoundarySplatMode: next?.boundarySplatMode ?? null,
+              effectiveBoundarySplatMode: state.boundarySplatMode ?? null,
+              effectiveFootprintAuthority: state.boundarySplatFootprintAuthority ?? null,
+            });
+            return result;
+          };
+        }
+        return true;
+      })()`);
+      const receipt = await evaluate(socket, `(() => {
+        return window.__kaminosSelectiveHeadLive.setSparseProductGeometry(${JSON.stringify(mode)});
+      })()`);
+      assert.ok(
+        receipt.status === 'settling' || receipt.status === 'effective',
+        `geometry request returned invalid status:${receipt.status}`,
+      );
+      await delay(350);
+      const state = await waitForRuntimeState(socket, timeoutMs);
+      const authorityTrace = await evaluate(socket, `(() => {
+        const runtime = document.querySelector('#basin')?.contentWindow;
+        const prototype = runtime?.__kaminosVolumePrototype;
+        const select = runtime?.document?.getElementById('volume-boundary-splat-mode');
+        return {
+          selectedBoundarySplatMode: select?.value || null,
+          effectiveBoundarySplatMode: prototype?.debugState?.()?.boundarySplatMode || null,
+          effectiveFootprintAuthority: prototype?.debugState?.()?.boundarySplatFootprintAuthority || null,
+          setControls: runtime?.__kaminosSparseProductGeometryAuthorityTrace || [],
+        };
+      })()`);
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        geometryAttempt: { mode, receipt, state, authorityTrace },
+      };
+      assertSparseProductState(state, transitionResolution, mode, initialOpticalUnitMode);
+      const path = resolve(outputDir, `${mode}.png`);
+      await captureScreenshot(socket, path);
+      geometry[mode] = { receipt, state, authorityTrace, screenshotPath: path };
+    }
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, geometry };
   }
-  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, geometry };
 
   failurePhase = 'camera-interaction';
   const beforeCamera = await runtimeState(socket);
@@ -416,6 +432,15 @@ try {
   assert.notEqual(beforeCamera.cameraSignature, afterCamera.cameraSignature, 'camera drag did not change the live camera');
   assert.ok(afterCamera.simStepCount >= beforeCamera.simStepCount, 'camera interaction rewound simulation state');
   const cameraProbe = { before: beforeCamera, after: afterCamera };
+  const effectiveState = appearanceTargetRequested
+    ? await waitForRuntimeState(socket, timeoutMs)
+    : resolutionState;
+  assertSparseProductState(
+    effectiveState,
+    appearanceTargetRequested ? initialResolution : transitionResolution,
+    appearanceTargetRequested ? initialGeometry : effectiveState.geometry,
+    initialOpticalUnitMode,
+  );
 
   failurePhase = 'browser-error-audit';
   const browserErrors = socket.events.filter(event =>
@@ -428,17 +453,28 @@ try {
     status: 'passed',
     failurePhase: null,
     requestedRoute: route,
-    effectiveRoute: resolutionState.outerRoute,
-    effectiveInnerRoute: resolutionState.innerRoute,
+    effectiveRoute: effectiveState.outerRoute,
+    effectiveInnerRoute: effectiveState.innerRoute,
+    appearanceContext: appearanceTargetRequested
+      ? {
+          appearanceTargetRequested,
+          settingsAnchorId: appearanceSettingsAnchorId,
+          admission: effectiveState.sparseProductAppearanceAdmission,
+          attractor: effectiveState.appearanceAttractor,
+          exactVisualReplay: false,
+          skippedForNamedAppearanceTarget,
+        }
+      : null,
     coldLoad,
     coldPixels: stripPixels(coldPixels),
     coldScreenshotPath,
     resolution: {
       request: resolutionRequest,
       state: resolutionState,
-      pixels: stripPixels(resolutionPixels),
+      pixels: resolutionPixels ? stripPixels(resolutionPixels) : null,
     },
     controlProbe,
+    controlState,
     geometry,
     optics,
     opticsComparison,
@@ -575,6 +611,28 @@ function assertSparseProductState(state, resolution, geometry, opticalUnitMode) 
   assert.deepEqual(state.visibleDiagnosticControls, []);
   assert.ok(state.candidates > 0, `sparse product has no candidates:${JSON.stringify(state)}`);
   assert.ok(state.candidates < resolution ** 3, `sparse product silently became full-grid:${state.candidates}`);
+  if (appearanceTargetRequested) {
+    assert.equal(
+      state.sourceSettingsPresetId,
+      SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId,
+      'the named appearance target substituted its settings anchor',
+    );
+    assert.equal(
+      state.sourceSettingsPresetAuthority,
+      'shared-volume-settings-preset-v2',
+      'the named appearance target substituted settings authority',
+    );
+    assert.equal(state.sparseProductAppearanceAdmission?.ok, true);
+    assert.equal(
+      state.sparseProductAppearanceAdmission?.settingsAnchorId,
+      SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.settingsAnchorId,
+    );
+    assert.equal(
+      state.appearanceAttractor?.identity,
+      SPARSE_PRODUCT_APPEARANCE_ATTRACTOR.identity,
+    );
+    assert.equal(state.sparseProductAppearanceAdmission?.exactVisualReplay, false);
+  }
   const outerRoute = new URL(state.outerRoute);
   const innerRoute = new URL(state.innerRoute);
   assert.equal(outerRoute.pathname, requestedRoute.pathname);
@@ -707,6 +765,10 @@ async function captureRuntimeState(cdp) {
       requestedComposition: outer.requestedComposition || null,
       effectiveComposition: outer.effectiveComposition || null,
       transition: outer.volumeResolutionTransitionReceipt || null,
+      sourceSettingsPresetId: outer.sourceSettingsPresetId || null,
+      sourceSettingsPresetAuthority: outer.sourceSettingsPresetAuthority || null,
+      sparseProductAppearanceAdmission: outer.sparseProductAppearanceAdmission || null,
+      appearanceAttractor: outer.appearanceAttractor || null,
     };
   })()`);
 }
