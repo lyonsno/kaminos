@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,19 @@ from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import list_asset_entries
 
 
+def minimal_valid_glb():
+    json_chunk = b"{}  "
+    total_bytes = 12 + 8 + len(json_chunk)
+    return (
+        b"glTF"
+        + (2).to_bytes(4, "little")
+        + total_bytes.to_bytes(4, "little")
+        + len(json_chunk).to_bytes(4, "little")
+        + (0x4E4F534A).to_bytes(4, "little")
+        + json_chunk
+    )
+
+
 def test_http_status_404_log_does_not_crash():
     handler = KaminosHandler.__new__(KaminosHandler)
     handler.requestline = "GET /favicon.ico HTTP/1.1"
@@ -24,6 +38,102 @@ def test_http_status_404_log_does_not_crash():
         HTTPStatus.NOT_FOUND,
         "File not found",
     )
+
+
+def test_sf3d_candidate_artifact_persists_validated_glb_by_actual_identity():
+    glb = minimal_valid_glb()
+    actual_sha = hashlib.sha256(glb).hexdigest()
+    expected_sha = "b" * 64
+    revision = "c" * 40
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        receipt = serve.persist_sf3d_live_smoke_artifact(
+            glb,
+            claimed_sha256=actual_sha,
+            expected_sha256=expected_sha,
+            source_revision=revision,
+            output_dir=Path(tmp),
+        )
+        artifact_path = Path(receipt["path"])
+        assert artifact_path.read_bytes() == glb
+        assert artifact_path.name == f"candidate-{actual_sha}.glb"
+        assert receipt["schema"] == "kaminos.sf3d-live-smoke-artifact.v0"
+        assert receipt["sha256"] == actual_sha
+        assert receipt["expectedSha256"] == expected_sha
+        assert receipt["canonical"] is False
+        assert receipt["sourceRevision"] == revision
+        assert receipt["bytes"] == len(glb)
+        assert receipt["glbValidation"] == {
+            "magic": "glTF",
+            "version": 2,
+            "declaredBytes": len(glb),
+            "chunkCount": 1,
+            "chunkTypes": ["JSON"],
+            "jsonBytes": 4,
+        }
+
+
+def test_sf3d_candidate_artifact_rejects_false_claim_and_partial_glb_without_writing():
+    valid_glb = minimal_valid_glb()
+    header_only = b"glTF" + (2).to_bytes(4, "little") + (12).to_bytes(4, "little")
+    out_of_bounds_chunk = (
+        b"glTF"
+        + (2).to_bytes(4, "little")
+        + (20).to_bytes(4, "little")
+        + (8).to_bytes(4, "little")
+        + (0x4E4F534A).to_bytes(4, "little")
+    )
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        output_dir = Path(tmp)
+        for payload, claimed_sha, pattern in (
+            (valid_glb, "a" * 64, "claimed SF3D GLB SHA-256"),
+            (b"glTF", hashlib.sha256(b"glTF").hexdigest(), "GLB header"),
+            (header_only, hashlib.sha256(header_only).hexdigest(), "JSON chunk"),
+            (
+                out_of_bounds_chunk,
+                hashlib.sha256(out_of_bounds_chunk).hexdigest(),
+                "chunk payload exceeds",
+            ),
+        ):
+            try:
+                serve.persist_sf3d_live_smoke_artifact(
+                    payload,
+                    claimed_sha256=claimed_sha,
+                    expected_sha256="b" * 64,
+                    source_revision="c" * 40,
+                    output_dir=output_dir,
+                )
+            except ValueError as error:
+                assert pattern in str(error)
+            else:
+                raise AssertionError("invalid candidate GLB evidence must fail loud")
+        assert list(output_dir.iterdir()) == []
+
+
+def test_sf3d_artifact_source_identity_is_recomputed_and_client_claim_must_match():
+    exact_config = {
+        "schema": "kaminos.sf3d-live-smoke-config.v0",
+        "ok": True,
+        "routeId": serve.SF3D_LIVE_SMOKE_ROUTE_ID,
+        "requestedRevision": serve.SF3D_LIVE_SMOKE_SOURCE_REVISION,
+        "effectiveRevision": serve.SF3D_LIVE_SMOKE_SOURCE_REVISION,
+        "clean": True,
+    }
+    assert serve.resolve_sf3d_artifact_source(
+        serve.SF3D_LIVE_SMOKE_SOURCE_REVISION,
+        config=exact_config,
+    ) == serve.SF3D_LIVE_SMOKE_SOURCE_REVISION
+    for config, claimed, pattern in (
+        ({**exact_config, "clean": False}, serve.SF3D_LIVE_SMOKE_SOURCE_REVISION, "clean"),
+        ({**exact_config, "effectiveRevision": "c" * 40}, serve.SF3D_LIVE_SMOKE_SOURCE_REVISION, "effective"),
+        (exact_config, "c" * 40, "client source revision"),
+        ({**exact_config, "routeId": "fallback.route"}, serve.SF3D_LIVE_SMOKE_SOURCE_REVISION, "route"),
+    ):
+        try:
+            serve.resolve_sf3d_artifact_source(claimed, config=config)
+        except ValueError as error:
+            assert pattern in str(error)
+        else:
+            raise AssertionError("untrusted SF3D source identity must fail loud")
 
 
 def test_forge_host_registry_snapshot_preserves_endpoint_identity():
@@ -598,6 +708,9 @@ def test_pipeline_run_rejects_excluded_api_read_roots():
 
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
+    test_sf3d_candidate_artifact_persists_validated_glb_by_actual_identity()
+    test_sf3d_candidate_artifact_rejects_false_claim_and_partial_glb_without_writing()
+    test_sf3d_artifact_source_identity_is_recomputed_and_client_claim_must_match()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
     test_forge_host_registry_snapshot_fallback_is_not_live()
     test_volume_only_scene_save_name_uses_scene_fallback()

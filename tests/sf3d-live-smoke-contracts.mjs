@@ -8,7 +8,10 @@ import {
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
+  buildSf3dCompletedOutputReceipt,
+  buildSf3dFailureEvidence,
   canFireSf3dLiveSmoke,
+  freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
@@ -35,6 +38,100 @@ assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: false }), true);
 assert.equal(canFireSf3dLiveSmoke({ running: true, deviceLost: false }), false);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: true }), false);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: false, attempted: true }), false);
+
+const divergentOutputReceipt = buildSf3dCompletedOutputReceipt({
+  output: {
+    glb: new ArrayBuffer(12),
+    numVertices: 17,
+    numFaces: 23,
+    stageSpans: [{ name: 'texture-bake', start: 0, end: 81 }],
+    cooperativeReports: { 'texture-bake': { status: 'succeeded' } },
+    arenaSnapshot: { slotCount: 30 },
+  },
+  outputSha256: 'a'.repeat(64),
+  expectedSha256: 'b'.repeat(64),
+  routeWallMs: 81,
+  frameTimes: [0, 16, 80],
+  frameCpuTimes: [1, 2, 5],
+});
+assert.equal(divergentOutputReceipt.output.canonical, false);
+assert.equal(divergentOutputReceipt.output.sha256, 'a'.repeat(64));
+assert.equal(divergentOutputReceipt.output.expectedSha256, 'b'.repeat(64));
+assert.equal(divergentOutputReceipt.output.bytes, 12);
+assert.equal(divergentOutputReceipt.output.numVertices, 17);
+assert.equal(divergentOutputReceipt.renderer.renderedFrames, 3);
+assert.equal(divergentOutputReceipt.renderer.maxMs, 64);
+assert.equal(divergentOutputReceipt.renderer.cpuFrameP99Ms, 5);
+assert.equal(divergentOutputReceipt.stages[0].name, 'texture-bake');
+assert.equal(divergentOutputReceipt.stages[0].maxGapMs, 64);
+assert.deepEqual(divergentOutputReceipt.cooperativeReports, {
+  'texture-bake': { status: 'succeeded' },
+});
+assert.deepEqual(divergentOutputReceipt.arenaSnapshot, { slotCount: 30 });
+assert.throws(
+  () => buildSf3dCompletedOutputReceipt({
+    output: { glb: new ArrayBuffer(12) },
+    outputSha256: 'not-a-sha',
+    expectedSha256: 'b'.repeat(64),
+    routeWallMs: 1,
+    frameTimes: [],
+    frameCpuTimes: [],
+  }),
+  /output SHA-256/i,
+);
+
+const mutableFrameTimes = [100, 116, 180];
+const mutableCpuTimes = [1, 2, 3];
+const frozenRouteEvidence = freezeSf3dRouteEvidence({
+  startedAt: 100,
+  completedAt: 180,
+  frameTimes: mutableFrameTimes,
+  frameCpuTimes: mutableCpuTimes,
+});
+mutableFrameTimes.push(10_000);
+mutableCpuTimes.push(10_000);
+assert.equal(frozenRouteEvidence.routeWallMs, 80);
+assert.deepEqual(frozenRouteEvidence.frameTimes, [100, 116, 180]);
+assert.deepEqual(frozenRouteEvidence.frameCpuTimes, [1, 2, 3]);
+
+const circularReport = { status: 'succeeded' };
+circularReport.self = circularReport;
+const nonJsonArena = {
+  allocationBytes: 1n,
+  probe: new Uint8Array([1, 2, 3]),
+  unavailable: Number.POSITIVE_INFINITY,
+};
+const jsonSafeReceipt = buildSf3dCompletedOutputReceipt({
+  output: {
+    glb: new ArrayBuffer(12),
+    stageSpans: [],
+    cooperativeReports: { 'texture-bake': circularReport },
+    arenaSnapshot: nonJsonArena,
+  },
+  outputSha256: 'a'.repeat(64),
+  expectedSha256: 'b'.repeat(64),
+  routeWallMs: 1,
+  frameTimes: [],
+  frameCpuTimes: [],
+});
+const serializedReceipt = JSON.stringify(jsonSafeReceipt);
+const decodedReceipt = JSON.parse(serializedReceipt);
+assert.match(serializedReceipt, /circular-reference/);
+assert.match(serializedReceipt, /typed-array/);
+assert.match(serializedReceipt, /non-finite-number/);
+assert.equal(decodedReceipt.arenaSnapshot.allocationBytes.value, '1');
+assert.ok(
+  decodedReceipt.evidenceWarnings.some(warning => warning.kind === 'circular-reference'),
+  'circular evidence normalization must remain visible',
+);
+const divergentFailureEvidence = buildSf3dFailureEvidence(jsonSafeReceipt);
+assert.deepEqual(divergentFailureEvidence.cooperativeReports, decodedReceipt.cooperativeReports);
+assert.deepEqual(divergentFailureEvidence.arenaSnapshot, decodedReceipt.arenaSnapshot);
+assert.deepEqual(divergentFailureEvidence.evidenceWarnings, decodedReceipt.evidenceWarnings);
+assert.ok(
+  divergentFailureEvidence.evidenceWarnings.some(warning => warning.kind === 'typed-array'),
+  'divergent failure evidence must retain typed-array normalization warnings',
+);
 
 const config = validateSf3dLiveSmokeConfig({
   ok: true,

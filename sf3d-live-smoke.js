@@ -3,8 +3,10 @@ import {
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
   SF3D_LIVE_SMOKE_ROUTE_ID,
+  buildSf3dCompletedOutputReceipt,
+  buildSf3dFailureEvidence,
   canFireSf3dLiveSmoke,
-  frameGapsWithinStage,
+  freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
@@ -79,18 +81,6 @@ function createCrossOriginModuleWorker(moduleUrl) {
   };
 }
 
-function stageRows(stageSpans, frameTimes) {
-  return (stageSpans || []).map(stage => {
-    const summary = summarizeSf3dFrameGaps(frameGapsWithinStage(frameTimes, stage));
-    return {
-      name: stage.name,
-      wallMs: stage.end - stage.start,
-      maxGapMs: summary.maxMs,
-      p99Ms: summary.p99Ms,
-    };
-  });
-}
-
 async function persistReport(report) {
   try {
     const response = await fetch('/api/sf3d-live-smoke-report', {
@@ -103,6 +93,38 @@ async function persistReport(report) {
   } catch (error) {
     return { error: error.message || String(error) };
   }
+}
+
+async function persistCompletedGlb(glb, {
+  outputSha256,
+  expectedSha256,
+  sourceRevision,
+}) {
+  const response = await fetch('/api/sf3d-live-smoke-artifact', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'model/gltf-binary',
+      'X-SF3D-Output-SHA256': outputSha256,
+      'X-SF3D-Expected-SHA256': expectedSha256,
+      'X-SF3D-Source-Revision': sourceRevision,
+    },
+    body: glb,
+  });
+  const receipt = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(receipt?.error || `SF3D candidate artifact write failed: HTTP ${response.status}`);
+  }
+  if (
+    receipt?.schema !== 'kaminos.sf3d-live-smoke-artifact.v0'
+    || receipt.ok !== true
+    || receipt.sha256 !== outputSha256
+    || receipt.expectedSha256 !== expectedSha256
+    || receipt.sourceRevision !== sourceRevision
+    || receipt.bytes !== glb.byteLength
+  ) {
+    throw new Error('SF3D candidate artifact receipt identity mismatch');
+  }
+  return receipt;
 }
 
 async function probeDevice(device, {
@@ -274,6 +296,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
       const startedAt = performance.now();
       const workerHandle = createCrossOriginModuleWorker(`${prepared.config.origin}/src/lib/materialize_worker.js`);
       let phase = 'route-execution';
+      let completedOutput = null;
+      let outputArtifact = null;
       try {
         const output = await pipelineModule.runFullPipelineToGlb(
           prepared.device,
@@ -294,16 +318,38 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
             setProgress(progress.percent, progress.label);
           },
         );
-        phase = 'output-identity';
-        const outputSha256 = await sha256(output.glb);
-        if (outputSha256 !== SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256) {
-          throw new Error(`SF3D GLB identity mismatch: ${outputSha256}`);
-        }
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const routeEvidence = freezeSf3dRouteEvidence({
+          startedAt,
+          completedAt: performance.now(),
+          frameTimes,
+          frameCpuTimes,
+        });
         running = false;
-        const gaps = [];
-        for (let index = 1; index < frameTimes.length; index++) gaps.push(frameTimes[index] - frameTimes[index - 1]);
-        const totalWallMs = performance.now() - startedAt;
+        phase = 'output-evidence';
+        const outputSha256 = await sha256(output.glb);
+        completedOutput = buildSf3dCompletedOutputReceipt({
+          output,
+          outputSha256,
+          expectedSha256: SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
+          routeWallMs: routeEvidence.routeWallMs,
+          frameTimes: routeEvidence.frameTimes,
+          frameCpuTimes: routeEvidence.frameCpuTimes,
+        });
+        if (!completedOutput.output.canonical) {
+          const mismatch = `SF3D GLB identity mismatch: ${outputSha256}`;
+          phase = 'output-artifact';
+          try {
+            outputArtifact = await persistCompletedGlb(output.glb, {
+              outputSha256,
+              expectedSha256: SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
+              sourceRevision: prepared.config.effectiveRevision,
+            });
+          } catch (error) {
+            throw new Error(`${mismatch}; candidate artifact preservation failed: ${error.message || String(error)}`);
+          }
+          phase = 'output-identity';
+          throw new Error(mismatch);
+        }
         lastReport = {
           schema: 'kaminos.sf3d-live-contention-report.v0',
           ok: true,
@@ -314,22 +360,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           sourceClean: prepared.config.clean,
           gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
-          totalWallMs,
-          output: {
-            sha256: outputSha256,
-            bytes: output.glb.byteLength,
-            canonical: true,
-            numVertices: output.numVertices,
-            numFaces: output.numFaces,
-          },
-          renderer: {
-            ...summarizeSf3dFrameGaps(gaps),
-            renderedFrames: frameTimes.length,
-            cpuFrameP99Ms: summarizeSf3dFrameGaps(frameCpuTimes).p99Ms,
-          },
-          stages: stageRows(output.stageSpans, frameTimes),
-          cooperativeReports: output.cooperativeReports || {},
-          arenaSnapshot: output.arenaSnapshot || null,
+          ...completedOutput,
           lastProgress,
           deviceLoss: prepared.deviceLoss.info,
         };
@@ -362,6 +393,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           new Promise(resolve => setTimeout(resolve, 100)),
         ]);
         const deviceProbe = await probeDevice(prepared.device);
+        const completedEvidence = buildSf3dFailureEvidence(completedOutput);
         lastReport = {
           schema: 'kaminos.sf3d-live-contention-report.v0',
           ok: false,
@@ -374,11 +406,18 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           sourceClean: prepared.config.clean,
           gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
-          elapsedMs: performance.now() - startedAt,
+          elapsedMs: completedOutput?.totalWallMs ?? performance.now() - startedAt,
+          output: completedEvidence.output,
+          outputArtifact,
           lastProgress,
           deviceLoss: prepared.deviceLoss.info,
           deviceProbe,
-          renderer: summarizeSf3dFrameGaps(frameTimes.slice(1).map((time, index) => time - frameTimes[index])),
+          renderer: completedEvidence.renderer
+            ?? summarizeSf3dFrameGaps(frameTimes.slice(1).map((time, index) => time - frameTimes[index])),
+          stages: completedEvidence.stages,
+          cooperativeReports: completedEvidence.cooperativeReports,
+          arenaSnapshot: completedEvidence.arenaSnapshot,
+          evidenceWarnings: completedEvidence.evidenceWarnings,
         };
         const persisted = await persistReport(lastReport);
         window.kaminosSf3dLiveSmokeLastReport = lastReport;

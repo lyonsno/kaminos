@@ -2,6 +2,7 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import hashlib
 import json
 import os
 import queue
@@ -119,6 +120,8 @@ PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 SF3D_LIVE_SMOKE_ROUTE_ID = "sf3d.image-to-mesh.webgpu-local.v0"
 SF3D_LIVE_SMOKE_SOURCE_REVISION = "2f79b9b84a19809107f5eb29b5fab806e00e6c6a"
+SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
+GIT_SHA_PATTERN = re.compile(r"^[a-f0-9]{40}$", re.IGNORECASE)
 
 
 def runtime_config():
@@ -180,6 +183,136 @@ def sf3d_live_smoke_config():
     if dirty:
         return {**resolved, "error": "SF3D source checkout is dirty", "dirty": dirty.splitlines()}
     return {**resolved, "ok": True}
+
+
+def persist_sf3d_live_smoke_artifact(
+    payload,
+    *,
+    claimed_sha256,
+    expected_sha256,
+    source_revision,
+    output_dir=None,
+):
+    """Validate and durably retain a completed SF3D GLB by its actual identity."""
+    if not isinstance(payload, bytes):
+        raise ValueError("SF3D GLB artifact payload must be bytes")
+    if len(payload) < 12:
+        raise ValueError("SF3D GLB header must contain at least 12 bytes")
+    if payload[:4] != b"glTF":
+        raise ValueError("SF3D GLB magic must be glTF")
+    version = int.from_bytes(payload[4:8], "little")
+    declared_bytes = int.from_bytes(payload[8:12], "little")
+    if version != 2:
+        raise ValueError(f"SF3D GLB version must be 2, got {version}")
+    if declared_bytes != len(payload):
+        raise ValueError(
+            f"SF3D GLB declared byte length {declared_bytes} does not match payload {len(payload)}"
+        )
+    chunks = []
+    offset = 12
+    while offset < declared_bytes:
+        if offset + 8 > declared_bytes:
+            raise ValueError("SF3D GLB chunk header exceeds declared payload")
+        chunk_length = int.from_bytes(payload[offset:offset + 4], "little")
+        chunk_type = int.from_bytes(payload[offset + 4:offset + 8], "little")
+        chunk_start = offset + 8
+        chunk_end = chunk_start + chunk_length
+        if chunk_length % 4 != 0:
+            raise ValueError(f"SF3D GLB chunk length {chunk_length} must be four-byte aligned")
+        if chunk_end > declared_bytes:
+            raise ValueError("SF3D GLB chunk payload exceeds declared byte length")
+        chunks.append({
+            "type": chunk_type,
+            "length": chunk_length,
+            "start": chunk_start,
+            "end": chunk_end,
+        })
+        offset = chunk_end
+    if not chunks or chunks[0]["type"] != 0x4E4F534A:
+        raise ValueError("SF3D GLB must begin with a JSON chunk")
+    try:
+        json_document = json.loads(payload[chunks[0]["start"]:chunks[0]["end"]].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"SF3D GLB JSON chunk is invalid: {error}") from error
+    if not isinstance(json_document, dict):
+        raise ValueError("SF3D GLB JSON chunk root must be an object")
+    chunk_type_names = {
+        0x4E4F534A: "JSON",
+        0x004E4942: "BIN",
+    }
+    if not isinstance(claimed_sha256, str) or not SHA256_PATTERN.fullmatch(claimed_sha256):
+        raise ValueError("claimed SF3D GLB SHA-256 must be 64 hexadecimal characters")
+    if not isinstance(expected_sha256, str) or not SHA256_PATTERN.fullmatch(expected_sha256):
+        raise ValueError("expected SF3D GLB SHA-256 must be 64 hexadecimal characters")
+    if not isinstance(source_revision, str) or not GIT_SHA_PATTERN.fullmatch(source_revision):
+        raise ValueError("SF3D source revision must be a full 40-character Git SHA")
+    actual_sha256 = hashlib.sha256(payload).hexdigest()
+    if actual_sha256 != claimed_sha256.lower():
+        raise ValueError(
+            f"claimed SF3D GLB SHA-256 {claimed_sha256.lower()} does not match actual {actual_sha256}"
+        )
+    destination_dir = Path(
+        output_dir or (KAMINOS_PIPELINE_RUNS_DIR / "sf3d-live-smoke")
+    )
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = destination_dir / f"candidate-{actual_sha256}.glb"
+    if artifact_path.exists():
+        if artifact_path.read_bytes() != payload:
+            raise ValueError(f"existing SF3D artifact disagrees with content identity {actual_sha256}")
+    else:
+        temporary_path = destination_dir / (
+            f".{artifact_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        temporary_path.write_bytes(payload)
+        os.replace(temporary_path, artifact_path)
+    try:
+        relative_path = str(artifact_path.relative_to(KAMINOS_ASSETS_DIR))
+    except ValueError:
+        relative_path = None
+    expected = expected_sha256.lower()
+    return {
+        "schema": "kaminos.sf3d-live-smoke-artifact.v0",
+        "ok": True,
+        "path": str(artifact_path),
+        "relativePath": relative_path,
+        "sha256": actual_sha256,
+        "expectedSha256": expected,
+        "canonical": actual_sha256 == expected,
+        "sourceRevision": source_revision.lower(),
+        "bytes": len(payload),
+        "glbValidation": {
+            "magic": "glTF",
+            "version": version,
+            "declaredBytes": declared_bytes,
+            "chunkCount": len(chunks),
+            "chunkTypes": [
+                chunk_type_names.get(chunk["type"], f"0x{chunk['type']:08X}")
+                for chunk in chunks
+            ],
+            "jsonBytes": chunks[0]["length"],
+        },
+    }
+
+
+def resolve_sf3d_artifact_source(claimed_revision, *, config=None):
+    """Bind an artifact receipt to current server-owned SF3D checkout truth."""
+    effective = config if config is not None else sf3d_live_smoke_config()
+    if not isinstance(effective, dict) or effective.get("ok") is not True:
+        error = effective.get("error") if isinstance(effective, dict) else None
+        raise ValueError(error or "SF3D artifact source config is not executable")
+    if effective.get("schema") != "kaminos.sf3d-live-smoke-config.v0":
+        raise ValueError("SF3D artifact source config schema mismatch")
+    if effective.get("routeId") != SF3D_LIVE_SMOKE_ROUTE_ID:
+        raise ValueError("SF3D artifact source route identity mismatch")
+    if effective.get("clean") is not True:
+        raise ValueError("SF3D artifact source checkout must be clean")
+    if effective.get("requestedRevision") != SF3D_LIVE_SMOKE_SOURCE_REVISION:
+        raise ValueError("SF3D artifact requested revision is not accepted")
+    if effective.get("effectiveRevision") != SF3D_LIVE_SMOKE_SOURCE_REVISION:
+        raise ValueError("SF3D artifact effective revision is not accepted")
+    if claimed_revision != effective["effectiveRevision"]:
+        raise ValueError("SF3D client source revision does not match server source identity")
+    return effective["effectiveRevision"]
 
 
 def _read_json_file(path):
@@ -1032,6 +1165,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture()
         elif parsed.path == "/api/sf3d-live-smoke-report":
             self.handle_sf3d_live_smoke_report()
+        elif parsed.path == "/api/sf3d-live-smoke-artifact":
+            self.handle_sf3d_live_smoke_artifact()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -1063,6 +1198,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "path": str(report_path),
             "relativePath": str(report_path.relative_to(KAMINOS_ASSETS_DIR)),
         })
+
+    def handle_sf3d_live_smoke_artifact(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = self.rfile.read(length)
+            source_revision = resolve_sf3d_artifact_source(
+                self.headers.get("X-SF3D-Source-Revision", ""),
+            )
+            receipt = persist_sf3d_live_smoke_artifact(
+                payload,
+                claimed_sha256=self.headers.get("X-SF3D-Output-SHA256", ""),
+                expected_sha256=self.headers.get("X-SF3D-Expected-SHA256", ""),
+                source_revision=source_revision,
+            )
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except OSError as error:
+            self.send_json({"error": f"SF3D artifact write failed: {error}"}, 500)
+            return
+        self.send_json(receipt, 201)
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())

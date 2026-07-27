@@ -106,3 +106,176 @@ export function frameGapsWithinStage(frameTimes, stage) {
   }
   return gaps;
 }
+
+function requiredSha256(value, label) {
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/i.test(value)) {
+    throw new Error(`${label} must be a SHA-256`);
+  }
+  return value.toLowerCase();
+}
+
+function normalizeEvidenceValue(value, path, seen, warnings) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) return value;
+    warnings.push({ kind: 'non-finite-number', path, value: String(value) });
+    return { evidenceType: 'non-finite-number', value: String(value) };
+  }
+  if (typeof value === 'bigint') {
+    warnings.push({ kind: 'bigint', path });
+    return { evidenceType: 'bigint', value: value.toString() };
+  }
+  if (typeof value === 'undefined' || typeof value === 'function' || typeof value === 'symbol') {
+    const kind = `unsupported-${typeof value}`;
+    warnings.push({ kind, path });
+    return { evidenceType: kind };
+  }
+  if (value instanceof ArrayBuffer) {
+    warnings.push({ kind: 'array-buffer', path, byteLength: value.byteLength });
+    return {
+      evidenceType: 'array-buffer',
+      byteLength: value.byteLength,
+      binaryPayloadOmitted: true,
+    };
+  }
+  if (ArrayBuffer.isView(value)) {
+    const constructor = value.constructor?.name || 'TypedArray';
+    warnings.push({ kind: 'typed-array', path, constructor, byteLength: value.byteLength });
+    return {
+      evidenceType: 'typed-array',
+      constructor,
+      length: Number.isFinite(value.length) ? value.length : null,
+      byteLength: value.byteLength,
+      binaryPayloadOmitted: true,
+    };
+  }
+  if (seen.has(value)) {
+    const refPath = seen.get(value);
+    warnings.push({ kind: 'circular-reference', path, refPath });
+    return { evidenceType: 'circular-reference', refPath };
+  }
+  seen.set(value, path);
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => (
+      normalizeEvidenceValue(entry, `${path}[${index}]`, seen, warnings)
+    ));
+  }
+  if (value instanceof Error) {
+    return {
+      evidenceType: 'error',
+      name: value.name,
+      message: value.message,
+    };
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    const constructor = value.constructor?.name || 'non-plain-object';
+    warnings.push({ kind: 'non-plain-object', path, constructor });
+    return {
+      evidenceType: 'non-plain-object',
+      constructor,
+      objectPayloadOmitted: true,
+    };
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      normalizeEvidenceValue(entry, `${path}.${key}`, seen, warnings),
+    ]),
+  );
+}
+
+function normalizeEvidence(value, label) {
+  const warnings = [];
+  const normalized = normalizeEvidenceValue(value, label, new WeakMap(), warnings);
+  return { normalized, warnings };
+}
+
+export function freezeSf3dRouteEvidence({
+  startedAt,
+  completedAt,
+  frameTimes,
+  frameCpuTimes,
+}) {
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt) || completedAt < startedAt) {
+    throw new Error('SF3D route timestamps must be finite and ordered');
+  }
+  if (!Array.isArray(frameTimes) || !Array.isArray(frameCpuTimes)) {
+    throw new Error('SF3D route frame evidence must be arrays');
+  }
+  return Object.freeze({
+    routeWallMs: completedAt - startedAt,
+    frameTimes: Object.freeze([...frameTimes]),
+    frameCpuTimes: Object.freeze([...frameCpuTimes]),
+  });
+}
+
+export function buildSf3dCompletedOutputReceipt({
+  output,
+  outputSha256,
+  expectedSha256,
+  routeWallMs,
+  frameTimes,
+  frameCpuTimes,
+}) {
+  if (!(output?.glb instanceof ArrayBuffer)) {
+    throw new Error('SF3D completed output GLB must be an ArrayBuffer');
+  }
+  if (!Number.isFinite(routeWallMs) || routeWallMs < 0) {
+    throw new Error('SF3D completed route wall must be finite and non-negative');
+  }
+  if (!Array.isArray(frameTimes) || !Array.isArray(frameCpuTimes)) {
+    throw new Error('SF3D completed frame evidence must be arrays');
+  }
+  const sha256 = requiredSha256(outputSha256, 'SF3D output SHA-256');
+  const expected = requiredSha256(expectedSha256, 'SF3D expected SHA-256');
+  const cooperativeEvidence = normalizeEvidence(
+    output.cooperativeReports || {},
+    'cooperativeReports',
+  );
+  const arenaEvidence = normalizeEvidence(output.arenaSnapshot || null, 'arenaSnapshot');
+  const gaps = frameTimes.slice(1).map((time, index) => time - frameTimes[index]);
+  const stages = (output.stageSpans || []).map(stage => {
+    const summary = summarizeSf3dFrameGaps(frameGapsWithinStage(frameTimes, stage));
+    return Object.freeze({
+      name: stage.name,
+      wallMs: stage.end - stage.start,
+      maxGapMs: summary.maxMs,
+      p99Ms: summary.p99Ms,
+    });
+  });
+  return Object.freeze({
+    totalWallMs: routeWallMs,
+    output: Object.freeze({
+      sha256,
+      expectedSha256: expected,
+      bytes: output.glb.byteLength,
+      canonical: sha256 === expected,
+      numVertices: output.numVertices ?? null,
+      numFaces: output.numFaces ?? null,
+    }),
+    renderer: Object.freeze({
+      ...summarizeSf3dFrameGaps(gaps),
+      renderedFrames: frameTimes.length,
+      cpuFrameP99Ms: summarizeSf3dFrameGaps(frameCpuTimes).p99Ms,
+    }),
+    stages: Object.freeze(stages),
+    cooperativeReports: cooperativeEvidence.normalized,
+    arenaSnapshot: arenaEvidence.normalized,
+    evidenceWarnings: Object.freeze([
+      ...cooperativeEvidence.warnings,
+      ...arenaEvidence.warnings,
+    ]),
+  });
+}
+
+export function buildSf3dFailureEvidence(completedOutput) {
+  return Object.freeze({
+    output: completedOutput?.output ?? null,
+    renderer: completedOutput?.renderer ?? null,
+    stages: completedOutput?.stages ?? [],
+    cooperativeReports: completedOutput?.cooperativeReports ?? {},
+    arenaSnapshot: completedOutput?.arenaSnapshot ?? null,
+    evidenceWarnings: completedOutput?.evidenceWarnings ?? [],
+  });
+}
