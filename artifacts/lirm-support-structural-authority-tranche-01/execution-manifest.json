@@ -1,0 +1,134 @@
+{
+  "schema": "kaminos.lirm-support-structural-authority-execution-manifest.v0",
+  "seed": 727001,
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+  "referenceOrder": [
+    "clay",
+    "depth",
+    "normal",
+    "support_control"
+  ],
+  "prompt": {
+    "path": "prompt.txt",
+    "byteSize": 719,
+    "sha256": "sha256:8cff1ee7b7baeb48900704226ad73937739ebb692249675e76fc85cd53957edc"
+  },
+  "settings": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "mlxCacheLimitGb": 48
+  },
+  "receipts": {
+    "carrierSignalBudget": "receipts/carrier-signal-budget.json",
+    "fluxRouteContract": "receipts/flux-4ref-route-contract.json",
+    "exposureFilterContract": "receipts/exposure-filter-contract.json",
+    "sealedSourceMapping": "source-mapping.json"
+  },
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "atlasCellId": "body-only--wide",
+      "carrierMode": "zero_support",
+      "seed": 727001,
+      "jobType": "mflux_flux2_edit_promptfile_4ref",
+      "sourceImages": [
+        {
+          "role": "clay",
+          "path": "cells/cell-a/clay.png",
+          "byteSize": 23521,
+          "sha256": "sha256:c3f78402cf2b6f79c16f363190a3c6726945e9dfff79dfb05ee7692f7159ea4e"
+        },
+        {
+          "role": "depth",
+          "path": "cells/cell-a/depth.png",
+          "byteSize": 13772,
+          "sha256": "sha256:43780136c893e146a26610d9da9a4cec17269a5e5bed09a68fcca52c5cccfbf6"
+        },
+        {
+          "role": "normal",
+          "path": "cells/cell-a/normal.png",
+          "byteSize": 29026,
+          "sha256": "sha256:57df6a81f10045fc0f8a4cc3bfcaa68358c49bb9eb6796deb40923a30e0c5568"
+        },
+        {
+          "role": "support_control",
+          "path": "cells/cell-a/support-control.png",
+          "byteSize": 1937,
+          "sha256": "sha256:4de8d440a98ea4cbc0adbbd169efdb56bed6843fd9cf3a9384edc7dd532ea93e"
+        }
+      ]
+    },
+    {
+      "cellId": "cell-b",
+      "atlasCellId": "attachment-fields--wide",
+      "carrierMode": "latent_continuous_underside",
+      "seed": 727001,
+      "jobType": "mflux_flux2_edit_promptfile_4ref",
+      "sourceImages": [
+        {
+          "role": "clay",
+          "path": "cells/cell-b/clay.png",
+          "byteSize": 26665,
+          "sha256": "sha256:b776ce8c34bd623080ee0791857472127ac9a8c7dff74b10cb656e75dd258989"
+        },
+        {
+          "role": "depth",
+          "path": "cells/cell-b/depth.png",
+          "byteSize": 14112,
+          "sha256": "sha256:6dfc889412a213150833959615b9bd5beef1d149781bc17f57ca4eaa5d723d31"
+        },
+        {
+          "role": "normal",
+          "path": "cells/cell-b/normal.png",
+          "byteSize": 32980,
+          "sha256": "sha256:e6f1f2416e0ef050348ae23de368cfefac699783bfd0d0fa3b380639dcc41fa9"
+        },
+        {
+          "role": "support_control",
+          "path": "cells/cell-b/support-control.png",
+          "byteSize": 40636,
+          "sha256": "sha256:0e5e29af03d67fd2ae9b0ac03b8352c3b1f3afc14686f439567dbe3a756eae69"
+        }
+      ]
+    },
+    {
+      "cellId": "cell-c",
+      "atlasCellId": "external-rig--wide",
+      "carrierMode": "consumed_explicit_role_plane",
+      "seed": 727001,
+      "jobType": "mflux_flux2_edit_promptfile_4ref",
+      "sourceImages": [
+        {
+          "role": "clay",
+          "path": "cells/cell-c/clay.png",
+          "byteSize": 23521,
+          "sha256": "sha256:c3f78402cf2b6f79c16f363190a3c6726945e9dfff79dfb05ee7692f7159ea4e"
+        },
+        {
+          "role": "depth",
+          "path": "cells/cell-c/depth.png",
+          "byteSize": 13772,
+          "sha256": "sha256:43780136c893e146a26610d9da9a4cec17269a5e5bed09a68fcca52c5cccfbf6"
+        },
+        {
+          "role": "normal",
+          "path": "cells/cell-c/normal.png",
+          "byteSize": 29026,
+          "sha256": "sha256:57df6a81f10045fc0f8a4cc3bfcaa68358c49bb9eb6796deb40923a30e0c5568"
+        },
+        {
+          "role": "support_control",
+          "path": "cells/cell-c/support-control.png",
+          "byteSize": 15874,
+          "sha256": "sha256:03cf611fb36ab04f7c1f48452f24a2e34d0ae530ddb0ca4eb36d70cbe2efd487"
+        }
+      ]
+    }
+  ],
+  "generatorFiring": "not_started",
+  "operatorExposure": "prohibited_pending_decomposed_agent_classification"
+}

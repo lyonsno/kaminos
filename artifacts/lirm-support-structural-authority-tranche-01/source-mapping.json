@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos.lirm-support-structural-authority-sealed-source-mapping.v0",
+  "sealedFromClassifier": true,
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "atlasCellId": "body-only--wide",
+      "familyId": "body-only",
+      "carrierMode": "zero_support"
+    },
+    {
+      "cellId": "cell-b",
+      "atlasCellId": "attachment-fields--wide",
+      "familyId": "attachment-fields",
+      "carrierMode": "latent_continuous_underside"
+    },
+    {
+      "cellId": "cell-c",
+      "atlasCellId": "external-rig--wide",
+      "familyId": "external-rig",
+      "carrierMode": "consumed_explicit_role_plane"
+    }
+  ]
+}

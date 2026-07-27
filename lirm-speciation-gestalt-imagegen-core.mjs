@@ -7,6 +7,7 @@ export const GESTALT_IMAGEGEN_COMPLETION_SCHEMA = 'kaminos.lirm-speciation-gesta
 export const GESTALT_IMAGEGEN_JOB_TYPE = 'mflux_flux2_edit_promptfile';
 export const GESTALT_IMAGEGEN_JOB_TYPE_2REF = 'mflux_flux2_edit_promptfile_2ref';
 export const GESTALT_IMAGEGEN_JOB_TYPE_3REF = 'mflux_flux2_edit_promptfile_3ref';
+export const GESTALT_IMAGEGEN_JOB_TYPE_4REF = 'mflux_flux2_edit_promptfile_4ref';
 export const GESTALT_IMAGEGEN_RUNNER = '/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit';
 export const GESTALT_TRELLIS_PLAN_SCHEMA = 'kaminos.lirm-speciation-gestalt-trellis-plan.v0';
 export const GESTALT_TRELLIS_COMPLETION_SCHEMA = 'kaminos.lirm-speciation-gestalt-trellis-completion.v0';
@@ -364,6 +365,7 @@ export function buildGreenroomSubmitArgs(cell) {
     [GESTALT_IMAGEGEN_JOB_TYPE, 0],
     [GESTALT_IMAGEGEN_JOB_TYPE_2REF, 1],
     [GESTALT_IMAGEGEN_JOB_TYPE_3REF, 2],
+    [GESTALT_IMAGEGEN_JOB_TYPE_4REF, 3],
   ]);
   if (!referenceCounts.has(cell?.jobType)) throw new Error(`unsupported job type: ${cell?.jobType}`);
   const references = cell.references ?? [];
@@ -398,6 +400,75 @@ export function buildGreenroomSubmitArgs(cell) {
   ];
 }
 
+function shellWords(command) {
+  const words = [];
+  let word = '';
+  let quote = null;
+  let escaped = false;
+  let active = false;
+  for (const character of String(command ?? '')) {
+    if (escaped) {
+      word += character;
+      escaped = false;
+      active = true;
+      continue;
+    }
+    if (character === '\\' && quote !== "'") {
+      escaped = true;
+      active = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = null;
+      else word += character;
+      active = true;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      active = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (active) {
+        words.push(word);
+        word = '';
+        active = false;
+      }
+      continue;
+    }
+    word += character;
+    active = true;
+  }
+  if (escaped || quote) throw new Error('effective route contains an unterminated shell token');
+  if (active) words.push(word);
+  return words;
+}
+
+export function assertEffectiveImagePathSequence({ effectiveRoute, cell }) {
+  const words = shellWords(effectiveRoute);
+  const markerIndex = words.indexOf('--image-paths');
+  if (markerIndex < 0) throw new Error('effective image path sequence mismatch: --image-paths missing');
+  const observed = [];
+  for (let index = markerIndex + 1; index < words.length; index += 1) {
+    if (words[index].startsWith('--')) break;
+    observed.push(words[index]);
+  }
+  const expected = [
+    cell.input.path,
+    ...(cell.references ?? []).map(reference => reference.path),
+  ];
+  if (
+    observed.length !== expected.length
+    || observed.some((path, index) => resolve(path) !== resolve(expected[index]))
+  ) {
+    throw new Error(
+      `effective image path sequence mismatch: ${JSON.stringify(observed)} != ${JSON.stringify(expected)}`,
+    );
+  }
+  return observed;
+}
+
 export function parseGreenroomCliOutput(stdout) {
   const text = String(stdout ?? '').trim();
   if (!text) throw new Error('Greenroom returned empty output');
@@ -420,6 +491,7 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
   if (resolve(status.input_path) !== resolve(cell.input.path)) throw new Error('effective input path mismatch');
   if (resolve(status.output_dir) !== resolve(cell.outputDir)) throw new Error('effective output directory mismatch');
   assertEffectiveRunner(status.effective_route, cell.expectedRunner, 'imagegen');
+  assertEffectiveImagePathSequence({ effectiveRoute: status.effective_route, cell });
   const expectedParams = {
     ...(cell.references ?? []).reduce((params, reference, index) => ({
       ...params,

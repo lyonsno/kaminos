@@ -1,0 +1,14 @@
+{
+  "schema": "kaminos.lirm-flux-four-reference-route-contract.v0",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+  "jobType": "mflux_flux2_edit_promptfile_4ref",
+  "referenceOrder": [
+    "clay",
+    "depth",
+    "normal",
+    "support_control"
+  ],
+  "expectedRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "effectiveRouteAdmission": "exact --image-paths sequence required after completion",
+  "status": "contract_written_not_exercised"
+}

@@ -1,0 +1,312 @@
+{
+  "schema": "kaminos.lirm-carrier-signal-budget-collection.v0",
+  "calibration": "native-budget-with-sensitivity",
+  "nativeScale": 1,
+  "sensitivityCompanion": {
+    "status": "planned_after_opening-trio",
+    "scales": [
+      0.5,
+      2
+    ],
+    "invariant": "same source geometry, prompt, seed, route, and role coordinates"
+  },
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "atlasCellId": "body-only--wide",
+      "carrierMode": "zero_support",
+      "nativeBudget": {
+        "schema": "kaminos.lirm-carrier-signal-budget.v0",
+        "disposition": "zero_support",
+        "dimensions": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "dtype": "uint8",
+        "valueRange": [
+          0,
+          255
+        ],
+        "backgroundValue": 0,
+        "channels": [
+          {
+            "channel": 0,
+            "nonBackgroundPixelCount": 0,
+            "areaFraction": 0,
+            "l1Energy": 0,
+            "l2Energy": 0
+          },
+          {
+            "channel": 1,
+            "nonBackgroundPixelCount": 0,
+            "areaFraction": 0,
+            "l1Energy": 0,
+            "l2Energy": 0
+          },
+          {
+            "channel": 2,
+            "nonBackgroundPixelCount": 0,
+            "areaFraction": 0,
+            "l1Energy": 0,
+            "l2Energy": 0
+          }
+        ],
+        "aggregate": {
+          "nonBackgroundPixelCount": 0,
+          "areaFraction": 0,
+          "l1Energy": 0,
+          "l2Energy": 0,
+          "centroid": null,
+          "secondMoment": 0,
+          "spatialBandwidth": 0,
+          "spatialBandwidthMeasure": "energy-weighted-rms-radius-pixels"
+        },
+        "roles": [],
+        "bodyMaskOverlap": {
+          "pixelCount": 0,
+          "signalFraction": 0
+        },
+        "undersideBoundaryContact": {
+          "pixelCount": 0
+        }
+      },
+      "carrierImage": {
+        "path": "cells/cell-a/support-control.png",
+        "byteSize": 1937,
+        "sha256": "sha256:4de8d440a98ea4cbc0adbbd169efdb56bed6843fd9cf3a9384edc7dd532ea93e"
+      },
+      "producer": {
+        "module": "lirm-support-structural-authority-prelaunch.mjs",
+        "grid": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "roleCoordinateSource": "attachment-fields--wide measured projection centroids"
+      }
+    },
+    {
+      "cellId": "cell-b",
+      "atlasCellId": "attachment-fields--wide",
+      "carrierMode": "latent_continuous_underside",
+      "nativeBudget": {
+        "schema": "kaminos.lirm-carrier-signal-budget.v0",
+        "disposition": "latent_continuous_underside",
+        "dimensions": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "dtype": "uint8",
+        "valueRange": [
+          0,
+          255
+        ],
+        "backgroundValue": 0,
+        "channels": [
+          {
+            "channel": 0,
+            "nonBackgroundPixelCount": 9662,
+            "areaFraction": 0.34946469907407407,
+            "l1Energy": 308182,
+            "l2Energy": 4828.741658030589
+          },
+          {
+            "channel": 1,
+            "nonBackgroundPixelCount": 9648,
+            "areaFraction": 0.3489583333333333,
+            "l1Energy": 310403,
+            "l2Energy": 5074.9818718888055
+          },
+          {
+            "channel": 2,
+            "nonBackgroundPixelCount": 8595,
+            "areaFraction": 0.3108723958333333,
+            "l1Energy": 240582,
+            "l2Energy": 4183.531283497232
+          }
+        ],
+        "aggregate": {
+          "nonBackgroundPixelCount": 10124,
+          "areaFraction": 0.36617476851851855,
+          "l1Energy": 859167,
+          "l2Energy": 8159.29659958504,
+          "centroid": {
+            "x": 99.1912864437298,
+            "y": 86.98439651429815
+          },
+          "secondMoment": 846.1386627588171,
+          "spatialBandwidth": 29.08846270875821,
+          "spatialBandwidthMeasure": "energy-weighted-rms-radius-pixels"
+        },
+        "roles": [
+          {
+            "role": "front-left",
+            "peak": {
+              "x": 71,
+              "y": 92,
+              "value": 116
+            }
+          },
+          {
+            "role": "front-right",
+            "peak": {
+              "x": 83,
+              "y": 83,
+              "value": 116
+            }
+          },
+          {
+            "role": "rear-left",
+            "peak": {
+              "x": 110,
+              "y": 92,
+              "value": 116
+            }
+          },
+          {
+            "role": "rear-right",
+            "peak": {
+              "x": 123,
+              "y": 82,
+              "value": 116
+            }
+          }
+        ],
+        "bodyMaskOverlap": {
+          "pixelCount": 4490,
+          "signalFraction": 0.443500592651126
+        },
+        "undersideBoundaryContact": {
+          "pixelCount": 125
+        }
+      },
+      "carrierImage": {
+        "path": "cells/cell-b/support-control.png",
+        "byteSize": 40636,
+        "sha256": "sha256:0e5e29af03d67fd2ae9b0ac03b8352c3b1f3afc14686f439567dbe3a756eae69"
+      },
+      "producer": {
+        "module": "lirm-support-structural-authority-prelaunch.mjs",
+        "grid": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "roleCoordinateSource": "attachment-fields--wide measured projection centroids"
+      }
+    },
+    {
+      "cellId": "cell-c",
+      "atlasCellId": "external-rig--wide",
+      "carrierMode": "consumed_explicit_role_plane",
+      "nativeBudget": {
+        "schema": "kaminos.lirm-carrier-signal-budget.v0",
+        "disposition": "consumed_explicit_role_plane",
+        "dimensions": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "dtype": "uint8",
+        "valueRange": [
+          0,
+          255
+        ],
+        "backgroundValue": 0,
+        "channels": [
+          {
+            "channel": 0,
+            "nonBackgroundPixelCount": 2365,
+            "areaFraction": 0.0855396412037037,
+            "l1Energy": 80736,
+            "l2Energy": 2950.8717356062766
+          },
+          {
+            "channel": 1,
+            "nonBackgroundPixelCount": 2433,
+            "areaFraction": 0.08799913194444445,
+            "l1Energy": 81203,
+            "l2Energy": 2771.150483102641
+          },
+          {
+            "channel": 2,
+            "nonBackgroundPixelCount": 2216,
+            "areaFraction": 0.08015046296296297,
+            "l1Energy": 63260,
+            "l2Energy": 2390.343489961223
+          }
+        ],
+        "aggregate": {
+          "nonBackgroundPixelCount": 2524,
+          "areaFraction": 0.09129050925925926,
+          "l1Energy": 225199,
+          "l2Energy": 4701.134012129414,
+          "centroid": {
+            "x": 99.15401489349419,
+            "y": 86.98799284188651
+          },
+          "secondMoment": 504.01436809256904,
+          "spatialBandwidth": 22.450264321218338,
+          "spatialBandwidthMeasure": "energy-weighted-rms-radius-pixels"
+        },
+        "roles": [
+          {
+            "role": "front-left",
+            "peak": {
+              "x": 71,
+              "y": 92,
+              "value": 255
+            }
+          },
+          {
+            "role": "front-right",
+            "peak": {
+              "x": 83,
+              "y": 83,
+              "value": 255
+            }
+          },
+          {
+            "role": "rear-left",
+            "peak": {
+              "x": 110,
+              "y": 92,
+              "value": 255
+            }
+          },
+          {
+            "role": "rear-right",
+            "peak": {
+              "x": 123,
+              "y": 82,
+              "value": 255
+            }
+          }
+        ],
+        "bodyMaskOverlap": {
+          "pixelCount": 1579,
+          "signalFraction": 0.625594294770206
+        },
+        "undersideBoundaryContact": {
+          "pixelCount": 83
+        }
+      },
+      "carrierImage": {
+        "path": "cells/cell-c/support-control.png",
+        "byteSize": 15874,
+        "sha256": "sha256:03cf611fb36ab04f7c1f48452f24a2e34d0ae530ddb0ca4eb36d70cbe2efd487"
+      },
+      "producer": {
+        "module": "lirm-support-structural-authority-prelaunch.mjs",
+        "grid": {
+          "width": 192,
+          "height": 144,
+          "channels": 3
+        },
+        "roleCoordinateSource": "attachment-fields--wide measured projection centroids"
+      }
+    }
+  ]
+}

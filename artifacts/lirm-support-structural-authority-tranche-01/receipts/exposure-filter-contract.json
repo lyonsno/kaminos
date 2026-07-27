@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.lirm-structural-authority-exposure-filter-contract.v0",
+  "requiredFields": [
+    "safe",
+    "happy",
+    "lerm_identity",
+    "nintendo_region_coherence",
+    "connected_body",
+    "head_tail_polarity",
+    "literal_carrier_mark_leakage",
+    "operatorExposure",
+    "classifier"
+  ],
+  "operatorEligibility": "safe=true; happy=true; literal_carrier_mark_leakage=false",
+  "sourceSelection": "exact-plan-cell-output-paths-only",
+  "status": "contract_written_no_outputs_classified"
+}

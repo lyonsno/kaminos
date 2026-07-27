@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const {
+  GESTALT_IMAGEGEN_JOB_TYPE_4REF,
   buildGestaltImagegenMatrix,
   buildGestaltImagegenContactSheetManifest,
   buildGestaltAdherenceContactSheetManifest,
@@ -274,6 +275,16 @@ const multirefArgs = buildGreenroomSubmitArgs({
 });
 assert.ok(multirefArgs.includes('reference_path_2=/fixture/depth.png'));
 assert.ok(multirefArgs.includes('reference_path_3=/fixture/normal.png'));
+const fourRefArgs = buildGreenroomSubmitArgs({
+  ...plan.cells[0],
+  jobType: GESTALT_IMAGEGEN_JOB_TYPE_4REF,
+  references: [
+    { role: 'depth', path: '/fixture/depth.png', bytes: 10, sha256: 'sha256:depth' },
+    { role: 'normal', path: '/fixture/normal.png', bytes: 10, sha256: 'sha256:normal' },
+    { role: 'support_control', path: '/fixture/support.png', bytes: 10, sha256: 'sha256:support' },
+  ],
+});
+assert.ok(fourRefArgs.includes('reference_path_4=/fixture/support.png'));
 assert.throws(
   () => buildGreenroomSubmitArgs({ ...plan.cells[0], jobType: 'mflux_flux2_edit_promptfile_3ref', references: [] }),
   /requires exactly 2 secondary reference/,
@@ -366,6 +377,58 @@ const multirefStatus = {
 };
 const multirefCompletion = await validateGestaltImagegenCompletion({ cell: multirefCell, status: multirefStatus });
 assert.deepEqual(multirefCompletion.references.map(reference => reference.role), ['depth', 'normal']);
+const supportReferencePath = join(root, 'multiref-support.png');
+const supportReferenceBytes = Buffer.from('support-reference');
+await writeFile(supportReferencePath, supportReferenceBytes);
+const fourRefCell = {
+  ...multirefCell,
+  cellId: `${cell.cellId}-four-ref`,
+  jobType: GESTALT_IMAGEGEN_JOB_TYPE_4REF,
+  requestedRoute: `gpu-greenroom/${GESTALT_IMAGEGEN_JOB_TYPE_4REF}`,
+  references: [
+    ...multirefCell.references,
+    {
+      role: 'support_control',
+      path: supportReferencePath,
+      bytes: supportReferenceBytes.length,
+      sha256: `sha256:${createHash('sha256').update(supportReferenceBytes).digest('hex')}`,
+    },
+  ],
+};
+const fourRefStatus = {
+  ...multirefStatus,
+  job_id: 'fourref123',
+  job_type: fourRefCell.jobType,
+  params: {
+    ...multirefStatus.params,
+    reference_path_4: supportReferencePath,
+  },
+  effective_route: `${cell.expectedRunner} --image-paths ${cell.input.path} ${depthReferencePath} ${normalReferencePath} ${supportReferencePath} --prompt-file ${cell.prompt.path} --output ${multirefOutputPath}`,
+};
+const fourRefCompletion = await validateGestaltImagegenCompletion({
+  cell: fourRefCell,
+  status: fourRefStatus,
+});
+assert.deepEqual(
+  fourRefCompletion.references.map(reference => reference.role),
+  ['depth', 'normal', 'support_control'],
+);
+for (const invalidImagePaths of [
+  [cell.input.path, depthReferencePath, normalReferencePath],
+  [cell.input.path, depthReferencePath, supportReferencePath, normalReferencePath],
+  [cell.input.path, depthReferencePath, normalReferencePath, normalReferencePath],
+]) {
+  await assert.rejects(
+    () => validateGestaltImagegenCompletion({
+      cell: fourRefCell,
+      status: {
+        ...fourRefStatus,
+        effective_route: `${cell.expectedRunner} --image-paths ${invalidImagePaths.join(' ')} --prompt-file ${cell.prompt.path} --output ${multirefOutputPath}`,
+      },
+    }),
+    /effective image path sequence mismatch/,
+  );
+}
 await assert.rejects(
   () => validateGestaltImagegenCompletion({
     cell: {

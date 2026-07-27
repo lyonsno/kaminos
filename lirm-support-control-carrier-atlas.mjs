@@ -243,7 +243,7 @@ function fusedCarrierPrimitives(program) {
   ));
 }
 
-function createCellArmatureProgram(family, program) {
+export function createCellArmatureProgram(family, program) {
   return {
     id: `kaminos.lirm-support-control-carrier.${family.id}.${program.id}.v0`,
     parameterVocabulary: 'kaminos.lirm-support-control-carrier.fixed-friendly-bauplan.v0',
