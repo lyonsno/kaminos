@@ -14414,7 +14414,6 @@ export async function createWebGPUFingerFluidSolver({
         repository: 'kaminos',
         composedRevision: safeComposedRevision,
         runtimeRoute: KAMINOS_FINGER_FLUID_RUNTIME_ROUTE,
-        runtime: runtimeApi,
       },
       device,
       queue: device.queue,

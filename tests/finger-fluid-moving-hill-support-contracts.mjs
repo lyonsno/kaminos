@@ -1,5 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import * as fingerFluidCore from '../finger-fluid-webgpu-core.js';
 
@@ -476,6 +487,11 @@ assert.doesNotMatch(
   /provider:\s*movingHillSupportProvider/,
   'particle ownership must not transfer mutable moving-support provider authority',
 );
+assert.doesNotMatch(
+  ownershipDescriptorSource,
+  /runtime:\s*runtimeApi/,
+  'consumer-facing ownership descriptors must not expose runtime teardown authority',
+);
 
 assert.match(browserWitnessSource, /synthetic_canonical_frame_contract_witness_not_lerms_source_authority/);
 assert.match(browserWitnessSource, /sourceAuthority:\s*'synthetic_fixture_only'/);
@@ -495,5 +511,88 @@ assert.match(browserWitnessRunnerSource, /captured moving-Hill output is blank o
 assert.match(browserWitnessRunnerSource, /primary_output_written:\s*primaryOutputWritten/);
 assert.match(browserWitnessRunnerSource, /failure_phase:\s*phase/);
 assert.match(browserWitnessRunnerSource, /lastTrustworthyEvidence/);
+
+const servedWitnessFiles = new Map([
+  [
+    '/finger-fluid-moving-hill-support-witness.html',
+    new URL('../finger-fluid-moving-hill-support-witness.html', import.meta.url),
+  ],
+  [
+    '/finger-fluid-moving-hill-support-witness.js',
+    new URL('../finger-fluid-moving-hill-support-witness.js', import.meta.url),
+  ],
+  [
+    '/finger-fluid-webgpu-core.js',
+    new URL('../finger-fluid-webgpu-core.js', import.meta.url),
+  ],
+]);
+const sourceServer = createServer((request, response) => {
+  const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+  const sourceFile = servedWitnessFiles.get(pathname);
+  if (!sourceFile) {
+    response.writeHead(404);
+    response.end('not found');
+    return;
+  }
+  response.writeHead(200, {
+    'content-type': pathname.endsWith('.html')
+      ? 'text/html; charset=utf-8'
+      : 'text/javascript; charset=utf-8',
+  });
+  response.end(readFileSync(sourceFile));
+});
+sourceServer.listen(0, '127.0.0.1');
+await once(sourceServer, 'listening');
+
+const spawnFailureRoot = mkdtempSync(resolve(tmpdir(), 'moving-hill-spawn-failure-'));
+const spawnFailureReport = resolve(spawnFailureRoot, 'failure.json');
+const spawnFailureOutput = resolve(spawnFailureRoot, 'failure.png');
+const sourcePort = sourceServer.address().port;
+const witnessRunner = spawn(
+  process.execPath,
+  [
+    fileURLToPath(new URL('../finger-fluid-moving-hill-support-witness.mjs', import.meta.url)),
+    '--url',
+    `http://127.0.0.1:${sourcePort}/finger-fluid-moving-hill-support-witness.html?composed_revision=${'f'.repeat(40)}`,
+    '--out',
+    spawnFailureOutput,
+    '--report',
+    spawnFailureReport,
+    '--debug-port',
+    '9593',
+  ],
+  {
+    env: {
+      ...process.env,
+      KAMINOS_CHROME: '/definitely/missing/kaminos-test-chrome',
+    },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  },
+);
+let spawnFailureStderr = '';
+witnessRunner.stderr.on('data', chunk => {
+  spawnFailureStderr += chunk.toString();
+});
+const [spawnFailureExitCode] = await once(witnessRunner, 'close');
+sourceServer.close();
+await once(sourceServer, 'close');
+
+const spawnFailureReportExists = existsSync(spawnFailureReport);
+const spawnFailureEvidence = spawnFailureReportExists
+  ? JSON.parse(readFileSync(spawnFailureReport, 'utf8'))
+  : null;
+rmSync(spawnFailureRoot, { recursive: true, force: true });
+
+assert.notEqual(spawnFailureExitCode, 0, 'a missing browser executable must fail the witness');
+assert.equal(
+  spawnFailureReportExists,
+  true,
+  `a browser launch failure must still write a durable report; stderr:\n${spawnFailureStderr}`,
+);
+assert.equal(spawnFailureEvidence.ok, false);
+assert.equal(spawnFailureEvidence.failure_phase, 'launch-browser');
+assert.equal(spawnFailureEvidence.primary_output_written, false);
+assert.equal(spawnFailureEvidence.lastTrustworthyEvidence.phase, 'bind-served-source');
+assert.match(spawnFailureEvidence.error, /ENOENT|spawn/i);
 
 console.log('finger fluid moving-Hill support contracts passed');

@@ -41,6 +41,20 @@ function delay(milliseconds) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
 }
 
+function waitForBrowserLaunch(child) {
+  return new Promise((resolveLaunch, rejectLaunch) => {
+    let launched = false;
+    child.on('error', error => {
+      stderr += `${error?.stack || error}\n`;
+      if (!launched) rejectLaunch(error);
+    });
+    child.once('spawn', () => {
+      launched = true;
+      resolveLaunch();
+    });
+  });
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -335,6 +349,7 @@ async function main() {
     'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
+  await waitForBrowserLaunch(chromeProcess);
 
   phase = 'connect-cdp';
   browserVersion = await waitForCdp();
@@ -394,7 +409,7 @@ main()
     process.exitCode = 1;
   })
   .finally(() => {
-    if (chromeProcess && !chromeProcess.killed) {
+    if (chromeProcess?.pid && !chromeProcess.killed) {
       chromeProcess.kill('SIGTERM');
     }
   });
