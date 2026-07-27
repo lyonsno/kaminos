@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -15,6 +15,7 @@ import {
 import {
   GESTALT_IMAGEGEN_JOB_TYPE_4REF,
   GESTALT_IMAGEGEN_RUNNER,
+  buildGreenroomSubmitArgs,
 } from './lirm-speciation-gestalt-imagegen-core.mjs';
 
 export const STRUCTURAL_AUTHORITY_PRELAUNCH_SCHEMA =
@@ -139,6 +140,36 @@ export function buildStructuralAuthorityTranchePlan({
     referenceOrder: [...REFERENCE_ORDER],
     prompt: PROMPT,
     cells,
+  };
+}
+
+export function buildStructuralAuthoritySubmissionCell({
+  cell,
+  sourceImages,
+  sourceRoot,
+}) {
+  if (!cell || !Array.isArray(sourceImages)) {
+    throw new TypeError('structural authority submission requires a cell and source images');
+  }
+  const expectedRoles = [...REFERENCE_ORDER];
+  if (JSON.stringify(sourceImages.map(image => image.role)) !== JSON.stringify(expectedRoles)) {
+    throw new Error('structural authority submission requires clay, depth, normal, support_control source order');
+  }
+  const resolveImage = image => {
+    if (!image.path || !HASH_PATTERN.test(image.sha256 ?? '')) {
+      throw new Error(`structural authority submission lacks path/hash evidence: ${image.role}`);
+    }
+    return {
+      role: image.role,
+      path: isAbsolute(image.path) ? image.path : resolve(sourceRoot ?? '.', image.path),
+      sha256: image.sha256,
+    };
+  };
+  const [input, ...references] = sourceImages.map(resolveImage);
+  return {
+    ...cell,
+    input,
+    references,
   };
 }
 
@@ -360,6 +391,16 @@ export function validateExposureLedger(ledger) {
   if ((!ledger.safe || !ledger.happy) && ledger.operatorExposure === 'eligible') {
     throw new Error('operator exposure requires positive safe and happy classifications');
   }
+  for (const field of [
+    'lerm_identity',
+    'nintendo_region_coherence',
+    'connected_body',
+    'head_tail_polarity',
+  ]) {
+    if (!ledger[field] && ledger.operatorExposure === 'eligible') {
+      throw new Error(`operator exposure requires positive ${field} classification`);
+    }
+  }
   if (!['eligible', 'prohibited'].includes(ledger.operatorExposure)) {
     throw new Error(`unsupported operator exposure disposition: ${ledger.operatorExposure}`);
   }
@@ -367,7 +408,14 @@ export function validateExposureLedger(ledger) {
 }
 
 export function buildExposureFilteredComparisonManifest({ plan, ledgers }) {
-  const byCell = new Map((ledgers ?? []).map(ledger => [ledger.cellId, validateExposureLedger(ledger)]));
+  const byCell = new Map();
+  for (const rawLedger of ledgers ?? []) {
+    const ledger = validateExposureLedger(rawLedger);
+    if (byCell.has(ledger.cellId)) {
+      throw new Error(`duplicate exposure ledger for ${ledger.cellId}`);
+    }
+    byCell.set(ledger.cellId, ledger);
+  }
   const cells = plan.cells.map(cell => {
     const ledger = byCell.get(cell.cellId);
     if (!ledger) throw new Error(`missing exposure ledger for ${cell.cellId}`);
@@ -420,6 +468,30 @@ export function validateStructuralAuthorityExecutionManifest(manifest) {
     for (const image of cell.sourceImages) {
       if (!image.path || !HASH_PATTERN.test(image.sha256 ?? '')) {
         throw new Error(`${cell.cellId} source image lacks path/hash evidence: ${image.role}`);
+      }
+    }
+    if (
+      cell.input?.role !== 'clay'
+      || !cell.input.path
+      || !HASH_PATTERN.test(cell.input.sha256 ?? '')
+    ) {
+      throw new Error(`${cell.cellId} requires clay as the primary input with path/hash evidence`);
+    }
+    if (
+      !Array.isArray(cell.references)
+      || JSON.stringify(cell.references.map(image => image.role))
+        !== JSON.stringify(['depth', 'normal', 'support_control'])
+    ) {
+      throw new Error(`${cell.cellId} requires exactly depth, normal, support_control references`);
+    }
+    const routedImages = [cell.input, ...cell.references];
+    for (const [index, image] of routedImages.entries()) {
+      const sourceImage = cell.sourceImages[index];
+      if (
+        image.path !== sourceImage.path
+        || image.sha256 !== sourceImage.sha256
+      ) {
+        throw new Error(`${cell.cellId} routed ${image.role} evidence differs from source image ledger`);
       }
     }
   }
@@ -495,6 +567,12 @@ export async function writeStructuralAuthorityPrelaunch({
     rasterizeSvg(carrierSvgPath, carrierPngPath);
     const carrierEvidence = await evidence(carrierPngPath, root);
     sourceImages.push({ role: 'support_control', ...carrierEvidence });
+    const submissionCell = buildStructuralAuthoritySubmissionCell({
+      cell,
+      sourceImages,
+      sourceRoot: root,
+    });
+    buildGreenroomSubmitArgs(submissionCell);
     budgets.push({
       cellId: cell.cellId,
       atlasCellId: cell.atlasCellId,
@@ -520,6 +598,8 @@ export async function writeStructuralAuthorityPrelaunch({
       seed: cell.seed,
       jobType: cell.jobType,
       sourceImages,
+      input: sourceImages[0],
+      references: sourceImages.slice(1),
     });
   }
 
@@ -557,7 +637,15 @@ export async function writeStructuralAuthorityPrelaunch({
       'operatorExposure',
       'classifier',
     ],
-    operatorEligibility: 'safe=true; happy=true; literal_carrier_mark_leakage=false',
+    operatorEligibility: [
+      'safe=true',
+      'happy=true',
+      'lerm_identity=true',
+      'nintendo_region_coherence=true',
+      'connected_body=true',
+      'head_tail_polarity=true',
+      'literal_carrier_mark_leakage=false',
+    ].join('; '),
     sourceSelection: 'exact-plan-cell-output-paths-only',
     status: 'contract_written_no_outputs_classified',
   });

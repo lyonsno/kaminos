@@ -11,7 +11,7 @@
     "operatorExposure",
     "classifier"
   ],
-  "operatorEligibility": "safe=true; happy=true; literal_carrier_mark_leakage=false",
+  "operatorEligibility": "safe=true; happy=true; lerm_identity=true; nintendo_region_coherence=true; connected_body=true; head_tail_polarity=true; literal_carrier_mark_leakage=false",
   "sourceSelection": "exact-plan-cell-output-paths-only",
   "status": "contract_written_no_outputs_classified"
 }
