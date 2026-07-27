@@ -47,6 +47,16 @@ assert.equal(
   'function',
   'the solver must fail closed before pipeline creation on a false Hill provider',
 );
+assert.equal(
+  typeof fingerFluidCore.createFingerFluidSupportContactIdentity,
+  'function',
+  'particle ownership must publish an inert support identity instead of the mutable provider',
+);
+assert.equal(
+  typeof fingerFluidCore.failFingerFluidWebGPUInitialization,
+  'function',
+  'post-device initialization failures must share one provider/device cleanup primitive',
+);
 
 const buffers = [];
 const writes = [];
@@ -328,6 +338,44 @@ assert.equal(
   fingerFluidCore.validateFingerFluidMovingHillSupportContactProvider(provider, { device }),
   provider,
 );
+const supportContactIdentity = fingerFluidCore.createFingerFluidSupportContactIdentity(
+  provider,
+  { device },
+);
+assert.equal(Object.isFrozen(supportContactIdentity), true);
+assert.equal(supportContactIdentity.route, movingHillRoute);
+assert.equal(supportContactIdentity.sourceId, identity.sourceId);
+assert.equal(supportContactIdentity.terrainEpoch, nextIdentity.terrainEpoch);
+assert.equal(supportContactIdentity.deviceMatchesSolver, true);
+assert.equal(
+  Object.hasOwn(supportContactIdentity, 'provider'),
+  false,
+  'the ownership descriptor must not expose the provider update/release authority',
+);
+assert.equal(typeof supportContactIdentity.update, 'undefined');
+assert.equal(typeof supportContactIdentity.release, 'undefined');
+
+let cleanupReleaseCount = 0;
+let cleanupDestroyCount = 0;
+const unavailable = fingerFluidCore.failFingerFluidWebGPUInitialization({
+  provider: {
+    release() {
+      cleanupReleaseCount += 1;
+    },
+  },
+  device: {
+    destroy() {
+      cleanupDestroyCount += 1;
+    },
+  },
+  reason: 'moving-Hill bind group rejected',
+  details: { phase: 'compute-bind-group' },
+});
+assert.equal(cleanupReleaseCount, 1);
+assert.equal(cleanupDestroyCount, 1);
+assert.equal(unavailable.available, false);
+assert.match(unavailable.reason, /moving-Hill bind group rejected/i);
+assert.deepEqual(unavailable.phase, 'compute-bind-group');
 assert.throws(
   () => fingerFluidCore.validateFingerFluidMovingHillSupportContactProvider(null, { device }),
   /moving Hill support provider is missing/i,
@@ -407,8 +455,26 @@ assert.match(
 );
 assert.match(
   source,
-  /function failFingerFluidInitialization\([\s\S]*movingHillSupportProvider\?\.release\?\.\(\);[\s\S]*device\.destroy\(\);/,
+  /function failFingerFluidInitialization\([\s\S]*failFingerFluidWebGPUInitialization\(\{[\s\S]*provider:\s*movingHillSupportProvider,[\s\S]*device,[\s\S]*reason,[\s\S]*details,[\s\S]*\}\)/,
   'every unavailable exit after provider allocation must release moving-Hill resources before destroying the device',
+);
+assert.match(
+  source,
+  /let computeBindGroup;\s*try \{\s*computeBindGroup = device\.createBindGroup\([\s\S]*\);\s*\} catch \(error\) \{\s*return failFingerFluidInitialization\(`WebGPU compute bind group validation failed:/,
+  'a provider resource rejected during bind-group creation must release the provider and destroy the device',
+);
+const ownershipDescriptorSource = source.slice(
+  source.indexOf('function getParticleOwnershipDescriptor()'),
+  source.indexOf('function getDebugState()'),
+);
+assert.match(
+  ownershipDescriptorSource,
+  /createFingerFluidSupportContactIdentity\(\s*movingHillSupportProvider,\s*\{\s*device\s*\},?\s*\)/,
+);
+assert.doesNotMatch(
+  ownershipDescriptorSource,
+  /provider:\s*movingHillSupportProvider/,
+  'particle ownership must not transfer mutable moving-support provider authority',
 );
 
 assert.match(browserWitnessSource, /synthetic_canonical_frame_contract_witness_not_lerms_source_authority/);

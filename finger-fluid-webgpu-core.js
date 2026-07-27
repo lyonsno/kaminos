@@ -573,6 +573,41 @@ export function validateFingerFluidMovingHillSupportContactProvider(provider, { 
   return provider;
 }
 
+export function createFingerFluidSupportContactIdentity(provider, { device } = {}) {
+  if (!provider) {
+    return Object.freeze({
+      route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
+      owner: 'kaminos_diagnostic',
+      sourceId: 'built-in-toy-support',
+      terrainId: null,
+      terrainEpoch: null,
+      supportEpoch: null,
+      remapEpoch: null,
+      stale: false,
+      fallbackRoute: null,
+      execution: 'gpu_same_device_analytic_diagnostic_signed_distance_v0',
+      deviceMatchesSolver: true,
+      visibilityAuthority: 'gpu_descriptor_without_host_readback',
+      hostReadbackVisibility: false,
+    });
+  }
+  return Object.freeze({
+    route: provider.route,
+    owner: provider.owner,
+    sourceId: provider.sourceId,
+    terrainId: provider.terrainId,
+    terrainEpoch: provider.terrainEpoch,
+    supportEpoch: provider.supportEpoch,
+    remapEpoch: provider.remapEpoch,
+    stale: provider.stale,
+    fallbackRoute: provider.fallbackRoute,
+    execution: provider.execution,
+    deviceMatchesSolver: provider.device === device,
+    visibilityAuthority: provider.visibilityAuthority,
+    hostReadbackVisibility: provider.hostReadbackVisibility,
+  });
+}
+
 function portableGeometryFailure(message) {
   throw new Error(`Portable fluid support geometry ${message}`);
 }
@@ -12068,6 +12103,20 @@ function createUnavailableSolver(reason, details = {}) {
   };
 }
 
+export function failFingerFluidWebGPUInitialization({
+  provider = null,
+  device,
+  reason,
+  details = {},
+} = {}) {
+  try {
+    provider?.release?.();
+  } finally {
+    device?.destroy?.();
+  }
+  return createUnavailableSolver(reason, details);
+}
+
 export async function createWebGPUFingerFluidSolver({
   canvas,
   particleCount = DEFAULT_PARTICLE_COUNT,
@@ -12142,9 +12191,12 @@ export async function createWebGPUFingerFluidSolver({
     }
   }
   function failFingerFluidInitialization(reason, details = {}) {
-    movingHillSupportProvider?.release?.();
-    device.destroy();
-    return createUnavailableSolver(reason, details);
+    return failFingerFluidWebGPUInitialization({
+      provider: movingHillSupportProvider,
+      device,
+      reason,
+      details,
+    });
   }
   const context = canvas.getContext('webgpu');
   if (!context) return failFingerFluidInitialization('GPUCanvasContext unavailable');
@@ -12484,28 +12536,33 @@ export async function createWebGPUFingerFluidSolver({
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
-  const computeBindGroup = device.createBindGroup({
-    label: 'kaminos-finger-fluid-compute-bind-group',
-    layout: computeLayout,
-    entries: [
-      { binding: 0, resource: { buffer: particleBuffer } },
-      { binding: 1, resource: { buffer: cellHeadsBuffer } },
-      { binding: 2, resource: { buffer: particleNextBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } },
-      { binding: 4, resource: { buffer: interfaceRecordsBuffer } },
-      { binding: 5, resource: { buffer: interfaceCountersBuffer } },
-      { binding: 6, resource: { buffer: restStateBuffer } },
-      { binding: 7, resource: { buffer: neighborTopologyBuffer } },
-      { binding: 8, resource: { buffer: materialTracerBuffer } },
-      { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
-      { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
-      { binding: 11, resource: { buffer: liveInletBuffer } },
-      ...(movingHillSupportProvider ? [
-        { binding: 12, resource: movingHillSupportProvider.sampleTextureView },
-        { binding: 13, resource: { buffer: movingHillSupportProvider.paramsBuffer } },
-      ] : []),
-    ],
-  });
+  let computeBindGroup;
+  try {
+    computeBindGroup = device.createBindGroup({
+      label: 'kaminos-finger-fluid-compute-bind-group',
+      layout: computeLayout,
+      entries: [
+        { binding: 0, resource: { buffer: particleBuffer } },
+        { binding: 1, resource: { buffer: cellHeadsBuffer } },
+        { binding: 2, resource: { buffer: particleNextBuffer } },
+        { binding: 3, resource: { buffer: paramsBuffer } },
+        { binding: 4, resource: { buffer: interfaceRecordsBuffer } },
+        { binding: 5, resource: { buffer: interfaceCountersBuffer } },
+        { binding: 6, resource: { buffer: restStateBuffer } },
+        { binding: 7, resource: { buffer: neighborTopologyBuffer } },
+        { binding: 8, resource: { buffer: materialTracerBuffer } },
+        { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
+        { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
+        { binding: 11, resource: { buffer: liveInletBuffer } },
+        ...(movingHillSupportProvider ? [
+          { binding: 12, resource: movingHillSupportProvider.sampleTextureView },
+          { binding: 13, resource: { buffer: movingHillSupportProvider.paramsBuffer } },
+        ] : []),
+      ],
+    });
+  } catch (error) {
+    return failFingerFluidInitialization(`WebGPU compute bind group validation failed: ${error.message || String(error)}`);
+  }
   const energyDiagnosticsModule = device.createShaderModule({
     label: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
     code: ENERGY_DIAGNOSTICS_SHADER,
@@ -14346,33 +14403,10 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function getParticleOwnershipDescriptor() {
-    const supportContact = movingHillSupportProvider ? {
-      route: movingHillSupportProvider.route,
-      owner: movingHillSupportProvider.owner,
-      sourceId: movingHillSupportProvider.sourceId,
-      provider: movingHillSupportProvider,
-      device,
-      terrainId: movingHillSupportProvider.terrainId,
-      terrainEpoch: movingHillSupportProvider.terrainEpoch,
-      supportEpoch: movingHillSupportProvider.supportEpoch,
-      remapEpoch: movingHillSupportProvider.remapEpoch,
-      stale: movingHillSupportProvider.stale,
-      fallbackRoute: movingHillSupportProvider.fallbackRoute,
-      execution: movingHillSupportProvider.execution,
-    } : {
-      route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
-      owner: 'kaminos_diagnostic',
-      sourceId: 'built-in-toy-support',
-      provider: null,
-      device,
-      terrainId: null,
-      terrainEpoch: null,
-      supportEpoch: null,
-      remapEpoch: null,
-      stale: false,
-      fallbackRoute: null,
-      execution: 'gpu_same_device_analytic_diagnostic_signed_distance_v0',
-    };
+    const supportContact = createFingerFluidSupportContactIdentity(
+      movingHillSupportProvider,
+      { device },
+    );
     return {
       contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
       packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
