@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Moving Hill Support Witness</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #020708;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      max-width: min(720px, calc(100vw - 32px));
+      padding: 10px 12px;
+      border: 1px solid rgba(77, 220, 210, 0.62);
+      background: rgba(2, 10, 12, 0.88);
+      color: #b5f8ed;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="moving-hill-support"></canvas>
+  <div id="status">initializing canonical moving-Hill support witness</div>
+  <script type="module" src="./finger-fluid-moving-hill-support-witness.js"></script>
+</body>
+</html>

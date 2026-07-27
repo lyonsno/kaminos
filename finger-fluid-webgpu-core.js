@@ -35,6 +35,17 @@ export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_STATES = Object.freeze({
   postImpact: 2,
 });
 export const KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTACT_THRESHOLD = 0.5;
+export const KAMINOS_FINGER_FLUID_RUNTIME_ROUTE = 'kaminos/finger-fluid/webgpu-core-v0';
+export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE =
+  'kaminos/finger-fluid/analytic-support-contact-diagnostic-v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE =
+  'lerms/hill-of-hills/gpu-moving-support-contact-v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_EXECUTION =
+  'gpu_same_device_moving_hill_signed_distance_v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_PROVIDER_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-support-contact-provider.v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_OWNER = 'lerms_hill_of_hills';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_SAMPLE_STRIDE_FLOATS = 8;
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -202,6 +213,364 @@ function representationFrameGrid(value, label) {
     representationFrameFailure(`${label} metric is invalid`);
   }
   return value;
+}
+
+function movingHillSupportFailure(message) {
+  throw new Error(`Finger fluid moving Hill support ${message}`);
+}
+
+function movingHillSupportString(value, label) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    movingHillSupportFailure(`${label} is missing`);
+  }
+  return value;
+}
+
+function movingHillSupportEpoch(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    movingHillSupportFailure(`${label} is invalid: ${value}`);
+  }
+  return value;
+}
+
+function movingHillSupportField(frame, field, length) {
+  const value = frame.fields?.[field];
+  if (!ArrayBuffer.isView(value) || value instanceof DataView || value.length !== length) {
+    movingHillSupportFailure(`${field} sample count is invalid`);
+  }
+  return value;
+}
+
+function validateMovingHillTerrainFrame(terrainFrame, identity) {
+  if (!terrainFrame || terrainFrame.schema !== 'kaminos.fluid.terrain-fluid-frame.v1') {
+    movingHillSupportFailure('canonical terrain frame schema is invalid');
+  }
+  if (terrainFrame.supportClass !== 'heightfield') {
+    movingHillSupportFailure(`support class must be heightfield, received ${terrainFrame.supportClass}`);
+  }
+  if (terrainFrame.complete !== true) {
+    movingHillSupportFailure('canonical terrain frame must be complete');
+  }
+  if (terrainFrame.worldMetersPerUnit !== 1) {
+    movingHillSupportFailure('canonical terrain frame must use one world meter per unit');
+  }
+  const grid = representationFrameGrid(terrainFrame.grid, 'moving Hill support grid');
+  const sampleCount = grid.width * grid.height;
+  if (
+    terrainFrame.expectedSampleCount !== sampleCount
+    || terrainFrame.actualSampleCount !== sampleCount
+  ) {
+    movingHillSupportFailure('canonical terrain frame sample accounting is incomplete');
+  }
+  movingHillSupportField(terrainFrame, 'bedHeight', sampleCount);
+  movingHillSupportField(terrainFrame, 'normal', sampleCount * 3);
+  movingHillSupportField(terrainFrame, 'supportVelocity', sampleCount * 3);
+  const valid = movingHillSupportField(terrainFrame, 'valid', sampleCount);
+  for (let index = 0; index < sampleCount; index += 1) {
+    if (valid[index] !== 1) {
+      movingHillSupportFailure(`valid support sample ${index} is unavailable`);
+    }
+  }
+  if (!identity || typeof identity !== 'object') {
+    movingHillSupportFailure('identity is missing');
+  }
+  const terrainId = movingHillSupportString(identity.terrainId, 'terrain id');
+  const sourceId = movingHillSupportString(identity.sourceId, 'source id');
+  if (terrainId !== terrainFrame.terrainId) {
+    movingHillSupportFailure('terrain id diverges from the canonical terrain frame');
+  }
+  if (sourceId !== terrainFrame.source?.effective) {
+    movingHillSupportFailure('source id diverges from the canonical terrain frame');
+  }
+  const terrainEpoch = movingHillSupportEpoch(identity.terrainEpoch, 'terrain epoch');
+  if (terrainEpoch !== terrainFrame.currentEpoch) {
+    movingHillSupportFailure('terrain epoch diverges from the canonical terrain frame');
+  }
+  const supportEpoch = movingHillSupportEpoch(identity.supportEpoch, 'support epoch');
+  const remapEpoch = movingHillSupportEpoch(identity.remapEpoch, 'remap epoch');
+  if (identity.stale !== false) {
+    movingHillSupportFailure('identity is stale');
+  }
+  if (identity.fallbackRoute !== null) {
+    movingHillSupportFailure('identity declares a fallback route');
+  }
+  return {
+    grid,
+    sampleCount,
+    sourceId,
+    terrainId,
+    terrainEpoch,
+    supportEpoch,
+    remapEpoch,
+  };
+}
+
+export function createFingerFluidMovingHillSupportContactProvider({
+  device,
+  terrainFrame,
+  identity,
+} = {}) {
+  if (
+    !device?.createBuffer
+    || !device.createTexture
+    || !device.queue?.writeBuffer
+    || !device.queue.writeTexture
+  ) {
+    movingHillSupportFailure('GPU device is missing');
+  }
+  const packFrame = (nextTerrainFrame, nextIdentity) => {
+    const validated = validateMovingHillTerrainFrame(nextTerrainFrame, nextIdentity);
+    const bedHeight = nextTerrainFrame.fields.bedHeight;
+    const normal = nextTerrainFrame.fields.normal;
+    const supportVelocity = nextTerrainFrame.fields.supportVelocity;
+    const rowBytes = validated.grid.width * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const bytesPerRow = Math.ceil(rowBytes / 256) * 256;
+    const rowStrideFloats = bytesPerRow / Float32Array.BYTES_PER_ELEMENT;
+    const rowsPerLayer = validated.grid.height;
+    const samples = new Float32Array(rowStrideFloats * rowsPerLayer * 2);
+    for (let index = 0; index < validated.sampleCount; index += 1) {
+      const x = index % validated.grid.width;
+      const z = Math.floor(index / validated.grid.width);
+      const heightNormalOffset = z * rowStrideFloats + x * 4;
+      const supportVelocityOffset = rowStrideFloats * rowsPerLayer + heightNormalOffset;
+      const vectorOffset = index * 3;
+      const normalLength = Math.hypot(
+        normal[vectorOffset],
+        normal[vectorOffset + 1],
+        normal[vectorOffset + 2],
+      );
+      if (!Number.isFinite(bedHeight[index]) || !Number.isFinite(normalLength) || normalLength <= 1e-8) {
+        movingHillSupportFailure(`support sample ${index} geometry is invalid`);
+      }
+      for (let component = 0; component < 3; component += 1) {
+        if (!Number.isFinite(supportVelocity[vectorOffset + component])) {
+          movingHillSupportFailure(`support sample ${index} velocity is invalid`);
+        }
+      }
+      samples[heightNormalOffset] = bedHeight[index];
+      samples[heightNormalOffset + 1] = normal[vectorOffset] / normalLength;
+      samples[heightNormalOffset + 2] = normal[vectorOffset + 1] / normalLength;
+      samples[heightNormalOffset + 3] = normal[vectorOffset + 2] / normalLength;
+      samples[supportVelocityOffset] = supportVelocity[vectorOffset];
+      samples[supportVelocityOffset + 1] = supportVelocity[vectorOffset + 1];
+      samples[supportVelocityOffset + 2] = supportVelocity[vectorOffset + 2];
+      samples[supportVelocityOffset + 3] = 1;
+    }
+
+    const paramsData = new ArrayBuffer(48);
+    const paramsFloats = new Float32Array(paramsData);
+    const paramsWords = new Uint32Array(paramsData);
+    paramsFloats.set([
+      validated.grid.origin[0],
+      validated.grid.origin[2],
+      validated.grid.spacing[0],
+      validated.grid.spacing[1],
+    ], 0);
+    paramsWords.set([
+      validated.grid.width,
+      validated.grid.height,
+      validated.terrainEpoch,
+      validated.supportEpoch,
+      validated.remapEpoch,
+      validated.sampleCount,
+      0,
+      0,
+    ], 4);
+    return {
+      validated,
+      samples,
+      textureLayout: {
+        bytesPerRow,
+        rowsPerImage: rowsPerLayer,
+      },
+      paramsData,
+    };
+  };
+
+  const initial = packFrame(terrainFrame, identity);
+  const { validated } = initial;
+
+  const sampleTexture = device.createTexture({
+    label: 'kaminos-finger-fluid-moving-hill-support-samples',
+    size: {
+      width: validated.grid.width,
+      height: validated.grid.height,
+      depthOrArrayLayers: 2,
+    },
+    dimension: '2d',
+    format: 'rgba32float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const sampleTextureView = sampleTexture.createView({
+    label: 'kaminos-finger-fluid-moving-hill-support-samples-view',
+    dimension: '2d-array',
+    baseArrayLayer: 0,
+    arrayLayerCount: 2,
+  });
+  const paramsBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-moving-hill-support-params',
+    size: initial.paramsData.byteLength,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture: sampleTexture },
+    initial.samples,
+    initial.textureLayout,
+    {
+      width: validated.grid.width,
+      height: validated.grid.height,
+      depthOrArrayLayers: 2,
+    },
+  );
+  device.queue.writeBuffer(paramsBuffer, 0, initial.paramsData);
+  let released = false;
+  let currentIdentity = validated;
+  let writeTick = 0;
+  const initialGrid = {
+    width: validated.grid.width,
+    height: validated.grid.height,
+    spacing: [...validated.grid.spacing],
+    origin: [...validated.grid.origin],
+  };
+  const provider = {
+    schema: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_PROVIDER_SCHEMA,
+    route: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
+    owner: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_OWNER,
+    execution: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_EXECUTION,
+    get sourceId() { return currentIdentity.sourceId; },
+    get terrainId() { return currentIdentity.terrainId; },
+    get terrainEpoch() { return currentIdentity.terrainEpoch; },
+    get supportEpoch() { return currentIdentity.supportEpoch; },
+    get remapEpoch() { return currentIdentity.remapEpoch; },
+    stale: false,
+    fallbackRoute: null,
+    complete: true,
+    device,
+    queue: device.queue,
+    sampleTexture,
+    sampleTextureView,
+    paramsBuffer,
+    sampleCount: validated.sampleCount,
+    sampleStrideFloats: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_SAMPLE_STRIDE_FLOATS,
+    visibilityAuthority: 'gpu_descriptor_texture_without_host_readback',
+    hostReadbackVisibility: false,
+    get writeTick() { return writeTick; },
+    update({
+      terrainFrame: nextTerrainFrame,
+      identity: nextIdentity,
+    } = {}) {
+      if (released) {
+        movingHillSupportFailure('provider has been released');
+      }
+      const next = packFrame(nextTerrainFrame, nextIdentity);
+      if (next.validated.sourceId !== currentIdentity.sourceId) {
+        movingHillSupportFailure('source id changed');
+      }
+      if (next.validated.terrainId !== currentIdentity.terrainId) {
+        movingHillSupportFailure('terrain id changed');
+      }
+      if (next.validated.terrainEpoch <= currentIdentity.terrainEpoch) {
+        movingHillSupportFailure('terrain epoch must advance');
+      }
+      if (next.validated.supportEpoch < currentIdentity.supportEpoch) {
+        movingHillSupportFailure('support epoch must not regress');
+      }
+      if (next.validated.remapEpoch < currentIdentity.remapEpoch) {
+        movingHillSupportFailure('remap epoch must not regress');
+      }
+      const nextGrid = next.validated.grid;
+      if (
+        nextGrid.width !== initialGrid.width
+        || nextGrid.height !== initialGrid.height
+        || nextGrid.spacing[0] !== initialGrid.spacing[0]
+        || nextGrid.spacing[1] !== initialGrid.spacing[1]
+        || nextGrid.origin[0] !== initialGrid.origin[0]
+        || nextGrid.origin[1] !== initialGrid.origin[1]
+        || nextGrid.origin[2] !== initialGrid.origin[2]
+      ) {
+        movingHillSupportFailure('grid topology changed; reconstruct the provider explicitly');
+      }
+      device.queue.writeTexture(
+        { texture: sampleTexture },
+        next.samples,
+        next.textureLayout,
+        {
+          width: next.validated.grid.width,
+          height: next.validated.grid.height,
+          depthOrArrayLayers: 2,
+        },
+      );
+      device.queue.writeBuffer(paramsBuffer, 0, next.paramsData);
+      currentIdentity = next.validated;
+      writeTick += 1;
+      return provider;
+    },
+    release() {
+      if (released) return;
+      released = true;
+      sampleTexture.destroy();
+      paramsBuffer.destroy();
+    },
+  };
+  return Object.freeze(provider);
+}
+
+export function validateFingerFluidMovingHillSupportContactProvider(provider, { device } = {}) {
+  if (!provider || typeof provider !== 'object') {
+    movingHillSupportFailure('provider is missing');
+  }
+  if (provider.schema !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_PROVIDER_SCHEMA) {
+    movingHillSupportFailure('provider schema is invalid');
+  }
+  if (provider.route !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
+    movingHillSupportFailure('provider route is invalid');
+  }
+  if (provider.owner !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_OWNER) {
+    movingHillSupportFailure('provider owner is invalid');
+  }
+  if (provider.execution !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_EXECUTION) {
+    movingHillSupportFailure('provider execution is invalid');
+  }
+  if (!device || provider.device !== device || provider.queue !== device.queue) {
+    movingHillSupportFailure('provider GPU device or queue does not match the solver');
+  }
+  if (provider.stale !== false) {
+    movingHillSupportFailure('provider is stale');
+  }
+  if (provider.fallbackRoute !== null) {
+    movingHillSupportFailure('provider declares a fallback route');
+  }
+  if (provider.complete !== true) {
+    movingHillSupportFailure('provider is partial');
+  }
+  if (!provider.sampleTexture || typeof provider.sampleTexture !== 'object') {
+    movingHillSupportFailure('provider sample texture is missing');
+  }
+  if (!provider.sampleTextureView || typeof provider.sampleTextureView !== 'object') {
+    movingHillSupportFailure('provider sample texture view is missing');
+  }
+  if (!provider.paramsBuffer || typeof provider.paramsBuffer !== 'object') {
+    movingHillSupportFailure('provider params buffer is missing');
+  }
+  if (
+    !Number.isSafeInteger(provider.sampleCount)
+    || provider.sampleCount <= 0
+    || provider.sampleStrideFloats !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_SAMPLE_STRIDE_FLOATS
+  ) {
+    movingHillSupportFailure('provider sample layout is invalid');
+  }
+  movingHillSupportString(provider.sourceId, 'provider source id');
+  movingHillSupportString(provider.terrainId, 'provider terrain id');
+  movingHillSupportEpoch(provider.terrainEpoch, 'provider terrain epoch');
+  movingHillSupportEpoch(provider.supportEpoch, 'provider support epoch');
+  movingHillSupportEpoch(provider.remapEpoch, 'provider remap epoch');
+  if (
+    provider.visibilityAuthority !== 'gpu_descriptor_texture_without_host_readback'
+    || provider.hostReadbackVisibility !== false
+  ) {
+    movingHillSupportFailure('provider visibility authority is invalid');
+  }
+  return provider;
 }
 
 function portableGeometryFailure(message) {
@@ -5462,6 +5831,204 @@ fn toyFloorNormal(p: vec3<f32>) -> vec3<f32> {
 `;
 
 const KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN = '__KAMINOS_FINGER_FLUID_MAX_SPEED__';
+const KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN = '__KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS__';
+const KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN = '__KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS__';
+const ANALYTIC_SUPPORT_BINDINGS_WGSL = '';
+const MOVING_HILL_SUPPORT_BINDINGS_WGSL = /* wgsl */`
+struct MovingHillSupportSample {
+  heightNormal: vec4<f32>,
+  supportVelocityValid: vec4<f32>,
+}
+
+struct MovingHillSupportParams {
+  originSpacing: vec4<f32>,
+  dimensionsEpochs: vec4<u32>,
+  remapIdentity: vec4<u32>,
+}
+
+@group(0) @binding(12) var movingHillSupportSamples: texture_2d_array<f32>;
+@group(0) @binding(13) var<uniform> movingHillSupportParams: MovingHillSupportParams;
+`;
+const ANALYTIC_SUPPORT_FUNCTIONS_WGSL = /* wgsl */`
+const analyticObstacleSupportEnabled: bool = true;
+
+fn floorHeight(p: vec3<f32>) -> f32 {
+  return toyFloorHeight(p);
+}
+
+fn floorNormal(p: vec3<f32>) -> vec3<f32> {
+  return toyFloorNormal(p);
+}
+
+fn supportVelocityAt(position: vec3<f32>) -> vec3<f32> {
+  _ = position;
+  return vec3<f32>(0.0);
+}
+
+fn supportSignedDistanceFrame(position: vec3<f32>, radius: f32) -> vec4<f32> {
+  let normal = floorNormal(position);
+  let signedDistance = (position.y - (floorHeight(position) + radius)) * normal.y;
+  return vec4<f32>(normal, signedDistance);
+}
+
+fn resolveSupportPenetration(inputPosition: vec3<f32>, radius: f32) -> vec3<f32> {
+  var p = inputPosition;
+  let normal = floorNormal(p);
+  let penetration = floorHeight(p) + radius - p.y;
+  if (penetration > 0.0) {
+    p = p + normal * (penetration / max(normal.y, 0.15));
+  }
+  return p;
+}
+
+fn resolveSupportVelocity(inputVelocity: vec3<f32>, position: vec3<f32>, radius: f32) -> vec3<f32> {
+  var velocity = inputVelocity;
+  let frame = supportSignedDistanceFrame(position, radius);
+  let normal = frame.xyz;
+  if (frame.w <= 0.01) {
+    let normalSpeed = dot(velocity, normal);
+    if (normalSpeed < 0.0) {
+      velocity = velocity - normal * normalSpeed;
+    }
+  }
+  return velocity;
+}
+
+fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
+  let radius = params.fluid.x * 0.22;
+  let floorFrame = supportSignedDistanceFrame(position, radius);
+  let floorSupport = 1.0 - smoothstep(0.012, 0.09, max(0.0, floorFrame.w));
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let fromSphere = position - sphereCenter;
+  let sphereSupportDistance = abs(length(fromSphere) - (${OBSTACLE_RADIUS} + radius));
+  let sphereSupport = 1.0 - smoothstep(0.012, 0.09, sphereSupportDistance);
+  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+  return vec4<f32>(
+    select(sphereNormal, floorFrame.xyz, floorSupport >= sphereSupport),
+    max(floorSupport, sphereSupport),
+  );
+}
+`;
+const MOVING_HILL_SUPPORT_FUNCTIONS_WGSL = /* wgsl */`
+const analyticObstacleSupportEnabled: bool = false;
+
+fn movingHillSupportTexel(x: u32, z: u32) -> MovingHillSupportSample {
+  let coordinates = vec2<i32>(i32(x), i32(z));
+  return MovingHillSupportSample(
+    textureLoad(movingHillSupportSamples, coordinates, 0, 0),
+    textureLoad(movingHillSupportSamples, coordinates, 1, 0),
+  );
+}
+
+fn movingHillSupportSample(position: vec3<f32>) -> MovingHillSupportSample {
+  let dimensions = vec2<u32>(
+    movingHillSupportParams.dimensionsEpochs.x,
+    movingHillSupportParams.dimensionsEpochs.y,
+  );
+  let origin = movingHillSupportParams.originSpacing.xy;
+  let spacing = movingHillSupportParams.originSpacing.zw;
+  let gridPosition = (position.xz - origin) / spacing;
+  if (
+    any(gridPosition < vec2<f32>(0.0))
+    || gridPosition.x > f32(dimensions.x - 1u)
+    || gridPosition.y > f32(dimensions.y - 1u)
+  ) {
+    return MovingHillSupportSample(
+      vec4<f32>(-1000000.0, 0.0, 1.0, 0.0),
+      vec4<f32>(0.0),
+    );
+  }
+  let lower = vec2<u32>(floor(gridPosition));
+  let upper = min(lower + vec2<u32>(1u), dimensions - vec2<u32>(1u));
+  let blend = fract(gridPosition);
+  let sample00 = movingHillSupportTexel(lower.x, lower.y);
+  let sample10 = movingHillSupportTexel(upper.x, lower.y);
+  let sample01 = movingHillSupportTexel(lower.x, upper.y);
+  let sample11 = movingHillSupportTexel(upper.x, upper.y);
+  let heightNormal0 = mix(sample00.heightNormal, sample10.heightNormal, blend.x);
+  let heightNormal1 = mix(sample01.heightNormal, sample11.heightNormal, blend.x);
+  let velocityValid0 = mix(sample00.supportVelocityValid, sample10.supportVelocityValid, blend.x);
+  let velocityValid1 = mix(sample01.supportVelocityValid, sample11.supportVelocityValid, blend.x);
+  var heightNormal = mix(heightNormal0, heightNormal1, blend.y);
+  let velocityValid = mix(velocityValid0, velocityValid1, blend.y);
+  heightNormal.yzw = normalize(heightNormal.yzw);
+  return MovingHillSupportSample(heightNormal, velocityValid);
+}
+
+fn floorHeight(p: vec3<f32>) -> f32 {
+  return movingHillSupportSample(p).heightNormal.x;
+}
+
+fn floorNormal(p: vec3<f32>) -> vec3<f32> {
+  return movingHillSupportSample(p).heightNormal.yzw;
+}
+
+fn supportVelocityAt(position: vec3<f32>) -> vec3<f32> {
+  return movingHillSupportSample(position).supportVelocityValid.xyz;
+}
+
+fn supportSignedDistanceFrame(position: vec3<f32>, radius: f32) -> vec4<f32> {
+  let sample = movingHillSupportSample(position);
+  let normal = sample.heightNormal.yzw;
+  let valid = sample.supportVelocityValid.w;
+  let signedDistance = select(
+    1000000.0,
+    (position.y - (sample.heightNormal.x + radius)) * normal.y,
+    valid > 0.999,
+  );
+  return vec4<f32>(normal, signedDistance);
+}
+
+fn resolveSupportPenetration(inputPosition: vec3<f32>, radius: f32) -> vec3<f32> {
+  let supportFrame = supportSignedDistanceFrame(inputPosition, radius);
+  return select(
+    inputPosition,
+    inputPosition - supportFrame.xyz * supportFrame.w,
+    supportFrame.w < 0.0,
+  );
+}
+
+fn resolveSupportVelocity(inputVelocity: vec3<f32>, position: vec3<f32>, radius: f32) -> vec3<f32> {
+  let supportFrame = supportSignedDistanceFrame(position, radius);
+  let supportVelocity = supportVelocityAt(position);
+  var relativeVelocity = inputVelocity - supportVelocity;
+  if (supportFrame.w <= 0.01) {
+    let normalSpeed = dot(relativeVelocity, supportFrame.xyz);
+    if (normalSpeed < 0.0) {
+      relativeVelocity = relativeVelocity - supportFrame.xyz * normalSpeed;
+    }
+  }
+  return supportVelocity + relativeVelocity;
+}
+
+fn movingHillSupportContactFrame(position: vec3<f32>) -> vec4<f32> {
+  let radius = params.fluid.x * 0.22;
+  let supportFrame = supportSignedDistanceFrame(position, radius);
+  let supportContact = 1.0 - smoothstep(0.012, 0.09, max(0.0, supportFrame.w));
+  return vec4<f32>(supportFrame.xyz, supportContact);
+}
+
+fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
+  return movingHillSupportContactFrame(position);
+}
+`;
+
+function supportShaderSourceForRoute(route) {
+  if (route === KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) {
+    return {
+      bindings: ANALYTIC_SUPPORT_BINDINGS_WGSL,
+      functions: ANALYTIC_SUPPORT_FUNCTIONS_WGSL,
+    };
+  }
+  if (route === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
+    return {
+      bindings: MOVING_HILL_SUPPORT_BINDINGS_WGSL,
+      functions: MOVING_HILL_SUPPORT_FUNCTIONS_WGSL,
+    };
+  }
+  movingHillSupportFailure(`route is unsupported: ${route}`);
+}
+
 const COMPUTE_SHADER = /* wgsl */`
 struct Particle {
   position: vec4<f32>,
@@ -5582,30 +6149,10 @@ const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
 @group(0) @binding(9) var<storage, read_write> liquidFireContactRecords: array<LiquidFireContactRecord>;
 @group(0) @binding(10) var<storage, read_write> liquidFireContactHeader: LiquidFireContactHeader;
 @group(0) @binding(11) var<uniform> liveInletPacket: LiveInletPacket;
+${KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN}
 
 ${PLAYGROUND_WGSL}
-
-fn floorHeight(p: vec3<f32>) -> f32 {
-  return toyFloorHeight(p);
-}
-
-fn floorNormal(p: vec3<f32>) -> vec3<f32> {
-  return toyFloorNormal(p);
-}
-
-fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
-  let radius = params.fluid.x * 0.22;
-  let floorSupportDistance = max(0.0, position.y - (floorHeight(position) + radius));
-  let floorSupport = 1.0 - smoothstep(0.012, 0.09, floorSupportDistance);
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let fromSphere = position - sphereCenter;
-  let sphereSupportDistance = abs(length(fromSphere) - (${OBSTACLE_RADIUS} + radius));
-  let sphereSupport = 1.0 - smoothstep(0.012, 0.09, sphereSupportDistance);
-  let supportContact = max(floorSupport, sphereSupport);
-  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
-  let supportNormal = select(sphereNormal, floorNormal(position), floorSupport >= sphereSupport);
-  return vec4<f32>(supportNormal, supportContact);
-}
+${KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN}
 
 fn mark_particle_ownership_dormant(index: u32) {
   let sourceGeneration = materialTracers[index].ownershipTransitionState.y;
@@ -6117,19 +6664,16 @@ fn sourceParticleResetPosition(index: u32) -> vec3<f32> {
 fn collideDomain(inputPosition: vec3<f32>) -> vec3<f32> {
   let radius = params.fluid.x * 0.22;
   var p = clamp(inputPosition, params.boundsMin.xyz + vec3<f32>(radius), params.boundsMax.xyz - vec3<f32>(radius));
-  let floorY = floorHeight(p) + radius;
-  let penetration = floorY - p.y;
-  if (penetration > 0.0) {
-    let normal = floorNormal(p);
-    p = p + normal * (penetration / max(normal.y, 0.15));
-  }
+  p = resolveSupportPenetration(p, radius);
 
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let sphereRadius = ${OBSTACLE_RADIUS} + radius;
-  let fromSphere = p - sphereCenter;
-  let sphereDistance = length(fromSphere);
-  if (sphereDistance < sphereRadius) {
-    p = sphereCenter + normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003)) * sphereRadius;
+  if (analyticObstacleSupportEnabled) {
+    let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+    let sphereRadius = ${OBSTACLE_RADIUS} + radius;
+    let fromSphere = p - sphereCenter;
+    let sphereDistance = length(fromSphere);
+    if (sphereDistance < sphereRadius) {
+      p = sphereCenter + normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003)) * sphereRadius;
+    }
   }
   return p;
 }
@@ -6215,19 +6759,24 @@ fn boundary_missing_fraction_derivative(distance: f32) -> f32 {
 
 fn analytic_boundary_density_support(position: vec3<f32>) -> vec4<f32> {
   let particleRadius = params.fluid.x * 0.22;
-  let terrainNormal = floorNormal(position);
-  let terrainSignedDistance = (position.y - (floorHeight(position) + particleRadius)) * terrainNormal.y;
+  let terrainFrame = supportSignedDistanceFrame(position, particleRadius);
+  let terrainNormal = terrainFrame.xyz;
+  let terrainSignedDistance = terrainFrame.w;
   let terrainDistance = max(0.0, terrainSignedDistance);
   let terrainFraction = boundary_missing_fraction(terrainDistance);
   let terrainFractionGradient = terrainNormal * boundary_missing_fraction_derivative(terrainDistance);
 
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let fromSphere = position - sphereCenter;
-  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
-  let sphereSignedDistance = length(fromSphere) - (${OBSTACLE_RADIUS} + particleRadius);
-  let sphereDistance = max(0.0, sphereSignedDistance);
-  let sphereFraction = boundary_missing_fraction(sphereDistance);
-  let sphereFractionGradient = sphereNormal * boundary_missing_fraction_derivative(sphereDistance);
+  var sphereFraction = 0.0;
+  var sphereFractionGradient = vec3<f32>(0.0);
+  if (analyticObstacleSupportEnabled) {
+    let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+    let fromSphere = position - sphereCenter;
+    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+    let sphereSignedDistance = length(fromSphere) - (${OBSTACLE_RADIUS} + particleRadius);
+    let sphereDistance = max(0.0, sphereSignedDistance);
+    sphereFraction = boundary_missing_fraction(sphereDistance);
+    sphereFractionGradient = sphereNormal * boundary_missing_fraction_derivative(sphereDistance);
+  }
 
   let missingFraction = terrainFraction + sphereFraction - terrainFraction * sphereFraction;
   let fractionGradient = terrainFractionGradient * (1.0 - sphereFraction)
@@ -6285,12 +6834,16 @@ fn write_sheet_release_diagnostics(
 
 fn supportNormalAt(position: vec3<f32>) -> vec3<f32> {
   let radius = params.fluid.x * 0.22;
-  let floorDistance = abs(position.y - (floorHeight(position) + radius));
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let fromSphere = position - sphereCenter;
-  let sphereDistance = abs(length(fromSphere) - (${OBSTACLE_RADIUS} + radius));
-  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
-  return select(sphereNormal, floorNormal(position), floorDistance <= sphereDistance);
+  let terrainFrame = supportSignedDistanceFrame(position, radius);
+  var supportNormal = terrainFrame.xyz;
+  if (analyticObstacleSupportEnabled) {
+    let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+    let fromSphere = position - sphereCenter;
+    let sphereDistance = abs(length(fromSphere) - (${OBSTACLE_RADIUS} + radius));
+    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+    supportNormal = select(sphereNormal, terrainFrame.xyz, abs(terrainFrame.w) <= sphereDistance);
+  }
+  return supportNormal;
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -6813,27 +7366,30 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   velocity = velocity * params.forces.y;
   restStates[index].z = supportRestWeight;
   let radius = params.fluid.x * 0.22;
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  if (position.y <= floorHeight(position) + radius + 0.01) {
-    let normal = floorNormal(position);
-    let normalSpeed = dot(velocity, normal);
-    if (normalSpeed < 0.0) { velocity = velocity - normal * normalSpeed; }
-  }
-  let fromSphere = position - sphereCenter;
-  let sphereDistance = length(fromSphere);
-  if (sphereDistance <= ${OBSTACLE_RADIUS} + radius + 0.01) {
-    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
-    let sphereNormalSpeed = dot(velocity, sphereNormal);
-    if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+  let terrainVelocity = supportVelocityAt(position);
+  velocity = resolveSupportVelocity(velocity, position, radius);
+  if (analyticObstacleSupportEnabled) {
+    let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+    let fromSphere = position - sphereCenter;
+    let sphereDistance = length(fromSphere);
+    if (sphereDistance <= ${OBSTACLE_RADIUS} + radius + 0.01) {
+      let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+      let sphereNormalSpeed = dot(velocity, sphereNormal);
+      if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+    }
   }
   let supportFrame = supportContactFrame(position);
   let supportContact = supportFrame.w;
   let supportNormal = supportFrame.xyz;
   transition_particle_ownership_on_support_contact(index, supportContact);
-  let supportNormalSpeed = dot(velocity, supportNormal);
-  let supportTangentialVelocity = velocity - supportNormal * supportNormalSpeed;
+  let relativeSupportVelocity = velocity - terrainVelocity;
+  let supportNormalSpeed = dot(relativeSupportVelocity, supportNormal);
+  let supportTangentialVelocity = relativeSupportVelocity - supportNormal * supportNormalSpeed;
   let supportTangentialRetention = exp(-params.particleShift.y * supportContact * params.dt);
-  velocity = supportNormal * supportNormalSpeed + supportTangentialVelocity * supportTangentialRetention;
+  let frictionVelocity = terrainVelocity
+    + supportNormal * supportNormalSpeed
+    + supportTangentialVelocity * supportTangentialRetention;
+  velocity = mix(velocity, frictionVelocity, supportContact);
   if (params.particleShift.z > 0.5) {
     velocity = apply_active_inlet_boundary(index, position, particle.velocity.w, velocity).xyz;
   }
@@ -7265,17 +7821,23 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (cohesionLength > 0.42) { cohesionAcceleration = cohesionAcceleration * (0.42 / cohesionLength); }
   var velocity = particle.delta.xyz + cohesionAcceleration * params.dt;
   let radius = params.fluid.x * 0.22;
-  if (position.y <= floorHeight(position) + radius + 0.01) {
-    let normal = floorNormal(position);
-    let normalSpeed = dot(velocity, normal);
-    if (normalSpeed < 0.0) { velocity = velocity - normal * normalSpeed; }
+  let terrainFrame = supportSignedDistanceFrame(position, radius);
+  let terrainVelocity = supportVelocityAt(position);
+  if (terrainFrame.w <= 0.01) {
+    let relativeVelocity = velocity - terrainVelocity;
+    let normalSpeed = dot(relativeVelocity, terrainFrame.xyz);
+    if (normalSpeed < 0.0) {
+      velocity = terrainVelocity + relativeVelocity - terrainFrame.xyz * normalSpeed;
+    }
   }
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let fromSphere = position - sphereCenter;
-  if (length(fromSphere) <= ${OBSTACLE_RADIUS} + radius + 0.01) {
-    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
-    let sphereNormalSpeed = dot(velocity, sphereNormal);
-    if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+  if (analyticObstacleSupportEnabled) {
+    let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+    let fromSphere = position - sphereCenter;
+    if (length(fromSphere) <= ${OBSTACLE_RADIUS} + radius + 0.01) {
+      let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+      let sphereNormalSpeed = dot(velocity, sphereNormal);
+      if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+    }
   }
   if (params.particleShift.z > 0.5) {
     velocity = apply_active_inlet_boundary(index, position, particle.velocity.w, velocity).xyz;
@@ -7566,14 +8128,10 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
 
-  let radius = params.fluid.x * 0.22;
-  let floorContact = select(0.0, 1.0, position.y <= floorHeight(position) + radius + 0.035);
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let sphereContact = select(0.0, 1.0, abs(length(position - sphereCenter) - (${OBSTACLE_RADIUS} + radius)) < 0.045);
-  let contact = max(floorContact, sphereContact);
-  let fallbackNormal = select(vec3<f32>(0.0, 1.0, 0.0), floorNormal(position), floorContact > 0.5);
-  let sphereSupportNormal = normalize(position - sphereCenter + vec3<f32>(0.00001, 0.00002, 0.00003));
-  let contactSupportNormal = select(sphereSupportNormal, floorNormal(position), floorContact > 0.5);
+  let supportFrame = supportContactFrame(position);
+  let contact = supportFrame.w;
+  let contactSupportNormal = supportFrame.xyz;
+  let fallbackNormal = select(vec3<f32>(0.0, 1.0, 0.0), contactSupportNormal, contact > 0.5);
   var interfaceNormal = select(fallbackNormal, normalize(directionalSupport), length(directionalSupport) > 0.0001);
   if (contact > 0.5 && dot(interfaceNormal, contactSupportNormal) < 0.0) {
     interfaceNormal = -interfaceNormal;
@@ -11537,9 +12095,22 @@ export async function createWebGPUFingerFluidSolver({
   waterfallOraclePreset = 'baseline',
   transparentBackground = false,
   liveInletPacket = null,
+  supportContactRoute = KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
+  movingHillSupportContactProviderFactory = null,
+  composedRevision = null,
 } = {}) {
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
   if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
+  const supportShaderSource = supportShaderSourceForRoute(supportContactRoute);
+  const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
+    ? composedRevision
+    : null;
+  if (
+    supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE
+    && !safeComposedRevision
+  ) {
+    movingHillSupportFailure('composed source revision is missing or invalid');
+  }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return createUnavailableSolver('WebGPU adapter unavailable');
   const requiredStorageBindings = 10;
@@ -11549,14 +12120,39 @@ export async function createWebGPUFingerFluidSolver({
   const device = await adapter.requestDevice({
     requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
   });
+  let movingHillSupportProvider = null;
+  if (supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
+    if (typeof movingHillSupportContactProviderFactory !== 'function') {
+      device.destroy();
+      movingHillSupportFailure('provider factory is missing');
+    }
+    try {
+      movingHillSupportProvider = await movingHillSupportContactProviderFactory({
+        device,
+        queue: device.queue,
+      });
+      validateFingerFluidMovingHillSupportContactProvider(
+        movingHillSupportProvider,
+        { device },
+      );
+    } catch (error) {
+      movingHillSupportProvider?.release?.();
+      device.destroy();
+      throw error;
+    }
+  }
+  function failFingerFluidInitialization(reason, details = {}) {
+    movingHillSupportProvider?.release?.();
+    device.destroy();
+    return createUnavailableSolver(reason, details);
+  }
   const context = canvas.getContext('webgpu');
-  if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
+  if (!context) return failFingerFluidInitialization('GPUCanvasContext unavailable');
   let hdrEnvironment;
   try {
     hdrEnvironment = await loadFingerFluidHdrEnvironment();
   } catch (error) {
-    device.destroy();
-    return createUnavailableSolver(`HDR environment initialization failed: ${error.message || String(error)}`);
+    return failFingerFluidInitialization(`HDR environment initialization failed: ${error.message || String(error)}`);
   }
 
   const safeBaseParticleCount = resolveFingerFluidParticleCount(particleCount);
@@ -11565,7 +12161,7 @@ export async function createWebGPUFingerFluidSolver({
   const particleAllocationCapacity = measureFingerFluidParticleAllocationCapacity(device.limits);
   const particleAllocationPreflight = evaluateFingerFluidParticleAllocationRequest(safeParticleCount, particleAllocationCapacity);
   if (!particleAllocationPreflight.ok) {
-    return createUnavailableSolver(particleAllocationPreflight.reason, {
+    return failFingerFluidInitialization(particleAllocationPreflight.reason, {
       requestedParticleCount: safeBaseParticleCount,
       requestedSimulationCapacity: safeParticleCount,
       effectiveParticleCount: null,
@@ -11809,11 +12405,28 @@ export async function createWebGPUFingerFluidSolver({
   device.queue.writeBuffer(dynamicReflectionMeshNormalBuffer, 0, dynamicReflectionMeshData.normals);
   device.queue.writeBuffer(dynamicReflectionMeshIndexBuffer, 0, dynamicReflectionMeshData.indices);
 
-  const computeShader = COMPUTE_SHADER.replaceAll(
-    KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
-    String(safeMaxFluidSpeed),
-  );
+  const computeShader = COMPUTE_SHADER
+    .replaceAll(
+      KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
+      String(safeMaxFluidSpeed),
+    )
+    .replace(KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN, supportShaderSource.bindings)
+    .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
   const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
+  const movingHillComputeLayoutEntries = movingHillSupportProvider
+    ? [
+      {
+        binding: 12,
+        visibility: GPUShaderStage.COMPUTE,
+        texture: {
+          sampleType: 'unfilterable-float',
+          viewDimension: '2d-array',
+          multisampled: false,
+        },
+      },
+      { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+    ]
+    : [];
   const computeLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-compute-layout',
     entries: [
@@ -11829,6 +12442,7 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      ...movingHillComputeLayoutEntries,
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [computeLayout] });
@@ -11868,7 +12482,7 @@ export async function createWebGPUFingerFluidSolver({
       finalizeLiquidFireContacts: await pipelineFor('finalize_liquid_fire_contact_descriptor'),
     };
   } catch (error) {
-    return createUnavailableSolver(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
+    return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
   const computeBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-compute-bind-group',
@@ -11886,6 +12500,10 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
       { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
       { binding: 11, resource: { buffer: liveInletBuffer } },
+      ...(movingHillSupportProvider ? [
+        { binding: 12, resource: movingHillSupportProvider.sampleTextureView },
+        { binding: 13, resource: { buffer: movingHillSupportProvider.paramsBuffer } },
+      ] : []),
     ],
   });
   const energyDiagnosticsModule = device.createShaderModule({
@@ -11915,7 +12533,7 @@ export async function createWebGPUFingerFluidSolver({
       cohesion: await energyPipelineFor('measure_cohesion_energy'),
     };
   } catch (error) {
-    return createUnavailableSolver(`WebGPU energy diagnostic pipeline validation failed: ${error.message || String(error)}`);
+    return failFingerFluidInitialization(`WebGPU energy diagnostic pipeline validation failed: ${error.message || String(error)}`);
   }
   const energyDiagnosticsBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-energy-diagnostics-bind-group',
@@ -12212,7 +12830,7 @@ export async function createWebGPUFingerFluidSolver({
       primitive: { topology: 'triangle-list', cullMode: 'none' },
     });
   } catch (error) {
-    return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
+    return failFingerFluidInitialization(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
   }
   const renderBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-render-bind-group',
@@ -12271,6 +12889,7 @@ export async function createWebGPUFingerFluidSolver({
 
   let depthTexture = null;
   let configuredExtent = '';
+  let runtimeApi = null;
   let frameIndex = 0;
   let stepCount = 0;
   let liveInletPlanStep = 0;
@@ -13727,9 +14346,42 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function getParticleOwnershipDescriptor() {
+    const supportContact = movingHillSupportProvider ? {
+      route: movingHillSupportProvider.route,
+      owner: movingHillSupportProvider.owner,
+      sourceId: movingHillSupportProvider.sourceId,
+      provider: movingHillSupportProvider,
+      device,
+      terrainId: movingHillSupportProvider.terrainId,
+      terrainEpoch: movingHillSupportProvider.terrainEpoch,
+      supportEpoch: movingHillSupportProvider.supportEpoch,
+      remapEpoch: movingHillSupportProvider.remapEpoch,
+      stale: movingHillSupportProvider.stale,
+      fallbackRoute: movingHillSupportProvider.fallbackRoute,
+      execution: movingHillSupportProvider.execution,
+    } : {
+      route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
+      owner: 'kaminos_diagnostic',
+      sourceId: 'built-in-toy-support',
+      provider: null,
+      device,
+      terrainId: null,
+      terrainEpoch: null,
+      supportEpoch: null,
+      remapEpoch: null,
+      stale: false,
+      fallbackRoute: null,
+      execution: 'gpu_same_device_analytic_diagnostic_signed_distance_v0',
+    };
     return {
       contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
       packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
+      source: {
+        repository: 'kaminos',
+        composedRevision: safeComposedRevision,
+        runtimeRoute: KAMINOS_FINGER_FLUID_RUNTIME_ROUTE,
+        runtime: runtimeApi,
+      },
       device,
       queue: device.queue,
       buffer: materialTracerBuffer,
@@ -13745,6 +14397,10 @@ export async function createWebGPUFingerFluidSolver({
       writeTick: Math.max(0, frameIndex - 1),
       ownershipAuthority: 'solver_spatial_first_support_contact_v0',
       consumerVisibilityRule: 'pre_impact_hidden_post_impact_visible_v0',
+      visibilityAuthority: movingHillSupportProvider?.visibilityAuthority
+        ?? 'gpu_descriptor_without_host_readback',
+      hostReadbackVisibility: false,
+      supportContact,
     };
   }
 
@@ -13757,6 +14413,27 @@ export async function createWebGPUFingerFluidSolver({
       shaderRoute: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE,
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
+      supportContactRoute,
+      supportContact: movingHillSupportProvider ? {
+        route: movingHillSupportProvider.route,
+        owner: movingHillSupportProvider.owner,
+        sourceId: movingHillSupportProvider.sourceId,
+        terrainId: movingHillSupportProvider.terrainId,
+        terrainEpoch: movingHillSupportProvider.terrainEpoch,
+        supportEpoch: movingHillSupportProvider.supportEpoch,
+        remapEpoch: movingHillSupportProvider.remapEpoch,
+        stale: movingHillSupportProvider.stale,
+        fallbackRoute: movingHillSupportProvider.fallbackRoute,
+        execution: movingHillSupportProvider.execution,
+        deviceMatchesSolver: movingHillSupportProvider.device === device,
+        sampleTextureIdentity: movingHillSupportProvider.sampleTexture.label || null,
+        paramsBufferIdentity: movingHillSupportProvider.paramsBuffer.label || null,
+        hostReadbackVisibility: movingHillSupportProvider.hostReadbackVisibility,
+      } : {
+        route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
+        owner: 'kaminos_diagnostic',
+        fallbackRoute: null,
+      },
       boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
       supportFrictionContract: KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT,
       energyLedgerContract: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
@@ -14422,6 +15099,7 @@ export async function createWebGPUFingerFluidSolver({
     restStateBuffer.destroy();
     neighborTopologyBuffer.destroy();
     materialTracerBuffer.destroy();
+    movingHillSupportProvider?.release?.();
     analyticCarrierParticleBuffer.destroy();
     analyticCarrierNeighborTopologyBuffer.destroy();
     analyticCarrierMaterialTracerBuffer.destroy();
@@ -14453,7 +15131,7 @@ export async function createWebGPUFingerFluidSolver({
     console.error('Kaminos Finger Fluid WebGPU device lost:', info.message || info.reason);
   });
 
-  return {
+  runtimeApi = {
     available: true,
     solver_backend: 'webgpu_compute',
     render_backend: 'webgpu_direct_render',
@@ -14475,4 +15153,5 @@ export async function createWebGPUFingerFluidSolver({
     getDebugState,
     destroy,
   };
+  return runtimeApi;
 }
