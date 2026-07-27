@@ -118,7 +118,7 @@ JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 SF3D_LIVE_SMOKE_ROUTE_ID = "sf3d.image-to-mesh.webgpu-local.v0"
-SF3D_LIVE_SMOKE_SOURCE_REVISION = "35eb1b003072dd5adbda9e001d5ede4ca3cfe09a"
+SF3D_LIVE_SMOKE_SOURCE_REVISION = "2f79b9b84a19809107f5eb29b5fab806e00e6c6a"
 
 
 def runtime_config():

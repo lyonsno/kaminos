@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
 
-const EXPECTED_REVISION = '35eb1b003072dd5adbda9e001d5ede4ca3cfe09a';
+const EXPECTED_REVISION = '2f79b9b84a19809107f5eb29b5fab806e00e6c6a';
 const KAMINOS_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
 function argument(name, fallback = null) {

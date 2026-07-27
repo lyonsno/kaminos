@@ -1,5 +1,5 @@
 export const SF3D_LIVE_SMOKE_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
-export const SF3D_LIVE_SMOKE_SOURCE_REVISION = '35eb1b003072dd5adbda9e001d5ede4ca3cfe09a';
+export const SF3D_LIVE_SMOKE_SOURCE_REVISION = '2f79b9b84a19809107f5eb29b5fab806e00e6c6a';
 export const SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 export const SF3D_LIVE_SMOKE_GPU_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
 
