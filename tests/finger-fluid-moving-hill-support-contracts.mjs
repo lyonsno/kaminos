@@ -68,6 +68,11 @@ assert.equal(
   'function',
   'post-device initialization failures must share one provider/device cleanup primitive',
 );
+assert.equal(
+  typeof fingerFluidCore.failFingerFluidWebGPURuntimeOperation,
+  'function',
+  'post-construction runtime failures must share one solver/device cleanup primitive',
+);
 
 const buffers = [];
 const writes = [];
@@ -387,6 +392,29 @@ assert.equal(cleanupDestroyCount, 1);
 assert.equal(unavailable.available, false);
 assert.match(unavailable.reason, /moving-Hill bind group rejected/i);
 assert.deepEqual(unavailable.phase, 'compute-bind-group');
+let runtimeCleanupCount = 0;
+let runtimeDeviceDestroyCount = 0;
+assert.throws(
+  () => fingerFluidCore.failFingerFluidWebGPURuntimeOperation({
+    destroyRuntime() {
+      runtimeCleanupCount += 1;
+    },
+    device: {
+      destroy() {
+        runtimeDeviceDestroyCount += 1;
+      },
+    },
+    phase: 'configure-render-extent',
+    error: new Error('screen-space bind group rejected'),
+  }),
+  error => {
+    assert.equal(error.failurePhase, 'configure-render-extent');
+    assert.match(error.message, /screen-space bind group rejected/i);
+    return true;
+  },
+);
+assert.equal(runtimeCleanupCount, 1);
+assert.equal(runtimeDeviceDestroyCount, 1);
 assert.throws(
   () => fingerFluidCore.validateFingerFluidMovingHillSupportContactProvider(null, { device }),
   /moving Hill support provider is missing/i,
@@ -473,6 +501,20 @@ assert.match(
   source,
   /let computeBindGroup;\s*try \{\s*computeBindGroup = device\.createBindGroup\([\s\S]*\);\s*\} catch \(error\) \{\s*return failFingerFluidInitialization\(`WebGPU compute bind group validation failed:/,
   'a provider resource rejected during bind-group creation must release the provider and destroy the device',
+);
+assert.match(
+  source,
+  /function failFingerFluidInitialization\([\s\S]*?\n  \}\s*try \{\s*const context = canvas\.getContext\('webgpu'\);[\s\S]*?return runtimeApi;\s*\} catch \(error\) \{\s*return failFingerFluidInitialization\(\s*`WebGPU post-provider initialization failed:/,
+  'every constructor allocation after provider ownership transfers must share one cleanup boundary',
+);
+const ensureExtentSource = source.slice(
+  source.indexOf('function ensureExtent('),
+  source.indexOf('function writeDynamicReflectionSceneParams()'),
+);
+assert.match(
+  ensureExtentSource,
+  /try \{[\s\S]*context\.configure\([\s\S]*device\.createBindGroup\([\s\S]*\} catch \(error\) \{\s*return failFingerFluidWebGPURuntimeOperation\(\{[\s\S]*destroyRuntime:\s*destroy,[\s\S]*device,[\s\S]*phase:\s*'configure-render-extent',[\s\S]*error,[\s\S]*\}\);/,
+  'first-resize allocation failures must tear down the runtime and device before surfacing the error',
 );
 const ownershipDescriptorSource = source.slice(
   source.indexOf('function getParticleOwnershipDescriptor()'),

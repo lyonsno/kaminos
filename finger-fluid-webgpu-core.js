@@ -12117,6 +12117,33 @@ export function failFingerFluidWebGPUInitialization({
   return createUnavailableSolver(reason, details);
 }
 
+export function failFingerFluidWebGPURuntimeOperation({
+  destroyRuntime,
+  device,
+  phase = 'runtime-operation',
+  error,
+} = {}) {
+  let cleanupError = null;
+  try {
+    destroyRuntime?.();
+  } catch (caught) {
+    cleanupError = caught;
+  } finally {
+    try {
+      device?.destroy?.();
+    } catch (caught) {
+      cleanupError ??= caught;
+    }
+  }
+  const detail = error?.message || String(error ?? 'unknown failure');
+  const failure = new Error(
+    `Finger Fluid WebGPU ${phase} failed: ${detail}`,
+    { cause: cleanupError ? new AggregateError([error, cleanupError]) : error },
+  );
+  failure.failurePhase = phase;
+  throw failure;
+}
+
 export async function createWebGPUFingerFluidSolver({
   canvas,
   particleCount = DEFAULT_PARTICLE_COUNT,
@@ -12198,6 +12225,7 @@ export async function createWebGPUFingerFluidSolver({
       details,
     });
   }
+  try {
   const context = canvas.getContext('webgpu');
   if (!context) return failFingerFluidInitialization('GPUCanvasContext unavailable');
   let hdrEnvironment;
@@ -13051,6 +13079,7 @@ export async function createWebGPUFingerFluidSolver({
   let destroyed = false;
 
   function ensureExtent(width, height, pixelRatio = globalThis.devicePixelRatio || 1) {
+    try {
     const targetWidth = Math.max(1, Math.floor(width * pixelRatio));
     const targetHeight = Math.max(1, Math.floor(height * pixelRatio));
     const key = `${targetWidth}x${targetHeight}`;
@@ -13182,6 +13211,14 @@ export async function createWebGPUFingerFluidSolver({
     });
     configuredExtent = key;
     return { width: targetWidth, height: targetHeight };
+    } catch (error) {
+      return failFingerFluidWebGPURuntimeOperation({
+        destroyRuntime: destroy,
+        device,
+        phase: 'configure-render-extent',
+        error,
+      });
+    }
   }
 
   function writeDynamicReflectionSceneParams() {
@@ -15116,6 +15153,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function destroy() {
+    if (destroyed) return;
     destroyed = true;
     particleBuffer.destroy();
     cellHeadsBuffer.destroy();
@@ -15187,4 +15225,10 @@ export async function createWebGPUFingerFluidSolver({
     destroy,
   };
   return runtimeApi;
+  } catch (error) {
+    return failFingerFluidInitialization(
+      `WebGPU post-provider initialization failed: ${error.message || String(error)}`,
+      { failurePhase: 'post-provider-initialization' },
+    );
+  }
 }
