@@ -6,9 +6,16 @@ export const KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_FAILURE_SCHEMA =
   'kaminos.finger-fluid.portable-macro-optical-renderer-failure.v0';
 export const KAMINOS_PORTABLE_MACRO_OPTICAL_SHADER_ROUTE =
   'wgsl-portable-macro-fresnel-refraction-absorption-v0';
+export const KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE =
+  'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0';
+export const KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE =
+  'kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0';
 
 const PORTABLE_UPLOAD_SCHEMA =
   'kaminos.finger-fluid.portable-macro-upload-snapshot.v1';
+const MACRO_WET_BOUNDARY_SCHEMA = 'kaminos.fluid.macro-wet-boundary.v1';
+const MACRO_WET_BOUNDARY_ROUTE = 'kaminos/fluid/macro-wet-boundary';
+const CLIPPED_AMBIGUITY_ROUTE = 'asymptotic-decider-stable-cell-v1';
 const VERTEX_STRIDE_FLOATS = 12;
 const VERTEX_STRIDE_BYTES = VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const UNIFORM_FLOATS = 44;
@@ -28,6 +35,8 @@ function reportedFailure(message, diagnostics, details = {}) {
     schema: KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_FAILURE_SCHEMA,
     requestedRoute: diagnostics.requestedRoute ?? null,
     effectiveRoute: null,
+    requestedTopologyRoute: diagnostics.requestedTopologyRoute ?? null,
+    effectiveTopologyRoute: null,
     failurePhase: diagnostics.phase,
     lastTrustworthyEvidence: diagnostics.lastTrustworthyEvidence,
     primaryOutputWritten: false,
@@ -316,8 +325,7 @@ function requireHostFrame(hostFrame, diagnostics) {
   diagnostics.lastTrustworthyEvidence = 'host-attachments-exact';
 }
 
-function buildMesh(snapshot, diagnostics) {
-  diagnostics.phase = 'build-surface-mesh';
+function buildSurfaceVertexAttributes(snapshot, wetState = null) {
   const vertices = new Float32Array(snapshot.sampleCount * VERTEX_STRIDE_FLOATS);
   let wetSampleCount = 0;
   for (let index = 0; index < snapshot.sampleCount; index += 1) {
@@ -326,7 +334,7 @@ function buildMesh(snapshot, diagnostics) {
     const mappedDepth = snapshot.mappedDepth[index];
     const physicalDepthMeters = mappedDepth / snapshot.jacobian[index];
     const worldDepth = physicalDepthMeters / snapshot.worldMetersPerUnit;
-    const wet = mappedDepth > 0 ? 1 : 0;
+    const wet = wetState == null ? Number(mappedDepth > 0) : wetState[index];
     wetSampleCount += wet;
     for (let axis = 0; axis < 3; axis += 1) {
       vertices[vertexOffset + axis] = (
@@ -383,6 +391,12 @@ function buildMesh(snapshot, diagnostics) {
       vertices.set(interfaceNormal, vertexOffset + 3);
     }
   }
+  return { vertices, wetSampleCount };
+}
+
+function buildRegularGridMesh(snapshot, diagnostics) {
+  diagnostics.phase = 'build-surface-mesh';
+  const { vertices, wetSampleCount } = buildSurfaceVertexAttributes(snapshot);
   const indices = new Uint32Array((snapshot.width - 1) * (snapshot.height - 1) * 6);
   let indexOffset = 0;
   for (let row = 0; row < snapshot.height - 1; row += 1) {
@@ -447,26 +461,458 @@ function buildMesh(snapshot, diagnostics) {
   return { vertices, indices, wetSampleCount, drawableWetTriangleCount };
 }
 
+function requireWetBoundary(snapshot, diagnostics) {
+  diagnostics.phase = 'validate-wet-boundary';
+  const boundary = snapshot.wetBoundary;
+  if (!boundary || typeof boundary !== 'object') {
+    fail('wet boundary descriptor is missing', diagnostics);
+  }
+  if (boundary.schema !== MACRO_WET_BOUNDARY_SCHEMA) {
+    fail(`wet boundary schema is unsupported: ${boundary.schema ?? 'missing'}`, diagnostics);
+  }
+  if (
+    boundary.route?.requested !== MACRO_WET_BOUNDARY_ROUTE
+    || boundary.route?.effective !== boundary.route.requested
+    || boundary.sourceAuthority !== 'live_runtime'
+    || boundary.fallbackStatus !== 'none'
+  ) {
+    fail('wet boundary route is unsupported, fallback, or substituted', diagnostics, {
+      requested: boundary.route?.requested ?? null,
+      effective: boundary.route?.effective ?? null,
+      sourceAuthority: boundary.sourceAuthority ?? null,
+      fallbackStatus: boundary.fallbackStatus ?? null,
+    });
+  }
+  if (boundary.complete !== true) {
+    fail('wet boundary descriptor is partial', diagnostics);
+  }
+  if (
+    boundary.terrainEpoch !== snapshot.terrainEpoch
+    || boundary.fluidEpoch !== snapshot.fluidEpoch
+  ) {
+    fail('wet boundary epoch is stale or substituted', diagnostics);
+  }
+  if (
+    !isNonEmptyString(snapshot.topologyId)
+    || boundary.topologyId !== snapshot.topologyId
+  ) {
+    fail('wet boundary topology identity is missing or substituted', diagnostics);
+  }
+  if (
+    !isFiniteNumber(boundary.effectiveDryDepthMeters)
+    || boundary.effectiveDryDepthMeters < 0
+    || !isFiniteNumber(boundary.effectiveWetActivationDepthMeters)
+    || boundary.effectiveWetActivationDepthMeters <= boundary.effectiveDryDepthMeters
+  ) {
+    fail('wet boundary thresholds are invalid', diagnostics);
+  }
+  requireNumericArray(
+    boundary.physicalDepthMeters,
+    snapshot.sampleCount,
+    'wet boundary physical depth',
+    diagnostics,
+  );
+  requireNumericArray(
+    boundary.signedDryMarginMeters,
+    snapshot.sampleCount,
+    'wet boundary signed dry margin',
+    diagnostics,
+  );
+  requireNumericArray(
+    boundary.wetState,
+    snapshot.sampleCount,
+    'wet boundary wet state',
+    diagnostics,
+  );
+  for (let index = 0; index < snapshot.sampleCount; index += 1) {
+    const physicalDepth = snapshot.mappedDepth[index] / snapshot.jacobian[index];
+    const tolerance = 1e-10 * Math.max(1, physicalDepth);
+    if (
+      Math.abs(boundary.physicalDepthMeters[index] - physicalDepth) > tolerance
+      || Math.abs(
+        boundary.signedDryMarginMeters[index]
+        - (physicalDepth - boundary.effectiveDryDepthMeters)
+      ) > tolerance
+    ) {
+      fail('wet boundary physical depth or signed margin disagrees with source geometry', diagnostics, {
+        index,
+      });
+    }
+    if (boundary.wetState[index] !== 0 && boundary.wetState[index] !== 1) {
+      fail('wet boundary wet state is not binary', diagnostics, { index });
+    }
+    if (
+      (physicalDepth <= boundary.effectiveDryDepthMeters && boundary.wetState[index] !== 0)
+      || (
+        physicalDepth >= boundary.effectiveWetActivationDepthMeters
+        && boundary.wetState[index] !== 1
+      )
+    ) {
+      fail('wet state disagrees with the producer-owned hysteretic margin', diagnostics, {
+        index,
+      });
+    }
+  }
+  const cells = boundary.cells;
+  const cellWidth = snapshot.width - 1;
+  const cellHeight = snapshot.height - 1;
+  const cellCount = cellWidth * cellHeight;
+  if (
+    !cells
+    || cells.indexing !== 'row-major-quad-v1'
+    || cells.width !== cellWidth
+    || cells.height !== cellHeight
+  ) {
+    fail('wet boundary cell grid is missing or inconsistent', diagnostics);
+  }
+  for (const [value, label] of [
+    [cells.stableId, 'wet boundary stable cell id'],
+    [cells.activeState, 'wet boundary active cell state'],
+    [cells.generation, 'wet boundary cell generation'],
+  ]) {
+    requireNumericArray(value, cellCount, label, diagnostics);
+  }
+  const reset = boundary.reset;
+  if (
+    !Number.isInteger(boundary.boundaryGeneration)
+    || boundary.boundaryGeneration < 0
+    || boundary.boundaryId
+      !== `${boundary.topologyId}:boundary:${boundary.boundaryGeneration}`
+    || !reset
+    || !Number.isInteger(reset.generation)
+    || reset.generation < 0
+    || !Number.isInteger(reset.previousTerrainEpoch)
+    || reset.terrainEpoch !== snapshot.terrainEpoch
+    || reset.previousTerrainEpoch > reset.terrainEpoch
+    || !['initial', 'ordinary_morph', 'phase_morph', 'shock_reset'].includes(reset.kind)
+    || reset.boundaryGeneration > boundary.boundaryGeneration
+    || reset.generation > boundary.boundaryGeneration
+    || reset.discontinuous !== true
+  ) {
+    fail('wet boundary reset lineage is missing or stale', diagnostics);
+  }
+  const resetRemapIdentity = reset.remapReceiptId ?? 'initial';
+  const expectedResetId = [
+    `${boundary.topologyId}:reset:${reset.generation}`,
+    `${reset.previousTerrainEpoch}->${reset.terrainEpoch}`,
+    reset.kind,
+    resetRemapIdentity,
+  ].join(':');
+  if (reset.id !== expectedResetId) {
+    fail('wet boundary reset identity is stale or substituted', diagnostics);
+  }
+  for (let row = 0; row < cellHeight; row += 1) {
+    for (let column = 0; column < cellWidth; column += 1) {
+      const cellId = row * cellWidth + column;
+      const topLeft = row * snapshot.width + column;
+      const signature = boundary.wetState[topLeft]
+        | (boundary.wetState[topLeft + 1] << 1)
+        | (boundary.wetState[topLeft + snapshot.width + 1] << 2)
+        | (boundary.wetState[topLeft + snapshot.width] << 3);
+      const expectedActive = Number(signature !== 0 && signature !== 15);
+      if (
+        cells.stableId[cellId] !== cellId
+        || cells.activeState[cellId] !== expectedActive
+        || !Number.isInteger(cells.generation[cellId])
+        || cells.generation[cellId] < reset.generation
+      ) {
+        fail('wet boundary stable cell identity, state, or generation disagrees', diagnostics, {
+          cellId,
+        });
+      }
+    }
+  }
+  if (
+    boundary.derivation?.physicalDepth !== 'mappedDepth / supportGeometry.jacobian'
+    || boundary.derivation?.signedMargin
+      !== 'physicalDepthMeters - effectiveDryDepthMeters'
+    || boundary.derivation?.hysteresis !== 'schmitt-trigger-v1'
+  ) {
+    fail('wet boundary derivation identity is unsupported', diagnostics);
+  }
+  diagnostics.lastTrustworthyEvidence = 'wet-boundary-source-exact';
+  return boundary;
+}
+
+function interpolateClippedVertex(start, end) {
+  const denominator = start.ownershipMargin - end.ownershipMargin;
+  const t = Math.min(1, Math.max(
+    0,
+    Math.abs(denominator) > 1e-20 ? start.ownershipMargin / denominator : 0.5,
+  ));
+  const attributes = start.attributes.map(
+    (value, index) => value + (end.attributes[index] - value) * t,
+  );
+  attributes[11] = 1;
+  const samplePair = [start.sampleIndex, end.sampleIndex].sort((left, right) => left - right);
+  return {
+    key: `edge:${samplePair[0]}:${samplePair[1]}`,
+    sampleIndex: samplePair[0],
+    attributes,
+    ownershipMargin: 0,
+    referenceNormal: [3, 4, 5].map(
+      offset => start.referenceNormal[offset - 3]
+        + (end.referenceNormal[offset - 3] - start.referenceNormal[offset - 3]) * t,
+    ),
+  };
+}
+
+function clipTriangleToWet(triangle) {
+  const output = [];
+  for (let index = 0; index < triangle.length; index += 1) {
+    const current = triangle[index];
+    const previous = triangle[(index + triangle.length - 1) % triangle.length];
+    const currentInside = current.ownershipMargin >= 0;
+    const previousInside = previous.ownershipMargin >= 0;
+    if (currentInside !== previousInside) {
+      output.push(interpolateClippedVertex(previous, current));
+    }
+    if (currentInside) {
+      output.push(current);
+    }
+  }
+  return output;
+}
+
+function buildClippedShorelineMesh(snapshot, boundary, diagnostics) {
+  diagnostics.phase = 'build-clipped-shoreline-mesh';
+  const source = buildSurfaceVertexAttributes(snapshot, boundary.wetState);
+  const sourceVertices = Array.from({ length: snapshot.sampleCount }, (_, sampleIndex) => {
+    const offset = sampleIndex * VERTEX_STRIDE_FLOATS;
+    const attributes = Array.from(
+      source.vertices.subarray(offset, offset + VERTEX_STRIDE_FLOATS),
+    );
+    const wet = boundary.wetState[sampleIndex] === 1;
+    return {
+      key: `sample:${sampleIndex}`,
+      sampleIndex,
+      attributes,
+      ownershipMargin: wet
+        ? boundary.signedDryMarginMeters[sampleIndex]
+        : boundary.physicalDepthMeters[sampleIndex]
+          - boundary.effectiveWetActivationDepthMeters,
+      referenceNormal: attributes.slice(3, 6),
+    };
+  });
+  const outputRecords = [];
+  const outputIndices = [];
+  const outputIndexByKey = new Map();
+  const crossingKeys = new Set();
+  const normalSums = [];
+  let clippedCellCount = 0;
+  let drawableWetTriangleCount = 0;
+  let ambiguousCellCount = 0;
+  let stableCellTieBreakCount = 0;
+
+  const outputIndex = (record) => {
+    const existing = outputIndexByKey.get(record.key);
+    if (existing != null) {
+      return existing;
+    }
+    const index = outputRecords.length;
+    outputIndexByKey.set(record.key, index);
+    outputRecords.push(record);
+    normalSums.push([0, 0, 0]);
+    if (record.key.startsWith('edge:')) {
+      crossingKeys.add(record.key);
+    }
+    return index;
+  };
+
+  const appendTriangle = (triangle) => {
+    const indices = triangle.map(outputIndex);
+    const positions = triangle.map(record => record.attributes.slice(0, 3));
+    const edgeA = positions[1].map((value, axis) => value - positions[0][axis]);
+    const edgeB = positions[2].map((value, axis) => value - positions[0][axis]);
+    const faceNormal = [
+      edgeA[1] * edgeB[2] - edgeA[2] * edgeB[1],
+      edgeA[2] * edgeB[0] - edgeA[0] * edgeB[2],
+      edgeA[0] * edgeB[1] - edgeA[1] * edgeB[0],
+    ];
+    if (Math.hypot(...faceNormal) <= 1e-12) {
+      return;
+    }
+    outputIndices.push(...indices);
+    for (const index of indices) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        normalSums[index][axis] += faceNormal[axis];
+      }
+    }
+    drawableWetTriangleCount += 1;
+  };
+
+  for (let row = 0; row < snapshot.height - 1; row += 1) {
+    for (let column = 0; column < snapshot.width - 1; column += 1) {
+      const cellId = row * (snapshot.width - 1) + column;
+      const topLeftIndex = row * snapshot.width + column;
+      const topRightIndex = topLeftIndex + 1;
+      const bottomLeftIndex = topLeftIndex + snapshot.width;
+      const bottomRightIndex = bottomLeftIndex + 1;
+      const topLeft = sourceVertices[topLeftIndex];
+      const topRight = sourceVertices[topRightIndex];
+      const bottomLeft = sourceVertices[bottomLeftIndex];
+      const bottomRight = sourceVertices[bottomRightIndex];
+      const signature = boundary.wetState[topLeftIndex]
+        | (boundary.wetState[topRightIndex] << 1)
+        | (boundary.wetState[bottomRightIndex] << 2)
+        | (boundary.wetState[bottomLeftIndex] << 3);
+      const ambiguous = signature === 5 || signature === 10;
+      let useTopLeftBottomRight = false;
+      if (ambiguous) {
+        ambiguousCellCount += 1;
+        const determinant = (
+          topLeft.ownershipMargin * bottomRight.ownershipMargin
+          - topRight.ownershipMargin * bottomLeft.ownershipMargin
+        );
+        const scale = Math.max(
+          1,
+          ...[topLeft, topRight, bottomLeft, bottomRight].map(
+            vertex => Math.abs(vertex.ownershipMargin),
+          ),
+        );
+        if (Math.abs(determinant) <= 1e-12 * scale * scale) {
+          stableCellTieBreakCount += 1;
+          useTopLeftBottomRight = boundary.cells.stableId[cellId] % 2 === 0;
+        } else {
+          useTopLeftBottomRight = determinant > 0;
+        }
+      }
+      const triangles = useTopLeftBottomRight
+        ? [
+          [topLeft, bottomLeft, bottomRight],
+          [topLeft, bottomRight, topRight],
+        ]
+        : [
+          [topLeft, bottomLeft, topRight],
+          [topRight, bottomLeft, bottomRight],
+        ];
+      let cellProducedTriangle = false;
+      for (const triangle of triangles) {
+        const polygon = clipTriangleToWet(triangle);
+        for (let vertex = 1; vertex + 1 < polygon.length; vertex += 1) {
+          appendTriangle([polygon[0], polygon[vertex], polygon[vertex + 1]]);
+          cellProducedTriangle = true;
+        }
+      }
+      clippedCellCount += Number(
+        boundary.cells.activeState[cellId] === 1 && cellProducedTriangle,
+      );
+    }
+  }
+  if (outputIndices.length === 0 || drawableWetTriangleCount === 0) {
+    fail('portable macro clipped shoreline surface is blank', diagnostics, {
+      sampleCount: snapshot.sampleCount,
+      wetSampleCount: source.wetSampleCount,
+      drawableWetTriangleCount,
+    });
+  }
+  const vertices = new Float32Array(outputRecords.length * VERTEX_STRIDE_FLOATS);
+  for (let index = 0; index < outputRecords.length; index += 1) {
+    const record = outputRecords[index];
+    const normal = normalSums[index];
+    let length = Math.hypot(...normal);
+    if (length <= 1e-12) {
+      normal.splice(0, 3, ...record.referenceNormal);
+      length = Math.hypot(...normal);
+    }
+    const normalized = normal.map(value => value / Math.max(length, 1e-12));
+    const alignment = normalized.reduce(
+      (sum, value, axis) => sum + value * record.referenceNormal[axis],
+      0,
+    );
+    if (alignment < 0) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        normalized[axis] *= -1;
+      }
+    }
+    record.attributes.splice(3, 3, ...normalized);
+    vertices.set(record.attributes, index * VERTEX_STRIDE_FLOATS);
+  }
+  diagnostics.lastTrustworthyEvidence = 'clipped-shoreline-mesh-built';
+  return {
+    vertices,
+    indices: Uint32Array.from(outputIndices),
+    wetSampleCount: source.wetSampleCount,
+    drawableWetTriangleCount,
+    topology: Object.freeze({
+      boundary: Object.freeze({
+        schema: boundary.schema,
+        id: boundary.boundaryId,
+        generation: boundary.boundaryGeneration,
+        resetId: boundary.reset.id,
+        topologyId: boundary.topologyId,
+        route: Object.freeze({ ...boundary.route }),
+        sourceAuthority: boundary.sourceAuthority,
+        fallbackStatus: boundary.fallbackStatus,
+      }),
+      edgeCrossingRoute: 'hysteretic-ownership-margin-linear-edge-v1',
+      shorelineCrossingCount: crossingKeys.size,
+      clippedCellCount,
+      minimumOutputSignedMarginMeters: Math.max(
+        0,
+        Math.min(...outputRecords.map(record => record.ownershipMargin)),
+      ),
+      ambiguityResolution: Object.freeze({
+        route: CLIPPED_AMBIGUITY_ROUTE,
+        ambiguousCellCount,
+        stableCellTieBreakCount,
+      }),
+    }),
+  };
+}
+
 export function createFingerFluidPortableMacroOpticalRenderPlan({
   snapshot,
   expectedIdentity,
   hostFrame,
   requestedRoute = KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
+  requestedTopologyRoute =
+    KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
 } = {}) {
   const diagnostics = {
     phase: 'validate-route',
     requestedRoute,
+    requestedTopologyRoute,
     lastTrustworthyEvidence: 'renderer-request-received',
   };
   try {
     if (requestedRoute !== KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE) {
       fail(`portable macro optical renderer route is unsupported: ${requestedRoute}`, diagnostics);
     }
+    if (![
+      KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
+      KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+    ].includes(requestedTopologyRoute)) {
+      fail(
+        `portable macro optical topology route is unsupported: ${requestedTopologyRoute}`,
+        diagnostics,
+      );
+    }
     diagnostics.lastTrustworthyEvidence = 'renderer-route-exact';
     requireIdentity(snapshot ?? {}, expectedIdentity ?? {}, diagnostics);
     requireSourceGeometry(snapshot, diagnostics);
     requireHostFrame(hostFrame, diagnostics);
-    const mesh = buildMesh(snapshot, diagnostics);
+    const boundary = requestedTopologyRoute
+      === KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE
+      ? requireWetBoundary(snapshot, diagnostics)
+      : null;
+    const mesh = boundary == null
+      ? buildRegularGridMesh(snapshot, diagnostics)
+      : buildClippedShorelineMesh(snapshot, boundary, diagnostics);
+    const topology = Object.freeze({
+      route: Object.freeze({
+        requested: requestedTopologyRoute,
+        effective: requestedTopologyRoute,
+        fallback: null,
+      }),
+      boundary: mesh.topology?.boundary ?? null,
+      edgeCrossingRoute: mesh.topology?.edgeCrossingRoute ?? null,
+      shorelineCrossingCount: mesh.topology?.shorelineCrossingCount ?? 0,
+      clippedCellCount: mesh.topology?.clippedCellCount ?? 0,
+      minimumOutputSignedMarginMeters:
+        mesh.topology?.minimumOutputSignedMarginMeters ?? null,
+      ambiguityResolution: mesh.topology?.ambiguityResolution ?? null,
+    });
     return Object.freeze({
       schema: KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_SCHEMA,
       route: Object.freeze({
@@ -507,8 +953,9 @@ export function createFingerFluidPortableMacroOpticalRenderPlan({
         farMeters: hostFrame.camera.farMeters,
       }),
       absorptionPerMeter: Object.freeze([...snapshot.physicalMaterial.absorptionPerMeter]),
+      topology,
       vertexStrideFloats: VERTEX_STRIDE_FLOATS,
-      vertexCount: snapshot.sampleCount,
+      vertexCount: mesh.vertices.length / VERTEX_STRIDE_FLOATS,
       indexCount: mesh.indices.length,
       vertices: mesh.vertices,
       indices: mesh.indices,
@@ -558,6 +1005,7 @@ export function validateFingerFluidPortableMacroOpticalRenderAttachments({
   const diagnostics = {
     phase: 'validate-render-attachments',
     requestedRoute: plan?.route?.requested ?? null,
+    requestedTopologyRoute: plan?.topology?.route?.requested ?? null,
     lastTrustworthyEvidence: 'render-plan-received',
   };
   if (
@@ -872,6 +1320,17 @@ export function createWebGPUFingerFluidPortableMacroOpticalRenderer({
       requestedRoute: plan.route.requested,
       effectiveRoute: plan.route.effective,
       fallback: null,
+      requestedTopologyRoute: plan.topology.route.requested,
+      effectiveTopologyRoute: plan.topology.route.effective,
+      topologyFallback: plan.topology.route.fallback,
+      topology: Object.freeze({
+        boundaryId: plan.topology.boundary?.id ?? null,
+        resetId: plan.topology.boundary?.resetId ?? null,
+        edgeCrossingRoute: plan.topology.edgeCrossingRoute,
+        shorelineCrossingCount: plan.topology.shorelineCrossingCount,
+        clippedCellCount: plan.topology.clippedCellCount,
+        ambiguityRoute: plan.topology.ambiguityResolution?.route ?? null,
+      }),
       shaderRoute: KAMINOS_PORTABLE_MACRO_OPTICAL_SHADER_ROUTE,
       source: plan.source,
       hostFrameId: plan.host.frameId,

@@ -117,7 +117,16 @@ const actualProvider = webgpuCore.createFingerFluidPortableMacroGeometryProvider
     },
   },
 });
-assert.equal(actualProvider.package.version, '0.3.0');
+assert.equal(actualProvider.package.version, '0.4.0');
+const actualUploadSnapshot = actualProvider.createUploadSnapshot();
+assert.equal(
+  actualProvider.geometry.topologyId,
+  actualUploadSnapshot.wetBoundary.topologyId,
+);
+assert.equal(
+  actualUploadSnapshot.wetBoundary.boundaryId,
+  `${actualProvider.geometry.topologyId}:boundary:0`,
+);
 assert.equal(actualProvider.source.handleId, 'analytic-saddle-optical-source-7-0');
 assert.deepEqual(actualProvider.source.terrain, {
   requested: 'analytic-saddle-live',
@@ -154,12 +163,15 @@ const packageDescriptor = {
   sourceAuthority: 'live_runtime',
   fallbackStatus: 'none',
   packageName: '@kaminos/fluid-webgpu',
-  packageVersion: '0.3.0',
-  artifactRevision: '@kaminos/fluid-webgpu@0.3.0',
+  packageVersion: '0.4.0',
+  artifactRevision: '@kaminos/fluid-webgpu@0.4.0',
   runtimeRevision: producerRevision,
   runtimeRoute: canonicalRuntimeRoute,
   representationRoutes: ['kaminos/fluid/representation-frame'],
-  sourceRoutes: ['kaminos/fluid/portable-macro-source'],
+  sourceRoutes: [
+    'kaminos/fluid/portable-macro-source',
+    'kaminos/fluid/macro-wet-boundary',
+  ],
 };
 const representationFrame = {
   schema: 'kaminos.fluid.representation-frame.v1',
@@ -365,6 +377,50 @@ const retainedSourceHandle = Object.freeze({
         ...representationFrame.physicalMaterial,
         absorptionPerMeter: [...representationFrame.physicalMaterial.absorptionPerMeter],
       },
+      wetBoundary: {
+        schema: 'kaminos.fluid.macro-wet-boundary.v1',
+        route: {
+          requested: 'kaminos/fluid/macro-wet-boundary',
+          effective: 'kaminos/fluid/macro-wet-boundary',
+        },
+        sourceAuthority: 'live_runtime',
+        fallbackStatus: 'none',
+        terrainEpoch: 7,
+        fluidEpoch: 11,
+        topologyId: 'analytic-plane-grid-v1',
+        effectiveDryDepthMeters: 0.05,
+        effectiveWetActivationDepthMeters: 0.1,
+        physicalDepthMeters: new Float64Array([0.2, 0.2, 0, 0.2]),
+        signedDryMarginMeters: new Float64Array([0.15, 0.15, -0.05, 0.15]),
+        wetState: new Uint8Array([1, 1, 0, 1]),
+        cells: {
+          indexing: 'row-major-quad-v1',
+          width: 1,
+          height: 1,
+          stableId: new Uint32Array([0]),
+          activeState: new Uint8Array([1]),
+          generation: new Uint32Array([0]),
+        },
+        boundaryGeneration: 0,
+        boundaryId: 'analytic-plane-grid-v1:boundary:0',
+        reset: {
+          generation: 0,
+          id: 'analytic-plane-grid-v1:reset:0:7->7:initial:initial',
+          kind: 'initial',
+          previousTerrainEpoch: 7,
+          terrainEpoch: 7,
+          remapReceiptId: null,
+          shockId: null,
+          boundaryGeneration: 0,
+          discontinuous: true,
+        },
+        derivation: {
+          physicalDepth: 'mappedDepth / supportGeometry.jacobian',
+          signedMargin: 'physicalDepthMeters - effectiveDryDepthMeters',
+          hysteresis: 'schmitt-trigger-v1',
+        },
+        complete: true,
+      },
       confidence: 1,
       dirtyRegions: [{ x: 0, y: 0, width, height }],
       complete: true,
@@ -550,6 +606,23 @@ for (const [label, sourceHandle, expectation] of [
       pattern: /incomplete/i,
       phase: 'validate-source-snapshot',
       lastTrustworthyEvidence: 'source-snapshot-read',
+    },
+  ],
+  [
+    'fallback wet boundary report',
+    retainedHandleWith({
+      snapshotOverrides: {
+        wetBoundary: {
+          ...canonicalSnapshot.wetBoundary,
+          route: { ...canonicalSnapshot.wetBoundary.route },
+          fallbackStatus: 'legacy_preview',
+        },
+      },
+    }),
+    {
+      pattern: /wet boundary.*fallback/i,
+      phase: 'validate-wet-boundary',
+      lastTrustworthyEvidence: 'macro-source-snapshot-validated',
     },
   ],
   [
@@ -782,9 +855,10 @@ assert.deepEqual(provider.route, {
 });
 assert.equal(provider.capability, 'kaminos.fluid.portable-macro-source.v1');
 assert.equal(provider.hostIndependent, true);
-assert.equal(provider.package.version, '0.3.0', 'compatibility is capability-based rather than pinned to v0.2.1');
+assert.equal(provider.package.version, '0.4.0', 'provider consumes the canonical wet-boundary package');
 assert.equal(provider.package.runtimeRoute, canonicalRuntimeRoute);
 assert.equal(provider.geometry.identity, 'analytic-plane:terrain-7');
+assert.equal(provider.geometry.topologyId, 'analytic-plane-grid-v1');
 assert.equal(provider.geometry.transformIdentity, 'analytic-plane-to-world-v1');
 assert.equal(provider.geometry.terrainId, 'analytic-plane');
 assert.equal(provider.geometry.producerId, 'analytic-portable-host');
@@ -841,6 +915,12 @@ const upload = provider.createUploadSnapshot();
 assert.equal(upload.schema, 'kaminos.finger-fluid.portable-macro-upload-snapshot.v1');
 assert.equal(upload.sampleCount, sampleCount);
 assert.equal(upload.terrainId, 'analytic-plane');
+assert.equal(upload.topologyId, 'analytic-plane-grid-v1');
+assert.equal(upload.wetBoundary.boundaryId, 'analytic-plane-grid-v1:boundary:0');
+assert.equal(upload.wetBoundary.route.requested, 'kaminos/fluid/macro-wet-boundary');
+assert.equal(upload.wetBoundary.route.effective, 'kaminos/fluid/macro-wet-boundary');
+assert.equal(upload.wetBoundary.fallbackStatus, 'none');
+assert.deepEqual(Array.from(upload.wetBoundary.wetState), [1, 1, 0, 1]);
 assert.deepEqual(upload.source, terrainSourceIdentity);
 assert.deepEqual(Array.from(upload.mappedDepth), [0.2, 0.4, 0, 0.6]);
 assert.deepEqual(Array.from(upload.supportPosition), Array.from(supportPosition));

@@ -5,7 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
 const OPTICAL_ROUTE = 'kaminos/finger-fluid/portable-macro-screen-space-optics-v0';
-const CYAN_ROUTE = 'kaminos/finger-fluid/portable-macro-cyan-debug-v0';
+const REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE =
+  'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0';
+const WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE =
+  'kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
@@ -21,8 +24,8 @@ const outDir = resolve(
 const reportPath = resolve(args.get('--report') || join(outDir, 'report.json'));
 const dynamicStartPath = join(outDir, 'optical-dynamic-start.png');
 const dynamicEndPath = join(outDir, 'optical-dynamic-end.png');
-const cyanPath = join(outDir, 'same-state-cyan.png');
-const opticalPath = join(outDir, 'same-state-optical.png');
+const regularGridPath = join(outDir, 'same-state-regular-grid-debug.png');
+const clippedPath = join(outDir, 'same-state-wet-boundary-clipped.png');
 const debugPort = Number(args.get('--debug-port') || 9531);
 const viewportWidth = Number(args.get('--viewport-width') || 1600);
 const viewportHeight = Number(args.get('--viewport-height') || 1000);
@@ -72,6 +75,9 @@ function writeReport(extra = {}) {
     requestedRoute: OPTICAL_ROUTE,
     effectiveRoute: state?.effectiveRoute ?? null,
     fallback: state?.fallback ?? null,
+    requestedTopologyRoute: WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    effectiveTopologyRoute: state?.effectiveTopologyRoute ?? null,
+    topologyFallback: state?.topologyFallback ?? null,
     backend: state?.backend ?? null,
     startTimeSeconds,
     endTimeSeconds,
@@ -289,7 +295,7 @@ async function readState(socket) {
   return evaluate(socket, 'window.kaminosPortableMacroOpticalDebugState ?? null');
 }
 
-function validateOpticalState(candidate, expectedTime) {
+function validateOpticalState(candidate, expectedTime, expectedTopologyRoute) {
   if (!candidate || candidate.status !== 'running') {
     throw new Error(`portable macro optical state is not running: ${JSON.stringify(candidate)}`);
   }
@@ -304,6 +310,59 @@ function validateOpticalState(candidate, expectedTime) {
   }
   if (candidate.fallback !== null) {
     throw new Error(`fallback route rejected: ${JSON.stringify(candidate.fallback)}`);
+  }
+  if (
+    candidate.requestedTopologyRoute !== expectedTopologyRoute
+    || candidate.effectiveTopologyRoute !== expectedTopologyRoute
+  ) {
+    throw new Error(`optical topology identity mismatch: ${JSON.stringify(candidate)}`);
+  }
+  if (candidate.topologyFallback !== null) {
+    throw new Error(`fallback topology rejected: ${JSON.stringify(candidate.topologyFallback)}`);
+  }
+  if (
+    candidate.rendererEvidence?.requestedTopologyRoute !== expectedTopologyRoute
+    || candidate.rendererEvidence?.effectiveTopologyRoute !== expectedTopologyRoute
+  ) {
+    throw new Error(
+      `renderer topology identity mismatch: ${JSON.stringify(candidate.rendererEvidence)}`,
+    );
+  }
+  if (candidate.rendererEvidence?.topologyFallback !== null) {
+    throw new Error(
+      `renderer fallback topology rejected: ${
+        JSON.stringify(candidate.rendererEvidence?.topologyFallback)
+      }`,
+    );
+  }
+  if (
+    expectedTopologyRoute === WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+    && (
+      !candidate.topology?.boundaryId
+      || !candidate.topology?.resetId
+      || candidate.topology.shorelineCrossingCount <= 0
+      || candidate.topology.clippedCellCount <= 0
+    )
+  ) {
+    throw new Error(`clipped shoreline evidence is partial: ${JSON.stringify(candidate.topology)}`);
+  }
+  if (
+    expectedTopologyRoute === WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+    && (
+      candidate.rendererEvidence?.topology?.boundaryId !== candidate.topology.boundaryId
+      || candidate.rendererEvidence?.topology?.resetId !== candidate.topology.resetId
+      || candidate.rendererEvidence?.topology?.shorelineCrossingCount
+        !== candidate.topology.shorelineCrossingCount
+      || candidate.rendererEvidence?.topology?.clippedCellCount
+        !== candidate.topology.clippedCellCount
+      || !candidate.rendererEvidence?.topology?.ambiguityRoute
+    )
+  ) {
+    throw new Error(
+      `renderer clipped shoreline evidence is partial or divergent: ${
+        JSON.stringify(candidate.rendererEvidence?.topology)
+      }`,
+    );
   }
   if (candidate.blank || candidate.partial || !candidate.primaryOutputWritten) {
     throw new Error(`blank or partial optical output rejected: ${JSON.stringify(candidate)}`);
@@ -423,7 +482,11 @@ async function main() {
     if (effectiveUrl !== requestedUrl) {
       throw new Error(`effectiveUrl !== requestedUrl: ${effectiveUrl} != ${requestedUrl}`);
     }
-    validateOpticalState(state, startTimeSeconds);
+    validateOpticalState(
+      state,
+      startTimeSeconds,
+      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    );
     preserveEvidence('first-optical-frame', state);
 
     phase = 'capture-dynamic-start';
@@ -436,7 +499,11 @@ async function main() {
 
     phase = 'capture-dynamic-end';
     state = await setTimeAndMode(socket, endTimeSeconds, 'optical');
-    validateOpticalState(state, endTimeSeconds);
+    validateOpticalState(
+      state,
+      endTimeSeconds,
+      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    );
     captures.dynamicEnd = {
       state,
       visual: await captureCanvas(socket, dynamicEndPath),
@@ -447,36 +514,36 @@ async function main() {
       throw new Error(`dynamic output is stale: ${JSON.stringify(dynamicDelta)}`);
     }
 
-    phase = 'capture-same-state-cyan';
-    state = await setTimeAndMode(socket, endTimeSeconds, 'cyan');
-    if (
-      state?.backend !== 'webgpu'
-      || state?.requestedRoute !== OPTICAL_ROUTE
-      || state?.effectiveRoute !== CYAN_ROUTE
-      || state?.fallback !== null
-      || state?.blank
-      || state?.partial
-      || !state?.primaryOutputWritten
-    ) {
-      throw new Error(`cyan comparison route is invalid: ${JSON.stringify(state)}`);
-    }
-    captures.cyan = {
+    phase = 'capture-same-state-regular-grid-debug';
+    state = await setTimeAndMode(socket, endTimeSeconds, 'regular_grid_debug');
+    validateOpticalState(
       state,
-      visual: await captureCanvas(socket, cyanPath),
-      path: cyanPath,
+      endTimeSeconds,
+      REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE,
+    );
+    captures.regularGridDebug = {
+      state,
+      visual: await captureCanvas(socket, regularGridPath),
+      path: regularGridPath,
     };
 
-    phase = 'capture-same-state-optical';
+    phase = 'capture-same-state-wet-boundary-clipped';
     state = await setTimeAndMode(socket, endTimeSeconds, 'optical');
-    validateOpticalState(state, endTimeSeconds);
-    captures.optical = {
+    validateOpticalState(
       state,
-      visual: await captureCanvas(socket, opticalPath),
-      path: opticalPath,
+      endTimeSeconds,
+      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    );
+    captures.wetBoundaryClipped = {
+      state,
+      visual: await captureCanvas(socket, clippedPath),
+      path: clippedPath,
     };
-    sameStateDelta = measurePngDelta(cyanPath, opticalPath);
-    if (sameStateDelta.changedRatio < 0.01) {
-      throw new Error(`optical route lacks a material visual delta: ${JSON.stringify(sameStateDelta)}`);
+    sameStateDelta = measurePngDelta(regularGridPath, clippedPath);
+    if (sameStateDelta.changedRatio < 0.001) {
+      throw new Error(
+        `clipped shoreline topology lacks a material visual delta: ${JSON.stringify(sameStateDelta)}`,
+      );
     }
     if (consoleEvents.some(event => event.type === 'exception' || event.type === 'error')) {
       throw new Error(`browser emitted runtime errors: ${JSON.stringify(consoleEvents)}`);
@@ -487,6 +554,8 @@ async function main() {
       effectiveUrl,
       backend: state.backend,
       effectiveRoute: state.effectiveRoute,
+      effectiveTopologyRoute: state.effectiveTopologyRoute,
+      topology: state.topology,
       source: state.source,
       host: state.host,
       dynamicDelta,

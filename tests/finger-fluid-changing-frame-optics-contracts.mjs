@@ -126,7 +126,7 @@ const currentFrame = runtime.representation();
 
 const previousIdentity = {
   packageDescriptor: KAMINOS_FLUID_PACKAGE_DESCRIPTOR,
-  artifactRevision: '@kaminos/fluid-webgpu@0.3.0',
+  artifactRevision: '@kaminos/fluid-webgpu@0.4.0',
   producerRevision: KAMINOS_FLUID_PACKAGE_DESCRIPTOR.runtimeRevision,
   fluidEpoch: previousFrame.fluidEpoch,
   terrainEpoch: previousFrame.terrainEpoch,

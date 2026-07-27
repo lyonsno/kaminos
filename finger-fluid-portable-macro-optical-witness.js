@@ -1,5 +1,7 @@
 import {
   KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
+  KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
+  KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
   createFingerFluidPortableMacroOpticalRenderPlan,
   createWebGPUFingerFluidPortableMacroOpticalRenderer,
 } from './finger-fluid-portable-macro-optical-renderer.js';
@@ -37,16 +39,22 @@ let lastPlan = null;
 let failure = null;
 let startTime = performance.now();
 let forcedTime = Number.isFinite(fixedTime) ? fixedTime : null;
+let requestedTopologyRoute = requestedMode === 'regular_grid_debug'
+  ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
+  : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
 
 window.kaminosPortableMacroOpticalDebugState = {
   status: 'initializing',
   requestedMode,
   effectiveMode: null,
-  requestedRoute: requestedMode === 'optical'
-    ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
-    : CYAN_DEBUG_ROUTE,
+  requestedRoute: requestedMode === 'cyan'
+    ? CYAN_DEBUG_ROUTE
+    : KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
   effectiveRoute: null,
   fallback: null,
+  requestedTopologyRoute,
+  effectiveTopologyRoute: null,
+  topologyFallback: null,
   frameCount: 0,
   primaryOutputWritten: false,
   blank: true,
@@ -59,13 +67,26 @@ function publishDebugState() {
     status: failure ? 'error' : frameCount > 0 ? 'running' : 'initializing',
     requestedMode,
     effectiveMode,
-    requestedRoute: requestedMode === 'optical'
-      ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
-      : CYAN_DEBUG_ROUTE,
+    requestedRoute: requestedMode === 'cyan'
+      ? CYAN_DEBUG_ROUTE
+      : KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
     effectiveRoute: effectiveMode === 'optical'
       ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
+      : effectiveMode === 'regular_grid_debug'
+        ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
       : effectiveMode === 'cyan' ? CYAN_DEBUG_ROUTE : null,
     fallback: null,
+    requestedTopologyRoute,
+    effectiveTopologyRoute: lastPlan?.topology?.route?.effective ?? null,
+    topologyFallback: lastPlan?.topology?.route?.fallback ?? null,
+    topology: lastPlan?.topology ? {
+      boundaryId: lastPlan.topology.boundary?.id ?? null,
+      resetId: lastPlan.topology.boundary?.resetId ?? null,
+      boundaryGeneration: lastPlan.topology.boundary?.generation ?? null,
+      shorelineCrossingCount: lastPlan.topology.shorelineCrossingCount,
+      clippedCellCount: lastPlan.topology.clippedCellCount,
+      ambiguityResolution: lastPlan.topology.ambiguityResolution,
+    } : null,
     backend: device ? 'webgpu' : null,
     frameCount,
     primaryOutputWritten: frameCount > 0,
@@ -81,6 +102,7 @@ function publishDebugState() {
     `KAMINOS PORTABLE MACRO OPTICS`,
     `${requestedMode} -> ${effectiveMode ?? 'pending'} · ${device ? 'webgpu' : 'pending'}`,
     `${window.kaminosPortableMacroOpticalDebugState.effectiveRoute ?? 'no route'}`,
+    `${window.kaminosPortableMacroOpticalDebugState.effectiveTopologyRoute ?? 'no topology route'}`,
     `frame ${frameCount} · wet ${lastPlan?.wetSampleCount ?? 0}/${sampleCount}`,
     failure ? `FAILED: ${failure.message}` : 'source live · fallback none',
   ].join('\n');
@@ -209,6 +231,8 @@ function makeSnapshot(timeSeconds) {
   const normal = new Float64Array(sampleCount * 3);
   const jacobian = new Float64Array(sampleCount);
   const supportVelocity = new Float64Array(sampleCount * 3);
+  const effectiveDryDepthMeters = 0.08;
+  const effectiveWetActivationDepthMeters = 0.1;
   for (let row = 0; row < heightSamples; row += 1) {
     for (let column = 0; column < widthSamples; column += 1) {
       const index = row * widthSamples + column;
@@ -237,7 +261,7 @@ function makeSnapshot(timeSeconds) {
       jacobian[index] = 1;
     }
   }
-  return {
+  const snapshot = {
     schema: 'kaminos.finger-fluid.portable-macro-upload-snapshot.v1',
     geometryIdentity: 'portable-macro-witness-geometry-v0',
     terrainId: 'portable-macro-witness-terrain-v0',
@@ -275,6 +299,80 @@ function makeSnapshot(timeSeconds) {
     confidence: 1,
     dirtyRegions: [],
   };
+  const physicalDepthMeters = Float64Array.from(mappedDepth);
+  const signedDryMarginMeters = Float64Array.from(
+    mappedDepth,
+    depth => depth - effectiveDryDepthMeters,
+  );
+  const wetState = Uint8Array.from(
+    mappedDepth,
+    depth => Number(depth >= effectiveWetActivationDepthMeters),
+  );
+  const cellWidth = widthSamples - 1;
+  const cellHeight = heightSamples - 1;
+  const cellCount = cellWidth * cellHeight;
+  const stableId = new Uint32Array(cellCount);
+  const activeState = new Uint8Array(cellCount);
+  const boundaryGeneration = snapshot.fluidEpoch;
+  const generation = new Uint32Array(cellCount).fill(boundaryGeneration);
+  for (let row = 0; row < cellHeight; row += 1) {
+    for (let column = 0; column < cellWidth; column += 1) {
+      const cellId = row * cellWidth + column;
+      const topLeft = row * widthSamples + column;
+      const signature = wetState[topLeft]
+        | (wetState[topLeft + 1] << 1)
+        | (wetState[topLeft + widthSamples + 1] << 2)
+        | (wetState[topLeft + widthSamples] << 3);
+      stableId[cellId] = cellId;
+      activeState[cellId] = Number(signature !== 0 && signature !== 15);
+    }
+  }
+  snapshot.topologyId = 'portable-macro-witness-topology-v0';
+  snapshot.wetBoundary = {
+    schema: 'kaminos.fluid.macro-wet-boundary.v1',
+    route: {
+      requested: 'kaminos/fluid/macro-wet-boundary',
+      effective: 'kaminos/fluid/macro-wet-boundary',
+    },
+    sourceAuthority: 'live_runtime',
+    fallbackStatus: 'none',
+    terrainEpoch: snapshot.terrainEpoch,
+    fluidEpoch: snapshot.fluidEpoch,
+    topologyId: snapshot.topologyId,
+    effectiveDryDepthMeters,
+    effectiveWetActivationDepthMeters,
+    physicalDepthMeters,
+    signedDryMarginMeters,
+    wetState,
+    cells: {
+      indexing: 'row-major-quad-v1',
+      width: cellWidth,
+      height: cellHeight,
+      stableId,
+      activeState,
+      generation,
+    },
+    boundaryGeneration,
+    boundaryId: `${snapshot.topologyId}:boundary:${boundaryGeneration}`,
+    reset: {
+      generation: 0,
+      id: `${snapshot.topologyId}:reset:0:0->0:initial:initial`,
+      kind: 'initial',
+      previousTerrainEpoch: 0,
+      terrainEpoch: 0,
+      remapReceiptId: null,
+      shockId: null,
+      boundaryGeneration: 0,
+      discontinuous: true,
+    },
+    derivation: {
+      physicalDepth: 'mappedDepth / supportGeometry.jacobian',
+      signedMargin: 'physicalDepthMeters - effectiveDryDepthMeters',
+      hysteresis: 'schmitt-trigger-v1',
+    },
+    complete: true,
+  };
+  return snapshot;
 }
 
 function expectedIdentity(snapshot) {
@@ -631,13 +729,14 @@ function renderFrame(timestamp) {
       snapshot,
       expectedIdentity: expectedIdentity(snapshot),
       hostFrame: frame,
+      requestedTopologyRoute,
     });
     const targetView = context.getCurrentTexture().createView();
     const encoder = device.createCommandEncoder({
       label: `portable-macro-witness-frame-${frameCount}`,
     });
     renderBaseScene(encoder, targetView);
-    lastEvidence = effectiveMode === 'optical'
+    lastEvidence = effectiveMode !== 'cyan'
       ? renderer.render({
         plan,
         commandEncoder: encoder,
@@ -668,7 +767,7 @@ function renderFrame(timestamp) {
 
 async function initialize() {
   if (!navigator.gpu) throw new Error('navigator.gpu unavailable');
-  if (!['optical', 'cyan'].includes(requestedMode)) {
+  if (!['optical', 'regular_grid_debug', 'cyan'].includes(requestedMode)) {
     throw new Error(`unsupported witness mode: ${requestedMode}`);
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
@@ -727,8 +826,13 @@ async function initialize() {
     sceneDepthTexture = null;
   });
   window.kaminosPortableMacroSetModeForWitness = mode => {
-    if (!['optical', 'cyan'].includes(mode)) throw new Error(`unsupported witness mode: ${mode}`);
+    if (!['optical', 'regular_grid_debug', 'cyan'].includes(mode)) {
+      throw new Error(`unsupported witness mode: ${mode}`);
+    }
     effectiveMode = mode;
+    requestedTopologyRoute = mode === 'regular_grid_debug'
+      ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
+      : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
     renderFrame(performance.now());
     return publishDebugState();
   };

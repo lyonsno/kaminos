@@ -124,6 +124,8 @@ export const KAMINOS_FLUID_REPRESENTATION_OWNERSHIP_IDENTITY = 'macro-local-parc
 export const KAMINOS_FLUID_PACKAGE_DESCRIPTOR_SCHEMA = 'kaminos.fluid.package-descriptor.v1';
 export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_CAPABILITY = 'kaminos.fluid.portable-macro-source.v1';
 export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE = 'kaminos/fluid/portable-macro-source';
+export const KAMINOS_FLUID_MACRO_WET_BOUNDARY_SCHEMA = 'kaminos.fluid.macro-wet-boundary.v1';
+export const KAMINOS_FLUID_MACRO_WET_BOUNDARY_ROUTE = 'kaminos/fluid/macro-wet-boundary';
 export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_HANDLE_SCHEMA = 'kaminos.fluid.portable-macro-source-handle.v1';
 export const KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_SNAPSHOT_SCHEMA = 'kaminos.fluid.portable-macro-source-snapshot.v1';
 export const KAMINOS_FINGER_FLUID_PORTABLE_MACRO_PROVIDER_SCHEMA = 'kaminos.finger-fluid.portable-macro-geometry-provider.v1';
@@ -135,7 +137,7 @@ export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSITION_SCHEMA = 'kaminos.finger-fl
 export const KAMINOS_FINGER_FLUID_OPTICAL_EXECUTION_SCHEMA = 'kaminos.finger-fluid.optical-execution.v1';
 export const KAMINOS_FINGER_FLUID_CHANGING_FRAME_OPTICS_ROUTE = 'webgpu-watershed-changing-frame-optics-v1';
 export const KAMINOS_FINGER_FLUID_OPTICAL_TIMING_ROUTE = 'webgpu-timestamp-query-optical-pass-v1';
-const KAMINOS_FLUID_PACKAGE_VERSION = '0.3.0';
+const KAMINOS_FLUID_PACKAGE_VERSION = '0.4.0';
 const KAMINOS_FLUID_PACKAGE_RUNTIME_ROUTE = 'kaminos/fluid/mapped-orthogonal-heightfield-hll-reference-v1';
 
 function representationFrameFailure(message) {
@@ -1011,6 +1013,15 @@ function validatePortablePackageIdentity(expectedIdentity) {
   ) {
     portableGeometryFailure('package does not publish the canonical representation capability');
   }
+  if (
+    !Array.isArray(packageDescriptor.sourceRoutes)
+    || !packageDescriptor.sourceRoutes.includes(KAMINOS_FLUID_PORTABLE_MACRO_SOURCE_ROUTE)
+    || !packageDescriptor.sourceRoutes.includes(KAMINOS_FLUID_MACRO_WET_BOUNDARY_ROUTE)
+  ) {
+    portableGeometryFailure(
+      'package does not publish the canonical portable source route and wet boundary route',
+    );
+  }
   return packageDescriptor;
 }
 
@@ -1084,6 +1095,195 @@ function validatePortablePhysicalMaterial(physicalMaterial, label = 'physical ma
     absorptionPerMeter: Array.from(physicalMaterial.absorptionPerMeter, (value, index) => (
       representationFrameFinite(value, `${label} absorption[${index}]`, { nonNegative: true })
     )),
+  };
+}
+
+function validatePortableWetBoundaryForOptics(
+  wetBoundary,
+  {
+    sampleCount,
+    grid,
+    mappedDepth,
+    jacobian,
+    topologyId,
+    terrainEpoch,
+    fluidEpoch,
+  },
+) {
+  if (!wetBoundary || typeof wetBoundary !== 'object') {
+    portableGeometryFailure('wet boundary descriptor is missing');
+  }
+  if (wetBoundary.schema !== KAMINOS_FLUID_MACRO_WET_BOUNDARY_SCHEMA) {
+    portableGeometryFailure(`wet boundary schema is unsupported: ${wetBoundary.schema || 'missing'}`);
+  }
+  validatePortableExactRoute(
+    wetBoundary.route,
+    KAMINOS_FLUID_MACRO_WET_BOUNDARY_ROUTE,
+    'wet boundary',
+  );
+  if (
+    wetBoundary.sourceAuthority !== 'live_runtime'
+    || wetBoundary.fallbackStatus !== 'none'
+  ) {
+    portableGeometryFailure('wet boundary authority or fallback is invalid');
+  }
+  if (
+    wetBoundary.complete !== true
+    || wetBoundary.terrainEpoch !== terrainEpoch
+    || wetBoundary.fluidEpoch !== fluidEpoch
+    || wetBoundary.topologyId !== topologyId
+  ) {
+    portableGeometryFailure('wet boundary identity, epoch, or completeness disagrees');
+  }
+  const dryDepth = representationFrameFinite(
+    wetBoundary.effectiveDryDepthMeters,
+    'wet boundary dry depth',
+    { nonNegative: true },
+  );
+  const activationDepth = representationFrameFinite(
+    wetBoundary.effectiveWetActivationDepthMeters,
+    'wet boundary activation depth',
+    { positive: true },
+  );
+  if (activationDepth <= dryDepth) {
+    portableGeometryFailure('wet boundary activation depth must exceed dry depth');
+  }
+  representationFrameTypedArray(
+    wetBoundary.physicalDepthMeters,
+    sampleCount,
+    'wet boundary physical depth',
+    { nonNegative: true },
+  );
+  representationFrameTypedArray(
+    wetBoundary.signedDryMarginMeters,
+    sampleCount,
+    'wet boundary signed dry margin',
+  );
+  representationFrameTypedArray(
+    wetBoundary.wetState,
+    sampleCount,
+    'wet boundary wet state',
+    { nonNegative: true },
+  );
+  for (let index = 0; index < sampleCount; index += 1) {
+    const physicalDepth = mappedDepth[index] / jacobian[index];
+    const tolerance = 1e-10 * Math.max(1, physicalDepth);
+    if (
+      Math.abs(wetBoundary.physicalDepthMeters[index] - physicalDepth) > tolerance
+      || Math.abs(wetBoundary.signedDryMarginMeters[index] - (physicalDepth - dryDepth))
+        > tolerance
+    ) {
+      portableGeometryFailure(`wet boundary scalar disagreement at sample ${index}`);
+    }
+    if (wetBoundary.wetState[index] !== 0 && wetBoundary.wetState[index] !== 1) {
+      portableGeometryFailure(`wet boundary wet state is not binary at sample ${index}`);
+    }
+    if (
+      (physicalDepth <= dryDepth && wetBoundary.wetState[index] !== 0)
+      || (physicalDepth >= activationDepth && wetBoundary.wetState[index] !== 1)
+    ) {
+      portableGeometryFailure(`wet boundary hysteresis disagreement at sample ${index}`);
+    }
+  }
+  const cells = wetBoundary.cells;
+  const cellWidth = grid.width - 1;
+  const cellHeight = grid.height - 1;
+  const cellCount = cellWidth * cellHeight;
+  if (
+    !cells
+    || cells.indexing !== 'row-major-quad-v1'
+    || cells.width !== cellWidth
+    || cells.height !== cellHeight
+  ) {
+    portableGeometryFailure('wet boundary cell grid disagrees');
+  }
+  for (const [values, label] of [
+    [cells.stableId, 'wet boundary stable cell id'],
+    [cells.activeState, 'wet boundary active cell state'],
+    [cells.generation, 'wet boundary cell generation'],
+  ]) {
+    representationFrameTypedArray(values, cellCount, label, { nonNegative: true });
+  }
+  const reset = wetBoundary.reset;
+  if (
+    !Number.isInteger(wetBoundary.boundaryGeneration)
+    || wetBoundary.boundaryGeneration < 0
+    || wetBoundary.boundaryId
+      !== `${topologyId}:boundary:${wetBoundary.boundaryGeneration}`
+    || !reset
+    || !Number.isInteger(reset.generation)
+    || reset.generation < 0
+    || !Number.isInteger(reset.previousTerrainEpoch)
+    || reset.terrainEpoch !== terrainEpoch
+    || reset.previousTerrainEpoch > reset.terrainEpoch
+    || !['initial', 'ordinary_morph', 'phase_morph', 'shock_reset'].includes(reset.kind)
+    || reset.boundaryGeneration > wetBoundary.boundaryGeneration
+    || reset.generation > wetBoundary.boundaryGeneration
+    || reset.discontinuous !== true
+  ) {
+    portableGeometryFailure('wet boundary reset lineage disagrees');
+  }
+  const resetId = [
+    `${topologyId}:reset:${reset.generation}`,
+    `${reset.previousTerrainEpoch}->${reset.terrainEpoch}`,
+    reset.kind,
+    reset.remapReceiptId ?? 'initial',
+  ].join(':');
+  if (reset.id !== resetId) {
+    portableGeometryFailure('wet boundary reset identity disagrees');
+  }
+  for (let row = 0; row < cellHeight; row += 1) {
+    for (let column = 0; column < cellWidth; column += 1) {
+      const cellId = row * cellWidth + column;
+      const topLeft = row * grid.width + column;
+      const signature = wetBoundary.wetState[topLeft]
+        | (wetBoundary.wetState[topLeft + 1] << 1)
+        | (wetBoundary.wetState[topLeft + grid.width + 1] << 2)
+        | (wetBoundary.wetState[topLeft + grid.width] << 3);
+      if (
+        cells.stableId[cellId] !== cellId
+        || cells.activeState[cellId] !== Number(signature !== 0 && signature !== 15)
+        || !Number.isInteger(cells.generation[cellId])
+        || cells.generation[cellId] < reset.generation
+      ) {
+        portableGeometryFailure(`wet boundary cell disagreement at cell ${cellId}`);
+      }
+    }
+  }
+  if (
+    wetBoundary.derivation?.physicalDepth !== 'mappedDepth / supportGeometry.jacobian'
+    || wetBoundary.derivation?.signedMargin
+      !== 'physicalDepthMeters - effectiveDryDepthMeters'
+    || wetBoundary.derivation?.hysteresis !== 'schmitt-trigger-v1'
+  ) {
+    portableGeometryFailure('wet boundary derivation identity disagrees');
+  }
+  return {
+    schema: wetBoundary.schema,
+    route: Object.freeze({ ...wetBoundary.route }),
+    sourceAuthority: wetBoundary.sourceAuthority,
+    fallbackStatus: wetBoundary.fallbackStatus,
+    terrainEpoch: wetBoundary.terrainEpoch,
+    fluidEpoch: wetBoundary.fluidEpoch,
+    topologyId: wetBoundary.topologyId,
+    effectiveDryDepthMeters: dryDepth,
+    effectiveWetActivationDepthMeters: activationDepth,
+    physicalDepthMeters: Float64Array.from(wetBoundary.physicalDepthMeters),
+    signedDryMarginMeters: Float64Array.from(wetBoundary.signedDryMarginMeters),
+    wetState: Uint8Array.from(wetBoundary.wetState),
+    cells: {
+      indexing: cells.indexing,
+      width: cells.width,
+      height: cells.height,
+      stableId: Uint32Array.from(cells.stableId),
+      activeState: Uint8Array.from(cells.activeState),
+      generation: Uint32Array.from(cells.generation),
+    },
+    boundaryGeneration: wetBoundary.boundaryGeneration,
+    boundaryId: wetBoundary.boundaryId,
+    reset: Object.freeze({ ...reset }),
+    derivation: Object.freeze({ ...wetBoundary.derivation }),
+    complete: true,
   };
 }
 
@@ -1362,8 +1562,19 @@ function validatePortableMacroSourceHandleForOptics(
     snapshot.physicalMaterial,
     'macro source snapshot material',
   );
-  diagnostics.phase = 'construct-provider';
+  diagnostics.phase = 'validate-wet-boundary';
   diagnostics.lastTrustworthyEvidence = 'macro-source-snapshot-validated';
+  const wetBoundary = validatePortableWetBoundaryForOptics(snapshot.wetBoundary, {
+    sampleCount,
+    grid,
+    mappedDepth: snapshot.macro.mappedDepth,
+    jacobian,
+    topologyId: support.topologyId,
+    terrainEpoch: snapshot.terrainEpoch,
+    fluidEpoch: snapshot.fluidEpoch,
+  });
+  diagnostics.phase = 'construct-provider';
+  diagnostics.lastTrustworthyEvidence = 'wet-boundary-validated';
 
   return {
     representation: {
@@ -1379,6 +1590,7 @@ function validatePortableMacroSourceHandleForOptics(
     geometrySource: {
       grid,
       sampleCount,
+      topologyId: support.topologyId,
       supportPosition: Float64Array.from(support.worldPosition),
       tangentU,
       tangentV,
@@ -1417,6 +1629,7 @@ function validatePortableMacroSourceHandleForOptics(
       retainedFluidEpoch: descriptor.lifetime.retainedFluidEpoch,
       terrain: terrainSource,
     }),
+    wetBoundary,
     confidence: snapshot.confidence,
     dirtyRegions: Object.freeze(dirtyRegions),
   };
@@ -1443,6 +1656,7 @@ function createFingerFluidPortableMacroGeometryProviderInternal({
     geometrySource,
     metadata,
     source,
+    wetBoundary,
     confidence,
     dirtyRegions,
   } = retainedSource;
@@ -1461,6 +1675,7 @@ function createFingerFluidPortableMacroGeometryProviderInternal({
   });
   const geometry = Object.freeze({
     identity: metadata.identity,
+    topologyId: geometrySource.topologyId,
     transformIdentity: metadata.transformIdentity,
     terrainId: metadata.terrainId,
     producerId: metadata.producerId,
@@ -1497,7 +1712,7 @@ function createFingerFluidPortableMacroGeometryProviderInternal({
     ));
     return {
       index,
-      wet: mappedDepth > 0,
+      wet: wetBoundary.wetState[index] === 1,
       mappedDepth,
       physicalDepthMeters,
       supportPosition: support,
@@ -1521,6 +1736,7 @@ function createFingerFluidPortableMacroGeometryProviderInternal({
     return {
       schema: KAMINOS_FINGER_FLUID_PORTABLE_MACRO_UPLOAD_SCHEMA,
       geometryIdentity: geometry.identity,
+      topologyId: geometry.topologyId,
       terrainId: geometry.terrainId,
       sourceHandleId: geometry.sourceHandleId,
       source: source.terrain,
@@ -1544,6 +1760,34 @@ function createFingerFluidPortableMacroGeometryProviderInternal({
       normal: Float64Array.from(geometrySource.normal),
       jacobian: Float64Array.from(geometrySource.jacobian),
       supportVelocity: Float64Array.from(geometrySource.supportVelocity),
+      wetBoundary: {
+        schema: wetBoundary.schema,
+        route: Object.freeze({ ...wetBoundary.route }),
+        sourceAuthority: wetBoundary.sourceAuthority,
+        fallbackStatus: wetBoundary.fallbackStatus,
+        terrainEpoch: wetBoundary.terrainEpoch,
+        fluidEpoch: wetBoundary.fluidEpoch,
+        topologyId: wetBoundary.topologyId,
+        effectiveDryDepthMeters: wetBoundary.effectiveDryDepthMeters,
+        effectiveWetActivationDepthMeters:
+          wetBoundary.effectiveWetActivationDepthMeters,
+        physicalDepthMeters: Float64Array.from(wetBoundary.physicalDepthMeters),
+        signedDryMarginMeters: Float64Array.from(wetBoundary.signedDryMarginMeters),
+        wetState: Uint8Array.from(wetBoundary.wetState),
+        cells: {
+          indexing: wetBoundary.cells.indexing,
+          width: wetBoundary.cells.width,
+          height: wetBoundary.cells.height,
+          stableId: Uint32Array.from(wetBoundary.cells.stableId),
+          activeState: Uint8Array.from(wetBoundary.cells.activeState),
+          generation: Uint32Array.from(wetBoundary.cells.generation),
+        },
+        boundaryGeneration: wetBoundary.boundaryGeneration,
+        boundaryId: wetBoundary.boundaryId,
+        reset: Object.freeze({ ...wetBoundary.reset }),
+        derivation: Object.freeze({ ...wetBoundary.derivation }),
+        complete: true,
+      },
       confidence,
       dirtyRegions,
     };

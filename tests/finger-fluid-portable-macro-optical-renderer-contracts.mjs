@@ -6,6 +6,7 @@ const snapshot = {
   schema: 'kaminos.finger-fluid.portable-macro-upload-snapshot.v1',
   geometryIdentity: 'hill-geometry-a',
   terrainId: 'hill-a',
+  topologyId: 'hill-topology-a',
   sourceHandleId: 'hill-source-a',
   source: {
     requested: 'hill/live',
@@ -59,6 +60,62 @@ const snapshot = {
   supportVelocity: new Float64Array(27),
   confidence: 1,
   dirtyRegions: [],
+  wetBoundary: {
+    schema: 'kaminos.fluid.macro-wet-boundary.v1',
+    route: {
+      requested: 'kaminos/fluid/macro-wet-boundary',
+      effective: 'kaminos/fluid/macro-wet-boundary',
+    },
+    sourceAuthority: 'live_runtime',
+    fallbackStatus: 'none',
+    terrainEpoch: 3,
+    fluidEpoch: 7,
+    topologyId: 'hill-topology-a',
+    effectiveDryDepthMeters: 0.1,
+    effectiveWetActivationDepthMeters: 0.12,
+    physicalDepthMeters: new Float64Array([
+      0, 0.3, 0,
+      0.25, 0.8, 0.4,
+      0, 0.35, 0,
+    ]),
+    signedDryMarginMeters: new Float64Array([
+      -0.1, 0.2, -0.1,
+      0.15, 0.7, 0.3,
+      -0.1, 0.25, -0.1,
+    ]),
+    wetState: new Uint8Array([
+      0, 1, 0,
+      1, 1, 1,
+      0, 1, 0,
+    ]),
+    cells: {
+      indexing: 'row-major-quad-v1',
+      width: 2,
+      height: 2,
+      stableId: new Uint32Array([0, 1, 2, 3]),
+      activeState: new Uint8Array([1, 1, 1, 1]),
+      generation: new Uint32Array([0, 0, 0, 0]),
+    },
+    boundaryGeneration: 0,
+    boundaryId: 'hill-topology-a:boundary:0',
+    reset: {
+      generation: 0,
+      id: 'hill-topology-a:reset:0:3->3:initial:initial',
+      kind: 'initial',
+      previousTerrainEpoch: 3,
+      terrainEpoch: 3,
+      remapReceiptId: null,
+      shockId: null,
+      boundaryGeneration: 0,
+      discontinuous: true,
+    },
+    derivation: {
+      physicalDepth: 'mappedDepth / supportGeometry.jacobian',
+      signedMargin: 'physicalDepthMeters - effectiveDryDepthMeters',
+      hysteresis: 'schmitt-trigger-v1',
+    },
+    complete: true,
+  },
 };
 
 const expectedIdentity = {
@@ -140,6 +197,14 @@ assert.equal(
   'kaminos/finger-fluid/portable-macro-screen-space-optics-v0',
 );
 assert.equal(
+  renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
+  'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0',
+);
+assert.equal(
+  renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+  'kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0',
+);
+assert.equal(
   typeof renderer.createFingerFluidPortableMacroOpticalRenderPlan,
   'function',
 );
@@ -152,6 +217,8 @@ const plan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
   snapshot,
   expectedIdentity,
   hostFrame,
+  requestedTopologyRoute:
+    renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
 });
 
 assert.equal(plan.schema, renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_SCHEMA);
@@ -179,6 +246,12 @@ assert.ok(plan.drawableWetTriangleCount > 0);
 assert.equal(plan.blank, false);
 assert.equal(plan.partial, false);
 assert.deepEqual(plan.absorptionPerMeter, snapshot.physicalMaterial.absorptionPerMeter);
+assert.deepEqual(plan.topology.route, {
+  requested: renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
+  effective: renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
+  fallback: null,
+});
+assert.equal(plan.topology.boundary, null);
 assert.ok(
   Array.from(
     plan.vertices.slice(
@@ -192,6 +265,110 @@ assert.ok(
   Math.abs(plan.vertices[4 * plan.vertexStrideFloats + 6] - 0.8) < 1e-6,
   'physical depth in meters remains available to the optical shader',
 );
+
+const clippedPlan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+  snapshot,
+  expectedIdentity,
+  hostFrame,
+  requestedTopologyRoute:
+    renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+});
+
+assert.deepEqual(clippedPlan.topology.route, {
+  requested: renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+  effective: renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+  fallback: null,
+});
+assert.equal(clippedPlan.topology.boundary.id, snapshot.wetBoundary.boundaryId);
+assert.equal(clippedPlan.topology.boundary.resetId, snapshot.wetBoundary.reset.id);
+assert.equal(clippedPlan.topology.boundary.generation, 0);
+assert.equal(clippedPlan.topology.boundary.route.requested, 'kaminos/fluid/macro-wet-boundary');
+assert.equal(clippedPlan.topology.boundary.route.effective, 'kaminos/fluid/macro-wet-boundary');
+assert.equal(clippedPlan.topology.boundary.fallbackStatus, 'none');
+assert.equal(
+  clippedPlan.topology.ambiguityResolution.route,
+  'asymptotic-decider-stable-cell-v1',
+);
+assert.ok(clippedPlan.topology.shorelineCrossingCount > 0);
+assert.ok(clippedPlan.topology.clippedCellCount > 0);
+assert.equal(clippedPlan.topology.minimumOutputSignedMarginMeters, 0);
+assert.ok(clippedPlan.vertexCount > 0);
+assert.ok(clippedPlan.indexCount > 0);
+assert.equal(clippedPlan.indexCount % 3, 0);
+assert.ok(
+  Array.from({ length: clippedPlan.vertexCount }, (_, index) => (
+    clippedPlan.vertices[index * clippedPlan.vertexStrideFloats + 1]
+  )).every(value => value >= 0.05 - 1e-6),
+  'clipped shoreline geometry must never retain a dry corner below the exact dry threshold',
+);
+assert.ok(
+  Array.from({ length: clippedPlan.vertexCount }, (_, index) => (
+    clippedPlan.vertices[index * clippedPlan.vertexStrideFloats + 11]
+  )).every(value => value === 1),
+  'every clipped output vertex is owned by the wet optical surface',
+);
+assert.ok(
+  Array.from({ length: clippedPlan.vertexCount }, (_, index) => {
+    const offset = index * clippedPlan.vertexStrideFloats + 3;
+    return Math.abs(Math.hypot(
+      clippedPlan.vertices[offset],
+      clippedPlan.vertices[offset + 1],
+      clippedPlan.vertices[offset + 2],
+    ) - 1) < 1e-5;
+  }).every(Boolean),
+  'clipped output normals are reconstructed and normalized',
+);
+
+const ambiguousSnapshot = {
+  ...snapshot,
+  width: 2,
+  height: 2,
+  sampleCount: 4,
+  mappedDepth: new Float64Array([0.2, 0.02, 0.02, 0.2]),
+  mappedMomentumU: new Float64Array(4),
+  mappedMomentumV: new Float64Array(4),
+  supportPosition: new Float64Array([
+    -1, 0, -1, 1, 0, -1,
+    -1, 0, 1, 1, 0, 1,
+  ]),
+  tangentU: new Float64Array([
+    1, 0, 0, 1, 0, 0,
+    1, 0, 0, 1, 0, 0,
+  ]),
+  tangentV: new Float64Array([
+    0, 0, 1, 0, 0, 1,
+    0, 0, 1, 0, 0, 1,
+  ]),
+  normal: new Float64Array([
+    0, 1, 0, 0, 1, 0,
+    0, 1, 0, 0, 1, 0,
+  ]),
+  jacobian: new Float64Array(4).fill(1),
+  supportVelocity: new Float64Array(12),
+  wetBoundary: {
+    ...snapshot.wetBoundary,
+    physicalDepthMeters: new Float64Array([0.2, 0.02, 0.02, 0.2]),
+    signedDryMarginMeters: new Float64Array([0.1, -0.08, -0.08, 0.1]),
+    wetState: new Uint8Array([1, 0, 0, 1]),
+    cells: {
+      indexing: 'row-major-quad-v1',
+      width: 1,
+      height: 1,
+      stableId: new Uint32Array([0]),
+      activeState: new Uint8Array([1]),
+      generation: new Uint32Array([0]),
+    },
+  },
+};
+const ambiguousPlan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+  snapshot: ambiguousSnapshot,
+  expectedIdentity,
+  hostFrame,
+  requestedTopologyRoute:
+    renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+});
+assert.equal(ambiguousPlan.topology.ambiguityResolution.ambiguousCellCount, 1);
+assert.equal(ambiguousPlan.topology.ambiguityResolution.stableCellTieBreakCount, 1);
 assert.doesNotThrow(
   () => renderer.createFingerFluidPortableMacroOpticalRenderPlan({
     snapshot: {
@@ -214,6 +391,13 @@ function expectFailure(mutator, phase, messagePattern) {
     physicalMaterial: {
       ...snapshot.physicalMaterial,
       absorptionPerMeter: [...snapshot.physicalMaterial.absorptionPerMeter],
+    },
+    wetBoundary: {
+      ...snapshot.wetBoundary,
+      route: { ...snapshot.wetBoundary.route },
+      cells: { ...snapshot.wetBoundary.cells },
+      reset: { ...snapshot.wetBoundary.reset },
+      derivation: { ...snapshot.wetBoundary.derivation },
     },
   };
   const candidateIdentity = {
@@ -248,6 +432,44 @@ function expectFailure(mutator, phase, messagePattern) {
       assert.equal(error.report.failurePhase, phase);
       assert.equal(error.report.primaryOutputWritten, false);
       assert.ok(error.report.lastTrustworthyEvidence);
+      return true;
+    },
+  );
+}
+
+function expectClippedFailure(mutator, phase, messagePattern) {
+  const candidateSnapshot = {
+    ...snapshot,
+    source: { ...snapshot.source },
+    physicalMaterial: {
+      ...snapshot.physicalMaterial,
+      absorptionPerMeter: [...snapshot.physicalMaterial.absorptionPerMeter],
+    },
+    wetBoundary: {
+      ...snapshot.wetBoundary,
+      route: { ...snapshot.wetBoundary.route },
+      cells: { ...snapshot.wetBoundary.cells },
+      reset: { ...snapshot.wetBoundary.reset },
+      derivation: { ...snapshot.wetBoundary.derivation },
+    },
+  };
+  mutator(candidateSnapshot);
+  assert.throws(
+    () => renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+      snapshot: candidateSnapshot,
+      expectedIdentity,
+      hostFrame,
+      requestedTopologyRoute:
+        renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+    }),
+    (error) => {
+      assert.match(error.message, messagePattern);
+      assert.equal(error.report.failurePhase, phase);
+      assert.equal(error.report.primaryOutputWritten, false);
+      assert.equal(
+        error.report.requestedTopologyRoute,
+        renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+      );
       return true;
     },
   );
@@ -344,6 +566,59 @@ assert.throws(
   ),
   'unsupported route evidence must preserve the exact caller request',
 );
+assert.throws(
+  () => renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+    snapshot,
+    expectedIdentity,
+    hostFrame,
+    requestedTopologyRoute: 'bad/topology-route',
+  }),
+  error => (
+    error.report.requestedTopologyRoute === 'bad/topology-route'
+    && error.report.effectiveTopologyRoute === null
+  ),
+  'unsupported topology evidence must preserve the exact caller request',
+);
+expectClippedFailure(
+  candidate => {
+    delete candidate.wetBoundary;
+  },
+  'validate-wet-boundary',
+  /wet boundary.*missing/i,
+);
+expectClippedFailure(
+  candidate => {
+    candidate.wetBoundary.terrainEpoch = 2;
+  },
+  'validate-wet-boundary',
+  /wet boundary.*epoch/i,
+);
+expectClippedFailure(
+  candidate => {
+    candidate.wetBoundary.route.effective = 'fallback/wet-boundary';
+    candidate.wetBoundary.fallbackStatus = 'legacy';
+  },
+  'validate-wet-boundary',
+  /wet boundary.*route|fallback/i,
+);
+expectClippedFailure(
+  candidate => {
+    candidate.wetBoundary.wetState = new Uint8Array(9);
+  },
+  'validate-wet-boundary',
+  /wet state.*margin|disagrees/i,
+);
+expectClippedFailure(
+  candidate => {
+    candidate.mappedDepth = new Float64Array(9);
+    candidate.wetBoundary.physicalDepthMeters = new Float64Array(9);
+    candidate.wetBoundary.signedDryMarginMeters = new Float64Array(9).fill(-0.1);
+    candidate.wetBoundary.wetState = new Uint8Array(9);
+    candidate.wetBoundary.cells.activeState = new Uint8Array(4);
+  },
+  'build-clipped-shoreline-mesh',
+  /blank/i,
+);
 
 const attachmentView = Object.freeze({});
 const validAttachments = {
@@ -383,5 +658,78 @@ assert.throws(
   ),
   'target format must match the renderer pipeline before command encoding',
 );
+
+globalThis.GPUShaderStage = { VERTEX: 1, FRAGMENT: 2 };
+globalThis.GPUBufferUsage = {
+  UNIFORM: 1,
+  COPY_DST: 2,
+  VERTEX: 4,
+  INDEX: 8,
+};
+const fakeDevice = {
+  createShaderModule: descriptor => descriptor,
+  createBindGroupLayout: descriptor => descriptor,
+  createPipelineLayout: descriptor => descriptor,
+  createRenderPipeline: descriptor => descriptor,
+  createBuffer: descriptor => ({ ...descriptor, destroy() {} }),
+  createSampler: descriptor => descriptor,
+  createBindGroup: descriptor => descriptor,
+  queue: { writeBuffer() {} },
+};
+const fakeCommandEncoder = {
+  beginRenderPass() {
+    return {
+      setPipeline() {},
+      setBindGroup() {},
+      setVertexBuffer() {},
+      setIndexBuffer() {},
+      drawIndexed() {},
+      end() {},
+    };
+  },
+};
+const webgpuRenderer = renderer.createWebGPUFingerFluidPortableMacroOpticalRenderer({
+  device: fakeDevice,
+});
+const clippedRenderEvidence = webgpuRenderer.render({
+  plan: clippedPlan,
+  commandEncoder: fakeCommandEncoder,
+  ...validAttachments,
+});
+assert.equal(
+  clippedRenderEvidence.requestedTopologyRoute,
+  renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+);
+assert.equal(
+  clippedRenderEvidence.effectiveTopologyRoute,
+  renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+);
+assert.equal(clippedRenderEvidence.topologyFallback, null);
+assert.deepEqual(clippedRenderEvidence.topology, {
+  boundaryId: snapshot.wetBoundary.boundaryId,
+  resetId: snapshot.wetBoundary.reset.id,
+  edgeCrossingRoute: clippedPlan.topology.edgeCrossingRoute,
+  shorelineCrossingCount: clippedPlan.topology.shorelineCrossingCount,
+  clippedCellCount: clippedPlan.topology.clippedCellCount,
+  ambiguityRoute: 'asymptotic-decider-stable-cell-v1',
+});
+assert.throws(
+  () => renderer.validateFingerFluidPortableMacroOpticalRenderAttachments({
+    plan: clippedPlan,
+    ...validAttachments,
+    sceneDepth: {
+      ...validAttachments.sceneDepth,
+      frameId: 'stale-frame',
+    },
+  }),
+  error => (
+    error.report.requestedTopologyRoute
+      === renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE
+    && error.report.effectiveTopologyRoute === null
+    && error.report.primaryOutputWritten === false
+  ),
+  'pre-output attachment failure must preserve the exact requested clipped topology',
+);
+webgpuRenderer.destroy();
 
 console.log('finger fluid portable macro optical renderer contracts passed');
