@@ -29,7 +29,7 @@ class ChainedWitnessContracts(unittest.TestCase):
     def test_witness_html_embeds_states_and_is_selfcontained(self) -> None:
         html = CHAIN.witness_html(["120", "118", "116"], {"120": {"heldMae": 0.1}}, "damped")
         self.assertIn("120", html)
-        self.assertIn("tracked-damped-state-", html)
+        self.assertIn("tracked-${data.chain}-state-", html)
         self.assertIn("target-state-", html)
         self.assertNotIn("http://", html.split("<script>")[1])
         self.assertGreater(len(html), 1500)
