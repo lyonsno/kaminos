@@ -24,7 +24,7 @@ import {
 } from '../scripts/sf3d-live-smoke-witness-core.mjs';
 
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
-assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, '2f79b9b84a19809107f5eb29b5fab806e00e6c6a');
+assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'f977b50fb21815f955a04a1c3a392b3a44060561');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: false,
@@ -335,6 +335,42 @@ const indexSource = readFileSync(new URL('index.html', root), 'utf8');
 const serverSource = readFileSync(new URL('serve.py', root), 'utf8');
 const launcherSource = readFileSync(new URL('scripts/run-sf3d-live-smoke.mjs', root), 'utf8');
 const witnessSource = readFileSync(new URL('scripts/witness-sf3d-live-smoke-activation.mjs', root), 'utf8');
+
+function assertSingleSourceRevision(source, pattern, label) {
+  const matches = [...source.matchAll(pattern)];
+  assert.equal(matches.length, 1, `${label} must define exactly one accepted SF3D revision`);
+  assert.equal(
+    matches[0][1],
+    SF3D_LIVE_SMOKE_SOURCE_REVISION,
+    `${label} must accept the same exact SF3D revision as the browser contract`,
+  );
+}
+
+const serverRevisionPattern = /^SF3D_LIVE_SMOKE_SOURCE_REVISION = "([0-9a-f]{40})"$/gm;
+const launcherRevisionPattern = /^const EXPECTED_REVISION = '([0-9a-f]{40})';$/gm;
+assertSingleSourceRevision(serverSource, serverRevisionPattern, 'Kaminos server');
+assertSingleSourceRevision(launcherSource, launcherRevisionPattern, 'SF3D smoke launcher');
+
+const staleRevision = '2f79b9b84a19809107f5eb29b5fab806e00e6c6a';
+assert.throws(
+  () => assertSingleSourceRevision(
+    serverSource.replace(SF3D_LIVE_SMOKE_SOURCE_REVISION, staleRevision),
+    serverRevisionPattern,
+    'Kaminos server',
+  ),
+  /same exact SF3D revision/,
+  'the contract must reject a stale server pin',
+);
+assert.throws(
+  () => assertSingleSourceRevision(
+    launcherSource.replace(SF3D_LIVE_SMOKE_SOURCE_REVISION, staleRevision),
+    launcherRevisionPattern,
+    'SF3D smoke launcher',
+  ),
+  /same exact SF3D revision/,
+  'the contract must reject a stale launcher pin',
+);
+
 assert.doesNotMatch(indexSource, /device: sf3dLiveSmokePrepared\.device/, 'Kaminos must not consume SF3D external-device lifetime');
 assert.match(indexSource, /new THREE\.WebGPURenderer\(\{\s*antialias: true,\s*\}\)/, 'Kaminos must retain renderer-owned device creation');
 assert.match(indexSource, /id="sf3d-live-smoke-topology"/, 'the operator surface must expose effective GPU topology');
