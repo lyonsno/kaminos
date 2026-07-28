@@ -73,6 +73,53 @@ assert.equal(
   'function',
   'post-construction runtime failures must share one solver/device cleanup primitive',
 );
+assert.equal(
+  typeof fingerFluidCore.createFingerFluidWebGPURuntimeLifecycle,
+  'function',
+  'device loss and completed teardown must be represented by distinct lifecycle state',
+);
+
+let resolveLifecycleDeviceLoss;
+const lifecycleDeviceLoss = new Promise(resolveLoss => {
+  resolveLifecycleDeviceLoss = resolveLoss;
+});
+let observedDeviceLoss = null;
+const lifecycle = fingerFluidCore.createFingerFluidWebGPURuntimeLifecycle({
+  deviceLost: lifecycleDeviceLoss,
+  onDeviceLost(info) {
+    observedDeviceLoss = info;
+  },
+});
+assert.equal(lifecycle.stopped, false);
+assert.equal(lifecycle.beginTeardown(), true);
+assert.equal(lifecycle.beginTeardown(), false, 'normal teardown must remain idempotent');
+
+let resolvePreTeardownDeviceLoss;
+const preTeardownDeviceLoss = new Promise(resolveLoss => {
+  resolvePreTeardownDeviceLoss = resolveLoss;
+});
+const lossBeforeTeardownLifecycle = fingerFluidCore.createFingerFluidWebGPURuntimeLifecycle({
+  deviceLost: preTeardownDeviceLoss,
+});
+resolvePreTeardownDeviceLoss({ reason: 'destroyed', message: 'test device loss' });
+await preTeardownDeviceLoss;
+await Promise.resolve();
+assert.equal(lossBeforeTeardownLifecycle.stopped, true);
+assert.equal(
+  lossBeforeTeardownLifecycle.beginTeardown(),
+  true,
+  'device loss must stop runtime work without suppressing the first owned-resource teardown',
+);
+assert.equal(lossBeforeTeardownLifecycle.beginTeardown(), false);
+
+resolveLifecycleDeviceLoss({ reason: 'destroyed', message: 'post-teardown loss' });
+await lifecycleDeviceLoss;
+await Promise.resolve();
+assert.equal(lifecycle.stopped, true);
+assert.deepEqual(observedDeviceLoss, {
+  reason: 'destroyed',
+  message: 'post-teardown loss',
+});
 
 const buffers = [];
 const writes = [];

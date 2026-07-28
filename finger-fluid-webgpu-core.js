@@ -12144,6 +12144,37 @@ export function failFingerFluidWebGPURuntimeOperation({
   throw failure;
 }
 
+export function createFingerFluidWebGPURuntimeLifecycle({
+  deviceLost,
+  onDeviceLost = () => {},
+} = {}) {
+  if (!deviceLost || typeof deviceLost.then !== 'function') {
+    throw new Error('Finger Fluid WebGPU lifecycle requires a device.lost promise');
+  }
+  if (typeof onDeviceLost !== 'function') {
+    throw new Error('Finger Fluid WebGPU lifecycle onDeviceLost must be callable');
+  }
+
+  let stopped = false;
+  let teardownCompleted = false;
+  deviceLost.then(info => {
+    stopped = true;
+    onDeviceLost(info);
+  });
+
+  return Object.freeze({
+    get stopped() {
+      return stopped;
+    },
+    beginTeardown() {
+      stopped = true;
+      if (teardownCompleted) return false;
+      teardownCompleted = true;
+      return true;
+    },
+  });
+}
+
 export async function createWebGPUFingerFluidSolver({
   canvas,
   particleCount = DEFAULT_PARTICLE_COUNT,
@@ -13076,7 +13107,12 @@ export async function createWebGPUFingerFluidSolver({
     failurePhase: null,
     lastTrustworthyEvidence: 'analytic-carrier-not-requested',
   };
-  let destroyed = false;
+  const runtimeLifecycle = createFingerFluidWebGPURuntimeLifecycle({
+    deviceLost: device.lost,
+    onDeviceLost(info) {
+      console.error('Kaminos Finger Fluid WebGPU device lost:', info.message || info.reason);
+    },
+  });
 
   function ensureExtent(width, height, pixelRatio = globalThis.devicePixelRatio || 1) {
     try {
@@ -13506,7 +13542,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function step(dt = 1 / 60) {
-    if (destroyed) return;
+    if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
     const frameDt = clamp(finite(dt, 1 / 60), 1 / 240, 1 / 30);
     const substepDt = frameDt / safeSubsteps;
@@ -13600,7 +13636,7 @@ export async function createWebGPUFingerFluidSolver({
     bodyTransportMode = safeBodyTransportMode,
     interfaceFrequencyMode = safeInterfaceFrequencyMode,
   } = {}) {
-    if (destroyed) return;
+    if (runtimeLifecycle.stopped) return;
     analyticCarrierLastFrameDrawCount = 0;
     const extent = ensureExtent(width, height, pixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
@@ -13922,7 +13958,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   async function requestDiagnostics() {
-    if (diagnosticsPending || destroyed) return diagnostics;
+    if (diagnosticsPending || runtimeLifecycle.stopped) return diagnostics;
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;
     const diagnosticsStartedAtMs = performance.now();
@@ -15153,8 +15189,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function destroy() {
-    if (destroyed) return;
-    destroyed = true;
+    if (!runtimeLifecycle.beginTeardown()) return;
     particleBuffer.destroy();
     cellHeadsBuffer.destroy();
     particleNextBuffer.destroy();
@@ -15196,11 +15231,6 @@ export async function createWebGPUFingerFluidSolver({
     deferredAlbedoMetallicTexture?.destroy();
     deferredLinearDepthObjectTexture?.destroy();
   }
-
-  device.lost.then(info => {
-    destroyed = true;
-    console.error('Kaminos Finger Fluid WebGPU device lost:', info.message || info.reason);
-  });
 
   runtimeApi = {
     available: true,
