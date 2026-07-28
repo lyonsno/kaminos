@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
 
-const EXPECTED_REVISION = 'a6f691c2bc33483036a36e047c723084f7ca0a9e';
+const EXPECTED_REVISION = '7c35ecdc6bf6ab83d636de77c08c846e9dca0854';
 const KAMINOS_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
 function argument(name, fallback = null) {
@@ -56,9 +56,13 @@ const renderFps = argument('--render-fps', '');
 if (renderFps !== '' && (!Number.isFinite(Number(renderFps)) || Number(renderFps) <= 0)) {
   throw new Error(`--render-fps must be a positive finite number, got ${renderFps}`);
 }
-const postProcessor = argument('--post-processor', 'cooperative');
-if (!['monolithic', 'cooperative'].includes(postProcessor)) {
-  throw new Error(`--post-processor must be monolithic or cooperative, got ${postProcessor}`);
+const dino = argument('--dino', 'cooperative');
+if (!['monolithic', 'cooperative'].includes(dino)) {
+  throw new Error(`--dino must be monolithic or cooperative, got ${dino}`);
+}
+const postProcessor = argument('--post-processor', 'layer');
+if (!['monolithic', 'cooperative', 'layer'].includes(postProcessor)) {
+  throw new Error(`--post-processor must be monolithic, cooperative, or layer, got ${postProcessor}`);
 }
 if (!existsSync(path.join(meshDir, meshFile))) {
   throw new Error(`accepted SF3D smoke mesh is missing: ${path.join(meshDir, meshFile)}`);
@@ -127,6 +131,7 @@ await Promise.all([
 const url = new URL(kaminosOrigin);
 url.searchParams.set('sf3d_live_smoke', '1');
 url.searchParams.set('sf3d_gpu_topology', gpuTopology);
+url.searchParams.set('sf3d_dino', dino);
 url.searchParams.set('sf3d_post_processor', postProcessor);
 if (renderFps !== '') url.searchParams.set('sf3d_render_fps', renderFps);
 url.searchParams.set('mesh_root', 'splat-extra-1');
@@ -136,6 +141,7 @@ console.log(`  source: ${effectiveRevision}`);
 console.log(`  sf3d:   ${sf3dOrigin}`);
 console.log(`  topology: ${gpuTopology}`);
 console.log(`  render fps: ${renderFps || 'unthrottled'}`);
+console.log(`  DINO: ${dino}`);
 console.log(`  postprocessor: ${postProcessor}`);
 console.log(`  open:   ${url.href}`);
 console.log('  firing is manual; model load does not start inference\n');

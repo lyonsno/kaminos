@@ -1,19 +1,47 @@
 export const SF3D_LIVE_SMOKE_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
-export const SF3D_LIVE_SMOKE_SOURCE_REVISION = 'a6f691c2bc33483036a36e047c723084f7ca0a9e';
+export const SF3D_LIVE_SMOKE_SOURCE_REVISION = '7c35ecdc6bf6ab83d636de77c08c846e9dca0854';
 export const SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 export const SF3D_LIVE_SMOKE_GPU_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
 export const SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY = 'same-page-shared-device-shared-queue';
 
 export const SF3D_LIVE_SMOKE_OPTIONS = Object.freeze({
   cooperativeDino: false,
+  dinoSchedulingMode: 'cooperative',
+  dinoChunkBlocks: 1,
   cooperativePostProcessor: false,
   postProcessorSchedulingMode: 'cooperative',
+  postProcessorDutyGranularity: 'plane',
   cooperativeBake: true,
   bakeSchedulingMode: 'cooperative',
   bakeBatchTexels: 4096,
   decoderArena: true,
   materializeWorker: true,
 });
+
+export function resolveSf3dDinoRequest(params) {
+  const requested = params?.get?.('sf3d_dino');
+  if (requested == null || requested === '' || requested === 'monolithic') {
+    return Object.freeze({
+      requested: requested || 'monolithic',
+      effective: 'monolithic',
+      cooperativeDino: false,
+      dinoSchedulingMode: 'cooperative',
+      dinoChunkBlocks: 1,
+      authority: 'caller-route-query',
+    });
+  }
+  if (requested === 'cooperative') {
+    return Object.freeze({
+      requested,
+      effective: 'twenty-four-block-cooperative',
+      cooperativeDino: true,
+      dinoSchedulingMode: 'cooperative',
+      dinoChunkBlocks: 1,
+      authority: 'caller-route-query',
+    });
+  }
+  throw new Error(`Unsupported SF3D DINO mode: ${requested}`);
+}
 
 export function resolveSf3dPostProcessorRequest(params) {
   const requested = params?.get?.('sf3d_post_processor');
@@ -23,6 +51,7 @@ export function resolveSf3dPostProcessorRequest(params) {
       effective: 'monolithic',
       cooperativePostProcessor: false,
       postProcessorSchedulingMode: 'cooperative',
+      postProcessorDutyGranularity: 'plane',
       authority: 'caller-route-query',
     });
   }
@@ -32,6 +61,17 @@ export function resolveSf3dPostProcessorRequest(params) {
       effective: 'three-plane-cooperative',
       cooperativePostProcessor: true,
       postProcessorSchedulingMode: 'cooperative',
+      postProcessorDutyGranularity: 'plane',
+      authority: 'caller-route-query',
+    });
+  }
+  if (requested === 'layer') {
+    return Object.freeze({
+      requested,
+      effective: 'eighteen-stage-cooperative',
+      cooperativePostProcessor: true,
+      postProcessorSchedulingMode: 'cooperative',
+      postProcessorDutyGranularity: 'layer',
       authority: 'caller-route-query',
     });
   }
@@ -195,14 +235,15 @@ export function progressFromSf3dMessage(message) {
     const fraction = total > 0 ? Math.min(1, completed / total) : 0;
     return { percent: Math.round(8 + fraction * 18), label: `DINOv2 blocks ${completed} / ${total}` };
   }
-  const postProcessor = text.match(/^Post-processor planes\s+(\d+)\/(\d+)/i);
+  const postProcessor = text.match(/^Post-processor (planes|duties)\s+(\d+)\/(\d+)/i);
   if (postProcessor) {
-    const completed = Number(postProcessor[1]);
-    const total = Number(postProcessor[2]);
+    const unit = postProcessor[1].toLowerCase();
+    const completed = Number(postProcessor[2]);
+    const total = Number(postProcessor[3]);
     const fraction = total > 0 ? Math.min(1, completed / total) : 0;
     return {
       percent: Math.round(60 + fraction * 7),
-      label: `Post-processor planes ${completed} / ${total}`,
+      label: `Post-processor ${unit} ${completed} / ${total}`,
     };
   }
   const texture = text.match(/^Texture bake\s+(\d+)\/(\d+)/i);

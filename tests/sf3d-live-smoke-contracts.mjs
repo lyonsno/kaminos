@@ -17,6 +17,7 @@ import {
   canFireSf3dLiveSmoke,
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
+  resolveSf3dDinoRequest,
   resolveSf3dGpuTopologyRequest,
   resolveSf3dPostProcessorRequest,
   resolveSf3dRenderTargetFps,
@@ -31,13 +32,16 @@ import {
 } from '../scripts/sf3d-live-smoke-witness-core.mjs';
 
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
-assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'a6f691c2bc33483036a36e047c723084f7ca0a9e');
+assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, '7c35ecdc6bf6ab83d636de77c08c846e9dca0854');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
 assert.equal(SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY, 'same-page-shared-device-shared-queue');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: false,
+  dinoSchedulingMode: 'cooperative',
+  dinoChunkBlocks: 1,
   cooperativePostProcessor: false,
   postProcessorSchedulingMode: 'cooperative',
+  postProcessorDutyGranularity: 'plane',
   cooperativeBake: true,
   bakeSchedulingMode: 'cooperative',
   bakeBatchTexels: 4096,
@@ -45,12 +49,39 @@ assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   materializeWorker: true,
 });
 assert.deepEqual(
+  resolveSf3dDinoRequest(new URLSearchParams()),
+  {
+    requested: 'monolithic',
+    effective: 'monolithic',
+    cooperativeDino: false,
+    dinoSchedulingMode: 'cooperative',
+    dinoChunkBlocks: 1,
+    authority: 'caller-route-query',
+  },
+);
+assert.deepEqual(
+  resolveSf3dDinoRequest(new URLSearchParams('sf3d_dino=cooperative')),
+  {
+    requested: 'cooperative',
+    effective: 'twenty-four-block-cooperative',
+    cooperativeDino: true,
+    dinoSchedulingMode: 'cooperative',
+    dinoChunkBlocks: 1,
+    authority: 'caller-route-query',
+  },
+);
+assert.throws(
+  () => resolveSf3dDinoRequest(new URLSearchParams('sf3d_dino=claimed-but-unknown')),
+  /unsupported SF3D DINO mode/i,
+);
+assert.deepEqual(
   resolveSf3dPostProcessorRequest(new URLSearchParams()),
   {
     requested: 'monolithic',
     effective: 'monolithic',
     cooperativePostProcessor: false,
     postProcessorSchedulingMode: 'cooperative',
+    postProcessorDutyGranularity: 'plane',
     authority: 'caller-route-query',
   },
 );
@@ -63,6 +94,20 @@ assert.deepEqual(
     effective: 'three-plane-cooperative',
     cooperativePostProcessor: true,
     postProcessorSchedulingMode: 'cooperative',
+    postProcessorDutyGranularity: 'plane',
+    authority: 'caller-route-query',
+  },
+);
+assert.deepEqual(
+  resolveSf3dPostProcessorRequest(
+    new URLSearchParams('sf3d_post_processor=layer'),
+  ),
+  {
+    requested: 'layer',
+    effective: 'eighteen-stage-cooperative',
+    cooperativePostProcessor: true,
+    postProcessorSchedulingMode: 'cooperative',
+    postProcessorDutyGranularity: 'layer',
     authority: 'caller-route-query',
   },
 );
@@ -472,6 +517,10 @@ assert.deepEqual(progressFromSf3dMessage('Post-processor planes 2/3 (67%)'), {
   percent: 65,
   label: 'Post-processor planes 2 / 3',
 });
+assert.deepEqual(progressFromSf3dMessage('Post-processor duties 11/18 (61%)'), {
+  percent: 64,
+  label: 'Post-processor duties 11 / 18',
+});
 assert.deepEqual(progressFromSf3dMessage('Running two-stream backbone...'), {
   percent: 42,
   label: 'Two-stream backbone',
@@ -541,6 +590,7 @@ assert.match(serverSource, /handle_sf3d_live_smoke_report/, 'the route must pers
 assert.match(launcherSource, /mesh_path.*meshFile/, 'the launcher must mount the accepted foreground mesh');
 assert.match(witnessSource, /resolveSf3dGpuTopologyRequest/, 'the witness must derive expected topology from the requested route');
 assert.match(witnessSource, /resolveSf3dPostProcessorRequest/, 'the witness must derive expected postprocessor mode from the requested route');
+assert.match(witnessSource, /resolveSf3dDinoRequest/, 'the witness must derive expected DINO mode from the requested route');
 assert.match(witnessSource, /gpuTopologyReceipt/, 'the witness must reject requested/effective topology substitution');
 assert.match(witnessSource, /FAILED_ALLOCATION_SIZE\s*=\s*3_145_728/, 'the witness must preserve the exact failed allocation size');
 assert.match(witnessSource, /size:\s*FAILED_ALLOCATION_SIZE,\s*mappedAtCreation:\s*true/, 'the witness must exercise that allocation with mappedAtCreation');

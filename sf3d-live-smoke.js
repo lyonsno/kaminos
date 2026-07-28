@@ -10,6 +10,7 @@ import {
   createSf3dRendererOptions,
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
+  resolveSf3dDinoRequest,
   resolveSf3dGpuTopologyRequest,
   resolveSf3dPostProcessorRequest,
   resolveSf3dRenderTargetFps,
@@ -26,6 +27,7 @@ export function isSf3dLiveSmokeRoute(params = new URLSearchParams(location.searc
 export async function prepareSf3dLiveSmokeDevice(params = new URLSearchParams(location.search)) {
   if (!isSf3dLiveSmokeRoute(params)) return null;
   const requestedTopology = resolveSf3dGpuTopologyRequest(params);
+  const dino = resolveSf3dDinoRequest(params);
   const postProcessor = resolveSf3dPostProcessorRequest(params);
   const renderTargetFps = resolveSf3dRenderTargetFps(params, requestedTopology);
   const response = await fetch('/api/sf3d-live-smoke-config', { cache: 'no-store' });
@@ -52,6 +54,7 @@ export async function prepareSf3dLiveSmokeDevice(params = new URLSearchParams(lo
     device: gpu.device,
     deviceLoss,
     requestedTopology,
+    dino,
     postProcessor,
     renderTargetFps,
   });
@@ -232,8 +235,12 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   setText('sf3d-live-smoke-status', 'Loading model');
   const effectiveOptions = Object.freeze({
     ...SF3D_LIVE_SMOKE_OPTIONS,
+    cooperativeDino: prepared.dino.cooperativeDino,
+    dinoSchedulingMode: prepared.dino.dinoSchedulingMode,
+    dinoChunkBlocks: prepared.dino.dinoChunkBlocks,
     cooperativePostProcessor: prepared.postProcessor.cooperativePostProcessor,
     postProcessorSchedulingMode: prepared.postProcessor.postProcessorSchedulingMode,
+    postProcessorDutyGranularity: prepared.postProcessor.postProcessorDutyGranularity,
   });
 
   const [weightsModule, inferenceModule, pipelineModule] = await Promise.all([
@@ -277,6 +284,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         gpuTopology: prepared.gpuTopology.effective,
         gpuTopologyReceipt: prepared.gpuTopology,
         renderCadence: prepared.renderCadence.snapshot(),
+        dino: prepared.dino,
         postProcessor: prepared.postProcessor,
         options: effectiveOptions,
         running,
@@ -346,8 +354,11 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           inputImage,
           {
             cooperativeDino: effectiveOptions.cooperativeDino,
+            dinoSchedulingMode: effectiveOptions.dinoSchedulingMode,
+            dinoChunkBlocks: effectiveOptions.dinoChunkBlocks,
             cooperativePostProcessor: effectiveOptions.cooperativePostProcessor,
             postProcessorSchedulingMode: effectiveOptions.postProcessorSchedulingMode,
+            postProcessorDutyGranularity: effectiveOptions.postProcessorDutyGranularity,
             cooperativeBake: effectiveOptions.cooperativeBake,
             bakeSchedulingMode: effectiveOptions.bakeSchedulingMode,
             bakeBatchTexels: effectiveOptions.bakeBatchTexels,
@@ -403,6 +414,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           gpuTopology: prepared.gpuTopology.effective,
           gpuTopologyReceipt: prepared.gpuTopology,
           renderCadence: prepared.renderCadence.snapshot(),
+          dino: prepared.dino,
           postProcessor: prepared.postProcessor,
           options: effectiveOptions,
           ...completedOutput,
@@ -452,6 +464,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           gpuTopology: prepared.gpuTopology.effective,
           gpuTopologyReceipt: prepared.gpuTopology,
           renderCadence: prepared.renderCadence.snapshot(),
+          dino: prepared.dino,
           postProcessor: prepared.postProcessor,
           options: effectiveOptions,
           elapsedMs: completedOutput?.totalWallMs ?? performance.now() - startedAt,

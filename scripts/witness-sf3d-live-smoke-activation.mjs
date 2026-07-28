@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
+  resolveSf3dDinoRequest,
   resolveSf3dGpuTopologyRequest,
   resolveSf3dPostProcessorRequest,
   validateSf3dLiveSmokeConfig,
@@ -22,7 +23,7 @@ const FAILED_ALLOCATION_SIZE = 3_145_728;
 
 function parseArgs(argv) {
   const values = {
-    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&sf3d_gpu_topology=dual-device&sf3d_post_processor=cooperative&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
+    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&sf3d_gpu_topology=dual-device&sf3d_dino=cooperative&sf3d_post_processor=layer&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
     sf3dRepo: process.env.SF3D_REPO || '/private/tmp/sf3d-webgpu-wake-portable-tet-origin-0726',
     screenshot: '/tmp/sf3d-live-smoke-dual-device-witness.png',
     report: '/tmp/sf3d-live-smoke-dual-device-witness.json',
@@ -182,6 +183,7 @@ try {
   report.url = options.url;
   const routeParams = new URL(options.url).searchParams;
   report.expectedTopology = resolveSf3dGpuTopologyRequest(routeParams);
+  report.expectedDino = resolveSf3dDinoRequest(routeParams);
   report.expectedPostProcessor = resolveSf3dPostProcessorRequest(routeParams);
   report.expectedRenderFps = routeParams.has('sf3d_render_fps')
     ? Number(routeParams.get('sf3d_render_fps'))
@@ -250,9 +252,17 @@ try {
     `render cadence mismatch: ${JSON.stringify(report.initialState.renderCadence)}`,
   );
   assert(
+    report.initialState.dino?.effective === report.expectedDino.effective
+      && report.initialState.options?.cooperativeDino
+        === report.expectedDino.cooperativeDino,
+    `DINO mode mismatch: ${JSON.stringify(report.initialState.dino)}`,
+  );
+  assert(
     report.initialState.postProcessor?.effective === report.expectedPostProcessor.effective
       && report.initialState.options?.cooperativePostProcessor
-        === report.expectedPostProcessor.cooperativePostProcessor,
+        === report.expectedPostProcessor.cooperativePostProcessor
+      && report.initialState.options?.postProcessorDutyGranularity
+        === report.expectedPostProcessor.postProcessorDutyGranularity,
     `postprocessor mode mismatch: ${JSON.stringify(report.initialState.postProcessor)}`,
   );
   assert(report.initialState.revision === SF3D_LIVE_SMOKE_SOURCE_REVISION, `controller revision mismatch: ${report.initialState.revision}`);
