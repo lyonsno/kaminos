@@ -5986,7 +5986,8 @@ fn movingHillSupportSample(position: vec3<f32>) -> MovingHillSupportSample {
   let velocityValid1 = mix(sample01.supportVelocityValid, sample11.supportVelocityValid, blend.x);
   var heightNormal = mix(heightNormal0, heightNormal1, blend.y);
   let velocityValid = mix(velocityValid0, velocityValid1, blend.y);
-  heightNormal.yzw = normalize(heightNormal.yzw);
+  let normalizedHeightNormal = normalize(heightNormal.yzw);
+  heightNormal = vec4<f32>(heightNormal.x, normalizedHeightNormal);
   return MovingHillSupportSample(heightNormal, velocityValid);
 }
 

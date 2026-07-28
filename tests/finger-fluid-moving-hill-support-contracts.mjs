@@ -529,6 +529,16 @@ assert.match(source, /@group\(0\)\s*@binding\(13\).*movingHillSupportParams/);
 assert.match(source, /fn movingHillSupportContactFrame\(/);
 assert.match(source, /supportVelocity/);
 assert.match(source, /signedDistance/);
+assert.doesNotMatch(
+  source,
+  /\b[A-Za-z_]\w*\.[xyzwrgba]{2,}\s*=/,
+  'WGSL cannot assign through a multi-component swizzle because Chrome rejects it as a non-assignable value',
+);
+assert.match(
+  source,
+  /let normalizedHeightNormal = normalize\(heightNormal\.yzw\);\s*heightNormal = vec4<f32>\(heightNormal\.x, normalizedHeightNormal\);/,
+  'moving-Hill interpolation must normalize through a temporary vector and reconstruct the complete sample',
+);
 assert.match(source, /source:\s*\{\s*repository:\s*'kaminos'/s);
 assert.match(source, /visibilityAuthority:\s*'gpu_descriptor_texture_without_host_readback'/);
 assert.match(source, /hostReadbackVisibility:\s*false/);
