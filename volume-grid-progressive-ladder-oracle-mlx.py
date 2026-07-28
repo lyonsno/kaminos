@@ -85,6 +85,10 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
     sys.modules["optical_modes_ladder"] = mode_module
     spec.loader.exec_module(mode_module)
     schedules = arm_schedules(args)
+    if args.arms:
+        keep = {name.strip() for name in str(args.arms).split(",") if name.strip()}
+        schedules = [arm for arm in schedules if arm["name"] in keep]
+        require(len(schedules) > 0, f"arm filter matched nothing: {args.arms}")
     budgets = {arm["name"]: sum(stage["iterations"] for stage in arm["stages"]) for arm in schedules}
     require(len(set(budgets.values())) == 1, f"arm step budgets are unequal: {budgets}")
 
@@ -249,6 +253,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fit-cameras", type=int, default=6)
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
+    parser.add_argument("--arms", default="")
     parser.add_argument("--seed", type=int, default=20260727)
     return parser.parse_args(argv)
 
