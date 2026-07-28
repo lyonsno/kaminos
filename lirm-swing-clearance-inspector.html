@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lirm 719024 Swing Clearance Assay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #0b0d0c;
+      color: #eef4ef;
+    }
+    * { box-sizing: border-box; }
+    html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #panel {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      width: min(430px, calc(100vw - 24px));
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+      padding: 14px;
+      background: color-mix(in srgb, #111613 92%, transparent);
+      border: 1px solid #33433a;
+      border-radius: 6px;
+      box-shadow: 0 12px 36px #0009;
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0 0 4px; font-size: 15px; letter-spacing: 0; }
+    #identity { color: #9eb0a4; font: 11px/1.45 ui-monospace, monospace; overflow-wrap: anywhere; }
+    #identity[data-state="error"] { color: #ff8c7f; }
+    .group { margin-top: 12px; }
+    .label {
+      margin-bottom: 6px;
+      color: #91a198;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .controls { display: flex; flex-wrap: wrap; gap: 6px; }
+    button {
+      min-height: 30px;
+      padding: 6px 9px;
+      border: 1px solid #3b4841;
+      border-radius: 5px;
+      background: #1a211d;
+      color: #dce7df;
+      font: 11px/1.1 inherit;
+      cursor: pointer;
+    }
+    button:hover { background: #222d27; }
+    button[aria-pressed="true"] {
+      border-color: #7bd9b0;
+      background: #214437;
+      color: #effff8;
+    }
+    #metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .metric {
+      min-width: 0;
+      padding: 7px;
+      border: 1px solid #2b3731;
+      background: #121815;
+    }
+    .metric span { display: block; color: #84958b; font-size: 9px; }
+    .metric strong { display: block; margin-top: 2px; font: 11px ui-monospace, monospace; }
+    #legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; color: #b1bdb5; font-size: 10px; }
+    .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; }
+    #authority { margin-top: 10px; color: #839088; font: 10px/1.4 ui-monospace, monospace; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <aside id="panel">
+    <h1>Rear-left swing clearance</h1>
+    <div id="identity" data-state="loading">Loading exact 719024 assay...</div>
+    <div class="group">
+      <div class="label">Candidate</div>
+      <div class="controls" id="variants">
+        <button data-variant="source" aria-pressed="true">Source</button>
+        <button data-variant="translation" aria-pressed="false">Translation</button>
+        <button data-variant="minimum-rotation" aria-pressed="false">Minimum rotation</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="label">Evidence</div>
+      <div class="controls" id="overlays">
+        <button data-overlay="textured" aria-pressed="true">Textured</button>
+        <button data-overlay="masks" aria-pressed="false">Masks</button>
+        <button data-overlay="clearance" aria-pressed="false">Clearance</button>
+        <button data-overlay="distortion" aria-pressed="false">Distortion</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="label">View</div>
+      <div class="controls" id="views">
+        <button data-view="three-quarter" aria-pressed="true">Three-quarter</button>
+        <button data-view="profile" aria-pressed="false">Profile</button>
+        <button data-view="underside" aria-pressed="false">Underside</button>
+        <button data-view="collar-closeup" aria-pressed="false">Collar close-up</button>
+      </div>
+    </div>
+    <div id="metrics">
+      <div class="metric"><span>minimum clearance</span><strong id="minimum">--</strong></div>
+      <div class="metric"><span>collar max |log d|</span><strong id="collar">--</strong></div>
+      <div class="metric"><span>source-normal reversals</span><strong id="flips">--</strong></div>
+    </div>
+    <div id="legend">
+      <span><i class="swatch" style="background:#59e0ff"></i>support patch</span>
+      <span><i class="swatch" style="background:#9f77ff"></i>influence region</span>
+      <span><i class="swatch" style="background:#ffc15c"></i>attachment collar</span>
+      <span><i class="swatch" style="background:#ff5f54"></i>negative clearance</span>
+    </div>
+    <div id="authority">Operator inspection only. This view carries no support authority.</div>
+  </aside>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const ROUTE = 'kaminos/lirm-719024/swing-clearance-static-operator-assay-v0';
+    const SOURCE_HASH = 'sha256:8fed20d958ef48797c14ad1d3846a50eae05d43e6ae67f8805060b02f1abde8e';
+    const REPORT_URL = './artifacts/lirm-719024-swing-clearance-assay-v0/report.json';
+    const SOURCE_URL = './artifacts/motion-ready-719024/creature.glb';
+    const SUPPORT_ID = 'rear-left';
+    const app = document.querySelector('#app');
+    const identity = document.querySelector('#identity');
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    app.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0d0c);
+    const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.005, 30);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = false;
+    controls.minDistance = 0.08;
+    controls.maxDistance = 8;
+    controls.addEventListener('change', render);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+    scene.add(new THREE.HemisphereLight(0xf0f5ed, 0x252b27, 2.1));
+    const key = new THREE.DirectionalLight(0xffead0, 4.3);
+    key.position.set(-3, 5, 3);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x8cc7e8, 1.5);
+    fill.position.set(4, 1, -4);
+    scene.add(fill);
+
+    let report = null;
+    let root = null;
+    let mesh = null;
+    let originalMaterials = null;
+    let candidatePositions = new Map();
+    let candidateDisplacements = new Map();
+    let variant = 'source';
+    let overlay = 'textured';
+    let view = 'three-quarter';
+    let overlayRoot = new THREE.Group();
+    let terrainRoot = new THREE.Group();
+    scene.add(terrainRoot, overlayRoot);
+
+    window.__LIRM_SWING_CLEARANCE_STATE__ = {
+      status: 'loading',
+      happy: false,
+      requestedRoute: ROUTE,
+      effectiveRoute: null,
+      sourceHash: SOURCE_HASH,
+      actualSourceHash: null,
+      supportId: SUPPORT_ID,
+      variant,
+      overlay,
+      view,
+      masks: null,
+      candidate: null,
+      camera: null,
+      static: true,
+    };
+
+    async function sha256(bytes) {
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return `sha256:${[...new Uint8Array(digest)]
+        .map(value => value.toString(16).padStart(2, '0')).join('')}`;
+    }
+
+    async function loadFloat32(url, count) {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`binary field load failed: ${url} ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength !== count * 4) {
+        throw new Error(`binary field shape mismatch: ${url} ${bytes.byteLength} != ${count * 4}`);
+      }
+      return new Float32Array(bytes);
+    }
+
+    function findSingleMesh(value) {
+      const meshes = [];
+      value.traverse(node => { if (node.isMesh) meshes.push(node); });
+      if (meshes.length !== 1) throw new Error(`assay requires one exact mesh, got ${meshes.length}`);
+      return meshes[0];
+    }
+
+    function candidate() {
+      return report.candidates.find(entry => entry.family === variant);
+    }
+
+    function setPressed(container, key, value) {
+      for (const button of document.querySelectorAll(`#${container} button`)) {
+        button.setAttribute('aria-pressed', String(button.dataset[key] === value));
+      }
+    }
+
+    function positionsFor(indices) {
+      const source = candidatePositions.get(variant);
+      const values = new Float32Array(indices.length * 3);
+      indices.forEach((vertex, index) => {
+        values[index * 3] = source[vertex * 3];
+        values[index * 3 + 1] = source[vertex * 3 + 1];
+        values[index * 3 + 2] = source[vertex * 3 + 2];
+      });
+      return values;
+    }
+
+    function makePoints(indices, color, size, opacity = 1, renderOrder = 20) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positionsFor(indices), 3));
+      const points = new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          color,
+          size,
+          sizeAttenuation: true,
+          transparent: true,
+          opacity,
+          depthWrite: false,
+          depthTest: false,
+        }),
+      );
+      points.renderOrder = renderOrder;
+      return points;
+    }
+
+    function makeColoredPoints(indices, colors, size) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positionsFor(indices), 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const points = new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          vertexColors: true,
+          size,
+          sizeAttenuation: true,
+          depthWrite: false,
+          depthTest: false,
+        }),
+      );
+      points.renderOrder = 22;
+      return points;
+    }
+
+    function clearGroup(group) {
+      while (group.children.length) {
+        const child = group.children.pop();
+        child.geometry?.dispose();
+        child.material?.dispose();
+      }
+    }
+
+    function buildTerrain() {
+      clearGroup(terrainRoot);
+      const normal = new THREE.Vector3(...report.terrain.normal).normalize();
+      const point = new THREE.Vector3(...report.terrain.point);
+      for (const [offset, color, opacity] of [
+        [0, 0x40524a, 0.38],
+        [0.008, 0x66ddc5, 0.16],
+      ]) {
+        const geometry = new THREE.PlaneGeometry(0.8, 0.8, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity,
+          side: THREE.DoubleSide,
+          wireframe: offset > 0,
+          depthWrite: false,
+        });
+        const plane = new THREE.Mesh(geometry, material);
+        plane.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+        plane.position.copy(point).addScaledVector(normal, offset);
+        plane.renderOrder = 1;
+        terrainRoot.add(plane);
+      }
+      const arrow = new THREE.ArrowHelper(normal, point, 0.16, 0x59e0ff, 0.035, 0.018);
+      terrainRoot.add(arrow);
+    }
+
+    function buildMaskOverlay() {
+      const { masks } = report;
+      overlayRoot.add(makePoints(masks.influenceVertexIndices, 0x9f77ff, 0.005, 0.34, 20));
+      overlayRoot.add(makePoints(masks.attachmentVertexIndices, 0xffc15c, 0.007, 0.74, 21));
+      overlayRoot.add(makePoints(masks.supportVertexIndices, 0x59e0ff, 0.015, 1, 23));
+      if (view !== 'collar-closeup') return;
+      const pairs = report.bodySideSet.pairs;
+      const lines = new Float32Array(pairs.length * 6);
+      const positions = candidatePositions.get(variant);
+      pairs.forEach((pair, index) => {
+        for (let axis = 0; axis < 3; axis += 1) {
+          lines[index * 6 + axis] = positions[pair.attachmentVertex * 3 + axis];
+          lines[index * 6 + 3 + axis] = positions[pair.bodyVertex * 3 + axis];
+        }
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(lines, 3));
+      const collar = new THREE.LineSegments(
+        geometry,
+        new THREE.LineBasicMaterial({
+          color: 0xffc15c,
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+          depthTest: false,
+        }),
+      );
+      collar.renderOrder = 19;
+      overlayRoot.add(collar);
+    }
+
+    function buildClearanceOverlay() {
+      const values = candidate().clearance.values;
+      const colors = new Float32Array(values.length * 3);
+      values.forEach((value, index) => {
+        const negative = value < 0.008;
+        const magnitude = THREE.MathUtils.clamp(Math.abs(value - 0.008) / 0.16, 0, 1);
+        const color = negative
+          ? new THREE.Color(0xffb24d).lerp(new THREE.Color(0xff4f4a), magnitude)
+          : new THREE.Color(0x7fffe0).lerp(new THREE.Color(0xffffff), magnitude);
+        colors.set([color.r, color.g, color.b], index * 3);
+      });
+      overlayRoot.add(makeColoredPoints(report.masks.supportVertexIndices, colors, 0.014));
+    }
+
+    function buildDistortionOverlay() {
+      const indices = report.masks.influenceVertexIndices;
+      const displacement = candidateDisplacements.get(variant);
+      const values = indices.map(vertex => displacement[vertex]);
+      const q95 = [...values].sort((a, b) => a - b)[Math.floor(values.length * 0.95)] || 1;
+      const colors = new Float32Array(indices.length * 3);
+      values.forEach((value, index) => {
+        const amount = THREE.MathUtils.clamp(value / Math.max(q95, 1e-6), 0, 1);
+        const color = new THREE.Color(0x5fe4ff)
+          .lerp(new THREE.Color(0xffdb55), Math.min(1, amount * 1.5))
+          .lerp(new THREE.Color(0xff4d57), Math.max(0, amount - 0.55) / 0.45);
+        colors.set([color.r, color.g, color.b], index * 3);
+      });
+      overlayRoot.add(makeColoredPoints(indices, colors, 0.009));
+      overlayRoot.add(makePoints(report.masks.attachmentVertexIndices, 0xffc15c, 0.011));
+    }
+
+    function updateOverlay() {
+      clearGroup(overlayRoot);
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material, index) => {
+        material.transparent = overlay !== 'textured';
+        material.opacity = overlay === 'textured' ? 1 : 0.32;
+        material.depthWrite = overlay === 'textured';
+        material.needsUpdate = true;
+      });
+      terrainRoot.visible = overlay === 'clearance' || overlay === 'masks';
+      if (overlay === 'masks') buildMaskOverlay();
+      if (overlay === 'clearance') buildClearanceOverlay();
+      if (overlay === 'distortion') buildDistortionOverlay();
+    }
+
+    function centroid(indices) {
+      const positions = candidatePositions.get(variant);
+      const value = new THREE.Vector3();
+      for (const vertex of indices) {
+        value.x += positions[vertex * 3];
+        value.y += positions[vertex * 3 + 1];
+        value.z += positions[vertex * 3 + 2];
+      }
+      return value.multiplyScalar(1 / indices.length);
+    }
+
+    function setCameraView(nextView) {
+      view = nextView;
+      if (overlay === 'masks') updateOverlay();
+      const box = new THREE.Box3().setFromBufferAttribute(mesh.geometry.getAttribute('position'));
+      const size = box.getSize(new THREE.Vector3());
+      const radius = Math.max(size.x, size.y, size.z) * 0.5;
+      const support = centroid(report.masks.supportVertexIndices);
+      const collar = centroid(report.masks.attachmentVertexIndices);
+      const normal = new THREE.Vector3(...report.terrain.normal).normalize();
+      const lateral = new THREE.Vector3(
+        report.rootFrame.lateral.x,
+        report.rootFrame.lateral.y,
+        report.rootFrame.lateral.z,
+      ).normalize();
+      const tangent = new THREE.Vector3(
+        report.rootFrame.tangent.x,
+        report.rootFrame.tangent.y,
+        report.rootFrame.tangent.z,
+      ).normalize();
+      let target = support.clone();
+      let position;
+      if (view === 'three-quarter') {
+        target = box.getCenter(new THREE.Vector3()).lerp(support, 0.42);
+        position = target.clone()
+          .addScaledVector(lateral, radius * 2.4)
+          .addScaledVector(normal, radius * 1.2)
+          .addScaledVector(tangent, -radius * 1.25);
+      } else if (view === 'profile') {
+        position = target.clone()
+          .addScaledVector(lateral, radius * 1.65)
+          .addScaledVector(normal, radius * 0.2);
+      } else if (view === 'underside') {
+        position = target.clone()
+          .addScaledVector(normal, -radius * 1.35)
+          .addScaledVector(lateral, radius * 0.45);
+      } else {
+        target = collar;
+        position = target.clone()
+          .addScaledVector(lateral, radius * 0.62)
+          .addScaledVector(normal, radius * 0.24)
+          .addScaledVector(tangent, -radius * 0.22);
+      }
+      camera.position.copy(position);
+      controls.target.copy(target);
+      camera.near = Math.max(0.002, camera.position.distanceTo(target) / 200);
+      camera.far = camera.position.distanceTo(target) * 20;
+      camera.updateProjectionMatrix();
+      controls.update();
+      setPressed('views', 'view', view);
+      Object.assign(window.__LIRM_SWING_CLEARANCE_STATE__, {
+        view,
+        camera: {
+          position: camera.position.toArray(),
+          target: controls.target.toArray(),
+        },
+      });
+      render();
+    }
+
+    function updateCandidate() {
+      const positions = candidatePositions.get(variant);
+      mesh.geometry.getAttribute('position').array.set(positions);
+      mesh.geometry.getAttribute('position').needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+      mesh.geometry.computeBoundingBox();
+      mesh.geometry.computeBoundingSphere();
+      setPressed('variants', 'variant', variant);
+      updateOverlay();
+      setCameraView(view);
+      const selected = candidate();
+      document.querySelector('#minimum').textContent =
+        `${selected.clearance.minimum.toFixed(4)} ${selected.clearance.passes ? 'pass' : 'fail'}`;
+      document.querySelector('#collar').textContent =
+        selected.collar.maximumAbsoluteLogDistanceDistortion.toFixed(3);
+      document.querySelector('#flips').textContent =
+        String(selected.deformation.flippedTriangleCount);
+      Object.assign(window.__LIRM_SWING_CLEARANCE_STATE__, {
+        variant,
+        candidate: {
+          family: selected.family,
+          clearance: selected.clearance,
+          collar: selected.collar,
+          deformation: selected.deformation,
+        },
+      });
+      render();
+    }
+
+    function render() {
+      renderer.render(scene, camera);
+    }
+
+    window.__lirmSwingClearanceVisualProbe = () => {
+      const context = renderer.getContext();
+      const width = renderer.domElement.width;
+      const height = renderer.domElement.height;
+      const stride = Math.max(8, Math.floor(Math.min(width, height) / 72));
+      const pixel = new Uint8Array(4);
+      let sampledPixels = 0;
+      let activePixels = 0;
+      let opaquePixels = 0;
+      for (let y = Math.floor(stride / 2); y < height; y += stride) {
+        for (let x = Math.floor(stride / 2); x < width; x += stride) {
+          context.readPixels(x, y, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+          sampledPixels += 1;
+          if (pixel[3] > 240) opaquePixels += 1;
+          if (Math.abs(pixel[0] - 11) + Math.abs(pixel[1] - 13) + Math.abs(pixel[2] - 12) > 28) {
+            activePixels += 1;
+          }
+        }
+      }
+      return {
+        width,
+        height,
+        stride,
+        sampledPixels,
+        activePixels,
+        opaquePixels,
+        activeRatio: sampledPixels ? activePixels / sampledPixels : 0,
+      };
+    };
+
+    window.__setLirmSwingClearanceVariant = value => {
+      if (!candidatePositions.has(value)) throw new Error(`unknown candidate ${value}`);
+      variant = value;
+      updateCandidate();
+      return window.__LIRM_SWING_CLEARANCE_STATE__;
+    };
+    window.__setLirmSwingClearanceOverlay = value => {
+      if (!['textured', 'masks', 'clearance', 'distortion'].includes(value)) {
+        throw new Error(`unknown overlay ${value}`);
+      }
+      overlay = value;
+      setPressed('overlays', 'overlay', overlay);
+      updateOverlay();
+      Object.assign(window.__LIRM_SWING_CLEARANCE_STATE__, { overlay });
+      render();
+      return window.__LIRM_SWING_CLEARANCE_STATE__;
+    };
+    window.__setLirmSwingClearanceView = value => {
+      if (!['three-quarter', 'profile', 'underside', 'collar-closeup'].includes(value)) {
+        throw new Error(`unknown view ${value}`);
+      }
+      setCameraView(value);
+      return window.__LIRM_SWING_CLEARANCE_STATE__;
+    };
+
+    document.querySelector('#variants').addEventListener('click', event => {
+      const value = event.target.closest('button')?.dataset.variant;
+      if (value) window.__setLirmSwingClearanceVariant(value);
+    });
+    document.querySelector('#overlays').addEventListener('click', event => {
+      const value = event.target.closest('button')?.dataset.overlay;
+      if (value) window.__setLirmSwingClearanceOverlay(value);
+    });
+    document.querySelector('#views').addEventListener('click', event => {
+      const value = event.target.closest('button')?.dataset.view;
+      if (value) window.__setLirmSwingClearanceView(value);
+    });
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      render();
+    });
+
+    async function load() {
+      try {
+        const reportResponse = await fetch(REPORT_URL, { cache: 'no-store' });
+        if (!reportResponse.ok) throw new Error(`report load failed: ${reportResponse.status}`);
+        report = await reportResponse.json();
+        if (report.status !== 'complete'
+            || report.requestedRoute !== ROUTE
+            || report.effectiveRoute !== ROUTE
+            || report.actualSourceHash !== SOURCE_HASH
+            || report.supportId !== SUPPORT_ID) {
+          throw new Error('report route, source, or support identity mismatch');
+        }
+        const sourceResponse = await fetch(SOURCE_URL, { cache: 'no-store' });
+        if (!sourceResponse.ok) throw new Error(`source load failed: ${sourceResponse.status}`);
+        const sourceBytes = await sourceResponse.arrayBuffer();
+        const actualSourceHash = await sha256(sourceBytes);
+        if (actualSourceHash !== SOURCE_HASH) {
+          throw new Error(`source hash mismatch: ${actualSourceHash}`);
+        }
+        const gltf = await new Promise((resolve, reject) => {
+          new GLTFLoader().parse(
+            sourceBytes,
+            new URL('.', new URL(SOURCE_URL, location.href)).href,
+            resolve,
+            reject,
+          );
+        });
+        root = gltf.scene;
+        mesh = findSingleMesh(root);
+        mesh.geometry = mesh.geometry.clone();
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map(material => material.clone())
+          : mesh.material.clone();
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(root);
+        await Promise.all(report.candidates.flatMap(entry => [
+          loadFloat32(
+            `./artifacts/lirm-719024-swing-clearance-assay-v0/${entry.positionsFile}`,
+            report.vertexCount * 3,
+          ).then(values => candidatePositions.set(entry.family, values)),
+          loadFloat32(
+            `./artifacts/lirm-719024-swing-clearance-assay-v0/${entry.displacementFile}`,
+            report.vertexCount,
+          ).then(values => candidateDisplacements.set(entry.family, values)),
+        ]));
+        buildTerrain();
+        Object.assign(window.__LIRM_SWING_CLEARANCE_STATE__, {
+          status: 'loaded',
+          happy: true,
+          effectiveRoute: report.effectiveRoute,
+          actualSourceHash,
+          masks: {
+            supportVertexCount: report.masks.supportVertexCount,
+            influenceVertexCount: report.masks.influenceVertexCount,
+            attachmentVertexCount: report.masks.attachmentVertexCount,
+            bodySidePairCount: report.bodySideSet.pairs.length,
+          },
+        });
+        identity.dataset.state = 'loaded';
+        identity.innerHTML =
+          `<strong>loaded | static | exact rear-left masks</strong><br>${ROUTE}<br>`
+          + `${report.masks.supportVertexCount} support · `
+          + `${report.masks.influenceVertexCount} influence · `
+          + `${report.masks.attachmentVertexCount} attachment`;
+        updateCandidate();
+      } catch (error) {
+        identity.dataset.state = 'error';
+        identity.innerHTML = `<strong>load failed</strong><br>${String(error?.message || error)}`;
+        Object.assign(window.__LIRM_SWING_CLEARANCE_STATE__, {
+          status: 'error',
+          happy: false,
+          error: String(error?.stack || error),
+        });
+        console.error(error);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
