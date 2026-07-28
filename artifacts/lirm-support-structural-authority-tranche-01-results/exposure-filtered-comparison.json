@@ -1,0 +1,76 @@
+{
+  "schema": "kaminos.lirm-structural-authority-exposure-filtered-comparison.v0",
+  "operatorExposure": "eligible",
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "outputPath": "cell-a/output.png",
+      "ledger": {
+        "schema": "kaminos.lirm-structural-authority-exposure-ledger.v0",
+        "cellId": "cell-a",
+        "safe": true,
+        "happy": true,
+        "lerm_identity": true,
+        "nintendo_region_coherence": true,
+        "connected_body": true,
+        "head_tail_polarity": true,
+        "literal_carrier_mark_leakage": false,
+        "operatorExposure": "eligible",
+        "classifier": {
+          "id": "agent-visual-classifier",
+          "model": "gpt-5",
+          "context": "full-resolution-output via Codex view_image"
+        },
+        "visualDescription": "Friendly eyeless red toy creature with one connected squash body, cream underside, orange ear-like side forms, and four planted rounded supports.",
+        "authorityRead": "The zero-support control leaves locomotor structure to the generator prior; FLUX supplies a coherent quadrupedal solution."
+      }
+    },
+    {
+      "cellId": "cell-b",
+      "outputPath": "cell-b/output.png",
+      "ledger": {
+        "schema": "kaminos.lirm-structural-authority-exposure-ledger.v0",
+        "cellId": "cell-b",
+        "safe": true,
+        "happy": true,
+        "lerm_identity": true,
+        "nintendo_region_coherence": true,
+        "connected_body": true,
+        "head_tail_polarity": true,
+        "literal_carrier_mark_leakage": false,
+        "operatorExposure": "eligible",
+        "classifier": {
+          "id": "agent-visual-classifier",
+          "model": "gpt-5",
+          "context": "full-resolution-output via Codex view_image"
+        },
+        "visualDescription": "Friendly eyeless red low-slung creature with one connected body, cream underside, orange ear-like side forms, and two large integrated support masses; the cast floats above its shadow.",
+        "authorityRead": "The latent continuous underside field changes the support interpretation and body compression while preserving the friendly species basin; grounding remains unresolved."
+      }
+    },
+    {
+      "cellId": "cell-c",
+      "outputPath": "cell-c/output.png",
+      "ledger": {
+        "schema": "kaminos.lirm-structural-authority-exposure-ledger.v0",
+        "cellId": "cell-c",
+        "safe": true,
+        "happy": true,
+        "lerm_identity": true,
+        "nintendo_region_coherence": true,
+        "connected_body": true,
+        "head_tail_polarity": true,
+        "literal_carrier_mark_leakage": false,
+        "operatorExposure": "eligible",
+        "classifier": {
+          "id": "agent-visual-classifier",
+          "model": "gpt-5",
+          "context": "full-resolution-output via Codex view_image"
+        },
+        "visualDescription": "Friendly eyeless red toy creature with one connected squash body, cream underside, orange ear-like side forms, and two clean upright planted legs with rounded feet.",
+        "authorityRead": "The explicit consumed role-plane drives a distinct upright two-support solution without leaking literal control marks or leaving the friendly species basin."
+      }
+    }
+  ],
+  "sourceSelection": "exact-plan-cell-output-paths-only"
+}

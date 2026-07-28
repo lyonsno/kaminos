@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.lirm-support-structural-authority-results.v0",
+  "status": "complete",
+  "repo": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725",
+  "branch": "cc/molten-projected-support-legibility-r2-0725",
+  "preRunHead": "2649992efe2e62e4c62edb5423d0f1153fd9d47c",
+  "sourcePrelaunch": {
+    "path": "../lirm-support-structural-authority-tranche-01/execution-manifest.json",
+    "byteSize": 7052,
+    "sha256": "sha256:5cb2d4506d91aef17f9c419f891a105025c6899a8febc422d31774cde242948c"
+  },
+  "prompt": {
+    "path": "../lirm-support-structural-authority-tranche-01/prompt.txt",
+    "byteSize": 719,
+    "sha256": "sha256:8cff1ee7b7baeb48900704226ad73937739ebb692249675e76fc85cd53957edc"
+  },
+  "frozenControls": {
+    "seed": 727001,
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "mlxCacheLimitGb": 48,
+    "referenceOrder": [
+      "clay",
+      "depth",
+      "normal",
+      "support_control"
+    ]
+  },
+  "routeRegistryMutation": {
+    "liveConfig": "/Users/noahlyons/.local/state/gpu-greenroom/job_types.json",
+    "beforeSha256": "sha256:bda9aa6ae89a6b562f2a2817de4050b6b4da9e2406867406213529571383ddbf",
+    "afterSha256": "sha256:f0524440bbdcc282378c39df68e4a3feb47ad4faf924d0ead491c3ae2e92475e",
+    "addedJobType": "mflux_flux2_edit_promptfile_4ref"
+  },
+  "cells": [
+    {
+      "cellId": "cell-a",
+      "jobId": "bf2290ab384d",
+      "status": "accepted",
+      "durationSeconds": 146.43732976913452,
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-a/clay.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-a/depth.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-a/normal.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-a/support-control.png --prompt-file /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-a-seed727001/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 727001 --mlx-cache-limit-gb 48",
+      "output": {
+        "path": "cell-a/output.png",
+        "byteSize": 202166,
+        "sha256": "sha256:8e71592b1ee118fa71d08eec160b55e72f3b157c37bcd67a233e8e230838fd73"
+      },
+      "completion": {
+        "path": "cell-a/completion.json",
+        "byteSize": 5714,
+        "sha256": "sha256:b3fbc1fe43ed85e7eb3b4169c9cfc239a966f7ba341641b8b71fc8c6d7c1792b"
+      },
+      "classification": {
+        "path": "classifications/cell-a.json",
+        "byteSize": 779,
+        "sha256": "sha256:e28ba17e839d05be09fae5162b5396b5f0061d00d48116a9ebe9fc2bbff5be83"
+      },
+      "operatorExposure": "eligible"
+    },
+    {
+      "cellId": "cell-b",
+      "jobId": "23c84e58ecc5",
+      "status": "accepted",
+      "durationSeconds": 86.14611792564392,
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/clay.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/depth.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/normal.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/support-control.png --prompt-file /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-b-seed727001/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 727001 --mlx-cache-limit-gb 48",
+      "output": {
+        "path": "cell-b/output.png",
+        "byteSize": 181675,
+        "sha256": "sha256:4d03a9575431aa0fcc865e8b6906797cbc5ea75a869476652ae53d2899de9ac8"
+      },
+      "completion": {
+        "path": "cell-b/completion.json",
+        "byteSize": 5717,
+        "sha256": "sha256:37f95c279a95492cedebb6bbec24932ec6cb1349a9040a14ce7f3c5ba0852cab"
+      },
+      "classification": {
+        "path": "classifications/cell-b.json",
+        "byteSize": 864,
+        "sha256": "sha256:51e90838f5d05b341600cbddb99051ca5dcfdb9765bf40c3ebed7ee8df0c2129"
+      },
+      "operatorExposure": "eligible"
+    },
+    {
+      "cellId": "cell-c",
+      "jobId": "ba411701b97e",
+      "status": "accepted",
+      "durationSeconds": 129.49683260917664,
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/clay.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/depth.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/normal.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/support-control.png --prompt-file /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-c-seed727001/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 727001 --mlx-cache-limit-gb 48",
+      "output": {
+        "path": "cell-c/output.png",
+        "byteSize": 187220,
+        "sha256": "sha256:d377532c4ccd06a6464aa86d27bb147b52c9a42c48849067ad2cfccd26ffcde3"
+      },
+      "completion": {
+        "path": "cell-c/completion.json",
+        "byteSize": 5720,
+        "sha256": "sha256:62bbbbf167b72cdb05d709458d5711493b01436c5fb9493dea77d70f3ec89af7"
+      },
+      "classification": {
+        "path": "classifications/cell-c.json",
+        "byteSize": 832,
+        "sha256": "sha256:84e849bc6f8908b9327c34afeab16c72738dcade8eeb5c46cb8b647d6b4c644c"
+      },
+      "operatorExposure": "eligible"
+    }
+  ],
+  "contactSheet": {
+    "path": "contact-sheet.png",
+    "byteSize": 992605,
+    "sha256": "sha256:451593172d2cf150de8f41e7a21d2bdb46cb47df79160bb681915fc8ef47ce95"
+  },
+  "exposureFilteredComparison": {
+    "path": "exposure-filtered-comparison.json",
+    "byteSize": 3280,
+    "sha256": "sha256:d352a89a7568687ae848c26c095806d47878453d5504c9dc5f9df39fbf2006a6"
+  },
+  "rejectedAttempts": {
+    "path": "rejected-attempts/index.json",
+    "byteSize": 2433,
+    "sha256": "sha256:1acdee53cd48d23973d9f6114aba0727e8f76528bcf4daf0955c9bd6c0026149"
+  },
+  "operatorExposure": "eligible",
+  "comparativeResult": {
+    "carrierAuthorityObserved": true,
+    "speciesBasinPreservedAcrossCells": true,
+    "literalCarrierLeakageObserved": false,
+    "zeroSupport": "generator-prior four-support quadruped",
+    "latentContinuousUnderside": "low compressed body with two integrated support masses and unresolved grounding",
+    "explicitRolePlane": "upright two-support morphology with planted feet"
+  },
+  "boundary": "single seed and view; no claim of multi-seed reliability, 3D topology, riggability, contact stability, or motion quality"
+}

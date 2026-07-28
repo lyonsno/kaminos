@@ -1,0 +1,21 @@
+{
+  "job_type": "mflux_flux2_edit_promptfile_4ref",
+  "input_path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/clay.png",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-c-seed727001",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/depth.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/normal.png",
+    "reference_path_4": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/support-control.png",
+    "prompt_file": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "727001",
+    "mlx_cache_limit_gb": "48"
+  },
+  "job_id": "ba411701b97e",
+  "submitted_at": 1785201674.4913201
+}

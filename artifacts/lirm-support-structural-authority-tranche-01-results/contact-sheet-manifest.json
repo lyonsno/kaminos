@@ -1,0 +1,41 @@
+{
+  "columns": 3,
+  "rows": 2,
+  "width": 1536,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "cells": [
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01-results/cell-a/output.png",
+      "title": "A / ZERO SUPPORT",
+      "viewLabel": "GENERATOR-PRIOR QUADRUPED"
+    },
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01-results/cell-b/output.png",
+      "title": "B / LATENT UNDERSIDE",
+      "viewLabel": "LOW INTEGRATED SUPPORT MASSES"
+    },
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01-results/cell-c/output.png",
+      "title": "C / EXPLICIT ROLE-PLANE",
+      "viewLabel": "UPRIGHT TWO-SUPPORT SOLUTION"
+    },
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01/cells/cell-a/support-control.png",
+      "title": "A / CONTROL",
+      "viewLabel": "ZERO SUPPORT SIGNAL"
+    },
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/support-control.png",
+      "title": "B / CONTROL",
+      "viewLabel": "CONTINUOUS ATTACHMENT FIELD"
+    },
+    {
+      "sourcePath": "artifacts/lirm-support-structural-authority-tranche-01/cells/cell-c/support-control.png",
+      "title": "C / CONTROL",
+      "viewLabel": "EXPLICIT ROLE-PLANE"
+    }
+  ]
+}

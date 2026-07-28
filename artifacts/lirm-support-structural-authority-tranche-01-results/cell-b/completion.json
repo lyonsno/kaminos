@@ -1,0 +1,107 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-imagegen-completion.v0",
+  "status": "accepted",
+  "cellId": "cell-b",
+  "jobId": "23c84e58ecc5",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_4ref",
+  "effectiveJobType": "mflux_flux2_edit_promptfile_4ref",
+  "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/clay.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/depth.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/normal.png /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/support-control.png --prompt-file /private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-b-seed727001/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 727001 --mlx-cache-limit-gb 48",
+  "effectiveParams": {
+    "reference_path_2": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/depth.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/normal.png",
+    "reference_path_4": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/support-control.png",
+    "prompt_file": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "727001",
+    "mlx_cache_limit_gb": "48"
+  },
+  "submittedAt": 1785201652.362345,
+  "startedAt": 1785201652.742424,
+  "finishedAt": 1785201738.888542,
+  "durationSeconds": 86.14611792564392,
+  "outputMtime": 1785201737.7312546,
+  "warnings": [],
+  "input": {
+    "path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/clay.png",
+    "bytes": 26665,
+    "sha256": "sha256:b776ce8c34bd623080ee0791857472127ac9a8c7dff74b10cb656e75dd258989"
+  },
+  "references": [
+    {
+      "path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/depth.png",
+      "bytes": 14112,
+      "sha256": "sha256:6dfc889412a213150833959615b9bd5beef1d149781bc17f57ca4eaa5d723d31",
+      "role": "depth"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/normal.png",
+      "bytes": 32980,
+      "sha256": "sha256:e6f1f2416e0ef050348ae23de368cfefac699783bfd0d0fa3b380639dcc41fa9",
+      "role": "normal"
+    },
+    {
+      "path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/cells/cell-b/support-control.png",
+      "bytes": 40636,
+      "sha256": "sha256:0e5e29af03d67fd2ae9b0ac03b8352c3b1f3afc14686f439567dbe3a756eae69",
+      "role": "support_control"
+    }
+  ],
+  "prompt": {
+    "path": "/private/tmp/kaminos-molten-projected-support-legibility-r2-0725/artifacts/lirm-support-structural-authority-tranche-01/prompt.txt",
+    "bytes": 719,
+    "sha256": "sha256:8cff1ee7b7baeb48900704226ad73937739ebb692249675e76fc85cd53957edc"
+  },
+  "output": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lerms-structural-authority-tranche-01-cell-b-seed727001/output.png",
+    "bytes": 181675,
+    "sha256": "sha256:4d03a9575431aa0fcc865e8b6906797cbc5ea75a869476652ae53d2899de9ac8"
+  },
+  "archivedOutput": {
+    "path": "output.png",
+    "byteSize": 181675,
+    "sha256": "sha256:4d03a9575431aa0fcc865e8b6906797cbc5ea75a869476652ae53d2899de9ac8",
+    "mtimeSeconds": 1785202328.7719462
+  },
+  "archivedMetadata": {
+    "path": "metadata.json",
+    "byteSize": 1294,
+    "sha256": "sha256:8ff05808198e04dcdc98e835ded84820f72c9c888c36b7446d802f6e04b3f4d7",
+    "mtimeSeconds": 1785202328.772426
+  },
+  "archivedGeneratorMetadata": {
+    "path": "output.metadata.json",
+    "byteSize": 4,
+    "sha256": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  "archivedGreenroom": {
+    "request": {
+      "path": "request.json",
+      "byteSize": 1293,
+      "sha256": "sha256:cbf1a81cf754165ce0d2845090106680a2de85aefa56476a79bc38e7b6e3d6eb",
+      "mtimeSeconds": 1785202355.6759958
+    },
+    "receipt": {
+      "path": "receipt.json",
+      "byteSize": 3997,
+      "sha256": "sha256:261a4990216ac14c1063708d94b808bd26204e711d033f5a10ec8c2a0f9b1843",
+      "mtimeSeconds": 1785202355.6764662
+    },
+    "stdout": {
+      "path": "stdout.log",
+      "byteSize": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtimeSeconds": 1785202355.6766827
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "byteSize": 569,
+      "sha256": "sha256:b273a23d9c2339d9730c3210bd36a2f85d295f373fffec92ac851b8f5f8b3998",
+      "mtimeSeconds": 1785202355.6771486
+    }
+  }
+}

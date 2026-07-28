@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.lirm-support-structural-authority-rejected-attempts.v0",
+  "attempts": [
+    {
+      "cellId": "cell-b",
+      "jobId": "f813daf11932",
+      "queueStatus": "done",
+      "exitCode": 0,
+      "primaryOutputPresent": false,
+      "durationSeconds": 3.616029977798462,
+      "rejectionReason": "cwd-relative prompt and reference paths were resolved from the MLX server cwd; stdout reports that the prompt file does not exist",
+      "archivedEvidence": {
+        "request": {
+          "path": "request.json",
+          "byteSize": 969,
+          "sha256": "sha256:6785f572017dc0db63fdb7fccbca7be9b8980f84ec6f62e319a62099b6541a64"
+        },
+        "receipt": {
+          "path": "receipt.json",
+          "byteSize": 3284,
+          "sha256": "sha256:89daf6aafc9ce46422490d907b702255674b862e28ebac3d74699559acce0ce0"
+        },
+        "stdout": {
+          "path": "stdout.log",
+          "byteSize": 94,
+          "sha256": "sha256:8d60c59268da1015fed89698ae857c35a1961583e879f714bc2d1d407fbe737b"
+        },
+        "stderr": {
+          "path": "stderr.log",
+          "byteSize": 0,
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "cellId": "cell-c",
+      "jobId": "7286ab31c8aa",
+      "queueStatus": "done",
+      "exitCode": 0,
+      "primaryOutputPresent": false,
+      "durationSeconds": 2.1100339889526367,
+      "rejectionReason": "cwd-relative prompt and reference paths were resolved from the MLX server cwd; stdout reports that the prompt file does not exist",
+      "archivedEvidence": {
+        "request": {
+          "path": "request.json",
+          "byteSize": 968,
+          "sha256": "sha256:2798c0271ba8e8ecdac8509a911ffb8e1adbb053d76e131105ca07029985c82c"
+        },
+        "receipt": {
+          "path": "receipt.json",
+          "byteSize": 3281,
+          "sha256": "sha256:b89c9663e58c81664fb7ca2ebd08d70b7b89ea2da3565977d41449aa0a7c89fc"
+        },
+        "stdout": {
+          "path": "stdout.log",
+          "byteSize": 94,
+          "sha256": "sha256:8d60c59268da1015fed89698ae857c35a1961583e879f714bc2d1d407fbe737b"
+        },
+        "stderr": {
+          "path": "stderr.log",
+          "byteSize": 0,
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ],
+  "disposition": "rejected_false_success_no_primary_artifact"
+}
