@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
 const OPTICAL_ROUTE = 'kaminos/finger-fluid/portable-macro-screen-space-optics-v0';
+const CYAN_DEBUG_ROUTE = 'kaminos/finger-fluid/portable-macro-cyan-debug-v0';
 const REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE =
   'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0';
 const WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE =
@@ -25,6 +26,7 @@ const reportPath = resolve(args.get('--report') || join(outDir, 'report.json'));
 const dynamicStartPath = join(outDir, 'optical-dynamic-start.png');
 const dynamicEndPath = join(outDir, 'optical-dynamic-end.png');
 const regularGridPath = join(outDir, 'same-state-regular-grid-debug.png');
+const cyanPath = join(outDir, 'same-state-cyan-debug.png');
 const clippedPath = join(outDir, 'same-state-wet-boundary-clipped.png');
 const debugPort = Number(args.get('--debug-port') || 9531);
 const viewportWidth = Number(args.get('--viewport-width') || 1600);
@@ -38,6 +40,7 @@ const userDataDir = args.get('--user-data-dir')
 let phase = 'parse-config';
 let primaryOutputWritten = false;
 let requestedUrlObject = null;
+let initialEffectiveUrl = null;
 let effectiveUrl = null;
 let browserVersion = null;
 let servedSourceIdentity = null;
@@ -45,6 +48,7 @@ let state = null;
 let captures = {};
 let dynamicDelta = null;
 let sameStateDelta = null;
+let operatorControls = null;
 let stderr = '';
 const consoleEvents = [];
 const outputFiles = [];
@@ -71,6 +75,7 @@ function writeReport(extra = {}) {
     schema: 'kaminos.finger-fluid.portable-macro-optical-browser-witness.v0',
     ok: false,
     requestedUrl,
+    initialEffectiveUrl,
     effectiveUrl,
     requestedRoute: OPTICAL_ROUTE,
     effectiveRoute: state?.effectiveRoute ?? null,
@@ -88,6 +93,7 @@ function writeReport(extra = {}) {
     captures,
     dynamicDelta,
     sameStateDelta,
+    operatorControls,
     primary_output_written: primaryOutputWritten,
     failure_phase: phase,
     lastTrustworthyEvidence,
@@ -374,12 +380,130 @@ function validateOpticalState(candidate, expectedTime, expectedTopologyRoute) {
 
 async function setTimeAndMode(socket, timeSeconds, mode) {
   return evaluate(socket, `(async () => {
-    window.kaminosPortableMacroSetTimeForWitness(${JSON.stringify(timeSeconds)});
-    const state = window.kaminosPortableMacroSetModeForWitness(${JSON.stringify(mode)});
+    const timeControl = document.querySelector('#time-control');
+    const modeControl = document.querySelector(
+      \`#mode-controls [data-mode="${mode}"]\`
+    );
+    const requestedTime = ${JSON.stringify(timeSeconds)};
+    if (!timeControl || !modeControl) throw new Error('operator controls are missing');
+    if (requestedTime > Number(timeControl.max)) {
+      timeControl.max = String(Math.ceil(requestedTime + 1));
+    }
+    timeControl.value = requestedTime;
+    timeControl.dispatchEvent(new Event('input', { bubbles: true }));
+    modeControl.click();
     await window.__kaminosPortableMacroDevice?.queue?.onSubmittedWorkDone?.();
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    return window.kaminosPortableMacroOpticalDebugState || state;
+    return window.kaminosPortableMacroOpticalDebugState;
   })()`);
+}
+
+async function exerciseOperatorControls(socket, initialState) {
+  const result = await evaluate(socket, `(async () => {
+    const controls = document.querySelector('#controls');
+    const playback = document.querySelector('#playback-toggle');
+    const timeControl = document.querySelector('#time-control');
+    const modes = [...document.querySelectorAll('#mode-controls [data-mode]')];
+    const cyanControl = modes.find(control => control.dataset.mode === 'cyan');
+    const bounds = controls?.getBoundingClientRect();
+    if (
+      !controls
+      || !playback
+      || !timeControl
+      || !cyanControl
+      || modes.length !== 3
+      || !bounds
+      || bounds.width < 240
+      || bounds.height < 60
+      || bounds.right > window.innerWidth
+      || bounds.bottom > window.innerHeight
+    ) {
+      throw new Error('operator controls are hidden or partial');
+    }
+    const before = window.kaminosPortableMacroOpticalDebugState;
+    playback.click();
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await window.__kaminosPortableMacroDevice?.queue?.onSubmittedWorkDone?.();
+    const playing = window.kaminosPortableMacroOpticalDebugState;
+    if (
+      playing.paused
+      || playing.frameCount <= before.frameCount
+      || playing.animationTimeSeconds <= before.animationTimeSeconds + 0.1
+    ) {
+      throw new Error('animation did not advance through the visible play control');
+    }
+    playback.click();
+    await window.__kaminosPortableMacroDevice?.queue?.onSubmittedWorkDone?.();
+    const paused = window.kaminosPortableMacroOpticalDebugState;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const settled = window.kaminosPortableMacroOpticalDebugState;
+    if (
+      !paused.paused
+      || !settled.paused
+      || settled.animationTimeSeconds !== paused.animationTimeSeconds
+    ) {
+      throw new Error('pause control did not freeze the visible animation state');
+    }
+    cyanControl.click();
+    await window.__kaminosPortableMacroDevice?.queue?.onSubmittedWorkDone?.();
+    const cyan = window.kaminosPortableMacroOpticalDebugState;
+    if (
+      cyan.requestedMode !== 'cyan'
+      || cyan.effectiveMode !== 'cyan'
+      || cyan.requestedRoute !== ${JSON.stringify(CYAN_DEBUG_ROUTE)}
+      || cyan.effectiveRoute !== ${JSON.stringify(CYAN_DEBUG_ROUTE)}
+      || cyan.fallback !== null
+      || cyan.requestedTopologyRoute
+        !== ${JSON.stringify(WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE)}
+      || cyan.effectiveTopologyRoute
+        !== ${JSON.stringify(WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE)}
+      || cyan.topologyFallback !== null
+    ) {
+      throw new Error(\`cyan visible control route mismatch: \${JSON.stringify(cyan)}\`);
+    }
+    return {
+      bounds: {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      },
+      modeCount: modes.length,
+      before: {
+        frameCount: before.frameCount,
+        animationTimeSeconds: before.animationTimeSeconds,
+        paused: before.paused,
+      },
+      playing: {
+        frameCount: playing.frameCount,
+        animationTimeSeconds: playing.animationTimeSeconds,
+        paused: playing.paused,
+      },
+      paused: {
+        frameCount: settled.frameCount,
+        animationTimeSeconds: settled.animationTimeSeconds,
+        paused: settled.paused,
+      },
+      cyan: {
+        requestedMode: cyan.requestedMode,
+        effectiveMode: cyan.effectiveMode,
+        requestedRoute: cyan.requestedRoute,
+        effectiveRoute: cyan.effectiveRoute,
+        fallback: cyan.fallback,
+        requestedTopologyRoute: cyan.requestedTopologyRoute,
+        effectiveTopologyRoute: cyan.effectiveTopologyRoute,
+        topologyFallback: cyan.topologyFallback,
+      },
+      playbackLabel: playback.getAttribute('aria-label'),
+      timeValue: document.querySelector('#time-value')?.value ?? null,
+    };
+  })()`);
+  const restoredState = await setTimeAndMode(
+    socket,
+    initialState.animationTimeSeconds,
+    'optical',
+  );
+  return { ...result, restoredState };
 }
 
 async function captureCanvas(socket, path) {
@@ -478,9 +602,11 @@ async function main() {
       if (state?.status === 'running' && state.frameCount > 0) break;
       await delay(100);
     }
-    effectiveUrl = await evaluate(socket, 'window.location.href');
-    if (effectiveUrl !== requestedUrl) {
-      throw new Error(`effectiveUrl !== requestedUrl: ${effectiveUrl} != ${requestedUrl}`);
+    initialEffectiveUrl = await evaluate(socket, 'window.location.href');
+    if (initialEffectiveUrl !== requestedUrl) {
+      throw new Error(
+        `initialEffectiveUrl !== requestedUrl: ${initialEffectiveUrl} != ${requestedUrl}`,
+      );
     }
     validateOpticalState(
       state,
@@ -488,6 +614,16 @@ async function main() {
       WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
     );
     preserveEvidence('first-optical-frame', state);
+
+    phase = 'exercise-operator-controls';
+    operatorControls = await exerciseOperatorControls(socket, state);
+    state = operatorControls.restoredState;
+    validateOpticalState(
+      state,
+      startTimeSeconds,
+      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    );
+    preserveEvidence('exercise-operator-controls', operatorControls);
 
     phase = 'capture-dynamic-start';
     captures.dynamicStart = {
@@ -527,6 +663,31 @@ async function main() {
       path: regularGridPath,
     };
 
+    phase = 'capture-same-state-cyan-debug';
+    state = await setTimeAndMode(socket, endTimeSeconds, 'cyan');
+    if (
+      state?.status !== 'running'
+      || state.backend !== 'webgpu'
+      || state.requestedMode !== 'cyan'
+      || state.effectiveMode !== 'cyan'
+      || state.requestedRoute !== CYAN_DEBUG_ROUTE
+      || state.effectiveRoute !== CYAN_DEBUG_ROUTE
+      || state.fallback !== null
+      || state.requestedTopologyRoute !== WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+      || state.effectiveTopologyRoute !== WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+      || state.topologyFallback !== null
+      || state.blank
+      || state.partial
+      || !state.primaryOutputWritten
+    ) {
+      throw new Error(`cyan visible output rejected: ${JSON.stringify(state)}`);
+    }
+    captures.cyanDebug = {
+      state,
+      visual: await captureCanvas(socket, cyanPath),
+      path: cyanPath,
+    };
+
     phase = 'capture-same-state-wet-boundary-clipped';
     state = await setTimeAndMode(socket, endTimeSeconds, 'optical');
     validateOpticalState(
@@ -550,7 +711,19 @@ async function main() {
     }
 
     phase = 'complete';
+    const expectedFinalUrl = new URL(requestedUrl);
+    expectedFinalUrl.searchParams.set('mode', 'optical');
+    expectedFinalUrl.searchParams.set('time', endTimeSeconds.toFixed(2));
+    expectedFinalUrl.searchParams.set('paused', '1');
+    const finalEffectiveUrl = await evaluate(socket, 'window.location.href');
+    if (finalEffectiveUrl !== expectedFinalUrl.href) {
+      throw new Error(
+        `final effective URL is stale: ${finalEffectiveUrl} != ${expectedFinalUrl.href}`,
+      );
+    }
+    effectiveUrl = finalEffectiveUrl;
     preserveEvidence('complete', {
+      initialEffectiveUrl,
       effectiveUrl,
       backend: state.backend,
       effectiveRoute: state.effectiveRoute,

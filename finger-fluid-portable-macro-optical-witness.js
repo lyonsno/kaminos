@@ -12,10 +12,14 @@ const heightSamples = 72;
 const sampleCount = widthSamples * heightSamples;
 const canvas = document.getElementById('portable-macro-optics');
 const status = document.getElementById('status');
+const modeControls = [...document.querySelectorAll('#mode-controls [data-mode]')];
+const playbackToggle = document.getElementById('playback-toggle');
+const timeControl = document.getElementById('time-control');
+const timeValue = document.getElementById('time-value');
 const query = new URLSearchParams(window.location.search);
-const requestedMode = query.get('mode') || 'optical';
+let requestedMode = query.get('mode') || 'optical';
 const fixedTime = query.has('time') ? Number(query.get('time')) : null;
-const paused = query.get('paused') === '1' || Number.isFinite(fixedTime);
+let paused = query.get('paused') === '1' || Number.isFinite(fixedTime);
 
 let effectiveMode = null;
 let renderer = null;
@@ -61,6 +65,20 @@ window.kaminosPortableMacroOpticalDebugState = {
   partial: true,
 };
 
+function requireOperatorControls() {
+  const missing = [
+    !canvas && 'portable-macro-optics',
+    !status && 'status',
+    modeControls.length !== 3 && 'mode-controls',
+    !playbackToggle && 'playback-toggle',
+    !timeControl && 'time-control',
+    !timeValue && 'time-value',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(`operator controls are missing: ${missing.join(', ')}`);
+  }
+}
+
 function publishDebugState() {
   window.kaminosPortableMacroOpticalDebugState = {
     schema: 'kaminos.finger-fluid.portable-macro-optical-browser-state.v0',
@@ -96,17 +114,91 @@ function publishDebugState() {
     host: lastPlan?.host ?? null,
     rendererEvidence: lastEvidence,
     animationTimeSeconds: forcedTime ?? Math.max(0, (performance.now() - startTime) / 1000),
+    paused,
     failure,
   };
-  status.textContent = [
+  const publishedState = window.kaminosPortableMacroOpticalDebugState;
+  if (status) status.textContent = [
     `KAMINOS PORTABLE MACRO OPTICS`,
     `${requestedMode} -> ${effectiveMode ?? 'pending'} · ${device ? 'webgpu' : 'pending'}`,
-    `${window.kaminosPortableMacroOpticalDebugState.effectiveRoute ?? 'no route'}`,
-    `${window.kaminosPortableMacroOpticalDebugState.effectiveTopologyRoute ?? 'no topology route'}`,
+    `${publishedState.effectiveRoute ?? 'no route'}`,
+    `${publishedState.effectiveTopologyRoute ?? 'no topology route'}`,
     `frame ${frameCount} · wet ${lastPlan?.wetSampleCount ?? 0}/${sampleCount}`,
     failure ? `FAILED: ${failure.message}` : 'source live · fallback none',
   ].join('\n');
-  return window.kaminosPortableMacroOpticalDebugState;
+  modeControls.forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.mode === effectiveMode));
+  });
+  playbackToggle?.setAttribute('data-state', paused ? 'paused' : 'playing');
+  playbackToggle?.setAttribute('aria-label', paused ? 'Play animation' : 'Pause animation');
+  playbackToggle?.setAttribute('title', paused ? 'Play animation' : 'Pause animation');
+  const displayedTime = publishedState.animationTimeSeconds;
+  if (Number.isFinite(displayedTime)) {
+    if (timeControl && displayedTime > Number(timeControl.max)) {
+      timeControl.max = String(Math.ceil(displayedTime + 1));
+    }
+    if (timeControl) timeControl.value = String(displayedTime);
+    timeControl?.setAttribute('aria-valuetext', `${displayedTime.toFixed(2)} seconds`);
+    if (timeValue) timeValue.value = `${displayedTime.toFixed(2)} s`;
+    timeValue?.setAttribute('data-time', displayedTime.toFixed(2));
+  }
+  return publishedState;
+}
+
+function updateShareableUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('mode', requestedMode);
+  if (paused && Number.isFinite(forcedTime)) {
+    url.searchParams.set('time', forcedTime.toFixed(2));
+    url.searchParams.set('paused', '1');
+  } else {
+    url.searchParams.delete('time');
+    url.searchParams.delete('paused');
+  }
+  history.replaceState(null, '', url);
+}
+
+function setMode(mode) {
+  if (!['optical', 'regular_grid_debug', 'cyan'].includes(mode)) {
+    throw new Error(`unsupported witness mode: ${mode}`);
+  }
+  requestedMode = mode;
+  effectiveMode = mode;
+  requestedTopologyRoute = mode === 'regular_grid_debug'
+    ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
+    : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
+  updateShareableUrl();
+  renderFrame(performance.now());
+  return publishDebugState();
+}
+
+function setTime(timeSeconds) {
+  if (!Number.isFinite(timeSeconds) || timeSeconds < 0) {
+    throw new Error('witness time must be finite and nonnegative');
+  }
+  forcedTime = timeSeconds;
+  paused = true;
+  updateShareableUrl();
+  renderFrame(performance.now());
+  return publishDebugState();
+}
+
+function setPaused(nextPaused) {
+  if (nextPaused === paused) return publishDebugState();
+  const currentTime = forcedTime
+    ?? window.kaminosPortableMacroOpticalDebugState.animationTimeSeconds
+    ?? 0;
+  paused = nextPaused;
+  if (paused) {
+    forcedTime = currentTime;
+    renderFrame(performance.now());
+  } else {
+    startTime = performance.now() - currentTime * 1000;
+    forcedTime = null;
+    window.requestAnimationFrame(renderFrame);
+  }
+  updateShareableUrl();
+  return publishDebugState();
 }
 
 function normalize(vector) {
@@ -766,6 +858,7 @@ function renderFrame(timestamp) {
 }
 
 async function initialize() {
+  requireOperatorControls();
   if (!navigator.gpu) throw new Error('navigator.gpu unavailable');
   if (!['optical', 'regular_grid_debug', 'cyan'].includes(requestedMode)) {
     throw new Error(`unsupported witness mode: ${requestedMode}`);
@@ -825,25 +918,13 @@ async function initialize() {
     sceneColorTexture = null;
     sceneDepthTexture = null;
   });
-  window.kaminosPortableMacroSetModeForWitness = mode => {
-    if (!['optical', 'regular_grid_debug', 'cyan'].includes(mode)) {
-      throw new Error(`unsupported witness mode: ${mode}`);
-    }
-    effectiveMode = mode;
-    requestedTopologyRoute = mode === 'regular_grid_debug'
-      ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
-      : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
-    renderFrame(performance.now());
-    return publishDebugState();
-  };
-  window.kaminosPortableMacroSetTimeForWitness = timeSeconds => {
-    if (!Number.isFinite(timeSeconds) || timeSeconds < 0) {
-      throw new Error('witness time must be finite and nonnegative');
-    }
-    forcedTime = timeSeconds;
-    renderFrame(performance.now());
-    return publishDebugState();
-  };
+  modeControls.forEach(button => {
+    button.addEventListener('click', () => setMode(button.dataset.mode));
+  });
+  playbackToggle.addEventListener('click', () => setPaused(!paused));
+  timeControl.addEventListener('input', () => setTime(Number(timeControl.value)));
+  window.kaminosPortableMacroSetModeForWitness = setMode;
+  window.kaminosPortableMacroSetTimeForWitness = setTime;
   window.kaminosPortableMacroRenderForWitness = () => {
     renderFrame(performance.now());
     return publishDebugState();

@@ -33,11 +33,156 @@
       white-space: pre-wrap;
       pointer-events: none;
     }
+
+    #controls {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: min(390px, calc(100vw - 32px));
+      padding: 10px;
+      border: 1px solid rgba(113, 218, 229, 0.58);
+      border-radius: 6px;
+      background: rgba(3, 13, 16, 0.88);
+      color: #d9ffff;
+      font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      box-sizing: border-box;
+    }
+
+    #mode-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      margin: 0 0 10px;
+      padding: 0;
+      border: 0;
+    }
+
+    #controls button {
+      min-width: 0;
+      height: 34px;
+      border: 1px solid rgba(156, 208, 211, 0.38);
+      border-radius: 4px;
+      background: rgba(29, 51, 53, 0.94);
+      color: #cbebeb;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    #controls button:hover {
+      border-color: rgba(183, 244, 243, 0.8);
+      background: rgba(42, 72, 74, 0.96);
+    }
+
+    #controls button:focus-visible,
+    #time-control:focus-visible {
+      outline: 2px solid #7de5e2;
+      outline-offset: 2px;
+    }
+
+    #mode-controls button[aria-pressed="true"] {
+      border-color: #85eeeb;
+      background: #176a70;
+      color: #ffffff;
+    }
+
+    #playback-controls {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 64px;
+      align-items: center;
+      gap: 9px;
+    }
+
+    #playback-toggle {
+      position: relative;
+      width: 34px;
+      padding: 0;
+    }
+
+    #playback-toggle[data-state="paused"]::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 9px;
+      width: 0;
+      height: 0;
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      border-left: 11px solid currentColor;
+    }
+
+    #playback-toggle[data-state="playing"]::before,
+    #playback-toggle[data-state="playing"]::after {
+      content: "";
+      position: absolute;
+      top: 9px;
+      width: 4px;
+      height: 14px;
+      background: currentColor;
+    }
+
+    #playback-toggle[data-state="playing"]::before {
+      left: 11px;
+    }
+
+    #playback-toggle[data-state="playing"]::after {
+      right: 11px;
+    }
+
+    #time-control {
+      width: 100%;
+      min-width: 0;
+      accent-color: #56cfd1;
+      cursor: pointer;
+    }
+
+    #time-value {
+      text-align: right;
+      color: #b7f4f3;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 760px) {
+      #status {
+        bottom: 112px;
+      }
+
+      #controls {
+        left: 16px;
+        right: 16px;
+        width: auto;
+      }
+    }
   </style>
 </head>
 <body>
   <canvas id="portable-macro-optics"></canvas>
   <div id="status">initializing portable macro optics</div>
+  <div id="controls">
+    <fieldset id="mode-controls" aria-label="Surface mode">
+      <button type="button" data-mode="optical" aria-pressed="false">Clipped</button>
+      <button type="button" data-mode="regular_grid_debug" aria-pressed="false">Grid debug</button>
+      <button type="button" data-mode="cyan" aria-pressed="false">Cyan</button>
+    </fieldset>
+    <div id="playback-controls">
+      <button
+        id="playback-toggle"
+        type="button"
+        data-state="paused"
+        aria-label="Play animation"
+        title="Play animation"
+      ></button>
+      <input
+        id="time-control"
+        type="range"
+        min="0"
+        max="8"
+        step="0.01"
+        value="0.75"
+        aria-label="Animation time"
+      >
+      <output id="time-value" for="time-control">0.75 s</output>
+    </div>
+  </div>
   <script type="module" src="./finger-fluid-portable-macro-optical-witness.js"></script>
 </body>
 </html>
