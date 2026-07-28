@@ -140,16 +140,15 @@ const submissions = createWebGpuBoundedSubmissionQueue({
 });
 
 for (const range of exactRanges) {
+  const encoder = device.createCommandEncoder({ label: range.rangeId });
+  encodeRange(encoder, range);
+
   await submissions.submitDuty({
     dutyId: range.rangeId,
+    commandBuffers: [encoder.finish()],
     metadata: {
       itemStart: range.itemStart,
       itemEnd: range.itemEnd,
-    },
-    submit() {
-      const encoder = device.createCommandEncoder({ label: range.rangeId });
-      encodeRange(encoder, range);
-      device.queue.submit([encoder.finish()]);
     },
   });
 }
@@ -157,7 +156,7 @@ for (const range of exactRanges) {
 const submissionReport = await submissions.drain();
 ```
 
-`maxInFlightDuties` is a required caller-selected positive depth; the runtime does not invent a cap. Each submission captures its queue-prefix fence immediately and yields to the browser. Admission applies backpressure at the selected depth, concurrent callers retain call order, and terminal drain waits for queued admissions and every submitted prefix. Cancellation stops new admission but still drains work already accepted by WebGPU. The uncapped report keeps raw queue-prefix duration separate from host backpressure wait, because neither measurement proves presentation cadence or preempts a command buffer that has already been submitted.
+`maxInFlightDuties` is a required caller-selected positive depth; the runtime does not invent a cap. The controller owns `queue.submit()`, captures that submission's queue-prefix fence immediately, and then yields to the browser, so caller code cannot submit work and throw before fence authority exists. Admission applies backpressure at the selected depth, concurrent callers retain call order, and terminal drain waits for queued admissions and every submitted prefix. Cancellation stops new admission but still drains work already accepted by WebGPU. The uncapped report keeps raw queue-prefix duration separate from host backpressure wait, because neither measurement proves presentation cadence or preempts a command buffer that has already been submitted.
 
 Every progress event carries `completedItems`, `totalItems`, phase progress, and overall progress. A boundary whose total is discovered at invocation time declares `totalItems: null`; `startBoundary(boundaryId, { totalItems })` supplies the exact total before its first range. Until every total is known, aggregate progress remains `null` instead of presenting a fabricated percentage.
 

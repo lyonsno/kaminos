@@ -229,7 +229,7 @@ export function createWebGpuBoundedSubmissionQueue(input = {}) {
     const sequence = ++state.sequence;
     const submitStartedAtMs = requireNow(now);
     try {
-      await duty.submit();
+      queue.submit(duty.commandBuffers);
     } catch (error) {
       state.duties.push({
         dutyId: duty.dutyId,
@@ -351,7 +351,12 @@ export function createWebGpuBoundedSubmissionQueue(input = {}) {
     if (state.dutyIds.has(duty.dutyId)) {
       throw new Error(`duplicate GPU duty ${duty.dutyId}`);
     }
-    if (typeof duty.submit !== 'function') throw new TypeError('GPU duty submit must be a function');
+    if (duty.submit != null) {
+      throw new TypeError('GPU duty submit callbacks are unsupported; provide commandBuffers');
+    }
+    if (!Array.isArray(duty.commandBuffers) || duty.commandBuffers.length === 0) {
+      throw new TypeError('GPU duty commandBuffers must be a non-empty array');
+    }
     if (duty.metadata != null && !isPlainObject(duty.metadata)) {
       throw new TypeError('GPU duty metadata must be an object when provided');
     }
@@ -361,10 +366,11 @@ export function createWebGpuBoundedSubmissionQueue(input = {}) {
     } catch {
       throw new TypeError('GPU duty metadata must be JSON-serializable');
     }
+    const commandBuffers = [...duty.commandBuffers];
     state.dutyIds.add(duty.dutyId);
     const operation = admissionTail.then(() => {
       if (state.status !== 'active') throw terminalStateError();
-      return submitDutyInternal({ ...duty, metadata });
+      return submitDutyInternal({ dutyId: duty.dutyId, commandBuffers, metadata });
     });
     admissionTail = operation.then(
       () => undefined,
@@ -401,7 +407,6 @@ export function createWebGpuBoundedSubmissionQueue(input = {}) {
 
   return Object.freeze({
     schema: WEBGPU_BOUNDED_GPU_SUBMISSION_REPORT_SCHEMA,
-    queue,
     maxInFlightDuties: input.maxInFlightDuties,
     submitDuty,
     drain,

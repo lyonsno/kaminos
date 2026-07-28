@@ -67,13 +67,77 @@ for (const invalid of [0, -1, 1.5, Number.NaN, '2', null, false]) {
   );
 }
 
+const submissionOwnershipFixture = createFixture(2);
+let legacySubmitCallbackRan = false;
+await assert.rejects(
+  Promise.resolve().then(() => submissionOwnershipFixture.controller.submitDuty({
+    dutyId: 'legacy-caller-owned-submit',
+    submit() {
+      legacySubmitCallbackRan = true;
+      submissionOwnershipFixture.controller.queue.submit(['legacy-caller-owned-submit']);
+      throw new Error('caller threw after queue submission');
+    },
+  })),
+  /commandBuffers/,
+);
+assert.equal(
+  legacySubmitCallbackRan,
+  false,
+  'caller code must not run across the controller-owned queue submission boundary',
+);
+
+const copiedBuffersFixture = createFixture(2);
+const callerOwnedBuffers = ['copied-before-admission'];
+const copiedBuffersPromise = copiedBuffersFixture.controller.submitDuty({
+  dutyId: 'copied-command-buffers',
+  commandBuffers: callerOwnedBuffers,
+});
+callerOwnedBuffers[0] = 'mutated-after-admission';
+await copiedBuffersPromise;
+assert.equal(
+  copiedBuffersFixture.events[0],
+  'queue-submit:copied-before-admission',
+  'command buffer arrays must be copied before queued admission',
+);
+copiedBuffersFixture.fences[0].resolve();
+await copiedBuffersFixture.controller.drain();
+
+let submitFailureFenceCalls = 0;
+const submitFailureController = kit.createWebGpuBoundedSubmissionQueue({
+  queue: {
+    submit() {
+      throw new Error('queue rejected command buffers');
+    },
+    onSubmittedWorkDone() {
+      submitFailureFenceCalls += 1;
+      return Promise.resolve();
+    },
+  },
+  maxInFlightDuties: 1,
+});
+await assert.rejects(
+  submitFailureController.submitDuty({
+    dutyId: 'queue-submit-failure',
+    commandBuffers: [{}],
+  }),
+  error => {
+    assert.equal(error.message, 'queue rejected command buffers');
+    assert.equal(error.boundedGpuSubmissionReport.failure.phase, 'queue-submission');
+    assert.equal(error.boundedGpuSubmissionReport.duties[0].submittedAtMs, null);
+    return true;
+  },
+);
+assert.equal(
+  submitFailureFenceCalls,
+  0,
+  'a queue.submit throw must not claim that a command prefix was accepted',
+);
+
 const { controller, events, fences } = createFixture(2);
 
 const first = await controller.submitDuty({
   dutyId: 'duty-1',
-  submit() {
-    controller.queue.submit(['duty-1']);
-  },
+  commandBuffers: ['duty-1'],
   metadata: { rangeIndex: 0 },
 });
 assert.equal(first.status, 'admitted');
@@ -83,9 +147,7 @@ assert.equal(controller.snapshot().inFlightDutyCount, 1);
 let secondSettled = false;
 const secondPromise = controller.submitDuty({
   dutyId: 'duty-2',
-  submit() {
-    controller.queue.submit(['duty-2']);
-  },
+  commandBuffers: ['duty-2'],
   metadata: { rangeIndex: 1 },
 }).then(receipt => {
   secondSettled = true;
@@ -106,9 +168,7 @@ assert.equal(controller.snapshot().completedDutyCount, 1);
 
 const thirdPromise = controller.submitDuty({
   dutyId: 'duty-3',
-  submit() {
-    controller.queue.submit(['duty-3']);
-  },
+  commandBuffers: ['duty-3'],
   metadata: { rangeIndex: 2 },
 });
 await flush();
@@ -146,16 +206,14 @@ assert.deepEqual(events.slice(0, 6), [
   'yield:duty-2',
 ]);
 assert.throws(
-  () => controller.submitDuty({ dutyId: 'after-drain', submit() {} }),
+  () => controller.submitDuty({ dutyId: 'after-drain', commandBuffers: [{}] }),
   /drained/,
 );
 
 const failedFixture = createFixture(1);
 const failedPromise = failedFixture.controller.submitDuty({
   dutyId: 'failed-duty',
-  submit() {
-    failedFixture.controller.queue.submit(['failed-duty']);
-  },
+  commandBuffers: ['failed-duty'],
 });
 await flush();
 failedFixture.fences[0].reject(new Error('device lost during prefix completion'));
@@ -184,9 +242,7 @@ const metadataFixture = createFixture(2);
 assert.throws(
   () => metadataFixture.controller.submitDuty({
     dutyId: 'invalid-metadata',
-    submit() {
-      metadataFixture.controller.queue.submit(['invalid-metadata']);
-    },
+    commandBuffers: ['invalid-metadata'],
     metadata: { unsupported: 1n },
   }),
   /metadata.*JSON-serializable/,
@@ -203,9 +259,7 @@ const cancelledFixture = createFixture(2, { signal: cancellation.signal });
 await assert.rejects(
   cancelledFixture.controller.submitDuty({
     dutyId: 'cancelled-before-submit',
-    submit() {
-      cancelledFixture.controller.queue.submit(['cancelled-before-submit']);
-    },
+    commandBuffers: ['cancelled-before-submit'],
   }),
   error => {
     assert.equal(error.name, 'AbortError');
@@ -226,9 +280,7 @@ const inFlightCancelledFixture = createFixture(2, {
 });
 await inFlightCancelledFixture.controller.submitDuty({
   dutyId: 'submitted-before-cancel',
-  submit() {
-    inFlightCancelledFixture.controller.queue.submit(['submitted-before-cancel']);
-  },
+  commandBuffers: ['submitted-before-cancel'],
 });
 inFlightCancellation.abort('operator-cancelled-after-submit');
 let cancellationSettled = false;
@@ -263,9 +315,7 @@ const malformedFenceController = kit.createWebGpuBoundedSubmissionQueue({
 await assert.rejects(
   malformedFenceController.submitDuty({
     dutyId: 'malformed-fence',
-    submit() {
-      malformedFenceController.queue.submit([]);
-    },
+    commandBuffers: [{}],
   }),
   error => {
     assert.match(error.message, /onSubmittedWorkDone.*Promise/);
@@ -285,9 +335,7 @@ let yieldFailureSettled = false;
 const yieldFailurePromise = assert.rejects(
   yieldFailure.controller.submitDuty({
     dutyId: 'yield-failure',
-    submit() {
-      yieldFailure.controller.queue.submit(['yield-failure']);
-    },
+    commandBuffers: ['yield-failure'],
   }),
   error => {
     yieldFailureSettled = true;
@@ -310,11 +358,7 @@ let backpressureCancellationSettled = false;
 const backpressureCancellationPromise = assert.rejects(
   backpressureCancellationFixture.controller.submitDuty({
     dutyId: 'cancelled-during-backpressure',
-    submit() {
-      backpressureCancellationFixture.controller.queue.submit([
-        'cancelled-during-backpressure',
-      ]);
-    },
+    commandBuffers: ['cancelled-during-backpressure'],
   }),
   error => {
     backpressureCancellationSettled = true;
@@ -340,9 +384,7 @@ const concurrentFixture = createFixture(2);
 const concurrentSubmissions = ['concurrent-1', 'concurrent-2', 'concurrent-3'].map(
   dutyId => concurrentFixture.controller.submitDuty({
     dutyId,
-    submit() {
-      concurrentFixture.controller.queue.submit([dutyId]);
-    },
+    commandBuffers: [dutyId],
   }),
 );
 await flush();
