@@ -103,9 +103,6 @@ const glb = await execution.run(async cooperative => {
         });
         return encoder.finish();
       },
-      submit(commandBuffer) {
-        runtime.queue.submit([commandBuffer]);
-      },
     });
   }
 

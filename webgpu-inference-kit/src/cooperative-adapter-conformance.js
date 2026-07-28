@@ -352,6 +352,7 @@ function createScenarioRuntime({ manifest, scenario, abortController, now }) {
   }
 
   const queue = {
+    submit() {},
     async onSubmittedWorkDone() {
       maybeFail('gpu');
     },

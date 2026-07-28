@@ -77,6 +77,8 @@ function createFakeRuntime({
   now,
   failedSettlementError = null,
   browserYieldError = null,
+  submissionRecorderError = null,
+  duplicateSubmission = false,
 }) {
   const queue = {
     submit(commandBuffers) {
@@ -99,7 +101,10 @@ function createFakeRuntime({
     commandDuties: {
       async measureSubmission(descriptor, submit) {
         calls.push(`measure-submit:${descriptor.metadata.boundaryId}`);
-        return submit();
+        const result = await submit();
+        if (duplicateSubmission) await submit();
+        if (submissionRecorderError) throw submissionRecorderError;
+        return result;
       },
     },
     async runInvocation({ invocationId }, fn) {
@@ -265,6 +270,110 @@ assert.deepEqual(execution.progress(), {
   ],
 });
 
+const legacySubmitCalls = [];
+const legacySubmitRuntime = createFakeRuntime({ calls: legacySubmitCalls, now });
+const legacySubmitExecution = createWebGpuCooperativeExecution({
+  runtime: legacySubmitRuntime,
+  manifest,
+  invocationId: 'sharp:firing:legacy-submit-callback',
+  schedulingMode: 'cooperative',
+  now,
+});
+let legacySubmitRan = false;
+await assert.rejects(
+  legacySubmitExecution.run(async cooperative => {
+    const gpu = cooperative.startBoundary('spn-window-tiles');
+    await gpu.runGpuDuty(gpu.nextRange(), {
+      encode() {
+        return { rangeId: 'legacy-submit-buffer' };
+      },
+      submit(commandBuffer) {
+        legacySubmitRan = true;
+        legacySubmitRuntime.queue.submit([commandBuffer]);
+        throw new Error('caller threw after cooperative queue submission');
+      },
+    });
+  }),
+  error => {
+    assert.match(error.message, /submit callbacks are unsupported/);
+    assert.equal(error.cooperativeExecutionReport.queueCompletionAuthority, 'no-gpu-duty-submitted');
+    assert.equal(error.cooperativeExecutionReport.submittedGpuDutyCount, 0);
+    assert.equal(error.cooperativeExecutionReport.boundaries[0].planner.pendingRangeId, null);
+    return true;
+  },
+);
+assert.equal(legacySubmitRan, false);
+assert.equal(legacySubmitCalls.some(call => call.startsWith('submit:')), false);
+
+const recorderFailureCalls = [];
+const recorderFailureRuntime = createFakeRuntime({
+  calls: recorderFailureCalls,
+  now,
+  submissionRecorderError: new Error('recorder failed after submission'),
+});
+const recorderFailureExecution = createWebGpuCooperativeExecution({
+  runtime: recorderFailureRuntime,
+  manifest,
+  invocationId: 'sharp:firing:recorder-post-submit-failure',
+  schedulingMode: 'cooperative',
+  now,
+});
+await assert.rejects(
+  recorderFailureExecution.run(async cooperative => {
+    const gpu = cooperative.startBoundary('spn-window-tiles');
+    await gpu.runGpuDuty(gpu.nextRange(), {
+      encode() {
+        return { rangeId: 'recorder-failure-buffer' };
+      },
+    });
+  }),
+  error => {
+    assert.equal(error.message, 'recorder failed after submission');
+    const failureReport = error.cooperativeExecutionReport;
+    assert.equal(failureReport.failure.phase, 'queue-submission');
+    assert.equal(failureReport.queueCompletionAuthority, 'per-gpu-duty-prefix-fence');
+    assert.equal(failureReport.submittedGpuDutyCount, 1);
+    assert.equal(failureReport.observedPrefixFenceCount, 1);
+    assert.equal(failureReport.unfencedSubmittedGpuDutyCount, 0);
+    return true;
+  },
+);
+assert.ok(recorderFailureCalls.includes('queue-fence'));
+
+const duplicateSubmissionCalls = [];
+const duplicateSubmissionExecution = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({
+    calls: duplicateSubmissionCalls,
+    now,
+    duplicateSubmission: true,
+  }),
+  manifest,
+  invocationId: 'sharp:firing:duplicate-recorder-submit',
+  schedulingMode: 'cooperative',
+  now,
+});
+await assert.rejects(
+  duplicateSubmissionExecution.run(async cooperative => {
+    const gpu = cooperative.startBoundary('spn-window-tiles');
+    await gpu.runGpuDuty(gpu.nextRange(), {
+      encode() {
+        return { rangeId: 'duplicate-recorder-buffer' };
+      },
+    });
+  }),
+  error => {
+    assert.match(error.message, /duplicate GPU submission/);
+    assert.equal(error.cooperativeExecutionReport.submittedGpuDutyCount, 1);
+    assert.equal(error.cooperativeExecutionReport.observedPrefixFenceCount, 1);
+    assert.equal(error.cooperativeExecutionReport.unfencedSubmittedGpuDutyCount, 0);
+    return true;
+  },
+);
+assert.equal(
+  duplicateSubmissionCalls.filter(call => call.startsWith('submit:')).length,
+  1,
+);
+
 const output = await execution.run(async cooperative => {
   const gpu = cooperative.startBoundary('spn-window-tiles');
   let range;
@@ -274,9 +383,6 @@ const output = await execution.run(async cooperative => {
         calls.push(`encode:${exactRange.rangeIndex}`);
         assert.equal(commandDuty.metadata.boundaryId, 'spn-window-tiles');
         return { rangeId: exactRange.rangeId };
-      },
-      submit(commandBuffer) {
-        runtime.queue.submit([commandBuffer]);
       },
     });
   }
@@ -402,9 +508,6 @@ await assert.rejects(
       encode({ range: exactRange }) {
         return { rangeId: exactRange.rangeId };
       },
-      submit(commandBuffer) {
-        progressFailureCalls.push(`progress-submit:${commandBuffer.rangeId}`);
-      },
     });
   }),
   error => {
@@ -448,9 +551,6 @@ await assert.rejects(
       encode({ range: exactRange }) {
         return { rangeId: exactRange.rangeId };
       },
-      submit(commandBuffer) {
-        yieldFailureCalls.push(`yield-submit:${commandBuffer.rangeId}`);
-      },
     });
   }),
   error => {
@@ -492,9 +592,6 @@ await disabled.run(async cooperative => {
       encode({ range: exactRange }) {
         return { rangeId: exactRange.rangeId };
       },
-      submit(commandBuffer) {
-        disabledRuntime.queue.submit([commandBuffer]);
-      },
     });
   }
   const cpu = cooperative.startBoundary('ply-compose');
@@ -531,9 +628,6 @@ await assert.rejects(
     await gpu.runGpuDuty(gpu.nextRange(), {
       encode() {
         throw new Error('shader binding mismatch');
-      },
-      submit() {
-        assert.fail('failed encoding must not submit');
       },
     });
   }),
@@ -574,9 +668,6 @@ await assert.rejects(
     await gpu.runGpuDuty(gpu.nextRange(), {
       encode() {
         throw new Error('encode blew');
-      },
-      submit() {
-        assert.fail('double failure must not submit');
       },
     });
   }),
@@ -625,14 +716,12 @@ await assert.rejects(
       encode({ range: exactRange }) {
         return { rangeId: exactRange.rangeId };
       },
-      submit() {},
     });
     cancellation.abort('operator-cancelled');
     await gpu.runGpuDuty(gpu.nextRange(), {
       encode() {
         assert.fail('cancelled execution must not encode more work');
       },
-      submit() {},
     });
   }),
   error => {
@@ -658,7 +747,6 @@ await assert.rejects(
       encode({ range: exactRange }) {
         return { rangeId: exactRange.rangeId };
       },
-      submit() {},
     });
   }),
   error => {
@@ -694,7 +782,6 @@ await dynamic.run(async cooperative => {
     encode({ range: exactRange }) {
       return { rangeId: exactRange.rangeId };
     },
-    submit() {},
   });
 });
 assert.equal(dynamic.finish().progress.percent, 100);

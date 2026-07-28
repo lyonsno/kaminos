@@ -90,7 +90,6 @@ function createInput(overrides = {}) {
           encode({ range: exactRange }) {
             return { rangeId: exactRange.rangeId };
           },
-          submit() {},
         });
       }
 
@@ -236,7 +235,6 @@ await assert.rejects(
           encode() {
             return {};
           },
-          submit() {},
         });
       }
       return { outputFingerprint: 'sha256:partial-output' };

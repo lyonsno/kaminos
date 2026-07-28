@@ -235,6 +235,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
     invocationScheduler: null,
     runCalled: false,
     terminalQueueFenceObserved: false,
+    submittedGpuDutyCount: 0,
+    observedPrefixFenceCount: 0,
+    unfencedSubmittedGpuDutyCount: 0,
   };
 
   function checkCancellation() {
@@ -329,11 +332,17 @@ export function createWebGpuCooperativeExecution(input = {}) {
       .filter(definition => definition.boundary.kind === 'gpu-command').length;
     const queueCompletionAuthority = gpuBoundaryCount === 0
       ? 'not-applicable'
-      : schedulingMode === 'cooperative'
+      : state.submittedGpuDutyCount === 0
+        ? 'no-gpu-duty-submitted'
+        : state.unfencedSubmittedGpuDutyCount > 0
+          ? 'incomplete-prefix-fence-authority'
+          : schedulingMode === 'cooperative'
         ? 'per-gpu-duty-prefix-fence'
         : state.terminalQueueFenceObserved
           ? 'one-terminal-prefix-fence'
-          : 'terminal-prefix-fence-pending';
+          : state.observedPrefixFenceCount === state.submittedGpuDutyCount
+            ? 'exceptional-per-duty-prefix-fence'
+            : 'terminal-prefix-fence-pending';
     return deepFreeze({
       schema: WEBGPU_COOPERATIVE_EXECUTION_REPORT_SCHEMA,
       status: state.status,
@@ -344,6 +353,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
       schedulerRevision: state.schedulerRevision,
       invocationScheduler: clone(state.invocationScheduler),
       queueCompletionAuthority,
+      submittedGpuDutyCount: state.submittedGpuDutyCount,
+      observedPrefixFenceCount: state.observedPrefixFenceCount,
+      unfencedSubmittedGpuDutyCount: state.unfencedSubmittedGpuDutyCount,
       retention: 'uncapped',
       startedAtMs: state.startedAtMs,
       endedAtMs: state.endedAtMs,
@@ -546,9 +558,19 @@ export function createWebGpuCooperativeExecution(input = {}) {
         if (definition.boundary.kind !== 'gpu-command') {
           throw new Error(`${boundaryId} is not a gpu-command boundary`);
         }
-        if (typeof handlers.encode !== 'function') throw new TypeError('GPU duty encode must be a function');
-        if (typeof handlers.submit !== 'function') throw new TypeError('GPU duty submit must be a function');
         requirePendingRange(boundaryState, range);
+        if (typeof handlers.encode !== 'function') {
+          const error = new TypeError('GPU duty encode must be a function');
+          failRange(boundaryState, range, 'command-encoding', error);
+          throw failExecution(error, 'command-encoding', boundaryState);
+        }
+        if (handlers.submit != null) {
+          const error = new TypeError(
+            'GPU duty submit callbacks are unsupported; encode must return command buffers',
+          );
+          failRange(boundaryState, range, 'command-encoding', error);
+          throw failExecution(error, 'command-encoding', boundaryState);
+        }
 
         let descriptor = {
           phase: definition.phase.phaseId,
@@ -611,29 +633,64 @@ export function createWebGpuCooperativeExecution(input = {}) {
           }
         }
 
+        const commandBuffers = Array.isArray(encoded) ? [...encoded] : [encoded];
+        if (commandBuffers.length === 0 || commandBuffers.some(buffer => buffer == null)) {
+          const error = new TypeError('GPU duty encode must return command buffers');
+          failRange(boundaryState, range, 'command-encoding', error);
+          throw failExecution(error, 'command-encoding', boundaryState);
+        }
+
         const submitStartMs = readNow(now);
         let prefixFence = null;
+        let submitted = false;
+        const capturePrefixFence = () => {
+          if (typeof runtime.queue.onSubmittedWorkDone !== 'function') {
+            throw new Error('GPU duties require queue.onSubmittedWorkDone');
+          }
+          const fence = runtime.queue.onSubmittedWorkDone();
+          if (fence == null || typeof fence.then !== 'function') {
+            throw new TypeError('queue onSubmittedWorkDone must return a Promise');
+          }
+          state.observedPrefixFenceCount += 1;
+          return fence;
+        };
         try {
-          const submit = () => handlers.submit(encoded, {
-            range,
-            commandDuty: deepFreeze(clone(descriptor)),
-            schedulerInvocation,
-          });
+          const submit = () => {
+            if (submitted) {
+              throw new Error('command duty recorder attempted duplicate GPU submission');
+            }
+            runtime.queue.submit(commandBuffers);
+            submitted = true;
+            state.submittedGpuDutyCount += 1;
+            if (schedulingMode === 'cooperative') {
+              prefixFence = capturePrefixFence();
+            }
+          };
           if (runtime.commandDuties?.measureSubmission) {
             await runtime.commandDuties.measureSubmission(descriptor, submit);
           } else {
-            await submit();
+            submit();
           }
+          if (!submitted) throw new Error('command duty recorder did not submit GPU work');
           if (schedulingMode === 'cooperative') {
-            if (typeof runtime.queue.onSubmittedWorkDone !== 'function') {
-              throw new Error('cooperative GPU duties require queue.onSubmittedWorkDone');
-            }
-            prefixFence = runtime.queue.onSubmittedWorkDone();
             await prefixFence;
           }
         } catch (error) {
+          const secondaryFailures = [];
+          if (submitted) {
+            try {
+              if (!prefixFence) prefixFence = capturePrefixFence();
+              await prefixFence;
+            } catch (fenceError) {
+              state.unfencedSubmittedGpuDutyCount += 1;
+              secondaryFailures.push({
+                phase: 'queue-prefix-drain',
+                error: normalizeError(fenceError),
+              });
+            }
+          }
           failRange(boundaryState, range, 'queue-submission', error);
-          throw failExecution(error, 'queue-submission', boundaryState);
+          throw failExecution(error, 'queue-submission', boundaryState, { secondaryFailures });
         }
         const completedAtMs = readNow(now);
 
@@ -748,6 +805,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
           throw new Error('disabled scheduling A/B requires a terminal queue.onSubmittedWorkDone fence');
         }
         const terminalFence = runtime.queue.onSubmittedWorkDone();
+        if (terminalFence == null || typeof terminalFence.then !== 'function') {
+          throw new TypeError('queue onSubmittedWorkDone must return a Promise');
+        }
         await terminalFence;
         state.terminalQueueFenceObserved = true;
       }
