@@ -125,6 +125,40 @@ const cooperativeReport = execution.finish();
 
 For each cooperative GPU duty, Kaminos services pending foreground work before encoding, submits the exact model-owned command buffer, captures that inference prefix's queue fence immediately, adapts the next exact range from completed queue time, and yields to the browser. CPU duties use the same range and progress grammar with host-phase timing. Histories remain uncapped, and `actualRangeCount` becomes authoritative only when the boundary completes.
 
+Raw adapters can bound queue-prefix completion without serializing every duty:
+
+```js
+import {
+  createWebGpuBoundedSubmissionQueue,
+} from "@kaminos/webgpu-inference-kit";
+
+const submissions = createWebGpuBoundedSubmissionQueue({
+  queue: device.queue,
+  maxInFlightDuties: 2,
+  signal: abortController.signal,
+  yieldToBrowser: () => new Promise(requestAnimationFrame),
+});
+
+for (const range of exactRanges) {
+  await submissions.submitDuty({
+    dutyId: range.rangeId,
+    metadata: {
+      itemStart: range.itemStart,
+      itemEnd: range.itemEnd,
+    },
+    submit() {
+      const encoder = device.createCommandEncoder({ label: range.rangeId });
+      encodeRange(encoder, range);
+      device.queue.submit([encoder.finish()]);
+    },
+  });
+}
+
+const submissionReport = await submissions.drain();
+```
+
+`maxInFlightDuties` is a required caller-selected positive depth; the runtime does not invent a cap. Each submission captures its queue-prefix fence immediately and yields to the browser. Admission applies backpressure at the selected depth, concurrent callers retain call order, and terminal drain waits for queued admissions and every submitted prefix. Cancellation stops new admission but still drains work already accepted by WebGPU. The uncapped report keeps raw queue-prefix duration separate from host backpressure wait, because neither measurement proves presentation cadence or preempts a command buffer that has already been submitted.
+
 Every progress event carries `completedItems`, `totalItems`, phase progress, and overall progress. A boundary whose total is discovered at invocation time declares `totalItems: null`; `startBoundary(boundaryId, { totalItems })` supplies the exact total before its first range. Until every total is known, aggregate progress remains `null` instead of presenting a fabricated percentage.
 
 Set `schedulingMode: "disabled"` to exercise the same declared work as a pass-through A/B. That mode keeps command-duty measurement, omits cooperative preparation, adaptation, and per-duty yields, and captures one terminal queue-prefix fence before reporting success.

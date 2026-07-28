@@ -72,6 +72,11 @@ export {
 } from './cooperative-execution.js';
 
 export {
+  WEBGPU_BOUNDED_GPU_SUBMISSION_REPORT_SCHEMA,
+  createWebGpuBoundedSubmissionQueue,
+} from './bounded-gpu-submission.js';
+
+export {
   WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
   runWebGpuCooperativeAdapterConformance,
 } from './cooperative-adapter-conformance.js';
