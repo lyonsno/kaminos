@@ -9297,10 +9297,11 @@ struct DeferredSceneHit {
 
 fn projectWorldToDeferred(worldPosition: vec3<f32>) -> vec4<f32> {
   let clip = params.viewProjection * vec4<f32>(worldPosition, 1.0);
-  if (clip.w <= 0.001) { return vec4<f32>(-1.0); }
+  if (abs(clip.w) <= 0.001) { return vec4<f32>(-1.0); }
   let ndc = clip.xy / clip.w;
   let uv = vec2<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5);
-  return vec4<f32>(uv, clip.w, 1.0);
+  let viewDepth = dot(worldPosition - params.cameraPosition.xyz, params.cameraForward.xyz);
+  return vec4<f32>(uv, viewDepth, select(0.0, 1.0, viewDepth > 0.001));
 }
 
 fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> DeferredSceneHit {
@@ -10479,6 +10480,14 @@ function matricesApproximatelyEqual(actual, expected, tolerance = 2e-4) {
   return true;
 }
 
+function cameraVectorsApproximatelyEqual(actual, expected, tolerance = 2e-4) {
+  for (let index = 0; index < 3; index += 1) {
+    const scale = Math.max(1, Math.abs(actual[index]), Math.abs(expected[index]));
+    if (Math.abs(actual[index] - expected[index]) > tolerance * scale) return false;
+  }
+  return true;
+}
+
 export function resolveFingerFluidPresentationMode(value) {
   const mode = String(value || KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE);
   if (
@@ -10549,6 +10558,23 @@ export function validateFingerFluidExternalCamera(camera, extent) {
     const length = Math.hypot(...basis);
     if (Math.abs(length - 1) > 2e-3) {
       fingerFluidCameraFailure(`${label} basis length is invalid: ${length}`);
+    }
+  }
+  const inverseView = invertMatrix(view);
+  const expectedCameraChannels = {
+    position: inverseView.slice(12, 15),
+    right: inverseView.slice(0, 3),
+    up: inverseView.slice(4, 7),
+    forward: new Float32Array([-inverseView[8], -inverseView[9], -inverseView[10]]),
+  };
+  for (const [label, channel] of [
+    ['position', position],
+    ['right', right],
+    ['up', up],
+    ['forward', forward],
+  ]) {
+    if (!cameraVectorsApproximatelyEqual(channel, expectedCameraChannels[label], 8e-4)) {
+      fingerFluidCameraFailure(`${label} does not match view matrix`);
     }
   }
   return Object.freeze({

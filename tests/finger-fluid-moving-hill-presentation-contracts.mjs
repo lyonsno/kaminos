@@ -23,7 +23,7 @@ const externalCamera = {
   projection: identityMatrix,
   viewProjection: identityMatrix,
   inverseViewProjection: identityMatrix,
-  position: [0, 0, 4],
+  position: [0, 0, 0],
   right: [1, 0, 0],
   up: [0, 1, 0],
   forward: [0, 0, -1],
@@ -95,6 +95,22 @@ assert.notEqual(
   validatedCamera.viewProjection,
   externalCamera.viewProjection,
   'the renderer must retain an immutable camera snapshot instead of consumer-owned mutable arrays',
+);
+assert.throws(
+  () => fingerFluidCore.validateFingerFluidExternalCamera(
+    { ...externalCamera, position: [0, 0, 4] },
+    { width: 1280, height: 720 },
+  ),
+  /position does not match view matrix/,
+  'an exact external-camera claim must reject a position that contradicts its view matrix',
+);
+assert.throws(
+  () => fingerFluidCore.validateFingerFluidExternalCamera(
+    { ...externalCamera, forward: [0, 0, 1] },
+    { width: 1280, height: 720 },
+  ),
+  /forward does not match view matrix/,
+  'an exact external-camera claim must reject a basis that contradicts its view matrix',
 );
 
 assert.throws(
@@ -174,6 +190,11 @@ assert.match(
   source,
   /cameraEvidence:\s*\{[\s\S]*schema:\s*KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA[\s\S]*identity:[\s\S]*generation:[\s\S]*fallbackReason:\s*null/,
   'runtime evidence must preserve exact external camera identity without fallback',
+);
+assert.match(
+  source,
+  /fn projectWorldToDeferred\(worldPosition: vec3<f32>\)[\s\S]*dot\(worldPosition - params\.cameraPosition\.xyz, params\.cameraForward\.xyz\)/,
+  'deferred projection must compare camera-forward linear depth rather than perspective-only clip.w',
 );
 
 console.log('finger fluid moving-Hill presentation contracts passed');
