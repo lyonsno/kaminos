@@ -48,6 +48,14 @@ if (!sf3dRepoValue) throw new Error('--sf3d-repo is required');
 const sf3dRepo = path.resolve(sf3dRepoValue);
 const meshDir = path.resolve(argument('--mesh-dir', '/private/tmp/sf3d-arena-worker-shots'));
 const meshFile = argument('--mesh-file', 'arena-worker.glb');
+const gpuTopology = argument('--gpu-topology', 'dual-device');
+if (!['dual-device', 'shared-device'].includes(gpuTopology)) {
+  throw new Error(`--gpu-topology must be dual-device or shared-device, got ${gpuTopology}`);
+}
+const renderFps = argument('--render-fps', '');
+if (renderFps !== '' && (!Number.isFinite(Number(renderFps)) || Number(renderFps) <= 0)) {
+  throw new Error(`--render-fps must be a positive finite number, got ${renderFps}`);
+}
 if (!existsSync(path.join(meshDir, meshFile))) {
   throw new Error(`accepted SF3D smoke mesh is missing: ${path.join(meshDir, meshFile)}`);
 }
@@ -114,11 +122,15 @@ await Promise.all([
 
 const url = new URL(kaminosOrigin);
 url.searchParams.set('sf3d_live_smoke', '1');
+url.searchParams.set('sf3d_gpu_topology', gpuTopology);
+if (renderFps !== '') url.searchParams.set('sf3d_render_fps', renderFps);
 url.searchParams.set('mesh_root', 'splat-extra-1');
 url.searchParams.set('mesh_path', meshFile);
 console.log('\nSF3D live contention smoke');
 console.log(`  source: ${effectiveRevision}`);
 console.log(`  sf3d:   ${sf3dOrigin}`);
+console.log(`  topology: ${gpuTopology}`);
+console.log(`  render fps: ${renderFps || 'unthrottled'}`);
 console.log(`  open:   ${url.href}`);
 console.log('  firing is manual; model load does not start inference\n');
 

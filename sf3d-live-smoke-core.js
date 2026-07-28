@@ -2,6 +2,7 @@ export const SF3D_LIVE_SMOKE_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 export const SF3D_LIVE_SMOKE_SOURCE_REVISION = 'f977b50fb21815f955a04a1c3a392b3a44060561';
 export const SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 export const SF3D_LIVE_SMOKE_GPU_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
+export const SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY = 'same-page-shared-device-shared-queue';
 
 export const SF3D_LIVE_SMOKE_OPTIONS = Object.freeze({
   cooperativeDino: false,
@@ -11,6 +12,113 @@ export const SF3D_LIVE_SMOKE_OPTIONS = Object.freeze({
   decoderArena: true,
   materializeWorker: true,
 });
+
+export function resolveSf3dGpuTopologyRequest(params) {
+  const requested = params?.get?.('sf3d_gpu_topology');
+  if (requested == null || requested === '' || requested === 'dual-device') {
+    return SF3D_LIVE_SMOKE_GPU_TOPOLOGY;
+  }
+  if (requested === 'shared-device') return SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY;
+  throw new Error(`Unsupported SF3D GPU topology: ${requested}`);
+}
+
+export function resolveSf3dRenderTargetFps(params, requestedTopology) {
+  if (
+    requestedTopology !== SF3D_LIVE_SMOKE_GPU_TOPOLOGY
+    && requestedTopology !== SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY
+  ) {
+    throw new Error(`Unsupported SF3D GPU topology: ${requestedTopology || 'missing'}`);
+  }
+  const raw = params?.get?.('sf3d_render_fps');
+  if (raw == null || raw === '') return null;
+  const targetFps = Number(raw);
+  if (!Number.isFinite(targetFps) || targetFps <= 0) {
+    throw new Error('SF3D render target FPS must be a positive finite number');
+  }
+  return targetFps;
+}
+
+export function createSf3dRenderCadenceGate({ targetFps }) {
+  if (targetFps != null && (!Number.isFinite(targetFps) || targetFps <= 0)) {
+    throw new Error('SF3D render target FPS must be a positive finite number');
+  }
+  const targetFrameMs = targetFps == null ? null : 1000 / targetFps;
+  let lastAdmittedAt = null;
+  let admittedFrames = 0;
+  let skippedFrames = 0;
+  return Object.freeze({
+    shouldRender(now, { inferenceActive = false } = {}) {
+      if (!Number.isFinite(now)) throw new Error('SF3D render cadence timestamp must be finite');
+      if (
+        inferenceActive
+        && targetFrameMs != null
+        && lastAdmittedAt != null
+        && now - lastAdmittedAt < targetFrameMs
+      ) {
+        skippedFrames++;
+        return false;
+      }
+      lastAdmittedAt = now;
+      admittedFrames++;
+      return true;
+    },
+    snapshot() {
+      return Object.freeze({
+        targetFps,
+        targetFrameMs,
+        authority: targetFps == null ? 'unthrottled-rAF-admission' : 'caller-owned-rAF-admission',
+        admittedFrames,
+        skippedFrames,
+      });
+    },
+  });
+}
+
+export function createSf3dRendererOptions({
+  requestedTopology,
+  inferenceDevice,
+}) {
+  if (requestedTopology === SF3D_LIVE_SMOKE_GPU_TOPOLOGY) {
+    return { antialias: true };
+  }
+  if (requestedTopology !== SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY) {
+    throw new Error(`Unsupported SF3D GPU topology: ${requestedTopology || 'missing'}`);
+  }
+  if (!inferenceDevice?.queue) {
+    throw new Error('Shared-device SF3D rendering requires the prepared SF3D GPUDevice');
+  }
+  return { antialias: true, device: inferenceDevice };
+}
+
+export function createSf3dGpuTopologyReceipt({
+  requestedTopology,
+  inferenceDevice,
+  rendererDevice,
+}) {
+  if (
+    requestedTopology !== SF3D_LIVE_SMOKE_GPU_TOPOLOGY
+    && requestedTopology !== SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY
+  ) {
+    throw new Error(`Unsupported SF3D GPU topology: ${requestedTopology || 'missing'}`);
+  }
+  if (!inferenceDevice?.queue || !rendererDevice?.queue) {
+    throw new Error('SF3D topology verification requires both initialized GPUDevices');
+  }
+  const sameDevice = inferenceDevice === rendererDevice;
+  const sameQueue = inferenceDevice.queue === rendererDevice.queue;
+  if (requestedTopology === SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY && (!sameDevice || !sameQueue)) {
+    throw new Error('Requested shared GPUDevice topology did not initialize with exact device and queue identity');
+  }
+  return Object.freeze({
+    requested: requestedTopology,
+    effective: sameDevice && sameQueue
+      ? SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY
+      : SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+    sameDevice,
+    sameQueue,
+    authority: 'exact-browser-object-identity',
+  });
+}
 
 export function canFireSf3dLiveSmoke({ running, deviceLost, attempted = false }) {
   return running !== true && deviceLost !== true && attempted !== true;

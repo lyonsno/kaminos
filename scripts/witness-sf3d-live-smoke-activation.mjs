@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
+  resolveSf3dGpuTopologyRequest,
   validateSf3dLiveSmokeConfig,
 } from '../sf3d-live-smoke-core.js';
 import {
@@ -16,7 +17,6 @@ import {
   validateTetWitnessEvidence,
 } from './sf3d-live-smoke-witness-core.mjs';
 
-const EXPECTED_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
 const FAILED_ALLOCATION_SIZE = 3_145_728;
 
 function parseArgs(argv) {
@@ -161,7 +161,7 @@ const report = {
   schema: 'kaminos.sf3d-live-smoke-activation-witness.v0',
   ok: false,
   url: options.url,
-  expectedTopology: EXPECTED_TOPOLOGY,
+  expectedTopology: null,
   allocation: {
     size: FAILED_ALLOCATION_SIZE,
     mappedAtCreation: true,
@@ -179,6 +179,11 @@ let phase = 'arguments';
 try {
   Object.assign(options, parseArgs(argv));
   report.url = options.url;
+  const routeParams = new URL(options.url).searchParams;
+  report.expectedTopology = resolveSf3dGpuTopologyRequest(routeParams);
+  report.expectedRenderFps = routeParams.has('sf3d_render_fps')
+    ? Number(routeParams.get('sf3d_render_fps'))
+    : null;
   report.settleMs = options.settleMs;
   report.source = {
     expectedRevision: SF3D_LIVE_SMOKE_SOURCE_REVISION,
@@ -228,7 +233,20 @@ try {
   assert(configBefore.effectiveRevision === SF3D_LIVE_SMOKE_SOURCE_REVISION, `wrong SF3D revision: ${configBefore.effectiveRevision}`);
   assert(configBefore.repo === resolve(options.sf3dRepo), `wrong SF3D repo: ${configBefore.repo || 'missing'}`);
   report.initialState = await page.evaluate(() => window.kaminosSf3dLiveSmokeController.debugState());
-  assert(report.initialState.gpuTopology === EXPECTED_TOPOLOGY, `wrong GPU topology: ${report.initialState.gpuTopology}`);
+  assert(report.initialState.gpuTopology === report.expectedTopology, `wrong GPU topology: ${report.initialState.gpuTopology}`);
+  assert(
+    report.initialState.gpuTopologyReceipt?.requested === report.expectedTopology
+      && report.initialState.gpuTopologyReceipt?.effective === report.expectedTopology,
+    `GPU topology receipt mismatch: ${JSON.stringify(report.initialState.gpuTopologyReceipt)}`,
+  );
+  assert(
+    report.initialState.gpuTopologyReceipt?.authority === 'exact-browser-object-identity',
+    'GPU topology receipt lacks exact object identity authority',
+  );
+  assert(
+    report.initialState.renderCadence?.targetFps === report.expectedRenderFps,
+    `render cadence mismatch: ${JSON.stringify(report.initialState.renderCadence)}`,
+  );
   assert(report.initialState.revision === SF3D_LIVE_SMOKE_SOURCE_REVISION, `controller revision mismatch: ${report.initialState.revision}`);
   assert(report.initialState.attempted === false, 'activation witness found a spent route');
   assert(report.initialState.deviceLoss === null, 'inference device was already lost');

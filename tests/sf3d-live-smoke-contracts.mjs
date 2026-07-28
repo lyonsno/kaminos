@@ -7,12 +7,18 @@ import {
   SF3D_LIVE_SMOKE_ROUTE_ID,
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+  SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
+  createSf3dGpuTopologyReceipt,
+  createSf3dRenderCadenceGate,
+  createSf3dRendererOptions,
   buildSf3dCompletedOutputReceipt,
   buildSf3dFailureEvidence,
   canFireSf3dLiveSmoke,
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
+  resolveSf3dGpuTopologyRequest,
+  resolveSf3dRenderTargetFps,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
 } from '../sf3d-live-smoke-core.js';
@@ -26,6 +32,7 @@ import {
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
 assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'f977b50fb21815f955a04a1c3a392b3a44060561');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
+assert.equal(SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY, 'same-page-shared-device-shared-queue');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: false,
   cooperativeBake: true,
@@ -38,6 +45,122 @@ assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: false }), true);
 assert.equal(canFireSf3dLiveSmoke({ running: true, deviceLost: false }), false);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: true }), false);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: false, attempted: true }), false);
+
+const inferenceQueue = {};
+const inferenceDevice = { queue: inferenceQueue };
+const otherQueue = {};
+const otherDevice = { queue: otherQueue };
+assert.equal(
+  resolveSf3dGpuTopologyRequest(new URLSearchParams()),
+  SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+);
+assert.equal(
+  resolveSf3dGpuTopologyRequest(new URLSearchParams('sf3d_gpu_topology=shared-device')),
+  SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+);
+assert.throws(
+  () => resolveSf3dGpuTopologyRequest(new URLSearchParams('sf3d_gpu_topology=claimed-but-unknown')),
+  /unsupported SF3D GPU topology/i,
+);
+assert.deepEqual(
+  createSf3dRendererOptions({
+    requestedTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+    inferenceDevice,
+  }),
+  { antialias: true },
+);
+const sharedRendererOptions = createSf3dRendererOptions({
+  requestedTopology: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+  inferenceDevice,
+});
+assert.deepEqual(sharedRendererOptions, { antialias: true, device: inferenceDevice });
+assert.equal(
+  Object.isExtensible(sharedRendererOptions),
+  true,
+  'Three.js owns and augments the renderer parameters object during initialization',
+);
+assert.throws(
+  () => createSf3dRendererOptions({
+    requestedTopology: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    inferenceDevice: null,
+  }),
+  /requires the prepared SF3D GPUDevice/i,
+);
+assert.deepEqual(
+  createSf3dGpuTopologyReceipt({
+    requestedTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+    inferenceDevice,
+    rendererDevice: otherDevice,
+  }),
+  {
+    requested: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+    effective: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+    sameDevice: false,
+    sameQueue: false,
+    authority: 'exact-browser-object-identity',
+  },
+);
+assert.deepEqual(
+  createSf3dGpuTopologyReceipt({
+    requestedTopology: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    inferenceDevice,
+    rendererDevice: inferenceDevice,
+  }),
+  {
+    requested: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    effective: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    sameDevice: true,
+    sameQueue: true,
+    authority: 'exact-browser-object-identity',
+  },
+);
+assert.throws(
+  () => createSf3dGpuTopologyReceipt({
+    requestedTopology: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    inferenceDevice,
+    rendererDevice: otherDevice,
+  }),
+  /requested shared GPUDevice.*did not initialize/i,
+);
+assert.throws(
+  () => createSf3dGpuTopologyReceipt({
+    requestedTopology: SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+    inferenceDevice,
+    rendererDevice: { queue: otherQueue },
+  }),
+  /requested shared GPUDevice.*did not initialize/i,
+);
+
+assert.equal(
+  resolveSf3dRenderTargetFps(new URLSearchParams(), SF3D_LIVE_SMOKE_GPU_TOPOLOGY),
+  null,
+);
+assert.equal(
+  resolveSf3dRenderTargetFps(
+    new URLSearchParams('sf3d_render_fps=60'),
+    SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+  ),
+  60,
+);
+assert.throws(
+  () => resolveSf3dRenderTargetFps(
+    new URLSearchParams('sf3d_render_fps=not-a-number'),
+    SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY,
+  ),
+  /positive finite number/i,
+);
+const cadenceGate = createSf3dRenderCadenceGate({ targetFps: 60 });
+assert.equal(cadenceGate.shouldRender(0, { inferenceActive: true }), true);
+assert.equal(cadenceGate.shouldRender(8, { inferenceActive: true }), false);
+assert.equal(cadenceGate.shouldRender(17, { inferenceActive: true }), true);
+assert.equal(cadenceGate.shouldRender(18, { inferenceActive: false }), true);
+assert.deepEqual(cadenceGate.snapshot(), {
+  targetFps: 60,
+  targetFrameMs: 1000 / 60,
+  authority: 'caller-owned-rAF-admission',
+  admittedFrames: 3,
+  skippedFrames: 1,
+});
 
 const divergentOutputReceipt = buildSf3dCompletedOutputReceipt({
   output: {
@@ -335,6 +458,7 @@ const indexSource = readFileSync(new URL('index.html', root), 'utf8');
 const serverSource = readFileSync(new URL('serve.py', root), 'utf8');
 const launcherSource = readFileSync(new URL('scripts/run-sf3d-live-smoke.mjs', root), 'utf8');
 const witnessSource = readFileSync(new URL('scripts/witness-sf3d-live-smoke-activation.mjs', root), 'utf8');
+const firingWitnessSource = readFileSync(new URL('scripts/witness-sf3d-live-smoke-firing.mjs', root), 'utf8');
 
 function assertSingleSourceRevision(source, pattern, label) {
   const matches = [...source.matchAll(pattern)];
@@ -371,15 +495,17 @@ assert.throws(
   'the contract must reject a stale launcher pin',
 );
 
-assert.doesNotMatch(indexSource, /device: sf3dLiveSmokePrepared\.device/, 'Kaminos must not consume SF3D external-device lifetime');
-assert.match(indexSource, /new THREE\.WebGPURenderer\(\{\s*antialias: true,\s*\}\)/, 'Kaminos must retain renderer-owned device creation');
+assert.match(indexSource, /createSf3dRendererOptions\(/, 'Kaminos must select the explicit SF3D topology arm');
+assert.match(indexSource, /new THREE\.WebGPURenderer\(sf3dRendererOptions\)/, 'Kaminos must pass the selected device policy into Three');
+assert.match(indexSource, /bindSf3dLiveSmokeRenderer\(/, 'Kaminos must verify effective renderer device and queue identity');
 assert.match(indexSource, /id="sf3d-live-smoke-topology"/, 'the operator surface must expose effective GPU topology');
 assert.match(indexSource, /noteRenderedFrame\(performance\.now\(\), frameMs\)/, 'the live route must measure actual renderer-loop completions');
 assert.match(indexSource, /sf3dLiveSmokeRouteActive \|\| idleFrames/, 'the live route must prevent renderer idle retirement');
 assert.match(serverSource, /effective_revision != requested_revision/, 'the config endpoint must reject a stale effective source');
 assert.match(serverSource, /handle_sf3d_live_smoke_report/, 'the route must persist success and pre-output failure reports');
 assert.match(launcherSource, /mesh_path.*meshFile/, 'the launcher must mount the accepted foreground mesh');
-assert.match(witnessSource, /same-page-dual-device-shared-physical-gpu/, 'the witness must reject fallback GPU topology');
+assert.match(witnessSource, /resolveSf3dGpuTopologyRequest/, 'the witness must derive expected topology from the requested route');
+assert.match(witnessSource, /gpuTopologyReceipt/, 'the witness must reject requested/effective topology substitution');
 assert.match(witnessSource, /FAILED_ALLOCATION_SIZE\s*=\s*3_145_728/, 'the witness must preserve the exact failed allocation size');
 assert.match(witnessSource, /size:\s*FAILED_ALLOCATION_SIZE,\s*mappedAtCreation:\s*true/, 'the witness must exercise that allocation with mappedAtCreation');
 assert.match(witnessSource, /probeInferenceDevice[\s\S]*setTimeout[\s\S]*probeInferenceDevice/, 'the witness must probe both sides of a renderer/model coexistence window');
@@ -388,3 +514,7 @@ assert.match(witnessSource, /failurePhase/, 'the witness must name the phase of 
 assert.match(witnessSource, /lastTrustworthyEvidence/, 'the witness must preserve its last trustworthy checkpoint');
 assert.match(witnessSource, /Page\.captureScreenshot/, 'the witness must preserve inspectable visual output');
 assert.match(witnessSource, /querySelector\(['"]#viewport > canvas['"]\)/, 'the witness must capture the renderer canvas rather than nested utility canvases');
+assert.match(firingWitnessSource, /controller\.fire\(\)\.catch/, 'the firing witness must start inference without awaiting it inside one CDP call');
+assert.match(firingWitnessSource, /kaminosSf3dLiveSmokeLastReport/, 'the firing witness must wait on page-owned terminal state');
+assert.match(firingWitnessSource, /gpuTopologyReceipt/, 'the firing witness must preserve effective topology identity');
+assert.match(firingWitnessSource, /finally[\s\S]*finalizeWitnessReport/, 'the firing witness must write a report on every terminal path');

@@ -2869,6 +2869,9 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import {
+  bindSf3dLiveSmokeRenderer,
+  createSf3dRenderCadenceGate,
+  createSf3dRendererOptions,
   createSf3dLiveSmokeController,
   isSf3dLiveSmokeRoute,
   prepareSf3dLiveSmokeDevice,
@@ -8871,9 +8874,16 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({
-    antialias: true,
+  const sf3dRendererOptions = sf3dLiveSmokePrepared
+    ? createSf3dRendererOptions({
+        requestedTopology: sf3dLiveSmokePrepared.requestedTopology,
+        inferenceDevice: sf3dLiveSmokePrepared.device,
+      })
+    : { antialias: true };
+  const sf3dRenderCadence = createSf3dRenderCadenceGate({
+    targetFps: sf3dLiveSmokePrepared?.renderTargetFps ?? null,
   });
+  renderer = new THREE.WebGPURenderer(sf3dRendererOptions);
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8884,6 +8894,13 @@ async function initScene() {
   vp.appendChild(renderer.domElement);
 
   await renderer.init();
+  if (sf3dLiveSmokePrepared) {
+    sf3dLiveSmokePrepared = bindSf3dLiveSmokeRenderer(
+      sf3dLiveSmokePrepared,
+      renderer,
+      sf3dRenderCadence,
+    );
+  }
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
 
   controls = new OrbitControls(camera, renderer.domElement);
@@ -9070,7 +9087,12 @@ async function initScene() {
     const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || sf3dLiveSmokeRouteActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || sf3dLiveSmokeRouteActive || idleFrames < IDLE_THRESHOLD)) {
+    const mainRendererDemand = mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || sf3dLiveSmokeRouteActive || idleFrames < IDLE_THRESHOLD);
+    const sf3dRenderAdmitted = !mainRendererDemand || sf3dRenderCadence.shouldRender(
+      performance.now(),
+      { inferenceActive: sf3dLiveSmokeController?.active === true },
+    );
+    if (mainRendererDemand && sf3dRenderAdmitted) {
       const t0 = performance.now();
 
       renderPipeline.render();

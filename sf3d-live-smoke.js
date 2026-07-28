@@ -1,23 +1,31 @@
 import {
   SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
-  SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
   SF3D_LIVE_SMOKE_ROUTE_ID,
   buildSf3dCompletedOutputReceipt,
   buildSf3dFailureEvidence,
   canFireSf3dLiveSmoke,
+  createSf3dGpuTopologyReceipt,
+  createSf3dRenderCadenceGate,
+  createSf3dRendererOptions,
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
+  resolveSf3dGpuTopologyRequest,
+  resolveSf3dRenderTargetFps,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
 } from './sf3d-live-smoke-core.js';
+
+export { createSf3dRenderCadenceGate, createSf3dRendererOptions };
 
 export function isSf3dLiveSmokeRoute(params = new URLSearchParams(location.search)) {
   return params.get('sf3d_live_smoke') === '1';
 }
 
-export async function prepareSf3dLiveSmokeDevice() {
-  if (!isSf3dLiveSmokeRoute()) return null;
+export async function prepareSf3dLiveSmokeDevice(params = new URLSearchParams(location.search)) {
+  if (!isSf3dLiveSmokeRoute(params)) return null;
+  const requestedTopology = resolveSf3dGpuTopologyRequest(params);
+  const renderTargetFps = resolveSf3dRenderTargetFps(params, requestedTopology);
   const response = await fetch('/api/sf3d-live-smoke-config', { cache: 'no-store' });
   const payload = await response.json().catch(() => null);
   const config = validateSf3dLiveSmokeConfig(payload);
@@ -36,7 +44,26 @@ export async function prepareSf3dLiveSmokeDevice() {
     };
     return deviceLoss.info;
   });
-  return Object.freeze({ config, adapter: gpu.adapter, device: gpu.device, deviceLoss });
+  return Object.freeze({
+    config,
+    adapter: gpu.adapter,
+    device: gpu.device,
+    deviceLoss,
+    requestedTopology,
+    renderTargetFps,
+  });
+}
+
+export function bindSf3dLiveSmokeRenderer(prepared, renderer, renderCadence) {
+  if (!prepared) return null;
+  if (!renderCadence?.snapshot) throw new Error('SF3D live smoke render cadence is unverified');
+  const rendererDevice = renderer?.backend?.device;
+  const gpuTopology = createSf3dGpuTopologyReceipt({
+    requestedTopology: prepared.requestedTopology,
+    inferenceDevice: prepared.device,
+    rendererDevice,
+  });
+  return Object.freeze({ ...prepared, gpuTopology, renderCadence });
 }
 
 function setText(id, value) {
@@ -191,13 +218,14 @@ function renderFinalMetrics(report) {
 
 export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   if (!prepared) return null;
+  if (!prepared.gpuTopology) throw new Error('SF3D live smoke renderer topology is unverified');
   const panel = document.getElementById('sf3d-live-smoke-panel');
   if (!panel) throw new Error('SF3D live smoke panel is missing');
   panel.hidden = false;
   panel.dataset.status = 'loading';
   setText('sf3d-live-smoke-revision', prepared.config.effectiveRevision.slice(0, 10));
   setText('sf3d-live-smoke-route', SF3D_LIVE_SMOKE_ROUTE_ID);
-  setText('sf3d-live-smoke-topology', SF3D_LIVE_SMOKE_GPU_TOPOLOGY);
+  setText('sf3d-live-smoke-topology', prepared.gpuTopology.effective);
   setText('sf3d-live-smoke-status', 'Loading model');
 
   const [weightsModule, inferenceModule, pipelineModule] = await Promise.all([
@@ -238,7 +266,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
       return {
         routeId: SF3D_LIVE_SMOKE_ROUTE_ID,
         revision: prepared.config.effectiveRevision,
-        gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+        gpuTopology: prepared.gpuTopology.effective,
+        gpuTopologyReceipt: prepared.gpuTopology,
+        renderCadence: prepared.renderCadence.snapshot(),
         running,
         attempted,
         deviceLoss: prepared.deviceLoss.info,
@@ -358,7 +388,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
-          gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+          gpuTopology: prepared.gpuTopology.effective,
+          gpuTopologyReceipt: prepared.gpuTopology,
+          renderCadence: prepared.renderCadence.snapshot(),
           options: SF3D_LIVE_SMOKE_OPTIONS,
           ...completedOutput,
           lastProgress,
@@ -404,7 +436,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
-          gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+          gpuTopology: prepared.gpuTopology.effective,
+          gpuTopologyReceipt: prepared.gpuTopology,
+          renderCadence: prepared.renderCadence.snapshot(),
           options: SF3D_LIVE_SMOKE_OPTIONS,
           elapsedMs: completedOutput?.totalWallMs ?? performance.now() - startedAt,
           output: completedEvidence.output,
