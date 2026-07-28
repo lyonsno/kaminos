@@ -5,6 +5,10 @@ import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
 const MOVING_HILL_ROUTE = 'lerms/hill-of-hills/gpu-moving-support-contact-v0';
+const MOVING_HILL_PRESENTATION_MODE = 'moving_hill_consumer';
+const MOVING_HILL_PRESENTATION_ROUTE =
+  'kaminos/finger-fluid/moving-hill-consumer-presentation-v0';
+const EXTERNAL_CAMERA_IDENTITY = 'kaminos-moving-hill-support-witness-camera';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
@@ -306,6 +310,33 @@ function validateState(candidate) {
     || candidate.terrainEpoch < 3
   ) {
     throw new Error(`stale moving-Hill epoch evidence rejected: ${JSON.stringify(candidate)}`);
+  }
+  if (
+    candidate.requestedPresentationMode !== MOVING_HILL_PRESENTATION_MODE
+    || candidate.effectivePresentationMode !== MOVING_HILL_PRESENTATION_MODE
+    || candidate.effectivePresentationRoute !== MOVING_HILL_PRESENTATION_ROUTE
+    || candidate.presentationEvidence?.fallbackReason !== null
+    || candidate.presentationEvidence?.nonParticleToyDrawCount !== 0
+  ) {
+    throw new Error(`moving-Hill presentation identity rejected: ${JSON.stringify(candidate)}`);
+  }
+  if (
+    candidate.cameraEvidence?.authority !== 'consumer_external_exact_v0'
+    || candidate.cameraEvidence?.identity !== EXTERNAL_CAMERA_IDENTITY
+    || !Number.isSafeInteger(candidate.cameraEvidence?.generation)
+    || candidate.cameraEvidence?.fallbackReason !== null
+  ) {
+    throw new Error(`external camera authority rejected: ${JSON.stringify(candidate)}`);
+  }
+  if (
+    candidate.negativeParticleWitness?.cameraIdentity !== EXTERNAL_CAMERA_IDENTITY
+    || !Number.isSafeInteger(candidate.negativeParticleWitness?.cameraGeneration)
+    || candidate.negativeParticleWitness?.presentationRoute !== MOVING_HILL_PRESENTATION_ROUTE
+    || candidate.negativeParticleWitness?.particleVisibility !== 'hidden'
+    || candidate.negativeParticleWitness?.particleDrawCount !== 0
+    || candidate.negativeParticleWitness?.nonParticleToyDrawCount !== 0
+  ) {
+    throw new Error(`particle attribution witness rejected: ${JSON.stringify(candidate)}`);
   }
   if (
     candidate.blank

@@ -596,8 +596,33 @@ assert.match(browserWitnessSource, /synthetic_canonical_frame_contract_witness_n
 assert.match(browserWitnessSource, /sourceAuthority:\s*'synthetic_fixture_only'/);
 assert.match(browserWitnessSource, /composed_revision must be an exact 40-character lowercase Git revision/);
 assert.match(browserWitnessSource, /supportContactRoute:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE/);
+assert.match(
+  browserWitnessSource,
+  /presentationMode:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE/,
+  'the moving-Hill witness must select the no-toy consumer presentation explicitly',
+);
 assert.match(browserWitnessSource, /movingHillSupportContactProviderFactory\(\{\s*device\s*\}\)/);
 assert.match(browserWitnessSource, /provider\.update\(\{/);
+assert.match(
+  browserWitnessSource,
+  /createFingerFluidPerspectiveOrbitCamera\(\{/,
+  'the moving-Hill witness must publish an exact external camera packet',
+);
+assert.match(
+  browserWitnessSource,
+  /externalCamera,\s*\n\s*particleVisibility,/,
+  'every moving-Hill witness render must make camera and particle visibility explicit',
+);
+assert.match(
+  browserWitnessSource,
+  /renderFrame\('hidden'\)/,
+  'the moving-Hill witness must exercise a particles-hidden attribution frame',
+);
+assert.match(
+  browserWitnessSource,
+  /negativeParticleWitness/,
+  'the particles-hidden result must survive into the durable witness state',
+);
 assert.match(browserWitnessSource, /support\.fallbackRoute !== null/);
 assert.match(browserWitnessSource, /support\.deviceMatchesSolver !== true/);
 assert.match(browserWitnessSource, /support\.hostReadbackVisibility !== false/);
@@ -606,6 +631,9 @@ assert.match(browserWitnessRunnerSource, /effective URL differs from requested U
 assert.match(browserWitnessRunnerSource, /fallback route rejected/);
 assert.match(browserWitnessRunnerSource, /same-device support authority rejected/);
 assert.match(browserWitnessRunnerSource, /stale moving-Hill epoch evidence rejected/);
+assert.match(browserWitnessRunnerSource, /moving-Hill presentation identity rejected/);
+assert.match(browserWitnessRunnerSource, /external camera authority rejected/);
+assert.match(browserWitnessRunnerSource, /particle attribution witness rejected/);
 assert.match(browserWitnessRunnerSource, /captured moving-Hill output is blank or partial/);
 assert.match(browserWitnessRunnerSource, /primary_output_written:\s*primaryOutputWritten/);
 assert.match(browserWitnessRunnerSource, /failure_phase:\s*phase/);

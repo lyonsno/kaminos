@@ -1,6 +1,9 @@
 import {
   KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE,
+  KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE,
   KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
+  createFingerFluidPerspectiveOrbitCamera,
   createFingerFluidMovingHillSupportContactProvider,
   createWebGPUFingerFluidSolver,
 } from './finger-fluid-webgpu-core.js';
@@ -25,6 +28,7 @@ let supportWriteCount = 0;
 let terrainEpoch = 1;
 let startTime = performance.now();
 let failure = null;
+let negativeParticleWitness = null;
 
 window.kaminosMovingHillSupportWitnessState = {
   schema: WITNESS_SCHEMA,
@@ -48,12 +52,42 @@ function publishState() {
     effectiveRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE
     && fallbackRoute === null
   );
+  const presentation = debug?.presentationEvidence || null;
+  const camera = debug?.cameraEvidence || null;
+  const presentationExact = (
+    presentation?.requestedMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+    && presentation?.effectiveMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+    && presentation?.route === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE
+    && presentation?.fallbackReason === null
+    && presentation?.nonParticleToyDrawCount === 0
+  );
+  const cameraExact = (
+    camera?.authority === 'consumer_external_exact_v0'
+    && camera?.identity === 'kaminos-moving-hill-support-witness-camera'
+    && camera?.fallbackReason === null
+  );
+  const negativeWitnessExact = (
+    negativeParticleWitness?.particleVisibility === 'hidden'
+    && negativeParticleWitness?.particleDrawCount === 0
+    && negativeParticleWitness?.nonParticleToyDrawCount === 0
+  );
+  const complete = frameCount > 0
+    && routeExact
+    && presentationExact
+    && cameraExact
+    && negativeWitnessExact;
   window.kaminosMovingHillSupportWitnessState = {
     schema: WITNESS_SCHEMA,
-    status: failure ? 'error' : frameCount > 0 && routeExact ? 'running' : 'initializing',
+    status: failure ? 'error' : complete ? 'running' : 'initializing',
     requestedRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
     effectiveRoute,
     fallbackRoute,
+    requestedPresentationMode: KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE,
+    effectivePresentationMode: presentation?.effectiveMode ?? null,
+    effectivePresentationRoute: presentation?.route ?? null,
+    presentationEvidence: presentation,
+    cameraEvidence: camera,
+    negativeParticleWitness,
     backend: debug?.solver_backend || null,
     evidenceScope: 'synthetic_canonical_frame_contract_witness_not_lerms_source_authority',
     sourceAuthority: 'synthetic_fixture_only',
@@ -65,9 +99,9 @@ function publishState() {
     remapEpoch: support?.remapEpoch ?? null,
     deviceMatchesSolver: support?.deviceMatchesSolver ?? false,
     hostReadbackVisibility: support?.hostReadbackVisibility ?? null,
-    primaryOutputWritten: frameCount > 0 && routeExact,
+    primaryOutputWritten: complete,
     blank: frameCount === 0,
-    partial: frameCount === 0 || !routeExact,
+    partial: !complete,
     failure,
   };
   status.textContent = [
@@ -76,6 +110,9 @@ function publishState() {
     `${effectiveRoute || 'route pending'}`,
     `terrain ${support?.terrainEpoch ?? '-'} · support ${support?.supportEpoch ?? '-'} · remap ${support?.remapEpoch ?? '-'}`,
     `same device ${support?.deviceMatchesSolver === true ? 'yes' : 'no'} · fallback ${fallbackRoute ?? 'none'}`,
+    `${presentation?.route || 'presentation pending'} · toys ${presentation?.nonParticleToyDrawCount ?? '-'}`,
+    `${camera?.identity || 'camera pending'} · generation ${camera?.generation ?? '-'}`,
+    `particle negative ${negativeWitnessExact ? 'exact' : 'pending'}`,
     'synthetic canonical frame witness · not LERMS source authority',
     failure ? `FAILED: ${failure.message}` : 'live moving support · GPU contact · no host readback',
   ].join('\n');
@@ -206,6 +243,7 @@ async function initialize() {
     colorMode: 'phase',
     rendererMode: 'sphere_debug',
     supportContactRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
+    presentationMode: KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE,
     composedRevision,
     movingHillSupportContactProviderFactory({ device }) {
       const frame = createTerrainFrame(0, terrainEpoch, 0);
@@ -247,17 +285,40 @@ function animate(now) {
       supportWriteCount += 1;
     }
     solver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
-    solver.render({
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const externalCamera = createFingerFluidPerspectiveOrbitCamera({
+      identity: 'kaminos-moving-hill-support-witness-camera',
+      generation: frameCount + 1,
       width: canvas.clientWidth,
       height: canvas.clientHeight,
-      pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+      pixelRatio,
       yaw: -0.58,
       pitch: 0.42,
       distance: 6.1,
       target: [0, -0.18, 0],
+    });
+    const renderFrame = particleVisibility => solver.render({
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+      pixelRatio,
       colorMode: 'phase',
       rendererMode: 'sphere_debug',
+      externalCamera,
+      particleVisibility,
     });
+    if (frameCount === 8 && !negativeParticleWitness) {
+      renderFrame('hidden');
+      const hiddenPresentation = solver.getDebugState().presentationEvidence;
+      negativeParticleWitness = {
+        cameraIdentity: externalCamera.identity,
+        cameraGeneration: externalCamera.generation,
+        presentationRoute: hiddenPresentation?.route ?? null,
+        particleVisibility: hiddenPresentation?.particleVisibility ?? null,
+        particleDrawCount: hiddenPresentation?.particleDrawCount ?? null,
+        nonParticleToyDrawCount: hiddenPresentation?.nonParticleToyDrawCount ?? null,
+      };
+    }
+    renderFrame('visible');
     frameCount += 1;
     publishState();
     requestAnimationFrame(animate);

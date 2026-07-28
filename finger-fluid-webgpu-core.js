@@ -46,6 +46,12 @@ export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_PROVIDER_SCHEMA =
   'kaminos.finger-fluid.moving-hill-support-contact-provider.v0';
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_OWNER = 'lerms_hill_of_hills';
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_SAMPLE_STRIDE_FLOATS = 8;
+export const KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE = 'analytic_playground';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE = 'moving_hill_consumer';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE =
+  'kaminos/finger-fluid/moving-hill-consumer-presentation-v0';
+export const KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA =
+  'kaminos.finger-fluid.external-camera.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -8387,6 +8393,7 @@ struct MaterialTracerState {
 
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -8590,6 +8597,7 @@ fn sampleEnvironmentFiltered(rayDirection: vec3<f32>, roughness: f32) -> vec3<f3
 const HDR_WORLD_BACKGROUND_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -8616,13 +8624,13 @@ fn vs_hdr_world_background(@builtin(vertex_index) vertexIndex: u32) -> @builtin(
 fn fs_hdr_world_background(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
   let normalized = fragmentPosition.xy / params.viewport.xy;
   let ndc = normalized * 2.0 - vec2<f32>(1.0);
-  let aspect = params.viewport.x / max(params.viewport.y, 1.0);
-  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
-  let cameraRay = normalize(
-    params.cameraForward.xyz
-      + params.cameraRight.xyz * ndc.x * aspect * tanHalfFov
-      - params.cameraUp.xyz * ndc.y * tanHalfFov
-  );
+  let nearClip = vec4<f32>(ndc.x, -ndc.y, 0.0, 1.0);
+  let farClip = vec4<f32>(ndc.x, -ndc.y, 1.0, 1.0);
+  let nearHomogeneous = params.inverseViewProjection * nearClip;
+  let farHomogeneous = params.inverseViewProjection * farClip;
+  let nearWorld = nearHomogeneous.xyz / max(abs(nearHomogeneous.w), 0.000001);
+  let farWorld = farHomogeneous.xyz / max(abs(farHomogeneous.w), 0.000001);
+  let cameraRay = normalize(farWorld - nearWorld);
   return vec4<f32>(sampleEnvironment(cameraRay), 1.0);
 }
 `;
@@ -8630,6 +8638,7 @@ fn fs_hdr_world_background(@builtin(position) fragmentPosition: vec4<f32>) -> @l
 const FINAL_PRESENTATION_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -8655,9 +8664,9 @@ fn toneMapAces(color: vec3<f32>) -> vec3<f32> {
 }
 
 fn viewDepthToNdc(viewDepth: f32) -> f32 {
-  let near = 0.08;
-  let far = 30.0;
-  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
+  let worldPosition = params.cameraPosition.xyz + params.cameraForward.xyz * viewDepth;
+  let clipPosition = params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  return clipPosition.z / max(abs(clipPosition.w), 0.000001);
 }
 
 @vertex
@@ -8694,6 +8703,7 @@ fn fs_final_presentation(@builtin(position) fragmentPosition: vec4<f32>) -> @loc
 const ANALYTIC_SUPPORT_PRESENTATION_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -8851,7 +8861,10 @@ fn vs_analytic_support_presentation(@builtin(vertex_index) vertexIndex: u32) -> 
   output.worldPosition = worldPosition;
   output.worldNormal = worldNormal;
   output.supportKind = supportKind;
-  output.viewDepth = max(0.001, output.position.w);
+  output.viewDepth = max(
+    0.001,
+    dot(worldPosition - params.cameraPosition.xyz, params.cameraForward.xyz)
+  );
   return output;
 }
 
@@ -8909,6 +8922,7 @@ fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> Defer
 const DYNAMIC_INDEXED_MESH_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -8949,7 +8963,10 @@ fn vs_dynamic_indexed_mesh(
   output.position = clipPosition;
   output.worldPosition = worldPosition.xyz;
   output.worldNormal = normalize((scene.normalTransform * localNormal).xyz);
-  output.viewDepth = max(0.001, clipPosition.w);
+  output.viewDepth = max(
+    0.001,
+    dot(worldPosition.xyz - params.cameraPosition.xyz, params.cameraForward.xyz)
+  );
   return output;
 }
 
@@ -9013,6 +9030,7 @@ struct MaterialTracerState {
 
 struct RenderParams {
   viewProjection: mat4x4<f32>,
+  inverseViewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -9145,7 +9163,10 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
     corner.x * (projectedHalfLength / max(radius, 0.000001) + 1.0),
     corner.y
   );
-  output.viewDepth = max(0.001, clip.w);
+  output.viewDepth = max(
+    0.001,
+    dot(segmentCenter - params.cameraPosition.xyz, params.cameraForward.xyz)
+  );
   output.surface = surface;
   output.speed = length(particle.velocity.xyz);
   output.tracer = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
@@ -9234,12 +9255,14 @@ fn reconstructWorldPosition(pixel: vec2<i32>, viewDepth: f32) -> vec3<f32> {
   let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
   var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
   ndc.y = -ndc.y;
-  let tanHalfFov = tan(0.5 * 3.14159265 / 3.15);
-  let aspect = dims.x / max(dims.y, 1.0);
-  return params.cameraPosition.xyz
-    + params.cameraForward.xyz * viewDepth
-    + params.cameraRight.xyz * ndc.x * viewDepth * tanHalfFov * aspect
-    + params.cameraUp.xyz * ndc.y * viewDepth * tanHalfFov;
+  let nearHomogeneous = params.inverseViewProjection * vec4<f32>(ndc, 0.0, 1.0);
+  let farHomogeneous = params.inverseViewProjection * vec4<f32>(ndc, 1.0, 1.0);
+  let nearWorld = nearHomogeneous.xyz / max(abs(nearHomogeneous.w), 0.000001);
+  let farWorld = farHomogeneous.xyz / max(abs(farHomogeneous.w), 0.000001);
+  let rayDirection = normalize(farWorld - nearWorld);
+  let nearViewDepth = dot(nearWorld - params.cameraPosition.xyz, params.cameraForward.xyz);
+  let depthRate = max(dot(rayDirection, params.cameraForward.xyz), 0.000001);
+  return nearWorld + rayDirection * ((viewDepth - nearViewDepth) / depthRate);
 }
 
 fn worldSurfaceNormal(viewNormal: vec3<f32>) -> vec3<f32> {
@@ -9396,8 +9419,11 @@ fn traceClosestSurface(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Reflect
   hit.normal = vec3<f32>(0.0, 1.0, 0.0);
   hit.kind = REFLECTION_HIT_ENVIRONMENT;
   hit.position = rayOrigin + rayDirection * hit.distance;
-  hit = traceIndexedMesh(rayOrigin, rayDirection, hit);
-  hit = traceAnalyticSphere(rayOrigin, rayDirection, hit);
+  let movingHillConsumerPresentation = params.opticalModes.w > 0.5;
+  if (!movingHillConsumerPresentation) {
+    hit = traceIndexedMesh(rayOrigin, rayDirection, hit);
+    hit = traceAnalyticSphere(rayOrigin, rayDirection, hit);
+  }
   return hit;
 }
 
@@ -9785,9 +9811,9 @@ struct CompositeOutput {
 }
 
 fn viewDepthToNdc(viewDepth: f32) -> f32 {
-  let near = 0.08;
-  let far = 30.0;
-  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
+  let worldPosition = params.cameraPosition.xyz + params.cameraForward.xyz * viewDepth;
+  let clipPosition = params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  return clipPosition.z / max(abs(clipPosition.w), 0.000001);
 }
 
 fn reconstructRefractionOffset(normal: vec3<f32>, thickness: f32) -> vec2<f32> {
@@ -10380,6 +10406,238 @@ function multiplyMatrices(a, b) {
     }
   }
   return out;
+}
+
+function invertMatrix(matrix) {
+  const out = new Float32Array(16);
+  const [
+    a00, a01, a02, a03,
+    a10, a11, a12, a13,
+    a20, a21, a22, a23,
+    a30, a31, a32, a33,
+  ] = matrix;
+  const b00 = a00 * a11 - a01 * a10;
+  const b01 = a00 * a12 - a02 * a10;
+  const b02 = a00 * a13 - a03 * a10;
+  const b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11;
+  const b05 = a02 * a13 - a03 * a12;
+  const b06 = a20 * a31 - a21 * a30;
+  const b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30;
+  const b09 = a21 * a32 - a22 * a31;
+  const b10 = a21 * a33 - a23 * a31;
+  const b11 = a22 * a33 - a23 * a32;
+  const determinant = b00 * b11 - b01 * b10 + b02 * b09
+    + b03 * b08 - b04 * b07 + b05 * b06;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-10) {
+    throw new Error('Finger fluid camera viewProjection is not invertible');
+  }
+  const inverseDeterminant = 1 / determinant;
+  out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * inverseDeterminant;
+  out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * inverseDeterminant;
+  out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * inverseDeterminant;
+  out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * inverseDeterminant;
+  out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * inverseDeterminant;
+  out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * inverseDeterminant;
+  out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * inverseDeterminant;
+  out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * inverseDeterminant;
+  out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * inverseDeterminant;
+  out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * inverseDeterminant;
+  out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * inverseDeterminant;
+  out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * inverseDeterminant;
+  out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * inverseDeterminant;
+  out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * inverseDeterminant;
+  out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * inverseDeterminant;
+  out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * inverseDeterminant;
+  return out;
+}
+
+function fingerFluidCameraFailure(message) {
+  throw new Error(`Finger fluid external camera ${message}`);
+}
+
+function finiteCameraArray(value, length, label) {
+  if ((!Array.isArray(value) && !ArrayBuffer.isView(value)) || value.length !== length) {
+    fingerFluidCameraFailure(`${label} must contain ${length} finite components`);
+  }
+  const snapshot = new Float32Array(length);
+  for (let index = 0; index < length; index += 1) {
+    if (!Number.isFinite(value[index])) {
+      fingerFluidCameraFailure(`${label}[${index}] is invalid`);
+    }
+    snapshot[index] = value[index];
+  }
+  return snapshot;
+}
+
+function matricesApproximatelyEqual(actual, expected, tolerance = 2e-4) {
+  for (let index = 0; index < 16; index += 1) {
+    const scale = Math.max(1, Math.abs(actual[index]), Math.abs(expected[index]));
+    if (Math.abs(actual[index] - expected[index]) > tolerance * scale) return false;
+  }
+  return true;
+}
+
+export function resolveFingerFluidPresentationMode(value) {
+  const mode = String(value || KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE);
+  if (
+    mode !== KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE
+    && mode !== KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+  ) {
+    throw new Error(`Finger fluid presentation mode ${mode} is unsupported`);
+  }
+  return mode;
+}
+
+export function validateFingerFluidExternalCamera(camera, extent) {
+  if (!camera || camera.schema !== KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA) {
+    fingerFluidCameraFailure(`schema must be ${KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA}`);
+  }
+  if (typeof camera.identity !== 'string' || camera.identity.trim().length === 0) {
+    fingerFluidCameraFailure('identity is missing');
+  }
+  if (!Number.isSafeInteger(camera.generation) || camera.generation < 0) {
+    fingerFluidCameraFailure(`generation is invalid: ${camera.generation}`);
+  }
+  if (camera.projectionType !== 'perspective' && camera.projectionType !== 'orthographic') {
+    fingerFluidCameraFailure(`projectionType ${camera.projectionType} is unsupported`);
+  }
+  if (
+    !Number.isInteger(camera.viewport?.width)
+    || camera.viewport.width <= 0
+    || !Number.isInteger(camera.viewport?.height)
+    || camera.viewport.height <= 0
+  ) {
+    fingerFluidCameraFailure('viewport is invalid');
+  }
+  if (
+    camera.viewport.width !== extent?.width
+    || camera.viewport.height !== extent?.height
+  ) {
+    fingerFluidCameraFailure(
+      `viewport ${camera.viewport.width}x${camera.viewport.height} does not match render extent ${extent?.width}x${extent?.height}`,
+    );
+  }
+  if (!Number.isFinite(camera.near) || camera.near <= 0) {
+    fingerFluidCameraFailure(`near is invalid: ${camera.near}`);
+  }
+  if (!Number.isFinite(camera.far) || camera.far <= camera.near) {
+    fingerFluidCameraFailure(`far is invalid: ${camera.far}`);
+  }
+  const view = finiteCameraArray(camera.view, 16, 'view');
+  const projection = finiteCameraArray(camera.projection, 16, 'projection');
+  const viewProjection = finiteCameraArray(camera.viewProjection, 16, 'viewProjection');
+  const inverseViewProjection = finiteCameraArray(
+    camera.inverseViewProjection,
+    16,
+    'inverseViewProjection',
+  );
+  const expectedViewProjection = multiplyMatrices(projection, view);
+  if (!matricesApproximatelyEqual(viewProjection, expectedViewProjection)) {
+    fingerFluidCameraFailure('viewProjection does not match projection multiplied by view');
+  }
+  const expectedInverse = invertMatrix(viewProjection);
+  if (!matricesApproximatelyEqual(inverseViewProjection, expectedInverse, 8e-4)) {
+    fingerFluidCameraFailure('inverseViewProjection does not invert viewProjection');
+  }
+  const position = finiteCameraArray(camera.position, 3, 'position');
+  const right = finiteCameraArray(camera.right, 3, 'right');
+  const up = finiteCameraArray(camera.up, 3, 'up');
+  const forward = finiteCameraArray(camera.forward, 3, 'forward');
+  for (const [label, basis] of [['right', right], ['up', up], ['forward', forward]]) {
+    const length = Math.hypot(...basis);
+    if (Math.abs(length - 1) > 2e-3) {
+      fingerFluidCameraFailure(`${label} basis length is invalid: ${length}`);
+    }
+  }
+  return Object.freeze({
+    schema: KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA,
+    identity: camera.identity,
+    generation: camera.generation,
+    projectionType: camera.projectionType,
+    view,
+    projection,
+    viewProjection,
+    inverseViewProjection,
+    position,
+    right,
+    up,
+    forward,
+    near: camera.near,
+    far: camera.far,
+    viewport: Object.freeze({
+      width: camera.viewport.width,
+      height: camera.viewport.height,
+    }),
+  });
+}
+
+export function createFingerFluidPerspectiveOrbitCamera({
+  identity,
+  generation,
+  width,
+  height,
+  pixelRatio = 1,
+  yaw = -0.58,
+  pitch = 0.42,
+  distance = 6.1,
+  target = [0, -0.18, 0],
+  near = 0.08,
+  far = 30,
+  fovY = Math.PI / 3.15,
+}) {
+  const extent = {
+    width: Math.max(1, Math.floor(Number(width) * Number(pixelRatio))),
+    height: Math.max(1, Math.floor(Number(height) * Number(pixelRatio))),
+  };
+  if (
+    !Number.isFinite(width)
+    || width <= 0
+    || !Number.isFinite(height)
+    || height <= 0
+    || !Number.isFinite(pixelRatio)
+    || pixelRatio <= 0
+    || !Number.isFinite(yaw)
+    || !Number.isFinite(pitch)
+    || !Number.isFinite(distance)
+    || distance <= 0
+    || !Number.isFinite(fovY)
+    || fovY <= 0
+    || fovY >= Math.PI
+  ) {
+    fingerFluidCameraFailure('perspective orbit parameters are invalid');
+  }
+  const safeTarget = finiteCameraArray(target, 3, 'target');
+  const cp = Math.cos(pitch);
+  const position = [
+    safeTarget[0] + Math.sin(yaw) * cp * distance,
+    safeTarget[1] + Math.sin(pitch) * distance,
+    safeTarget[2] + Math.cos(yaw) * cp * distance,
+  ];
+  const forward = normalize3(subtract3(safeTarget, position));
+  const right = normalize3(cross3(forward, [0, 1, 0]));
+  const up = normalize3(cross3(right, forward));
+  const projection = perspectiveMatrix(fovY, extent.width / extent.height, near, far);
+  const view = lookAtMatrix(position, safeTarget, [0, 1, 0]);
+  const viewProjection = multiplyMatrices(projection, view);
+  return validateFingerFluidExternalCamera({
+    schema: KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA,
+    identity,
+    generation,
+    projectionType: 'perspective',
+    view,
+    projection,
+    viewProjection,
+    inverseViewProjection: invertMatrix(viewProjection),
+    position,
+    right,
+    up,
+    forward,
+    near,
+    far,
+    viewport: extent,
+  }, extent);
 }
 
 export function sampleFingerFluidPlaygroundHeight(x, z) {
@@ -12204,11 +12462,13 @@ export async function createWebGPUFingerFluidSolver({
   transparentBackground = false,
   liveInletPacket = null,
   supportContactRoute = KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
+  presentationMode = KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE,
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
 } = {}) {
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
   if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
+  const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
   const supportShaderSource = supportShaderSourceForRoute(supportContactRoute);
   const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
     ? composedRevision
@@ -12218,6 +12478,18 @@ export async function createWebGPUFingerFluidSolver({
     && !safeComposedRevision
   ) {
     movingHillSupportFailure('composed source revision is missing or invalid');
+  }
+  if (
+    supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE
+    && safePresentationMode !== KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+  ) {
+    movingHillSupportFailure('moving Hill support requires moving_hill_consumer presentation');
+  }
+  if (
+    safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+    && supportContactRoute !== KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE
+  ) {
+    movingHillSupportFailure('moving_hill_consumer presentation requires canonical moving Hill support');
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return createUnavailableSolver('WebGPU adapter unavailable');
@@ -12692,7 +12964,7 @@ export async function createWebGPUFingerFluidSolver({
   );
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
-    size: 176,
+    size: 240,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
@@ -13058,6 +13330,12 @@ export async function createWebGPUFingerFluidSolver({
   let lastReflectionProviderPhase = 0;
   let reflectionMeshWitnessOverride = false;
   let lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
+  let lastExternalCamera = null;
+  let lastCameraSnapshot = null;
+  let lastFrameAnalyticSupportDrawCount = 0;
+  let lastFrameDynamicToyMeshDrawCount = 0;
+  let lastFrameParticleDrawCount = 0;
+  let lastParticleVisibility = 'visible';
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastOpticalDebugMode = safeOpticalDebugMode;
@@ -13636,6 +13914,8 @@ export async function createWebGPUFingerFluidSolver({
     transmissionFootprintMode = safeTransmissionFootprintMode,
     bodyTransportMode = safeBodyTransportMode,
     interfaceFrequencyMode = safeInterfaceFrequencyMode,
+    externalCamera = null,
+    particleVisibility = 'visible',
   } = {}) {
     if (runtimeLifecycle.stopped) return;
     analyticCarrierLastFrameDrawCount = 0;
@@ -13669,6 +13949,9 @@ export async function createWebGPUFingerFluidSolver({
       ? resolvedInterfaceFrequencyMode
       : 'not_executed';
     const renderFrameId = directRenderFrameCount + 1;
+    if (particleVisibility !== 'visible' && particleVisibility !== 'hidden') {
+      throw new Error(`Finger fluid particle visibility ${particleVisibility} is unsupported`);
+    }
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
     lastOpticalDebugMode = effectiveOpticalDebugMode;
@@ -13693,37 +13976,81 @@ export async function createWebGPUFingerFluidSolver({
       if (animatedPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
       reflectionMeshPhase = animatedPhase;
     }
-    const cp = Math.cos(pitch);
-    const eye = [
-      target[0] + Math.sin(yaw) * cp * distance,
-      target[1] + Math.sin(pitch) * distance,
-      target[2] + Math.cos(yaw) * cp * distance,
-    ];
-    const forward = normalize3(subtract3(target, eye));
-    const right = normalize3(cross3(forward, [0, 1, 0]));
-    const up = normalize3(cross3(right, forward));
-    const projection = perspectiveMatrix(Math.PI / 3.15, extent.width / extent.height, 0.08, 30);
-    const view = lookAtMatrix(eye, target, [0, 1, 0]);
-    const viewProjection = multiplyMatrices(projection, view);
-    const renderData = new Float32Array(44);
+    const externalCameraSnapshot = externalCamera
+      ? validateFingerFluidExternalCamera(externalCamera, extent)
+      : null;
+    if (
+      safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+      && !externalCameraSnapshot
+    ) {
+      fingerFluidCameraFailure('is required for moving_hill_consumer presentation');
+    }
+    let cameraSnapshot = externalCameraSnapshot;
+    if (!cameraSnapshot) {
+      const cp = Math.cos(pitch);
+      const eye = [
+        target[0] + Math.sin(yaw) * cp * distance,
+        target[1] + Math.sin(pitch) * distance,
+        target[2] + Math.cos(yaw) * cp * distance,
+      ];
+      const forward = normalize3(subtract3(target, eye));
+      const right = normalize3(cross3(forward, [0, 1, 0]));
+      const up = normalize3(cross3(right, forward));
+      const projection = perspectiveMatrix(Math.PI / 3.15, extent.width / extent.height, 0.08, 30);
+      const view = lookAtMatrix(eye, target, [0, 1, 0]);
+      const viewProjection = multiplyMatrices(projection, view);
+      cameraSnapshot = {
+        schema: KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA,
+        identity: 'kaminos-internal-orbit-camera',
+        generation: renderFrameId,
+        projectionType: 'perspective',
+        view,
+        projection,
+        viewProjection,
+        inverseViewProjection: invertMatrix(viewProjection),
+        position: eye,
+        right,
+        up,
+        forward,
+        near: 0.08,
+        far: 30,
+        viewport: { width: extent.width, height: extent.height },
+      };
+    }
+    const {
+      position: eye,
+      right,
+      up,
+      forward,
+      viewProjection,
+      inverseViewProjection,
+    } = cameraSnapshot;
+    const renderData = new Float32Array(60);
     const effectiveColorMode = resolveFingerFluidColorMode(colorMode);
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
-    renderData.set([...right, colorModeIndex], 16);
-    renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
-    renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 24);
-    renderData.set([...eye, KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.indexOf(resolvedOpticalFootprintMode)], 28);
-    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 32);
+    renderData.set(inverseViewProjection, 16);
+    renderData.set([...right, colorModeIndex], 32);
+    renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 36);
+    renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 40);
+    renderData.set([...eye, KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.indexOf(resolvedOpticalFootprintMode)], 44);
+    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 48);
     renderData.set([
       KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES.indexOf(resolvedTransmissionFootprintMode),
       KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES.indexOf(resolvedBodyTransportMode),
       KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_MODES.indexOf(resolvedInterfaceFrequencyMode),
-      0,
-    ], 36);
+      safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE ? 1 : 0,
+    ], 52);
     renderData.set(
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
-      40,
+      56,
     );
+    lastExternalCamera = externalCameraSnapshot;
+    lastCameraSnapshot = cameraSnapshot;
+    lastParticleVisibility = particleVisibility;
+    lastFrameAnalyticSupportDrawCount = 0;
+    lastFrameDynamicToyMeshDrawCount = 0;
+    lastFrameParticleDrawCount = 0;
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
     writeDynamicReflectionSceneParams();
 
@@ -13733,6 +14060,7 @@ export async function createWebGPUFingerFluidSolver({
     const encoder = device.createCommandEncoder({ label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}` });
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
     const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
+    const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
     const hdrWorldBackgroundPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
       colorAttachments: [{
@@ -13778,12 +14106,15 @@ export async function createWebGPUFingerFluidSolver({
         depthStoreOp: 'store',
       },
     });
-    analyticSupportPresentationPass.setPipeline(analyticSupportPresentationPipeline);
-    analyticSupportPresentationPass.setBindGroup(0, analyticSupportPresentationBindGroup);
-    analyticSupportPresentationPass.draw(analyticSupportVertexCount);
+    if (drawAnalyticSupport) {
+      analyticSupportPresentationPass.setPipeline(analyticSupportPresentationPipeline);
+      analyticSupportPresentationPass.setBindGroup(0, analyticSupportPresentationBindGroup);
+      analyticSupportPresentationPass.draw(analyticSupportVertexCount);
+      analyticSupportPresentationPassCount += 1;
+      analyticSupportDepthPassCount += 1;
+      lastFrameAnalyticSupportDrawCount = 1;
+    }
     analyticSupportPresentationPass.end();
-    analyticSupportPresentationPassCount += 1;
-    analyticSupportDepthPassCount += 1;
 
     const dynamicIndexedMeshPass = encoder.beginRenderPass({
       label: `${KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE}:dynamic-indexed-mesh`,
@@ -13812,7 +14143,8 @@ export async function createWebGPUFingerFluidSolver({
     });
     const isolateWorldReflection = refractionEnabled
       && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(effectiveOpticalDebugMode);
-    if (!isolateWorldReflection) {
+    const drawDynamicToyMesh = drawAnalyticSupport && !isolateWorldReflection;
+    if (drawDynamicToyMesh) {
       dynamicIndexedMeshPass.setPipeline(dynamicIndexedMeshPipeline);
       dynamicIndexedMeshPass.setBindGroup(0, dynamicIndexedMeshBindGroup);
       dynamicIndexedMeshPass.setVertexBuffer(0, dynamicReflectionMeshPositionBuffer);
@@ -13820,8 +14152,11 @@ export async function createWebGPUFingerFluidSolver({
       dynamicIndexedMeshPass.setIndexBuffer(dynamicReflectionMeshIndexBuffer, 'uint32');
       dynamicIndexedMeshPass.drawIndexed(DYNAMIC_REFLECTION_MESH_INDEX_COUNT);
       dynamicIndexedMeshDrawCount += 1;
+      lastFrameDynamicToyMeshDrawCount = 1;
       lastDynamicIndexedMeshDrawFrameId = renderFrameId;
       lastDynamicMeshPresentationMode = 'deferred_scene_visible_v0';
+    } else if (!drawAnalyticSupport) {
+      lastDynamicMeshPresentationMode = 'suppressed_in_moving_hill_consumer_v0';
     } else {
       lastDynamicMeshPresentationMode = 'suppressed_in_reflection_debug_provider_remains_active_v0';
     }
@@ -13855,9 +14190,12 @@ export async function createWebGPUFingerFluidSolver({
           depthStoreOp: 'store',
         },
       });
-      pass.setPipeline(renderPipeline);
-      pass.setBindGroup(0, renderBindGroup);
-      pass.draw(6, safeParticleCount);
+      if (particleVisibility === 'visible') {
+        pass.setPipeline(renderPipeline);
+        pass.setBindGroup(0, renderBindGroup);
+        pass.draw(6, safeParticleCount);
+        lastFrameParticleDrawCount += 1;
+      }
       pass.end();
       sphereDebugRenderFrameCount += 1;
     } else {
@@ -13885,15 +14223,21 @@ export async function createWebGPUFingerFluidSolver({
         ],
       });
       accumulationPass.setPipeline(screenSpaceSurfaceAccumulationPipeline);
-      if (canonicalParticleVisibility !== 'hidden') {
+      if (particleVisibility === 'visible' && canonicalParticleVisibility !== 'hidden') {
         accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
         accumulationPass.draw(6, safeParticleCount);
+        lastFrameParticleDrawCount += 1;
       }
-      if (analyticCarrierAccumulationBindGroup && analyticCarrierSampleCount > 0) {
+      if (
+        particleVisibility === 'visible'
+        && analyticCarrierAccumulationBindGroup
+        && analyticCarrierSampleCount > 0
+      ) {
         accumulationPass.setBindGroup(0, analyticCarrierAccumulationBindGroup);
         accumulationPass.draw(6, analyticCarrierSampleCount);
         analyticCarrierAccumulationDrawCount += 1;
         analyticCarrierLastFrameDrawCount = 1;
+        lastFrameParticleDrawCount += 1;
       }
       accumulationPass.end();
       screenSpaceSurfaceAccumulationPassCount += 1;
@@ -14755,6 +15099,8 @@ export async function createWebGPUFingerFluidSolver({
         : 'closed_particle_population_no_source_recirculation_v0',
       sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
+      requestedPresentationMode: safePresentationMode,
+      effectivePresentationMode: safePresentationMode,
       requestedRendererMode: lastRequestedRendererMode,
       effectiveRendererMode: lastEffectiveRendererMode,
       requestedRenderer: rendererRouteForMode(lastRequestedRendererMode),
@@ -14886,6 +15232,39 @@ export async function createWebGPUFingerFluidSolver({
         passCount: finalPresentationPassCount,
         fallbackReason: null,
       },
+      presentationEvidence: {
+        requestedMode: safePresentationMode,
+        effectiveMode: safePresentationMode,
+        route: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE
+          : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+        fallbackReason: null,
+        analyticSupportDrawCount: lastFrameAnalyticSupportDrawCount,
+        dynamicToyMeshDrawCount: lastFrameDynamicToyMeshDrawCount,
+        nonParticleToyDrawCount: lastFrameAnalyticSupportDrawCount + lastFrameDynamicToyMeshDrawCount,
+        particleDrawCount: lastFrameParticleDrawCount,
+        particleVisibility: lastParticleVisibility,
+        particleAttributionRoute: 'same-frame-explicit-particle-draw-suppression-v0',
+      },
+      cameraEvidence: {
+        schema: KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA,
+        authority: lastExternalCamera ? 'consumer_external_exact_v0' : 'kaminos_private_analytic_bench_v0',
+        identity: lastCameraSnapshot?.identity ?? null,
+        generation: lastCameraSnapshot?.generation ?? null,
+        projectionType: lastCameraSnapshot?.projectionType ?? null,
+        viewport: lastCameraSnapshot?.viewport ? { ...lastCameraSnapshot.viewport } : null,
+        near: lastCameraSnapshot?.near ?? null,
+        far: lastCameraSnapshot?.far ?? null,
+        view: lastCameraSnapshot ? [...lastCameraSnapshot.view] : null,
+        projection: lastCameraSnapshot ? [...lastCameraSnapshot.projection] : null,
+        viewProjection: lastCameraSnapshot ? [...lastCameraSnapshot.viewProjection] : null,
+        inverseViewProjection: lastCameraSnapshot ? [...lastCameraSnapshot.inverseViewProjection] : null,
+        position: lastCameraSnapshot ? [...lastCameraSnapshot.position] : null,
+        right: lastCameraSnapshot ? [...lastCameraSnapshot.right] : null,
+        up: lastCameraSnapshot ? [...lastCameraSnapshot.up] : null,
+        forward: lastCameraSnapshot ? [...lastCameraSnapshot.forward] : null,
+        fallbackReason: null,
+      },
       deferredSceneEvidence: {
         requestedRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
         effectiveRoute: KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE,
@@ -14893,6 +15272,7 @@ export async function createWebGPUFingerFluidSolver({
         fallbackReason: null,
         passCount: deferredScenePassCount,
         dynamicIndexedMeshDrawCount,
+        currentFrameDynamicToyMeshDrawCount: lastFrameDynamicToyMeshDrawCount,
         renderFrameId: lastRenderFrameId,
         deferredSceneFrameId: lastDeferredSceneFrameId,
         dynamicIndexedMeshLastDrawFrameId: lastDynamicIndexedMeshDrawFrameId,
@@ -14965,12 +15345,27 @@ export async function createWebGPUFingerFluidSolver({
           fallbackReason: null,
           compositePassCount: worldSpaceReflectionCompositePassCount,
           reflectionProviderFrameId: lastReflectionProviderFrameId,
-          candidateCapMode: 'uncapped_exact_dynamic_mesh_triangle_population_v0',
-          exactTriangleCount: DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
-          hitKinds: ['environment', 'analytic_sphere', 'indexed_mesh'],
-          dynamicMeshObjectId: DYNAMIC_REFLECTION_MESH_OBJECT_ID,
-          dynamicMeshTransformGeneration: lastReflectionProviderTransformGeneration,
-          dynamicMeshPhase: Number(lastReflectionProviderPhase.toFixed(6)),
+          providerExecution: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? 'toy_world_providers_suppressed_consumer_scene_not_yet_bound_v0'
+            : 'analytic_and_indexed_toy_world_providers_executed_v0',
+          candidateCapMode: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? 'no_toy_candidates_environment_only_v0'
+            : 'uncapped_exact_dynamic_mesh_triangle_population_v0',
+          exactTriangleCount: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? 0
+            : DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
+          hitKinds: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? ['environment']
+            : ['environment', 'analytic_sphere', 'indexed_mesh'],
+          dynamicMeshObjectId: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? null
+            : DYNAMIC_REFLECTION_MESH_OBJECT_ID,
+          dynamicMeshTransformGeneration: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? null
+            : lastReflectionProviderTransformGeneration,
+          dynamicMeshPhase: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? null
+            : Number(lastReflectionProviderPhase.toFixed(6)),
           dynamicMeshPresentationMode: lastDynamicMeshPresentationMode,
           participatingRadianceBoundary: 'integrateParticipatingRadiance(ray,tMax)_reserved_not_executed_v0',
           composition: 'fresnel_world_reflection_plus_two_interface_refraction_v0',
@@ -14997,11 +15392,21 @@ export async function createWebGPUFingerFluidSolver({
         },
       } : {}),
       supportPresentationEvidence: {
-        route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
-        depthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
-        colorDepthAuthority: 'same_pass_same_analytic_geometry_v0',
-        geometrySource: 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
-        calibrationLandmarks: 'world_anchored_half_unit_grid_major_grid_and_axes_v0',
+        route: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE
+          : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+        depthRoute: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? null
+          : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        colorDepthAuthority: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? 'consumer_scene_color_depth_not_bound_v0'
+          : 'same_pass_same_analytic_geometry_v0',
+        geometrySource: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? null
+          : 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
+        calibrationLandmarks: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? null
+          : 'world_anchored_half_unit_grid_major_grid_and_axes_v0',
         refractionCaptureOrder: 'copy_after_deferred_scene_v0',
         passCount: analyticSupportPresentationPassCount,
         particleSupportDrawCount,
@@ -15009,7 +15414,9 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceSurfaceEvidence: {
         route: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
-        supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        supportDepthRoute: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? null
+          : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         analyticSupportDepthPassCount,
         accumulationTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-surface-accumulation',
@@ -15060,7 +15467,9 @@ export async function createWebGPUFingerFluidSolver({
         } : null,
         slabGeometry: 'projected_particle_interval_hull_not_watertight_surface_v0',
         invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
-        supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        supportDepthRoute: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          ? null
+          : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
         analyticSupportDepthPassCount,
         opticalDebugMode: lastOpticalDebugMode,
         requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
