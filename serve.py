@@ -119,7 +119,7 @@ JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 SF3D_LIVE_SMOKE_ROUTE_ID = "sf3d.image-to-mesh.webgpu-local.v0"
-SF3D_LIVE_SMOKE_SOURCE_REVISION = "f977b50fb21815f955a04a1c3a392b3a44060561"
+SF3D_LIVE_SMOKE_SOURCE_REVISION = "a6f691c2bc33483036a36e047c723084f7ca0a9e"
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
 GIT_SHA_PATTERN = re.compile(r"^[a-f0-9]{40}$", re.IGNORECASE)
 

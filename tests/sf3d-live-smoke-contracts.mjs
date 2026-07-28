@@ -18,6 +18,7 @@ import {
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
   resolveSf3dGpuTopologyRequest,
+  resolveSf3dPostProcessorRequest,
   resolveSf3dRenderTargetFps,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
@@ -30,17 +31,47 @@ import {
 } from '../scripts/sf3d-live-smoke-witness-core.mjs';
 
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
-assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'f977b50fb21815f955a04a1c3a392b3a44060561');
+assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'a6f691c2bc33483036a36e047c723084f7ca0a9e');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
 assert.equal(SF3D_LIVE_SMOKE_SHARED_GPU_TOPOLOGY, 'same-page-shared-device-shared-queue');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: false,
+  cooperativePostProcessor: false,
+  postProcessorSchedulingMode: 'cooperative',
   cooperativeBake: true,
   bakeSchedulingMode: 'cooperative',
   bakeBatchTexels: 4096,
   decoderArena: true,
   materializeWorker: true,
 });
+assert.deepEqual(
+  resolveSf3dPostProcessorRequest(new URLSearchParams()),
+  {
+    requested: 'monolithic',
+    effective: 'monolithic',
+    cooperativePostProcessor: false,
+    postProcessorSchedulingMode: 'cooperative',
+    authority: 'caller-route-query',
+  },
+);
+assert.deepEqual(
+  resolveSf3dPostProcessorRequest(
+    new URLSearchParams('sf3d_post_processor=cooperative'),
+  ),
+  {
+    requested: 'cooperative',
+    effective: 'three-plane-cooperative',
+    cooperativePostProcessor: true,
+    postProcessorSchedulingMode: 'cooperative',
+    authority: 'caller-route-query',
+  },
+);
+assert.throws(
+  () => resolveSf3dPostProcessorRequest(
+    new URLSearchParams('sf3d_post_processor=claimed-but-unknown'),
+  ),
+  /unsupported SF3D postprocessor mode/i,
+);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: false }), true);
 assert.equal(canFireSf3dLiveSmoke({ running: true, deviceLost: false }), false);
 assert.equal(canFireSf3dLiveSmoke({ running: false, deviceLost: true }), false);
@@ -437,6 +468,10 @@ assert.deepEqual(progressFromSf3dMessage('Texture bake 12/48 (25%)'), {
   percent: 90,
   label: 'Texture bake 12 / 48',
 });
+assert.deepEqual(progressFromSf3dMessage('Post-processor planes 2/3 (67%)'), {
+  percent: 65,
+  label: 'Post-processor planes 2 / 3',
+});
 assert.deepEqual(progressFromSf3dMessage('Running two-stream backbone...'), {
   percent: 42,
   label: 'Two-stream backbone',
@@ -505,6 +540,7 @@ assert.match(serverSource, /effective_revision != requested_revision/, 'the conf
 assert.match(serverSource, /handle_sf3d_live_smoke_report/, 'the route must persist success and pre-output failure reports');
 assert.match(launcherSource, /mesh_path.*meshFile/, 'the launcher must mount the accepted foreground mesh');
 assert.match(witnessSource, /resolveSf3dGpuTopologyRequest/, 'the witness must derive expected topology from the requested route');
+assert.match(witnessSource, /resolveSf3dPostProcessorRequest/, 'the witness must derive expected postprocessor mode from the requested route');
 assert.match(witnessSource, /gpuTopologyReceipt/, 'the witness must reject requested/effective topology substitution');
 assert.match(witnessSource, /FAILED_ALLOCATION_SIZE\s*=\s*3_145_728/, 'the witness must preserve the exact failed allocation size');
 assert.match(witnessSource, /size:\s*FAILED_ALLOCATION_SIZE,\s*mappedAtCreation:\s*true/, 'the witness must exercise that allocation with mappedAtCreation');
@@ -517,4 +553,5 @@ assert.match(witnessSource, /querySelector\(['"]#viewport > canvas['"]\)/, 'the 
 assert.match(firingWitnessSource, /controller\.fire\(\)\.catch/, 'the firing witness must start inference without awaiting it inside one CDP call');
 assert.match(firingWitnessSource, /kaminosSf3dLiveSmokeLastReport/, 'the firing witness must wait on page-owned terminal state');
 assert.match(firingWitnessSource, /gpuTopologyReceipt/, 'the firing witness must preserve effective topology identity');
+assert.match(firingWitnessSource, /expectedPostProcessor/, 'the firing witness must preserve effective postprocessor identity');
 assert.match(firingWitnessSource, /finally[\s\S]*finalizeWitnessReport/, 'the firing witness must write a report on every terminal path');

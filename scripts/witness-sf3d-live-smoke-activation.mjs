@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import {
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   resolveSf3dGpuTopologyRequest,
+  resolveSf3dPostProcessorRequest,
   validateSf3dLiveSmokeConfig,
 } from '../sf3d-live-smoke-core.js';
 import {
@@ -21,7 +22,7 @@ const FAILED_ALLOCATION_SIZE = 3_145_728;
 
 function parseArgs(argv) {
   const values = {
-    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
+    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&sf3d_gpu_topology=dual-device&sf3d_post_processor=cooperative&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
     sf3dRepo: process.env.SF3D_REPO || '/private/tmp/sf3d-webgpu-wake-portable-tet-origin-0726',
     screenshot: '/tmp/sf3d-live-smoke-dual-device-witness.png',
     report: '/tmp/sf3d-live-smoke-dual-device-witness.json',
@@ -181,6 +182,7 @@ try {
   report.url = options.url;
   const routeParams = new URL(options.url).searchParams;
   report.expectedTopology = resolveSf3dGpuTopologyRequest(routeParams);
+  report.expectedPostProcessor = resolveSf3dPostProcessorRequest(routeParams);
   report.expectedRenderFps = routeParams.has('sf3d_render_fps')
     ? Number(routeParams.get('sf3d_render_fps'))
     : null;
@@ -246,6 +248,12 @@ try {
   assert(
     report.initialState.renderCadence?.targetFps === report.expectedRenderFps,
     `render cadence mismatch: ${JSON.stringify(report.initialState.renderCadence)}`,
+  );
+  assert(
+    report.initialState.postProcessor?.effective === report.expectedPostProcessor.effective
+      && report.initialState.options?.cooperativePostProcessor
+        === report.expectedPostProcessor.cooperativePostProcessor,
+    `postprocessor mode mismatch: ${JSON.stringify(report.initialState.postProcessor)}`,
   );
   assert(report.initialState.revision === SF3D_LIVE_SMOKE_SOURCE_REVISION, `controller revision mismatch: ${report.initialState.revision}`);
   assert(report.initialState.attempted === false, 'activation witness found a spent route');

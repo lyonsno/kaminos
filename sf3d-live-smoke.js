@@ -11,6 +11,7 @@ import {
   freezeSf3dRouteEvidence,
   progressFromSf3dMessage,
   resolveSf3dGpuTopologyRequest,
+  resolveSf3dPostProcessorRequest,
   resolveSf3dRenderTargetFps,
   summarizeSf3dFrameGaps,
   validateSf3dLiveSmokeConfig,
@@ -25,6 +26,7 @@ export function isSf3dLiveSmokeRoute(params = new URLSearchParams(location.searc
 export async function prepareSf3dLiveSmokeDevice(params = new URLSearchParams(location.search)) {
   if (!isSf3dLiveSmokeRoute(params)) return null;
   const requestedTopology = resolveSf3dGpuTopologyRequest(params);
+  const postProcessor = resolveSf3dPostProcessorRequest(params);
   const renderTargetFps = resolveSf3dRenderTargetFps(params, requestedTopology);
   const response = await fetch('/api/sf3d-live-smoke-config', { cache: 'no-store' });
   const payload = await response.json().catch(() => null);
@@ -50,6 +52,7 @@ export async function prepareSf3dLiveSmokeDevice(params = new URLSearchParams(lo
     device: gpu.device,
     deviceLoss,
     requestedTopology,
+    postProcessor,
     renderTargetFps,
   });
 }
@@ -227,6 +230,11 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   setText('sf3d-live-smoke-route', SF3D_LIVE_SMOKE_ROUTE_ID);
   setText('sf3d-live-smoke-topology', prepared.gpuTopology.effective);
   setText('sf3d-live-smoke-status', 'Loading model');
+  const effectiveOptions = Object.freeze({
+    ...SF3D_LIVE_SMOKE_OPTIONS,
+    cooperativePostProcessor: prepared.postProcessor.cooperativePostProcessor,
+    postProcessorSchedulingMode: prepared.postProcessor.postProcessorSchedulingMode,
+  });
 
   const [weightsModule, inferenceModule, pipelineModule] = await Promise.all([
     import(`${prepared.config.origin}/src/lib/weights.js`),
@@ -269,6 +277,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         gpuTopology: prepared.gpuTopology.effective,
         gpuTopologyReceipt: prepared.gpuTopology,
         renderCadence: prepared.renderCadence.snapshot(),
+        postProcessor: prepared.postProcessor,
+        options: effectiveOptions,
         running,
         attempted,
         deviceLoss: prepared.deviceLoss.info,
@@ -335,11 +345,13 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           weights,
           inputImage,
           {
-            cooperativeDino: SF3D_LIVE_SMOKE_OPTIONS.cooperativeDino,
-            cooperativeBake: SF3D_LIVE_SMOKE_OPTIONS.cooperativeBake,
-            bakeSchedulingMode: SF3D_LIVE_SMOKE_OPTIONS.bakeSchedulingMode,
-            bakeBatchTexels: SF3D_LIVE_SMOKE_OPTIONS.bakeBatchTexels,
-            decoderArena: SF3D_LIVE_SMOKE_OPTIONS.decoderArena,
+            cooperativeDino: effectiveOptions.cooperativeDino,
+            cooperativePostProcessor: effectiveOptions.cooperativePostProcessor,
+            postProcessorSchedulingMode: effectiveOptions.postProcessorSchedulingMode,
+            cooperativeBake: effectiveOptions.cooperativeBake,
+            bakeSchedulingMode: effectiveOptions.bakeSchedulingMode,
+            bakeBatchTexels: effectiveOptions.bakeBatchTexels,
+            decoderArena: effectiveOptions.decoderArena,
             materializeWorker: workerHandle.worker,
           },
           message => {
@@ -391,7 +403,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           gpuTopology: prepared.gpuTopology.effective,
           gpuTopologyReceipt: prepared.gpuTopology,
           renderCadence: prepared.renderCadence.snapshot(),
-          options: SF3D_LIVE_SMOKE_OPTIONS,
+          postProcessor: prepared.postProcessor,
+          options: effectiveOptions,
           ...completedOutput,
           lastProgress,
           deviceLoss: prepared.deviceLoss.info,
@@ -439,7 +452,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           gpuTopology: prepared.gpuTopology.effective,
           gpuTopologyReceipt: prepared.gpuTopology,
           renderCadence: prepared.renderCadence.snapshot(),
-          options: SF3D_LIVE_SMOKE_OPTIONS,
+          postProcessor: prepared.postProcessor,
+          options: effectiveOptions,
           elapsedMs: completedOutput?.totalWallMs ?? performance.now() - startedAt,
           output: completedEvidence.output,
           outputArtifact,

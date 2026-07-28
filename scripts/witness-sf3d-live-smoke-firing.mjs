@@ -8,6 +8,7 @@ import {
   SF3D_LIVE_SMOKE_ROUTE_ID,
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   resolveSf3dGpuTopologyRequest,
+  resolveSf3dPostProcessorRequest,
 } from '../sf3d-live-smoke-core.js';
 import {
   extractRequestedReportPath,
@@ -17,7 +18,7 @@ import {
 
 function parseArgs(argv) {
   const values = {
-    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&sf3d_gpu_topology=shared-device&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
+    url: 'http://127.0.0.1:8093/?sf3d_live_smoke=1&sf3d_gpu_topology=dual-device&sf3d_post_processor=cooperative&mesh_root=splat-extra-1&mesh_path=arena-worker.glb',
     sf3dRepo: process.env.SF3D_REPO || '/private/tmp/sf3d-webgpu-wake-portable-tet-origin-0726',
     screenshot: '/tmp/sf3d-live-smoke-firing.png',
     report: '/tmp/sf3d-live-smoke-firing.json',
@@ -66,6 +67,7 @@ try {
   report.requestedUrl = options.url;
   const routeParams = new URL(options.url).searchParams;
   report.expectedTopology = resolveSf3dGpuTopologyRequest(routeParams);
+  report.expectedPostProcessor = resolveSf3dPostProcessorRequest(routeParams);
   report.expectedRenderFps = routeParams.has('sf3d_render_fps')
     ? Number(routeParams.get('sf3d_render_fps'))
     : null;
@@ -111,12 +113,19 @@ try {
   assert(report.initialState.revision === SF3D_LIVE_SMOKE_SOURCE_REVISION, 'SF3D firing source revision mismatch');
   assert(report.initialState.gpuTopology === report.expectedTopology, 'SF3D firing effective topology mismatch');
   assert(
+    report.initialState.postProcessor?.effective === report.expectedPostProcessor.effective
+      && report.initialState.options?.cooperativePostProcessor
+        === report.expectedPostProcessor.cooperativePostProcessor,
+    'SF3D firing postprocessor mode mismatch',
+  );
+  assert(
     report.initialState.gpuTopologyReceipt?.requested === report.expectedTopology
       && report.initialState.gpuTopologyReceipt?.effective === report.expectedTopology,
     'SF3D firing topology receipt mismatch',
   );
-  assert(report.initialState.gpuTopologyReceipt?.sameDevice === true, 'SF3D firing did not share the renderer GPUDevice');
-  assert(report.initialState.gpuTopologyReceipt?.sameQueue === true, 'SF3D firing did not share the renderer GPUQueue');
+  const expectSharedDevice = report.expectedTopology === 'same-page-shared-device-shared-queue';
+  assert(report.initialState.gpuTopologyReceipt?.sameDevice === expectSharedDevice, 'SF3D firing device topology identity mismatch');
+  assert(report.initialState.gpuTopologyReceipt?.sameQueue === expectSharedDevice, 'SF3D firing queue topology identity mismatch');
   assert(report.initialState.renderCadence?.targetFps === report.expectedRenderFps, 'SF3D firing render cadence mismatch');
   report.lastTrustworthyEvidence = 'source-bound shared-device route armed';
 
@@ -142,8 +151,14 @@ try {
   assert(report.appReport.requestedRevision === SF3D_LIVE_SMOKE_SOURCE_REVISION, 'SF3D requested revision mismatch');
   assert(report.appReport.effectiveRevision === SF3D_LIVE_SMOKE_SOURCE_REVISION, 'SF3D effective revision mismatch');
   assert(report.appReport.gpuTopology === report.expectedTopology, 'SF3D terminal topology mismatch');
-  assert(report.appReport.gpuTopologyReceipt?.sameDevice === true, 'SF3D terminal report lost shared device identity');
-  assert(report.appReport.gpuTopologyReceipt?.sameQueue === true, 'SF3D terminal report lost shared queue identity');
+  assert(report.appReport.gpuTopologyReceipt?.sameDevice === expectSharedDevice, 'SF3D terminal report lost device topology identity');
+  assert(report.appReport.gpuTopologyReceipt?.sameQueue === expectSharedDevice, 'SF3D terminal report lost queue topology identity');
+  assert(
+    report.appReport.postProcessor?.effective === report.expectedPostProcessor.effective
+      && report.appReport.options?.cooperativePostProcessor
+        === report.expectedPostProcessor.cooperativePostProcessor,
+    'SF3D terminal report lost postprocessor mode identity',
+  );
   assert(report.appReport.renderCadence?.targetFps === report.expectedRenderFps, 'SF3D terminal render cadence mismatch');
   assert(report.appReport.ok === true, report.appReport.error || 'SF3D route failed');
   assert(report.appReport.output?.canonical === true, 'SF3D route did not produce canonical output');
