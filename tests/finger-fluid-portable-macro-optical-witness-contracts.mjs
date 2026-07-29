@@ -1,5 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import {
+  urlsHaveSameIdentity,
+} from '../finger-fluid-portable-macro-optical-witness.mjs';
 
 const witness = readFileSync(
   new URL('../finger-fluid-portable-macro-optical-witness.mjs', import.meta.url),
@@ -125,6 +138,16 @@ assert.match(
   'the operator can scrub and inspect the exact witness time',
 );
 assert.match(
+  page,
+  /finger-fluid-portable-macro-optical-witness\.js\?runtime=controls-v1/,
+  'the visible control shell binds a versioned runtime instead of a stale cached module',
+);
+assert.match(
+  witness,
+  /servedPath:\s*'finger-fluid-portable-macro-optical-witness\.js\?runtime=controls-v1'/,
+  'served source identity binds the exact versioned runtime URL executed by the page',
+);
+assert.match(
   runtime,
   /let requestedMode = query\.get\('mode'\)[\s\S]*let paused =/,
   'operator changes can update requested mode and playback state honestly',
@@ -163,6 +186,70 @@ assert.match(
   witness,
   /initialEffectiveUrl[\s\S]*final effective URL is stale[\s\S]*effectiveUrl = finalEffectiveUrl/,
   'the report distinguishes the requested navigation URL from the final shareable URL',
+);
+assert.match(
+  witness,
+  /function urlsHaveSameIdentity[\s\S]*searchParams[\s\S]*urlsHaveSameIdentity\(finalEffectiveUrl, expectedFinalUrl\)/,
+  'effective URL identity ignores harmless query ordering without ignoring parameter values',
+);
+assert.equal(
+  urlsHaveSameIdentity(
+    'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1',
+    'http://127.0.0.1:48220/witness?paused=1&mode=optical&time=2.75',
+  ),
+  true,
+  'query ordering does not change effective URL identity',
+);
+for (const staleUrl of [
+  'http://127.0.0.1:48220/witness?mode=cyan&time=2.75&paused=1',
+  'http://127.0.0.1:48220/witness?mode=optical&time=2.75',
+  'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1&fallback=cyan',
+  'http://127.0.0.1:48220/witness?mode=optical&mode=cyan&time=2.75&paused=1',
+]) {
+  assert.equal(
+    urlsHaveSameIdentity(
+      staleUrl,
+      'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1',
+    ),
+    false,
+    `stale effective URL identity fails loud: ${staleUrl}`,
+  );
+}
+
+const aliasTestDir = mkdtempSync(join(tmpdir(), 'kaminos-witness-alias-'));
+const aliasReportPath = join(aliasTestDir, 'report.json');
+const canonicalWitnessPath = fileURLToPath(
+  new URL('../finger-fluid-portable-macro-optical-witness.mjs', import.meta.url),
+);
+const aliasWitnessPath = join(aliasTestDir, 'witness-alias.mjs');
+symlinkSync(canonicalWitnessPath, aliasWitnessPath);
+const aliasInvocation = spawnSync(
+  process.execPath,
+  [
+    aliasWitnessPath,
+    '--url',
+    'http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=cyan&time=0.75',
+    '--report',
+    aliasReportPath,
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(
+  aliasInvocation.status,
+  0,
+  'filesystem aliases still execute the witness instead of silently exiting zero',
+);
+assert.equal(
+  existsSync(aliasReportPath),
+  true,
+  'filesystem-alias pre-output failure still writes a durable report',
+);
+rmSync(aliasTestDir, { recursive: true, force: true });
+
+assert.match(
+  witness,
+  /localPath:\s*'finger-fluid-portable-macro-optical-witness\.html'[\s\S]*servedUrl:\s*requestedUrlObject/,
+  'served document identity binds the exact query-bearing URL loaded by Chrome',
 );
 assert.match(
   witness,

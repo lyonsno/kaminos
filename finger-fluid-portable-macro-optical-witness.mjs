@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const OPTICAL_ROUTE = 'kaminos/finger-fluid/portable-macro-screen-space-optics-v0';
 const CYAN_DEBUG_ROUTE = 'kaminos/finger-fluid/portable-macro-cyan-debug-v0';
@@ -69,6 +75,19 @@ function preserveEvidence(completedPhase, evidence) {
   lastTrustworthyEvidence = { phase: completedPhase, evidence };
 }
 
+export function urlsHaveSameIdentity(actual, expected) {
+  const canonicalize = value => {
+    const url = new URL(value);
+    const entries = [...url.searchParams.entries()].sort(([keyA, valueA], [keyB, valueB]) => (
+      keyA.localeCompare(keyB) || valueA.localeCompare(valueB)
+    ));
+    url.search = '';
+    for (const [key, value] of entries) url.searchParams.append(key, value);
+    return url.href;
+  };
+  return canonicalize(actual) === canonicalize(expected);
+}
+
 function writeReport(extra = {}) {
   mkdirSync(dirname(reportPath), { recursive: true });
   const report = {
@@ -109,32 +128,44 @@ function writeReport(extra = {}) {
 
 async function bindServedSourceIdentity() {
   const sources = [
-    'finger-fluid-portable-macro-optical-witness.html',
-    'finger-fluid-portable-macro-optical-witness.js',
-    'finger-fluid-portable-macro-optical-renderer.js',
-    'finger-fluid-webgpu-core.js',
+    {
+      localPath: 'finger-fluid-portable-macro-optical-witness.html',
+      servedUrl: requestedUrlObject,
+    },
+    {
+      localPath: 'finger-fluid-portable-macro-optical-witness.js',
+      servedPath: 'finger-fluid-portable-macro-optical-witness.js?runtime=controls-v1',
+    },
+    {
+      localPath: 'finger-fluid-portable-macro-optical-renderer.js',
+      servedPath: 'finger-fluid-portable-macro-optical-renderer.js',
+    },
+    {
+      localPath: 'finger-fluid-webgpu-core.js',
+      servedPath: 'finger-fluid-webgpu-core.js',
+    },
   ];
   const identity = {};
-  for (const name of sources) {
-    const localBytes = readFileSync(new URL(`./${name}`, import.meta.url));
-    const servedUrl = new URL(`./${name}`, requestedUrlObject);
+  for (const { localPath, servedPath, servedUrl: exactServedUrl } of sources) {
+    const localBytes = readFileSync(new URL(`./${localPath}`, import.meta.url));
+    const servedUrl = exactServedUrl || new URL(`./${servedPath}`, requestedUrlObject);
     const response = await fetch(servedUrl);
     if (!response.ok) {
       throw new Error(`served source ${servedUrl.href} failed with ${response.status}`);
     }
     const servedBytes = Buffer.from(await response.arrayBuffer());
-    identity[name] = {
+    identity[localPath] = {
       requestedUrl: servedUrl.href,
       effectiveUrl: response.url,
       localSha256: sha256(localBytes),
       servedSha256: sha256(servedBytes),
       bytes: servedBytes.byteLength,
     };
-    identity[name].exactLocalMatch = (
-      identity[name].localSha256 === identity[name].servedSha256
+    identity[localPath].exactLocalMatch = (
+      identity[localPath].localSha256 === identity[localPath].servedSha256
     );
-    if (!identity[name].exactLocalMatch) {
-      throw new Error(`served source differs from local checkout: ${name}`);
+    if (!identity[localPath].exactLocalMatch) {
+      throw new Error(`served source differs from local checkout: ${localPath}`);
     }
   }
   return identity;
@@ -716,7 +747,7 @@ async function main() {
     expectedFinalUrl.searchParams.set('time', endTimeSeconds.toFixed(2));
     expectedFinalUrl.searchParams.set('paused', '1');
     const finalEffectiveUrl = await evaluate(socket, 'window.location.href');
-    if (finalEffectiveUrl !== expectedFinalUrl.href) {
+    if (!urlsHaveSameIdentity(finalEffectiveUrl, expectedFinalUrl)) {
       throw new Error(
         `final effective URL is stale: ${finalEffectiveUrl} != ${expectedFinalUrl.href}`,
       );
@@ -748,14 +779,19 @@ async function main() {
   }
 }
 
-try {
-  const report = await main();
-  console.log(JSON.stringify(report, null, 2));
-} catch (error) {
-  const report = writeReport({
-    ok: false,
-    error: error?.stack || error?.message || String(error),
-  });
-  console.error(JSON.stringify(report, null, 2));
-  process.exitCode = 1;
+const invokedAsMain = process.argv[1] && (
+  realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
+);
+if (invokedAsMain) {
+  try {
+    const report = await main();
+    console.log(JSON.stringify(report, null, 2));
+  } catch (error) {
+    const report = writeReport({
+      ok: false,
+      error: error?.stack || error?.message || String(error),
+    });
+    console.error(JSON.stringify(report, null, 2));
+    process.exitCode = 1;
+  }
 }
