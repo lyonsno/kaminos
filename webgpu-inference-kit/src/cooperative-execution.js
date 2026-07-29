@@ -578,6 +578,47 @@ export function createWebGpuCooperativeExecution(input = {}) {
     };
   }
 
+  function registerBoundedGpuDuty({
+    boundaryId,
+    boundaryState,
+    range,
+    encoded,
+    submittedAtMs,
+    prefixFence,
+  }) {
+    const dutyIndex = state.gpuDuties.length;
+    const entry = {
+      dutyId: range.rangeId,
+      dutyIndex,
+      boundaryState,
+      range,
+      encoded,
+      submittedAtMs,
+      fenceOutcome: Promise.resolve(prefixFence).then(
+        () => ({ ok: true, completedAtMs: readNow(now) }),
+        error => ({ ok: false, error, completedAtMs: readNow(now) }),
+      ),
+    };
+    state.gpuDuties.push({
+      dutyId: entry.dutyId,
+      rangeId: range.rangeId,
+      rangeIndex: range.rangeIndex,
+      boundaryId,
+      status: 'issued',
+      submittedAtMs,
+      retiredAtMs: null,
+      rawQueueDurationMs: null,
+      timingAuthority: 'queue-work-done-prefix-fence-pending',
+      failure: null,
+    });
+    state.inFlightGpuDuties.push(entry);
+    state.maxObservedInFlightGpuDuties = Math.max(
+      state.maxObservedInFlightGpuDuties,
+      state.inFlightGpuDuties.length,
+    );
+    return entry;
+  }
+
   async function drainGpuDutiesAfterFailure() {
     const secondaryFailures = [];
     while (state.inFlightGpuDuties.length > 0) {
@@ -716,6 +757,10 @@ export function createWebGpuCooperativeExecution(input = {}) {
         const releaseAdmission = await acquireGpuDutyAdmission();
         try {
           checkCancellation();
+          if (completionPolicy === 'bounded-prefix'
+              && state.inFlightGpuDuties.some(entry => entry.boundaryState !== boundaryState)) {
+            await drainGpuDuties();
+          }
           if (definition.boundary.kind !== 'gpu-command') {
             throw new Error(`${boundaryId} is not a gpu-command boundary`);
           }
@@ -805,6 +850,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
         let prefixFence = null;
         let submitted = false;
         let queueSubmittedAtMs = null;
+        let boundedEntry = null;
         const capturePrefixFence = () => {
           if (typeof runtime.queue.onSubmittedWorkDone !== 'function') {
             throw new Error('GPU duties require queue.onSubmittedWorkDone');
@@ -821,12 +867,23 @@ export function createWebGpuCooperativeExecution(input = {}) {
             if (submitted) {
               throw new Error('command duty recorder attempted duplicate GPU submission');
             }
+            queueSubmittedAtMs = submitStartMs;
             runtime.queue.submit(commandBuffers);
             submitted = true;
-            queueSubmittedAtMs = readNow(now);
             state.submittedGpuDutyCount += 1;
+            queueSubmittedAtMs = readNow(now);
             if (schedulingMode === 'cooperative') {
               prefixFence = capturePrefixFence();
+            }
+            if (completionPolicy === 'bounded-prefix') {
+              boundedEntry = registerBoundedGpuDuty({
+                boundaryId,
+                boundaryState,
+                range,
+                encoded,
+                submittedAtMs: queueSubmittedAtMs,
+                prefixFence,
+              });
             }
           };
           if (runtime.commandDuties?.measureSubmission) {
@@ -840,6 +897,32 @@ export function createWebGpuCooperativeExecution(input = {}) {
           }
         } catch (error) {
           const secondaryFailures = [];
+          if (submitted && completionPolicy === 'bounded-prefix') {
+            if (!boundedEntry) {
+              try {
+                if (!prefixFence) prefixFence = capturePrefixFence();
+                boundedEntry = registerBoundedGpuDuty({
+                  boundaryId,
+                  boundaryState,
+                  range,
+                  encoded,
+                  submittedAtMs: queueSubmittedAtMs,
+                  prefixFence,
+                });
+              } catch (fenceError) {
+                state.unfencedSubmittedGpuDutyCount += 1;
+                secondaryFailures.push({
+                  phase: 'queue-prefix-drain',
+                  error: normalizeError(fenceError),
+                });
+              }
+            }
+            failRange(boundaryState, range, 'queue-submission', error);
+            if (boundedEntry) {
+              secondaryFailures.push(...await drainGpuDutiesAfterFailure());
+            }
+            throw failExecution(error, 'queue-submission', boundaryState, { secondaryFailures });
+          }
           if (submitted) {
             try {
               if (!prefixFence) prefixFence = capturePrefixFence();
@@ -857,37 +940,6 @@ export function createWebGpuCooperativeExecution(input = {}) {
         }
 
         if (completionPolicy === 'bounded-prefix') {
-          const submittedAtMs = queueSubmittedAtMs;
-          const dutyIndex = state.gpuDuties.length;
-          const entry = {
-            dutyId: range.rangeId,
-            dutyIndex,
-            boundaryState,
-            range,
-            encoded,
-            submittedAtMs,
-            fenceOutcome: Promise.resolve(prefixFence).then(
-              () => ({ ok: true, completedAtMs: readNow(now) }),
-              error => ({ ok: false, error, completedAtMs: readNow(now) }),
-            ),
-          };
-          state.gpuDuties.push({
-            dutyId: entry.dutyId,
-            rangeId: range.rangeId,
-            rangeIndex: range.rangeIndex,
-            boundaryId,
-            status: 'issued',
-            submittedAtMs,
-            retiredAtMs: null,
-            rawQueueDurationMs: null,
-            timingAuthority: 'queue-work-done-prefix-fence-pending',
-            failure: null,
-          });
-          state.inFlightGpuDuties.push(entry);
-          state.maxObservedInFlightGpuDuties = Math.max(
-            state.maxObservedInFlightGpuDuties,
-            state.inFlightGpuDuties.length,
-          );
           try {
             await yieldAfterDuty(range);
           } catch (error) {
@@ -943,6 +995,10 @@ export function createWebGpuCooperativeExecution(input = {}) {
         }
         if (typeof handlers.work !== 'function') throw new TypeError('CPU duty work must be a function');
         requirePendingRange(boundaryState, range);
+        if (completionPolicy === 'bounded-prefix') {
+          await drainGpuDuties();
+          checkCancellation();
+        }
         const startedAtMs = readNow(now);
         try {
           const work = () => handlers.work({ range, schedulerInvocation });

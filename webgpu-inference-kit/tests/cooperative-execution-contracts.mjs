@@ -931,6 +931,83 @@ assert.deepEqual(
 );
 assert.ok(boundedReport.gpuDuties.every(duty => duty.rawQueueDurationMs >= 0));
 
+const downstreamManifest = defineWebGpuCooperativeBoundaryManifest({
+  manifestId: 'sf3d.gpu-then-cpu.v0',
+  routeId: ROUTE_ID,
+  phases: [
+    {
+      phaseId: boundedManifest.phases[0].phaseId,
+      boundaries: [{
+        ...boundedManifest.phases[0].boundaries[0],
+        totalItems: 1,
+      }],
+    },
+    {
+      phaseId: 'materialization',
+      boundaries: [{
+        boundaryId: 'glb-materialization',
+        kind: 'cpu-work',
+        hostPhase: 'presentation',
+        unit: 'primitive',
+        totalItems: 1,
+        progressWeight: 1,
+        chunking: {
+          mode: 'fixed',
+          chunkItems: 1,
+        },
+        yieldPolicy: 'after-duty',
+        resources: {
+          retain: ['sf3d.baked-texture'],
+          produce: ['sf3d.glb'],
+          release: ['sf3d.baked-texture'],
+        },
+      }],
+    },
+  ],
+});
+const downstreamCalls = [];
+const downstreamFence = createDeferred();
+const downstreamRuntime = createFakeRuntime({ calls: downstreamCalls, now });
+downstreamRuntime.queue.onSubmittedWorkDone = () => downstreamFence.promise;
+let downstreamCpuWorkStarted = false;
+const downstreamExecution = createWebGpuCooperativeExecution({
+  runtime: downstreamRuntime,
+  manifest: downstreamManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-downstream',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await downstreamExecution.run(async cooperative => {
+  const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+  const gpuRange = gpu.nextRange();
+  await gpu.runGpuDuty(gpuRange, {
+    encode() {
+      return { rangeId: gpuRange.rangeId };
+    },
+  });
+  assert.equal(gpu.nextRange(), null);
+
+  const cpu = cooperative.startBoundary('glb-materialization');
+  const cpuRange = cpu.nextRange();
+  const cpuDuty = cpu.runCpuDuty(cpuRange, {
+    work() {
+      downstreamCpuWorkStarted = true;
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const startedBeforeFence = downstreamCpuWorkStarted;
+  downstreamFence.resolve();
+  await cpuDuty;
+  assert.equal(
+    startedBeforeFence,
+    false,
+    'downstream CPU work must wait for the final bounded GPU prefix',
+  );
+  assert.equal(downstreamCpuWorkStarted, true);
+});
+
 const concurrentCalls = [];
 const concurrentEncodeGate = createDeferred();
 const concurrentExecution = createWebGpuCooperativeExecution({
@@ -1099,6 +1176,44 @@ await assert.rejects(
     assert.equal(report.inFlightGpuDutyCount, 0);
     assert.deepEqual(report.gpuDuties.map(duty => duty.status), ['retired-after-failure']);
     assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    return true;
+  },
+);
+
+const boundedRecorderFailure = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({
+    calls: [],
+    now,
+    submissionRecorderError: new Error('bounded recorder failed after submit'),
+  }),
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-recorder-failure',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await assert.rejects(
+  boundedRecorderFailure.run(async cooperative => {
+    const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+    const range = gpu.nextRange();
+    await gpu.runGpuDuty(range, {
+      encode() {
+        return { rangeId: range.rangeId };
+      },
+    });
+  }),
+  error => {
+    const report = error.cooperativeExecutionReport;
+    assert.equal(error.message, 'bounded recorder failed after submit');
+    assert.equal(report.failure.phase, 'queue-submission');
+    assert.equal(report.submittedGpuDutyCount, 1);
+    assert.equal(report.observedPrefixFenceCount, 1);
+    assert.equal(report.issuedGpuDutyCount, 1);
+    assert.equal(report.inFlightGpuDutyCount, 0);
+    assert.equal(report.gpuDuties.length, 1);
+    assert.equal(report.gpuDuties[0].status, 'retired-after-failure');
+    assert.ok(report.gpuDuties[0].rawQueueDurationMs >= 0);
     return true;
   },
 );
