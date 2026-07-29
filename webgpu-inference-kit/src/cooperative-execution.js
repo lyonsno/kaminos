@@ -9,6 +9,7 @@ export const WEBGPU_COOPERATIVE_RANGE_SCHEMA =
   'kaminos.webgpu-cooperative-range.v0';
 
 const SCHEDULING_MODES = new Set(['cooperative', 'disabled']);
+const COMPLETION_POLICIES = new Set(['strict-prefix', 'bounded-prefix']);
 
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -61,11 +62,19 @@ function createAbortError(signal) {
   return error;
 }
 
-function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, metadata }) {
+function createFixedRangePlanner({
+  plannerId,
+  unit,
+  totalItems,
+  chunkItems,
+  metadata,
+  maxPendingRanges = 1,
+}) {
   const ranges = [];
   let status = 'active';
+  let issuedItems = 0;
   let completedItems = 0;
-  let pendingRange = null;
+  let pendingRanges = [];
   let failure = null;
 
   function snapshot() {
@@ -74,9 +83,13 @@ function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, meta
       plannerId,
       unit,
       totalItems,
+      issuedItems,
       completedItems,
       progress: completedItems / totalItems,
-      pendingRangeId: pendingRange?.rangeId || null,
+      maxPendingRanges,
+      pendingRangeId: pendingRanges[0]?.rangeId || null,
+      pendingRangeIds: pendingRanges.map(range => range.rangeId),
+      pendingRangeCount: pendingRanges.length,
       rangeCount: ranges.length,
       actualRangeCount: status === 'complete' ? ranges.length : null,
       rangeCountAuthority: status === 'complete' ? 'actual' : 'open-until-completion',
@@ -89,11 +102,16 @@ function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, meta
     nextRange() {
       if (status === 'failed') throw new Error('failed planner cannot produce another range');
       if (status === 'complete') return null;
-      if (pendingRange) throw new Error(`pending range ${pendingRange.rangeId} must be completed or failed first`);
-      const itemStart = completedItems;
+      if (pendingRanges.length >= maxPendingRanges) {
+        throw new Error(
+          `pending range capacity ${maxPendingRanges} must retire before another range is issued`,
+        );
+      }
+      if (issuedItems === totalItems) return null;
+      const itemStart = issuedItems;
       const itemCount = Math.min(chunkItems, totalItems - itemStart);
       const rangeIndex = ranges.length;
-      pendingRange = deepFreeze({
+      const pendingRange = deepFreeze({
         schema: WEBGPU_COOPERATIVE_RANGE_SCHEMA,
         plannerId,
         rangeId: `${plannerId}:${rangeIndex}`,
@@ -112,17 +130,23 @@ function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, meta
         plannedChunkItems: chunkItems,
         metadata: clone(metadata),
       });
+      issuedItems = pendingRange.itemEnd;
+      pendingRanges.push(pendingRange);
       ranges.push({ ...clone(pendingRange), status: 'pending-completion' });
       return pendingRange;
     },
 
     completeRange(rangeId, detail = {}) {
-      if (status !== 'active' || !pendingRange) throw new Error('planner has no active range to complete');
-      if (pendingRange.rangeId !== rangeId) throw new Error('range does not match the pending planner range');
-      const range = pendingRange;
+      if (status !== 'active' || pendingRanges.length === 0) {
+        throw new Error('planner has no active range to complete');
+      }
+      const range = pendingRanges[0];
+      if (range.rangeId !== rangeId) {
+        throw new Error('range does not match the oldest pending planner range');
+      }
       completedItems = range.itemEnd;
       status = completedItems === totalItems ? 'complete' : 'active';
-      pendingRange = null;
+      pendingRanges.shift();
       ranges[range.rangeIndex] = {
         ...ranges[range.rangeIndex],
         ...clone(detail),
@@ -132,8 +156,9 @@ function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, meta
     },
 
     failRange(rangeId, phase, error) {
-      if (status !== 'active' || !pendingRange) return snapshot();
-      if (pendingRange.rangeId !== rangeId) throw new Error('range does not match the pending planner range');
+      if (status !== 'active' || pendingRanges.length === 0) return snapshot();
+      const pendingRange = pendingRanges.find(range => range.rangeId === rangeId);
+      if (!pendingRange) throw new Error('range does not match a pending planner range');
       failure = {
         rangeId,
         rangeIndex: pendingRange.rangeIndex,
@@ -145,7 +170,7 @@ function createFixedRangePlanner({ plannerId, unit, totalItems, chunkItems, meta
         status: 'failed',
         failure: clone(failure),
       };
-      pendingRange = null;
+      pendingRanges = [];
       status = 'failed';
       return snapshot();
     },
@@ -190,6 +215,29 @@ export function createWebGpuCooperativeExecution(input = {}) {
   if (!SCHEDULING_MODES.has(schedulingMode)) {
     throw new TypeError('schedulingMode must be cooperative or disabled');
   }
+  const completionPolicy = input.completionPolicy || 'strict-prefix';
+  if (!COMPLETION_POLICIES.has(completionPolicy)) {
+    throw new TypeError('completionPolicy must be strict-prefix or bounded-prefix');
+  }
+  if (completionPolicy === 'bounded-prefix' && schedulingMode !== 'cooperative') {
+    throw new TypeError('bounded-prefix completion requires cooperative scheduling');
+  }
+  if (completionPolicy === 'bounded-prefix') {
+    requirePositiveSafeInteger('maxInFlightGpuDuties', input.maxInFlightGpuDuties);
+    const adaptiveGpuBoundary = manifest.phases
+      .flatMap(phase => phase.boundaries)
+      .find(boundary => boundary.kind === 'gpu-command' && boundary.chunking.mode === 'adaptive');
+    if (adaptiveGpuBoundary) {
+      throw new TypeError(
+        `bounded-prefix completion supports fixed GPU boundaries only; ${adaptiveGpuBoundary.boundaryId} is adaptive`,
+      );
+    }
+  } else if (input.maxInFlightGpuDuties != null) {
+    throw new TypeError('maxInFlightGpuDuties is available only with bounded-prefix completion');
+  }
+  const maxInFlightGpuDuties = completionPolicy === 'bounded-prefix'
+    ? input.maxInFlightGpuDuties
+    : 1;
   if (input.onProgress != null && typeof input.onProgress !== 'function') {
     throw new TypeError('onProgress must be a function when provided');
   }
@@ -238,6 +286,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
     submittedGpuDutyCount: 0,
     observedPrefixFenceCount: 0,
     unfencedSubmittedGpuDutyCount: 0,
+    gpuDuties: [],
+    inFlightGpuDuties: [],
+    maxObservedInFlightGpuDuties: 0,
   };
 
   function checkCancellation() {
@@ -337,7 +388,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
         : state.unfencedSubmittedGpuDutyCount > 0
           ? 'incomplete-prefix-fence-authority'
           : schedulingMode === 'cooperative'
-        ? 'per-gpu-duty-prefix-fence'
+        ? completionPolicy === 'bounded-prefix'
+          ? 'bounded-per-gpu-duty-prefix-fence'
+          : 'per-gpu-duty-prefix-fence'
         : state.terminalQueueFenceObserved
           ? 'one-terminal-prefix-fence'
           : state.observedPrefixFenceCount === state.submittedGpuDutyCount
@@ -350,6 +403,14 @@ export function createWebGpuCooperativeExecution(input = {}) {
       manifestId: manifest.manifestId,
       invocationId: input.invocationId,
       schedulingMode,
+      completionPolicy,
+      maxInFlightGpuDuties,
+      maxObservedInFlightGpuDuties: state.maxObservedInFlightGpuDuties,
+      issuedGpuDutyCount: state.gpuDuties.length,
+      retiredGpuDutyCount: state.gpuDuties.filter(duty => duty.status === 'retired').length,
+      inFlightGpuDutyCount: state.inFlightGpuDuties.length,
+      inFlightGpuDutyIds: state.inFlightGpuDuties.map(entry => entry.dutyId),
+      gpuDuties: clone(state.gpuDuties),
       schedulerRevision: state.schedulerRevision,
       invocationScheduler: clone(state.invocationScheduler),
       queueCompletionAuthority,
@@ -425,9 +486,11 @@ export function createWebGpuCooperativeExecution(input = {}) {
 
   function requirePendingRange(boundaryState, range) {
     if (!range || typeof range !== 'object') throw new TypeError('range must be an object');
-    const pendingRangeId = boundaryState.planner?.snapshot()?.pendingRangeId;
-    if (pendingRangeId !== range.rangeId) {
-      throw new Error(`range ${range.rangeId || '<missing>'} is not the pending range for ${boundaryState.boundaryId}`);
+    const plannerSnapshot = boundaryState.planner?.snapshot();
+    const pendingRangeIds = plannerSnapshot?.pendingRangeIds
+      || (plannerSnapshot?.pendingRangeId ? [plannerSnapshot.pendingRangeId] : []);
+    if (!pendingRangeIds.includes(range.rangeId)) {
+      throw new Error(`range ${range.rangeId || '<missing>'} is not pending for ${boundaryState.boundaryId}`);
     }
   }
 
@@ -453,7 +516,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
 
   function failRange(boundaryState, range, phase, error) {
     const plannerSnapshot = boundaryState.planner?.snapshot();
-    if (plannerSnapshot?.pendingRangeId === range?.rangeId) {
+    const pendingRangeIds = plannerSnapshot?.pendingRangeIds
+      || (plannerSnapshot?.pendingRangeId ? [plannerSnapshot.pendingRangeId] : []);
+    if (pendingRangeIds.includes(range?.rangeId)) {
       if (boundaryState.boundary.chunking.mode === 'adaptive' && schedulingMode === 'cooperative') {
         boundaryState.planner.failRange({ rangeId: range.rangeId, phase, error });
       } else {
@@ -493,6 +558,10 @@ export function createWebGpuCooperativeExecution(input = {}) {
       unit: definition.boundary.unit,
       totalItems,
       chunkItems,
+      maxPendingRanges: completionPolicy === 'bounded-prefix'
+        && definition.boundary.kind === 'gpu-command'
+        ? maxInFlightGpuDuties
+        : 1,
       metadata: {
         manifestId: manifest.manifestId,
         routeId: manifest.routeId,
@@ -500,6 +569,86 @@ export function createWebGpuCooperativeExecution(input = {}) {
         boundaryId: definition.boundary.boundaryId,
       },
     });
+  }
+
+  function updateGpuDuty(entry, detail) {
+    state.gpuDuties[entry.dutyIndex] = {
+      ...state.gpuDuties[entry.dutyIndex],
+      ...clone(detail),
+    };
+  }
+
+  async function drainGpuDutiesAfterFailure() {
+    const secondaryFailures = [];
+    while (state.inFlightGpuDuties.length > 0) {
+      const entry = state.inFlightGpuDuties[0];
+      const outcome = await entry.fenceOutcome;
+      state.inFlightGpuDuties.shift();
+      if (outcome.ok) {
+        updateGpuDuty(entry, {
+          status: 'retired-after-failure',
+          retiredAtMs: outcome.completedAtMs,
+          rawQueueDurationMs: outcome.completedAtMs - entry.submittedAtMs,
+          timingAuthority: 'queue-work-done',
+        });
+      } else {
+        updateGpuDuty(entry, {
+          status: 'failed',
+          retiredAtMs: outcome.completedAtMs,
+          rawQueueDurationMs: outcome.completedAtMs - entry.submittedAtMs,
+          timingAuthority: 'queue-work-done-prefix-fence-rejected',
+          failure: normalizeError(outcome.error),
+        });
+        secondaryFailures.push({
+          phase: 'queue-completion',
+          dutyId: entry.dutyId,
+          error: normalizeError(outcome.error),
+        });
+      }
+    }
+    return secondaryFailures;
+  }
+
+  async function retireOldestGpuDuty() {
+    const entry = state.inFlightGpuDuties[0];
+    if (!entry) return null;
+    const outcome = await entry.fenceOutcome;
+    state.inFlightGpuDuties.shift();
+    if (!outcome.ok) {
+      updateGpuDuty(entry, {
+        status: 'failed',
+        retiredAtMs: outcome.completedAtMs,
+        rawQueueDurationMs: outcome.completedAtMs - entry.submittedAtMs,
+        timingAuthority: 'queue-work-done-prefix-fence-rejected',
+        failure: normalizeError(outcome.error),
+      });
+      failRange(entry.boundaryState, entry.range, 'queue-completion', outcome.error);
+      const secondaryFailures = await drainGpuDutiesAfterFailure();
+      throw failExecution(
+        outcome.error,
+        'queue-completion',
+        entry.boundaryState,
+        { secondaryFailures },
+      );
+    }
+    completeFixedRange(entry.boundaryState, entry.range, {
+      timingAuthority: 'queue-work-done',
+      observedDurationMs: outcome.completedAtMs - entry.submittedAtMs,
+    });
+    updateGpuDuty(entry, {
+      status: 'retired',
+      retiredAtMs: outcome.completedAtMs,
+      rawQueueDurationMs: outcome.completedAtMs - entry.submittedAtMs,
+      timingAuthority: 'queue-work-done',
+    });
+    emitProgress(entry.boundaryState);
+    return entry;
+  }
+
+  async function drainGpuDuties() {
+    while (state.inFlightGpuDuties.length > 0) {
+      await retireOldestGpuDuty();
+    }
   }
 
   function startBoundary(boundaryId, options = {}, schedulerInvocation) {
@@ -521,20 +670,30 @@ export function createWebGpuCooperativeExecution(input = {}) {
 
     async function yieldAfterDuty(range) {
       if (schedulingMode !== 'cooperative' || definition.boundary.yieldPolicy !== 'after-duty') return null;
-      try {
-        return await schedulerInvocation.yieldToBrowser({
-          reason: 'cooperative-boundary-duty-complete',
-          metadata: {
-            manifestId: manifest.manifestId,
-            phaseId: definition.phase.phaseId,
-            boundaryId,
-            rangeId: range.rangeId,
-            rangeIndex: range.rangeIndex,
-          },
-        });
-      } catch (error) {
-        throw failExecution(error, 'browser-yield', boundaryState);
-      }
+      return schedulerInvocation.yieldToBrowser({
+        reason: completionPolicy === 'bounded-prefix'
+          && definition.boundary.kind === 'gpu-command'
+          ? 'cooperative-boundary-duty-issued'
+          : 'cooperative-boundary-duty-complete',
+        metadata: {
+          manifestId: manifest.manifestId,
+          phaseId: definition.phase.phaseId,
+          boundaryId,
+          rangeId: range.rangeId,
+          rangeIndex: range.rangeIndex,
+        },
+      });
+    }
+
+    let gpuDutyAdmissionTail = Promise.resolve();
+    async function acquireGpuDutyAdmission() {
+      const predecessor = gpuDutyAdmissionTail;
+      let release;
+      gpuDutyAdmissionTail = new Promise(resolve => {
+        release = resolve;
+      });
+      await predecessor;
+      return release;
     }
 
     const controller = Object.freeze({
@@ -554,23 +713,25 @@ export function createWebGpuCooperativeExecution(input = {}) {
       },
 
       async runGpuDuty(range, handlers = {}) {
-        checkCancellation();
-        if (definition.boundary.kind !== 'gpu-command') {
-          throw new Error(`${boundaryId} is not a gpu-command boundary`);
-        }
-        requirePendingRange(boundaryState, range);
-        if (typeof handlers.encode !== 'function') {
-          const error = new TypeError('GPU duty encode must be a function');
-          failRange(boundaryState, range, 'command-encoding', error);
-          throw failExecution(error, 'command-encoding', boundaryState);
-        }
-        if (handlers.submit != null) {
-          const error = new TypeError(
-            'GPU duty submit callbacks are unsupported; encode must return command buffers',
-          );
-          failRange(boundaryState, range, 'command-encoding', error);
-          throw failExecution(error, 'command-encoding', boundaryState);
-        }
+        const releaseAdmission = await acquireGpuDutyAdmission();
+        try {
+          checkCancellation();
+          if (definition.boundary.kind !== 'gpu-command') {
+            throw new Error(`${boundaryId} is not a gpu-command boundary`);
+          }
+          requirePendingRange(boundaryState, range);
+          if (typeof handlers.encode !== 'function') {
+            const error = new TypeError('GPU duty encode must be a function');
+            failRange(boundaryState, range, 'command-encoding', error);
+            throw failExecution(error, 'command-encoding', boundaryState);
+          }
+          if (handlers.submit != null) {
+            const error = new TypeError(
+              'GPU duty submit callbacks are unsupported; encode must return command buffers',
+            );
+            failRange(boundaryState, range, 'command-encoding', error);
+            throw failExecution(error, 'command-encoding', boundaryState);
+          }
 
         let descriptor = {
           phase: definition.phase.phaseId,
@@ -643,6 +804,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
         const submitStartMs = readNow(now);
         let prefixFence = null;
         let submitted = false;
+        let queueSubmittedAtMs = null;
         const capturePrefixFence = () => {
           if (typeof runtime.queue.onSubmittedWorkDone !== 'function') {
             throw new Error('GPU duties require queue.onSubmittedWorkDone');
@@ -661,6 +823,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
             }
             runtime.queue.submit(commandBuffers);
             submitted = true;
+            queueSubmittedAtMs = readNow(now);
             state.submittedGpuDutyCount += 1;
             if (schedulingMode === 'cooperative') {
               prefixFence = capturePrefixFence();
@@ -672,7 +835,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
             submit();
           }
           if (!submitted) throw new Error('command duty recorder did not submit GPU work');
-          if (schedulingMode === 'cooperative') {
+          if (schedulingMode === 'cooperative' && completionPolicy === 'strict-prefix') {
             await prefixFence;
           }
         } catch (error) {
@@ -692,6 +855,57 @@ export function createWebGpuCooperativeExecution(input = {}) {
           failRange(boundaryState, range, 'queue-submission', error);
           throw failExecution(error, 'queue-submission', boundaryState, { secondaryFailures });
         }
+
+        if (completionPolicy === 'bounded-prefix') {
+          const submittedAtMs = queueSubmittedAtMs;
+          const dutyIndex = state.gpuDuties.length;
+          const entry = {
+            dutyId: range.rangeId,
+            dutyIndex,
+            boundaryState,
+            range,
+            encoded,
+            submittedAtMs,
+            fenceOutcome: Promise.resolve(prefixFence).then(
+              () => ({ ok: true, completedAtMs: readNow(now) }),
+              error => ({ ok: false, error, completedAtMs: readNow(now) }),
+            ),
+          };
+          state.gpuDuties.push({
+            dutyId: entry.dutyId,
+            rangeId: range.rangeId,
+            rangeIndex: range.rangeIndex,
+            boundaryId,
+            status: 'issued',
+            submittedAtMs,
+            retiredAtMs: null,
+            rawQueueDurationMs: null,
+            timingAuthority: 'queue-work-done-prefix-fence-pending',
+            failure: null,
+          });
+          state.inFlightGpuDuties.push(entry);
+          state.maxObservedInFlightGpuDuties = Math.max(
+            state.maxObservedInFlightGpuDuties,
+            state.inFlightGpuDuties.length,
+          );
+          try {
+            await yieldAfterDuty(range);
+          } catch (error) {
+            failRange(boundaryState, range, 'browser-yield', error);
+            const secondaryFailures = await drainGpuDutiesAfterFailure();
+            throw failExecution(error, 'browser-yield', boundaryState, { secondaryFailures });
+          }
+          const retired = state.inFlightGpuDuties.length >= maxInFlightGpuDuties
+            ? await retireOldestGpuDuty()
+            : null;
+          return {
+            range,
+            encoded,
+            queueCompletionAuthority: 'bounded-prefix-fence',
+            settledRangeId: retired?.range.rangeId || null,
+          };
+        }
+
         const completedAtMs = readNow(now);
 
         if (definition.boundary.chunking.mode === 'adaptive' && schedulingMode === 'cooperative') {
@@ -704,15 +918,22 @@ export function createWebGpuCooperativeExecution(input = {}) {
             observedDurationMs: completedAtMs - submitStartMs,
           });
         }
-        await yieldAfterDuty(range);
+        try {
+          await yieldAfterDuty(range);
+        } catch (error) {
+          throw failExecution(error, 'browser-yield', boundaryState);
+        }
         emitProgress(boundaryState);
-        return {
-          range,
-          encoded,
-          queueCompletionAuthority: prefixFence
-            ? 'immediate-prefix-fence'
-            : 'terminal-prefix-fence-pending',
-        };
+          return {
+            range,
+            encoded,
+            queueCompletionAuthority: prefixFence
+              ? 'immediate-prefix-fence'
+              : 'terminal-prefix-fence-pending',
+          };
+        } finally {
+          releaseAdmission();
+        }
       },
 
       async runCpuDuty(range, handlers = {}) {
@@ -749,7 +970,11 @@ export function createWebGpuCooperativeExecution(input = {}) {
           timingAuthority: 'host-work-call',
           observedDurationMs: readNow(now) - startedAtMs,
         });
-        await yieldAfterDuty(range);
+        try {
+          await yieldAfterDuty(range);
+        } catch (error) {
+          throw failExecution(error, 'browser-yield', boundaryState);
+        }
         emitProgress(boundaryState);
         return { range };
       },
@@ -792,6 +1017,9 @@ export function createWebGpuCooperativeExecution(input = {}) {
           throwIfCancelled: checkCancellation,
         }));
       });
+      if (completionPolicy === 'bounded-prefix') {
+        await drainGpuDuties();
+      }
       checkCancellation();
       const incomplete = [...boundaryStates.values()]
         .filter(boundary => boundary.status !== 'complete')
@@ -817,6 +1045,23 @@ export function createWebGpuCooperativeExecution(input = {}) {
       state.endedAtMs = readNow(now);
       return output;
     } catch (error) {
+      if (completionPolicy === 'bounded-prefix' && state.inFlightGpuDuties.length > 0) {
+        const priorReport = error?.cooperativeExecutionReport || null;
+        const phase = priorReport?.failure?.phase
+          || (error?.name === 'AbortError' ? 'cancellation' : 'completion');
+        const boundaryState = boundaryStates.get(priorReport?.failure?.boundaryId)
+          || state.inFlightGpuDuties[0]?.boundaryState
+          || null;
+        const oldestPending = state.inFlightGpuDuties[0];
+        if (boundaryState && oldestPending) {
+          failRange(boundaryState, oldestPending.range, phase, error);
+        }
+        const secondaryFailures = [
+          ...(priorReport?.failure?.secondaryFailures || []),
+          ...await drainGpuDutiesAfterFailure(),
+        ];
+        throw failExecution(error, phase, boundaryState, { secondaryFailures });
+      }
       if (error?.cooperativeExecutionReport) throw error;
       throw failExecution(
         error,
@@ -831,6 +1076,8 @@ export function createWebGpuCooperativeExecution(input = {}) {
     manifestId: manifest.manifestId,
     invocationId: input.invocationId,
     schedulingMode,
+    completionPolicy,
+    maxInFlightGpuDuties,
     run,
     progress: createProgress,
     snapshot: createReport,

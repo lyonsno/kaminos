@@ -155,6 +155,24 @@ function createFakeRuntime({
   };
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function waitFor(predicate, message) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  assert.fail(message);
+}
+
 const manifest = createManifest();
 assert.equal(manifest.schema, WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA);
 assert.equal(Object.isFrozen(manifest), true);
@@ -403,6 +421,8 @@ const report = execution.finish();
 assert.equal(report.schema, WEBGPU_COOPERATIVE_EXECUTION_REPORT_SCHEMA);
 assert.equal(report.status, 'succeeded');
 assert.equal(report.schedulingMode, 'cooperative');
+assert.equal(report.completionPolicy, 'strict-prefix');
+assert.equal(report.maxInFlightGpuDuties, 1);
 assert.equal(report.queueCompletionAuthority, 'per-gpu-duty-prefix-fence');
 assert.equal(report.progress.progress, 1);
 assert.equal(report.progress.percent, 100);
@@ -785,5 +805,384 @@ await dynamic.run(async cooperative => {
   });
 });
 assert.equal(dynamic.finish().progress.percent, 100);
+
+const boundedManifest = defineWebGpuCooperativeBoundaryManifest({
+  manifestId: 'sf3d.fixed-channel-ranges.v0',
+  routeId: ROUTE_ID,
+  phases: [{
+    phaseId: 'texture-bake',
+    boundaries: [{
+      boundaryId: 'texture-bake-channel-ranges',
+      kind: 'gpu-command',
+      unit: 'channel-range',
+      totalItems: 3,
+      progressWeight: 1,
+      commandDutyKind: 'compute',
+      chunking: {
+        mode: 'fixed',
+        chunkItems: 1,
+      },
+      yieldPolicy: 'after-duty',
+      resources: {
+        retain: ['sf3d.texture-atlas'],
+        produce: ['sf3d.baked-texture'],
+        release: [],
+      },
+    }],
+  }],
+});
+const boundedCalls = [];
+const boundedFences = [];
+const boundedProgress = [];
+let boundedNowMs = 0;
+const boundedNow = () => {
+  boundedNowMs += 1;
+  return boundedNowMs;
+};
+const boundedRuntime = createFakeRuntime({
+  calls: boundedCalls,
+  now: boundedNow,
+});
+boundedRuntime.queue.onSubmittedWorkDone = () => {
+  const fence = createDeferred();
+  boundedFences.push(fence);
+  boundedCalls.push(`queue-fence:${boundedFences.length - 1}`);
+  return fence.promise;
+};
+const bounded = createWebGpuCooperativeExecution({
+  runtime: boundedRuntime,
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  onProgress(progress) {
+    boundedProgress.push(progress);
+  },
+  now: boundedNow,
+});
+await bounded.run(async cooperative => {
+  const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+
+  const first = gpu.nextRange();
+  const firstAdmission = gpu.runGpuDuty(first, {
+    encode({ range }) {
+      return { rangeId: range.rangeId };
+    },
+  });
+  await waitFor(
+    () => boundedFences.length === 1,
+    'bounded-prefix must submit the first GPU duty without waiting for its fence',
+  );
+  await firstAdmission;
+  assert.equal(cooperative.progress().completedItems, 0);
+  assert.equal(boundedProgress.length, 0);
+
+  const second = gpu.nextRange();
+  const secondAdmission = gpu.runGpuDuty(second, {
+    encode({ range }) {
+      return { rangeId: range.rangeId };
+    },
+  });
+  await waitFor(
+    () => boundedFences.length === 2,
+    'bounded-prefix must submit two GPU duties before the oldest fence resolves',
+  );
+  assert.equal(cooperative.progress().completedItems, 0);
+  assert.equal(boundedProgress.length, 0);
+  boundedFences[0].resolve();
+  const secondReceipt = await secondAdmission;
+  assert.equal(secondReceipt.settledRangeId, first.rangeId);
+  assert.equal(cooperative.progress().completedItems, 1);
+  assert.equal(boundedProgress.length, 1);
+
+  const third = gpu.nextRange();
+  const thirdAdmission = gpu.runGpuDuty(third, {
+    encode({ range }) {
+      return { rangeId: range.rangeId };
+    },
+  });
+  await waitFor(
+    () => boundedFences.length === 3,
+    'bounded-prefix must replenish the retired queue slot',
+  );
+  boundedFences[1].resolve();
+  const thirdReceipt = await thirdAdmission;
+  assert.equal(thirdReceipt.settledRangeId, second.rangeId);
+  assert.equal(cooperative.progress().completedItems, 2);
+  boundedFences[2].resolve();
+});
+const boundedReport = bounded.finish();
+assert.equal(boundedReport.status, 'succeeded');
+assert.equal(boundedReport.completionPolicy, 'bounded-prefix');
+assert.equal(boundedReport.maxInFlightGpuDuties, 2);
+assert.equal(boundedReport.maxObservedInFlightGpuDuties, 2);
+assert.equal(boundedReport.issuedGpuDutyCount, 3);
+assert.equal(boundedReport.retiredGpuDutyCount, 3);
+assert.equal(boundedReport.progress.completedItems, 3);
+assert.equal(boundedProgress.length, 3);
+assert.deepEqual(
+  boundedReport.gpuDuties.map(duty => [duty.rangeId, duty.status]),
+  [
+    ['sf3d:firing:bounded-prefix:texture-bake-channel-ranges:range:0', 'retired'],
+    ['sf3d:firing:bounded-prefix:texture-bake-channel-ranges:range:1', 'retired'],
+    ['sf3d:firing:bounded-prefix:texture-bake-channel-ranges:range:2', 'retired'],
+  ],
+);
+assert.ok(boundedReport.gpuDuties.every(duty => duty.rawQueueDurationMs >= 0));
+
+const concurrentCalls = [];
+const concurrentEncodeGate = createDeferred();
+const concurrentExecution = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({ calls: concurrentCalls, now }),
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-concurrent-callers',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await concurrentExecution.run(async cooperative => {
+  const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+  const first = gpu.nextRange();
+  const second = gpu.nextRange();
+  const firstAdmission = gpu.runGpuDuty(first, {
+    async encode() {
+      concurrentCalls.push('encode-start:0');
+      await concurrentEncodeGate.promise;
+      concurrentCalls.push('encode-end:0');
+      return { rangeId: first.rangeId };
+    },
+  });
+  const secondAdmission = gpu.runGpuDuty(second, {
+    encode() {
+      concurrentCalls.push('encode:1');
+      return { rangeId: second.rangeId };
+    },
+  });
+  await waitFor(
+    () => concurrentCalls.includes('encode-start:0'),
+    'the first concurrent caller must acquire GPU admission',
+  );
+  assert.equal(concurrentCalls.includes('encode:1'), false);
+  concurrentEncodeGate.resolve();
+  await Promise.all([firstAdmission, secondAdmission]);
+  const third = gpu.nextRange();
+  await gpu.runGpuDuty(third, {
+    encode() {
+      concurrentCalls.push('encode:2');
+      return { rangeId: third.rangeId };
+    },
+  });
+});
+assert.deepEqual(
+  concurrentCalls.filter(call => call.startsWith('submit:')),
+  [
+    'submit:sf3d:firing:bounded-prefix-concurrent-callers:texture-bake-channel-ranges:range:0',
+    'submit:sf3d:firing:bounded-prefix-concurrent-callers:texture-bake-channel-ranges:range:1',
+    'submit:sf3d:firing:bounded-prefix-concurrent-callers:texture-bake-channel-ranges:range:2',
+  ],
+);
+
+const rejectedFenceCalls = [];
+const rejectedFenceRuntime = createFakeRuntime({
+  calls: rejectedFenceCalls,
+  now,
+});
+let rejectedFenceIndex = 0;
+rejectedFenceRuntime.queue.onSubmittedWorkDone = () => {
+  rejectedFenceCalls.push(`queue-fence:${rejectedFenceIndex}`);
+  rejectedFenceIndex += 1;
+  return rejectedFenceIndex === 1
+    ? Promise.reject(new Error('oldest prefix fence rejected'))
+    : Promise.resolve();
+};
+const rejectedFenceExecution = createWebGpuCooperativeExecution({
+  runtime: rejectedFenceRuntime,
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-rejection',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await assert.rejects(
+  rejectedFenceExecution.run(async cooperative => {
+    const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+    for (let rangeIndex = 0; rangeIndex < 2; rangeIndex += 1) {
+      const range = gpu.nextRange();
+      await gpu.runGpuDuty(range, {
+        encode() {
+          return { rangeId: range.rangeId };
+        },
+      });
+    }
+  }),
+  error => {
+    const report = error.cooperativeExecutionReport;
+    assert.equal(error.message, 'oldest prefix fence rejected');
+    assert.equal(report.failure.phase, 'queue-completion');
+    assert.equal(report.inFlightGpuDutyCount, 0);
+    assert.deepEqual(
+      report.gpuDuties.map(duty => duty.status),
+      ['failed', 'retired-after-failure'],
+    );
+    assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    return true;
+  },
+);
+
+const boundedYieldFailureRuntime = createFakeRuntime({
+  calls: [],
+  now,
+  browserYieldError: new Error('bounded browser yield failed'),
+});
+const boundedYieldFailure = createWebGpuCooperativeExecution({
+  runtime: boundedYieldFailureRuntime,
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-yield-failure',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await assert.rejects(
+  boundedYieldFailure.run(async cooperative => {
+    const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+    const range = gpu.nextRange();
+    await gpu.runGpuDuty(range, {
+      encode() {
+        return { rangeId: range.rangeId };
+      },
+    });
+  }),
+  error => {
+    const report = error.cooperativeExecutionReport;
+    assert.equal(error.message, 'bounded browser yield failed');
+    assert.equal(report.failure.phase, 'browser-yield');
+    assert.equal(report.inFlightGpuDutyCount, 0);
+    assert.deepEqual(report.gpuDuties.map(duty => duty.status), ['retired-after-failure']);
+    assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    return true;
+  },
+);
+
+const boundedEncodeFailure = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({ calls: [], now }),
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-encode-failure',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  now,
+});
+await assert.rejects(
+  boundedEncodeFailure.run(async cooperative => {
+    const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+    const first = gpu.nextRange();
+    await gpu.runGpuDuty(first, {
+      encode() {
+        return { rangeId: first.rangeId };
+      },
+    });
+    const second = gpu.nextRange();
+    await gpu.runGpuDuty(second, {
+      encode() {
+        throw new Error('second range encode failed');
+      },
+    });
+  }),
+  error => {
+    const report = error.cooperativeExecutionReport;
+    assert.equal(error.message, 'second range encode failed');
+    assert.equal(report.failure.phase, 'command-encoding');
+    assert.equal(report.inFlightGpuDutyCount, 0);
+    assert.deepEqual(report.gpuDuties.map(duty => duty.status), ['retired-after-failure']);
+    assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    return true;
+  },
+);
+
+const boundedCancellationController = new AbortController();
+const boundedCancellation = createWebGpuCooperativeExecution({
+  runtime: createFakeRuntime({ calls: [], now }),
+  manifest: boundedManifest,
+  invocationId: 'sf3d:firing:bounded-prefix-cancellation',
+  schedulingMode: 'cooperative',
+  completionPolicy: 'bounded-prefix',
+  maxInFlightGpuDuties: 2,
+  signal: boundedCancellationController.signal,
+  now,
+});
+await assert.rejects(
+  boundedCancellation.run(async cooperative => {
+    const gpu = cooperative.startBoundary('texture-bake-channel-ranges');
+    const first = gpu.nextRange();
+    await gpu.runGpuDuty(first, {
+      encode() {
+        return { rangeId: first.rangeId };
+      },
+    });
+    boundedCancellationController.abort('cancel after bounded issuance');
+    cooperative.throwIfCancelled();
+  }),
+  error => {
+    const report = error.cooperativeExecutionReport;
+    assert.equal(error.name, 'AbortError');
+    assert.equal(report.status, 'cancelled');
+    assert.equal(report.failure.phase, 'cancellation');
+    assert.equal(report.inFlightGpuDutyCount, 0);
+    assert.deepEqual(report.gpuDuties.map(duty => duty.status), ['retired-after-failure']);
+    assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    return true;
+  },
+);
+
+assert.throws(
+  () => createWebGpuCooperativeExecution({
+    runtime: createFakeRuntime({ calls: [], now }),
+    manifest,
+    invocationId: 'sharp:firing:adaptive-bounded-prefix',
+    schedulingMode: 'cooperative',
+    completionPolicy: 'bounded-prefix',
+    maxInFlightGpuDuties: 2,
+    now,
+  }),
+  /bounded-prefix.*fixed|adaptive.*bounded-prefix/i,
+);
+assert.throws(
+  () => createWebGpuCooperativeExecution({
+    runtime: createFakeRuntime({ calls: [], now }),
+    manifest: boundedManifest,
+    invocationId: 'sf3d:firing:bounded-prefix-missing-depth',
+    schedulingMode: 'cooperative',
+    completionPolicy: 'bounded-prefix',
+    now,
+  }),
+  /maxInFlightGpuDuties.*positive safe integer/,
+);
+assert.throws(
+  () => createWebGpuCooperativeExecution({
+    runtime: createFakeRuntime({ calls: [], now }),
+    manifest: boundedManifest,
+    invocationId: 'sf3d:firing:strict-prefix-stale-depth',
+    schedulingMode: 'cooperative',
+    maxInFlightGpuDuties: 2,
+    now,
+  }),
+  /only with bounded-prefix/,
+);
+assert.throws(
+  () => createWebGpuCooperativeExecution({
+    runtime: createFakeRuntime({ calls: [], now }),
+    manifest: boundedManifest,
+    invocationId: 'sf3d:firing:bounded-prefix-disabled',
+    schedulingMode: 'disabled',
+    completionPolicy: 'bounded-prefix',
+    maxInFlightGpuDuties: 2,
+    now,
+  }),
+  /requires cooperative scheduling/,
+);
 
 console.log('cooperative execution contracts passed');

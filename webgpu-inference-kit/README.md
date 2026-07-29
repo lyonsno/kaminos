@@ -122,6 +122,24 @@ const cooperativeReport = execution.finish();
 
 For each cooperative GPU duty, Kaminos services pending foreground work before encoding, submits the exact model-owned command buffer, captures that inference prefix's queue fence immediately, adapts the next exact range from completed queue time, and yields to the browser. CPU duties use the same range and progress grammar with host-phase timing. Histories remain uncapped, and `actualRangeCount` becomes authoritative only when the boundary completes.
 
+Fixed GPU boundaries can keep a caller-selected number of queue prefixes in flight instead of blocking the host after every submission:
+
+```js
+const execution = createWebGpuCooperativeExecution({
+  runtime,
+  manifest: fixedRangeBoundaries,
+  invocationId: crypto.randomUUID(),
+  schedulingMode: "cooperative",
+  completionPolicy: "bounded-prefix",
+  maxInFlightGpuDuties: 2,
+  onProgress: renderProgress,
+});
+```
+
+`strict-prefix` remains the default. `bounded-prefix` requires a positive `maxInFlightGpuDuties`, serializes concurrent caller admissions in range order, yields after each issued duty, and applies backpressure when the selected depth is occupied. Progress advances only when the oldest queue-prefix fence retires; submission alone never marks model work complete. Success, cancellation, and failure all drain work already accepted by WebGPU, while the uncapped report preserves every issued duty, raw queue duration, retirement status, maximum observed depth, and any secondary drain failures.
+
+Use bounded-prefix completion when a model exposes fixed, output-independent ranges such as texture channels, decoder tiles, or cell ranges. Adaptive boundaries remain strict-prefix because each completed queue duration changes the next dispatch geometry; Kaminos rejects that combination rather than planning from stale observations.
+
 Raw adapters can bound queue-prefix completion without serializing every duty:
 
 ```js
@@ -811,7 +829,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
-- `defineWebGpuCooperativeBoundaryManifest(input)` and `createWebGpuCooperativeExecution(input)`: declare a long route's GPU and CPU duty families once, execute exact fixed or adaptive ranges through safe pre-encoding boundaries, expose complete phase and overall progress, preserve cancellation/failure reports, and run a scheduling-disabled A/B over the same work.
+- `defineWebGpuCooperativeBoundaryManifest(input)` and `createWebGpuCooperativeExecution(input)`: declare a long route's GPU and CPU duty families once, execute exact fixed or adaptive ranges through safe pre-encoding boundaries, choose strict or caller-bounded queue-prefix completion for fixed GPU ranges, expose retirement-backed phase and overall progress, preserve cancellation/failure reports, and run a scheduling-disabled A/B over the same work.
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
