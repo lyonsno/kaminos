@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.constructional-packing-visual-inspection.v0",
+  "status": "passed",
+  "inspector": "agent-visual-inspection",
+  "inspectedAt": "2026-07-30T15:41:40Z",
+  "artifacts": [
+    {
+      "path": "witness.png",
+      "sha256": "6abbfa1e14c288a4f265bf44b603f15825ad8ea664d1970b48ae7c7e05c6ee72",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "path": "witness-mobile.png",
+      "sha256": "f27a5db202f1dfe4c026367eaa59d5db5aa8cbfc584c7162b2b008ec80ea4750",
+      "viewport": {
+        "width": 500,
+        "height": 1600
+      }
+    }
+  ],
+  "visibleDelta": {
+    "baseline": "Four connected semantic compartments completely occupy the envelope around one fitted joint-clearance obstacle; four hard anchors remain visible.",
+    "interiorPressure": "The edited dorsal compartment expands and the live envelope moves outward locally above and left of the dashed baseline contour.",
+    "exteriorCompression": "The live right flank contracts inside the dashed baseline contour and the internal ownership boundaries repack within the edited envelope."
+  },
+  "layout": {
+    "desktop": "passed",
+    "narrow": "passed",
+    "overlap": "none observed",
+    "horizontalOverflow": "none at the effective 500 CSS pixel narrow viewport"
+  },
+  "claimBoundary": {
+    "reciprocalPackingMechanism": "visually supported in the bounded two-dimensional proxy",
+    "anatomicalCorrectness": "unassayed",
+    "threeDimensionalPacking": "unassayed",
+    "generatorSurvival": "unassayed"
+  }
+}
