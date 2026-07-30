@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import {
   applyRigidChain,
   assertRigidArticulationReport,
+  classifyRigidPredecessorLocality,
+  createIndexedOwnershipLocality,
   createSphereCollisionField,
   createTriangleCollisionField,
   evaluateSweptRigidCandidate,
@@ -137,6 +139,25 @@ const triangleField = createTriangleCollisionField({
   indices: Uint32Array.from([0, 1, 2]),
   excludedVertexIndices: [],
 });
+const tiedTriangleField = createTriangleCollisionField({
+  identity: 'synthetic-tied-body-triangles',
+  positions: Float64Array.from([
+    -0.5, -2, 0,
+    0.5, -2, 0,
+    0, -1.5, 0,
+  ]),
+  indices: Uint32Array.from([0, 1, 2, 0, 1, 2]),
+  excludedVertexIndices: [],
+});
+assert.deepEqual(
+  tiedTriangleField.query([0, -1.75, 0]),
+  {
+    distance: 0,
+    triangleOffset: 0,
+    triangleVertexIndices: [0, 1, 2],
+  },
+  'nearest-triangle ties must resolve to the lower source triangle offset',
+);
 const triangleCrossing = evaluateSweptRigidCandidate({
   positions: Float64Array.from([-2, 0, 0]),
   rigidVertexIndices: [0],
@@ -157,6 +178,120 @@ assert.equal(
   'a source-mesh triangle crossing must fail between clean endpoints',
 );
 assert.ok(triangleCrossing.sweep.terminalFraction < 1);
+assert.equal(
+  triangleCrossing.sweep.limitingWitness.actualFailure,
+  false,
+  'a conservative stop must retain a bound witness rather than claim observed contact',
+);
+assert.equal(triangleCrossing.sweep.limitingWitness.movedVertexIndex, 0);
+assert.equal(triangleCrossing.sweep.limitingWitness.retainedTriangleOffset, 0);
+assert.deepEqual(
+  triangleCrossing.sweep.limitingWitness.retainedTriangleVertexIndices,
+  [0, 1, 2],
+);
+const observedCrossing = evaluateSweptRigidCandidate({
+  positions: Float64Array.from([1, 0, 0]),
+  rigidVertexIndices: [0],
+  rootFrame,
+  rootRadians: Math.PI,
+  terrainPoint: [0, 0, -3],
+  terrainNormal: [0, 0, 1],
+  diameter: 4,
+  collisionField: {
+    identity: 'synthetic-discontinuous-observed-crossing',
+    distance(value) {
+      return value[0] > 0.9 ? 1 : -1;
+    },
+    query() {
+      return {
+        distance: -1,
+        triangleOffset: 12,
+        triangleVertexIndices: [4, 5, 6],
+      };
+    },
+  },
+  numericTolerance: 1e-6,
+  collisionTolerance: 1e-4,
+  maximumWitnessTravel: 0.12,
+});
+assert.equal(observedCrossing.sweep.limitingWitness.actualFailure, true);
+assert.equal(
+  observedCrossing.sweep.limitingWitness.boundKind,
+  'observed-body-collision',
+);
+assert.equal(observedCrossing.sweep.limitingWitness.retainedTriangleOffset, 12);
+
+const locality = createIndexedOwnershipLocality({
+  positions: Float64Array.from([
+    0, 0, 0,
+    1, 0, 0,
+    0, 1, 0,
+    2, 0, 0,
+    3, 0, 0,
+    4, 0, 0,
+  ]),
+  indices: Uint32Array.from([
+    0, 1, 2,
+    1, 2, 3,
+    2, 3, 4,
+    3, 4, 5,
+  ]),
+  rigidVertexIndices: [0, 1, 2],
+  priorCollarVertexIndices: [5],
+});
+assert.deepEqual(locality.ownershipBoundaryVertexIndices, [1, 2]);
+assert.equal(locality.describeMovedVertex(0).ownershipBoundaryHops, 1);
+approximately(locality.describeMovedVertex(0).ownershipBoundaryDistance, 1);
+assert.equal(locality.describeRetainedVertex(5).priorCollarHops, 0);
+assert.ok(
+  locality.describeRetainedVertex(4).ownershipBoundaryDistance > 1.1,
+  'source-index topology must expose retained deep-core distance',
+);
+
+const boundaryLocalSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{
+    sweep: {
+      limitingWitness: {
+        movedVertexIndex: 0,
+        retainedTriangleOffset: 3,
+        retainedTriangleVertexIndices: [1, 2, 3],
+        locality: {
+          movedVertex: locality.describeMovedVertex(0),
+          retainedTriangleVertices: [1, 2, 3].map(
+            vertex => locality.describeRetainedVertex(vertex),
+          ),
+        },
+      },
+    },
+  }],
+});
+assert.equal(boundaryLocalSummary.classification, 'boundary-local');
+const deepCoreSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{
+    sweep: {
+      limitingWitness: {
+        movedVertexIndex: 0,
+        retainedTriangleOffset: 9,
+        retainedTriangleVertexIndices: [3, 4, 5],
+        locality: {
+          movedVertex: locality.describeMovedVertex(0),
+          retainedTriangleVertices: [3, 4, 5].map(
+            vertex => locality.describeRetainedVertex(vertex),
+          ),
+        },
+      },
+    },
+  }],
+});
+assert.equal(deepCoreSummary.classification, 'deep-core');
+const underinstrumentedSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{ sweep: { limitingWitness: null } }],
+});
+assert.equal(underinstrumentedSummary.classification, 'underinstrumented');
+assert.equal(underinstrumentedSummary.missingWitnessCount, 1);
 
 const validReport = {
   schema: 'kaminos.lirm-rigid-articulation-predecessor-report.v0',
@@ -180,6 +315,38 @@ const validReport = {
   ],
 };
 assert.equal(assertRigidArticulationReport(validReport), validReport);
+const validLocalityReport = structuredClone(validReport);
+validLocalityReport.locality = {
+  classification: 'deep-core',
+  rowCount: 1,
+  instrumentedRowCount: 1,
+  missingWitnessCount: 0,
+  transitionRadius: 1.1,
+};
+validLocalityReport.searches[0].sweptRejections = [{
+  sweep: {
+    limitingWitness: {
+      movedVertexIndex: 0,
+      retainedTriangleOffset: 9,
+      retainedTriangleVertexIndices: [3, 4, 5],
+      locality: {
+        movedVertex: locality.describeMovedVertex(0),
+        retainedTriangleVertices: [3, 4, 5].map(
+          vertex => locality.describeRetainedVertex(vertex),
+        ),
+      },
+    },
+  },
+}];
+assert.equal(assertRigidArticulationReport(validLocalityReport), validLocalityReport);
+const falseBoundaryLocalReport = structuredClone(validLocalityReport);
+falseBoundaryLocalReport.locality.classification = 'boundary-local';
+falseBoundaryLocalReport.locality.missingWitnessCount = 1;
+assert.throws(
+  () => assertRigidArticulationReport(falseBoundaryLocalReport),
+  /locality instrumentation/,
+  'missing witness identity must not masquerade as boundary-local evidence',
+);
 for (const [name, mutate, pattern] of [
   ['fallback route', report => { report.effectiveRoute = 'fallback'; }, /route identity/],
   ['stale cast', report => { report.actualSourceHash = 'stale'; }, /source identity/],

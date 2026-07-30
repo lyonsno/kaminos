@@ -412,6 +412,52 @@ function nearestTriangleDistanceSquared(node, sample, best = Infinity) {
   return nearestTriangleDistanceSquared(second, sample, best);
 }
 
+function nearestTriangleQuery(node, sample, best = null) {
+  const bestDistanceSquared = best?.distanceSquared ?? Infinity;
+  if (pointAabbDistanceSquared(sample, node.minimum, node.maximum) > bestDistanceSquared) {
+    return best;
+  }
+  if (node.entries) {
+    for (const triangle of node.entries) {
+      const distanceSquared = pointTriangleDistanceSquared(
+        sample,
+        triangle.a,
+        triangle.b,
+        triangle.c,
+      );
+      if (
+        !best
+        || distanceSquared < best.distanceSquared
+        || (
+          distanceSquared === best.distanceSquared
+          && triangle.triangleOffset < best.triangleOffset
+        )
+      ) {
+        best = {
+          distanceSquared,
+          triangleOffset: triangle.triangleOffset,
+          triangleVertexIndices: triangle.vertices,
+        };
+      }
+    }
+    return best;
+  }
+  const leftDistance = pointAabbDistanceSquared(
+    sample,
+    node.left.minimum,
+    node.left.maximum,
+  );
+  const rightDistance = pointAabbDistanceSquared(
+    sample,
+    node.right.minimum,
+    node.right.maximum,
+  );
+  const first = leftDistance <= rightDistance ? node.left : node.right;
+  const second = first === node.left ? node.right : node.left;
+  best = nearestTriangleQuery(first, sample, best);
+  return nearestTriangleQuery(second, sample, best);
+}
+
 export function createTriangleCollisionField({
   identity,
   positions,
@@ -437,6 +483,8 @@ export function createTriangleCollisionField({
       a: points[0],
       b: points[1],
       c: points[2],
+      triangleOffset: offset,
+      vertices,
       minimum,
       maximum,
       centroid: multiply(add(add(points[0], points[1]), points[2]), 1 / 3),
@@ -453,6 +501,15 @@ export function createTriangleCollisionField({
     distance(value) {
       const sample = assertPoint(value, 'triangle collision sample');
       return Math.sqrt(nearestTriangleDistanceSquared(bvh, sample));
+    },
+    query(value) {
+      const sample = assertPoint(value, 'triangle collision sample');
+      const result = nearestTriangleQuery(bvh, sample);
+      return {
+        distance: Math.sqrt(result.distanceSquared),
+        triangleOffset: result.triangleOffset,
+        triangleVertexIndices: [...result.triangleVertexIndices],
+      };
     },
   });
 }
@@ -548,6 +605,7 @@ export function evaluateSweptRigidCandidate({
       ? collisionTolerance
       : distance - collisionTolerance
   ));
+  let limitingWitness = null;
 
   function realizeState(fraction) {
     const realized = new Float64Array(rigidSourcePositions.length);
@@ -607,15 +665,80 @@ export function evaluateSweptRigidCandidate({
     return state;
   }
 
-  function conservativeMargin(state) {
-    const collisionMargin = Math.min(
-      ...state.collision.map(
-        (distance, index) => distance - collisionThresholds[index],
-      ),
+  function minimumDescriptor(values, thresholds, kind) {
+    let selected = null;
+    for (let localIndex = 0; localIndex < values.length; localIndex += 1) {
+      const margin = values[localIndex] - thresholds[localIndex];
+      const movedVertexIndex = rigidVertexIndices[localIndex];
+      if (
+        !selected
+        || margin < selected.margin
+        || (margin === selected.margin && movedVertexIndex < selected.movedVertexIndex)
+      ) {
+        selected = {
+          kind,
+          localIndex,
+          movedVertexIndex,
+          value: values[localIndex],
+          threshold: thresholds[localIndex],
+          margin,
+        };
+      }
+    }
+    return selected;
+  }
+
+  function limitingDescriptor(state) {
+    const collision = minimumDescriptor(
+      state.collision,
+      collisionThresholds,
+      'collision',
     );
-    const terrainMargin =
-      state.clearance.minimum - (sourceClearance.minimum - numericTolerance);
-    return Math.min(collisionMargin, terrainMargin);
+    const terrainThreshold = sourceClearance.minimum - numericTolerance;
+    const terrain = minimumDescriptor(
+      state.clearance.values,
+      state.clearance.values.map(() => terrainThreshold),
+      'terrain',
+    );
+    if (collision.margin !== terrain.margin) {
+      return collision.margin < terrain.margin ? collision : terrain;
+    }
+    return collision.movedVertexIndex <= terrain.movedVertexIndex
+      ? collision
+      : terrain;
+  }
+
+  function createLimitingWitness({
+    state,
+    descriptor,
+    actualFailure,
+    lastCertifiedFraction,
+    proposedNextFraction,
+    boundKind,
+  }) {
+    const movedPosition = point(state.positions, descriptor.localIndex);
+    const triangle = typeof collisionField.query === 'function'
+      ? collisionField.query(movedPosition)
+      : null;
+    return {
+      actualFailure,
+      boundKind,
+      movedVertexLocalIndex: descriptor.localIndex,
+      movedVertexIndex: descriptor.movedVertexIndex,
+      sourcePosition: point(rigidSourcePositions, descriptor.localIndex),
+      terminalPosition: movedPosition,
+      sourceCollisionDistance: sourceCollision[descriptor.localIndex],
+      terminalCollisionDistance: state.collision[descriptor.localIndex],
+      controllingValue: descriptor.value,
+      controllingThreshold: descriptor.threshold,
+      controllingMargin: descriptor.margin,
+      retainedTriangleDistance: triangle?.distance ?? null,
+      retainedTriangleOffset: triangle?.triangleOffset ?? null,
+      retainedTriangleVertexIndices: triangle?.triangleVertexIndices ?? null,
+      lastCertifiedFraction,
+      proposedNextFraction,
+      terminalFraction: state.fraction,
+    };
   }
 
   let state = realizeState(0);
@@ -623,26 +746,57 @@ export function evaluateSweptRigidCandidate({
   let sampleCount = 1;
   if (totalTravelBound > 0) {
     while (state.fraction < 1) {
-      const margin = conservativeMargin(state);
-      if (!(margin > 0)) {
+      const descriptor = limitingDescriptor(state);
+      if (!(descriptor.margin > 0)) {
         conservativeCertified = false;
+        limitingWitness = createLimitingWitness({
+          state,
+          descriptor,
+          actualFailure: false,
+          lastCertifiedFraction: state.fraction,
+          proposedNextFraction: null,
+          boundKind: `conservative-${descriptor.kind}-margin`,
+        });
         break;
       }
       // Distance-to-geometry and signed plane distance are 1-Lipschitz.
-      const certifiedTravel = Math.min(maximumWitnessTravel, margin / 2);
+      const certifiedTravel = Math.min(maximumWitnessTravel, descriptor.margin / 2);
       const fractionStep = certifiedTravel / totalTravelBound;
       const nextFraction = Math.min(1, state.fraction + fractionStep);
       if (!(nextFraction > state.fraction)) {
         conservativeCertified = false;
+        limitingWitness = createLimitingWitness({
+          state,
+          descriptor,
+          actualFailure: false,
+          lastCertifiedFraction: state.fraction,
+          proposedNextFraction: nextFraction,
+          boundKind: 'fraction-step-underflow',
+        });
         break;
       }
+      const lastCertifiedFraction = state.fraction;
       state = realizeState(nextFraction);
       sampleCount += 1;
-      if (!collisionPassesRelativeToSource({
+      const collisionPasses = collisionPassesRelativeToSource({
         current: state.collision,
         source: sourceCollision,
         collisionTolerance,
-      }) || state.clearance.minimum < sourceClearance.minimum - numericTolerance) {
+      });
+      const terrainPasses =
+        state.clearance.minimum >= sourceClearance.minimum - numericTolerance;
+      if (!collisionPasses || !terrainPasses) {
+        const actualDescriptor = limitingDescriptor(state);
+        limitingWitness = createLimitingWitness({
+          state,
+          descriptor: actualDescriptor,
+          actualFailure: true,
+          lastCertifiedFraction,
+          proposedNextFraction: nextFraction,
+          boundKind: !collisionPasses
+            ? 'observed-body-collision'
+            : 'observed-terrain-clearance',
+        });
         break;
       }
     }
@@ -696,6 +850,7 @@ export function evaluateSweptRigidCandidate({
       maximumWitnessTravel,
       conservativeCertified,
       terminalFraction: state.fraction,
+      limitingWitness,
       collision: {
         identity: collisionField.identity,
         minimum: sweepCollisionMinimum,
@@ -713,6 +868,292 @@ export function evaluateSweptRigidCandidate({
           && state.fraction === 1,
       },
     },
+  };
+}
+
+function createIndexedAdjacency(positions, indices) {
+  const vertexCount = positions.length / 3;
+  const adjacency = Array.from({ length: vertexCount }, () => []);
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const vertices = [indices[offset], indices[offset + 1], indices[offset + 2]];
+    for (const vertex of vertices) {
+      if (!Number.isInteger(vertex) || vertex < 0 || vertex >= vertexCount) {
+        throw new Error('indexed locality contains an out-of-range source vertex');
+      }
+    }
+    for (const [left, right] of [
+      [vertices[0], vertices[1]],
+      [vertices[1], vertices[2]],
+      [vertices[2], vertices[0]],
+    ]) {
+      const weight = length(subtract(point(positions, left), point(positions, right)));
+      adjacency[left].push({ vertex: right, weight });
+      adjacency[right].push({ vertex: left, weight });
+    }
+  }
+  return adjacency;
+}
+
+function createMinHeap() {
+  const values = [];
+  return {
+    get size() {
+      return values.length;
+    },
+    push(entry) {
+      values.push(entry);
+      let index = values.length - 1;
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (values[parent].distance <= entry.distance) break;
+        values[index] = values[parent];
+        index = parent;
+      }
+      values[index] = entry;
+    },
+    pop() {
+      const first = values[0];
+      const last = values.pop();
+      if (values.length > 0) {
+        let index = 0;
+        while (true) {
+          const left = index * 2 + 1;
+          const right = left + 1;
+          if (left >= values.length) break;
+          const child = right < values.length
+            && values[right].distance < values[left].distance
+            ? right
+            : left;
+          if (values[child].distance >= last.distance) break;
+          values[index] = values[child];
+          index = child;
+        }
+        values[index] = last;
+      }
+      return first;
+    },
+  };
+}
+
+function graphDistances(adjacency, seeds, allowed = null) {
+  const distances = new Float64Array(adjacency.length);
+  distances.fill(Infinity);
+  const heap = createMinHeap();
+  for (const seed of seeds) {
+    if (allowed && !allowed.has(seed)) continue;
+    if (distances[seed] === 0) continue;
+    distances[seed] = 0;
+    heap.push({ vertex: seed, distance: 0 });
+  }
+  while (heap.size > 0) {
+    const current = heap.pop();
+    if (current.distance !== distances[current.vertex]) continue;
+    for (const edge of adjacency[current.vertex]) {
+      if (allowed && !allowed.has(edge.vertex)) continue;
+      const candidate = current.distance + edge.weight;
+      if (candidate < distances[edge.vertex]) {
+        distances[edge.vertex] = candidate;
+        heap.push({ vertex: edge.vertex, distance: candidate });
+      }
+    }
+  }
+  return distances;
+}
+
+function graphHops(adjacency, seeds, allowed = null) {
+  const hops = new Int32Array(adjacency.length);
+  hops.fill(-1);
+  const queue = [];
+  for (const seed of seeds) {
+    if (allowed && !allowed.has(seed)) continue;
+    if (hops[seed] === 0) continue;
+    hops[seed] = 0;
+    queue.push(seed);
+  }
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor];
+    for (const edge of adjacency[current]) {
+      if ((allowed && !allowed.has(edge.vertex)) || hops[edge.vertex] >= 0) continue;
+      hops[edge.vertex] = hops[current] + 1;
+      queue.push(edge.vertex);
+    }
+  }
+  return hops;
+}
+
+function localityMetric(distance, hops) {
+  const reachable = Number.isFinite(distance) && hops >= 0;
+  return {
+    reachable,
+    distance: reachable ? distance : null,
+    hops: reachable ? hops : null,
+  };
+}
+
+export function createIndexedOwnershipLocality({
+  positions,
+  indices,
+  rigidVertexIndices,
+  priorCollarVertexIndices,
+} = {}) {
+  assertPositions(positions);
+  if (!ArrayBuffer.isView(indices) || indices.length < 3 || indices.length % 3 !== 0) {
+    throw new Error('indexed locality requires packed triangle indices');
+  }
+  assertRigidIndices(rigidVertexIndices, positions.length / 3);
+  if (!Array.isArray(priorCollarVertexIndices) || priorCollarVertexIndices.length === 0) {
+    throw new Error('indexed locality requires prior collar vertex identities');
+  }
+  const rigid = new Set(rigidVertexIndices);
+  const priorCollar = new Set(priorCollarVertexIndices);
+  for (const vertex of priorCollar) {
+    if (!Number.isInteger(vertex) || vertex < 0 || vertex >= positions.length / 3) {
+      throw new Error('prior collar contains an out-of-range source vertex');
+    }
+  }
+  const adjacency = createIndexedAdjacency(positions, indices);
+  const boundary = new Set();
+  for (const vertex of rigid) {
+    if (adjacency[vertex].some(edge => !rigid.has(edge.vertex))) boundary.add(vertex);
+  }
+  if (boundary.size === 0) {
+    throw new Error('rigid ownership set has no indexed topology boundary');
+  }
+  const boundarySeeds = [...boundary].sort((left, right) => left - right);
+  const collarSeeds = [...priorCollar].sort((left, right) => left - right);
+  const rigidBoundaryDistances = graphDistances(adjacency, boundarySeeds, rigid);
+  const rigidBoundaryHops = graphHops(adjacency, boundarySeeds, rigid);
+  const fullBoundaryDistances = graphDistances(adjacency, boundarySeeds);
+  const fullBoundaryHops = graphHops(adjacency, boundarySeeds);
+  const priorCollarDistances = graphDistances(adjacency, collarSeeds);
+  const priorCollarHops = graphHops(adjacency, collarSeeds);
+
+  function describeBoundary(vertex, restricted) {
+    const metric = localityMetric(
+      restricted ? rigidBoundaryDistances[vertex] : fullBoundaryDistances[vertex],
+      restricted ? rigidBoundaryHops[vertex] : fullBoundaryHops[vertex],
+    );
+    return {
+      ownershipBoundaryReachable: metric.reachable,
+      ownershipBoundaryDistance: metric.distance,
+      ownershipBoundaryHops: metric.hops,
+    };
+  }
+
+  function describePriorCollar(vertex) {
+    const metric = localityMetric(
+      priorCollarDistances[vertex],
+      priorCollarHops[vertex],
+    );
+    return {
+      priorCollarReachable: metric.reachable,
+      priorCollarDistance: metric.distance,
+      priorCollarHops: metric.hops,
+    };
+  }
+
+  return Object.freeze({
+    topology: 'original-indexed-source-mesh-no-welding',
+    vertexCount: positions.length / 3,
+    ownershipBoundaryVertexIndices: boundarySeeds,
+    priorCollarVertexIndices: collarSeeds,
+    describeMovedVertex(vertex) {
+      if (!rigid.has(vertex)) {
+        throw new Error('moved witness is outside frozen rigid ownership set K');
+      }
+      return {
+        vertexIndex: vertex,
+        ...describeBoundary(vertex, true),
+        ...describePriorCollar(vertex),
+      };
+    },
+    describeRetainedVertex(vertex) {
+      if (!Number.isInteger(vertex) || vertex < 0 || vertex >= positions.length / 3) {
+        throw new Error('retained witness contains an out-of-range source vertex');
+      }
+      return {
+        vertexIndex: vertex,
+        ...describeBoundary(vertex, false),
+        ...describePriorCollar(vertex),
+      };
+    },
+  });
+}
+
+function hasLocalityMetric(value, prefix) {
+  const reachable = value?.[`${prefix}Reachable`];
+  const distance = value?.[`${prefix}Distance`];
+  const hops = value?.[`${prefix}Hops`];
+  return typeof reachable === 'boolean'
+    && (
+      reachable
+        ? Number.isFinite(distance) && Number.isInteger(hops) && hops >= 0
+        : distance === null && hops === null
+    );
+}
+
+export function classifyRigidPredecessorLocality({
+  rows,
+  transitionRadius,
+} = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('rigid predecessor locality requires rejection rows');
+  }
+  if (!(transitionRadius > 0) || !Number.isFinite(transitionRadius)) {
+    throw new Error('rigid predecessor locality transition radius must be positive');
+  }
+  let missingWitnessCount = 0;
+  let deepWitnessCount = 0;
+  let maximumOwnershipBoundaryDistance = 0;
+  for (const row of rows) {
+    const witness = row?.sweep?.limitingWitness;
+    const moved = witness?.locality?.movedVertex;
+    const retained = witness?.locality?.retainedTriangleVertices;
+    const complete = Number.isInteger(witness?.movedVertexIndex)
+      && Number.isInteger(witness?.retainedTriangleOffset)
+      && Array.isArray(witness?.retainedTriangleVertexIndices)
+      && witness.retainedTriangleVertexIndices.length === 3
+      && moved?.vertexIndex === witness.movedVertexIndex
+      && hasLocalityMetric(moved, 'ownershipBoundary')
+      && hasLocalityMetric(moved, 'priorCollar')
+      && Array.isArray(retained)
+      && retained.length === 3
+      && retained.every((entry, index) => (
+        entry?.vertexIndex === witness.retainedTriangleVertexIndices[index]
+        && hasLocalityMetric(entry, 'ownershipBoundary')
+        && hasLocalityMetric(entry, 'priorCollar')
+      ));
+    if (!complete) {
+      missingWitnessCount += 1;
+      continue;
+    }
+    const witnesses = [moved, ...retained];
+    for (const entry of witnesses) {
+      if (!entry.ownershipBoundaryReachable) {
+        deepWitnessCount += 1;
+      } else {
+        maximumOwnershipBoundaryDistance = Math.max(
+          maximumOwnershipBoundaryDistance,
+          entry.ownershipBoundaryDistance,
+        );
+        if (entry.ownershipBoundaryDistance > transitionRadius) {
+          deepWitnessCount += 1;
+        }
+      }
+    }
+  }
+  return {
+    classification: missingWitnessCount > 0
+      ? 'underinstrumented'
+      : deepWitnessCount > 0
+        ? 'deep-core'
+        : 'boundary-local',
+    rowCount: rows.length,
+    instrumentedRowCount: rows.length - missingWitnessCount,
+    missingWitnessCount,
+    deepWitnessCount,
+    transitionRadius,
+    maximumOwnershipBoundaryDistance,
   };
 }
 
@@ -752,6 +1193,21 @@ export function assertRigidArticulationReport(report) {
   }
   if (!Array.isArray(report.searches) || report.searches.length === 0) {
     throw new Error('rigid articulation report requires search accounting');
+  }
+  if (report.locality) {
+    const rows = report.searches.flatMap(search => search.sweptRejections ?? []);
+    const observed = classifyRigidPredecessorLocality({
+      rows,
+      transitionRadius: report.locality.transitionRadius,
+    });
+    if (
+      observed.classification !== report.locality.classification
+      || observed.rowCount !== report.locality.rowCount
+      || observed.instrumentedRowCount !== report.locality.instrumentedRowCount
+      || observed.missingWitnessCount !== report.locality.missingWitnessCount
+    ) {
+      throw new Error('rigid articulation report locality instrumentation mismatch');
+    }
   }
   return report;
 }

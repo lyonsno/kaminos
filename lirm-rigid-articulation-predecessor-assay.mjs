@@ -20,6 +20,8 @@ import {
 import {
   applyRigidChain,
   assertRigidArticulationReport,
+  classifyRigidPredecessorLocality,
+  createIndexedOwnershipLocality,
   createTriangleCollisionField,
   evaluateSweptRigidCandidate,
   freezeRigidJointFrame,
@@ -41,6 +43,8 @@ const DEFAULT_INPUTS = Object.freeze({
   constraints: 'artifacts/motion-ready-719024/stationary-contact-constraints/constraints.json',
   annotation:
     'artifacts/lirm-719024-rigid-articulation-predecessor-v0/inputs/oracle-stencil.json',
+  swingClearanceReport:
+    'artifacts/lirm-719024-swing-clearance-assay-v0/report.json',
 });
 
 const EXPECTED_HASHES = Object.freeze({
@@ -53,6 +57,8 @@ const EXPECTED_HASHES = Object.freeze({
     'sha256:cb519913ad863441e88555b3d9fbd588ffef03650475de07c29ee1c71f500ff6',
   constraints: 'sha256:77a8e0f795791956ceb34a17da397865ea0a7504f98542de1e6b0529e66f72fb',
   annotation: RIGID_ARTICULATION_ANNOTATION_HASH,
+  swingClearanceReport:
+    'sha256:768a100a20fc7d9ec47e985efeabcbef296cb860540a990e025285d49a7a0617',
 });
 
 const ROOT_BOUND_RADIANS = Math.PI / 2;
@@ -238,6 +244,9 @@ function stripCandidate(candidate) {
       collisionPasses: candidate.swept.sweep.collision.passes,
       minimumTerrainClearance: candidate.swept.sweep.terrain.minimum,
       terrainPasses: candidate.swept.sweep.terrain.passes,
+      limitingWitness: candidate.swept.sweep.limitingWitness
+        ? structuredClone(candidate.swept.sweep.limitingWitness)
+        : null,
       rejectionReason: candidate.swept.passes
         ? null
         : (
@@ -450,6 +459,17 @@ export async function runRigidArticulationPredecessorAssay({
         await loadExact(path, EXPECTED_HASHES[key], key !== 'source'),
       ]),
     ));
+    const priorSwingClearance = loaded.swingClearanceReport.value;
+    if (
+      priorSwingClearance.requestedRoute
+        !== 'kaminos/lirm-719024/swing-clearance-static-operator-assay-v0'
+      || priorSwingClearance.effectiveRoute !== priorSwingClearance.requestedRoute
+      || priorSwingClearance.sourceHash !== RIGID_ARTICULATION_SOURCE_HASH
+      || priorSwingClearance.actualSourceHash !== priorSwingClearance.sourceHash
+      || priorSwingClearance.supportId !== RIGID_ARTICULATION_SUPPORT_ID
+    ) {
+      throw new Error('prior swing-clearance collar route/source/support identity mismatch');
+    }
     lastTrustworthyEvidence = 'all exact cast, registration, terrain, and annotation inputs admitted';
 
     failurePhase = 'source-geometry';
@@ -625,6 +645,63 @@ export async function runRigidArticulationPredecessorAssay({
       searches.push(complete);
       accepted = complete.acceptedCandidate;
     }
+    const rejectionRows = searches.flatMap(search => search.sweptRejections);
+    const priorCollarVertexIndices = [...new Set([
+      ...priorSwingClearance.masks.attachmentVertexIndices,
+      ...priorSwingClearance.bodySideSet.pairs.map(pair => pair.bodyVertex),
+    ])].sort((left, right) => left - right);
+    const transitionRadius = Math.max(...frames.chain.radii);
+    if (transitionRadius !== 0.04) {
+      throw new Error(`frozen operator transition radius changed: ${transitionRadius}`);
+    }
+    const indexedLocality = createIndexedOwnershipLocality({
+      positions: normalization.values,
+      indices,
+      rigidVertexIndices,
+      priorCollarVertexIndices,
+    });
+    for (const row of rejectionRows) {
+      const witness = row.sweep?.limitingWitness;
+      if (
+        !witness
+        || !Number.isInteger(witness.movedVertexIndex)
+        || !Array.isArray(witness.retainedTriangleVertexIndices)
+      ) {
+        continue;
+      }
+      witness.locality = {
+        movedVertex: indexedLocality.describeMovedVertex(witness.movedVertexIndex),
+        retainedTriangleVertices: witness.retainedTriangleVertexIndices.map(
+          vertex => indexedLocality.describeRetainedVertex(vertex),
+        ),
+      };
+    }
+    const locality = {
+      ...classifyRigidPredecessorLocality({
+        rows: rejectionRows,
+        transitionRadius,
+      }),
+      topology: indexedLocality.topology,
+      ownershipBoundaryVertexCount:
+        indexedLocality.ownershipBoundaryVertexIndices.length,
+      ownershipBoundaryVertexIndices:
+        indexedLocality.ownershipBoundaryVertexIndices,
+      priorCollarSourceReport:
+        'artifacts/lirm-719024-swing-clearance-assay-v0/report.json',
+      priorCollarSourceHash: loaded.swingClearanceReport.sha256,
+      priorAttachmentVertexCount:
+        priorSwingClearance.masks.attachmentVertexCount,
+      priorAttachmentToRetainedBodyPairCount:
+        priorSwingClearance.bodySideSet.pairs.length,
+      priorCollarVertexCount: priorCollarVertexIndices.length,
+      classificationPredicate:
+        'boundary-local iff every moved witness and every retained triangle vertex is reachable within the frozen transition radius from B_K; any farther or unreachable witness is deep-core; missing identity is underinstrumented',
+    };
+    if (locality.classification === 'underinstrumented') {
+      throw new Error(
+        `exact locality rerun remained underinstrumented for ${locality.missingWitnessCount} rows`,
+      );
+    }
     lastTrustworthyEvidence = accepted
       ? 'source-relative swept rigid candidate admitted'
       : 'complete-orientation axis-oracle diagnostic found no admitted candidate';
@@ -695,6 +772,7 @@ export async function runRigidArticulationPredecessorAssay({
         predicate:
           'no new body collision and no worsened preexisting proximity over the swept path',
       },
+      locality,
       searches: searches.map(({ acceptedCandidate, ...search }) => search),
       accepted: stripCandidate(accepted),
       acceptedPositionsFile,
