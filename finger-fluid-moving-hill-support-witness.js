@@ -707,6 +707,7 @@ async function initialize() {
   resizeHostAttachments();
   solver = await createWebGPUFingerFluidSolver({
     hostFrameComposition: true,
+    hostFramePipelineIdentity: HOST_PIPELINE_IDENTITY,
     webgpuDevice: device,
     particleCount: 24576,
     densityIterations: 3,

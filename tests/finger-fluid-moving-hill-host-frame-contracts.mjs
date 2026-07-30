@@ -134,6 +134,7 @@ const validated = fingerFluidCore.validateFingerFluidMovingHillHostFrame(
     device,
     extent: { width: 1280, height: 720 },
     camera,
+    expectedPipelineIdentity: 'lerms/hill/full-renderer-pipeline-12',
     expectedRemapGeneration: 17,
   },
 );
@@ -151,6 +152,7 @@ function rejectsFrame(frame, pattern, message) {
         device,
         extent: { width: 1280, height: 720 },
         camera,
+        expectedPipelineIdentity: 'lerms/hill/full-renderer-pipeline-12',
         expectedRemapGeneration: 17,
       },
     ),
@@ -176,6 +178,10 @@ rejectsFrame(
 rejectsFrame(
   hostFrame({ commandEncoder: null }),
   /command encoder is missing/,
+);
+rejectsFrame(
+  hostFrame({ pipelineIdentity: 'lerms/hill/substituted-pipeline-9' }),
+  /pipeline identity is cross-pipeline or substituted/,
 );
 rejectsFrame(
   hostFrame({
@@ -263,6 +269,11 @@ assert.match(
   source,
   /hostFrameComposition = false/,
   'the solver factory must make host-owned composition an explicit initialization contract',
+);
+assert.match(
+  source,
+  /hostFramePipelineIdentity = null/,
+  'host-owned composition must bind an authoritative pipeline identity at solver initialization',
 );
 assert.match(
   source,
@@ -362,8 +373,8 @@ assert.match(
 );
 assert.match(
   witnessSource,
-  /hostFrameComposition:\s*true[\s\S]*webgpuDevice:\s*device/,
-  'the witness must inject its existing WebGPU device into the solver host path',
+  /hostFrameComposition:\s*true[\s\S]*hostFramePipelineIdentity:\s*HOST_PIPELINE_IDENTITY[\s\S]*webgpuDevice:\s*device/,
+  'the witness must inject its host pipeline identity and existing WebGPU device into the solver host path',
 );
 assert.match(
   witnessSource,

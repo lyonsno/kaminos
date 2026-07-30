@@ -10775,6 +10775,7 @@ export function validateFingerFluidMovingHillHostFrame(
     device,
     extent,
     camera,
+    expectedPipelineIdentity,
     expectedRemapGeneration,
   } = {},
 ) {
@@ -10831,6 +10832,16 @@ export function validateFingerFluidMovingHillHostFrame(
     || hostFrame.pipelineIdentity.trim().length === 0
   ) {
     fail('pipeline identity is missing', 'validate-host-pipeline');
+  }
+  if (
+    typeof expectedPipelineIdentity !== 'string'
+    || expectedPipelineIdentity.trim().length === 0
+    || hostFrame.pipelineIdentity !== expectedPipelineIdentity
+  ) {
+    fail('pipeline identity is cross-pipeline or substituted', 'validate-host-pipeline', {
+      expected: expectedPipelineIdentity ?? null,
+      actual: hostFrame.pipelineIdentity,
+    });
   }
   if (!Number.isSafeInteger(hostFrame.remapGeneration) || hostFrame.remapGeneration < 0) {
     fail('remap generation is missing or invalid', 'validate-host-remap-generation');
@@ -12798,6 +12809,7 @@ export function createFingerFluidWebGPURuntimeLifecycle({
 export async function createWebGPUFingerFluidSolver({
   canvas,
   hostFrameComposition = false,
+  hostFramePipelineIdentity = null,
   webgpuDevice = null,
   particleCount = DEFAULT_PARTICLE_COUNT,
   densityIterations = 3,
@@ -12831,6 +12843,12 @@ export async function createWebGPUFingerFluidSolver({
 } = {}) {
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
   const safeHostFrameComposition = Boolean(hostFrameComposition);
+  const safeHostFramePipelineIdentity = (
+    typeof hostFramePipelineIdentity === 'string'
+    && hostFramePipelineIdentity.trim().length > 0
+  )
+    ? hostFramePipelineIdentity
+    : null;
   if (!safeHostFrameComposition && !canvas?.getContext) {
     return createUnavailableSolver('missing canvas');
   }
@@ -12842,6 +12860,9 @@ export async function createWebGPUFingerFluidSolver({
   }
   if (safeHostFrameComposition && !webgpuDevice) {
     movingHillSupportFailure('host-frame composition requires an existing host WebGPU device');
+  }
+  if (safeHostFrameComposition && !safeHostFramePipelineIdentity) {
+    movingHillSupportFailure('host-frame composition requires a host pipeline identity');
   }
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
@@ -14363,6 +14384,7 @@ export async function createWebGPUFingerFluidSolver({
         device,
         extent: expectedExtent,
         camera: externalCameraSnapshot,
+        expectedPipelineIdentity: safeHostFramePipelineIdentity,
         expectedRemapGeneration: movingHillSupportProvider?.remapEpoch,
       })
       : null;
