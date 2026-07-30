@@ -140,6 +140,38 @@ const execution = createWebGpuCooperativeExecution({
 
 Use bounded-prefix completion when a model exposes fixed, output-independent ranges such as texture channels, decoder tiles, or cell ranges. Adaptive boundaries remain strict-prefix because each completed queue duration changes the next dispatch geometry; Kaminos rejects that combination rather than planning from stale observations.
 
+Validate terminal execution with the package-owned contract instead of
+rebuilding queue and progress checks in each model port:
+
+```js
+import {
+  validateWebGpuCooperativeExecutionReport,
+} from "@kaminos/webgpu-inference-kit";
+
+const validation = validateWebGpuCooperativeExecutionReport(cooperativeReport, {
+  expectedRouteId: "sf3d.image-to-mesh.webgpu-local.v0",
+  expectedManifestId: "sf3d.cooperative-boundaries.v0",
+  expectedInvocationId: invocationId,
+  expectedSchedulingMode: "cooperative",
+  expectedCompletionPolicy: "bounded-prefix",
+  expectedGpuDutyCount: postProcessorDutyCount,
+  expectedMaxInFlightGpuDuties: 2,
+  requireConfiguredDepthObserved: true,
+});
+
+if (!validation.ok) {
+  throw new Error(`cooperative execution did not settle: ${validation.errors.join("; ")}`);
+}
+```
+
+The validator checks effective route, manifest, invocation, scheduling, and
+completion-policy identity; denominator-bearing terminal progress; exact
+boundary range coverage; uncapped retention; submitted, observed, unfenced,
+issued, retired, and in-flight counts; bounded depth; queue-completion
+authority; and every bounded duty's prefix-fence timing. It imposes no duty
+count of its own: a port supplies `expectedGpuDutyCount` when its fixed
+boundary geometry makes that count authoritative.
+
 Raw adapters can bound queue-prefix completion without serializing every duty:
 
 ```js

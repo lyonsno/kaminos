@@ -5,6 +5,7 @@ import {
   WEBGPU_COOPERATIVE_EXECUTION_REPORT_SCHEMA,
   createWebGpuCooperativeExecution,
   defineWebGpuCooperativeBoundaryManifest,
+  validateWebGpuCooperativeExecutionReport,
 } from '../src/index.js';
 
 const ROUTE_ID = 'sharp.image-to-splat.webgpu-local.v0';
@@ -442,6 +443,17 @@ assert.equal(progressEvents.length, 5);
 assert.equal(progressEvents.at(-1).percent, 100);
 assert.ok(progressEvents.every(event => event.totalItems === 15));
 assert.ok(progressEvents.every(event => Number.isFinite(event.percent)));
+assert.deepEqual(
+  validateWebGpuCooperativeExecutionReport(report, {
+    expectedRouteId: ROUTE_ID,
+    expectedManifestId: manifest.manifestId,
+    expectedInvocationId: 'sharp:firing:cooperative',
+    expectedSchedulingMode: 'cooperative',
+    expectedCompletionPolicy: 'strict-prefix',
+    expectedGpuDutyCount: 2,
+  }).errors,
+  [],
+);
 
 const defaultGainManifest = defineWebGpuCooperativeBoundaryManifest({
   manifestId: 'sharp.default-gain.v0',
@@ -628,6 +640,17 @@ assert.equal(disabledCalls.filter(call => call.startsWith('prepare:')).length, 0
 assert.equal(disabledCalls.filter(call => call.startsWith('yield:')).length, 0);
 assert.equal(disabledCalls.filter(call => call === 'queue-fence').length, 1);
 assert.equal(disabledCalls.filter(call => call.startsWith('measure-submit:')).length, 2);
+assert.deepEqual(
+  validateWebGpuCooperativeExecutionReport(disabledReport, {
+    expectedRouteId: ROUTE_ID,
+    expectedManifestId: manifest.manifestId,
+    expectedInvocationId: 'sharp:firing:disabled',
+    expectedSchedulingMode: 'disabled',
+    expectedCompletionPolicy: 'strict-prefix',
+    expectedGpuDutyCount: 2,
+  }).errors,
+  [],
+);
 
 const failureCalls = [];
 let failureNowMs = 0;
@@ -930,6 +953,17 @@ assert.deepEqual(
   ],
 );
 assert.ok(boundedReport.gpuDuties.every(duty => duty.rawQueueDurationMs >= 0));
+const boundedValidation = validateWebGpuCooperativeExecutionReport(boundedReport, {
+  expectedRouteId: ROUTE_ID,
+  expectedManifestId: boundedManifest.manifestId,
+  expectedInvocationId: 'sf3d:firing:bounded-prefix',
+  expectedSchedulingMode: 'cooperative',
+  expectedCompletionPolicy: 'bounded-prefix',
+  expectedGpuDutyCount: 3,
+  expectedMaxInFlightGpuDuties: 2,
+  requireConfiguredDepthObserved: true,
+});
+assert.deepEqual(boundedValidation.errors, []);
 
 const downstreamManifest = defineWebGpuCooperativeBoundaryManifest({
   manifestId: 'sf3d.gpu-then-cpu.v0',
@@ -1249,6 +1283,19 @@ await assert.rejects(
     assert.equal(report.inFlightGpuDutyCount, 0);
     assert.deepEqual(report.gpuDuties.map(duty => duty.status), ['retired-after-failure']);
     assert.equal(report.boundaries[0].planner.pendingRangeCount, 0);
+    assert.deepEqual(
+      validateWebGpuCooperativeExecutionReport(report, {
+        expectedStatus: 'cancelled',
+        expectedRouteId: ROUTE_ID,
+        expectedManifestId: boundedManifest.manifestId,
+        expectedInvocationId: 'sf3d:firing:bounded-prefix-cancellation',
+        expectedSchedulingMode: 'cooperative',
+        expectedCompletionPolicy: 'bounded-prefix',
+        expectedGpuDutyCount: 1,
+        expectedMaxInFlightGpuDuties: 2,
+      }).errors,
+      [],
+    );
     return true;
   },
 );

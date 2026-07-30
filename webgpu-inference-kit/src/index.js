@@ -72,6 +72,11 @@ export {
 } from './cooperative-execution.js';
 
 export {
+  WEBGPU_COOPERATIVE_REPORT_VALIDATION_SCHEMA,
+  validateWebGpuCooperativeExecutionReport,
+} from './cooperative-report-validation.js';
+
+export {
   WEBGPU_BOUNDED_GPU_SUBMISSION_REPORT_SCHEMA,
   createWebGpuBoundedSubmissionQueue,
 } from './bounded-gpu-submission.js';
