@@ -548,7 +548,7 @@ function createHostFramePacket(frameId, externalCamera, encoder) {
       fallback: null,
     },
     pipelineIdentity: HOST_PIPELINE_IDENTITY,
-    remapGeneration: terrainEpoch,
+    remapGeneration: provider.remapEpoch,
     sceneColor: hostAttachment({
       attachmentId: `${frameId}:scene-color`,
       frameId,
@@ -597,7 +597,7 @@ function validateHostEncodeEvidence(encodeEvidence, hostFrame) {
     || encodeEvidence.cameraIdentity !== hostFrame.camera.identity
     || encodeEvidence.cameraGeneration !== hostFrame.camera.generation
     || encodeEvidence.pipelineIdentity !== HOST_PIPELINE_IDENTITY
-    || encodeEvidence.remapGeneration !== terrainEpoch
+    || encodeEvidence.remapGeneration !== provider.remapEpoch
     || encodeEvidence.sceneColorAttachmentId !== hostFrame.sceneColor.attachmentId
     || encodeEvidence.sceneDepthAttachmentId !== hostFrame.sceneDepth.attachmentId
     || encodeEvidence.environmentAttachmentId !== hostFrame.environment.attachmentId
@@ -639,7 +639,7 @@ function renderHostFrame(particleVisibility, externalCamera, suffix) {
     cameraIdentity: externalCamera.identity,
     cameraGeneration: externalCamera.generation,
     pipelineIdentity: HOST_PIPELINE_IDENTITY,
-    remapGeneration: terrainEpoch,
+    remapGeneration: provider.remapEpoch,
     hostSubmissionAccepted: true,
     hostFinalPresentationCount: 1,
     primaryOutputWritten: true,

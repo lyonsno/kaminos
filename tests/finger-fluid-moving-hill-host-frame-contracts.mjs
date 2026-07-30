@@ -376,6 +376,11 @@ assert.match(
 );
 assert.match(
   witnessSource,
+  /remapGeneration:\s*provider\.remapEpoch/,
+  'the witness host-frame packet must publish remap lineage, not terrain deformation chronology',
+);
+assert.match(
+  witnessSource,
   /sceneColor:\s*hostAttachment[\s\S]*sceneDepth:\s*hostAttachment[\s\S]*environment:\s*hostAttachment[\s\S]*target:\s*hostAttachment/,
   'the witness must bind all four exact host attachments into one frame packet',
 );
