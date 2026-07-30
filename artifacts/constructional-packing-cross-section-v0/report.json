@@ -1,0 +1,111 @@
+{
+  "schema": "kaminos.constructional-packing-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "constructional-packing-cross-section-v0",
+    "effective": "constructional-packing-cross-section-v0"
+  },
+  "source": {
+    "id": "synthetic-fitted-hip-cross-section-v0",
+    "schema": "kaminos.constructional-packing-source.v0",
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "cases": [
+    {
+      "id": "baseline",
+      "sourceId": "synthetic-fitted-hip-cross-section-v0",
+      "metrics": {
+        "activeCellCount": 5422,
+        "excludedObstacleCellCount": 178,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "obstacleOwnedCellCount": 0,
+        "anchorViolationCount": 0,
+        "maxTargetShareError": 0.000092
+      }
+    },
+    {
+      "id": "interior-pressure",
+      "sourceId": "synthetic-fitted-hip-cross-section-v0",
+      "metrics": {
+        "activeCellCount": 5675,
+        "excludedObstacleCellCount": 178,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "obstacleOwnedCellCount": 0,
+        "anchorViolationCount": 0,
+        "maxTargetShareError": 0.00022
+      }
+    },
+    {
+      "id": "exterior-compression",
+      "sourceId": "synthetic-fitted-hip-cross-section-v0",
+      "metrics": {
+        "activeCellCount": 5225,
+        "excludedObstacleCellCount": 178,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "obstacleOwnedCellCount": 0,
+        "anchorViolationCount": 0,
+        "maxTargetShareError": 0.000239
+      }
+    }
+  ],
+  "ledgers": {
+    "interiorPressure": {
+      "schema": "kaminos.constructional-pressure-ledger.v0",
+      "sourceId": "synthetic-fitted-hip-cross-section-v0",
+      "packingSchema": "kaminos.constructional-packing-result.v0",
+      "edits": [
+        {
+          "id": "grow-dorsal-extensor",
+          "compartmentId": "dorsal-extensor",
+          "deltaShare": 0.09,
+          "authority": "operator-authored"
+        },
+        {
+          "id": "yield-connective-envelope",
+          "compartmentId": "connective-envelope",
+          "deltaShare": -0.09,
+          "authority": "operator-authored"
+        }
+      ],
+      "inferredEnvelopeResponse": [
+        {
+          "sourceEditId": "grow-dorsal-extensor",
+          "compartmentId": "dorsal-extensor",
+          "angle": 2.417343,
+          "amplitude": 0.1215,
+          "angularWidth": 0.52,
+          "authority": "solver-inferred"
+        }
+      ]
+    },
+    "exteriorCompression": {
+      "schema": "kaminos.constructional-envelope-edit-ledger.v0",
+      "sourceId": "synthetic-fitted-hip-cross-section-v0",
+      "edits": [
+        {
+          "id": "compress-posterior-flank",
+          "kind": "radial-offset",
+          "angle": 0.18,
+          "amplitude": -0.14,
+          "angularWidth": 0.34,
+          "authority": "operator-authored"
+        }
+      ],
+      "inferredAction": "repack-semantic-interior"
+    }
+  },
+  "visualInspection": {
+    "status": "pending-agent-inspection",
+    "artifact": "index.html"
+  },
+  "claims": {
+    "reciprocalPackingMechanism": "supported-by-numerical-contract",
+    "anatomicalCorrectness": "unassayed",
+    "threeDimensionalPacking": "unassayed",
+    "generatorSurvival": "unassayed"
+  }
+}
