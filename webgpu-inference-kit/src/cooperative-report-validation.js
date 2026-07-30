@@ -103,6 +103,9 @@ function validateTerminalProgress(errors, report) {
   if (progress.invocationId !== report.invocationId) {
     errors.push('progress.invocationId must match invocationId');
   }
+  if (progress.status !== report.status) {
+    errors.push(`progress.status must match terminal report status ${report.status}`);
+  }
   if (
     report.status === 'succeeded'
     && (
@@ -135,7 +138,7 @@ function validateTerminalProgress(errors, report) {
   }
 }
 
-function validateBoundaryRanges(errors, boundary, index) {
+function validateBoundaryRanges(errors, boundary, index, { requireComplete }) {
   const label = `boundaries[${index}]`;
   if (!Array.isArray(boundary.ranges)) {
     errors.push(`${label}.ranges must be an array`);
@@ -144,11 +147,13 @@ function validateBoundaryRanges(errors, boundary, index) {
   if (boundary.rangeCount !== boundary.ranges.length) {
     errors.push(`${label}.rangeCount must equal ranges length`);
   }
-  if (boundary.actualRangeCount !== boundary.ranges.length) {
-    errors.push(`${label}.actualRangeCount must equal ranges length`);
-  }
-  if (boundary.rangeCountAuthority !== 'actual') {
-    errors.push(`${label}.rangeCountAuthority must be actual`);
+  if (requireComplete) {
+    if (boundary.actualRangeCount !== boundary.ranges.length) {
+      errors.push(`${label}.actualRangeCount must equal ranges length`);
+    }
+    if (boundary.rangeCountAuthority !== 'actual') {
+      errors.push(`${label}.rangeCountAuthority must be actual`);
+    }
   }
   const rangeIds = new Set();
   let coveredItems = 0;
@@ -166,19 +171,51 @@ function validateBoundaryRanges(errors, boundary, index) {
     if (range.rangeIndex !== rangeIndex) {
       errors.push(`${rangeLabel}.rangeIndex must equal ${rangeIndex}`);
     }
-    if (
+    if (requireComplete && (
       !isNonnegativeSafeInteger(range.itemStart)
       || !Number.isSafeInteger(range.itemCount)
       || range.itemCount <= 0
       || range.itemEnd !== range.itemStart + range.itemCount
       || range.itemStart !== coveredItems
-    ) {
+    )) {
       errors.push(`${rangeLabel} must provide contiguous positive item coverage`);
     }
     if (Number.isSafeInteger(range.itemEnd)) coveredItems = range.itemEnd;
   }
-  if (isNonnegativeSafeInteger(boundary.totalItems) && coveredItems !== boundary.totalItems) {
+  if (
+    requireComplete
+    && isNonnegativeSafeInteger(boundary.totalItems)
+    && coveredItems !== boundary.totalItems
+  ) {
     errors.push(`${label}.ranges must cover totalItems exactly`);
+  }
+}
+
+function hasPendingPlannerWork(planner) {
+  if (!isPlainObject(planner)) return false;
+  return planner.pendingRangeId != null
+    || (planner.pendingRangeCount != null && planner.pendingRangeCount !== 0)
+    || (Array.isArray(planner.pendingRangeIds) && planner.pendingRangeIds.length !== 0);
+}
+
+function validateNormalizedFailure(errors, failure, label) {
+  if (!isPlainObject(failure)) {
+    errors.push(`${label} must be an object`);
+    return;
+  }
+  if (!isNonEmptyString(failure.phase)) errors.push(`${label}.phase must be a non-empty string`);
+  if (!isPlainObject(failure.error)) {
+    errors.push(`${label}.error must be an object`);
+  } else {
+    if (!isNonEmptyString(failure.error.name)) {
+      errors.push(`${label}.error.name must be a non-empty string`);
+    }
+    if (!isNonEmptyString(failure.error.message)) {
+      errors.push(`${label}.error.message must be a non-empty string`);
+    }
+  }
+  if (!Array.isArray(failure.secondaryFailures)) {
+    errors.push(`${label}.secondaryFailures must be an array`);
   }
 }
 
@@ -187,35 +224,71 @@ function validateBoundaries(errors, report) {
     errors.push('boundaries must be a non-empty array');
     return;
   }
-  if (report.status !== 'succeeded') return;
+  let terminalFailureBoundary = null;
   for (const [index, boundary] of report.boundaries.entries()) {
     const label = `boundaries[${index}]`;
     if (!isPlainObject(boundary)) {
       errors.push(`${label} must be an object`);
       continue;
     }
-    if (
-      boundary.status !== 'complete'
-      || !isNonnegativeSafeInteger(boundary.totalItems)
-      || boundary.completedItems !== boundary.totalItems
-      || boundary.progress !== 1
-    ) {
-      errors.push(`${label} must prove terminal completion`);
+    if (!isNonEmptyString(boundary.boundaryId)) {
+      errors.push(`${label}.boundaryId must be a non-empty string`);
     }
-    if (boundary.failure != null) errors.push(`${label}.failure must be null on success`);
-    if (
-      boundary.planner != null
-      && (
-        boundary.planner.pendingRangeId != null
-        || (
-          boundary.planner.pendingRangeCount != null
-          && boundary.planner.pendingRangeCount !== 0
-        )
-      )
-    ) {
+    if (!isNonEmptyString(boundary.kind)) errors.push(`${label}.kind must be a non-empty string`);
+    const requireComplete = boundary.status === 'complete';
+    if (report.status === 'succeeded') {
+      if (
+        !requireComplete
+        || !isNonnegativeSafeInteger(boundary.totalItems)
+        || boundary.completedItems !== boundary.totalItems
+        || boundary.progress !== 1
+      ) {
+        errors.push(`${label} must prove terminal completion`);
+      }
+      if (boundary.failure != null) errors.push(`${label}.failure must be null on success`);
+    } else {
+      if (!new Set(['complete', 'failed', 'cancelled', 'pending']).has(boundary.status)) {
+        errors.push(`${label}.status must be terminal or untouched pending`);
+      }
+      if (boundary.status === 'failed' || boundary.status === 'cancelled') {
+        validateNormalizedFailure(errors, boundary.failure, `${label}.failure`);
+        if (boundary.boundaryId === report.failure?.boundaryId) {
+          terminalFailureBoundary = boundary;
+        }
+      } else if (boundary.failure != null) {
+        errors.push(`${label}.failure must be null unless the boundary failed or was cancelled`);
+      }
+      if (boundary.status === 'pending' && Array.isArray(boundary.ranges) && boundary.ranges.length) {
+        errors.push(`${label}.pending boundary must not contain ranges`);
+      }
+    }
+    if (hasPendingPlannerWork(boundary.planner)) {
       errors.push(`${label}.planner must have no pending ranges`);
     }
-    validateBoundaryRanges(errors, boundary, index);
+    validateBoundaryRanges(errors, boundary, index, { requireComplete });
+  }
+  if (
+    report.status !== 'succeeded'
+    && report.failure?.boundaryId != null
+    && terminalFailureBoundary == null
+  ) {
+    errors.push('failure.boundaryId must identify the failed or cancelled boundary');
+  }
+  if (report.status !== 'succeeded') {
+    const lastBoundaryWithRanges = report.boundaries.findLast(
+      boundary => isPlainObject(boundary)
+        && Array.isArray(boundary.ranges)
+        && boundary.ranges.length > 0,
+    );
+    if (lastBoundaryWithRanges) {
+      if (!isPlainObject(report.lastTrustworthyBoundary)) {
+        errors.push('lastTrustworthyBoundary must preserve the last boundary with range evidence');
+      } else if (
+        report.lastTrustworthyBoundary.boundaryId !== lastBoundaryWithRanges.boundaryId
+      ) {
+        errors.push('lastTrustworthyBoundary must match the last boundary with range evidence');
+      }
+    }
   }
 }
 
@@ -257,6 +330,26 @@ function validateCounts(errors, report, expectedGpuDutyCount) {
   if (report.unfencedSubmittedGpuDutyCount !== 0) {
     errors.push('unfencedSubmittedGpuDutyCount must be zero');
   }
+}
+
+function collectGpuRangeEntries(report) {
+  const entries = [];
+  for (const boundary of Array.isArray(report.boundaries) ? report.boundaries : []) {
+    if (!isPlainObject(boundary) || boundary.kind !== 'gpu-command') continue;
+    for (const range of Array.isArray(boundary.ranges) ? boundary.ranges : []) {
+      if (!isPlainObject(range)) continue;
+      entries.push({
+        boundaryId: boundary.boundaryId,
+        rangeId: range.rangeId,
+        rangeIndex: range.rangeIndex,
+      });
+    }
+  }
+  return entries;
+}
+
+function gpuRangeKey(value) {
+  return JSON.stringify([value.boundaryId, value.rangeId, value.rangeIndex]);
 }
 
 function validateBoundedDuties(errors, report, expected) {
@@ -312,6 +405,15 @@ function validateBoundedDuties(errors, report, expected) {
     }
   }
   if (!Array.isArray(report.gpuDuties)) return;
+  const gpuRangeEntries = collectGpuRangeEntries(report);
+  const gpuRangesByKey = new Map(gpuRangeEntries.map(entry => [gpuRangeKey(entry), entry]));
+  const dutyCountByRangeKey = new Map();
+  if (
+    report.status === 'succeeded'
+    && report.gpuDuties.length !== gpuRangeEntries.length
+  ) {
+    errors.push('gpuDuties length must equal completed GPU-command ranges');
+  }
   const dutyIds = new Set();
   for (const [index, duty] of report.gpuDuties.entries()) {
     const label = `gpuDuties[${index}]`;
@@ -323,6 +425,12 @@ function validateBoundedDuties(errors, report, expected) {
       errors.push(`${label}.dutyId must be unique and non-empty`);
     } else {
       dutyIds.add(duty.dutyId);
+    }
+    const rangeKey = gpuRangeKey(duty);
+    if (!gpuRangesByKey.has(rangeKey)) {
+      errors.push(`${label} must match a completed GPU-command range`);
+    } else {
+      dutyCountByRangeKey.set(rangeKey, (dutyCountByRangeKey.get(rangeKey) || 0) + 1);
     }
     const allowedStatuses = report.status === 'succeeded'
       ? new Set(['retired'])
@@ -353,6 +461,16 @@ function validateBoundedDuties(errors, report, expected) {
     }
     if (report.status === 'succeeded' && duty.failure != null) {
       errors.push(`${label}.failure must be null on success`);
+    }
+  }
+  if (report.status === 'succeeded') {
+    for (const entry of gpuRangeEntries) {
+      if (dutyCountByRangeKey.get(gpuRangeKey(entry)) !== 1) {
+        errors.push(
+          `completed GPU-command range ${entry.boundaryId}/${entry.rangeId} `
+          + 'must have exactly one gpuDuty',
+        );
+      }
     }
   }
 }
@@ -426,8 +544,10 @@ export function validateWebGpuCooperativeExecutionReport(report, expectationInpu
   } else if (!sameDuration(report.durationMs, report.endedAtMs - report.startedAtMs)) {
     errors.push('durationMs must equal endedAtMs - startedAtMs');
   }
-  if (report.status === 'succeeded' && report.failure != null) {
-    errors.push('failure must be null on success');
+  if (report.status === 'succeeded') {
+    if (report.failure != null) errors.push('failure must be null on success');
+  } else {
+    validateNormalizedFailure(errors, report.failure, `failure for ${report.status}`);
   }
 
   validateCounts(errors, report, expected.expectedGpuDutyCount);

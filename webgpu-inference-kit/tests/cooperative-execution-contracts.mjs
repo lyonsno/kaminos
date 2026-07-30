@@ -1296,6 +1296,21 @@ await assert.rejects(
       }).errors,
       [],
     );
+    const missingLastTrustworthyBoundary = structuredClone(report);
+    missingLastTrustworthyBoundary.lastTrustworthyBoundary = null;
+    assert.match(
+      validateWebGpuCooperativeExecutionReport(missingLastTrustworthyBoundary, {
+        expectedStatus: 'cancelled',
+        expectedRouteId: ROUTE_ID,
+        expectedManifestId: boundedManifest.manifestId,
+        expectedInvocationId: 'sf3d:firing:bounded-prefix-cancellation',
+        expectedSchedulingMode: 'cooperative',
+        expectedCompletionPolicy: 'bounded-prefix',
+        expectedGpuDutyCount: 1,
+        expectedMaxInFlightGpuDuties: 2,
+      }).errors.join('\n'),
+      /lastTrustworthyBoundary/,
+    );
     return true;
   },
 );

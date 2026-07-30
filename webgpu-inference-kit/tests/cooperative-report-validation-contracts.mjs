@@ -186,6 +186,64 @@ const wrongExpectedCount = validateWebGpuCooperativeExecutionReport(
 assert.equal(wrongExpectedCount.ok, false);
 assert.match(wrongExpectedCount.errors.join('\n'), /expectedGpuDutyCount.*3/);
 
+{
+  const report = createBoundedReport();
+  const thirdRange = {
+    rangeId: 'post-processor:range:2',
+    rangeIndex: 2,
+    itemStart: 2,
+    itemEnd: 3,
+    itemCount: 1,
+    status: 'complete',
+  };
+  report.progress.completedItems = 3;
+  report.progress.totalItems = 3;
+  report.progress.phases[0].completedItems = 3;
+  report.progress.phases[0].totalItems = 3;
+  report.boundaries[0].completedItems = 3;
+  report.boundaries[0].totalItems = 3;
+  report.boundaries[0].rangeCount = 3;
+  report.boundaries[0].actualRangeCount = 3;
+  report.boundaries[0].ranges.push(thirdRange);
+  const result = validateWebGpuCooperativeExecutionReport(report, {
+    ...expectations,
+    expectedGpuDutyCount: undefined,
+  });
+  assert.equal(result.ok, false, 'completed GPU ranges require one duty each');
+  assert.match(result.errors.join('\n'), /gpuDuties.*completed GPU-command ranges/);
+}
+
+{
+  const report = createBoundedReport();
+  report.gpuDuties[0].boundaryId = 'unrelated-boundary';
+  report.gpuDuties[0].rangeId = 'unrelated-range';
+  report.gpuDuties[0].rangeIndex = 99;
+  const result = validateWebGpuCooperativeExecutionReport(report, expectations);
+  assert.equal(result.ok, false, 'duty identities must bind to completed GPU ranges');
+  assert.match(result.errors.join('\n'), /gpuDuties\[0\].*completed GPU-command range/);
+}
+
+{
+  const report = createBoundedReport();
+  report.status = 'cancelled';
+  report.progress.status = 'running';
+  report.failure = null;
+  report.boundaries = [null];
+  report.retiredGpuDutyCount = 0;
+  report.gpuDuties = report.gpuDuties.map(duty => ({
+    ...duty,
+    status: 'retired-after-failure',
+  }));
+  const result = validateWebGpuCooperativeExecutionReport(report, {
+    ...expectations,
+    expectedStatus: 'cancelled',
+  });
+  assert.equal(result.ok, false, 'cancelled reports require terminal failure authority');
+  assert.match(result.errors.join('\n'), /progress.status.*cancelled/);
+  assert.match(result.errors.join('\n'), /failure.*cancelled/);
+  assert.match(result.errors.join('\n'), /boundaries\[0\].*object/);
+}
+
 assert.throws(
   () => validateWebGpuCooperativeExecutionReport(createBoundedReport(), {
     ...expectations,
