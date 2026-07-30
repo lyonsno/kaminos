@@ -50,7 +50,7 @@
 
     #mode-controls {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 4px;
       margin: 0 0 10px;
       padding: 0;
@@ -159,7 +159,8 @@
   <div id="status">initializing portable macro optics</div>
   <div id="controls">
     <fieldset id="mode-controls" aria-label="Surface mode">
-      <button type="button" data-mode="optical" aria-pressed="false">Clipped</button>
+      <button type="button" data-mode="continuous" aria-pressed="false">Continuous</button>
+      <button type="button" data-mode="clipped" aria-pressed="false">Clipped</button>
       <button type="button" data-mode="regular_grid_debug" aria-pressed="false">Grid debug</button>
       <button type="button" data-mode="cyan" aria-pressed="false">Cyan</button>
     </fieldset>
@@ -185,7 +186,7 @@
   </div>
   <script
     type="module"
-    src="./finger-fluid-portable-macro-optical-witness.js?runtime=controls-v1"
+    src="./finger-fluid-portable-macro-optical-witness.js?runtime=continuous-v1"
   ></script>
 </body>
 </html>

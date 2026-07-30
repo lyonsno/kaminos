@@ -16,6 +16,8 @@ const REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE =
   'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0';
 const WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE =
   'kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0';
+const CONTINUOUS_PATCH_TOPOLOGY_ROUTE =
+  'kaminos/finger-fluid/portable-macro-continuous-patch-v0';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
@@ -24,16 +26,18 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const startTimeSeconds = Number(args.get('--start-time') || 0.75);
 const endTimeSeconds = Number(args.get('--end-time') || 2.75);
 const requestedUrl = args.get('--url')
-  || `http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=optical&time=${startTimeSeconds}`;
+  || `http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=${startTimeSeconds}`;
 const outDir = resolve(
   args.get('--out-dir') || `/tmp/kaminos-portable-macro-optics-${process.pid}`,
 );
 const reportPath = resolve(args.get('--report') || join(outDir, 'report.json'));
-const dynamicStartPath = join(outDir, 'optical-dynamic-start.png');
-const dynamicEndPath = join(outDir, 'optical-dynamic-end.png');
+const dynamicStartPath = join(outDir, 'continuous-fixed-camera-source-start.png');
+const dynamicEndPath = join(outDir, 'continuous-fixed-camera-source-end.png');
 const regularGridPath = join(outDir, 'same-state-regular-grid-debug.png');
 const cyanPath = join(outDir, 'same-state-cyan-debug.png');
 const clippedPath = join(outDir, 'same-state-wet-boundary-clipped.png');
+const cameraBasePath = join(outDir, 'frozen-source-camera-base.png');
+const cameraMovedPath = join(outDir, 'frozen-source-camera-moved.png');
 const debugPort = Number(args.get('--debug-port') || 9531);
 const viewportWidth = Number(args.get('--viewport-width') || 1600);
 const viewportHeight = Number(args.get('--viewport-height') || 1000);
@@ -54,6 +58,8 @@ let state = null;
 let captures = {};
 let dynamicDelta = null;
 let sameStateDelta = null;
+let continuousDelta = null;
+let cameraMotionDelta = null;
 let operatorControls = null;
 let stderr = '';
 const consoleEvents = [];
@@ -99,7 +105,7 @@ function writeReport(extra = {}) {
     requestedRoute: OPTICAL_ROUTE,
     effectiveRoute: state?.effectiveRoute ?? null,
     fallback: state?.fallback ?? null,
-    requestedTopologyRoute: WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+    requestedTopologyRoute: CONTINUOUS_PATCH_TOPOLOGY_ROUTE,
     effectiveTopologyRoute: state?.effectiveTopologyRoute ?? null,
     topologyFallback: state?.topologyFallback ?? null,
     backend: state?.backend ?? null,
@@ -112,6 +118,8 @@ function writeReport(extra = {}) {
     captures,
     dynamicDelta,
     sameStateDelta,
+    continuousDelta,
+    cameraMotionDelta,
     operatorControls,
     primary_output_written: primaryOutputWritten,
     failure_phase: phase,
@@ -134,7 +142,7 @@ async function bindServedSourceIdentity() {
     },
     {
       localPath: 'finger-fluid-portable-macro-optical-witness.js',
-      servedPath: 'finger-fluid-portable-macro-optical-witness.js?runtime=controls-v1',
+      servedPath: 'finger-fluid-portable-macro-optical-witness.js?runtime=continuous-v1',
     },
     {
       localPath: 'finger-fluid-portable-macro-optical-renderer.js',
@@ -373,15 +381,14 @@ function validateOpticalState(candidate, expectedTime, expectedTopologyRoute) {
     );
   }
   if (
-    expectedTopologyRoute === WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+    [WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE, CONTINUOUS_PATCH_TOPOLOGY_ROUTE]
+      .includes(expectedTopologyRoute)
     && (
       !candidate.topology?.boundaryId
       || !candidate.topology?.resetId
-      || candidate.topology.shorelineCrossingCount <= 0
-      || candidate.topology.clippedCellCount <= 0
     )
   ) {
-    throw new Error(`clipped shoreline evidence is partial: ${JSON.stringify(candidate.topology)}`);
+    throw new Error(`wet-boundary evidence is partial: ${JSON.stringify(candidate.topology)}`);
   }
   if (
     expectedTopologyRoute === WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
@@ -398,6 +405,25 @@ function validateOpticalState(candidate, expectedTime, expectedTopologyRoute) {
     throw new Error(
       `renderer clipped shoreline evidence is partial or divergent: ${
         JSON.stringify(candidate.rendererEvidence?.topology)
+      }`,
+    );
+  }
+  if (
+    expectedTopologyRoute === CONTINUOUS_PATCH_TOPOLOGY_ROUTE
+    && (
+      candidate.topology?.reconstruction?.position !== 'shared-c1-hermite-patch-v0'
+      || candidate.topology?.reconstruction?.normal
+        !== 'analytic-position-derivative-v0'
+      || candidate.topology?.reconstruction?.coverage
+        !== 'fragment-signed-wet-margin-aa-v0'
+      || candidate.topology?.reconstruction?.stableCarrier !== true
+      || candidate.rendererEvidence?.topology?.reconstruction?.position
+        !== 'shared-c1-hermite-patch-v0'
+    )
+  ) {
+    throw new Error(
+      `continuous reconstruction evidence is partial or divergent: ${
+        JSON.stringify(candidate)
       }`,
     );
   }
@@ -442,7 +468,7 @@ async function exerciseOperatorControls(socket, initialState) {
       || !playback
       || !timeControl
       || !cyanControl
-      || modes.length !== 3
+      || modes.length !== 4
       || !bounds
       || bounds.width < 240
       || bounds.height < 60
@@ -485,9 +511,9 @@ async function exerciseOperatorControls(socket, initialState) {
       || cyan.effectiveRoute !== ${JSON.stringify(CYAN_DEBUG_ROUTE)}
       || cyan.fallback !== null
       || cyan.requestedTopologyRoute
-        !== ${JSON.stringify(WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE)}
+        !== ${JSON.stringify(CONTINUOUS_PATCH_TOPOLOGY_ROUTE)}
       || cyan.effectiveTopologyRoute
-        !== ${JSON.stringify(WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE)}
+        !== ${JSON.stringify(CONTINUOUS_PATCH_TOPOLOGY_ROUTE)}
       || cyan.topologyFallback !== null
     ) {
       throw new Error(\`cyan visible control route mismatch: \${JSON.stringify(cyan)}\`);
@@ -532,9 +558,21 @@ async function exerciseOperatorControls(socket, initialState) {
   const restoredState = await setTimeAndMode(
     socket,
     initialState.animationTimeSeconds,
-    'optical',
+    'continuous',
   );
   return { ...result, restoredState };
+}
+
+async function setCameraOrbit(socket, cameraOrbitRadians) {
+  return evaluate(socket, `(async () => {
+    const state = window.kaminosPortableMacroSetCameraOrbitForWitness?.(
+      ${JSON.stringify(cameraOrbitRadians)}
+    );
+    if (!state) throw new Error('camera witness control is missing');
+    await window.__kaminosPortableMacroDevice?.queue?.onSubmittedWorkDone?.();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return window.kaminosPortableMacroOpticalDebugState;
+  })()`);
 }
 
 async function captureCanvas(socket, path) {
@@ -566,7 +604,7 @@ async function main() {
   requestedUrlObject = new URL(requestedUrl);
   if (
     requestedUrlObject.pathname !== '/finger-fluid-portable-macro-optical-witness.html'
-    || requestedUrlObject.searchParams.get('mode') !== 'optical'
+    || requestedUrlObject.searchParams.get('mode') !== 'continuous'
     || Number(requestedUrlObject.searchParams.get('time')) !== startTimeSeconds
   ) {
     throw new Error(`witness URL is stale or defaulted: ${requestedUrl}`);
@@ -642,7 +680,7 @@ async function main() {
     validateOpticalState(
       state,
       startTimeSeconds,
-      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+      CONTINUOUS_PATCH_TOPOLOGY_ROUTE,
     );
     preserveEvidence('first-optical-frame', state);
 
@@ -652,7 +690,7 @@ async function main() {
     validateOpticalState(
       state,
       startTimeSeconds,
-      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+      CONTINUOUS_PATCH_TOPOLOGY_ROUTE,
     );
     preserveEvidence('exercise-operator-controls', operatorControls);
 
@@ -665,11 +703,11 @@ async function main() {
     primaryOutputWritten = true;
 
     phase = 'capture-dynamic-end';
-    state = await setTimeAndMode(socket, endTimeSeconds, 'optical');
+    state = await setTimeAndMode(socket, endTimeSeconds, 'continuous');
     validateOpticalState(
       state,
       endTimeSeconds,
-      WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE,
+      CONTINUOUS_PATCH_TOPOLOGY_ROUTE,
     );
     captures.dynamicEnd = {
       state,
@@ -704,8 +742,8 @@ async function main() {
       || state.requestedRoute !== CYAN_DEBUG_ROUTE
       || state.effectiveRoute !== CYAN_DEBUG_ROUTE
       || state.fallback !== null
-      || state.requestedTopologyRoute !== WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
-      || state.effectiveTopologyRoute !== WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE
+      || state.requestedTopologyRoute !== CONTINUOUS_PATCH_TOPOLOGY_ROUTE
+      || state.effectiveTopologyRoute !== CONTINUOUS_PATCH_TOPOLOGY_ROUTE
       || state.topologyFallback !== null
       || state.blank
       || state.partial
@@ -720,7 +758,7 @@ async function main() {
     };
 
     phase = 'capture-same-state-wet-boundary-clipped';
-    state = await setTimeAndMode(socket, endTimeSeconds, 'optical');
+    state = await setTimeAndMode(socket, endTimeSeconds, 'clipped');
     validateOpticalState(
       state,
       endTimeSeconds,
@@ -731,21 +769,57 @@ async function main() {
       visual: await captureCanvas(socket, clippedPath),
       path: clippedPath,
     };
-    sameStateDelta = measurePngDelta(regularGridPath, clippedPath);
+    sameStateDelta = measurePngDelta(regularGridPath, dynamicEndPath);
     if (sameStateDelta.changedRatio < 0.001) {
       throw new Error(
-        `clipped shoreline topology lacks a material visual delta: ${JSON.stringify(sameStateDelta)}`,
+        `continuous topology lacks a material grid-debug delta: ${JSON.stringify(sameStateDelta)}`,
       );
+    }
+    continuousDelta = measurePngDelta(clippedPath, dynamicEndPath);
+    if (continuousDelta.changedRatio < 0.001) {
+      throw new Error(
+        `continuous reconstruction lacks a material clipped-route delta: ${
+          JSON.stringify(continuousDelta)
+        }`,
+      );
+    }
+
+    phase = 'capture-frozen-source-camera-base';
+    state = await setTimeAndMode(socket, endTimeSeconds, 'continuous');
+    state = await setCameraOrbit(socket, 0);
+    validateOpticalState(state, endTimeSeconds, CONTINUOUS_PATCH_TOPOLOGY_ROUTE);
+    captures.frozenSourceCameraBase = {
+      state,
+      visual: await captureCanvas(socket, cameraBasePath),
+      path: cameraBasePath,
+    };
+
+    phase = 'capture-frozen-source-camera-moved';
+    state = await setCameraOrbit(socket, 0.18);
+    validateOpticalState(state, endTimeSeconds, CONTINUOUS_PATCH_TOPOLOGY_ROUTE);
+    if (Math.abs(state.cameraOrbitRadians - 0.18) > 1e-6) {
+      throw new Error(`camera route is stale: ${JSON.stringify(state)}`);
+    }
+    captures.frozenSourceCameraMoved = {
+      state,
+      visual: await captureCanvas(socket, cameraMovedPath),
+      path: cameraMovedPath,
+    };
+    cameraMotionDelta = measurePngDelta(cameraBasePath, cameraMovedPath);
+    if (cameraMotionDelta.changedRatio < 0.002) {
+      throw new Error(`camera output is stale: ${JSON.stringify(cameraMotionDelta)}`);
     }
     if (consoleEvents.some(event => event.type === 'exception' || event.type === 'error')) {
       throw new Error(`browser emitted runtime errors: ${JSON.stringify(consoleEvents)}`);
     }
 
     phase = 'complete';
+    state = await setCameraOrbit(socket, 0);
     const expectedFinalUrl = new URL(requestedUrl);
-    expectedFinalUrl.searchParams.set('mode', 'optical');
+    expectedFinalUrl.searchParams.set('mode', 'continuous');
     expectedFinalUrl.searchParams.set('time', endTimeSeconds.toFixed(2));
     expectedFinalUrl.searchParams.set('paused', '1');
+    expectedFinalUrl.searchParams.delete('cameraOrbit');
     const finalEffectiveUrl = await evaluate(socket, 'window.location.href');
     if (!urlsHaveSameIdentity(finalEffectiveUrl, expectedFinalUrl)) {
       throw new Error(
@@ -764,6 +838,8 @@ async function main() {
       host: state.host,
       dynamicDelta,
       sameStateDelta,
+      continuousDelta,
+      cameraMotionDelta,
     });
     const report = writeReport({
       ok: true,

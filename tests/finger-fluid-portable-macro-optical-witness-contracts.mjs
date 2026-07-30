@@ -29,8 +29,8 @@ const runtime = readFileSync(
 
 assert.match(
   witness,
-  /finger-fluid-portable-macro-optical-witness\.html\?mode=optical&time=/,
-  'the requested optical route and fixed state are explicit',
+  /finger-fluid-portable-macro-optical-witness\.html\?mode=continuous&time=/,
+  'the requested continuous optical route and fixed state are explicit',
 );
 assert.match(
   witness,
@@ -90,12 +90,12 @@ assert.match(
 assert.match(
   witness,
   /sameStateDelta[\s\S]*changedRatio/,
-  'the same-state regular-grid-debug versus clipped-shoreline delta is measured',
+  'the same-state regular-grid-debug versus continuous-patch delta is measured',
 );
 assert.match(
   witness,
-  /capture-same-state-regular-grid-debug[\s\S]*REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE[\s\S]*capture-same-state-wet-boundary-clipped[\s\S]*WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE/,
-  'the witness captures both exact topology routes at one simulation state',
+  /capture-same-state-regular-grid-debug[\s\S]*REGULAR_GRID_DEBUG_TOPOLOGY_ROUTE[\s\S]*capture-same-state-wet-boundary-clipped[\s\S]*WET_BOUNDARY_CLIPPED_TOPOLOGY_ROUTE[\s\S]*continuous reconstruction lacks a material clipped-route delta/,
+  'the witness captures grid, clipped, and continuous topology evidence at one simulation state',
 );
 assert.match(
   witness,
@@ -124,8 +124,18 @@ assert.match(
 );
 assert.match(
   page,
-  /id="mode-controls"[\s\S]*data-mode="optical"[\s\S]*data-mode="regular_grid_debug"[\s\S]*data-mode="cyan"/,
+  /id="mode-controls"[\s\S]*data-mode="continuous"[\s\S]*data-mode="clipped"[\s\S]*data-mode="regular_grid_debug"[\s\S]*data-mode="cyan"/,
   'the operator can visibly select every supported rendering mode',
+);
+assert.match(
+  runtime,
+  /KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE[\s\S]*continuous[\s\S]*clipped/,
+  'the witness exposes continuous beauty and clipped attribution as distinct exact routes',
+);
+assert.match(
+  witness,
+  /capture-frozen-source-camera-base[\s\S]*capture-frozen-source-camera-moved/,
+  'the witness separates fixed-camera source motion from frozen-source camera motion',
 );
 assert.match(
   page,
@@ -139,12 +149,12 @@ assert.match(
 );
 assert.match(
   page,
-  /finger-fluid-portable-macro-optical-witness\.js\?runtime=controls-v1/,
+  /finger-fluid-portable-macro-optical-witness\.js\?runtime=continuous-v1/,
   'the visible control shell binds a versioned runtime instead of a stale cached module',
 );
 assert.match(
   witness,
-  /servedPath:\s*'finger-fluid-portable-macro-optical-witness\.js\?runtime=controls-v1'/,
+  /servedPath:\s*'finger-fluid-portable-macro-optical-witness\.js\?runtime=continuous-v1'/,
   'served source identity binds the exact versioned runtime URL executed by the page',
 );
 assert.match(
@@ -194,22 +204,22 @@ assert.match(
 );
 assert.equal(
   urlsHaveSameIdentity(
-    'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1',
-    'http://127.0.0.1:48220/witness?paused=1&mode=optical&time=2.75',
+    'http://127.0.0.1:48220/witness?mode=continuous&time=2.75&paused=1',
+    'http://127.0.0.1:48220/witness?paused=1&mode=continuous&time=2.75',
   ),
   true,
   'query ordering does not change effective URL identity',
 );
 for (const staleUrl of [
   'http://127.0.0.1:48220/witness?mode=cyan&time=2.75&paused=1',
-  'http://127.0.0.1:48220/witness?mode=optical&time=2.75',
-  'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1&fallback=cyan',
-  'http://127.0.0.1:48220/witness?mode=optical&mode=cyan&time=2.75&paused=1',
+  'http://127.0.0.1:48220/witness?mode=continuous&time=2.75',
+  'http://127.0.0.1:48220/witness?mode=continuous&time=2.75&paused=1&fallback=cyan',
+  'http://127.0.0.1:48220/witness?mode=continuous&mode=cyan&time=2.75&paused=1',
 ]) {
   assert.equal(
     urlsHaveSameIdentity(
       staleUrl,
-      'http://127.0.0.1:48220/witness?mode=optical&time=2.75&paused=1',
+      'http://127.0.0.1:48220/witness?mode=continuous&time=2.75&paused=1',
     ),
     false,
     `stale effective URL identity fails loud: ${staleUrl}`,

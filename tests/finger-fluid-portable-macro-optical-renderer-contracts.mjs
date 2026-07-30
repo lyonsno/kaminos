@@ -188,6 +188,9 @@ const hostFrame = {
   },
 };
 
+const CONTINUOUS_PATCH_ROUTE =
+  'kaminos/finger-fluid/portable-macro-continuous-patch-v0';
+
 assert.equal(
   renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_SCHEMA,
   'kaminos.finger-fluid.portable-macro-optical-renderer.v0',
@@ -264,6 +267,87 @@ assert.ok(
 assert.ok(
   Math.abs(plan.vertices[4 * plan.vertexStrideFloats + 6] - 0.8) < 1e-6,
   'physical depth in meters remains available to the optical shader',
+);
+
+const continuousPlan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+  snapshot,
+  expectedIdentity,
+  hostFrame,
+  requestedTopologyRoute: CONTINUOUS_PATCH_ROUTE,
+});
+assert.equal(
+  renderer.KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE,
+  CONTINUOUS_PATCH_ROUTE,
+);
+assert.deepEqual(continuousPlan.topology.route, {
+  requested: CONTINUOUS_PATCH_ROUTE,
+  effective: CONTINUOUS_PATCH_ROUTE,
+  fallback: null,
+});
+assert.equal(continuousPlan.topology.reconstruction.position, 'shared-c1-hermite-patch-v0');
+assert.equal(continuousPlan.topology.reconstruction.normal, 'analytic-position-derivative-v0');
+assert.equal(continuousPlan.topology.reconstruction.coverage, 'fragment-signed-wet-margin-aa-v0');
+assert.equal(continuousPlan.topology.reconstruction.subdivisionsPerCell, 4);
+assert.equal(continuousPlan.topology.reconstruction.stableCarrier, true);
+assert.equal(continuousPlan.vertexCount, 81);
+assert.equal(continuousPlan.indexCount, 384);
+assert.ok(
+  Array.from({ length: continuousPlan.vertexCount }, (_, index) => (
+    continuousPlan.vertices[index * continuousPlan.vertexStrideFloats + 11]
+  )).some(value => value < 0),
+  'the stable carrier retains dry signed margin for fragment-path wet coverage',
+);
+assert.ok(
+  Array.from({ length: continuousPlan.vertexCount }, (_, index) => (
+    continuousPlan.vertices[index * continuousPlan.vertexStrideFloats + 11]
+  )).some(value => value > 0),
+  'the stable carrier retains wet signed margin for fragment-path wet coverage',
+);
+assert.ok(
+  Array.from({ length: continuousPlan.vertexCount }, (_, index) => {
+    const offset = index * continuousPlan.vertexStrideFloats + 3;
+    return Math.abs(Math.hypot(
+      continuousPlan.vertices[offset],
+      continuousPlan.vertices[offset + 1],
+      continuousPlan.vertices[offset + 2],
+    ) - 1) < 1e-5;
+  }).every(Boolean),
+  'continuous patch normals are normalized analytic position derivatives',
+);
+
+const evolvedContinuousSnapshot = {
+  ...snapshot,
+  mappedDepth: new Float64Array([
+    0, 0.42, 0,
+    0.33, 0.65, 0.48,
+    0, 0.28, 0,
+  ]),
+  wetBoundary: {
+    ...snapshot.wetBoundary,
+    physicalDepthMeters: new Float64Array([
+      0, 0.42, 0,
+      0.33, 0.65, 0.48,
+      0, 0.28, 0,
+    ]),
+    signedDryMarginMeters: new Float64Array([
+      -0.1, 0.32, -0.1,
+      0.23, 0.55, 0.38,
+      -0.1, 0.18, -0.1,
+    ]),
+  },
+};
+const evolvedContinuousPlan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
+  snapshot: evolvedContinuousSnapshot,
+  expectedIdentity,
+  hostFrame,
+  requestedTopologyRoute: CONTINUOUS_PATCH_ROUTE,
+});
+assert.equal(evolvedContinuousPlan.vertexCount, continuousPlan.vertexCount);
+assert.equal(evolvedContinuousPlan.indexCount, continuousPlan.indexCount);
+assert.deepEqual(
+  evolvedContinuousPlan.indices,
+  continuousPlan.indices,
+  'evolving wet state updates fields without rebuilding visible interior topology',
 );
 
 const clippedPlan = renderer.createFingerFluidPortableMacroOpticalRenderPlan({
@@ -712,6 +796,7 @@ assert.deepEqual(clippedRenderEvidence.topology, {
   shorelineCrossingCount: clippedPlan.topology.shorelineCrossingCount,
   clippedCellCount: clippedPlan.topology.clippedCellCount,
   ambiguityRoute: 'asymptotic-decider-stable-cell-v1',
+  reconstruction: null,
 });
 assert.throws(
   () => renderer.validateFingerFluidPortableMacroOpticalRenderAttachments({

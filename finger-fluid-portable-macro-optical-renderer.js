@@ -10,12 +10,15 @@ export const KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE =
   'kaminos/finger-fluid/portable-macro-regular-grid-debug-v0';
 export const KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE =
   'kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0';
+export const KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE =
+  'kaminos/finger-fluid/portable-macro-continuous-patch-v0';
 
 const PORTABLE_UPLOAD_SCHEMA =
   'kaminos.finger-fluid.portable-macro-upload-snapshot.v1';
 const MACRO_WET_BOUNDARY_SCHEMA = 'kaminos.fluid.macro-wet-boundary.v1';
 const MACRO_WET_BOUNDARY_ROUTE = 'kaminos/fluid/macro-wet-boundary';
 const CLIPPED_AMBIGUITY_ROUTE = 'asymptotic-decider-stable-cell-v1';
+const CONTINUOUS_PATCH_SUBDIVISIONS = 4;
 const VERTEX_STRIDE_FLOATS = 12;
 const VERTEX_STRIDE_BYTES = VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const UNIFORM_FLOATS = 44;
@@ -347,7 +350,7 @@ function buildSurfaceVertexAttributes(snapshot, wetState = null) {
     vertices[vertexOffset + 8] = snapshot.mappedMomentumU[index];
     vertices[vertexOffset + 9] = snapshot.mappedMomentumV[index];
     vertices[vertexOffset + 10] = snapshot.confidence;
-    vertices[vertexOffset + 11] = wet;
+    vertices[vertexOffset + 11] = wet > 0 ? 1 : -1;
   }
   for (let row = 0; row < snapshot.height; row += 1) {
     for (let column = 0; column < snapshot.width; column += 1) {
@@ -861,6 +864,320 @@ function buildClippedShorelineMesh(snapshot, boundary, diagnostics) {
   };
 }
 
+function monotoneSlope(previous, current, next, hasPrevious, hasNext) {
+  if (!hasPrevious) return next - current;
+  if (!hasNext) return current - previous;
+  const incoming = current - previous;
+  const outgoing = next - current;
+  if (incoming === 0 || outgoing === 0 || Math.sign(incoming) !== Math.sign(outgoing)) {
+    return 0;
+  }
+  return 2 * incoming * outgoing / (incoming + outgoing);
+}
+
+function buildSharedFieldSlopes(values, width, height, componentCount) {
+  const slopeU = new Float64Array(values.length);
+  const slopeV = new Float64Array(values.length);
+  const read = (row, column, component) => (
+    values[(row * width + column) * componentCount + component]
+  );
+  for (let row = 0; row < height; row += 1) {
+    for (let column = 0; column < width; column += 1) {
+      const offset = (row * width + column) * componentCount;
+      for (let component = 0; component < componentCount; component += 1) {
+        slopeU[offset + component] = monotoneSlope(
+          read(row, Math.max(0, column - 1), component),
+          read(row, column, component),
+          read(row, Math.min(width - 1, column + 1), component),
+          column > 0,
+          column + 1 < width,
+        );
+        slopeV[offset + component] = monotoneSlope(
+          read(Math.max(0, row - 1), column, component),
+          read(row, column, component),
+          read(Math.min(height - 1, row + 1), column, component),
+          row > 0,
+          row + 1 < height,
+        );
+      }
+    }
+  }
+  return { slopeU, slopeV };
+}
+
+function hermiteBasis(t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    value: [
+      2 * t3 - 3 * t2 + 1,
+      -2 * t3 + 3 * t2,
+    ],
+    slope: [
+      t3 - 2 * t2 + t,
+      t3 - t2,
+    ],
+    valueDerivative: [
+      6 * t2 - 6 * t,
+      -6 * t2 + 6 * t,
+    ],
+    slopeDerivative: [
+      3 * t2 - 4 * t + 1,
+      3 * t2 - 2 * t,
+    ],
+  };
+}
+
+function evaluateSharedHermiteField({
+  values,
+  slopeU,
+  slopeV,
+  width,
+  componentCount,
+  row,
+  column,
+  u,
+  v,
+}) {
+  const basisU = hermiteBasis(u);
+  const basisV = hermiteBasis(v);
+  const value = new Float64Array(componentCount);
+  const derivativeU = new Float64Array(componentCount);
+  const derivativeV = new Float64Array(componentCount);
+  for (let cornerV = 0; cornerV < 2; cornerV += 1) {
+    for (let cornerU = 0; cornerU < 2; cornerU += 1) {
+      const sourceOffset = (
+        (row + cornerV) * width + column + cornerU
+      ) * componentCount;
+      const valueWeight = (
+        basisU.value[cornerU] * basisV.value[cornerV]
+      );
+      const slopeUWeight = (
+        basisU.slope[cornerU] * basisV.value[cornerV]
+      );
+      const slopeVWeight = (
+        basisU.value[cornerU] * basisV.slope[cornerV]
+      );
+      const valueDerivativeUWeight = (
+        basisU.valueDerivative[cornerU] * basisV.value[cornerV]
+      );
+      const slopeUDerivativeWeight = (
+        basisU.slopeDerivative[cornerU] * basisV.value[cornerV]
+      );
+      const slopeVDerivativeUWeight = (
+        basisU.valueDerivative[cornerU] * basisV.slope[cornerV]
+      );
+      const valueDerivativeVWeight = (
+        basisU.value[cornerU] * basisV.valueDerivative[cornerV]
+      );
+      const slopeUDerivativeVWeight = (
+        basisU.slope[cornerU] * basisV.valueDerivative[cornerV]
+      );
+      const slopeVDerivativeWeight = (
+        basisU.value[cornerU] * basisV.slopeDerivative[cornerV]
+      );
+      for (let component = 0; component < componentCount; component += 1) {
+        const sourceIndex = sourceOffset + component;
+        value[component] += (
+          values[sourceIndex] * valueWeight
+          + slopeU[sourceIndex] * slopeUWeight
+          + slopeV[sourceIndex] * slopeVWeight
+        );
+        derivativeU[component] += (
+          values[sourceIndex] * valueDerivativeUWeight
+          + slopeU[sourceIndex] * slopeUDerivativeWeight
+          + slopeV[sourceIndex] * slopeVDerivativeUWeight
+        );
+        derivativeV[component] += (
+          values[sourceIndex] * valueDerivativeVWeight
+          + slopeU[sourceIndex] * slopeUDerivativeVWeight
+          + slopeV[sourceIndex] * slopeVDerivativeWeight
+        );
+      }
+    }
+  }
+  return { value, derivativeU, derivativeV };
+}
+
+function buildContinuousPatchMesh(snapshot, boundary, diagnostics) {
+  diagnostics.phase = 'build-continuous-patch-mesh';
+  const source = buildSurfaceVertexAttributes(snapshot, boundary.wetState);
+  const componentCount = 8;
+  const field = new Float64Array(snapshot.sampleCount * componentCount);
+  for (let sampleIndex = 0; sampleIndex < snapshot.sampleCount; sampleIndex += 1) {
+    const sourceOffset = sampleIndex * VERTEX_STRIDE_FLOATS;
+    const fieldOffset = sampleIndex * componentCount;
+    field.set(source.vertices.subarray(sourceOffset, sourceOffset + 3), fieldOffset);
+    field[fieldOffset + 3] = boundary.physicalDepthMeters[sampleIndex];
+    field[fieldOffset + 4] = snapshot.mappedDepth[sampleIndex];
+    field[fieldOffset + 5] = snapshot.mappedMomentumU[sampleIndex];
+    field[fieldOffset + 6] = snapshot.mappedMomentumV[sampleIndex];
+    field[fieldOffset + 7] = boundary.signedDryMarginMeters[sampleIndex];
+  }
+  const slopes = buildSharedFieldSlopes(
+    field,
+    snapshot.width,
+    snapshot.height,
+    componentCount,
+  );
+  const microWidth = (snapshot.width - 1) * CONTINUOUS_PATCH_SUBDIVISIONS + 1;
+  const microHeight = (snapshot.height - 1) * CONTINUOUS_PATCH_SUBDIVISIONS + 1;
+  const vertices = new Float32Array(microWidth * microHeight * VERTEX_STRIDE_FLOATS);
+  let minimumOutputSignedMarginMeters = Number.POSITIVE_INFINITY;
+  for (let microRow = 0; microRow < microHeight; microRow += 1) {
+    const row = Math.min(
+      snapshot.height - 2,
+      Math.floor(microRow / CONTINUOUS_PATCH_SUBDIVISIONS),
+    );
+    const v = (
+      microRow === microHeight - 1
+        ? 1
+        : (microRow % CONTINUOUS_PATCH_SUBDIVISIONS) / CONTINUOUS_PATCH_SUBDIVISIONS
+    );
+    for (let microColumn = 0; microColumn < microWidth; microColumn += 1) {
+      const column = Math.min(
+        snapshot.width - 2,
+        Math.floor(microColumn / CONTINUOUS_PATCH_SUBDIVISIONS),
+      );
+      const u = (
+        microColumn === microWidth - 1
+          ? 1
+          : (microColumn % CONTINUOUS_PATCH_SUBDIVISIONS)
+            / CONTINUOUS_PATCH_SUBDIVISIONS
+      );
+      const evaluated = evaluateSharedHermiteField({
+        values: field,
+        ...slopes,
+        width: snapshot.width,
+        componentCount,
+        row,
+        column,
+        u,
+        v,
+      });
+      const derivativeU = evaluated.derivativeU;
+      const derivativeV = evaluated.derivativeV;
+      let normal = [
+        derivativeV[1] * derivativeU[2] - derivativeV[2] * derivativeU[1],
+        derivativeV[2] * derivativeU[0] - derivativeV[0] * derivativeU[2],
+        derivativeV[0] * derivativeU[1] - derivativeV[1] * derivativeU[0],
+      ];
+      const cornerWeights = [
+        (1 - u) * (1 - v),
+        u * (1 - v),
+        (1 - u) * v,
+        u * v,
+      ];
+      const cornerIndices = [
+        row * snapshot.width + column,
+        row * snapshot.width + column + 1,
+        (row + 1) * snapshot.width + column,
+        (row + 1) * snapshot.width + column + 1,
+      ];
+      const referenceNormal = [0, 0, 0];
+      for (let corner = 0; corner < 4; corner += 1) {
+        const normalOffset = cornerIndices[corner] * 3;
+        for (let axis = 0; axis < 3; axis += 1) {
+          referenceNormal[axis] += (
+            snapshot.normal[normalOffset + axis] * cornerWeights[corner]
+          );
+        }
+      }
+      let normalLength = Math.hypot(...normal);
+      if (normalLength <= 1e-12) {
+        normal = referenceNormal;
+        normalLength = Math.hypot(...normal);
+      }
+      normal = normal.map(value => value / Math.max(normalLength, 1e-12));
+      if (
+        normal.reduce(
+          (sum, value, axis) => sum + value * referenceNormal[axis],
+          0,
+        ) < 0
+      ) {
+        normal = normal.map(value => -value);
+      }
+      const vertexOffset = (
+        microRow * microWidth + microColumn
+      ) * VERTEX_STRIDE_FLOATS;
+      vertices.set(evaluated.value.subarray(0, 3), vertexOffset);
+      vertices.set(normal, vertexOffset + 3);
+      vertices[vertexOffset + 6] = Math.max(0, evaluated.value[3]);
+      vertices[vertexOffset + 7] = Math.max(0, evaluated.value[4]);
+      vertices[vertexOffset + 8] = evaluated.value[5];
+      vertices[vertexOffset + 9] = evaluated.value[6];
+      vertices[vertexOffset + 10] = snapshot.confidence;
+      vertices[vertexOffset + 11] = evaluated.value[7];
+      minimumOutputSignedMarginMeters = Math.min(
+        minimumOutputSignedMarginMeters,
+        evaluated.value[7],
+      );
+    }
+  }
+
+  const indices = new Uint32Array((microWidth - 1) * (microHeight - 1) * 6);
+  let indexOffset = 0;
+  let drawableWetTriangleCount = 0;
+  for (let row = 0; row < microHeight - 1; row += 1) {
+    for (let column = 0; column < microWidth - 1; column += 1) {
+      const topLeft = row * microWidth + column;
+      const topRight = topLeft + 1;
+      const bottomLeft = topLeft + microWidth;
+      const bottomRight = bottomLeft + 1;
+      indices.set([
+        topLeft, bottomLeft, topRight,
+        topRight, bottomLeft, bottomRight,
+      ], indexOffset);
+      indexOffset += 6;
+      for (const triangle of [
+        [topLeft, bottomLeft, topRight],
+        [topRight, bottomLeft, bottomRight],
+      ]) {
+        const margins = triangle.map(
+          index => vertices[index * VERTEX_STRIDE_FLOATS + 11],
+        );
+        if (Math.max(...margins) > 0) {
+          drawableWetTriangleCount += 1;
+        }
+      }
+    }
+  }
+  if (source.wetSampleCount === 0 || drawableWetTriangleCount === 0) {
+    fail('portable macro continuous patch surface is blank', diagnostics, {
+      sampleCount: snapshot.sampleCount,
+      wetSampleCount: source.wetSampleCount,
+      drawableWetTriangleCount,
+    });
+  }
+  diagnostics.lastTrustworthyEvidence = 'continuous-patch-mesh-built';
+  return {
+    vertices,
+    indices,
+    wetSampleCount: source.wetSampleCount,
+    drawableWetTriangleCount,
+    topology: Object.freeze({
+      boundary: Object.freeze({
+        schema: boundary.schema,
+        id: boundary.boundaryId,
+        generation: boundary.boundaryGeneration,
+        resetId: boundary.reset.id,
+        topologyId: boundary.topologyId,
+        route: Object.freeze({ ...boundary.route }),
+        sourceAuthority: boundary.sourceAuthority,
+        fallbackStatus: boundary.fallbackStatus,
+      }),
+      reconstruction: Object.freeze({
+        position: 'shared-c1-hermite-patch-v0',
+        normal: 'analytic-position-derivative-v0',
+        coverage: 'fragment-signed-wet-margin-aa-v0',
+        subdivisionsPerCell: CONTINUOUS_PATCH_SUBDIVISIONS,
+        stableCarrier: true,
+      }),
+      minimumOutputSignedMarginMeters,
+    }),
+  };
+}
+
 export function createFingerFluidPortableMacroOpticalRenderPlan({
   snapshot,
   expectedIdentity,
@@ -882,6 +1199,7 @@ export function createFingerFluidPortableMacroOpticalRenderPlan({
     if (![
       KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
       KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
+      KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE,
     ].includes(requestedTopologyRoute)) {
       fail(
         `portable macro optical topology route is unsupported: ${requestedTopologyRoute}`,
@@ -893,12 +1211,16 @@ export function createFingerFluidPortableMacroOpticalRenderPlan({
     requireSourceGeometry(snapshot, diagnostics);
     requireHostFrame(hostFrame, diagnostics);
     const boundary = requestedTopologyRoute
-      === KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE
+      !== KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
       ? requireWetBoundary(snapshot, diagnostics)
       : null;
-    const mesh = boundary == null
+    const mesh = requestedTopologyRoute
+      === KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
       ? buildRegularGridMesh(snapshot, diagnostics)
-      : buildClippedShorelineMesh(snapshot, boundary, diagnostics);
+      : requestedTopologyRoute
+        === KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE
+        ? buildClippedShorelineMesh(snapshot, boundary, diagnostics)
+        : buildContinuousPatchMesh(snapshot, boundary, diagnostics);
     const topology = Object.freeze({
       route: Object.freeze({
         requested: requestedTopologyRoute,
@@ -912,6 +1234,7 @@ export function createFingerFluidPortableMacroOpticalRenderPlan({
       minimumOutputSignedMarginMeters:
         mesh.topology?.minimumOutputSignedMarginMeters ?? null,
       ambiguityResolution: mesh.topology?.ambiguityResolution ?? null,
+      reconstruction: mesh.topology?.reconstruction ?? null,
     });
     return Object.freeze({
       schema: KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_SCHEMA,
@@ -1062,7 +1385,7 @@ struct VertexOutput {
   @location(0) positionWorld: vec3<f32>,
   @location(1) normalWorld: vec3<f32>,
   @location(2) physicalDepthMeters: f32,
-  @location(3) wetSupport: f32,
+  @location(3) signedWetSupport: f32,
   @location(4) viewDepthMeters: f32,
 };
 
@@ -1080,7 +1403,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
   output.positionWorld = input.positionWorld;
   output.normalWorld = input.normalWorld;
   output.physicalDepthMeters = input.optics.x;
-  output.wetSupport = input.support.y;
+  output.signedWetSupport = input.support.y;
   output.viewDepthMeters = max(0.0, -viewPosition.z);
   return output;
 }
@@ -1098,7 +1421,13 @@ fn schlickFresnel(cosineTheta: f32, f0: f32) -> f32 {
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
-  if (input.wetSupport <= 0.005 || input.physicalDepthMeters <= 0.0001) {
+  let coverageWidth = max(abs(fwidth(input.signedWetSupport)), 1e-5);
+  let wetCoverage = smoothstep(
+    -coverageWidth,
+    coverageWidth,
+    input.signedWetSupport
+  );
+  if (wetCoverage <= 0.001 || input.physicalDepthMeters <= 0.0001) {
     discard;
   }
   let pixel = vec2<i32>(input.position.xy);
@@ -1146,7 +1475,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     environmentUv(reflectedDirection),
     0.0
   ).rgb;
-  let radiance = transmitted * (1.0 - fresnel) + reflected * fresnel;
+  let waterRadiance = transmitted * (1.0 - fresnel) + reflected * fresnel;
+  let radiance = mix(transmittedScene, waterRadiance, wetCoverage);
   let display = radiance / (vec3<f32>(1.0) + radiance);
   return vec4<f32>(pow(max(display, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), 1.0);
 }
@@ -1330,6 +1660,7 @@ export function createWebGPUFingerFluidPortableMacroOpticalRenderer({
         shorelineCrossingCount: plan.topology.shorelineCrossingCount,
         clippedCellCount: plan.topology.clippedCellCount,
         ambiguityRoute: plan.topology.ambiguityResolution?.route ?? null,
+        reconstruction: plan.topology.reconstruction,
       }),
       shaderRoute: KAMINOS_PORTABLE_MACRO_OPTICAL_SHADER_ROUTE,
       source: plan.source,

@@ -1,5 +1,6 @@
 import {
   KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
+  KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE,
   KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE,
   KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE,
   createFingerFluidPortableMacroOpticalRenderPlan,
@@ -17,9 +18,10 @@ const playbackToggle = document.getElementById('playback-toggle');
 const timeControl = document.getElementById('time-control');
 const timeValue = document.getElementById('time-value');
 const query = new URLSearchParams(window.location.search);
-let requestedMode = query.get('mode') || 'optical';
+let requestedMode = query.get('mode') || 'continuous';
 const fixedTime = query.has('time') ? Number(query.get('time')) : null;
 let paused = query.get('paused') === '1' || Number.isFinite(fixedTime);
+let cameraOrbitRadians = Number(query.get('cameraOrbit') || 0);
 
 let effectiveMode = null;
 let renderer = null;
@@ -43,9 +45,14 @@ let lastPlan = null;
 let failure = null;
 let startTime = performance.now();
 let forcedTime = Number.isFinite(fixedTime) ? fixedTime : null;
-let requestedTopologyRoute = requestedMode === 'regular_grid_debug'
-  ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
-  : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
+const topologyRouteForMode = mode => (
+  mode === 'regular_grid_debug'
+    ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
+    : mode === 'clipped'
+      ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE
+      : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_CONTINUOUS_PATCH_ROUTE
+);
+let requestedTopologyRoute = topologyRouteForMode(requestedMode);
 
 window.kaminosPortableMacroOpticalDebugState = {
   status: 'initializing',
@@ -69,7 +76,7 @@ function requireOperatorControls() {
   const missing = [
     !canvas && 'portable-macro-optics',
     !status && 'status',
-    modeControls.length !== 3 && 'mode-controls',
+    modeControls.length !== 4 && 'mode-controls',
     !playbackToggle && 'playback-toggle',
     !timeControl && 'time-control',
     !timeValue && 'time-value',
@@ -88,10 +95,8 @@ function publishDebugState() {
     requestedRoute: requestedMode === 'cyan'
       ? CYAN_DEBUG_ROUTE
       : KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE,
-    effectiveRoute: effectiveMode === 'optical'
+    effectiveRoute: ['continuous', 'clipped', 'regular_grid_debug'].includes(effectiveMode)
       ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
-      : effectiveMode === 'regular_grid_debug'
-        ? KAMINOS_PORTABLE_MACRO_OPTICAL_RENDERER_ROUTE
       : effectiveMode === 'cyan' ? CYAN_DEBUG_ROUTE : null,
     fallback: null,
     requestedTopologyRoute,
@@ -104,6 +109,7 @@ function publishDebugState() {
       shorelineCrossingCount: lastPlan.topology.shorelineCrossingCount,
       clippedCellCount: lastPlan.topology.clippedCellCount,
       ambiguityResolution: lastPlan.topology.ambiguityResolution,
+      reconstruction: lastPlan.topology.reconstruction,
     } : null,
     backend: device ? 'webgpu' : null,
     frameCount,
@@ -114,6 +120,7 @@ function publishDebugState() {
     host: lastPlan?.host ?? null,
     rendererEvidence: lastEvidence,
     animationTimeSeconds: forcedTime ?? Math.max(0, (performance.now() - startTime) / 1000),
+    cameraOrbitRadians,
     paused,
     failure,
   };
@@ -155,18 +162,31 @@ function updateShareableUrl() {
     url.searchParams.delete('time');
     url.searchParams.delete('paused');
   }
+  if (Math.abs(cameraOrbitRadians) > 1e-8) {
+    url.searchParams.set('cameraOrbit', cameraOrbitRadians.toFixed(4));
+  } else {
+    url.searchParams.delete('cameraOrbit');
+  }
   history.replaceState(null, '', url);
 }
 
 function setMode(mode) {
-  if (!['optical', 'regular_grid_debug', 'cyan'].includes(mode)) {
+  if (!['continuous', 'clipped', 'regular_grid_debug', 'cyan'].includes(mode)) {
     throw new Error(`unsupported witness mode: ${mode}`);
   }
   requestedMode = mode;
   effectiveMode = mode;
-  requestedTopologyRoute = mode === 'regular_grid_debug'
-    ? KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_REGULAR_GRID_DEBUG_ROUTE
-    : KAMINOS_PORTABLE_MACRO_OPTICAL_TOPOLOGY_WET_BOUNDARY_CLIPPED_ROUTE;
+  requestedTopologyRoute = topologyRouteForMode(mode);
+  updateShareableUrl();
+  renderFrame(performance.now());
+  return publishDebugState();
+}
+
+function setCameraOrbit(nextCameraOrbitRadians) {
+  if (!Number.isFinite(nextCameraOrbitRadians)) {
+    throw new Error('camera orbit must be finite');
+  }
+  cameraOrbitRadians = nextCameraOrbitRadians;
   updateShareableUrl();
   renderFrame(performance.now());
   return publishDebugState();
@@ -298,7 +318,14 @@ function inverseMat4(matrix) {
 
 function cameraFrame() {
   const aspect = canvas.width / canvas.height;
-  const eye = [7.2, 6.6, 8.8];
+  const baseEye = [7.2, 6.6, 8.8];
+  const cosine = Math.cos(cameraOrbitRadians);
+  const sine = Math.sin(cameraOrbitRadians);
+  const eye = [
+    baseEye[0] * cosine + baseEye[2] * sine,
+    baseEye[1],
+    -baseEye[0] * sine + baseEye[2] * cosine,
+  ];
   const target = [0, -0.15, 0];
   const view = lookAt(eye, target, [0, 1, 0]);
   const projection = ortho(-5.4 * aspect, 5.4 * aspect, -5.4, 5.4, 0.1, 40);
@@ -815,7 +842,10 @@ function renderFrame(timestamp) {
     resizeTextures();
     const timeSeconds = forcedTime ?? Math.max(0, (timestamp - startTime) / 1000);
     const snapshot = makeSnapshot(timeSeconds);
-    const frameId = `portable-macro-witness-frame-${snapshot.fluidEpoch}`;
+    const frameId = [
+      `portable-macro-witness-frame-${snapshot.fluidEpoch}`,
+      `camera-${Math.round(cameraOrbitRadians * 10000)}`,
+    ].join('-');
     const frame = hostFrame(frameId);
     const plan = createFingerFluidPortableMacroOpticalRenderPlan({
       snapshot,
@@ -860,8 +890,11 @@ function renderFrame(timestamp) {
 async function initialize() {
   requireOperatorControls();
   if (!navigator.gpu) throw new Error('navigator.gpu unavailable');
-  if (!['optical', 'regular_grid_debug', 'cyan'].includes(requestedMode)) {
+  if (!['continuous', 'clipped', 'regular_grid_debug', 'cyan'].includes(requestedMode)) {
     throw new Error(`unsupported witness mode: ${requestedMode}`);
+  }
+  if (!Number.isFinite(cameraOrbitRadians)) {
+    throw new Error('unsupported witness camera orbit');
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU adapter unavailable');
@@ -925,6 +958,7 @@ async function initialize() {
   timeControl.addEventListener('input', () => setTime(Number(timeControl.value)));
   window.kaminosPortableMacroSetModeForWitness = setMode;
   window.kaminosPortableMacroSetTimeForWitness = setTime;
+  window.kaminosPortableMacroSetCameraOrbitForWitness = setCameraOrbit;
   window.kaminosPortableMacroRenderForWitness = () => {
     renderFrame(performance.now());
     return publishDebugState();

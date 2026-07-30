@@ -1,0 +1,1816 @@
+{
+  "schema": "kaminos.finger-fluid.portable-macro-optical-browser-witness.v0",
+  "ok": true,
+  "requestedUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=0.75",
+  "initialEffectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=0.75",
+  "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=2.75&paused=1",
+  "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+  "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+  "fallback": null,
+  "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+  "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+  "topologyFallback": null,
+  "backend": "webgpu",
+  "startTimeSeconds": 0.75,
+  "endTimeSeconds": 2.75,
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "debugPort": 9543,
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.187",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.21",
+    "WebKit-Version": "537.36 (@30f6543ae91e6a860e73b76e3216b663b050f4e5)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9543/devtools/browser/d649aaa9-b0e1-42e0-8f75-e80de8cd1236"
+  },
+  "servedSourceIdentity": {
+    "finger-fluid-portable-macro-optical-witness.html": {
+      "requestedUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=0.75",
+      "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=0.75",
+      "localSha256": "ff39d72970df9295d51999bd594ccf13d9cf2f1a316195ce02493654667fb913",
+      "servedSha256": "ff39d72970df9295d51999bd594ccf13d9cf2f1a316195ce02493654667fb913",
+      "bytes": 4575,
+      "exactLocalMatch": true
+    },
+    "finger-fluid-portable-macro-optical-witness.js": {
+      "requestedUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.js?runtime=continuous-v1",
+      "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.js?runtime=continuous-v1",
+      "localSha256": "a60269bd3364198c06649a514d1edfd8408954ca842cf230c68ad6ef36fbb02d",
+      "servedSha256": "a60269bd3364198c06649a514d1edfd8408954ca842cf230c68ad6ef36fbb02d",
+      "bytes": 32981,
+      "exactLocalMatch": true
+    },
+    "finger-fluid-portable-macro-optical-renderer.js": {
+      "requestedUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-renderer.js",
+      "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-renderer.js",
+      "localSha256": "ed56a22256764291f7c9969b486b83ecb988ecd32ffa1b1993ba338b066e9456",
+      "servedSha256": "ed56a22256764291f7c9969b486b83ecb988ecd32ffa1b1993ba338b066e9456",
+      "bytes": 63697,
+      "exactLocalMatch": true
+    },
+    "finger-fluid-webgpu-core.js": {
+      "requestedUrl": "http://127.0.0.1:48220/finger-fluid-webgpu-core.js",
+      "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-webgpu-core.js",
+      "localSha256": "78f4c8bf82ae1331b70674632f89988d6a55962adb1556bec1154aa12b33a297",
+      "servedSha256": "78f4c8bf82ae1331b70674632f89988d6a55962adb1556bec1154aa12b33a297",
+      "bytes": 685599,
+      "exactLocalMatch": true
+    }
+  },
+  "captures": {
+    "dynamicStart": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "continuous",
+        "effectiveMode": "continuous",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:45",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 45,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "backend": "webgpu",
+        "frameCount": 11,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 45
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-45-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:target",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": "portable-macro-witness-topology-v0:boundary:45",
+            "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+            "edgeCrossingRoute": null,
+            "shorelineCrossingCount": 0,
+            "clippedCellCount": 0,
+            "ambiguityRoute": null,
+            "reconstruction": {
+              "position": "shared-c1-hermite-patch-v0",
+              "normal": "analytic-position-derivative-v0",
+              "coverage": "fragment-signed-wet-margin-aa-v0",
+              "subdivisionsPerCell": 4,
+              "stableCarrier": true
+            }
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 45
+          },
+          "hostFrameId": "portable-macro-witness-frame-45-camera-0",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-45-camera-0:target",
+              "frameId": "portable-macro-witness-frame-45-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-color",
+              "frameId": "portable-macro-witness-frame-45-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-depth",
+              "frameId": "portable-macro-witness-frame-45-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-45-camera-0:environment",
+              "frameId": "portable-macro-witness-frame-45-camera-0",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 108585,
+          "indexCount": 647520,
+          "wetSampleCount": 4017,
+          "drawableWetTriangleCount": 132002,
+          "frameCount": 9,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 0.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.98595,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/continuous-fixed-camera-source-start.png"
+    },
+    "dynamicEnd": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "continuous",
+        "effectiveMode": "continuous",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 165,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "backend": "webgpu",
+        "frameCount": 13,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+            "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+            "edgeCrossingRoute": null,
+            "shorelineCrossingCount": 0,
+            "clippedCellCount": 0,
+            "ambiguityRoute": null,
+            "reconstruction": {
+              "position": "shared-c1-hermite-patch-v0",
+              "normal": "analytic-position-derivative-v0",
+              "coverage": "fragment-signed-wet-margin-aa-v0",
+              "subdivisionsPerCell": 4,
+              "stableCarrier": true
+            }
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 165
+          },
+          "hostFrameId": "portable-macro-witness-frame-165-camera-0",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 108585,
+          "indexCount": 647520,
+          "wetSampleCount": 3943,
+          "drawableWetTriangleCount": 129617,
+          "frameCount": 11,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/continuous-fixed-camera-source-end.png"
+    },
+    "regularGridDebug": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "regular_grid_debug",
+        "effectiveMode": "regular_grid_debug",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-regular-grid-debug-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-regular-grid-debug-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": null,
+          "resetId": null,
+          "boundaryGeneration": null,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": null
+        },
+        "backend": "webgpu",
+        "frameCount": 15,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-regular-grid-debug-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-regular-grid-debug-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": null,
+            "resetId": null,
+            "edgeCrossingRoute": null,
+            "shorelineCrossingCount": 0,
+            "clippedCellCount": 0,
+            "ambiguityRoute": null,
+            "reconstruction": null
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 165
+          },
+          "hostFrameId": "portable-macro-witness-frame-165-camera-0",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 6912,
+          "indexCount": 40470,
+          "wetSampleCount": 4390,
+          "drawableWetTriangleCount": 9034,
+          "frameCount": 13,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-regular-grid-debug.png"
+    },
+    "cyanDebug": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "cyan",
+        "effectiveMode": "cyan",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 165,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "backend": "webgpu",
+        "frameCount": 17,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-cyan-debug-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+          "fallback": null,
+          "frameCount": 17,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "blank": false,
+          "partial": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-cyan-debug.png"
+    },
+    "wetBoundaryClipped": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "clipped",
+        "effectiveMode": "clipped",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 165,
+          "shorelineCrossingCount": 520,
+          "clippedCellCount": 298,
+          "ambiguityResolution": {
+            "route": "asymptotic-decider-stable-cell-v1",
+            "ambiguousCellCount": 0,
+            "stableCellTieBreakCount": 0
+          },
+          "reconstruction": null
+        },
+        "backend": "webgpu",
+        "frameCount": 19,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-wet-boundary-clipped-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+            "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+            "edgeCrossingRoute": "hysteretic-ownership-margin-linear-edge-v1",
+            "shorelineCrossingCount": 520,
+            "clippedCellCount": 298,
+            "ambiguityRoute": "asymptotic-decider-stable-cell-v1",
+            "reconstruction": null
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 165
+          },
+          "hostFrameId": "portable-macro-witness-frame-165-camera-0",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 4463,
+          "indexCount": 25185,
+          "wetSampleCount": 3943,
+          "drawableWetTriangleCount": 8395,
+          "frameCount": 15,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-wet-boundary-clipped.png"
+    },
+    "frozenSourceCameraBase": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "continuous",
+        "effectiveMode": "continuous",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 165,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "backend": "webgpu",
+        "frameCount": 22,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+            "frameId": "portable-macro-witness-frame-165-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+            "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+            "edgeCrossingRoute": null,
+            "shorelineCrossingCount": 0,
+            "clippedCellCount": 0,
+            "ambiguityRoute": null,
+            "reconstruction": {
+              "position": "shared-c1-hermite-patch-v0",
+              "normal": "analytic-position-derivative-v0",
+              "coverage": "fragment-signed-wet-margin-aa-v0",
+              "subdivisionsPerCell": 4,
+              "stableCarrier": true
+            }
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 165
+          },
+          "hostFrameId": "portable-macro-witness-frame-165-camera-0",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+              "frameId": "portable-macro-witness-frame-165-camera-0",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 108585,
+          "indexCount": 647520,
+          "wetSampleCount": 3943,
+          "drawableWetTriangleCount": 129617,
+          "frameCount": 18,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/frozen-source-camera-base.png"
+    },
+    "frozenSourceCameraMoved": {
+      "state": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+        "status": "running",
+        "requestedMode": "continuous",
+        "effectiveMode": "continuous",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "boundaryGeneration": 165,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityResolution": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "backend": "webgpu",
+        "frameCount": 23,
+        "primaryOutputWritten": true,
+        "blank": false,
+        "partial": false,
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 165
+        },
+        "host": {
+          "frameId": "portable-macro-witness-frame-165-camera-1800",
+          "width": 1600,
+          "height": 1000,
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-1800:scene-color",
+            "frameId": "portable-macro-witness-frame-165-camera-1800",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-1800:scene-depth",
+            "frameId": "portable-macro-witness-frame-165-camera-1800",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-1800:environment",
+            "frameId": "portable-macro-witness-frame-165-camera-1800",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          },
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-165-camera-1800:target",
+            "frameId": "portable-macro-witness-frame-165-camera-1800",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          }
+        },
+        "rendererEvidence": {
+          "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+          "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+          "fallback": null,
+          "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+          "topologyFallback": null,
+          "topology": {
+            "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+            "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+            "edgeCrossingRoute": null,
+            "shorelineCrossingCount": 0,
+            "clippedCellCount": 0,
+            "ambiguityRoute": null,
+            "reconstruction": {
+              "position": "shared-c1-hermite-patch-v0",
+              "normal": "analytic-position-derivative-v0",
+              "coverage": "fragment-signed-wet-margin-aa-v0",
+              "subdivisionsPerCell": 4,
+              "stableCarrier": true
+            }
+          },
+          "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+          "source": {
+            "geometryIdentity": "portable-macro-witness-geometry-v0",
+            "terrainId": "portable-macro-witness-terrain-v0",
+            "sourceHandleId": "portable-macro-witness-source-v0",
+            "terrain": {
+              "requested": "kaminos/witness/live-macro-source",
+              "effective": "kaminos/witness/live-macro-source",
+              "producerId": "kaminos-portable-macro-witness",
+              "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+            },
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+            "terrainEpoch": 0,
+            "fluidEpoch": 165
+          },
+          "hostFrameId": "portable-macro-witness-frame-165-camera-1800",
+          "attachments": {
+            "target": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-1800:target",
+              "frameId": "portable-macro-witness-frame-165-camera-1800",
+              "width": 1600,
+              "height": 1000,
+              "format": "bgra8unorm"
+            },
+            "sceneColor": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-1800:scene-color",
+              "frameId": "portable-macro-witness-frame-165-camera-1800",
+              "width": 1600,
+              "height": 1000,
+              "format": "rgba16float",
+              "colorSpace": "linear_hdr"
+            },
+            "sceneDepth": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-1800:scene-depth",
+              "frameId": "portable-macro-witness-frame-165-camera-1800",
+              "width": 1600,
+              "height": 1000,
+              "format": "r32float",
+              "encoding": "linear_view_depth_meters"
+            },
+            "environment": {
+              "authority": "host_live_frame",
+              "attachmentId": "portable-macro-witness-frame-165-camera-1800:environment",
+              "frameId": "portable-macro-witness-frame-165-camera-1800",
+              "width": 512,
+              "height": 256,
+              "format": "rgba16float",
+              "mapping": "equirectangular_world_radiance"
+            }
+          },
+          "vertexCount": 108585,
+          "indexCount": 647520,
+          "wetSampleCount": 3943,
+          "drawableWetTriangleCount": 129617,
+          "frameCount": 19,
+          "primaryCommandEncoded": true,
+          "primaryOutputWritten": false,
+          "partial": false,
+          "blank": false,
+          "hostSubmissionAccepted": true
+        },
+        "animationTimeSeconds": 2.75,
+        "cameraOrbitRadians": 0.18,
+        "paused": true,
+        "failure": null
+      },
+      "visual": {
+        "pixelCount": 1600000,
+        "activeRatio": 0.985939,
+        "darkRatio": 0,
+        "partial": false,
+        "blank": false,
+        "measurement": "captured-portable-macro-canvas-rgb24-v0"
+      },
+      "path": "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/frozen-source-camera-moved.png"
+    }
+  },
+  "dynamicDelta": {
+    "changedPixels": 58953,
+    "changedRatio": 0.036846,
+    "meanAbsoluteChannelDelta": 0.54659,
+    "measurement": "portable-macro-rgb24-absolute-delta-v0"
+  },
+  "sameStateDelta": {
+    "changedPixels": 30430,
+    "changedRatio": 0.019019,
+    "meanAbsoluteChannelDelta": 0.53216,
+    "measurement": "portable-macro-rgb24-absolute-delta-v0"
+  },
+  "continuousDelta": {
+    "changedPixels": 19386,
+    "changedRatio": 0.012116,
+    "meanAbsoluteChannelDelta": 0.445394,
+    "measurement": "portable-macro-rgb24-absolute-delta-v0"
+  },
+  "cameraMotionDelta": {
+    "changedPixels": 52482,
+    "changedRatio": 0.032801,
+    "meanAbsoluteChannelDelta": 0.461282,
+    "measurement": "portable-macro-rgb24-absolute-delta-v0"
+  },
+  "operatorControls": {
+    "bounds": {
+      "x": 1194,
+      "y": 884,
+      "width": 390,
+      "height": 100
+    },
+    "modeCount": 4,
+    "before": {
+      "frameCount": 1,
+      "animationTimeSeconds": 0.75,
+      "paused": true
+    },
+    "playing": {
+      "frameCount": 6,
+      "animationTimeSeconds": 1.283600000023842,
+      "paused": false
+    },
+    "paused": {
+      "frameCount": 8,
+      "animationTimeSeconds": 1.283600000023842,
+      "paused": true
+    },
+    "cyan": {
+      "requestedMode": "cyan",
+      "effectiveMode": "cyan",
+      "requestedRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+      "effectiveRoute": "kaminos/finger-fluid/portable-macro-cyan-debug-v0",
+      "fallback": null,
+      "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "topologyFallback": null
+    },
+    "playbackLabel": "Play animation",
+    "timeValue": "1.28 s",
+    "restoredState": {
+      "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+      "status": "running",
+      "requestedMode": "continuous",
+      "effectiveMode": "continuous",
+      "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "fallback": null,
+      "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "topologyFallback": null,
+      "topology": {
+        "boundaryId": "portable-macro-witness-topology-v0:boundary:45",
+        "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+        "boundaryGeneration": 45,
+        "shorelineCrossingCount": 0,
+        "clippedCellCount": 0,
+        "ambiguityResolution": null,
+        "reconstruction": {
+          "position": "shared-c1-hermite-patch-v0",
+          "normal": "analytic-position-derivative-v0",
+          "coverage": "fragment-signed-wet-margin-aa-v0",
+          "subdivisionsPerCell": 4,
+          "stableCarrier": true
+        }
+      },
+      "backend": "webgpu",
+      "frameCount": 11,
+      "primaryOutputWritten": true,
+      "blank": false,
+      "partial": false,
+      "source": {
+        "geometryIdentity": "portable-macro-witness-geometry-v0",
+        "terrainId": "portable-macro-witness-terrain-v0",
+        "sourceHandleId": "portable-macro-witness-source-v0",
+        "terrain": {
+          "requested": "kaminos/witness/live-macro-source",
+          "effective": "kaminos/witness/live-macro-source",
+          "producerId": "kaminos-portable-macro-witness",
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+        },
+        "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+        "terrainEpoch": 0,
+        "fluidEpoch": 45
+      },
+      "host": {
+        "frameId": "portable-macro-witness-frame-45-camera-0",
+        "width": 1600,
+        "height": 1000,
+        "sceneColor": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-color",
+          "frameId": "portable-macro-witness-frame-45-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "rgba16float",
+          "colorSpace": "linear_hdr"
+        },
+        "sceneDepth": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-depth",
+          "frameId": "portable-macro-witness-frame-45-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "r32float",
+          "encoding": "linear_view_depth_meters"
+        },
+        "environment": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-45-camera-0:environment",
+          "frameId": "portable-macro-witness-frame-45-camera-0",
+          "width": 512,
+          "height": 256,
+          "format": "rgba16float",
+          "mapping": "equirectangular_world_radiance"
+        },
+        "target": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-45-camera-0:target",
+          "frameId": "portable-macro-witness-frame-45-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "bgra8unorm"
+        }
+      },
+      "rendererEvidence": {
+        "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+        "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+        "fallback": null,
+        "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+        "topologyFallback": null,
+        "topology": {
+          "boundaryId": "portable-macro-witness-topology-v0:boundary:45",
+          "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+          "edgeCrossingRoute": null,
+          "shorelineCrossingCount": 0,
+          "clippedCellCount": 0,
+          "ambiguityRoute": null,
+          "reconstruction": {
+            "position": "shared-c1-hermite-patch-v0",
+            "normal": "analytic-position-derivative-v0",
+            "coverage": "fragment-signed-wet-margin-aa-v0",
+            "subdivisionsPerCell": 4,
+            "stableCarrier": true
+          }
+        },
+        "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+        "source": {
+          "geometryIdentity": "portable-macro-witness-geometry-v0",
+          "terrainId": "portable-macro-witness-terrain-v0",
+          "sourceHandleId": "portable-macro-witness-source-v0",
+          "terrain": {
+            "requested": "kaminos/witness/live-macro-source",
+            "effective": "kaminos/witness/live-macro-source",
+            "producerId": "kaminos-portable-macro-witness",
+            "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+          },
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+          "terrainEpoch": 0,
+          "fluidEpoch": 45
+        },
+        "hostFrameId": "portable-macro-witness-frame-45-camera-0",
+        "attachments": {
+          "target": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:target",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "bgra8unorm"
+          },
+          "sceneColor": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-color",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "rgba16float",
+            "colorSpace": "linear_hdr"
+          },
+          "sceneDepth": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:scene-depth",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 1600,
+            "height": 1000,
+            "format": "r32float",
+            "encoding": "linear_view_depth_meters"
+          },
+          "environment": {
+            "authority": "host_live_frame",
+            "attachmentId": "portable-macro-witness-frame-45-camera-0:environment",
+            "frameId": "portable-macro-witness-frame-45-camera-0",
+            "width": 512,
+            "height": 256,
+            "format": "rgba16float",
+            "mapping": "equirectangular_world_radiance"
+          }
+        },
+        "vertexCount": 108585,
+        "indexCount": 647520,
+        "wetSampleCount": 4017,
+        "drawableWetTriangleCount": 132002,
+        "frameCount": 9,
+        "primaryCommandEncoded": true,
+        "primaryOutputWritten": false,
+        "partial": false,
+        "blank": false,
+        "hostSubmissionAccepted": true
+      },
+      "animationTimeSeconds": 0.75,
+      "cameraOrbitRadians": 0,
+      "paused": true,
+      "failure": null
+    }
+  },
+  "primary_output_written": true,
+  "failure_phase": null,
+  "lastTrustworthyEvidence": {
+    "phase": "complete",
+    "evidence": {
+      "initialEffectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=0.75",
+      "effectiveUrl": "http://127.0.0.1:48220/finger-fluid-portable-macro-optical-witness.html?mode=continuous&time=2.75&paused=1",
+      "backend": "webgpu",
+      "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "topology": {
+        "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+        "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+        "boundaryGeneration": 165,
+        "shorelineCrossingCount": 0,
+        "clippedCellCount": 0,
+        "ambiguityResolution": null,
+        "reconstruction": {
+          "position": "shared-c1-hermite-patch-v0",
+          "normal": "analytic-position-derivative-v0",
+          "coverage": "fragment-signed-wet-margin-aa-v0",
+          "subdivisionsPerCell": 4,
+          "stableCarrier": true
+        }
+      },
+      "source": {
+        "geometryIdentity": "portable-macro-witness-geometry-v0",
+        "terrainId": "portable-macro-witness-terrain-v0",
+        "sourceHandleId": "portable-macro-witness-source-v0",
+        "terrain": {
+          "requested": "kaminos/witness/live-macro-source",
+          "effective": "kaminos/witness/live-macro-source",
+          "producerId": "kaminos-portable-macro-witness",
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+        },
+        "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+        "terrainEpoch": 0,
+        "fluidEpoch": 165
+      },
+      "host": {
+        "frameId": "portable-macro-witness-frame-165-camera-0",
+        "width": 1600,
+        "height": 1000,
+        "sceneColor": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "rgba16float",
+          "colorSpace": "linear_hdr"
+        },
+        "sceneDepth": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "r32float",
+          "encoding": "linear_view_depth_meters"
+        },
+        "environment": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 512,
+          "height": 256,
+          "format": "rgba16float",
+          "mapping": "equirectangular_world_radiance"
+        },
+        "target": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "bgra8unorm"
+        }
+      },
+      "dynamicDelta": {
+        "changedPixels": 58953,
+        "changedRatio": 0.036846,
+        "meanAbsoluteChannelDelta": 0.54659,
+        "measurement": "portable-macro-rgb24-absolute-delta-v0"
+      },
+      "sameStateDelta": {
+        "changedPixels": 30430,
+        "changedRatio": 0.019019,
+        "meanAbsoluteChannelDelta": 0.53216,
+        "measurement": "portable-macro-rgb24-absolute-delta-v0"
+      },
+      "continuousDelta": {
+        "changedPixels": 19386,
+        "changedRatio": 0.012116,
+        "meanAbsoluteChannelDelta": 0.445394,
+        "measurement": "portable-macro-rgb24-absolute-delta-v0"
+      },
+      "cameraMotionDelta": {
+        "changedPixels": 52482,
+        "changedRatio": 0.032801,
+        "meanAbsoluteChannelDelta": 0.461282,
+        "measurement": "portable-macro-rgb24-absolute-delta-v0"
+      }
+    }
+  },
+  "outputFiles": [
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/continuous-fixed-camera-source-start.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/continuous-fixed-camera-source-end.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-regular-grid-debug.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-cyan-debug.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/same-state-wet-boundary-clipped.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/frozen-source-camera-base.png",
+    "/private/tmp/kaminos-big-papa-fluid-surface-renderer-0716/artifacts/finger-fluid-portable-macro-continuous-patch-0730/browser/frozen-source-camera-moved.png"
+  ],
+  "consoleEvents": [],
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9543/devtools/browser/d649aaa9-b0e1-42e0-8f75-e80de8cd1236\nTrying to load the allocator multiple times. This is *not* supported.\n[9788:35798084:0730/131401.049831:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n",
+  "lastState": {
+    "schema": "kaminos.finger-fluid.portable-macro-optical-browser-state.v0",
+    "status": "running",
+    "requestedMode": "continuous",
+    "effectiveMode": "continuous",
+    "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+    "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+    "fallback": null,
+    "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+    "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+    "topologyFallback": null,
+    "topology": {
+      "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+      "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+      "boundaryGeneration": 165,
+      "shorelineCrossingCount": 0,
+      "clippedCellCount": 0,
+      "ambiguityResolution": null,
+      "reconstruction": {
+        "position": "shared-c1-hermite-patch-v0",
+        "normal": "analytic-position-derivative-v0",
+        "coverage": "fragment-signed-wet-margin-aa-v0",
+        "subdivisionsPerCell": 4,
+        "stableCarrier": true
+      }
+    },
+    "backend": "webgpu",
+    "frameCount": 24,
+    "primaryOutputWritten": true,
+    "blank": false,
+    "partial": false,
+    "source": {
+      "geometryIdentity": "portable-macro-witness-geometry-v0",
+      "terrainId": "portable-macro-witness-terrain-v0",
+      "sourceHandleId": "portable-macro-witness-source-v0",
+      "terrain": {
+        "requested": "kaminos/witness/live-macro-source",
+        "effective": "kaminos/witness/live-macro-source",
+        "producerId": "kaminos-portable-macro-witness",
+        "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+      },
+      "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+      "terrainEpoch": 0,
+      "fluidEpoch": 165
+    },
+    "host": {
+      "frameId": "portable-macro-witness-frame-165-camera-0",
+      "width": 1600,
+      "height": 1000,
+      "sceneColor": {
+        "authority": "host_live_frame",
+        "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+        "frameId": "portable-macro-witness-frame-165-camera-0",
+        "width": 1600,
+        "height": 1000,
+        "format": "rgba16float",
+        "colorSpace": "linear_hdr"
+      },
+      "sceneDepth": {
+        "authority": "host_live_frame",
+        "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+        "frameId": "portable-macro-witness-frame-165-camera-0",
+        "width": 1600,
+        "height": 1000,
+        "format": "r32float",
+        "encoding": "linear_view_depth_meters"
+      },
+      "environment": {
+        "authority": "host_live_frame",
+        "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+        "frameId": "portable-macro-witness-frame-165-camera-0",
+        "width": 512,
+        "height": 256,
+        "format": "rgba16float",
+        "mapping": "equirectangular_world_radiance"
+      },
+      "target": {
+        "authority": "host_live_frame",
+        "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+        "frameId": "portable-macro-witness-frame-165-camera-0",
+        "width": 1600,
+        "height": 1000,
+        "format": "bgra8unorm"
+      }
+    },
+    "rendererEvidence": {
+      "schema": "kaminos.finger-fluid.portable-macro-optical-render-evidence.v0",
+      "requestedRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "effectiveRoute": "kaminos/finger-fluid/portable-macro-screen-space-optics-v0",
+      "fallback": null,
+      "requestedTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "effectiveTopologyRoute": "kaminos/finger-fluid/portable-macro-continuous-patch-v0",
+      "topologyFallback": null,
+      "topology": {
+        "boundaryId": "portable-macro-witness-topology-v0:boundary:165",
+        "resetId": "portable-macro-witness-topology-v0:reset:0:0->0:initial:initial",
+        "edgeCrossingRoute": null,
+        "shorelineCrossingCount": 0,
+        "clippedCellCount": 0,
+        "ambiguityRoute": null,
+        "reconstruction": {
+          "position": "shared-c1-hermite-patch-v0",
+          "normal": "analytic-position-derivative-v0",
+          "coverage": "fragment-signed-wet-margin-aa-v0",
+          "subdivisionsPerCell": 4,
+          "stableCarrier": true
+        }
+      },
+      "shaderRoute": "wgsl-portable-macro-fresnel-refraction-absorption-v0",
+      "source": {
+        "geometryIdentity": "portable-macro-witness-geometry-v0",
+        "terrainId": "portable-macro-witness-terrain-v0",
+        "sourceHandleId": "portable-macro-witness-source-v0",
+        "terrain": {
+          "requested": "kaminos/witness/live-macro-source",
+          "effective": "kaminos/witness/live-macro-source",
+          "producerId": "kaminos-portable-macro-witness",
+          "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab"
+        },
+        "producerRevision": "79bc04fe4a0de0a1a751002d3e864611b44758ab",
+        "terrainEpoch": 0,
+        "fluidEpoch": 165
+      },
+      "hostFrameId": "portable-macro-witness-frame-165-camera-0",
+      "attachments": {
+        "target": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:target",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "bgra8unorm"
+        },
+        "sceneColor": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-color",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "rgba16float",
+          "colorSpace": "linear_hdr"
+        },
+        "sceneDepth": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:scene-depth",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 1600,
+          "height": 1000,
+          "format": "r32float",
+          "encoding": "linear_view_depth_meters"
+        },
+        "environment": {
+          "authority": "host_live_frame",
+          "attachmentId": "portable-macro-witness-frame-165-camera-0:environment",
+          "frameId": "portable-macro-witness-frame-165-camera-0",
+          "width": 512,
+          "height": 256,
+          "format": "rgba16float",
+          "mapping": "equirectangular_world_radiance"
+        }
+      },
+      "vertexCount": 108585,
+      "indexCount": 647520,
+      "wetSampleCount": 3943,
+      "drawableWetTriangleCount": 129617,
+      "frameCount": 20,
+      "primaryCommandEncoded": true,
+      "primaryOutputWritten": false,
+      "partial": false,
+      "blank": false,
+      "hostSubmissionAccepted": true
+    },
+    "animationTimeSeconds": 2.75,
+    "cameraOrbitRadians": 0,
+    "paused": true,
+    "failure": null
+  }
+}
