@@ -7,6 +7,7 @@ export const RIGID_ARTICULATION_SOURCE_HASH =
 export const RIGID_ARTICULATION_ANNOTATION_HASH =
   'sha256:2440993b8a812eef99f4f6ebbae268297b967122e3fc806d324bc64d41008116';
 export const RIGID_ARTICULATION_SUPPORT_ID = 'rear-left';
+export const RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS = 0.04;
 
 const EPSILON = 1e-12;
 
@@ -723,6 +724,7 @@ export function evaluateSweptRigidCandidate({
     return {
       actualFailure,
       boundKind,
+      limitingConstraintKind: descriptor.kind,
       movedVertexLocalIndex: descriptor.localIndex,
       movedVertexIndex: descriptor.movedVertexIndex,
       sourcePosition: point(rigidSourcePositions, descriptor.localIndex),
@@ -732,6 +734,9 @@ export function evaluateSweptRigidCandidate({
       controllingValue: descriptor.value,
       controllingThreshold: descriptor.threshold,
       controllingMargin: descriptor.margin,
+      retainedTriangleRole: descriptor.kind === 'collision'
+        ? 'controlling-body-collision'
+        : 'contextual-nearest-body',
       retainedTriangleDistance: triangle?.distance ?? null,
       retainedTriangleOffset: triangle?.triangleOffset ?? null,
       retainedTriangleVertexIndices: triangle?.triangleVertexIndices ?? null,
@@ -1109,13 +1114,23 @@ export function classifyRigidPredecessorLocality({
     const witness = row?.sweep?.limitingWitness;
     const moved = witness?.locality?.movedVertex;
     const retained = witness?.locality?.retainedTriangleVertices;
-    const complete = Number.isInteger(witness?.movedVertexIndex)
-      && Number.isInteger(witness?.retainedTriangleOffset)
-      && Array.isArray(witness?.retainedTriangleVertexIndices)
-      && witness.retainedTriangleVertexIndices.length === 3
+    const retainedTriangleRole = witness?.retainedTriangleRole;
+    const limitingConstraintKind = witness?.limitingConstraintKind;
+    const retainedRoleMatchesConstraint = (
+      limitingConstraintKind === 'collision'
+      && retainedTriangleRole === 'controlling-body-collision'
+    ) || (
+      limitingConstraintKind === 'terrain'
+      && retainedTriangleRole === 'contextual-nearest-body'
+    );
+    const movedComplete = Number.isInteger(witness?.movedVertexIndex)
       && moved?.vertexIndex === witness.movedVertexIndex
       && hasLocalityMetric(moved, 'ownershipBoundary')
-      && hasLocalityMetric(moved, 'priorCollar')
+      && hasLocalityMetric(moved, 'priorCollar');
+    const retainedIdentityComplete = Number.isInteger(witness?.retainedTriangleOffset)
+      && Array.isArray(witness?.retainedTriangleVertexIndices)
+      && witness.retainedTriangleVertexIndices.length === 3;
+    const retainedLocalityComplete = retainedIdentityComplete
       && Array.isArray(retained)
       && retained.length === 3
       && retained.every((entry, index) => (
@@ -1123,11 +1138,30 @@ export function classifyRigidPredecessorLocality({
         && hasLocalityMetric(entry, 'ownershipBoundary')
         && hasLocalityMetric(entry, 'priorCollar')
       ));
+    const retainedContextAbsent = witness?.retainedTriangleOffset === null
+      && witness?.retainedTriangleVertexIndices === null
+      && retained == null;
+    const complete = movedComplete && retainedRoleMatchesConstraint && (
+      (
+        retainedTriangleRole === 'controlling-body-collision'
+        && retainedIdentityComplete
+        && retainedLocalityComplete
+      )
+      || (
+        retainedTriangleRole === 'contextual-nearest-body'
+        && (
+          retainedContextAbsent
+          || (retainedIdentityComplete && retainedLocalityComplete)
+        )
+      )
+    );
     if (!complete) {
       missingWitnessCount += 1;
       continue;
     }
-    const witnesses = [moved, ...retained];
+    const witnesses = retainedTriangleRole === 'controlling-body-collision'
+      ? [moved, ...retained]
+      : [moved];
     for (const entry of witnesses) {
       if (!entry.ownershipBoundaryReachable) {
         deepWitnessCount += 1;
@@ -1194,18 +1228,50 @@ export function assertRigidArticulationReport(report) {
   if (!Array.isArray(report.searches) || report.searches.length === 0) {
     throw new Error('rigid articulation report requires search accounting');
   }
+  if (report.status === 'complete' && !report.locality) {
+    throw new Error('rigid articulation report locality instrumentation missing');
+  }
   if (report.locality) {
+    if (
+      report.locality.transitionRadius
+      !== RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS
+    ) {
+      throw new Error('rigid articulation report locality instrumentation mismatch');
+    }
     const rows = report.searches.flatMap(search => search.sweptRejections ?? []);
+    const causalRoleMismatch = rows.some(row => {
+      const witness = row?.sweep?.limitingWitness;
+      if (!witness) {
+        return false;
+      }
+      return !(
+        (
+          witness.limitingConstraintKind === 'collision'
+          && witness.retainedTriangleRole === 'controlling-body-collision'
+        )
+        || (
+          witness.limitingConstraintKind === 'terrain'
+          && witness.retainedTriangleRole === 'contextual-nearest-body'
+        )
+      );
+    });
+    if (causalRoleMismatch) {
+      throw new Error('rigid articulation report locality causal role mismatch');
+    }
     const observed = classifyRigidPredecessorLocality({
       rows,
       transitionRadius: report.locality.transitionRadius,
     });
-    if (
-      observed.classification !== report.locality.classification
-      || observed.rowCount !== report.locality.rowCount
-      || observed.instrumentedRowCount !== report.locality.instrumentedRowCount
-      || observed.missingWitnessCount !== report.locality.missingWitnessCount
-    ) {
+    const summaryFields = [
+      'classification',
+      'rowCount',
+      'instrumentedRowCount',
+      'missingWitnessCount',
+      'deepWitnessCount',
+      'transitionRadius',
+      'maximumOwnershipBoundaryDistance',
+    ];
+    if (summaryFields.some(field => observed[field] !== report.locality[field])) {
       throw new Error('rigid articulation report locality instrumentation mismatch');
     }
   }

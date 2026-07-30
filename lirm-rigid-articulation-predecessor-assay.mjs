@@ -28,6 +28,7 @@ import {
   measureRigidSetClearance,
   RIGID_ARTICULATION_ANNOTATION_HASH,
   RIGID_ARTICULATION_ASSAY_ROUTE,
+  RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS,
   RIGID_ARTICULATION_SOURCE_HASH,
   RIGID_ARTICULATION_SUPPORT_ID,
 } from './lirm-rigid-articulation-predecessor-core.mjs';
@@ -651,7 +652,7 @@ export async function runRigidArticulationPredecessorAssay({
       ...priorSwingClearance.bodySideSet.pairs.map(pair => pair.bodyVertex),
     ])].sort((left, right) => left - right);
     const transitionRadius = Math.max(...frames.chain.radii);
-    if (transitionRadius !== 0.04) {
+    if (transitionRadius !== RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS) {
       throw new Error(`frozen operator transition radius changed: ${transitionRadius}`);
     }
     const indexedLocality = createIndexedOwnershipLocality({
@@ -662,18 +663,16 @@ export async function runRigidArticulationPredecessorAssay({
     });
     for (const row of rejectionRows) {
       const witness = row.sweep?.limitingWitness;
-      if (
-        !witness
-        || !Number.isInteger(witness.movedVertexIndex)
-        || !Array.isArray(witness.retainedTriangleVertexIndices)
-      ) {
+      if (!witness || !Number.isInteger(witness.movedVertexIndex)) {
         continue;
       }
       witness.locality = {
         movedVertex: indexedLocality.describeMovedVertex(witness.movedVertexIndex),
-        retainedTriangleVertices: witness.retainedTriangleVertexIndices.map(
-          vertex => indexedLocality.describeRetainedVertex(vertex),
-        ),
+        retainedTriangleVertices: Array.isArray(witness.retainedTriangleVertexIndices)
+          ? witness.retainedTriangleVertexIndices.map(
+            vertex => indexedLocality.describeRetainedVertex(vertex),
+          )
+          : null,
       };
     }
     const locality = {
@@ -695,7 +694,7 @@ export async function runRigidArticulationPredecessorAssay({
         priorSwingClearance.bodySideSet.pairs.length,
       priorCollarVertexCount: priorCollarVertexIndices.length,
       classificationPredicate:
-        'boundary-local iff every moved witness and every retained triangle vertex is reachable within the frozen transition radius from B_K; any farther or unreachable witness is deep-core; missing identity is underinstrumented',
+        'boundary-local iff every moved witness and every causally controlling retained body-triangle vertex is reachable within the frozen transition radius from B_K; terrain-limited nearest-body triangles are contextual only; any farther or unreachable causal witness is deep-core; missing causal identity is underinstrumented',
     };
     if (locality.classification === 'underinstrumented') {
       throw new Error(

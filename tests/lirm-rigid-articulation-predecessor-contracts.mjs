@@ -15,6 +15,7 @@ import {
   measureRigidSetClearance,
   RIGID_ARTICULATION_ANNOTATION_HASH,
   RIGID_ARTICULATION_ASSAY_ROUTE,
+  RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS,
   RIGID_ARTICULATION_SOURCE_HASH,
 } from '../lirm-rigid-articulation-predecessor-core.mjs';
 import * as assayModule from '../lirm-rigid-articulation-predecessor-assay.mjs';
@@ -185,6 +186,10 @@ assert.equal(
 );
 assert.equal(triangleCrossing.sweep.limitingWitness.movedVertexIndex, 0);
 assert.equal(triangleCrossing.sweep.limitingWitness.retainedTriangleOffset, 0);
+assert.equal(
+  triangleCrossing.sweep.limitingWitness.retainedTriangleRole,
+  'controlling-body-collision',
+);
 assert.deepEqual(
   triangleCrossing.sweep.limitingWitness.retainedTriangleVertexIndices,
   [0, 1, 2],
@@ -218,6 +223,10 @@ assert.equal(observedCrossing.sweep.limitingWitness.actualFailure, true);
 assert.equal(
   observedCrossing.sweep.limitingWitness.boundKind,
   'observed-body-collision',
+);
+assert.equal(
+  observedCrossing.sweep.limitingWitness.retainedTriangleRole,
+  'controlling-body-collision',
 );
 assert.equal(observedCrossing.sweep.limitingWitness.retainedTriangleOffset, 12);
 
@@ -254,6 +263,8 @@ const boundaryLocalSummary = classifyRigidPredecessorLocality({
     sweep: {
       limitingWitness: {
         movedVertexIndex: 0,
+        limitingConstraintKind: 'collision',
+        retainedTriangleRole: 'controlling-body-collision',
         retainedTriangleOffset: 3,
         retainedTriangleVertexIndices: [1, 2, 3],
         locality: {
@@ -273,6 +284,8 @@ const deepCoreSummary = classifyRigidPredecessorLocality({
     sweep: {
       limitingWitness: {
         movedVertexIndex: 0,
+        limitingConstraintKind: 'collision',
+        retainedTriangleRole: 'controlling-body-collision',
         retainedTriangleOffset: 9,
         retainedTriangleVertexIndices: [3, 4, 5],
         locality: {
@@ -286,6 +299,79 @@ const deepCoreSummary = classifyRigidPredecessorLocality({
   }],
 });
 assert.equal(deepCoreSummary.classification, 'deep-core');
+assert.equal(deepCoreSummary.deepWitnessCount, 2);
+assert.equal(deepCoreSummary.maximumOwnershipBoundaryDistance, 3);
+const terrainContextSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{
+    sweep: {
+      limitingWitness: {
+        movedVertexIndex: 0,
+        limitingConstraintKind: 'terrain',
+        retainedTriangleRole: 'contextual-nearest-body',
+        retainedTriangleOffset: 9,
+        retainedTriangleVertexIndices: [3, 4, 5],
+        locality: {
+          movedVertex: locality.describeMovedVertex(0),
+          retainedTriangleVertices: [3, 4, 5].map(
+            vertex => locality.describeRetainedVertex(vertex),
+          ),
+        },
+      },
+    },
+  }],
+});
+assert.equal(
+  terrainContextSummary.classification,
+  'boundary-local',
+  'terrain limits must not inherit deep-core locality from noncontrolling body context',
+);
+assert.equal(terrainContextSummary.deepWitnessCount, 0);
+assert.equal(terrainContextSummary.maximumOwnershipBoundaryDistance, 1);
+const malformedTerrainContextSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{
+    sweep: {
+      limitingWitness: {
+        movedVertexIndex: 0,
+        limitingConstraintKind: 'terrain',
+        retainedTriangleRole: 'contextual-nearest-body',
+        retainedTriangleOffset: null,
+        retainedTriangleVertexIndices: null,
+        locality: {
+          movedVertex: locality.describeMovedVertex(0),
+          retainedTriangleVertices: [locality.describeRetainedVertex(5)],
+        },
+      },
+    },
+  }],
+});
+assert.equal(malformedTerrainContextSummary.classification, 'underinstrumented');
+assert.equal(malformedTerrainContextSummary.instrumentedRowCount, 0);
+assert.equal(malformedTerrainContextSummary.missingWitnessCount, 1);
+const terrainWithoutBodyContextSummary = classifyRigidPredecessorLocality({
+  transitionRadius: 1.1,
+  rows: [{
+    sweep: {
+      limitingWitness: {
+        movedVertexIndex: 0,
+        limitingConstraintKind: 'terrain',
+        retainedTriangleRole: 'contextual-nearest-body',
+        retainedTriangleOffset: null,
+        retainedTriangleVertexIndices: null,
+        locality: {
+          movedVertex: locality.describeMovedVertex(0),
+          retainedTriangleVertices: null,
+        },
+      },
+    },
+  }],
+});
+assert.equal(
+  terrainWithoutBodyContextSummary.classification,
+  'boundary-local',
+  'optional terrain context must not turn a complete moved-vertex witness into missing evidence',
+);
 const underinstrumentedSummary = classifyRigidPredecessorLocality({
   transitionRadius: 1.1,
   rows: [{ sweep: { limitingWitness: null } }],
@@ -314,19 +400,27 @@ const validReport = {
     { family: 'J2-bounded', status: 'passed' },
   ],
 };
-assert.equal(assertRigidArticulationReport(validReport), validReport);
+assert.throws(
+  () => assertRigidArticulationReport(validReport),
+  /locality instrumentation/,
+  'a complete report must not validate after its locality evidence is removed',
+);
 const validLocalityReport = structuredClone(validReport);
 validLocalityReport.locality = {
   classification: 'deep-core',
   rowCount: 1,
   instrumentedRowCount: 1,
   missingWitnessCount: 0,
-  transitionRadius: 1.1,
+  deepWitnessCount: 4,
+  transitionRadius: RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS,
+  maximumOwnershipBoundaryDistance: 3,
 };
 validLocalityReport.searches[0].sweptRejections = [{
   sweep: {
     limitingWitness: {
       movedVertexIndex: 0,
+      limitingConstraintKind: 'collision',
+      retainedTriangleRole: 'controlling-body-collision',
       retainedTriangleOffset: 9,
       retainedTriangleVertexIndices: [3, 4, 5],
       locality: {
@@ -339,6 +433,18 @@ validLocalityReport.searches[0].sweptRejections = [{
   },
 }];
 assert.equal(assertRigidArticulationReport(validLocalityReport), validLocalityReport);
+const retaggedCollisionReport = structuredClone(validLocalityReport);
+retaggedCollisionReport.searches[0].sweptRejections[0]
+  .sweep.limitingWitness.retainedTriangleRole = 'contextual-nearest-body';
+retaggedCollisionReport.locality = classifyRigidPredecessorLocality({
+  rows: retaggedCollisionReport.searches.flatMap(search => search.sweptRejections ?? []),
+  transitionRadius: RIGID_ARTICULATION_LOCALITY_TRANSITION_RADIUS,
+});
+assert.throws(
+  () => assertRigidArticulationReport(retaggedCollisionReport),
+  /causal role/,
+  'a collision-controlled body witness must not validate after being retagged as terrain context',
+);
 const falseBoundaryLocalReport = structuredClone(validLocalityReport);
 falseBoundaryLocalReport.locality.classification = 'boundary-local';
 falseBoundaryLocalReport.locality.missingWitnessCount = 1;
@@ -347,6 +453,22 @@ assert.throws(
   /locality instrumentation/,
   'missing witness identity must not masquerade as boundary-local evidence',
 );
+for (const [name, mutate] of [
+  ['deep witness count', localitySummary => { localitySummary.deepWitnessCount = 1; }],
+  [
+    'maximum ownership-boundary distance',
+    localitySummary => { localitySummary.maximumOwnershipBoundaryDistance = 2; },
+  ],
+  ['transition radius', localitySummary => { localitySummary.transitionRadius = 2.1; }],
+]) {
+  const report = structuredClone(validLocalityReport);
+  mutate(report.locality);
+  assert.throws(
+    () => assertRigidArticulationReport(report),
+    /locality instrumentation/,
+    `tampered ${name} must not survive report validation`,
+  );
+}
 for (const [name, mutate, pattern] of [
   ['fallback route', report => { report.effectiveRoute = 'fallback'; }, /route identity/],
   ['stale cast', report => { report.actualSourceHash = 'stale'; }, /source identity/],
