@@ -10775,6 +10775,7 @@ export function validateFingerFluidMovingHillHostFrame(
     device,
     extent,
     camera,
+    expectedRemapGeneration,
   } = {},
 ) {
   const fail = (message, phase = 'validate-host-frame', details = {}) => (
@@ -10814,10 +10815,10 @@ export function validateFingerFluidMovingHillHostFrame(
     });
   }
   if (
-    hostFrame?.route?.requested !== hostFrame?.route?.effective
+    hostFrame?.route?.requested !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE
+    || hostFrame?.route?.effective !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE
+    || hostFrame?.route?.requested !== hostFrame?.route?.effective
     || hostFrame?.route?.fallback !== null
-    || typeof hostFrame?.route?.requested !== 'string'
-    || hostFrame.route.requested.trim().length === 0
   ) {
     fail('route is fallback or substituted', 'validate-host-route', {
       requested: hostFrame?.route?.requested ?? null,
@@ -10833,6 +10834,16 @@ export function validateFingerFluidMovingHillHostFrame(
   }
   if (!Number.isSafeInteger(hostFrame.remapGeneration) || hostFrame.remapGeneration < 0) {
     fail('remap generation is missing or invalid', 'validate-host-remap-generation');
+  }
+  if (
+    !Number.isSafeInteger(expectedRemapGeneration)
+    || expectedRemapGeneration < 0
+    || hostFrame.remapGeneration !== expectedRemapGeneration
+  ) {
+    fail('remap generation is stale or substituted', 'validate-host-remap-generation', {
+      expected: expectedRemapGeneration ?? null,
+      actual: hostFrame.remapGeneration,
+    });
   }
   const validatedCamera = validateFingerFluidExternalCamera(hostFrame.camera, extent);
   if (
@@ -14352,6 +14363,7 @@ export async function createWebGPUFingerFluidSolver({
         device,
         extent: expectedExtent,
         camera: externalCameraSnapshot,
+        expectedRemapGeneration: movingHillSupportProvider?.remapEpoch,
       })
       : null;
     const extent = ensureExtent(renderWidth, renderHeight, renderPixelRatio);
@@ -14768,7 +14780,7 @@ export async function createWebGPUFingerFluidSolver({
     if (validatedHostFrame) {
       lastHostFrameCompositionEvidence = Object.freeze({
         schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA,
-        requestedRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
+        requestedRoute: validatedHostFrame.route.requested,
         effectiveRoute: validatedHostFrame.route.effective,
         fallback: null,
         hostFrameId: validatedHostFrame.frameId,

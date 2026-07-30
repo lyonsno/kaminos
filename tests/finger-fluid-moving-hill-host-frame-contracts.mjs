@@ -79,8 +79,8 @@ function hostFrame(overrides = {}) {
     height: 720,
     camera,
     route: {
-      requested: 'lerms/hill/full-renderer-v0',
-      effective: 'lerms/hill/full-renderer-v0',
+      requested: fingerFluidCore.KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
+      effective: fingerFluidCore.KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
       fallback: null,
     },
     pipelineIdentity: 'lerms/hill/full-renderer-pipeline-12',
@@ -134,6 +134,7 @@ const validated = fingerFluidCore.validateFingerFluidMovingHillHostFrame(
     device,
     extent: { width: 1280, height: 720 },
     camera,
+    expectedRemapGeneration: 17,
   },
 );
 assert.equal(validated.frameId, 'lerms-frame-209');
@@ -150,6 +151,7 @@ function rejectsFrame(frame, pattern, message) {
         device,
         extent: { width: 1280, height: 720 },
         camera,
+        expectedRemapGeneration: 17,
       },
     ),
     error => {
@@ -174,6 +176,16 @@ rejectsFrame(
 rejectsFrame(
   hostFrame({ commandEncoder: null }),
   /command encoder is missing/,
+);
+rejectsFrame(
+  hostFrame({
+    route: {
+      requested: 'lerms/hill/full-renderer-v0',
+      effective: 'lerms/hill/full-renderer-v0',
+      fallback: null,
+    },
+  }),
+  /route is fallback or substituted/,
 );
 rejectsFrame(
   hostFrame({
@@ -241,6 +253,10 @@ rejectsFrame(
 rejectsFrame(
   hostFrame({ remapGeneration: -1 }),
   /remap generation is missing or invalid/,
+);
+rejectsFrame(
+  hostFrame({ remapGeneration: 16 }),
+  /remap generation is stale or substituted/,
 );
 
 assert.match(
