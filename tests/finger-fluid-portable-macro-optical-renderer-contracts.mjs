@@ -314,6 +314,25 @@ assert.ok(
   }).every(Boolean),
   'continuous patch normals are normalized analytic position derivatives',
 );
+const topCenterVertex = 4;
+const topCenterNormalOffset = (
+  topCenterVertex * continuousPlan.vertexStrideFloats + 3
+);
+const expectedTopCenterNormalLength = Math.hypot(1, 0.25);
+const expectedTopCenterNormal = [
+  0,
+  1 / expectedTopCenterNormalLength,
+  -0.25 / expectedTopCenterNormalLength,
+];
+for (let component = 0; component < 3; component += 1) {
+  assert.ok(
+    Math.abs(
+      continuousPlan.vertices[topCenterNormalOffset + component]
+        - expectedTopCenterNormal[component]
+    ) < 1e-5,
+    `continuous patch normal component ${component} follows the Hermite position derivative`,
+  );
+}
 
 const evolvedContinuousSnapshot = {
   ...snapshot,
