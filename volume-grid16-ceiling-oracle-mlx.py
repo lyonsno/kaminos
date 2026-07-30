@@ -241,6 +241,7 @@ def fit_modes(
     anchor_weight: float = 0.0,
     background_state: dict[str, np.ndarray] | None = None,
     confine_to_medium: bool = True,
+    high_frequency_weight: float = 0.0,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -287,6 +288,8 @@ def fit_modes(
         segment = np.where(hit, (rays["far"] - rays["near"]) / sample_count / fine_step_world, 0.0)
         camera_batches.append(
             {
+                "height": rays["height"],
+                "width": rays["width"],
                 "points": mx.array(points.astype(np.float32)),
                 "segment": mx.array(segment.astype(np.float32)),
                 "target": mx.array(
@@ -297,6 +300,9 @@ def fit_modes(
         )
         target_images.append(target_linear)
 
+    image_dims = {(batch["height"], batch["width"]) for batch in camera_batches}
+    require(len(image_dims) == 1, "fit cameras disagree on image dimensions")
+    (image_height, image_width) = next(iter(image_dims))
     parameters = {
         "centers": mx.array(raw["centers"].astype(np.float32)),
         "rawCholesky": mx.array(raw["rawCholesky"].astype(np.float32)),
@@ -408,6 +414,21 @@ def fit_modes(
         data_loss = mx.mean(mx.abs(predicted - target)) + 0.25 * mx.mean(
             mx.square(predicted - target)
         )
+        if high_frequency_weight > 0.0:
+            # Gradient-domain supervision: finite differences over the image
+            # plane give fine structure a gradient voice that mean-L1 over a
+            # mostly-empty frame denies it.
+            pred_img = predicted.reshape((image_height, image_width, 3))
+            targ_img = target.reshape((image_height, image_width, 3))
+            dx = mx.abs(
+                (pred_img[:, 1:, :] - pred_img[:, :-1, :])
+                - (targ_img[:, 1:, :] - targ_img[:, :-1, :])
+            )
+            dy = mx.abs(
+                (pred_img[1:, :, :] - pred_img[:-1, :, :])
+                - (targ_img[1:, :, :] - targ_img[:-1, :, :])
+            )
+            data_loss = data_loss + high_frequency_weight * (mx.mean(dx) + mx.mean(dy))
         if anchor_weight > 0.0:
             # Temporal anchor: penalize raw-parameter departure from the warm
             # seat so a short cadence budget cannot shatter the solution.
@@ -478,6 +499,7 @@ def fit_modes(
         "anchorWeight": float(anchor_weight),
         "backgroundModeCount": 0 if background_state is None else int(background_state["centers"].shape[0]),
         "confinedToMedium": bool(confine_to_medium),
+        "highFrequencyWeight": float(high_frequency_weight),
         "cameraCount": len(cameras),
         "targetLatticeSha256": digest,
         "initialLoss": float(initial_loss),

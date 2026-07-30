@@ -168,6 +168,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                     init=init,
                     learning_rate=stage["lr"],
                     initial_state=seed_state,
+                    high_frequency_weight=args.high_frequency_weight,
                 )
                 ORACLE.require_lattice_identity(data["lattice"], data["digest"])
                 if index == 0:
@@ -254,6 +255,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
     parser.add_argument("--arms", default="")
+    parser.add_argument("--high-frequency-weight", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=20260727)
     return parser.parse_args(argv)
 
