@@ -10920,6 +10920,23 @@ export function validateFingerFluidMovingHillHostFrame(
       },
     );
   }
+  const hostAttachments = [sceneColor, sceneDepth, environment, target];
+  const attachmentIds = hostAttachments.map(attachment => attachment.attachmentId);
+  const attachmentViews = hostAttachments.map(attachment => attachment.view);
+  if (
+    new Set(attachmentIds).size !== hostAttachments.length
+    || new Set(attachmentViews).size !== hostAttachments.length
+  ) {
+    fail(
+      'host attachment identities must be unique',
+      'validate-host-attachments',
+      {
+        attachmentIds,
+        uniqueAttachmentIdCount: new Set(attachmentIds).size,
+        uniqueAttachmentViewCount: new Set(attachmentViews).size,
+      },
+    );
+  }
   return Object.freeze({
     schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA,
     route: Object.freeze({
@@ -14814,6 +14831,8 @@ export async function createWebGPUFingerFluidSolver({
         sceneColorAttachmentId: validatedHostFrame.sceneColor.attachmentId,
         sceneDepthAttachmentId: validatedHostFrame.sceneDepth.attachmentId,
         environmentAttachmentId: validatedHostFrame.environment.attachmentId,
+        environmentWidth: validatedHostFrame.environment.width,
+        environmentHeight: validatedHostFrame.environment.height,
         targetAttachmentId: validatedHostFrame.target.attachmentId,
         commandEncoderAuthority: 'host_live_frame',
         primaryCommandEncoded: true,
@@ -15941,8 +15960,12 @@ export async function createWebGPUFingerFluidSolver({
             : 'wgsl-manual-bilinear-rgbe-equirectangular-v0',
           filterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
           worldBackgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
-          width: hdrEnvironment.width,
-          height: hdrEnvironment.height,
+          width: lastHostFrameCompositionEvidence
+            ? lastHostFrameCompositionEvidence.environmentWidth
+            : hdrEnvironment.width,
+          height: lastHostFrameCompositionEvidence
+            ? lastHostFrameCompositionEvidence.environmentHeight
+            : hdrEnvironment.height,
           gpuTextureFormat: lastHostFrameCompositionEvidence ? 'rgba16float' : 'rgba8unorm',
           fallbackReason: null,
         },

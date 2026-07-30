@@ -601,6 +601,8 @@ function validateHostEncodeEvidence(encodeEvidence, hostFrame) {
     || encodeEvidence.sceneColorAttachmentId !== hostFrame.sceneColor.attachmentId
     || encodeEvidence.sceneDepthAttachmentId !== hostFrame.sceneDepth.attachmentId
     || encodeEvidence.environmentAttachmentId !== hostFrame.environment.attachmentId
+    || encodeEvidence.environmentWidth !== hostFrame.environment.width
+    || encodeEvidence.environmentHeight !== hostFrame.environment.height
     || encodeEvidence.targetAttachmentId !== hostFrame.target.attachmentId
     || encodeEvidence.primaryCommandEncoded !== true
     || encodeEvidence.primaryOutputWritten !== false

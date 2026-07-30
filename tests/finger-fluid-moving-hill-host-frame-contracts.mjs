@@ -240,6 +240,31 @@ rejectsFrame(
 );
 rejectsFrame(
   hostFrame({
+    target: {
+      ...hostFrame().target,
+      attachmentId: hostFrame().sceneDepth.attachmentId,
+      view: hostFrame().sceneDepth.view,
+    },
+  }),
+  /host attachment identities must be unique/,
+);
+rejectsFrame(
+  hostFrame({
+    sceneDepth: {
+      ...hostFrame().sceneDepth,
+      attachmentId: hostFrame().sceneColor.attachmentId,
+    },
+  }),
+  /host attachment identities must be unique/,
+);
+const viewAliasFrame = hostFrame();
+viewAliasFrame.environment = {
+  ...viewAliasFrame.environment,
+  view: viewAliasFrame.sceneDepth.view,
+};
+rejectsFrame(viewAliasFrame, /host attachment identities must be unique/);
+rejectsFrame(
+  hostFrame({
     environment: {
       ...hostFrame().environment,
       authority: 'synthetic_fallback',
@@ -307,7 +332,7 @@ assert.match(
 );
 assert.match(
   source,
-  /schema:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA[\s\S]*hostFrameId:[\s\S]*deviceIdentity:[\s\S]*cameraIdentity:[\s\S]*cameraGeneration:[\s\S]*pipelineIdentity:[\s\S]*remapGeneration:[\s\S]*sceneColorAttachmentId:[\s\S]*sceneDepthAttachmentId:[\s\S]*environmentAttachmentId:[\s\S]*targetAttachmentId:/,
+  /schema:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA[\s\S]*hostFrameId:[\s\S]*deviceIdentity:[\s\S]*cameraIdentity:[\s\S]*cameraGeneration:[\s\S]*pipelineIdentity:[\s\S]*remapGeneration:[\s\S]*sceneColorAttachmentId:[\s\S]*sceneDepthAttachmentId:[\s\S]*environmentAttachmentId:[\s\S]*environmentWidth:[\s\S]*environmentHeight:[\s\S]*targetAttachmentId:/,
   'the host encode receipt must preserve every load-bearing frame identity',
 );
 assert.match(
@@ -337,7 +362,7 @@ assert.match(
 );
 assert.match(
   source,
-  /environmentMapEvidence:\s*\{[\s\S]*attachmentId:\s*lastHostFrameCompositionEvidence[\s\S]*environmentAttachmentId/,
+  /environmentMapEvidence:\s*\{[\s\S]*attachmentId:\s*lastHostFrameCompositionEvidence[\s\S]*environmentAttachmentId[\s\S]*width:\s*lastHostFrameCompositionEvidence[\s\S]*environmentWidth[\s\S]*height:\s*lastHostFrameCompositionEvidence[\s\S]*environmentHeight/,
   'environment evidence must name the bound host attachment rather than the private control asset',
 );
 assert.match(
@@ -450,6 +475,16 @@ assert.match(
   witnessRunnerSource,
   /hostEncode\?\.sceneColorAttachmentId/,
   'the browser runner must require exact host scene attachment identities',
+);
+assert.match(
+  witnessRunnerSource,
+  /new Set\(hostAttachmentIds\)\.size !== hostAttachmentIds\.length/,
+  'the browser runner must reject aliased host attachment identities',
+);
+assert.match(
+  witnessRunnerSource,
+  /hostEncode\?\.environmentWidth !== HOST_ENVIRONMENT_WIDTH[\s\S]*hostEncode\?\.environmentHeight !== HOST_ENVIRONMENT_HEIGHT/,
+  'the browser runner must reject substituted host environment dimensions',
 );
 assert.match(
   witnessRunnerSource,

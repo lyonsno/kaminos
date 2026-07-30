@@ -16,6 +16,8 @@ const HOST_FRAME_SUBMISSION_EVIDENCE_SCHEMA =
   'kaminos.finger-fluid.moving-hill-host-frame-submission-evidence.v0';
 const HOST_DEVICE_IDENTITY = 'kaminos-moving-hill-support-witness-device';
 const HOST_PIPELINE_IDENTITY = 'kaminos-moving-hill-support-witness-host-pipeline-v0';
+const HOST_ENVIRONMENT_WIDTH = 512;
+const HOST_ENVIRONMENT_HEIGHT = 256;
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
@@ -354,6 +356,8 @@ function validateState(candidate) {
     || hostEncode?.cameraGeneration !== candidate.cameraEvidence?.generation
     || hostEncode?.pipelineIdentity !== HOST_PIPELINE_IDENTITY
     || hostEncode?.remapGeneration !== candidate.remapEpoch
+    || hostEncode?.environmentWidth !== HOST_ENVIRONMENT_WIDTH
+    || hostEncode?.environmentHeight !== HOST_ENVIRONMENT_HEIGHT
     || hostAttachmentIds.some(
       attachmentId => (
         typeof attachmentId !== 'string'
