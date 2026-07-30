@@ -561,7 +561,7 @@ assert.match(
 );
 assert.match(
   source,
-  /function failFingerFluidInitialization\([\s\S]*?\n  \}\s*try \{\s*const context = canvas\.getContext\('webgpu'\);[\s\S]*?return runtimeApi;\s*\} catch \(error\) \{\s*return failFingerFluidInitialization\(\s*`WebGPU post-provider initialization failed:/,
+  /function failFingerFluidInitialization\([\s\S]*?\n  \}\s*try \{\s*const context = safeHostFrameComposition\s*\?\s*null\s*:\s*canvas\.getContext\('webgpu'\);[\s\S]*?return runtimeApi;\s*\} catch \(error\) \{\s*return failFingerFluidInitialization\(\s*`WebGPU post-provider initialization failed:/,
   'every constructor allocation after provider ownership transfers must share one cleanup boundary',
 );
 const ensureExtentSource = source.slice(
@@ -601,7 +601,11 @@ assert.match(
   /presentationMode:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE/,
   'the moving-Hill witness must select the no-toy consumer presentation explicitly',
 );
-assert.match(browserWitnessSource, /movingHillSupportContactProviderFactory\(\{\s*device\s*\}\)/);
+assert.match(
+  browserWitnessSource,
+  /movingHillSupportContactProviderFactory\(\{\s*device:\s*solverDevice\s*\}\)[\s\S]*solverDevice\s*!==\s*device[\s\S]*device:\s*solverDevice/,
+  'the witness must reject a substituted solver device before constructing the support provider',
+);
 assert.match(browserWitnessSource, /provider\.update\(\{/);
 assert.match(
   browserWitnessSource,
@@ -610,12 +614,12 @@ assert.match(
 );
 assert.match(
   browserWitnessSource,
-  /externalCamera,\s*\n\s*particleVisibility,/,
+  /externalCamera,\s*\n\s*hostFrame,\s*\n\s*particleVisibility,/,
   'every moving-Hill witness render must make camera and particle visibility explicit',
 );
 assert.match(
   browserWitnessSource,
-  /renderFrame\('hidden'\)/,
+  /renderHostFrame\('hidden',\s*externalCamera,\s*'particle-negative'\)/,
   'the moving-Hill witness must exercise a particles-hidden attribution frame',
 );
 assert.match(

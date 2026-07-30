@@ -9,6 +9,13 @@ const MOVING_HILL_PRESENTATION_MODE = 'moving_hill_consumer';
 const MOVING_HILL_PRESENTATION_ROUTE =
   'kaminos/finger-fluid/moving-hill-consumer-presentation-v0';
 const EXTERNAL_CAMERA_IDENTITY = 'kaminos-moving-hill-support-witness-camera';
+const HOST_FRAME_ROUTE = 'kaminos/finger-fluid/moving-hill-host-frame-attachments-v0';
+const HOST_FRAME_ENCODE_EVIDENCE_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-host-frame-encode-evidence.v0';
+const HOST_FRAME_SUBMISSION_EVIDENCE_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-host-frame-submission-evidence.v0';
+const HOST_DEVICE_IDENTITY = 'kaminos-moving-hill-support-witness-device';
+const HOST_PIPELINE_IDENTITY = 'kaminos-moving-hill-support-witness-host-pipeline-v0';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
@@ -327,6 +334,58 @@ function validateState(candidate) {
     || candidate.cameraEvidence?.fallbackReason !== null
   ) {
     throw new Error(`external camera authority rejected: ${JSON.stringify(candidate)}`);
+  }
+  const hostEncode = candidate.hostFrameCompositionEvidence;
+  const hostAttachmentIds = [
+    hostEncode?.sceneColorAttachmentId,
+    hostEncode?.sceneDepthAttachmentId,
+    hostEncode?.environmentAttachmentId,
+    hostEncode?.targetAttachmentId,
+  ];
+  if (
+    hostEncode?.schema !== HOST_FRAME_ENCODE_EVIDENCE_SCHEMA
+    || hostEncode?.requestedRoute !== HOST_FRAME_ROUTE
+    || hostEncode?.effectiveRoute !== HOST_FRAME_ROUTE
+    || hostEncode?.fallback !== null
+    || typeof hostEncode?.hostFrameId !== 'string'
+    || hostEncode.hostFrameId.length === 0
+    || hostEncode?.deviceIdentity !== HOST_DEVICE_IDENTITY
+    || hostEncode?.cameraIdentity !== EXTERNAL_CAMERA_IDENTITY
+    || hostEncode?.cameraGeneration !== candidate.cameraEvidence?.generation
+    || hostEncode?.pipelineIdentity !== HOST_PIPELINE_IDENTITY
+    || hostEncode?.remapGeneration !== candidate.remapEpoch
+    || hostAttachmentIds.some(
+      attachmentId => (
+        typeof attachmentId !== 'string'
+        || !attachmentId.startsWith(`${hostEncode.hostFrameId}:`)
+      ),
+    )
+    || new Set(hostAttachmentIds).size !== hostAttachmentIds.length
+    || hostEncode?.primaryCommandEncoded !== true
+    || hostEncode?.primaryOutputWritten !== false
+    || hostEncode?.submittedBySolver !== false
+    || hostEncode?.presentedBySolver !== false
+  ) {
+    throw new Error(`host-frame encode evidence rejected: ${JSON.stringify(candidate)}`);
+  }
+  if (
+    candidate.hostSubmissionEvidence?.schema !== HOST_FRAME_SUBMISSION_EVIDENCE_SCHEMA
+    || candidate.hostSubmissionEvidence?.requestedRoute !== HOST_FRAME_ROUTE
+    || candidate.hostSubmissionEvidence?.effectiveRoute !== HOST_FRAME_ROUTE
+    || candidate.hostSubmissionEvidence?.fallback !== null
+    || candidate.hostSubmissionEvidence?.hostFrameId !== hostEncode.hostFrameId
+    || candidate.hostSubmissionEvidence?.deviceIdentity !== HOST_DEVICE_IDENTITY
+    || candidate.hostSubmissionEvidence?.cameraIdentity !== EXTERNAL_CAMERA_IDENTITY
+    || candidate.hostSubmissionEvidence?.cameraGeneration !== candidate.cameraEvidence?.generation
+    || candidate.hostSubmissionEvidence?.pipelineIdentity !== HOST_PIPELINE_IDENTITY
+    || candidate.hostSubmissionEvidence?.remapGeneration !== candidate.remapEpoch
+    || candidate.hostSubmissionEvidence?.hostSubmissionAccepted !== true
+    || candidate.hostSubmissionEvidence?.hostFinalPresentationCount !== 1
+    || candidate.hostSubmissionEvidence?.primaryOutputWritten !== true
+    || candidate.hostSubmissionEvidence?.blank !== false
+    || candidate.hostSubmissionEvidence?.partial !== false
+  ) {
+    throw new Error(`host-frame submission evidence rejected: ${JSON.stringify(candidate)}`);
   }
   if (
     candidate.negativeParticleWitness?.cameraIdentity !== EXTERNAL_CAMERA_IDENTITY

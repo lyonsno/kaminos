@@ -52,6 +52,14 @@ export const KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE =
   'kaminos/finger-fluid/moving-hill-consumer-presentation-v0';
 export const KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA =
   'kaminos.finger-fluid.external-camera.v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-host-frame.v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE =
+  'kaminos/finger-fluid/moving-hill-host-frame-attachments-v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_FAILURE_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-host-frame-failure.v0';
+export const KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA =
+  'kaminos.finger-fluid.moving-hill-host-frame-encode-evidence.v0';
 export const KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT = 'wgsl-support-aware-symmetric-capillary-sheet-v0';
 export const KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT = 'wgsl-anisotropic-unsupported-sheet-support-v0';
 export const KAMINOS_FINGER_FLUID_SHEET_DIAGNOSTIC_CONTRACT = 'wgsl-per-particle-sheet-release-diagnostic-channels-v0';
@@ -8401,6 +8409,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
@@ -8564,7 +8573,9 @@ fn loadEnvironmentTexel(pixel: vec2<i32>) -> vec3<f32> {
   let dims = vec2<i32>(textureDimensions(hdrEnvironmentTexture));
   let wrappedX = ((pixel.x % dims.x) + dims.x) % dims.x;
   let safePixel = vec2<i32>(wrappedX, clamp(pixel.y, 0, dims.y - 1));
-  return decodeRgbe(textureLoad(hdrEnvironmentTexture, safePixel, 0));
+  let encoded = textureLoad(hdrEnvironmentTexture, safePixel, 0);
+  let movingHillHostLinearHdr = params.hostFrameControls.x > 0.5;
+  return select(decodeRgbe(encoded), encoded.rgb, movingHillHostLinearHdr);
 }
 
 fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
@@ -8605,6 +8616,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 @group(0) @binding(1) var<uniform> params: RenderParams;
@@ -8646,6 +8658,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 @group(0) @binding(0) var linearSceneRadiance: texture_2d<f32>;
@@ -8711,6 +8724,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 @group(0) @binding(1) var<uniform> params: RenderParams;
@@ -8930,6 +8944,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 struct SceneParams {
@@ -9038,6 +9053,7 @@ struct RenderParams {
   viewport: vec4<f32>,
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
+  hostFrameControls: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
@@ -9316,6 +9332,9 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
   hit.metallic = 0.0;
   hit.objectId = 0.0;
   hit.confidence = 0.0;
+  if (params.hostFrameControls.x > 0.5) {
+    return hit;
+  }
   let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
   let dimsFloat = vec2<f32>(dims);
   var distance = 0.055;
@@ -9922,6 +9941,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
 
   let supportOrderingDepth = readSupportOrderingDepth(pixel);
+  if (params.hostFrameControls.x > 0.5) {
+    let hostSceneDepth = textureLoad(deferredLinearDepthObject, pixel, 0).x;
+    if (hostSceneDepth > 0.0 && supportOrderingDepth >= hostSceneDepth - 0.002) {
+      discard;
+    }
+  }
   let opticalDebugMode = i32(round(params.cameraUp.w));
   if (opticalDebugMode == 16) {
     return refractionOutput(vec4<f32>(1.0, 1.0, 1.0, 1.0), supportOrderingDepth);
@@ -10596,6 +10621,303 @@ export function validateFingerFluidExternalCamera(camera, extent) {
       width: camera.viewport.width,
       height: camera.viewport.height,
     }),
+  });
+}
+
+function fingerFluidMovingHillHostFrameFailure(
+  message,
+  {
+    phase = 'validate-host-frame',
+    hostFrame = null,
+    lastTrustworthyEvidence = 'host-frame-received',
+    details = {},
+  } = {},
+) {
+  const error = new Error(`Finger fluid moving-Hill host frame ${message}`);
+  error.report = Object.freeze({
+    schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_FAILURE_SCHEMA,
+    requestedRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
+    effectiveRoute: null,
+    hostFrameId: hostFrame?.frameId ?? null,
+    failurePhase: phase,
+    lastTrustworthyEvidence,
+    primaryOutputWritten: false,
+    partial: true,
+    blank: true,
+    ...details,
+  });
+  throw error;
+}
+
+function validateFingerFluidMovingHillHostAttachment(
+  attachment,
+  {
+    label,
+    hostFrame,
+    camera,
+    formats,
+    colorSpace = null,
+    encoding = null,
+    mapping = null,
+    matchExtent = true,
+  },
+) {
+  const fail = (message, details = {}) => fingerFluidMovingHillHostFrameFailure(
+    `${label} ${message}`,
+    {
+      phase: `validate-${label.replaceAll(' ', '-')}`,
+      hostFrame,
+      lastTrustworthyEvidence: 'host-frame-identity-exact',
+      details,
+    },
+  );
+  if (!attachment || typeof attachment !== 'object') fail('attachment is missing');
+  if (attachment.authority !== 'host_live_frame') {
+    fail('authority is unsupported or fallback', {
+      authority: attachment.authority ?? null,
+    });
+  }
+  if (typeof attachment.attachmentId !== 'string' || attachment.attachmentId.trim().length === 0) {
+    fail('attachment identity is missing');
+  }
+  if (attachment.frameId !== hostFrame.frameId) {
+    fail('frame identity is stale or substituted', {
+      expected: hostFrame.frameId,
+      actual: attachment.frameId ?? null,
+    });
+  }
+  if (
+    attachment.cameraIdentity !== camera.identity
+    || attachment.cameraGeneration !== camera.generation
+  ) {
+    fail(
+      attachment.cameraIdentity !== camera.identity
+        ? 'camera identity is stale or substituted'
+        : 'camera generation is stale or substituted',
+      {
+        expectedCameraIdentity: camera.identity,
+        actualCameraIdentity: attachment.cameraIdentity ?? null,
+        expectedCameraGeneration: camera.generation,
+        actualCameraGeneration: attachment.cameraGeneration ?? null,
+      },
+    );
+  }
+  if (attachment.deviceIdentity !== hostFrame.deviceIdentity) {
+    fail('device identity is stale or substituted', {
+      expected: hostFrame.deviceIdentity,
+      actual: attachment.deviceIdentity ?? null,
+    });
+  }
+  if (
+    !Number.isInteger(attachment.width)
+    || attachment.width < 1
+    || !Number.isInteger(attachment.height)
+    || attachment.height < 1
+  ) {
+    fail('extent is incomplete');
+  }
+  if (
+    matchExtent
+    && (attachment.width !== hostFrame.width || attachment.height !== hostFrame.height)
+  ) {
+    fail('extent does not match the host frame', {
+      expected: `${hostFrame.width}x${hostFrame.height}`,
+      actual: `${attachment.width}x${attachment.height}`,
+    });
+  }
+  if (!formats.includes(attachment.format)) {
+    fail('format is unsupported', {
+      expected: formats,
+      actual: attachment.format ?? null,
+    });
+  }
+  if (colorSpace && attachment.colorSpace !== colorSpace) {
+    fail('color space is unsupported', {
+      expected: colorSpace,
+      actual: attachment.colorSpace ?? null,
+    });
+  }
+  if (encoding && attachment.encoding !== encoding) {
+    fail('encoding is unsupported', {
+      expected: encoding,
+      actual: attachment.encoding ?? null,
+    });
+  }
+  if (mapping && attachment.mapping !== mapping) {
+    fail('mapping is unsupported', {
+      expected: mapping,
+      actual: attachment.mapping ?? null,
+    });
+  }
+  if (!attachment.view || typeof attachment.view !== 'object') {
+    fail('GPU texture view is missing');
+  }
+  return Object.freeze({
+    authority: attachment.authority,
+    attachmentId: attachment.attachmentId,
+    frameId: attachment.frameId,
+    cameraIdentity: attachment.cameraIdentity,
+    cameraGeneration: attachment.cameraGeneration,
+    deviceIdentity: attachment.deviceIdentity,
+    width: attachment.width,
+    height: attachment.height,
+    format: attachment.format,
+    colorSpace: attachment.colorSpace ?? null,
+    encoding: attachment.encoding ?? null,
+    mapping: attachment.mapping ?? null,
+    view: attachment.view,
+  });
+}
+
+export function validateFingerFluidMovingHillHostFrame(
+  hostFrame,
+  {
+    device,
+    extent,
+    camera,
+  } = {},
+) {
+  const fail = (message, phase = 'validate-host-frame', details = {}) => (
+    fingerFluidMovingHillHostFrameFailure(message, {
+      phase,
+      hostFrame,
+      details,
+    })
+  );
+  if (hostFrame?.schema !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA) {
+    fail(`schema must be ${KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA}`);
+  }
+  if (typeof hostFrame.frameId !== 'string' || hostFrame.frameId.trim().length === 0) {
+    fail('frame identity is missing');
+  }
+  if (!device || hostFrame.device !== device) {
+    fail('device identity is cross-device or substituted', 'validate-host-device');
+  }
+  if (typeof hostFrame.deviceIdentity !== 'string' || hostFrame.deviceIdentity.trim().length === 0) {
+    fail('device identity is missing', 'validate-host-device');
+  }
+  if (!hostFrame.commandEncoder || typeof hostFrame.commandEncoder !== 'object') {
+    fail('command encoder is missing', 'validate-command-encoder');
+  }
+  if (
+    !Number.isInteger(hostFrame.width)
+    || hostFrame.width < 1
+    || !Number.isInteger(hostFrame.height)
+    || hostFrame.height < 1
+  ) {
+    fail('extent is incomplete', 'validate-host-extent');
+  }
+  if (hostFrame.width !== extent?.width || hostFrame.height !== extent?.height) {
+    fail('extent does not match the requested render extent', 'validate-host-extent', {
+      expected: `${extent?.width}x${extent?.height}`,
+      actual: `${hostFrame.width}x${hostFrame.height}`,
+    });
+  }
+  if (
+    hostFrame?.route?.requested !== hostFrame?.route?.effective
+    || hostFrame?.route?.fallback !== null
+    || typeof hostFrame?.route?.requested !== 'string'
+    || hostFrame.route.requested.trim().length === 0
+  ) {
+    fail('route is fallback or substituted', 'validate-host-route', {
+      requested: hostFrame?.route?.requested ?? null,
+      effective: hostFrame?.route?.effective ?? null,
+      fallback: hostFrame?.route?.fallback ?? null,
+    });
+  }
+  if (
+    typeof hostFrame.pipelineIdentity !== 'string'
+    || hostFrame.pipelineIdentity.trim().length === 0
+  ) {
+    fail('pipeline identity is missing', 'validate-host-pipeline');
+  }
+  if (!Number.isSafeInteger(hostFrame.remapGeneration) || hostFrame.remapGeneration < 0) {
+    fail('remap generation is missing or invalid', 'validate-host-remap-generation');
+  }
+  const validatedCamera = validateFingerFluidExternalCamera(hostFrame.camera, extent);
+  if (
+    !camera
+    || validatedCamera.identity !== camera.identity
+    || validatedCamera.generation !== camera.generation
+  ) {
+    fail('camera identity is cross-frame or substituted', 'validate-host-camera', {
+      expectedIdentity: camera?.identity ?? null,
+      actualIdentity: validatedCamera.identity,
+      expectedGeneration: camera?.generation ?? null,
+      actualGeneration: validatedCamera.generation,
+    });
+  }
+  const attachmentOptions = { hostFrame, camera: validatedCamera };
+  const sceneColor = validateFingerFluidMovingHillHostAttachment(
+    hostFrame.sceneColor,
+    {
+      ...attachmentOptions,
+      label: 'scene color',
+      formats: ['rgba16float'],
+      colorSpace: 'linear_hdr',
+    },
+  );
+  const sceneDepth = validateFingerFluidMovingHillHostAttachment(
+    hostFrame.sceneDepth,
+    {
+      ...attachmentOptions,
+      label: 'scene depth',
+      formats: ['r32float'],
+      encoding: 'linear_view_depth_meters',
+    },
+  );
+  const environment = validateFingerFluidMovingHillHostAttachment(
+    hostFrame.environment,
+    {
+      ...attachmentOptions,
+      label: 'environment',
+      formats: ['rgba16float'],
+      mapping: 'equirectangular_world_radiance',
+      matchExtent: false,
+    },
+  );
+  const target = validateFingerFluidMovingHillHostAttachment(
+    hostFrame.target,
+    {
+      ...attachmentOptions,
+      label: 'target',
+      formats: ['rgba16float'],
+      colorSpace: 'linear_hdr',
+    },
+  );
+  if (
+    target.attachmentId === sceneColor.attachmentId
+    || target.view === sceneColor.view
+  ) {
+    fail(
+      'target must be distinct from the preserved scene color',
+      'validate-host-target',
+      {
+        sceneColorAttachmentId: sceneColor.attachmentId,
+        targetAttachmentId: target.attachmentId,
+      },
+    );
+  }
+  return Object.freeze({
+    schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA,
+    route: Object.freeze({
+      requested: hostFrame.route.requested,
+      effective: hostFrame.route.effective,
+      fallback: null,
+    }),
+    frameId: hostFrame.frameId,
+    device,
+    deviceIdentity: hostFrame.deviceIdentity,
+    commandEncoder: hostFrame.commandEncoder,
+    width: hostFrame.width,
+    height: hostFrame.height,
+    camera: validatedCamera,
+    pipelineIdentity: hostFrame.pipelineIdentity,
+    remapGeneration: hostFrame.remapGeneration,
+    sceneColor,
+    sceneDepth,
+    environment,
+    target,
   });
 }
 
@@ -12391,13 +12713,14 @@ function createUnavailableSolver(reason, details = {}) {
 export function failFingerFluidWebGPUInitialization({
   provider = null,
   device,
+  destroyDevice = true,
   reason,
   details = {},
 } = {}) {
   try {
     provider?.release?.();
   } finally {
-    device?.destroy?.();
+    if (destroyDevice) device?.destroy?.();
   }
   return createUnavailableSolver(reason, details);
 }
@@ -12405,6 +12728,7 @@ export function failFingerFluidWebGPUInitialization({
 export function failFingerFluidWebGPURuntimeOperation({
   destroyRuntime,
   device,
+  destroyDevice = true,
   phase = 'runtime-operation',
   error,
 } = {}) {
@@ -12415,7 +12739,7 @@ export function failFingerFluidWebGPURuntimeOperation({
     cleanupError = caught;
   } finally {
     try {
-      device?.destroy?.();
+      if (destroyDevice) device?.destroy?.();
     } catch (caught) {
       cleanupError ??= caught;
     }
@@ -12462,6 +12786,8 @@ export function createFingerFluidWebGPURuntimeLifecycle({
 
 export async function createWebGPUFingerFluidSolver({
   canvas,
+  hostFrameComposition = false,
+  webgpuDevice = null,
   particleCount = DEFAULT_PARTICLE_COUNT,
   densityIterations = 3,
   substeps = 1,
@@ -12492,9 +12818,23 @@ export async function createWebGPUFingerFluidSolver({
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
 } = {}) {
-  if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
-  if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
+  const safeHostFrameComposition = Boolean(hostFrameComposition);
+  if (!safeHostFrameComposition && !canvas?.getContext) {
+    return createUnavailableSolver('missing canvas');
+  }
+  if (
+    safeHostFrameComposition
+    && safePresentationMode !== KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+  ) {
+    movingHillSupportFailure('host-frame composition requires moving_hill_consumer presentation');
+  }
+  if (safeHostFrameComposition && !webgpuDevice) {
+    movingHillSupportFailure('host-frame composition requires an existing host WebGPU device');
+  }
+  if (!webgpuDevice && !globalThis.navigator?.gpu) {
+    return createUnavailableSolver('navigator.gpu unavailable');
+  }
   const supportShaderSource = supportShaderSourceForRoute(supportContactRoute);
   const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
     ? composedRevision
@@ -12517,19 +12857,23 @@ export async function createWebGPUFingerFluidSolver({
   ) {
     movingHillSupportFailure('moving_hill_consumer presentation requires canonical moving Hill support');
   }
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter) return createUnavailableSolver('WebGPU adapter unavailable');
   const requiredStorageBindings = 10;
-  if (adapter.limits.maxStorageBuffersPerShaderStage < requiredStorageBindings) {
-    return createUnavailableSolver(`WebGPU adapter exposes ${adapter.limits.maxStorageBuffersPerShaderStage} storage buffers per shader stage; liquid/fire composition requires ${requiredStorageBindings}`);
+  const adapter = webgpuDevice
+    ? null
+    : await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  if (!webgpuDevice && !adapter) return createUnavailableSolver('WebGPU adapter unavailable');
+  const capacityLimits = webgpuDevice?.limits ?? adapter?.limits;
+  if (capacityLimits.maxStorageBuffersPerShaderStage < requiredStorageBindings) {
+    return createUnavailableSolver(`WebGPU device exposes ${capacityLimits.maxStorageBuffersPerShaderStage} storage buffers per shader stage; liquid/fire composition requires ${requiredStorageBindings}`);
   }
-  const device = await adapter.requestDevice({
-    requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
-  });
+  const ownsDevice = !webgpuDevice;
+  const device = webgpuDevice ?? await adapter.requestDevice({
+      requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
+    });
   let movingHillSupportProvider = null;
   if (supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
     if (typeof movingHillSupportContactProviderFactory !== 'function') {
-      device.destroy();
+      if (ownsDevice) device.destroy();
       movingHillSupportFailure('provider factory is missing');
     }
     try {
@@ -12543,7 +12887,7 @@ export async function createWebGPUFingerFluidSolver({
       );
     } catch (error) {
       movingHillSupportProvider?.release?.();
-      device.destroy();
+      if (ownsDevice) device.destroy();
       throw error;
     }
   }
@@ -12551,18 +12895,31 @@ export async function createWebGPUFingerFluidSolver({
     return failFingerFluidWebGPUInitialization({
       provider: movingHillSupportProvider,
       device,
+      destroyDevice: ownsDevice,
       reason,
       details,
     });
   }
   try {
-  const context = canvas.getContext('webgpu');
-  if (!context) return failFingerFluidInitialization('GPUCanvasContext unavailable');
+  const context = safeHostFrameComposition ? null : canvas.getContext('webgpu');
+  if (!safeHostFrameComposition && !context) {
+    return failFingerFluidInitialization('GPUCanvasContext unavailable');
+  }
   let hdrEnvironment;
-  try {
-    hdrEnvironment = await loadFingerFluidHdrEnvironment();
-  } catch (error) {
-    return failFingerFluidInitialization(`HDR environment initialization failed: ${error.message || String(error)}`);
+  if (safeHostFrameComposition) {
+    hdrEnvironment = {
+      width: 1,
+      height: 1,
+      rgbe: new Uint8Array([0, 0, 0, 0]),
+      assetSha256: null,
+      encodedByteLength: 4,
+    };
+  } else {
+    try {
+      hdrEnvironment = await loadFingerFluidHdrEnvironment();
+    } catch (error) {
+      return failFingerFluidInitialization(`HDR environment initialization failed: ${error.message || String(error)}`);
+    }
   }
 
   const safeBaseParticleCount = resolveFingerFluidParticleCount(particleCount);
@@ -12960,9 +13317,18 @@ export async function createWebGPUFingerFluidSolver({
     ],
   });
 
-  const format = navigator.gpu.getPreferredCanvasFormat();
+  const format = safeHostFrameComposition
+    ? 'bgra8unorm'
+    : navigator.gpu.getPreferredCanvasFormat();
   const canvasAlphaMode = transparentBackground ? 'premultiplied' : 'opaque';
-  context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  if (context) {
+    context.configure({
+      device,
+      format,
+      alphaMode: canvasAlphaMode,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+  }
   const hdrEnvironmentTexture = device.createTexture({
     label: 'kaminos-finger-fluid-hdr-environment-rgbe',
     size: [hdrEnvironment.width, hdrEnvironment.height],
@@ -12990,7 +13356,7 @@ export async function createWebGPUFingerFluidSolver({
   );
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
-    size: 240,
+    size: 256,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
@@ -13362,6 +13728,7 @@ export async function createWebGPUFingerFluidSolver({
   let lastFrameDynamicToyMeshDrawCount = 0;
   let lastFrameParticleDrawCount = 0;
   let lastParticleVisibility = 'visible';
+  let lastHostFrameCompositionEvidence = null;
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastOpticalDebugMode = safeOpticalDebugMode;
@@ -13425,9 +13792,16 @@ export async function createWebGPUFingerFluidSolver({
     const targetHeight = Math.max(1, Math.floor(height * pixelRatio));
     const key = `${targetWidth}x${targetHeight}`;
     if (configuredExtent === key) return { width: targetWidth, height: targetHeight };
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    if (context) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      context.configure({
+        device,
+        format,
+        alphaMode: canvasAlphaMode,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+    }
     depthTexture?.destroy();
     depthTexture = device.createTexture({
       label: 'kaminos-finger-fluid-depth',
@@ -13556,6 +13930,7 @@ export async function createWebGPUFingerFluidSolver({
       return failFingerFluidWebGPURuntimeOperation({
         destroyRuntime: destroy,
         device,
+        destroyDevice: ownsDevice,
         phase: 'configure-render-extent',
         error,
       });
@@ -13925,8 +14300,8 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function render({
-    width = canvas.clientWidth || 1,
-    height = canvas.clientHeight || 1,
+    width = null,
+    height = null,
     pixelRatio = globalThis.devicePixelRatio || 1,
     yaw = -0.55,
     pitch = 0.34,
@@ -13941,11 +14316,45 @@ export async function createWebGPUFingerFluidSolver({
     bodyTransportMode = safeBodyTransportMode,
     interfaceFrequencyMode = safeInterfaceFrequencyMode,
     externalCamera = null,
+    hostFrame = null,
     particleVisibility = 'visible',
   } = {}) {
     if (runtimeLifecycle.stopped) return;
+    lastHostFrameCompositionEvidence = null;
     analyticCarrierLastFrameDrawCount = 0;
-    const extent = ensureExtent(width, height, pixelRatio);
+    if (safeHostFrameComposition && !hostFrame) {
+      fingerFluidMovingHillHostFrameFailure('is required for host-frame composition', {
+        phase: 'validate-host-frame',
+      });
+    }
+    if (hostFrame && !safeHostFrameComposition) {
+      fingerFluidMovingHillHostFrameFailure(
+        'was supplied to a solver without host-frame composition enabled',
+        {
+          phase: 'validate-host-frame',
+          hostFrame,
+        },
+      );
+    }
+    const renderWidth = hostFrame?.width ?? width ?? canvas?.clientWidth ?? 1;
+    const renderHeight = hostFrame?.height ?? height ?? canvas?.clientHeight ?? 1;
+    const renderPixelRatio = hostFrame ? 1 : pixelRatio;
+    const expectedExtent = {
+      width: Math.max(1, Math.floor(renderWidth * renderPixelRatio)),
+      height: Math.max(1, Math.floor(renderHeight * renderPixelRatio)),
+    };
+    const requestedExternalCamera = externalCamera ?? hostFrame?.camera ?? null;
+    const externalCameraSnapshot = requestedExternalCamera
+      ? validateFingerFluidExternalCamera(requestedExternalCamera, expectedExtent)
+      : null;
+    const validatedHostFrame = hostFrame
+      ? validateFingerFluidMovingHillHostFrame(hostFrame, {
+        device,
+        extent: expectedExtent,
+        camera: externalCameraSnapshot,
+      })
+      : null;
+    const extent = ensureExtent(renderWidth, renderHeight, renderPixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
@@ -14002,9 +14411,6 @@ export async function createWebGPUFingerFluidSolver({
       if (animatedPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
       reflectionMeshPhase = animatedPhase;
     }
-    const externalCameraSnapshot = externalCamera
-      ? validateFingerFluidExternalCamera(externalCamera, extent)
-      : null;
     if (
       safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
       && !externalCameraSnapshot
@@ -14051,7 +14457,7 @@ export async function createWebGPUFingerFluidSolver({
       viewProjection,
       inverseViewProjection,
     } = cameraSnapshot;
-    const renderData = new Float32Array(60);
+    const renderData = new Float32Array(64);
     const effectiveColorMode = resolveFingerFluidColorMode(colorMode);
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
@@ -14071,6 +14477,7 @@ export async function createWebGPUFingerFluidSolver({
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
       56,
     );
+    renderData.set([validatedHostFrame ? 1 : 0, 0, 0, 0], 60);
     lastExternalCamera = externalCameraSnapshot;
     lastCameraSnapshot = cameraSnapshot;
     lastParticleVisibility = particleVisibility;
@@ -14080,13 +14487,51 @@ export async function createWebGPUFingerFluidSolver({
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
     writeDynamicReflectionSceneParams();
 
-    const currentTexture = context.getCurrentTexture();
-    const currentTextureView = currentTexture.createView();
-    const linearSceneRadianceView = linearSceneRadianceTexture.createView();
-    const encoder = device.createCommandEncoder({ label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}` });
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
+    if (validatedHostFrame && !refractionEnabled) {
+      fingerFluidMovingHillHostFrameFailure(
+        `renderer mode ${effectiveRendererMode} is unsupported; screen_space_refraction is required`,
+        {
+          phase: 'validate-renderer-mode',
+          hostFrame,
+          lastTrustworthyEvidence: 'host-attachments-exact',
+        },
+      );
+    }
+    const currentTextureView = validatedHostFrame
+      ? null
+      : context.getCurrentTexture().createView();
+    const linearSceneRadianceView = validatedHostFrame
+      ? validatedHostFrame.target.view
+      : linearSceneRadianceTexture.createView();
+    const encoder = validatedHostFrame?.commandEncoder
+      ?? device.createCommandEncoder({
+        label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}`,
+      });
+    const effectiveRefractionCompositeBindGroup = validatedHostFrame
+      ? device.createBindGroup({
+        label: `kaminos-finger-fluid-host-frame-${validatedHostFrame.frameId}-refraction-bind-group`,
+        layout: screenSpaceRefractionCompositeLayout,
+        entries: [
+          { binding: 1, resource: { buffer: renderParamsBuffer } },
+          { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+          { binding: 5, resource: validatedHostFrame.sceneColor.view },
+          { binding: 6, resource: screenSpaceRefractionSceneSampler },
+          { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
+          { binding: 8, resource: screenSpaceOpticalSlabBackDepthTexture.createView() },
+          { binding: 9, resource: { buffer: dynamicReflectionMeshPositionBuffer } },
+          { binding: 10, resource: { buffer: dynamicReflectionMeshIndexBuffer } },
+          { binding: 11, resource: { buffer: dynamicReflectionSceneParamsBuffer } },
+          { binding: 12, resource: validatedHostFrame.environment.view },
+          { binding: 13, resource: validatedHostFrame.sceneDepth.view },
+          { binding: 14, resource: deferredWorldNormalRoughnessTexture.createView() },
+          { binding: 15, resource: deferredAlbedoMetallicTexture.createView() },
+        ],
+      })
+      : screenSpaceRefractionCompositeBindGroup;
     const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
     const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
+    if (!validatedHostFrame) {
     const hdrWorldBackgroundPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
       colorAttachments: [{
@@ -14200,6 +14645,7 @@ export async function createWebGPUFingerFluidSolver({
       );
       screenSpaceRefractionScenePassCount += 1;
     }
+    }
 
     if (effectiveRendererMode === 'sphere_debug') {
       const pass = encoder.beginRenderPass({
@@ -14280,17 +14726,27 @@ export async function createWebGPUFingerFluidSolver({
             : transparentBackground
             ? { r: 0, g: 0, b: 0, a: 0 }
             : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
-          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
+          loadOp: validatedHostFrame
+            ? 'load'
+            : liquidSupportDiagnostic
+            ? 'clear'
+            : 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
           view: depthTexture.createView(),
-          depthLoadOp: 'load',
+          depthClearValue: 1,
+          depthLoadOp: validatedHostFrame ? 'clear' : 'load',
           depthStoreOp: 'store',
         },
       });
       compositePass.setPipeline(refractionEnabled ? screenSpaceRefractionCompositePipeline : screenSpaceSurfaceCompositePipeline);
-      compositePass.setBindGroup(0, refractionEnabled ? screenSpaceRefractionCompositeBindGroup : screenSpaceSurfaceCompositeBindGroup);
+      compositePass.setBindGroup(
+        0,
+        refractionEnabled
+          ? effectiveRefractionCompositeBindGroup
+          : screenSpaceSurfaceCompositeBindGroup,
+      );
       compositePass.draw(3);
       compositePass.end();
       if (refractionEnabled) {
@@ -14309,6 +14765,32 @@ export async function createWebGPUFingerFluidSolver({
         screenSpaceSurfaceRenderFrameCount += 1;
       }
     }
+    if (validatedHostFrame) {
+      lastHostFrameCompositionEvidence = Object.freeze({
+        schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA,
+        requestedRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
+        effectiveRoute: validatedHostFrame.route.effective,
+        fallback: null,
+        hostFrameId: validatedHostFrame.frameId,
+        deviceIdentity: validatedHostFrame.deviceIdentity,
+        cameraIdentity: validatedHostFrame.camera.identity,
+        cameraGeneration: validatedHostFrame.camera.generation,
+        pipelineIdentity: validatedHostFrame.pipelineIdentity,
+        remapGeneration: validatedHostFrame.remapGeneration,
+        sceneColorAttachmentId: validatedHostFrame.sceneColor.attachmentId,
+        sceneDepthAttachmentId: validatedHostFrame.sceneDepth.attachmentId,
+        environmentAttachmentId: validatedHostFrame.environment.attachmentId,
+        targetAttachmentId: validatedHostFrame.target.attachmentId,
+        commandEncoderAuthority: 'host_live_frame',
+        primaryCommandEncoded: true,
+        primaryOutputWritten: false,
+        submittedBySolver: false,
+        presentedBySolver: false,
+        partial: true,
+        blank: null,
+        lastTrustworthyEvidence: 'host_commands_encoded_not_submitted',
+      });
+    } else {
     const finalPresentationPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
       colorAttachments: [{
@@ -14323,9 +14805,11 @@ export async function createWebGPUFingerFluidSolver({
     finalPresentationPass.draw(3);
     finalPresentationPass.end();
     finalPresentationPassCount += 1;
-    device.queue.submit([encoder.finish()]);
+      device.queue.submit([encoder.finish()]);
+    }
     directRenderFrameCount += 1;
     lastRenderFrameId = renderFrameId;
+    return lastHostFrameCompositionEvidence;
   }
 
   async function requestDiagnostics() {
@@ -15248,6 +15732,9 @@ export async function createWebGPUFingerFluidSolver({
       finalPresentationEvidence: {
         requestedRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
         effectiveRoute: KAMINOS_FINGER_FLUID_FINAL_PRESENTATION_ROUTE,
+        execution: lastHostFrameCompositionEvidence
+          ? 'host_owned_not_executed_by_solver_v0'
+          : 'solver_owned_tone_map_and_canvas_present_v0',
         sourceFormat: LINEAR_SCENE_FORMAT,
         targetFormat: format,
         toneMap: 'aces-fitted-v0',
@@ -15272,6 +15759,8 @@ export async function createWebGPUFingerFluidSolver({
         particleVisibility: lastParticleVisibility,
         particleAttributionRoute: 'same-frame-explicit-particle-draw-suppression-v0',
       },
+      hostFrameComposition: safeHostFrameComposition,
+      hostFrameCompositionEvidence: lastHostFrameCompositionEvidence,
       cameraEvidence: {
         schema: KAMINOS_FINGER_FLUID_EXTERNAL_CAMERA_SCHEMA,
         authority: lastExternalCamera ? 'consumer_external_exact_v0' : 'kaminos_private_analytic_bench_v0',
@@ -15371,9 +15860,11 @@ export async function createWebGPUFingerFluidSolver({
           fallbackReason: null,
           compositePassCount: worldSpaceReflectionCompositePassCount,
           reflectionProviderFrameId: lastReflectionProviderFrameId,
-          providerExecution: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
-            ? 'toy_world_providers_suppressed_consumer_scene_not_yet_bound_v0'
-            : 'analytic_and_indexed_toy_world_providers_executed_v0',
+          providerExecution: lastHostFrameCompositionEvidence
+            ? 'host_scene_color_depth_environment_bound_toy_world_suppressed_v0'
+            : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+              ? 'toy_world_providers_suppressed_consumer_scene_not_yet_bound_v0'
+              : 'analytic_and_indexed_toy_world_providers_executed_v0',
           candidateCapMode: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? 'no_toy_candidates_environment_only_v0'
             : 'uncapped_exact_dynamic_mesh_triangle_population_v0',
@@ -15400,20 +15891,25 @@ export async function createWebGPUFingerFluidSolver({
           schema: 'kaminos.hdr-environment-map.v0',
           requestedRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
           effectiveRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
-          assetId: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID,
-          assetSha256: hdrEnvironment.assetSha256,
-          runtimeAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL,
-          sourceAssetUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL,
-          sourcePageUrl: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL,
-          license: 'CC0-1.0',
-          encodedByteLength: hdrEnvironment.encodedByteLength,
-          decodeRoute: 'cpu-radiance-rle-rgbe-v0',
-          samplingRoute: 'wgsl-manual-bilinear-rgbe-equirectangular-v0',
+          attachmentId: lastHostFrameCompositionEvidence
+            ? lastHostFrameCompositionEvidence.environmentAttachmentId
+            : null,
+          assetId: lastHostFrameCompositionEvidence ? null : KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_ID,
+          assetSha256: lastHostFrameCompositionEvidence ? null : hdrEnvironment.assetSha256,
+          runtimeAssetUrl: lastHostFrameCompositionEvidence ? null : KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ASSET_URL,
+          sourceAssetUrl: lastHostFrameCompositionEvidence ? null : KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_ASSET_URL,
+          sourcePageUrl: lastHostFrameCompositionEvidence ? null : KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_SOURCE_PAGE_URL,
+          license: lastHostFrameCompositionEvidence ? null : 'CC0-1.0',
+          encodedByteLength: lastHostFrameCompositionEvidence ? null : hdrEnvironment.encodedByteLength,
+          decodeRoute: lastHostFrameCompositionEvidence ? 'host_linear_hdr_no_decode_v0' : 'cpu-radiance-rle-rgbe-v0',
+          samplingRoute: lastHostFrameCompositionEvidence
+            ? 'wgsl-manual_bilinear_linear_hdr_equirectangular_v0'
+            : 'wgsl-manual-bilinear-rgbe-equirectangular-v0',
           filterRoute: KAMINOS_FINGER_FLUID_ENVIRONMENT_FILTER_ROUTE,
           worldBackgroundRoute: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
           width: hdrEnvironment.width,
           height: hdrEnvironment.height,
-          gpuTextureFormat: 'rgba8unorm',
+          gpuTextureFormat: lastHostFrameCompositionEvidence ? 'rgba16float' : 'rgba8unorm',
           fallbackReason: null,
         },
       } : {}),
@@ -15424,9 +15920,11 @@ export async function createWebGPUFingerFluidSolver({
         depthRoute: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
           ? null
           : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
-        colorDepthAuthority: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
-          ? 'consumer_scene_color_depth_not_bound_v0'
-          : 'same_pass_same_analytic_geometry_v0',
+        colorDepthAuthority: lastHostFrameCompositionEvidence
+          ? 'host_scene_color_linear_depth_bound_v0'
+          : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+            ? 'consumer_scene_color_depth_not_bound_v0'
+            : 'same_pass_same_analytic_geometry_v0',
         geometrySource: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
           ? null
           : 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
@@ -15592,7 +16090,10 @@ export async function createWebGPUFingerFluidSolver({
           label: 'kaminos-finger-fluid-refraction-scene-color',
           format: LINEAR_SCENE_FORMAT,
           extent: configuredExtent,
-          source: 'same-camera-linear-hdr-scene-radiance-v0',
+          source: lastHostFrameCompositionEvidence
+            ? 'host_scene_color_linear_hdr_attachment_v0'
+            : 'same-camera-linear-hdr-scene-radiance-v0',
+          attachmentId: lastHostFrameCompositionEvidence?.sceneColorAttachmentId ?? null,
         } : null,
         scenePassCount: screenSpaceRefractionScenePassCount,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
@@ -15615,7 +16116,7 @@ export async function createWebGPUFingerFluidSolver({
         ...diagnostics,
         ageMs: Number(Math.max(0, performance.now() - diagnostics.capturedAtMs).toFixed(1)),
       } : null,
-      adapterInfo: adapter.info ? {
+      adapterInfo: adapter?.info ? {
         vendor: adapter.info.vendor || null,
         architecture: adapter.info.architecture || null,
         device: adapter.info.device || null,
