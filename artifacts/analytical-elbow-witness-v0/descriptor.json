@@ -45,7 +45,8 @@
           0
         ],
         "protectedCoreRadius": 0.14
-      }
+      },
+      "processes": []
     },
     {
       "id": "ulna",
@@ -62,7 +63,26 @@
           0
         ],
         "protectedCoreRadius": 0.11
-      }
+      },
+      "processes": [
+        {
+          "id": "olecranon-process",
+          "kind": "attachment-bearing-capsule",
+          "localStart": [
+            0,
+            -0.14,
+            0
+          ],
+          "localEnd": [
+            -0.28,
+            0.22,
+            0
+          ],
+          "radius": 0.085,
+          "attachmentId": "triceps-insertion",
+          "authority": "synthetic-proxy"
+        }
+      ]
     }
   ],
   "attachments": [
@@ -100,8 +120,8 @@
       "id": "triceps-insertion",
       "segmentId": "ulna",
       "localPosition": [
-        -0.18,
-        0.2,
+        -0.28,
+        0.22,
         0
       ],
       "authority": "synthetic-proxy"
