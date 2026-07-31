@@ -350,11 +350,15 @@ export async function writeAnalyticalElbowWitness({
         sourceSchema: descriptor?.schema || null,
       },
     };
+    const failureReportPath = phase === 'prepare-output'
+      ? `${outputRoot}.failure-report.json`
+      : resolve(outputRoot, 'report.json');
+    error.failureReportPath = failureReportPath;
     try {
-      await io.mkdir(outputRoot, { recursive: true });
+      await io.mkdir(dirname(failureReportPath), { recursive: true });
       await writeJsonAtomically(
         io,
-        resolve(outputRoot, 'report.json'),
+        failureReportPath,
         failureReport,
       );
     } catch (reportError) {
