@@ -70,6 +70,24 @@ function isFinitePoint(value) {
     value.every(Number.isFinite);
 }
 
+function assertFiniteNumbers(value, path = 'pose') {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(`analytical elbow emitted non-finite value at ${path}`);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertFiniteNumbers(item, `${path}[${index}]`));
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      assertFiniteNumbers(item, `${path}.${key}`);
+    }
+  }
+}
+
 function validateDescriptor(descriptor) {
   if (descriptor?.schema !== ANALYTICAL_ELBOW_DESCRIPTOR_SCHEMA) {
     throw new Error('unsupported analytical elbow descriptor schema');
@@ -80,6 +98,19 @@ function validateDescriptor(descriptor) {
   if (!isFinitePoint(descriptor.joint?.pivot) ||
       !isFinitePoint(descriptor.joint?.axis)) {
     throw new Error('analytical elbow joint requires finite pivot and axis points');
+  }
+  if (descriptor.joint.axis.some((value, index) => value !== [0, 0, 1][index])) {
+    throw new Error('analytical elbow v0 only supports authored hinge axis [0,0,1]');
+  }
+  if (!Number.isFinite(descriptor.joint.protectedCoreRadius) ||
+      descriptor.joint.protectedCoreRadius <= 0) {
+    throw new Error('joint protectedCoreRadius must be positive and finite');
+  }
+  if (!Array.isArray(descriptor.joint.flexionRangeDegrees) ||
+      descriptor.joint.flexionRangeDegrees.length !== 2 ||
+      !descriptor.joint.flexionRangeDegrees.every(Number.isFinite) ||
+      descriptor.joint.flexionRangeDegrees[0] > descriptor.joint.flexionRangeDegrees[1]) {
+    throw new Error('joint flexionRangeDegrees must be a finite ascending pair');
   }
   const segments = new Map(descriptor.segments.map(segment => [segment.id, segment]));
   if (!segments.has(descriptor.joint.parentSegmentId) ||
@@ -116,6 +147,17 @@ function validateDescriptor(descriptor) {
         !Number.isFinite(muscle.routing?.radius) ||
         muscle.routing.radius <= descriptor.joint.protectedCoreRadius) {
       throw new Error(`muscle ${muscle.id} has invalid routing authority`);
+    }
+    if (!Number.isFinite(muscle.routing.lateralOffset)) {
+      throw new Error(`muscle ${muscle.id} routing lateralOffset must be finite`);
+    }
+    if (!Number.isFinite(muscle.profile?.tendonRatio) ||
+        muscle.profile.tendonRatio <= 0) {
+      throw new Error(`muscle ${muscle.id} profile tendonRatio must be positive and finite`);
+    }
+    if (!Number.isFinite(muscle.profile?.bellyPower) ||
+        muscle.profile.bellyPower <= 0) {
+      throw new Error(`muscle ${muscle.id} profile bellyPower must be positive and finite`);
     }
   }
   return { segments, attachments };
@@ -461,7 +503,7 @@ export function solveAnalyticalElbowPose(
   const clearanceViolationCount = muscles.filter(
     muscle => muscle.metrics.minimumProtectedCoreClearance < -1e-8,
   ).length;
-  return {
+  const pose = {
     schema: ANALYTICAL_ELBOW_POSE_SCHEMA,
     sourceId: descriptor.id,
     sourceSchema: descriptor.schema,
@@ -478,6 +520,8 @@ export function solveAnalyticalElbowPose(
       materialIdentityViolationCount: 0,
     },
   };
+  assertFiniteNumbers(pose);
+  return pose;
 }
 
 export function createAnalyticalElbowConsumerExport(
