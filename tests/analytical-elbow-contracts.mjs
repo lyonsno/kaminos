@@ -65,6 +65,62 @@ assert.throws(
   /unknown insertion attachment brachialis-insertion/,
 );
 
+const malformedNumerics = [
+  {
+    label: 'non-finite joint core',
+    mutate(candidate) {
+      candidate.joint.protectedCoreRadius = Number.NaN;
+    },
+    error: /joint protectedCoreRadius must be positive and finite/,
+  },
+  {
+    label: 'unsupported hinge axis',
+    mutate(candidate) {
+      candidate.joint.axis = [1, 0, 0];
+    },
+    error: /only supports authored hinge axis \[0,0,1\]/,
+  },
+  {
+    label: 'non-finite route offset',
+    mutate(candidate) {
+      candidate.muscles[0].routing.lateralOffset = Number.NaN;
+    },
+    error: /routing lateralOffset must be finite/,
+  },
+  {
+    label: 'non-finite tendon ratio',
+    mutate(candidate) {
+      candidate.muscles[0].profile.tendonRatio = Number.NaN;
+    },
+    error: /profile tendonRatio must be positive and finite/,
+  },
+  {
+    label: 'collapsed belly power',
+    mutate(candidate) {
+      candidate.muscles[1].profile.bellyPower = 0;
+    },
+    error: /profile bellyPower must be positive and finite/,
+  },
+];
+
+for (const malformedNumeric of malformedNumerics) {
+  const candidate = structuredClone(descriptor);
+  malformedNumeric.mutate(candidate);
+  assert.throws(
+    () => solveAnalyticalElbowPose(candidate, { flexionDegrees: 35 }),
+    malformedNumeric.error,
+    `malformed descriptor was accepted: ${malformedNumeric.label}`,
+  );
+}
+
+const overflowing = structuredClone(descriptor);
+overflowing.muscles[0].routing.lateralOffset = Number.MAX_VALUE;
+assert.throws(
+  () => solveAnalyticalElbowPose(overflowing, { flexionDegrees: 35 }),
+  /analytical elbow emitted non-finite/,
+  'finite descriptor values that overflow the solve must fail before admission',
+);
+
 const poses = [0, 35, 80].map(flexionDegrees =>
   solveAnalyticalElbowPose(descriptor, { flexionDegrees, pathSampleCount: 25 }),
 );
