@@ -1,0 +1,193 @@
+{
+  "schema": "kaminos.exact-elbow-envelope-coupling-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "exact-elbow-envelope-coupling-orbitable-v0",
+    "effective": "exact-elbow-envelope-coupling-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "id": "synthetic-exact-elbow-shared-material-v0",
+    "schema": "kaminos.exact-elbow-packing-source.v0",
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "cases": [
+    {
+      "id": "baseline",
+      "metrics": {
+        "activeCellCount": 25312,
+        "excludedRigidCellCount": 3240,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "rigidOwnedCellCount": 0,
+        "finiteRigidOverlapCellCount": 0,
+        "anchorViolationCount": 0,
+        "duplicateSourceCellCount": 0
+      },
+      "compartments": {
+        "brachialis-like-flexor": {
+          "role": "monoarticular-flexor",
+          "targetVolume": 0.105,
+          "realizedVolume": 0.105020832,
+          "targetVolumeError": 0.000020832451,
+          "cellCount": 1493,
+          "originAttachmentId": "brachialis-origin",
+          "insertionAttachmentId": "brachialis-insertion"
+        },
+        "monoarticular-triceps-like-extensor": {
+          "role": "monoarticular-extensor",
+          "targetVolume": 0.09,
+          "realizedVolume": 0.089967612,
+          "targetVolumeError": 0.000032388007,
+          "cellCount": 1279,
+          "originAttachmentId": "triceps-origin",
+          "insertionAttachmentId": "triceps-insertion"
+        },
+        "residual-tissue": {
+          "role": "passive-residual-tissue",
+          "targetVolume": 1.585512099,
+          "realizedVolume": 1.585512099,
+          "targetVolumeError": 0,
+          "cellCount": 22540
+        }
+      }
+    },
+    {
+      "id": "fixed-envelope-control",
+      "metrics": {
+        "activeCellCount": 25312,
+        "excludedRigidCellCount": 3240,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "rigidOwnedCellCount": 0,
+        "finiteRigidOverlapCellCount": 0,
+        "anchorViolationCount": 0,
+        "duplicateSourceCellCount": 0
+      },
+      "compartments": {
+        "brachialis-like-flexor": {
+          "role": "monoarticular-flexor",
+          "targetVolume": 0.1239,
+          "realizedVolume": 0.123872529,
+          "targetVolumeError": 0.000027470899,
+          "cellCount": 1761,
+          "originAttachmentId": "brachialis-origin",
+          "insertionAttachmentId": "brachialis-insertion"
+        },
+        "monoarticular-triceps-like-extensor": {
+          "role": "monoarticular-extensor",
+          "targetVolume": 0.09,
+          "realizedVolume": 0.089967612,
+          "targetVolumeError": 0.000032388007,
+          "cellCount": 1279,
+          "originAttachmentId": "triceps-origin",
+          "insertionAttachmentId": "triceps-insertion"
+        },
+        "residual-tissue": {
+          "role": "passive-residual-tissue",
+          "targetVolume": 1.566660402,
+          "realizedVolume": 1.566660402,
+          "targetVolumeError": 0,
+          "cellCount": 22272
+        }
+      }
+    },
+    {
+      "id": "coupled-envelope",
+      "metrics": {
+        "activeCellCount": 25580,
+        "excludedRigidCellCount": 3242,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "rigidOwnedCellCount": 0,
+        "finiteRigidOverlapCellCount": 0,
+        "anchorViolationCount": 0,
+        "duplicateSourceCellCount": 0
+      },
+      "compartments": {
+        "brachialis-like-flexor": {
+          "role": "monoarticular-flexor",
+          "targetVolume": 0.1239,
+          "realizedVolume": 0.123872529,
+          "targetVolumeError": 0.000027470899,
+          "cellCount": 1761,
+          "originAttachmentId": "brachialis-origin",
+          "insertionAttachmentId": "brachialis-insertion"
+        },
+        "monoarticular-triceps-like-extensor": {
+          "role": "monoarticular-extensor",
+          "targetVolume": 0.09,
+          "realizedVolume": 0.089967612,
+          "targetVolumeError": 0.000032388007,
+          "cellCount": 1279,
+          "originAttachmentId": "triceps-origin",
+          "insertionAttachmentId": "triceps-insertion"
+        },
+        "residual-tissue": {
+          "role": "passive-residual-tissue",
+          "targetVolume": 1.585512099,
+          "realizedVolume": 1.585512099,
+          "targetVolumeError": 0,
+          "cellCount": 22540
+        }
+      }
+    }
+  ],
+  "ledger": {
+    "schema": "kaminos.exact-elbow-envelope-pressure-ledger.v0",
+    "sourceId": "synthetic-exact-elbow-shared-material-v0",
+    "muscleId": "brachialis-like-flexor",
+    "residualPolicy": "preserve-baseline-volume",
+    "baselineActiveCellCount": 25312,
+    "targetActiveCellCount": 25580,
+    "predictedActiveCellCount": 25580,
+    "muscleCellDeficit": 268,
+    "pressureCellCount": 268,
+    "pressureDirection": [
+      0.997611946164,
+      -0.060025511428,
+      0.03416639941
+    ],
+    "angularWidth": 0.34,
+    "surfaceAmplitude": 0.05597492787,
+    "authority": "solver-inferred-volume-coupling"
+  },
+  "comparison": {
+    "muscleCellDeficit": 268,
+    "addedActiveCellCount": 268,
+    "addedSourceCellCount": 268,
+    "lostSourceCellCount": 0,
+    "brachialisCellDelta": 268,
+    "tricepsCellDelta": 0,
+    "residualCellDelta": 0,
+    "rigidIdentityViolationCount": 0,
+    "attachmentIdentityViolationCount": 0,
+    "gridIdentityViolationCount": 0,
+    "sharedUnchangedMaterialIdentityViolationCount": 0,
+    "unexpectedSharedOwnerTransitionCount": 0,
+    "localAddedCellCount": 268,
+    "localAddedCellFraction": 1,
+    "localSurfaceDisplacement": 0.043747557,
+    "remoteSurfaceDisplacement": 0,
+    "displacedVolume": 0.018851696736,
+    "requestedMuscleVolume": 0.018851696736,
+    "displacedVolumeError": 0,
+    "fixedEnvelopeResidualCellDelta": -268
+  },
+  "claims": {
+    "fixedEnvelopeControl": "supported-by-numerical-contract",
+    "volumeAccountedEnvelopeResponse": "supported-by-numerical-contract",
+    "localizedPressureDirection": "supported-by-deterministic-constructional-heuristic",
+    "elasticMechanics": "unassayed",
+    "anatomicalCorrectness": "unassayed",
+    "poseTransport": "unassayed"
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "index.html",
+    "receipt": "visual-inspection.json",
+    "indexHtmlSha256": "76f0edecfae98335b14e9df5f2027baf706b1df2e3234cda3620afe94b5d59d4",
+    "pendingReportSha256": "a3c5704d25990a3f85df54e96e11e1d68c105fbd48b919b3b25432a6f08aa4c7"
+  }
+}

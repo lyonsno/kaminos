@@ -1,0 +1,19 @@
+{
+  "schema": "kaminos.exact-elbow-envelope-pressure-ledger.v0",
+  "sourceId": "synthetic-exact-elbow-shared-material-v0",
+  "muscleId": "brachialis-like-flexor",
+  "residualPolicy": "preserve-baseline-volume",
+  "baselineActiveCellCount": 25312,
+  "targetActiveCellCount": 25580,
+  "predictedActiveCellCount": 25580,
+  "muscleCellDeficit": 268,
+  "pressureCellCount": 268,
+  "pressureDirection": [
+    0.997611946164,
+    -0.060025511428,
+    0.03416639941
+  ],
+  "angularWidth": 0.34,
+  "surfaceAmplitude": 0.05597492787,
+  "authority": "solver-inferred-volume-coupling"
+}

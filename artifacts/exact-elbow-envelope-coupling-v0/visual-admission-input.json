@@ -1,0 +1,46 @@
+{
+  "observedAt": "2026-07-31T23:34:03Z",
+  "url": "http://127.0.0.1:8137/artifacts/exact-elbow-envelope-coupling-v0/index.html",
+  "backend": {
+    "browser": "Google Chrome 150.0.7871.187",
+    "renderer": "WebGL via ANGLE Metal",
+    "three": "0.171.0"
+  },
+  "capture": {
+    "desktop": "Chrome headless Metal at 1400x900 after a 5 second virtual settle",
+    "mobile": "Chrome headless Metal at 500x844 after a 5 second virtual settle"
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [1400, 900],
+      "case": "baseline"
+    },
+    {
+      "path": "witness-control-desktop.png",
+      "viewport": [1400, 900],
+      "case": "fixed-envelope-control"
+    },
+    {
+      "path": "witness-coupled-desktop.png",
+      "viewport": [1400, 900],
+      "case": "coupled-envelope"
+    },
+    {
+      "path": "witness-coupled-mobile.png",
+      "viewport": [500, 844],
+      "case": "coupled-envelope"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "skinSurfaceLegible": true,
+    "fixedEnvelopeControlLegible": true,
+    "coupledBulgeLegible": true,
+    "baselineGhostLegible": true,
+    "rigidAndMuscleContextLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}

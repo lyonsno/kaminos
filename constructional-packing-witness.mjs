@@ -443,3 +443,8 @@ export {
   admitExactElbowPackingVisualInspection,
   writeExactElbowPackingWitness,
 } from './analytical-elbow-packing-witness.mjs';
+
+export {
+  admitExactElbowEnvelopeCouplingVisualInspection,
+  writeExactElbowEnvelopeCouplingWitness,
+} from './analytical-elbow-envelope-coupling-witness.mjs';

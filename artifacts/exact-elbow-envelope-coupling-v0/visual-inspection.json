@@ -1,0 +1,73 @@
+{
+  "schema": "kaminos.exact-elbow-envelope-coupling-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-07-31T23:34:03Z",
+  "route": {
+    "requested": "exact-elbow-envelope-coupling-orbitable-v0",
+    "effective": "exact-elbow-envelope-coupling-orbitable-v0",
+    "fallbackUsed": false,
+    "url": "http://127.0.0.1:8137/artifacts/exact-elbow-envelope-coupling-v0/index.html"
+  },
+  "backend": {
+    "browser": "Google Chrome 150.0.7871.187",
+    "renderer": "WebGL via ANGLE Metal",
+    "three": "0.171.0"
+  },
+  "capture": {
+    "desktop": "Chrome headless Metal at 1400x900 after a 5 second virtual settle",
+    "mobile": "Chrome headless Metal at 500x844 after a 5 second virtual settle"
+  },
+  "bindings": {
+    "indexHtmlSha256": "76f0edecfae98335b14e9df5f2027baf706b1df2e3234cda3620afe94b5d59d4",
+    "pendingReportSha256": "a3c5704d25990a3f85df54e96e11e1d68c105fbd48b919b3b25432a6f08aa4c7"
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "baseline",
+      "sha256": "795c38c8115ee8275a2f57869cd233a253eb3c9a217c4aa5a654814261e363ca"
+    },
+    {
+      "path": "witness-control-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "fixed-envelope-control",
+      "sha256": "151e9930f9d93d89989ec35b62a6df2bd5653121f619a0c52b89b213b0e263cd"
+    },
+    {
+      "path": "witness-coupled-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "coupled-envelope",
+      "sha256": "e97b478403512525592d677fff0fee73007c3a4ec09291d8effd119aa89c4285"
+    },
+    {
+      "path": "witness-coupled-mobile.png",
+      "viewport": [
+        500,
+        844
+      ],
+      "case": "coupled-envelope",
+      "sha256": "8f5fb47e10fad175cabff8337b97bdeec1321dff2c89347a9350465a194df4e0"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "skinSurfaceLegible": true,
+    "fixedEnvelopeControlLegible": true,
+    "coupledBulgeLegible": true,
+    "baselineGhostLegible": true,
+    "rigidAndMuscleContextLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}

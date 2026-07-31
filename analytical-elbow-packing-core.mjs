@@ -60,6 +60,39 @@ function isFinitePoint(value) {
     value.every(Number.isFinite);
 }
 
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function directionalGaussian(direction, centerDirection, angularWidth) {
+  const angle = Math.acos(clamp(dot(direction, centerDirection), -1, 1));
+  return Math.exp(-0.5 * (angle / angularWidth) ** 2);
+}
+
+function envelopeScaleAtDirection(domain, direction) {
+  return (domain.surfaceLobes || []).reduce(
+    (value, lobe) => value +
+      lobe.amplitude * directionalGaussian(direction, lobe.direction, lobe.angularWidth),
+    1,
+  );
+}
+
+export function sampleExactElbowEnvelopeSurface(domain, direction) {
+  if (!isFinitePoint(direction)) {
+    throw new Error('exact-elbow envelope surface direction must be finite');
+  }
+  const unitDirection = normalize(direction);
+  const radialScale = envelopeScaleAtDirection(domain, unitDirection);
+  const point = domain.center.map(
+    (value, index) => value + domain.radii[index] * unitDirection[index] * radialScale,
+  );
+  return {
+    point: point.map(value => rounded(value, 9)),
+    radialScale: rounded(radialScale, 9),
+    distance: rounded(distance(point, domain.center), 9),
+  };
+}
+
 function closestPointOnSegment(point, start, end) {
   const direction = subtract(end, start);
   const lengthSquared = dot(direction, direction);
@@ -100,7 +133,12 @@ function pointInsideEnvelope(point, domain) {
   const normalized = point.map(
     (value, index) => (value - domain.center[index]) / domain.radii[index],
   );
-  return dot(normalized, normalized) <= 1;
+  const radialDistance = length(normalized);
+  if (radialDistance <= 1e-12) return true;
+  return radialDistance <= envelopeScaleAtDirection(
+    domain,
+    scale(normalized, 1 / radialDistance),
+  );
 }
 
 function createRigidStructures(pose) {
@@ -199,13 +237,41 @@ function validateSource(source) {
     throw new Error('exact-elbow packing grid bounds must be finite and ordered');
   }
   if (
-    source.domain?.kind !== 'ellipsoid' ||
+    !['ellipsoid', 'radial-ellipsoid'].includes(source.domain?.kind) ||
     typeof source.domain.id !== 'string' ||
     !isFinitePoint(source.domain.center) ||
     !isFinitePoint(source.domain.radii) ||
     !source.domain.radii.every(value => value > 0)
   ) {
     throw new Error('exact-elbow packing requires a finite positive ellipsoid domain');
+  }
+  if (source.domain.kind === 'radial-ellipsoid') {
+    if (!Array.isArray(source.domain.surfaceLobes)) {
+      throw new Error('exact-elbow radial ellipsoid requires surfaceLobes');
+    }
+    for (const lobe of source.domain.surfaceLobes) {
+      if (
+        typeof lobe.id !== 'string' ||
+        !isFinitePoint(lobe.direction) ||
+        Math.abs(length(lobe.direction) - 1) > 1e-6 ||
+        !Number.isFinite(lobe.amplitude) ||
+        lobe.amplitude < 0 ||
+        !Number.isFinite(lobe.angularWidth) ||
+        lobe.angularWidth <= 0
+      ) {
+        throw new Error('exact-elbow surface lobe must have normalized direction and finite positive shape');
+      }
+    }
+  }
+  if (
+    source.grid.logicalIndexOffset !== undefined &&
+    (
+      !Array.isArray(source.grid.logicalIndexOffset) ||
+      source.grid.logicalIndexOffset.length !== 3 ||
+      !source.grid.logicalIndexOffset.every(Number.isInteger)
+    )
+  ) {
+    throw new Error('exact-elbow logical grid offset must contain three integers');
   }
   if (!source.elbowDescriptor || !Array.isArray(source.elbowDescriptor.muscles)) {
     throw new Error('exact-elbow packing requires an analytical elbow descriptor');
@@ -241,7 +307,13 @@ function enumerateDomain(source, rigidStructures) {
         // clears every rigid primitive. This conservatively excludes the full
         // finite cell, including its corners.
         const rigid = rigidOwner(point, rigidStructures, cellBoundingRadius);
-        const sourceCellId = `${source.domain.id}:${ix}:${iy}:${iz}`;
+        const logicalOffset = source.grid.logicalIndexOffset || [0, 0, 0];
+        const logicalIndex = [
+          ix - logicalOffset[0],
+          iy - logicalOffset[1],
+          iz - logicalOffset[2],
+        ];
+        const sourceCellId = `${source.domain.id}:${logicalIndex[0]}:${logicalIndex[1]}:${logicalIndex[2]}`;
         if (rigid) {
           excluded.push({ ix, iy, iz, sourceCellId, rigidId: rigid.id });
           continue;
@@ -459,6 +531,58 @@ export function createExactElbowPackingSource() {
   };
 }
 
+export function prepareExactElbowEnvelopeCouplingSource({
+  source,
+  paddingCells = [6, 6, 5],
+}) {
+  validateSource(source);
+  if (
+    !Array.isArray(paddingCells) ||
+    paddingCells.length !== 3 ||
+    !paddingCells.every(value => Number.isInteger(value) && value > 0)
+  ) {
+    throw new Error('exact-elbow envelope coupling padding must contain three positive integers');
+  }
+  const next = structuredClone(source);
+  const { width, height, depth, bounds } = source.grid;
+  const dimensions = [width, height, depth];
+  const minimums = [bounds.minX, bounds.minY, bounds.minZ];
+  const maximums = [bounds.maxX, bounds.maxY, bounds.maxZ];
+  const step = dimensions.map((dimension, index) =>
+    (maximums[index] - minimums[index]) / dimension,
+  );
+  const paddedMinimums = minimums.map(
+    (value, index) => value - paddingCells[index] * step[index],
+  );
+  const paddedMaximums = maximums.map(
+    (value, index) => value + paddingCells[index] * step[index],
+  );
+  next.domain.kind = 'radial-ellipsoid';
+  next.domain.surfaceLobes = [];
+  next.grid = {
+    width: width + 2 * paddingCells[0],
+    height: height + 2 * paddingCells[1],
+    depth: depth + 2 * paddingCells[2],
+    logicalIndexOffset: [...paddingCells],
+    bounds: {
+      minX: paddedMinimums[0],
+      maxX: paddedMaximums[0],
+      minY: paddedMinimums[1],
+      maxY: paddedMaximums[1],
+      minZ: paddedMinimums[2],
+      maxZ: paddedMaximums[2],
+    },
+  };
+  next.provenance.events.push({
+    id: 'prepare-envelope-coupling-grid',
+    authority: 'solver-derived',
+    paddingCells: [...paddingCells],
+    preservedStep: step.map(value => rounded(value, 12)),
+    preservedLogicalLattice: true,
+  });
+  return next;
+}
+
 export function applyExactElbowMuscleVolumeEdit({ source, edit }) {
   validateSource(source);
   if (
@@ -574,6 +698,281 @@ export function solveExactElbowPacking(source) {
       }).length,
       duplicateSourceCellCount: assignment.cells.length - sourceCellIds.size,
     },
+  };
+}
+
+function changedCellsForMuscle({ baseline, edited, muscleId }) {
+  const baselineById = new Map(baseline.cells.map(cell => [cell.sourceCellId, cell]));
+  return edited.cells.filter(cell => {
+    const prior = baselineById.get(cell.sourceCellId);
+    return prior && prior.ownerId !== muscleId && cell.ownerId === muscleId;
+  });
+}
+
+function normalizedEnvelopeDirection(point, domain) {
+  const normalized = point.map(
+    (value, index) => (value - domain.center[index]) / domain.radii[index],
+  );
+  return normalize(normalized);
+}
+
+function domainWithPressureLobe(source, { direction, amplitude, angularWidth, muscleId }) {
+  const next = structuredClone(source);
+  next.domain.surfaceLobes = [{
+    id: `${muscleId}:pressure-lobe`,
+    muscleId,
+    direction: direction.map(value => rounded(value, 12)),
+    amplitude: rounded(amplitude, 12),
+    angularWidth: rounded(angularWidth, 12),
+    authority: 'solver-inferred-volume-coupling',
+  }];
+  return next;
+}
+
+function maximumCenteredLobeAmplitude(source, direction) {
+  const surface = sampleExactElbowEnvelopeSurface(source.domain, direction).point;
+  const bounds = source.grid.bounds;
+  const minimums = [bounds.minX, bounds.minY, bounds.minZ];
+  const maximums = [bounds.maxX, bounds.maxY, bounds.maxZ];
+  let maximum = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < 3; index += 1) {
+    const slope = source.domain.radii[index] * direction[index];
+    if (Math.abs(slope) <= 1e-12) continue;
+    const margin = slope > 0
+      ? maximums[index] - surface[index]
+      : surface[index] - minimums[index];
+    maximum = Math.min(maximum, margin / Math.abs(slope));
+  }
+  if (!Number.isFinite(maximum) || maximum <= 0) {
+    throw new Error('exact-elbow coupling grid provides no envelope expansion margin');
+  }
+  return maximum * 0.9;
+}
+
+export function coupleExactElbowEnvelopeFromMuscleEdit({
+  source,
+  baseline,
+  fixedEnvelopeSource,
+  fixedEnvelopeEdited,
+  muscleId,
+  angularWidth = 0.34,
+}) {
+  validateSource(source);
+  validateSource(fixedEnvelopeSource);
+  if (
+    source.domain.kind !== 'radial-ellipsoid' ||
+    source.domain.surfaceLobes.length !== 0 ||
+    baseline?.sourceId !== source.id ||
+    fixedEnvelopeEdited?.sourceId !== source.id ||
+    fixedEnvelopeSource.id !== source.id ||
+    !sameJson(baseline.grid, fixedEnvelopeEdited.grid) ||
+    !sameJson(baseline.domain, source.domain) ||
+    !sameJson(fixedEnvelopeEdited.domain, source.domain)
+  ) {
+    throw new Error('exact-elbow envelope coupling requires baseline and edit from the same prepared source');
+  }
+  if (!Number.isFinite(angularWidth) || angularWidth <= 0) {
+    throw new Error('exact-elbow envelope coupling angular width must be positive and finite');
+  }
+  const baselineCompartment = baseline.compartments[muscleId];
+  const editedCompartment = fixedEnvelopeEdited.compartments[muscleId];
+  if (!baselineCompartment || !editedCompartment) {
+    throw new Error(`unknown exact-elbow coupling muscle: ${muscleId}`);
+  }
+  const muscleCellDeficit = editedCompartment.cellCount - baselineCompartment.cellCount;
+  if (muscleCellDeficit <= 0) {
+    throw new Error('exact-elbow envelope coupling requires positive muscle growth');
+  }
+  const pressureCells = changedCellsForMuscle({
+    baseline,
+    edited: fixedEnvelopeEdited,
+    muscleId,
+  });
+  if (pressureCells.length === 0) {
+    throw new Error('exact-elbow envelope coupling found no changed muscle cells');
+  }
+  const normalizedCentroid = [0, 1, 2].map(index =>
+    pressureCells.reduce(
+      (sum, cell) => sum +
+        ([cell.x, cell.y, cell.z][index] - source.domain.center[index]) /
+          source.domain.radii[index],
+      0,
+    ) / pressureCells.length,
+  );
+  const pressureDirection = normalize(normalizedCentroid);
+  const rigidStructures = baseline.elbow.rigidStructures;
+  const targetActiveCellCount = baseline.metrics.activeCellCount + muscleCellDeficit;
+  const maximumAmplitude = maximumCenteredLobeAmplitude(source, pressureDirection);
+  const observations = [];
+  const observe = amplitude => {
+    const candidate = domainWithPressureLobe(source, {
+      direction: pressureDirection,
+      amplitude,
+      angularWidth,
+      muscleId,
+    });
+    const activeCellCount = enumerateDomain(candidate, rigidStructures).cells.length;
+    const observation = {
+      amplitude,
+      activeCellCount,
+      error: Math.abs(activeCellCount - targetActiveCellCount),
+    };
+    observations.push(observation);
+    return observation;
+  };
+  let low = 0;
+  let high = Math.min(0.01, maximumAmplitude);
+  let highObservation = observe(high);
+  while (highObservation.activeCellCount < targetActiveCellCount && high < maximumAmplitude) {
+    low = high;
+    high = Math.min(high * 2, maximumAmplitude);
+    highObservation = observe(high);
+  }
+  if (highObservation.activeCellCount < targetActiveCellCount) {
+    throw new Error('exact-elbow coupling padding cannot admit the requested muscle volume');
+  }
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const middle = (low + high) / 2;
+    const observation = observe(middle);
+    if (observation.activeCellCount < targetActiveCellCount) low = middle;
+    else high = middle;
+  }
+  observations.push({
+    amplitude: 0,
+    activeCellCount: baseline.metrics.activeCellCount,
+    error: muscleCellDeficit,
+  });
+  observations.sort((left, right) =>
+    left.error - right.error ||
+    left.amplitude - right.amplitude,
+  );
+  const selected = observations[0];
+  const next = domainWithPressureLobe(fixedEnvelopeSource, {
+    direction: pressureDirection,
+    amplitude: selected.amplitude,
+    angularWidth,
+    muscleId,
+  });
+  const ledger = {
+    schema: 'kaminos.exact-elbow-envelope-pressure-ledger.v0',
+    sourceId: source.id,
+    muscleId,
+    residualPolicy: 'preserve-baseline-volume',
+    baselineActiveCellCount: baseline.metrics.activeCellCount,
+    targetActiveCellCount,
+    predictedActiveCellCount: selected.activeCellCount,
+    muscleCellDeficit,
+    pressureCellCount: pressureCells.length,
+    pressureDirection: pressureDirection.map(value => rounded(value, 12)),
+    angularWidth: rounded(angularWidth, 12),
+    surfaceAmplitude: rounded(selected.amplitude, 12),
+    authority: 'solver-inferred-volume-coupling',
+  };
+  next.provenance.events.push({
+    id: 'couple-muscle-pressure-to-envelope',
+    authority: 'solver-inferred-volume-coupling',
+    ledger: structuredClone(ledger),
+  });
+  return { source: next, ledger };
+}
+
+export function compareExactElbowEnvelopeCoupling({
+  baseline,
+  fixedEnvelopeEdited,
+  coupled,
+  ledger,
+}) {
+  if (
+    baseline?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    fixedEnvelopeEdited?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    coupled?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    ledger?.schema !== 'kaminos.exact-elbow-envelope-pressure-ledger.v0'
+  ) {
+    throw new Error('exact-elbow envelope comparison requires baseline, fixed edit, coupled result, and ledger');
+  }
+  const baselineById = new Map(baseline.cells.map(cell => [cell.sourceCellId, cell]));
+  const coupledById = new Map(coupled.cells.map(cell => [cell.sourceCellId, cell]));
+  const addedCells = coupled.cells.filter(cell => !baselineById.has(cell.sourceCellId));
+  const lostSourceCellCount = baseline.cells.filter(
+    cell => !coupledById.has(cell.sourceCellId),
+  ).length;
+  let sharedUnchangedMaterialIdentityViolationCount = 0;
+  let unexpectedSharedOwnerTransitionCount = 0;
+  for (const [cellId, baselineCell] of baselineById) {
+    const nextCell = coupledById.get(cellId);
+    if (!nextCell) continue;
+    if (baselineCell.ownerId === nextCell.ownerId) {
+      if (!sameJson(baselineCell.material, nextCell.material)) {
+        sharedUnchangedMaterialIdentityViolationCount += 1;
+      }
+    } else if (
+      !(
+        baselineCell.ownerId === RESIDUAL_TISSUE_ID &&
+        nextCell.ownerId === ledger.muscleId
+      )
+    ) {
+      unexpectedSharedOwnerTransitionCount += 1;
+    }
+  }
+  const localAddedCellCount = addedCells.filter(cell => {
+    const direction = normalizedEnvelopeDirection(
+      [cell.x, cell.y, cell.z],
+      baseline.domain,
+    );
+    const angle = Math.acos(clamp(dot(direction, ledger.pressureDirection), -1, 1));
+    return angle <= ledger.angularWidth * 3;
+  }).length;
+  const oppositeDirection = ledger.pressureDirection.map(value => -value);
+  const baselineLocal = sampleExactElbowEnvelopeSurface(
+    baseline.domain,
+    ledger.pressureDirection,
+  );
+  const coupledLocal = sampleExactElbowEnvelopeSurface(
+    coupled.domain,
+    ledger.pressureDirection,
+  );
+  const baselineRemote = sampleExactElbowEnvelopeSurface(
+    baseline.domain,
+    oppositeDirection,
+  );
+  const coupledRemote = sampleExactElbowEnvelopeSurface(
+    coupled.domain,
+    oppositeDirection,
+  );
+  const compartmentDelta = id =>
+    coupled.compartments[id].cellCount - baseline.compartments[id].cellCount;
+  const addedActiveCellCount =
+    coupled.metrics.activeCellCount - baseline.metrics.activeCellCount;
+  return {
+    muscleCellDeficit: ledger.muscleCellDeficit,
+    addedActiveCellCount,
+    addedSourceCellCount: addedCells.length,
+    lostSourceCellCount,
+    brachialisCellDelta: compartmentDelta('brachialis-like-flexor'),
+    tricepsCellDelta: compartmentDelta('monoarticular-triceps-like-extensor'),
+    residualCellDelta: compartmentDelta(RESIDUAL_TISSUE_ID),
+    rigidIdentityViolationCount:
+      sameJson(baseline.elbow.rigidStructures, coupled.elbow.rigidStructures) ? 0 : 1,
+    attachmentIdentityViolationCount:
+      sameJson(baseline.elbow.attachments, coupled.elbow.attachments) ? 0 : 1,
+    gridIdentityViolationCount: sameJson(baseline.grid, coupled.grid) ? 0 : 1,
+    sharedUnchangedMaterialIdentityViolationCount,
+    unexpectedSharedOwnerTransitionCount,
+    localAddedCellCount,
+    localAddedCellFraction: addedCells.length === 0
+      ? 0
+      : rounded(localAddedCellCount / addedCells.length, 6),
+    localSurfaceDisplacement: rounded(coupledLocal.distance - baselineLocal.distance, 9),
+    remoteSurfaceDisplacement: rounded(coupledRemote.distance - baselineRemote.distance, 9),
+    displacedVolume: rounded(addedActiveCellCount * baseline.grid.cellVolume, 12),
+    requestedMuscleVolume: rounded(ledger.muscleCellDeficit * baseline.grid.cellVolume, 12),
+    displacedVolumeError: rounded(
+      Math.abs((addedActiveCellCount - ledger.muscleCellDeficit) * baseline.grid.cellVolume),
+      12,
+    ),
+    fixedEnvelopeResidualCellDelta:
+      fixedEnvelopeEdited.compartments[RESIDUAL_TISSUE_ID].cellCount -
+        baseline.compartments[RESIDUAL_TISSUE_ID].cellCount,
   };
 }
 
