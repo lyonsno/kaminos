@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.exact-elbow-packing-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-07-31T19:56:00Z",
+  "route": {
+    "requested": "exact-elbow-packing-orbitable-v0",
+    "effective": "exact-elbow-packing-orbitable-v0",
+    "fallbackUsed": false,
+    "url": "http://127.0.0.1:8137/artifacts/exact-elbow-packing-v0/index.html"
+  },
+  "backend": {
+    "browser": "Google Chrome headless 140.0.7339.186",
+    "webgl": "ANGLE Metal",
+    "server": "localhost:8137"
+  },
+  "capture": {
+    "desktop": "Chrome --headless=new --use-angle=metal --window-size=1400,900 --screenshot",
+    "mobile": "Chrome DevTools Protocol Emulation.setDeviceMetricsOverride at 390x844 followed by Page.captureScreenshot"
+  },
+  "bindings": {
+    "indexHtmlSha256": "0d285deacfadda6c887aca2fe1584139b691ed1d74202ec373720ffb6b393e37",
+    "pendingReportSha256": "779f1e260afc89915cf48c7542d620fe56b2b78d59a2291cbfaf6e4d23578b1c"
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "baseline",
+      "sha256": "95340efa8744c31ad51b6ee0fc543382979640143a0d16a7db0145c59100d75e"
+    },
+    {
+      "path": "witness-swell-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "brachialis-swell",
+      "sha256": "b9fd6936ee1d5717691101f752a66b62dd0f14aa814f75f0e3ca59b82b94f281"
+    },
+    {
+      "path": "witness-swell-mobile.png",
+      "viewport": [
+        390,
+        844
+      ],
+      "case": "brachialis-swell",
+      "sha256": "5618ae08b71b0d7c1040a11d020833768c5cf2dd80cc41e17b5ffaf4ca615dc9"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "rigidExclusionsLegible": true,
+    "muscleTerritoriesLegible": true,
+    "changedOwnershipLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}

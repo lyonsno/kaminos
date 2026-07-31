@@ -1,0 +1,130 @@
+{
+  "schema": "kaminos.exact-elbow-packing-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "exact-elbow-packing-orbitable-v0",
+    "effective": "exact-elbow-packing-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "id": "synthetic-exact-elbow-shared-material-v0",
+    "schema": "kaminos.exact-elbow-packing-source.v0",
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "cases": [
+    {
+      "id": "baseline",
+      "metrics": {
+        "activeCellCount": 25312,
+        "excludedRigidCellCount": 3240,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "rigidOwnedCellCount": 0,
+        "finiteRigidOverlapCellCount": 0,
+        "anchorViolationCount": 0,
+        "duplicateSourceCellCount": 0
+      },
+      "compartments": {
+        "brachialis-like-flexor": {
+          "role": "monoarticular-flexor",
+          "targetVolume": 0.105,
+          "realizedVolume": 0.105020832,
+          "targetVolumeError": 0.000020832451,
+          "cellCount": 1493,
+          "originAttachmentId": "brachialis-origin",
+          "insertionAttachmentId": "brachialis-insertion"
+        },
+        "monoarticular-triceps-like-extensor": {
+          "role": "monoarticular-extensor",
+          "targetVolume": 0.09,
+          "realizedVolume": 0.089967612,
+          "targetVolumeError": 0.000032388007,
+          "cellCount": 1279,
+          "originAttachmentId": "triceps-origin",
+          "insertionAttachmentId": "triceps-insertion"
+        },
+        "residual-tissue": {
+          "role": "passive-residual-tissue",
+          "targetVolume": 1.585512099,
+          "realizedVolume": 1.585512099,
+          "targetVolumeError": 0,
+          "cellCount": 22540
+        }
+      }
+    },
+    {
+      "id": "brachialis-swell",
+      "metrics": {
+        "activeCellCount": 25312,
+        "excludedRigidCellCount": 3240,
+        "unownedCellCount": 0,
+        "multiOwnedCellCount": 0,
+        "rigidOwnedCellCount": 0,
+        "finiteRigidOverlapCellCount": 0,
+        "anchorViolationCount": 0,
+        "duplicateSourceCellCount": 0
+      },
+      "compartments": {
+        "brachialis-like-flexor": {
+          "role": "monoarticular-flexor",
+          "targetVolume": 0.1239,
+          "realizedVolume": 0.123872529,
+          "targetVolumeError": 0.000027470899,
+          "cellCount": 1761,
+          "originAttachmentId": "brachialis-origin",
+          "insertionAttachmentId": "brachialis-insertion"
+        },
+        "monoarticular-triceps-like-extensor": {
+          "role": "monoarticular-extensor",
+          "targetVolume": 0.09,
+          "realizedVolume": 0.089967612,
+          "targetVolumeError": 0.000032388007,
+          "cellCount": 1279,
+          "originAttachmentId": "triceps-origin",
+          "insertionAttachmentId": "triceps-insertion"
+        },
+        "residual-tissue": {
+          "role": "passive-residual-tissue",
+          "targetVolume": 1.566660402,
+          "realizedVolume": 1.566660402,
+          "targetVolumeError": 0,
+          "cellCount": 22272
+        }
+      }
+    }
+  ],
+  "comparison": {
+    "changedOwnerCellCount": 268,
+    "ownerTransitionCounts": {
+      "residual-tissue->brachialis-like-flexor": 268
+    },
+    "editedMuscleId": "brachialis-like-flexor",
+    "unexpectedOwnerTransitionCount": 0,
+    "localChangedOwnerCellCount": 268,
+    "localChangeFraction": 1,
+    "lostSourceCellCount": 0,
+    "addedSourceCellCount": 0,
+    "unchangedMaterialIdentityViolationCount": 0,
+    "attachmentIdentityViolationCount": 0,
+    "rigidIdentityViolationCount": 0,
+    "gridIdentityViolationCount": 0,
+    "brachialisCellDelta": 268,
+    "tricepsCellDelta": 0,
+    "residualCellDelta": -268
+  },
+  "claims": {
+    "threeDimensionalPacking": "supported-by-numerical-contract",
+    "reciprocalLocalResponse": "supported-by-matched-perturbation",
+    "anatomicalCorrectness": "unassayed",
+    "poseTransport": "unassayed",
+    "generatedSurfaceTransfer": "unassayed"
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "index.html",
+    "receipt": "visual-inspection.json",
+    "indexHtmlSha256": "0d285deacfadda6c887aca2fe1584139b691ed1d74202ec373720ffb6b393e37",
+    "pendingReportSha256": "779f1e260afc89915cf48c7542d620fe56b2b78d59a2291cbfaf6e4d23578b1c"
+  }
+}

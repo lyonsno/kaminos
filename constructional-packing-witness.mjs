@@ -438,3 +438,8 @@ if (
   const result = await writeConstructionalPackingWitness({ outDir });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
+
+export {
+  admitExactElbowPackingVisualInspection,
+  writeExactElbowPackingWitness,
+} from './analytical-elbow-packing-witness.mjs';

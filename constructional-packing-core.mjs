@@ -771,3 +771,12 @@ export function sampleEnvelopeRadius(source, angle) {
   }
   return sampleEnvelopeRadiusUnchecked(source, angle);
 }
+
+export {
+  EXACT_ELBOW_PACKING_RESULT_SCHEMA,
+  EXACT_ELBOW_PACKING_SOURCE_SCHEMA,
+  applyExactElbowMuscleVolumeEdit,
+  compareExactElbowPackings,
+  createExactElbowPackingSource,
+  solveExactElbowPacking,
+} from './analytical-elbow-packing-core.mjs';
