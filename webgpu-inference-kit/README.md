@@ -1170,6 +1170,23 @@ if (completion.status === "succeeded") showAsset(completion.output);
 
 `job.cancel(reason)` cancels only a pending job. Once its invocation has started, the handle returns `not-cancelled-active`; it never implies that submitted WebGPU work was preempted. `completion` always resolves to a terminal record (`succeeded`, `failed`, or `cancelled-before-start`) with route/job identity, scheduler revision, uncapped progress, and explicit output/failure presence.
 
+A route can describe durable output identity without placing opaque GPU handles in the queue snapshot:
+
+```js
+const job = inferenceQueue.enqueue({
+  jobId: crypto.randomUUID(),
+  execute: invocation => runSharpInference({ invocation, sourceImage }),
+  async describeOutput(output) {
+    return {
+      outputIdentity: output.assetId,
+      artifacts: [{ kind: "splat", path: output.plyPath }],
+    };
+  },
+});
+```
+
+`describeOutput(output)` may be synchronous or asynchronous. Its JSON-safe result appears as `publication` in job snapshots and completion receipts. Description failure is recorded as `publicationFailure` without falsely relabeling successful inference as failed. Runtime output itself remains available only on the completion handle.
+
 Adaptive decisions enter the queue as control barriers:
 
 ```js
@@ -1177,6 +1194,41 @@ const applicationReceipt = await inferenceQueue.scheduleSchedulerDecision(decisi
 ```
 
 A queued decision waits for the active invocation to finish and applies before the next pending job. The queue owns an immutable copy of the decision, records applied and failed control attempts, and continues processing after job or decision failure. `snapshot()` exposes every retained job and decision without a hidden cap; `forgetJob(jobId)` is the explicit reclamation boundary, and `drain()` resolves once no job, decision, or active invocation remains.
+
+### Durable Queue Publication
+
+`createWebGpuInferenceQueuePublication(input)` converts the in-browser queue into atomic machine-local evidence without transferring scheduling, retention, or deletion authority to the host. It subscribes to every queue mutation, publishes uncapped snapshots in order, and renews a caller-sized freshness lease. If the browser crashes, heartbeats stop and `freshness.expiresAt` lets a wall-clock consumer reject the stale file.
+
+```js
+import {
+  createWebGpuInferenceQueueHttpPublisher,
+  createWebGpuInferenceQueuePublication,
+} from "@kaminos/webgpu-inference-kit";
+
+const publicationPath = `sharp/${browserSessionId}.json`;
+const publish = createWebGpuInferenceQueueHttpPublisher({
+  publicationPath,
+  endpoint: "/api/webgpu-queue-publication",
+});
+const queuePublication = createWebGpuInferenceQueuePublication({
+  queue: inferenceQueue,
+  publicationPath,
+  publish,
+  producer: {
+    producerId: "sharp-browser-route",
+    instanceId: browserSessionId,
+    startedAt: new Date().toISOString(),
+  },
+  backendIdentity: runtime.backendIdentity,
+  freshnessBudgetMs: 30_000,
+});
+
+await queuePublication.flush();
+// On an orderly route shutdown:
+await queuePublication.close();
+```
+
+The canonical document schema is `kaminos.webgpu-inference-queue-publication.v0`; atomic host receipts use `kaminos.webgpu-inference-queue-publication-write-receipt.v0`. Kaminos `serve.py` writes the caller-selected relative JSON path beneath `KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR`, defaulting to `~/.local/state/kaminos/webgpu-inference-queues`. Successful receipts bind requested path, effective path, route, producer instance, bytes, SHA-256, and atomic replacement. Invalid paths or failed writes produce a durable report under that root's `failures/` directory when the root remains writable. Neither the publisher nor the HTTP endpoint exposes deletion authority; only the live queue's explicit `forgetJob(jobId)` removes a retained job, and the queue snapshot retains its forget receipt.
 
 ## Multi-Route Admission
 

@@ -596,6 +596,96 @@ def test_pipeline_run_rejects_excluded_api_read_roots():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_webgpu_queue_publication_is_atomic_and_caller_scoped():
+    assert hasattr(serve, "write_webgpu_queue_publication")
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "queue-publications"
+        document = {
+            "schema": "kaminos.webgpu-inference-queue-publication.v0",
+            "producer": {"instanceId": "browser-session-7"},
+            "effectiveRoute": {"routeId": "sharp.image-to-splat.webgpu-local.v0"},
+            "queue": {
+                "schema": "kaminos.webgpu-inference-queue.v0",
+                "routeId": "sharp.image-to-splat.webgpu-local.v0",
+            },
+        }
+        receipt = serve.write_webgpu_queue_publication(
+            {"path": "sharp/live.json", "document": document},
+            root=root,
+        )
+
+        assert receipt["schema"] == "kaminos.webgpu-inference-queue-publication-write-receipt.v0"
+        assert receipt["ok"] is True
+        assert receipt["requestedPath"] == "sharp/live.json"
+        assert receipt["effectivePath"] == "sharp/live.json"
+        assert receipt["routeId"] == "sharp.image-to-splat.webgpu-local.v0"
+        assert receipt["producerInstanceId"] == "browser-session-7"
+        assert receipt["atomicReplace"] is True
+        assert receipt["deletionAuthority"] == "none"
+        assert json.loads((root / "sharp" / "live.json").read_text()) == document
+        assert list(root.rglob("*.tmp")) == []
+
+
+def test_webgpu_queue_publication_rejects_traversal_without_silent_default():
+    assert hasattr(serve, "write_webgpu_queue_publication")
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "queue-publications"
+        receipt = serve.write_webgpu_queue_publication(
+            {
+                "path": "../escaped.json",
+                "document": {
+                    "schema": "kaminos.webgpu-inference-queue-publication.v0",
+                    "producer": {"instanceId": "browser-session-escape"},
+                    "effectiveRoute": {"routeId": "sharp.image-to-splat.webgpu-local.v0"},
+                    "queue": {
+                        "schema": "kaminos.webgpu-inference-queue.v0",
+                        "routeId": "sharp.image-to-splat.webgpu-local.v0",
+                    },
+                },
+            },
+            root=root,
+        )
+
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "path-validation"
+        assert receipt["requestedPath"] == "../escaped.json"
+        assert receipt["effectivePath"] is None
+        assert Path(receipt["failureReportPath"]).is_file()
+        assert not (Path(tmp) / "escaped.json").exists()
+
+
+def test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_identity():
+    assert hasattr(serve, "write_webgpu_queue_publication")
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "queue-publications"
+        blocked_parent = root / "blocked"
+        root.mkdir(parents=True)
+        blocked_parent.write_text("not a directory")
+        receipt = serve.write_webgpu_queue_publication(
+            {
+                "path": "blocked/live.json",
+                "document": {
+                    "schema": "kaminos.webgpu-inference-queue-publication.v0",
+                    "producer": {"instanceId": "browser-session-blocked"},
+                    "effectiveRoute": {"routeId": "sharp.image-to-splat.webgpu-local.v0"},
+                    "queue": {
+                        "schema": "kaminos.webgpu-inference-queue.v0",
+                        "routeId": "sharp.image-to-splat.webgpu-local.v0",
+                    },
+                },
+            },
+            root=root,
+        )
+
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "atomic-write"
+        assert receipt["lastTrustworthyEvidence"]["producerInstanceId"] == "browser-session-blocked"
+        assert receipt["lastTrustworthyEvidence"]["routeId"] == "sharp.image-to-splat.webgpu-local.v0"
+        failure_path = Path(receipt["failureReportPath"])
+        assert failure_path.is_file()
+        assert json.loads(failure_path.read_text())["ok"] is False
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
@@ -616,3 +706,6 @@ if __name__ == "__main__":
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
     test_pipeline_run_rejects_sources_outside_declared_roots()
     test_pipeline_run_rejects_excluded_api_read_roots()
+    test_webgpu_queue_publication_is_atomic_and_caller_scoped()
+    test_webgpu_queue_publication_rejects_traversal_without_silent_default()
+    test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_identity()

@@ -71,6 +71,10 @@ const queue = createWebGpuInferenceQueue({
   },
 });
 
+assert.equal(typeof queue.subscribe, 'function', 'queue mutations must be observable by publication adapters');
+const mutationEvents = [];
+const unsubscribe = queue.subscribe(event => mutationEvents.push(event));
+
 const initial = queue.snapshot();
 assert.equal(initial.schema, WEBGPU_INFERENCE_QUEUE_SCHEMA);
 assert.equal(initial.routeId, routeId);
@@ -226,6 +230,14 @@ held.resolve();
 await pendingForget.completion;
 assert.equal(queue.forgetJob('job-pending-forget'), true);
 assert.equal(queue.snapshot().jobs.some(job => job.jobId === 'job-pending-forget'), false);
+assert.deepEqual(queue.snapshot().forgetReceipts.at(-1), {
+  schema: 'kaminos.webgpu-inference-job-forget-receipt.v0',
+  routeId,
+  jobId: 'job-pending-forget',
+  forgottenAtMs: 154,
+  priorStatus: 'succeeded',
+  deletionAuthority: 'explicit-queue-forget-only',
+});
 assert.equal(queue.forgetJob('missing-job'), false);
 
 assert.throws(
@@ -254,5 +266,30 @@ assert.equal(finalSnapshot.pendingJobCount, 0);
 assert.equal(finalSnapshot.pendingDecisionCount, 0);
 assert.equal(finalSnapshot.jobs.filter(job => job.jobId.startsWith('bulk-')).length, 96);
 assert.equal(executionLog.includes('should-not-run:job-second'), false);
+
+const published = queue.enqueue({
+  jobId: 'job-published-output',
+  async execute() {
+    return { privateGpuHandle: 'must-not-enter-the-ledger', assetPath: 'outputs/orb.ply' };
+  },
+  async describeOutput(output) {
+    return Promise.resolve({
+      outputIdentity: 'orb-splat-v1',
+      artifacts: [{ kind: 'splat', path: output.assetPath }],
+    });
+  },
+});
+await published.completion;
+await queue.drain();
+const publishedSnapshot = queue.snapshot().jobs.find(job => job.jobId === published.jobId);
+assert.deepEqual(publishedSnapshot.publication, {
+  outputIdentity: 'orb-splat-v1',
+  artifacts: [{ kind: 'splat', path: 'outputs/orb.ply' }],
+});
+assert.equal('output' in publishedSnapshot, false, 'opaque runtime output must not leak into the durable snapshot');
+assert.ok(mutationEvents.some(event => event.kind === 'job-progress' && event.jobId === 'job-first'));
+assert.ok(mutationEvents.some(event => event.kind === 'job-completed' && event.jobId === published.jobId));
+assert.equal(mutationEvents.every(event => Object.isFrozen(event)), true);
+unsubscribe();
 
 console.log('inference queue contracts passed');

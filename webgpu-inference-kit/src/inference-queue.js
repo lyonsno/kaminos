@@ -1,6 +1,8 @@
 export const WEBGPU_INFERENCE_QUEUE_SCHEMA = 'kaminos.webgpu-inference-queue.v0';
 export const WEBGPU_INFERENCE_JOB_COMPLETION_SCHEMA = 'kaminos.webgpu-inference-job-completion.v0';
 export const WEBGPU_INFERENCE_JOB_CANCELLATION_SCHEMA = 'kaminos.webgpu-inference-job-cancellation.v0';
+export const WEBGPU_INFERENCE_JOB_FORGET_RECEIPT_SCHEMA = 'kaminos.webgpu-inference-job-forget-receipt.v0';
+export const WEBGPU_INFERENCE_QUEUE_MUTATION_SCHEMA = 'kaminos.webgpu-inference-queue-mutation.v0';
 export const WEBGPU_SCHEDULER_DECISION_QUEUE_RECEIPT_SCHEMA = 'kaminos.webgpu-scheduler-decision-queue-receipt.v0';
 
 function clone(value) {
@@ -69,6 +71,10 @@ export function createWebGpuInferenceQueue(input = {}) {
     pumpScheduled: false,
     decisionSequence: 0,
     drainWaiters: new Set(),
+    forgetReceipts: [],
+    listeners: new Set(),
+    mutationSequence: 0,
+    observerFailures: [],
   };
 
   function isIdle() {
@@ -89,6 +95,8 @@ export function createWebGpuInferenceQueue(input = {}) {
       completedAtMs: job.completedAtMs,
       schedulerRevision: job.schedulerRevision,
       outputPresent: job.outputPresent,
+      publication: clone(job.publication),
+      publicationFailure: clone(job.publicationFailure),
       failure: clone(job.failure),
       cancellation: clone(job.cancellation),
       progress: clone(job.progress),
@@ -126,7 +134,34 @@ export function createWebGpuInferenceQueue(input = {}) {
       pendingDecisionCount: state.pendingDecisions.length,
       jobs: [...state.jobs.values()].map(jobSnapshot),
       decisions: state.decisions.map(decisionSnapshot),
+      forgetReceipts: clone(state.forgetReceipts),
+      observerFailures: clone(state.observerFailures),
     };
+  }
+
+  function emitMutation(kind, atMs, details = {}) {
+    const event = deepFreeze({
+      schema: WEBGPU_INFERENCE_QUEUE_MUTATION_SCHEMA,
+      sequence: state.mutationSequence + 1,
+      routeId,
+      kind,
+      atMs,
+      ...clone(details),
+      queue: snapshot(),
+    });
+    state.mutationSequence = event.sequence;
+    for (const listener of state.listeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        state.observerFailures.push({
+          mutationSequence: event.sequence,
+          kind,
+          failure: serializeFailure(error),
+        });
+      }
+    }
+    return event;
   }
 
   function settleDrainWaiters() {
@@ -153,6 +188,8 @@ export function createWebGpuInferenceQueue(input = {}) {
     job.outputPresent = inputCompletion.outputPresent;
     job.failure = inputCompletion.failure || null;
     job.cancellation = inputCompletion.cancellation || null;
+    job.publication = inputCompletion.publication || null;
+    job.publicationFailure = inputCompletion.publicationFailure || null;
     const completion = Object.freeze({
       schema: WEBGPU_INFERENCE_JOB_COMPLETION_SCHEMA,
       routeId,
@@ -169,7 +206,10 @@ export function createWebGpuInferenceQueue(input = {}) {
       ...(job.failure ? { failure: deepFreeze(clone(job.failure)) } : {}),
       ...(job.cancellation ? { cancellation: deepFreeze(clone(job.cancellation)) } : {}),
       ...(job.admission ? { admission: deepFreeze(clone(job.admission)) } : {}),
+      ...(job.publication ? { publication: deepFreeze(clone(job.publication)) } : {}),
+      ...(job.publicationFailure ? { publicationFailure: deepFreeze(clone(job.publicationFailure)) } : {}),
     });
+    emitMutation('job-completed', job.completedAtMs, { jobId: job.jobId, status: job.status });
     job.completion.resolve(completion);
     return completion;
   }
@@ -194,11 +234,19 @@ export function createWebGpuInferenceQueue(input = {}) {
         application: clone(application),
         applicationAuthority: 'between-queued-invocations-only',
       });
+      emitMutation('scheduler-decision-applied', control.completedAtMs, {
+        decisionSequence: control.sequence,
+        revision: control.decision?.revision ?? null,
+      });
       control.deferred.resolve(receipt);
     } catch (error) {
       control.status = 'failed';
       control.completedAtMs = now();
       control.failure = serializeFailure(error);
+      emitMutation('scheduler-decision-failed', control.completedAtMs, {
+        decisionSequence: control.sequence,
+        revision: control.decision?.revision ?? null,
+      });
       control.deferred.reject(error);
     }
   }
@@ -207,6 +255,7 @@ export function createWebGpuInferenceQueue(input = {}) {
     state.activeJob = job;
     job.status = 'running';
     job.startedAtMs = now();
+    emitMutation('job-started', job.startedAtMs, { jobId: job.jobId });
     try {
       const output = await runtime.runInvocation({ invocationId: job.jobId }, invocation => {
         job.schedulerRevision = invocation.schedulerRevision ?? null;
@@ -224,15 +273,29 @@ export function createWebGpuInferenceQueue(input = {}) {
               value: clone(progress),
             });
             job.progress.push(row);
+            emitMutation('job-progress', row.atMs, { jobId: job.jobId, progressSequence: row.sequence });
             return row;
           },
         });
         return job.execute(context);
       });
+      let publication = null;
+      let publicationFailure = null;
+      if (job.describeOutput) {
+        try {
+          const described = await job.describeOutput(output);
+          if (!isPlainObject(described)) throw new Error('describeOutput must return an object');
+          publication = clone(described);
+        } catch (error) {
+          publicationFailure = serializeFailure(error);
+        }
+      }
       terminalCompletion(job, {
         status: 'succeeded',
         outputPresent: true,
         output,
+        publication,
+        publicationFailure,
       });
     } catch (error) {
       terminalCompletion(job, {
@@ -242,6 +305,7 @@ export function createWebGpuInferenceQueue(input = {}) {
       });
     } finally {
       state.activeJob = null;
+      emitMutation('job-settled', job.completedAtMs, { jobId: job.jobId, status: job.status });
     }
   }
 
@@ -313,7 +377,10 @@ export function createWebGpuInferenceQueue(input = {}) {
     } finally {
       state.pumping = false;
       if (state.pendingDecisions.length > 0 || state.pendingJobs.length > 0) schedulePump();
-      else settleDrainWaiters();
+      else {
+        emitMutation('queue-idle', null);
+        settleDrainWaiters();
+      }
     }
   }
 
@@ -330,6 +397,9 @@ export function createWebGpuInferenceQueue(input = {}) {
     if (jobInput.metadata != null && !isPlainObject(jobInput.metadata)) {
       throw new Error('job metadata must be an object');
     }
+    if (jobInput.describeOutput != null && typeof jobInput.describeOutput !== 'function') {
+      throw new Error('job describeOutput must be a function');
+    }
     const job = {
       jobId: jobInput.jobId,
       execute: jobInput.execute,
@@ -342,15 +412,19 @@ export function createWebGpuInferenceQueue(input = {}) {
       outputPresent: false,
       failure: null,
       cancellation: null,
+      publication: null,
+      publicationFailure: null,
       progress: [],
       admissionHandle: null,
       admission: null,
       admissionSequence: null,
       admissionStatus: admissionCoordinator == null ? 'route-local' : 'not-requested',
       completion: createDeferred(),
+      describeOutput: jobInput.describeOutput || null,
     };
     state.jobs.set(job.jobId, job);
     state.pendingJobs.push(job);
+    emitMutation('job-enqueued', job.queuedAtMs, { jobId: job.jobId });
 
     const handle = Object.freeze({
       jobId: job.jobId,
@@ -405,6 +479,10 @@ export function createWebGpuInferenceQueue(input = {}) {
     state.decisionSequence = control.sequence;
     state.decisions.push(control);
     state.pendingDecisions.push(control);
+    emitMutation('scheduler-decision-enqueued', control.queuedAtMs, {
+      decisionSequence: control.sequence,
+      revision: control.decision?.revision ?? null,
+    });
     schedulePump();
     return deferredDecision.promise;
   }
@@ -421,7 +499,24 @@ export function createWebGpuInferenceQueue(input = {}) {
       throw new Error('cannot forget an active or pending job');
     }
     state.jobs.delete(jobId);
+    const forgottenAtMs = now();
+    const receipt = deepFreeze({
+      schema: WEBGPU_INFERENCE_JOB_FORGET_RECEIPT_SCHEMA,
+      routeId,
+      jobId,
+      forgottenAtMs,
+      priorStatus: job.status,
+      deletionAuthority: 'explicit-queue-forget-only',
+    });
+    state.forgetReceipts.push(receipt);
+    emitMutation('job-forgotten', forgottenAtMs, { jobId, priorStatus: job.status });
     return true;
+  }
+
+  function subscribe(listener) {
+    if (typeof listener !== 'function') throw new Error('queue listener must be a function');
+    state.listeners.add(listener);
+    return () => state.listeners.delete(listener);
   }
 
   return Object.freeze({
@@ -430,5 +525,6 @@ export function createWebGpuInferenceQueue(input = {}) {
     drain,
     snapshot,
     forgetJob,
+    subscribe,
   });
 }

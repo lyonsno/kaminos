@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Kaminos dev server with directory browsing API."""
 
+import hashlib
 import http.server
 import json
 import os
@@ -8,6 +9,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -40,6 +42,10 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = Path(os.environ.get(
+    "KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR",
+    os.path.expanduser("~/.local/state/kaminos/webgpu-inference-queues"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
@@ -48,6 +54,7 @@ BROWSE_ROOTS = {
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
+    "webgpu-queues": KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -68,6 +75,9 @@ MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+WEBGPU_INFERENCE_QUEUE_PUBLICATION_SCHEMA = "kaminos.webgpu-inference-queue-publication.v0"
+WEBGPU_INFERENCE_QUEUE_SCHEMA = "kaminos.webgpu-inference-queue.v0"
+WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA = "kaminos.webgpu-inference-queue-publication-write-receipt.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
@@ -929,6 +939,166 @@ def record_job_output_event(event):
         JOB_OUTPUT_EVENTS.append(event)
 
 
+def _atomic_write_json(path, document):
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    body = (json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, target)
+        temporary_path = None
+        directory_fd = os.open(target.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return {
+        "bytes": len(body),
+        "sha256": hashlib.sha256(body).hexdigest(),
+    }
+
+
+def _resolve_webgpu_queue_publication_path(requested_path, root):
+    requested = str(requested_path or "").strip()
+    if not requested:
+        raise ValueError("queue publication path required")
+    relative = Path(requested)
+    if relative.is_absolute():
+        raise ValueError("queue publication path must be relative to the configured root")
+    if relative.suffix.lower() != ".json":
+        raise ValueError("queue publication path must name a JSON file")
+    resolved_root = Path(root).expanduser().resolve()
+    target = (resolved_root / relative).resolve()
+    if not target.is_relative_to(resolved_root):
+        raise PermissionError("queue publication path traversal")
+    return resolved_root, target, target.relative_to(resolved_root).as_posix()
+
+
+def _queue_publication_identity(document):
+    producer = document.get("producer") if isinstance(document, dict) else None
+    effective_route = document.get("effectiveRoute") if isinstance(document, dict) else None
+    queue_document = document.get("queue") if isinstance(document, dict) else None
+    return {
+        "documentSchema": document.get("schema") if isinstance(document, dict) else None,
+        "producerInstanceId": producer.get("instanceId") if isinstance(producer, dict) else None,
+        "routeId": effective_route.get("routeId") if isinstance(effective_route, dict) else None,
+        "queueSchema": queue_document.get("schema") if isinstance(queue_document, dict) else None,
+        "queueRouteId": queue_document.get("routeId") if isinstance(queue_document, dict) else None,
+    }
+
+
+def _validate_webgpu_queue_publication_document(document):
+    if not isinstance(document, dict):
+        raise ValueError("queue publication document must be an object")
+    identity = _queue_publication_identity(document)
+    if identity["documentSchema"] != WEBGPU_INFERENCE_QUEUE_PUBLICATION_SCHEMA:
+        raise ValueError("unsupported queue publication document schema")
+    if not identity["producerInstanceId"]:
+        raise ValueError("queue publication producer instanceId required")
+    if not identity["routeId"]:
+        raise ValueError("queue publication effective routeId required")
+    if identity["queueSchema"] != WEBGPU_INFERENCE_QUEUE_SCHEMA:
+        raise ValueError("unsupported queue snapshot schema")
+    if identity["queueRouteId"] != identity["routeId"]:
+        raise ValueError("queue publication route identity mismatch")
+    return identity
+
+
+def _write_queue_publication_failure(root, receipt):
+    root_path = Path(root).expanduser().resolve()
+    identity = receipt.get("lastTrustworthyEvidence") or {}
+    stable_key = "\0".join([
+        str(receipt.get("requestedPath") or ""),
+        str(identity.get("producerInstanceId") or "unknown-producer"),
+        str(identity.get("routeId") or "unknown-route"),
+    ])
+    digest = hashlib.sha256(stable_key.encode()).hexdigest()[:16]
+    producer = re.sub(
+        r"[^A-Za-z0-9_.-]+",
+        "-",
+        str(identity.get("producerInstanceId") or "unknown-producer"),
+    ).strip(".-")[:64] or "unknown-producer"
+    failure_path = root_path / "failures" / f"{producer}-{digest}.json"
+    _atomic_write_json(failure_path, receipt)
+    return failure_path
+
+
+def write_webgpu_queue_publication(payload, root=KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR):
+    phase = "input-validation"
+    requested_path = payload.get("path") if isinstance(payload, dict) else None
+    document = payload.get("document") if isinstance(payload, dict) else None
+    identity = _queue_publication_identity(document)
+    effective_path = None
+    try:
+        if not isinstance(payload, dict):
+            raise ValueError("queue publication payload must be an object")
+        phase = "path-validation"
+        resolved_root, target, effective_path = _resolve_webgpu_queue_publication_path(requested_path, root)
+        phase = "document-validation"
+        identity = _validate_webgpu_queue_publication_document(document)
+        phase = "atomic-write"
+        write_identity = _atomic_write_json(target, document)
+        return {
+            "schema": WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA,
+            "ok": True,
+            "requestedPath": str(requested_path),
+            "effectivePath": effective_path,
+            "root": str(resolved_root),
+            "path": str(target),
+            "routeId": identity["routeId"],
+            "producerInstanceId": identity["producerInstanceId"],
+            "documentSchema": identity["documentSchema"],
+            "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "bytes": write_identity["bytes"],
+            "sha256": write_identity["sha256"],
+            "atomicReplace": True,
+            "deletionAuthority": "none",
+        }
+    except Exception as error:
+        receipt = {
+            "schema": WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA,
+            "ok": False,
+            "phase": phase,
+            "requestedPath": str(requested_path) if requested_path is not None else None,
+            "effectivePath": effective_path,
+            "routeId": identity.get("routeId"),
+            "producerInstanceId": identity.get("producerInstanceId"),
+            "failedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "error": str(error),
+            "failure": {
+                "name": type(error).__name__,
+                "message": str(error),
+            },
+            "lastTrustworthyEvidence": identity,
+            "atomicReplace": False,
+            "deletionAuthority": "none",
+        }
+        try:
+            failure_path = _write_queue_publication_failure(root, receipt)
+            receipt["failureReportPath"] = str(failure_path)
+        except Exception as failure_error:
+            receipt["failureReportPath"] = None
+            receipt["failureReportFailure"] = {
+                "name": type(failure_error).__name__,
+                "message": str(failure_error),
+            }
+        return receipt
+
+
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -978,11 +1148,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
             self.handle_volume_capture()
+        elif parsed.path == "/api/webgpu-queue-publication":
+            self.handle_webgpu_queue_publication()
         else:
             self.send_json({"error": "Not found"}, 404)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_webgpu_queue_publication(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        receipt = write_webgpu_queue_publication(payload)
+        self.send_json(receipt, 200 if receipt.get("ok") else 422)
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
