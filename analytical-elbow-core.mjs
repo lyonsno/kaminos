@@ -120,12 +120,30 @@ function validateDescriptor(descriptor) {
       !segments.has(descriptor.joint.childSegmentId)) {
     throw new Error('analytical elbow joint references an unknown segment');
   }
+  const processIds = new Set();
   for (const segment of descriptor.segments) {
     if (!isFinitePoint(segment.bone?.start) ||
         !isFinitePoint(segment.bone?.end) ||
         !Number.isFinite(segment.bone?.protectedCoreRadius) ||
         segment.bone.protectedCoreRadius <= 0) {
       throw new Error(`segment ${segment.id} has an invalid protected bone core`);
+    }
+    if (!Array.isArray(segment.processes)) {
+      throw new Error(`segment ${segment.id} requires a skeletal process collection`);
+    }
+    for (const process of segment.processes) {
+      if (processIds.has(process.id)) {
+        throw new Error(`duplicate skeletal process ${process.id}`);
+      }
+      processIds.add(process.id);
+      if (process.kind !== 'attachment-bearing-capsule' ||
+          !isFinitePoint(process.localStart) ||
+          !isFinitePoint(process.localEnd) ||
+          distance(process.localStart, process.localEnd) <= 1e-12 ||
+          !Number.isFinite(process.radius) ||
+          process.radius <= 0) {
+        throw new Error(`skeletal process ${process.id} has invalid geometry`);
+      }
     }
   }
   const attachments = new Map(
@@ -134,6 +152,27 @@ function validateDescriptor(descriptor) {
   for (const attachment of descriptor.attachments) {
     if (!segments.has(attachment.segmentId) || !isFinitePoint(attachment.localPosition)) {
       throw new Error(`attachment ${attachment.id} has invalid segment authority`);
+    }
+  }
+  for (const segment of descriptor.segments) {
+    for (const process of segment.processes) {
+      const attachment = attachments.get(process.attachmentId);
+      if (!attachment) {
+        throw new Error(
+          `skeletal process ${process.id} references unknown attachment ${process.attachmentId}`,
+        );
+      }
+      if (attachment.segmentId !== segment.id) {
+        throw new Error(
+          `skeletal process ${process.id} attachment ${attachment.id} belongs to ` +
+          `${attachment.segmentId}, expected ${segment.id}`,
+        );
+      }
+      if (distance(process.localEnd, attachment.localPosition) > 1e-12) {
+        throw new Error(
+          `skeletal process ${process.id} does not terminate at attachment ${attachment.id}`,
+        );
+      }
     }
   }
   for (const muscle of descriptor.muscles) {
@@ -315,6 +354,7 @@ export function createAnalyticalElbowDescriptor() {
           end: [0, 1.8, 0],
           protectedCoreRadius: 0.14,
         },
+        processes: [],
       },
       {
         id: 'ulna',
@@ -324,6 +364,17 @@ export function createAnalyticalElbowDescriptor() {
           end: [0, -1.55, 0],
           protectedCoreRadius: 0.11,
         },
+        processes: [
+          {
+            id: 'olecranon-process',
+            kind: 'attachment-bearing-capsule',
+            localStart: [0, -0.14, 0],
+            localEnd: [-0.28, 0.22, 0],
+            radius: 0.085,
+            attachmentId: 'triceps-insertion',
+            authority: 'synthetic-proxy',
+          },
+        ],
       },
     ],
     attachments: [
@@ -348,7 +399,7 @@ export function createAnalyticalElbowDescriptor() {
       {
         id: 'triceps-insertion',
         segmentId: 'ulna',
-        localPosition: [-0.18, 0.2, 0],
+        localPosition: [-0.28, 0.22, 0],
         authority: 'synthetic-proxy',
       },
     ],
@@ -428,6 +479,21 @@ export function solveAnalyticalElbowPose(
           descriptor,
         ),
       }));
+    const processes = segment.processes.map(process => ({
+      ...structuredClone(process),
+      worldStart: segmentPointToWorld(
+        segment.id,
+        process.localStart,
+        angle,
+        descriptor,
+      ),
+      worldEnd: segmentPointToWorld(
+        segment.id,
+        process.localEnd,
+        angle,
+        descriptor,
+      ),
+    }));
     return {
       id: segment.id,
       authority: segment.authority,
@@ -446,6 +512,7 @@ export function solveAnalyticalElbowPose(
           descriptor,
         ),
       },
+      processes,
       attachments,
     };
   });
