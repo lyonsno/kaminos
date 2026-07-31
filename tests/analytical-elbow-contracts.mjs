@@ -188,6 +188,22 @@ assert.throws(
   /skeletal process olecranon-process does not terminate at attachment triceps-insertion/,
 );
 
+const detachedProcessRoot = structuredClone(descriptor);
+processById(
+  segmentById(detachedProcessRoot, 'ulna'),
+  'olecranon-process',
+).localStart = [4, -0.14, 0];
+assert.throws(
+  () => solveAnalyticalElbowPose(detachedProcessRoot, { flexionDegrees: 35 }),
+  /skeletal process olecranon-process root is detached from owning bone ulna/,
+);
+assert.throws(
+  () => createAnalyticalElbowConsumerExport(detachedProcessRoot, {
+    flexionDegrees: [0, 35, 80],
+  }),
+  /skeletal process olecranon-process root is detached from owning bone ulna/,
+);
+
 const overflowing = structuredClone(descriptor);
 overflowing.muscles[0].routing.lateralOffset = Number.MAX_VALUE;
 assert.throws(
