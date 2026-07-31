@@ -1,0 +1,83 @@
+{
+  "schema": "kaminos.analytical-elbow-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "analytical-elbow-orbitable-v0",
+    "effective": "analytical-elbow-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "id": "synthetic-mammalian-elbow-v0",
+    "schema": "kaminos.analytical-elbow-descriptor.v0",
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "structural-hypothesis"
+  },
+  "consumerRoute": {
+    "requested": "analytical-cage",
+    "effective": "analytical-cage",
+    "fallbackUsed": false
+  },
+  "claimBoundary": {
+    "proves": "analytical articulation and stable low-frequency cage authority",
+    "doesNotProve": "species anatomy, generated-surface transfer, or production skinning"
+  },
+  "poses": [
+    {
+      "flexionDegrees": 0,
+      "clearanceViolationCount": 0,
+      "materialIdentityViolationCount": 0,
+      "muscles": [
+        {
+          "id": "brachialis-like-flexor",
+          "realizedVolume": 0.105,
+          "volumeRelativeError": 0,
+          "minimumProtectedCoreClearance": 0.1643763188505498
+        },
+        {
+          "id": "monoarticular-triceps-like-extensor",
+          "realizedVolume": 0.09000000000000002,
+          "volumeRelativeError": 3.0839528461809903e-16,
+          "minimumProtectedCoreClearance": 0.10478441064129038
+        }
+      ]
+    },
+    {
+      "flexionDegrees": 35,
+      "clearanceViolationCount": 0,
+      "materialIdentityViolationCount": 0,
+      "muscles": [
+        {
+          "id": "brachialis-like-flexor",
+          "realizedVolume": 0.105,
+          "volumeRelativeError": 0,
+          "minimumProtectedCoreClearance": 0.14058058802020884
+        },
+        {
+          "id": "monoarticular-triceps-like-extensor",
+          "realizedVolume": 0.08999999999999998,
+          "volumeRelativeError": 1.5419764230904951e-16,
+          "minimumProtectedCoreClearance": 0.1351287421380651
+        }
+      ]
+    },
+    {
+      "flexionDegrees": 80,
+      "clearanceViolationCount": 0,
+      "materialIdentityViolationCount": 0,
+      "muscles": [
+        {
+          "id": "brachialis-like-flexor",
+          "realizedVolume": 0.10499999999999998,
+          "volumeRelativeError": 1.3216940769347102e-16,
+          "minimumProtectedCoreClearance": 0.08714583832887718
+        },
+        {
+          "id": "monoarticular-triceps-like-extensor",
+          "realizedVolume": 0.09,
+          "volumeRelativeError": 0,
+          "minimumProtectedCoreClearance": 0.05478956984916766
+        }
+      ]
+    }
+  ]
+}
