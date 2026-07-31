@@ -65,6 +65,19 @@ assert.throws(
   /unknown insertion attachment brachialis-insertion/,
 );
 
+const emptyMuscles = structuredClone(descriptor);
+emptyMuscles.muscles = [];
+assert.throws(
+  () => solveAnalyticalElbowPose(emptyMuscles, { flexionDegrees: 35 }),
+  /analytical elbow descriptor requires at least one muscle/,
+);
+assert.throws(
+  () => createAnalyticalElbowConsumerExport(emptyMuscles, {
+    flexionDegrees: [0, 35, 80],
+  }),
+  /analytical elbow descriptor requires at least one muscle/,
+);
+
 const malformedNumerics = [
   {
     label: 'non-finite joint core',
