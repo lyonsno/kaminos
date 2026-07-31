@@ -1,0 +1,39 @@
+{
+  "observedAt": "2026-07-31T19:56:00Z",
+  "url": "http://127.0.0.1:8137/artifacts/exact-elbow-packing-v0/index.html",
+  "backend": {
+    "browser": "Google Chrome headless 140.0.7339.186",
+    "webgl": "ANGLE Metal",
+    "server": "localhost:8137"
+  },
+  "capture": {
+    "desktop": "Chrome --headless=new --use-angle=metal --window-size=1400,900 --screenshot",
+    "mobile": "Chrome DevTools Protocol Emulation.setDeviceMetricsOverride at 390x844 followed by Page.captureScreenshot"
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [1400, 900],
+      "case": "baseline"
+    },
+    {
+      "path": "witness-swell-desktop.png",
+      "viewport": [1400, 900],
+      "case": "brachialis-swell"
+    },
+    {
+      "path": "witness-swell-mobile.png",
+      "viewport": [390, 844],
+      "case": "brachialis-swell"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "rigidExclusionsLegible": true,
+    "muscleTerritoriesLegible": true,
+    "changedOwnershipLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}
