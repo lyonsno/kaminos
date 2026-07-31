@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -76,6 +76,29 @@ try {
     sourceId: 'synthetic-mammalian-elbow-v0',
     sourceSchema: 'wrong.schema',
   });
+
+  const blockedOutputRoot = join(root, 'blocked-output');
+  await writeFile(blockedOutputRoot, 'blocks directory creation');
+  let prepareError = null;
+  try {
+    await writeAnalyticalElbowWitness({
+      outDir: blockedOutputRoot,
+      descriptor: createAnalyticalElbowDescriptor(),
+    });
+  } catch (error) {
+    prepareError = error;
+  }
+  assert.ok(prepareError, 'blocked output root must reject');
+  assert.equal(
+    prepareError.failureReportPath,
+    `${blockedOutputRoot}.failure-report.json`,
+  );
+  const prepareFailureReport = JSON.parse(
+    await readFile(prepareError.failureReportPath, 'utf8'),
+  );
+  assert.equal(prepareFailureReport.status, 'failed');
+  assert.equal(prepareFailureReport.failurePhase, 'prepare-output');
+  assert.equal(prepareFailureReport.route.effective, null);
 } finally {
   await rm(root, { recursive: true, force: true });
 }
