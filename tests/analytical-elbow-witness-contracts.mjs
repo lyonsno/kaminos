@@ -77,6 +77,26 @@ try {
     sourceSchema: 'wrong.schema',
   });
 
+  const detachedRoot = join(root, 'detached-process-root');
+  const detachedDescriptor = createAnalyticalElbowDescriptor();
+  detachedDescriptor.segments
+    .find(segment => segment.id === 'ulna')
+    .processes.find(process => process.id === 'olecranon-process')
+    .localStart = [4, -0.14, 0];
+  await assert.rejects(
+    writeAnalyticalElbowWitness({
+      outDir: detachedRoot,
+      descriptor: detachedDescriptor,
+    }),
+    /skeletal process olecranon-process root is detached from owning bone ulna/,
+  );
+  const detachedFailureReport = JSON.parse(
+    await readFile(join(detachedRoot, 'report.json'), 'utf8'),
+  );
+  assert.equal(detachedFailureReport.status, 'failed');
+  assert.equal(detachedFailureReport.failurePhase, 'solve-consumer-export');
+  assert.equal(detachedFailureReport.route.effective, null);
+
   const blockedOutputRoot = join(root, 'blocked-output');
   await writeFile(blockedOutputRoot, 'blocks directory creation');
   let prepareError = null;

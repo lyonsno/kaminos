@@ -43,6 +43,24 @@ function distance(left, right) {
   return length(subtract(left, right));
 }
 
+function pointSegmentDistance(point, start, end) {
+  const direction = subtract(end, start);
+  const lengthSquared = direction.reduce(
+    (sum, value) => sum + value * value,
+    0,
+  );
+  if (lengthSquared <= 1e-24) {
+    return distance(point, start);
+  }
+  const offset = subtract(point, start);
+  const projection = offset.reduce(
+    (sum, value, index) => sum + value * direction[index],
+    0,
+  ) / lengthSquared;
+  const clampedProjection = Math.max(0, Math.min(1, projection));
+  return distance(point, add(start, scale(direction, clampedProjection)));
+}
+
 function rotateAroundZ(point, angle) {
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
@@ -171,6 +189,16 @@ function validateDescriptor(descriptor) {
       if (distance(process.localEnd, attachment.localPosition) > 1e-12) {
         throw new Error(
           `skeletal process ${process.id} does not terminate at attachment ${attachment.id}`,
+        );
+      }
+      const rootDistance = pointSegmentDistance(
+        process.localStart,
+        segment.bone.start,
+        segment.bone.end,
+      );
+      if (rootDistance > segment.bone.protectedCoreRadius + process.radius + 1e-12) {
+        throw new Error(
+          `skeletal process ${process.id} root is detached from owning bone ${segment.id}`,
         );
       }
     }
