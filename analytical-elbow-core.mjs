@@ -92,6 +92,9 @@ function validateDescriptor(descriptor) {
   if (descriptor?.schema !== ANALYTICAL_ELBOW_DESCRIPTOR_SCHEMA) {
     throw new Error('unsupported analytical elbow descriptor schema');
   }
+  if (!Array.isArray(descriptor.muscles) || descriptor.muscles.length === 0) {
+    throw new Error('analytical elbow descriptor requires at least one muscle');
+  }
   if (descriptor.authority?.kind !== 'synthetic-proxy') {
     throw new Error('analytical elbow descriptor requires explicit proxy authority');
   }
