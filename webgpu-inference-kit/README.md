@@ -1197,7 +1197,7 @@ A queued decision waits for the active invocation to finish and applies before t
 
 ### Durable Queue Publication
 
-`createWebGpuInferenceQueuePublication(input)` converts the in-browser queue into atomic machine-local evidence without transferring scheduling, retention, or deletion authority to the host. It subscribes to every queue mutation, publishes uncapped snapshots in order, and renews a caller-sized freshness lease. If the browser crashes, heartbeats stop and `freshness.expiresAt` lets a wall-clock consumer reject the stale file.
+`createWebGpuInferenceQueuePublication(input)` converts the in-browser queue into atomic machine-local evidence without transferring scheduling, retention, or deletion authority to the host. It subscribes to every queue mutation, publishes uncapped snapshots in order, and renews a caller-sized freshness lease. If the browser crashes, heartbeats stop and `freshness.expiresAt` lets a wall-clock consumer reject the stale file. Every later durable document retains the uncapped `publicationFailures` history, including publication sequence, triggering mutation, phase, route/path/producer identity, and any host failure receipt; a later successful replacement therefore cannot imply that earlier publication was clean.
 
 ```js
 import {
@@ -1228,7 +1228,7 @@ await queuePublication.flush();
 await queuePublication.close();
 ```
 
-The canonical document schema is `kaminos.webgpu-inference-queue-publication.v0`; atomic host receipts use `kaminos.webgpu-inference-queue-publication-write-receipt.v0`. Kaminos `serve.py` writes the caller-selected relative JSON path beneath `KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR`, defaulting to `~/.local/state/kaminos/webgpu-inference-queues`. Successful receipts bind requested path, effective path, route, producer instance, bytes, SHA-256, and atomic replacement. Invalid paths or failed writes produce a durable report under that root's `failures/` directory when the root remains writable. Neither the publisher nor the HTTP endpoint exposes deletion authority; only the live queue's explicit `forgetJob(jobId)` removes a retained job, and the queue snapshot retains its forget receipt.
+The canonical document schema is `kaminos.webgpu-inference-queue-publication.v0`; atomic host receipts use `kaminos.webgpu-inference-queue-publication-write-receipt.v0`. Kaminos `serve.py` writes the caller-selected relative JSON path beneath `KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR`, defaulting to `~/.local/state/kaminos/webgpu-inference-queues`. Successful receipts bind requested path, effective path, route, producer instance, bytes, SHA-256, and atomic replacement. Invalid paths, malformed request framing or JSON, and failed writes produce a durable report under that root's `failures/` directory when the root remains writable; failures before payload decoding preserve null caller identity rather than inventing it. Neither the publisher nor the HTTP endpoint exposes deletion authority; only the live queue's explicit `forgetJob(jobId)` removes a retained job, and the queue snapshot retains its forget receipt.
 
 ## Multi-Route Admission
 

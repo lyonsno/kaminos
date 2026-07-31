@@ -1025,6 +1025,7 @@ def _write_queue_publication_failure(root, receipt):
         str(receipt.get("requestedPath") or ""),
         str(identity.get("producerInstanceId") or "unknown-producer"),
         str(identity.get("routeId") or "unknown-route"),
+        str(receipt.get("failureId") or receipt.get("phase") or "unknown-phase"),
     ])
     digest = hashlib.sha256(stable_key.encode()).hexdigest()[:16]
     producer = re.sub(
@@ -1035,6 +1036,48 @@ def _write_queue_publication_failure(root, receipt):
     failure_path = root_path / "failures" / f"{producer}-{digest}.json"
     _atomic_write_json(failure_path, receipt)
     return failure_path
+
+
+def write_webgpu_queue_publication_failure(
+    error,
+    phase,
+    *,
+    root=None,
+    requested_path=None,
+    effective_path=None,
+    identity=None,
+):
+    publication_root = KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR if root is None else root
+    trustworthy_identity = dict(identity or _queue_publication_identity(None))
+    receipt = {
+        "schema": WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA,
+        "ok": False,
+        "failureId": f"failure-{time.time_ns()}",
+        "phase": phase,
+        "requestedPath": str(requested_path) if requested_path is not None else None,
+        "effectivePath": effective_path,
+        "routeId": trustworthy_identity.get("routeId"),
+        "producerInstanceId": trustworthy_identity.get("producerInstanceId"),
+        "failedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "error": str(error),
+        "failure": {
+            "name": type(error).__name__,
+            "message": str(error),
+        },
+        "lastTrustworthyEvidence": trustworthy_identity,
+        "atomicReplace": False,
+        "deletionAuthority": "none",
+    }
+    try:
+        failure_path = _write_queue_publication_failure(publication_root, receipt)
+        receipt["failureReportPath"] = str(failure_path)
+    except Exception as failure_error:
+        receipt["failureReportPath"] = None
+        receipt["failureReportFailure"] = {
+            "name": type(failure_error).__name__,
+            "message": str(failure_error),
+        }
+    return receipt
 
 
 def write_webgpu_queue_publication(payload, root=KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR):
@@ -1069,34 +1112,14 @@ def write_webgpu_queue_publication(payload, root=KAMINOS_WEBGPU_QUEUE_PUBLICATIO
             "deletionAuthority": "none",
         }
     except Exception as error:
-        receipt = {
-            "schema": WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA,
-            "ok": False,
-            "phase": phase,
-            "requestedPath": str(requested_path) if requested_path is not None else None,
-            "effectivePath": effective_path,
-            "routeId": identity.get("routeId"),
-            "producerInstanceId": identity.get("producerInstanceId"),
-            "failedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "error": str(error),
-            "failure": {
-                "name": type(error).__name__,
-                "message": str(error),
-            },
-            "lastTrustworthyEvidence": identity,
-            "atomicReplace": False,
-            "deletionAuthority": "none",
-        }
-        try:
-            failure_path = _write_queue_publication_failure(root, receipt)
-            receipt["failureReportPath"] = str(failure_path)
-        except Exception as failure_error:
-            receipt["failureReportPath"] = None
-            receipt["failureReportFailure"] = {
-                "name": type(failure_error).__name__,
-                "message": str(failure_error),
-            }
-        return receipt
+        return write_webgpu_queue_publication_failure(
+            error,
+            phase,
+            root=root,
+            requested_path=requested_path,
+            effective_path=effective_path,
+            identity=identity,
+        )
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
@@ -1159,13 +1182,23 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_webgpu_queue_publication(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
-        except ValueError:
-            self.send_json({"error": "Invalid Content-Length"}, 400)
+            if length < 0:
+                raise ValueError("Content-Length must not be negative")
+        except ValueError as error:
+            receipt = write_webgpu_queue_publication_failure(
+                error,
+                "content-length-validation",
+            )
+            self.send_json(receipt, 400)
             return
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self.send_json({"error": "Invalid JSON"}, 400)
+        except json.JSONDecodeError as error:
+            receipt = write_webgpu_queue_publication_failure(
+                error,
+                "json-parse",
+            )
+            self.send_json(receipt, 400)
             return
         receipt = write_webgpu_queue_publication(payload)
         self.send_json(receipt, 200 if receipt.get("ok") else 422)

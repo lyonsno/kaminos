@@ -111,6 +111,9 @@ const mismatched = kit.createWebGpuInferenceQueuePublication({
 });
 await assert.rejects(mismatched.flush(), /publication path mismatch/i);
 assert.equal(mismatched.snapshot().lastFailure.phase, 'receipt-validation');
+assert.equal(mismatched.snapshot().publicationFailures.length, 1);
+assert.equal(mismatched.snapshot().publicationFailures[0].requestedPath, 'unexpected/default.json');
+assert.equal(mismatched.snapshot().publicationFailures[0].effectivePath, 'unexpected/default.json');
 
 const failedQueue = kit.createWebGpuInferenceQueue({ runtime, now: () => ++tick });
 const failed = kit.createWebGpuInferenceQueuePublication({
@@ -133,6 +136,68 @@ const failed = kit.createWebGpuInferenceQueuePublication({
 await assert.rejects(failed.flush(), /host publication unavailable/);
 assert.equal(failed.snapshot().lastFailure.phase, 'publish');
 assert.equal(failed.snapshot().lastFailure.receipt.failureReportPath, 'failures/browser-session-failure.json');
+
+const recoveringQueue = kit.createWebGpuInferenceQueue({ runtime, now: () => ++tick });
+const recoveredDocuments = [];
+let recoveringAttempts = 0;
+const recovering = kit.createWebGpuInferenceQueuePublication({
+  queue: recoveringQueue,
+  publicationPath: 'recovery/state.json',
+  producer: { instanceId: 'browser-session-recovery', startedAt: '2026-07-31T19:33:00.000Z' },
+  backendIdentity: { backend: 'webgpu' },
+  freshnessBudgetMs: 30_000,
+  now: () => `2026-07-31T19:33:${String(recoveringAttempts).padStart(2, '0')}.000Z`,
+  async publish(document) {
+    recoveringAttempts += 1;
+    if (recoveringAttempts === 1) {
+      const error = new Error('first atomic replacement failed');
+      error.receipt = {
+        schema: 'kaminos.webgpu-inference-queue-publication-write-receipt.v0',
+        ok: false,
+        phase: 'atomic-write',
+        requestedPath: 'recovery/state.json',
+        effectivePath: 'recovery/state.json',
+        routeId,
+        producerInstanceId: 'browser-session-recovery',
+        failedAt: '2026-07-31T19:33:01.000Z',
+        failureReportPath: 'failures/browser-session-recovery-1.json',
+      };
+      throw error;
+    }
+    recoveredDocuments.push(document);
+    return {
+      schema: 'kaminos.webgpu-inference-queue-publication-write-receipt.v0',
+      ok: true,
+      requestedPath: 'recovery/state.json',
+      effectivePath: 'recovery/state.json',
+      routeId,
+      writtenAt: document.observedAt,
+    };
+  },
+});
+await assert.rejects(recovering.flush(), /first atomic replacement failed/);
+const recoveryJob = recoveringQueue.enqueue({
+  jobId: 'job-after-publication-failure',
+  async execute() { return null; },
+});
+await recoveryJob.completion;
+await recoveringQueue.drain();
+await recovering.flush();
+assert.ok(recoveredDocuments.length > 0, 'a later queue mutation must recover durable publication');
+for (const document of recoveredDocuments) {
+  assert.equal(document.publicationFailures.length, 1, 'later durable documents must retain prior failures');
+  const [publicationFailure] = document.publicationFailures;
+  assert.equal(publicationFailure.publicationSequence, 1);
+  assert.equal(publicationFailure.trigger.kind, 'publisher-started');
+  assert.equal(publicationFailure.phase, 'publish');
+  assert.equal(publicationFailure.requestedPath, 'recovery/state.json');
+  assert.equal(publicationFailure.effectivePath, 'recovery/state.json');
+  assert.equal(publicationFailure.routeId, routeId);
+  assert.equal(publicationFailure.producerInstanceId, 'browser-session-recovery');
+  assert.equal(publicationFailure.receipt.failureReportPath, 'failures/browser-session-recovery-1.json');
+  assert.match(publicationFailure.failedAt, /^2026-07-31T19:33:/);
+}
+assert.equal(recovering.snapshot().publicationFailures.length, 1);
 
 let httpCall = null;
 const httpPublisher = kit.createWebGpuInferenceQueueHttpPublisher({

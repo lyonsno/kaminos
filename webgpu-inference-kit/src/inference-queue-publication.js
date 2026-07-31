@@ -28,16 +28,21 @@ function serializeFailure(error, phase) {
 }
 
 function validateWriteReceipt(receipt, publicationPath, routeId) {
-  if (!receipt || typeof receipt !== 'object') throw new Error('publication write receipt must be an object');
-  if (receipt.schema !== WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA) {
-    throw new Error(`unexpected publication write receipt schema ${receipt.schema || '<missing>'}`);
+  function fail(message) {
+    const error = new Error(message);
+    if (receipt && typeof receipt === 'object') error.receipt = clone(receipt);
+    throw error;
   }
-  if (receipt.ok !== true) throw new Error('publication write receipt reports failure');
+  if (!receipt || typeof receipt !== 'object') fail('publication write receipt must be an object');
+  if (receipt.schema !== WEBGPU_INFERENCE_QUEUE_PUBLICATION_WRITE_RECEIPT_SCHEMA) {
+    fail(`unexpected publication write receipt schema ${receipt.schema || '<missing>'}`);
+  }
+  if (receipt.ok !== true) fail('publication write receipt reports failure');
   if (receipt.requestedPath !== publicationPath || receipt.effectivePath !== publicationPath) {
-    throw new Error(`publication path mismatch: requested ${publicationPath}, wrote ${receipt.effectivePath || '<missing>'}`);
+    fail(`publication path mismatch: requested ${publicationPath}, wrote ${receipt.effectivePath || '<missing>'}`);
   }
   if (receipt.routeId !== routeId) {
-    throw new Error(`publication route mismatch: expected ${routeId}, wrote ${receipt.routeId || '<missing>'}`);
+    fail(`publication route mismatch: expected ${routeId}, wrote ${receipt.routeId || '<missing>'}`);
   }
   return receipt;
 }
@@ -72,16 +77,17 @@ export function createWebGpuInferenceQueuePublication(input = {}) {
   let closed = false;
   let lastReceipt = null;
   let lastFailure = null;
+  const publicationFailures = [];
   let tail = Promise.resolve(null);
 
-  function makeDocument(event, lifecycle = 'live') {
+  function makeDocument(event, lifecycle, publicationSequence) {
     const observedAt = nonEmptyString(now(), 'publication observedAt');
     const observedAtMs = Date.parse(observedAt);
     if (!Number.isFinite(observedAtMs)) throw new Error('publication observedAt must be an ISO timestamp');
     const expiresAt = new Date(observedAtMs + freshnessBudgetMs).toISOString();
     return deepFreeze({
       schema: WEBGPU_INFERENCE_QUEUE_PUBLICATION_SCHEMA,
-      publicationSequence: sequence + 1,
+      publicationSequence,
       publicationPath,
       observedAt,
       producer: {
@@ -104,30 +110,58 @@ export function createWebGpuInferenceQueuePublication(input = {}) {
         mutationSequence: event.sequence ?? null,
         atMs: event.atMs ?? null,
       },
+      publicationFailures: clone(publicationFailures),
       queue: clone(event.queue),
       retentionAuthority: 'queue-explicit-forget-only',
       deletionAuthority: 'none',
     });
   }
 
+  function recordFailure(error, phase, publicationSequence, event) {
+    const serialized = serializeFailure(error, phase);
+    const receipt = serialized.receipt || {};
+    const failedAt = typeof receipt.failedAt === 'string' && receipt.failedAt
+      ? receipt.failedAt
+      : nonEmptyString(now(), 'publication failure timestamp');
+    const failure = deepFreeze({
+      publicationSequence,
+      trigger: {
+        kind: event.kind,
+        mutationSequence: event.sequence ?? null,
+        atMs: event.atMs ?? null,
+      },
+      phase,
+      failedAt,
+      requestedPath: receipt.requestedPath ?? publicationPath,
+      effectivePath: receipt.effectivePath ?? null,
+      routeId: receipt.routeId ?? routeId,
+      producerInstanceId: receipt.producerInstanceId ?? producer.instanceId,
+      name: serialized.name,
+      message: serialized.message,
+      ...(serialized.receipt ? { receipt: clone(serialized.receipt) } : {}),
+    });
+    publicationFailures.push(failure);
+    lastFailure = failure;
+  }
+
   function schedule(event, lifecycle = 'live') {
-    const document = makeDocument(event, lifecycle);
-    sequence = document.publicationSequence;
+    const publicationSequence = sequence + 1;
+    sequence = publicationSequence;
     tail = tail.catch(() => null).then(async () => {
+      const document = makeDocument(event, lifecycle, publicationSequence);
       let receipt;
       try {
         receipt = await input.publish(document, { publicationPath });
       } catch (error) {
-        lastFailure = serializeFailure(error, 'publish');
+        recordFailure(error, 'publish', publicationSequence, event);
         throw error;
       }
       try {
         validateWriteReceipt(receipt, publicationPath, routeId);
       } catch (error) {
-        lastFailure = serializeFailure(error, 'receipt-validation');
+        recordFailure(error, 'receipt-validation', publicationSequence, event);
         throw error;
       }
-      lastFailure = null;
       lastReceipt = deepFreeze(clone(receipt));
       return lastReceipt;
     });
@@ -167,6 +201,7 @@ export function createWebGpuInferenceQueuePublication(input = {}) {
         publicationSequence: sequence,
         lastReceipt: clone(lastReceipt),
         lastFailure: clone(lastFailure),
+        publicationFailures: clone(publicationFailures),
       });
     },
     async close() {

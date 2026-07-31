@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -686,6 +687,59 @@ def test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_id
         assert json.loads(failure_path.read_text())["ok"] is False
 
 
+def _invoke_webgpu_queue_publication_handler(content_length, body):
+    handler = KaminosHandler.__new__(KaminosHandler)
+    handler.headers = {"Content-Length": content_length}
+    handler.rfile = BytesIO(body)
+    responses = []
+    handler.send_json = lambda payload, status=200: responses.append((payload, status))
+    handler.handle_webgpu_queue_publication()
+    assert len(responses) == 1
+    return responses[0]
+
+
+def test_webgpu_queue_publication_invalid_content_length_writes_durable_failure_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_root = serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR
+        serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = Path(tmp) / "queue-publications"
+        try:
+            receipt, status = _invoke_webgpu_queue_publication_handler("not-an-integer", b"")
+        finally:
+            serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = previous_root
+
+        assert status == 400
+        assert receipt["schema"] == "kaminos.webgpu-inference-queue-publication-write-receipt.v0"
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "content-length-validation"
+        assert receipt["requestedPath"] is None
+        assert receipt["lastTrustworthyEvidence"]["producerInstanceId"] is None
+        assert receipt["deletionAuthority"] == "none"
+        failure_path = Path(receipt["failureReportPath"])
+        assert failure_path.is_file()
+        assert json.loads(failure_path.read_text())["phase"] == "content-length-validation"
+
+
+def test_webgpu_queue_publication_invalid_json_writes_durable_failure_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_root = serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR
+        serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = Path(tmp) / "queue-publications"
+        try:
+            receipt, status = _invoke_webgpu_queue_publication_handler("8", b"not-json")
+        finally:
+            serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = previous_root
+
+        assert status == 400
+        assert receipt["schema"] == "kaminos.webgpu-inference-queue-publication-write-receipt.v0"
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "json-parse"
+        assert receipt["requestedPath"] is None
+        assert receipt["lastTrustworthyEvidence"]["routeId"] is None
+        assert receipt["deletionAuthority"] == "none"
+        failure_path = Path(receipt["failureReportPath"])
+        assert failure_path.is_file()
+        assert json.loads(failure_path.read_text())["phase"] == "json-parse"
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
@@ -709,3 +763,5 @@ if __name__ == "__main__":
     test_webgpu_queue_publication_is_atomic_and_caller_scoped()
     test_webgpu_queue_publication_rejects_traversal_without_silent_default()
     test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_identity()
+    test_webgpu_queue_publication_invalid_content_length_writes_durable_failure_report()
+    test_webgpu_queue_publication_invalid_json_writes_durable_failure_report()
