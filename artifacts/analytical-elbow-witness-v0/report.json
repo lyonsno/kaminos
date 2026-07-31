@@ -35,9 +35,9 @@
         },
         {
           "id": "monoarticular-triceps-like-extensor",
-          "realizedVolume": 0.09000000000000002,
-          "volumeRelativeError": 3.0839528461809903e-16,
-          "minimumProtectedCoreClearance": 0.10478441064129038
+          "realizedVolume": 0.09000000000000001,
+          "volumeRelativeError": 1.5419764230904951e-16,
+          "minimumProtectedCoreClearance": 0.15081067289302572
         }
       ]
     },
@@ -56,7 +56,7 @@
           "id": "monoarticular-triceps-like-extensor",
           "realizedVolume": 0.08999999999999998,
           "volumeRelativeError": 1.5419764230904951e-16,
-          "minimumProtectedCoreClearance": 0.1351287421380651
+          "minimumProtectedCoreClearance": 0.1253044132005336
         }
       ]
     },
@@ -73,9 +73,9 @@
         },
         {
           "id": "monoarticular-triceps-like-extensor",
-          "realizedVolume": 0.09,
-          "volumeRelativeError": 0,
-          "minimumProtectedCoreClearance": 0.05478956984916766
+          "realizedVolume": 0.09000000000000001,
+          "volumeRelativeError": 1.5419764230904951e-16,
+          "minimumProtectedCoreClearance": 0.05110182292629062
         }
       ]
     }
