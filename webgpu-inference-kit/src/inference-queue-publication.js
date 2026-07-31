@@ -27,7 +27,7 @@ function serializeFailure(error, phase) {
   });
 }
 
-function validateWriteReceipt(receipt, publicationPath, routeId) {
+function validateWriteReceipt(receipt, publicationPath, routeId, producerInstanceId) {
   function fail(message) {
     const error = new Error(message);
     if (receipt && typeof receipt === 'object') error.receipt = clone(receipt);
@@ -43,6 +43,21 @@ function validateWriteReceipt(receipt, publicationPath, routeId) {
   }
   if (receipt.routeId !== routeId) {
     fail(`publication route mismatch: expected ${routeId}, wrote ${receipt.routeId || '<missing>'}`);
+  }
+  if (receipt.producerInstanceId !== producerInstanceId) {
+    fail(`publication producer instance mismatch: expected ${producerInstanceId}, wrote ${receipt.producerInstanceId || '<missing>'}`);
+  }
+  if (receipt.atomicReplace !== true) {
+    fail('publication receipt must prove atomic replacement');
+  }
+  if (receipt.deletionAuthority !== 'none') {
+    fail('publication receipt deletion authority must be none');
+  }
+  if (!Number.isSafeInteger(receipt.bytes) || receipt.bytes <= 0) {
+    fail('publication receipt byte count must be a positive safe integer');
+  }
+  if (typeof receipt.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(receipt.sha256)) {
+    fail('publication receipt SHA-256 must be a 64-digit hexadecimal digest');
   }
   return receipt;
 }
@@ -157,7 +172,7 @@ export function createWebGpuInferenceQueuePublication(input = {}) {
         throw error;
       }
       try {
-        validateWriteReceipt(receipt, publicationPath, routeId);
+        validateWriteReceipt(receipt, publicationPath, routeId, producer.instanceId);
       } catch (error) {
         recordFailure(error, 'receipt-validation', publicationSequence, event);
         throw error;
@@ -246,6 +261,11 @@ export function createWebGpuInferenceQueueHttpPublisher(input = {}) {
       error.receipt = receipt;
       throw error;
     }
-    return receipt;
+    return validateWriteReceipt(
+      receipt,
+      publicationPath,
+      document?.effectiveRoute?.routeId,
+      document?.producer?.instanceId,
+    );
   };
 }

@@ -48,6 +48,11 @@ const publication = kit.createWebGpuInferenceQueuePublication({
       requestedPath,
       effectivePath: requestedPath,
       routeId: document.effectiveRoute.routeId,
+      producerInstanceId: document.producer.instanceId,
+      bytes: 512,
+      sha256: 'a'.repeat(64),
+      atomicReplace: true,
+      deletionAuthority: 'none',
       writtenAt: document.observedAt,
     };
   },
@@ -171,6 +176,11 @@ const recovering = kit.createWebGpuInferenceQueuePublication({
       requestedPath: 'recovery/state.json',
       effectivePath: 'recovery/state.json',
       routeId,
+      producerInstanceId: 'browser-session-recovery',
+      bytes: 512,
+      sha256: 'b'.repeat(64),
+      atomicReplace: true,
+      deletionAuthority: 'none',
       writtenAt: document.observedAt,
     };
   },
@@ -199,6 +209,54 @@ for (const document of recoveredDocuments) {
 }
 assert.equal(recovering.snapshot().publicationFailures.length, 1);
 
+const substitutedProducerQueue = kit.createWebGpuInferenceQueue({ runtime, now: () => ++tick });
+const substitutedProducer = kit.createWebGpuInferenceQueuePublication({
+  queue: substitutedProducerQueue,
+  publicationPath: 'substituted/state.json',
+  producer: { instanceId: 'browser-session-expected', startedAt: '2026-07-31T19:34:00.000Z' },
+  backendIdentity: { backend: 'webgpu' },
+  freshnessBudgetMs: 30_000,
+  async publish(document) {
+    return {
+      schema: 'kaminos.webgpu-inference-queue-publication-write-receipt.v0',
+      ok: true,
+      requestedPath: 'substituted/state.json',
+      effectivePath: 'substituted/state.json',
+      routeId: document.effectiveRoute.routeId,
+      producerInstanceId: 'browser-session-substituted',
+      bytes: 512,
+      sha256: 'c'.repeat(64),
+      atomicReplace: true,
+      deletionAuthority: 'none',
+    };
+  },
+});
+await assert.rejects(substitutedProducer.flush(), /producer instance mismatch/i);
+assert.equal(
+  substitutedProducer.snapshot().publicationFailures[0].receipt.producerInstanceId,
+  'browser-session-substituted',
+);
+
+const weakReceiptQueue = kit.createWebGpuInferenceQueue({ runtime, now: () => ++tick });
+const weakReceipt = kit.createWebGpuInferenceQueuePublication({
+  queue: weakReceiptQueue,
+  publicationPath: 'weak/state.json',
+  producer: { instanceId: 'browser-session-weak', startedAt: '2026-07-31T19:35:00.000Z' },
+  backendIdentity: { backend: 'webgpu' },
+  freshnessBudgetMs: 30_000,
+  async publish(document) {
+    return {
+      schema: 'kaminos.webgpu-inference-queue-publication-write-receipt.v0',
+      ok: true,
+      requestedPath: 'weak/state.json',
+      effectivePath: 'weak/state.json',
+      routeId: document.effectiveRoute.routeId,
+      producerInstanceId: 'browser-session-weak',
+    };
+  },
+});
+await assert.rejects(weakReceipt.flush(), /atomic replacement|byte count|sha-256|deletion authority/i);
+
 let httpCall = null;
 const httpPublisher = kit.createWebGpuInferenceQueueHttpPublisher({
   endpoint: '/api/webgpu-queue-publication',
@@ -216,6 +274,11 @@ const httpPublisher = kit.createWebGpuInferenceQueueHttpPublisher({
           requestedPath: payload.path,
           effectivePath: payload.path,
           routeId: payload.document.effectiveRoute.routeId,
+          producerInstanceId: payload.document.producer.instanceId,
+          bytes: 512,
+          sha256: 'd'.repeat(64),
+          atomicReplace: true,
+          deletionAuthority: 'none',
         };
       },
     };
@@ -226,6 +289,30 @@ assert.equal(httpReceipt.effectivePath, requestedPath);
 assert.equal(httpCall.endpoint, '/api/webgpu-queue-publication');
 assert.equal(httpCall.request.method, 'POST');
 assert.deepEqual(JSON.parse(httpCall.request.body), { path: requestedPath, document: finalDocument });
+
+const weakHttpPublisher = kit.createWebGpuInferenceQueueHttpPublisher({
+  publicationPath: requestedPath,
+  async fetch() {
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          schema: 'kaminos.webgpu-inference-queue-publication-write-receipt.v0',
+          ok: true,
+          requestedPath,
+          effectivePath: requestedPath,
+          routeId,
+          producerInstanceId: finalDocument.producer.instanceId,
+        };
+      },
+    };
+  },
+});
+await assert.rejects(
+  weakHttpPublisher(finalDocument, { publicationPath: requestedPath }),
+  /atomic replacement|byte count|sha-256|deletion authority/i,
+);
 
 const failedHttpPublisher = kit.createWebGpuInferenceQueueHttpPublisher({
   publicationPath: requestedPath,
