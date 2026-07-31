@@ -23,6 +23,19 @@ function attachmentById(descriptor, id) {
   return attachment;
 }
 
+function segmentById(value, id) {
+  const segment = value.segments.find(candidate => candidate.id === id);
+  assert.ok(segment, `missing segment ${id}`);
+  return segment;
+}
+
+function processById(segment, id) {
+  assert.ok(Array.isArray(segment.processes), `segment ${segment.id} has no skeletal process collection`);
+  const process = segment.processes.find(candidate => candidate.id === id);
+  assert.ok(process, `missing skeletal process ${id}`);
+  return process;
+}
+
 function muscleById(pose, id) {
   const muscle = pose.muscles.find(candidate => candidate.id === id);
   assert.ok(muscle, `missing muscle ${id}`);
@@ -42,6 +55,25 @@ assert.deepEqual(descriptor.joint.axis, [0, 0, 1]);
 assert.deepEqual(
   descriptor.muscles.map(muscle => muscle.id),
   ['brachialis-like-flexor', 'monoarticular-triceps-like-extensor'],
+);
+
+const descriptorUlna = segmentById(descriptor, 'ulna');
+const olecranon = processById(descriptorUlna, 'olecranon-process');
+const tricepsInsertion = attachmentById(descriptor, 'triceps-insertion');
+assert.equal(olecranon.kind, 'attachment-bearing-capsule');
+assert.equal(olecranon.attachmentId, tricepsInsertion.id);
+assert.deepEqual(
+  olecranon.localEnd,
+  tricepsInsertion.localPosition,
+  'olecranon tip and triceps insertion must share exact ulna-local authority',
+);
+assert.ok(
+  olecranon.localStart[1] < descriptor.joint.pivot[1],
+  'olecranon must emerge from the forearm side of the hinge',
+);
+assert.ok(
+  olecranon.localEnd[0] < descriptor.joint.pivot[0],
+  'olecranon tip must establish a posterior extensor lever arm',
 );
 
 for (const muscle of descriptor.muscles) {
@@ -126,6 +158,36 @@ for (const malformedNumeric of malformedNumerics) {
   );
 }
 
+const malformedProcessGeometry = structuredClone(descriptor);
+processById(
+  segmentById(malformedProcessGeometry, 'ulna'),
+  'olecranon-process',
+).radius = Number.NaN;
+assert.throws(
+  () => solveAnalyticalElbowPose(malformedProcessGeometry, { flexionDegrees: 35 }),
+  /skeletal process olecranon-process has invalid geometry/,
+);
+
+const malformedProcessAttachment = structuredClone(descriptor);
+processById(
+  segmentById(malformedProcessAttachment, 'ulna'),
+  'olecranon-process',
+).attachmentId = 'brachialis-origin';
+assert.throws(
+  () => solveAnalyticalElbowPose(malformedProcessAttachment, { flexionDegrees: 35 }),
+  /skeletal process olecranon-process attachment brachialis-origin belongs to humerus, expected ulna/,
+);
+
+const detachedProcessTip = structuredClone(descriptor);
+processById(
+  segmentById(detachedProcessTip, 'ulna'),
+  'olecranon-process',
+).localEnd = [-0.28, 0.24, 0];
+assert.throws(
+  () => solveAnalyticalElbowPose(detachedProcessTip, { flexionDegrees: 35 }),
+  /skeletal process olecranon-process does not terminate at attachment triceps-insertion/,
+);
+
 const overflowing = structuredClone(descriptor);
 overflowing.muscles[0].routing.lateralOffset = Number.MAX_VALUE;
 assert.throws(
@@ -198,10 +260,24 @@ for (const pose of poses) {
 }
 
 const flexed = poses.at(-1);
-const flexedUlna = flexed.segments.find(segment => segment.id === 'ulna');
-assert.ok(flexedUlna);
+const flexedUlna = segmentById(flexed, 'ulna');
 const expectedInsertion = flexedUlna.attachments.find(
   attachment => attachment.id === 'brachialis-insertion',
+);
+
+const flexedOlecranon = processById(flexedUlna, 'olecranon-process');
+const expectedTricepsInsertion = flexedUlna.attachments.find(
+  attachment => attachment.id === 'triceps-insertion',
+);
+assert.ok(expectedTricepsInsertion);
+assert.ok(
+  distance(flexedOlecranon.worldEnd, expectedTricepsInsertion.worldPosition) < 1e-12,
+  'posed olecranon tip must remain coincident with the triceps insertion',
+);
+assert.notDeepEqual(
+  processById(segmentById(extension, 'ulna'), 'olecranon-process').worldStart,
+  flexedOlecranon.worldStart,
+  'ulna-owned olecranon process did not articulate with the ulna',
 );
 assert.ok(expectedInsertion);
 assert.ok(

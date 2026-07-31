@@ -43,7 +43,8 @@ function renderHtml({ consumerExport, report }) {
     canvas { display:block; width:100%; height:100%; touch-action:none; }
     .legend { position:absolute; top:16px; left:18px; display:grid; gap:7px; margin:0; padding:0; list-style:none; pointer-events:none; color:#d9dfda; font-size:11px; text-shadow:0 1px 2px #000; }
     .legend span { display:inline-block; width:12px; height:12px; margin-right:8px; border:1px solid #ffffff55; vertical-align:-2px; }
-    .bone { background:#e8dcc1; }
+    .humerus { background:#e8dcc1; }
+    .ulna { background:#cbd8ca; }
     .flexor { background:#58b7a3; }
     .extensor { background:#df735f; }
     .attachment { background:#e3bd55; border-radius:50%; }
@@ -80,7 +81,8 @@ function renderHtml({ consumerExport, report }) {
     </header>
     <section class="viewport" aria-label="Orbitable analytical elbow">
       <ul class="legend">
-        <li><span class="bone"></span>authored bone stubs</li>
+        <li><span class="humerus"></span>humerus</li>
+        <li><span class="ulna"></span>ulna + olecranon</li>
         <li><span class="flexor"></span>brachialis-like flexor</li>
         <li><span class="extensor"></span>triceps-like extensor</li>
         <li><span class="attachment"></span>attachment authority</li>
@@ -139,7 +141,10 @@ function renderHtml({ consumerExport, report }) {
     ground.position.y = -1.66;
     scene.add(ground);
 
-    const boneMaterial = new THREE.MeshStandardMaterial({ color:0xe8dcc1, roughness:0.72, metalness:0.02 });
+    const boneMaterials = {
+      humerus: new THREE.MeshStandardMaterial({ color:0xe8dcc1, roughness:0.72, metalness:0.02 }),
+      ulna: new THREE.MeshStandardMaterial({ color:0xcbd8ca, roughness:0.72, metalness:0.02 }),
+    };
     const jointMaterial = new THREE.MeshStandardMaterial({ color:0x7f8b83, roughness:0.58, transparent:true, opacity:0.5 });
     const attachmentMaterial = new THREE.MeshStandardMaterial({ color:0xe3bd55, roughness:0.42, emissive:0x49350b, emissiveIntensity:0.35 });
     const muscleMaterials = {
@@ -194,12 +199,21 @@ function renderHtml({ consumerExport, report }) {
       const pose = data.poses[index];
       poseGroup = new THREE.Group();
       for (const segment of pose.segments) {
+        const boneMaterial = boneMaterials[segment.id];
         poseGroup.add(capsuleBetween(
           segment.bone.worldStart,
           segment.bone.worldEnd,
           segment.bone.protectedCoreRadius,
           boneMaterial,
         ));
+        for (const process of segment.processes) {
+          poseGroup.add(capsuleBetween(
+            process.worldStart,
+            process.worldEnd,
+            process.radius,
+            boneMaterial,
+          ));
+        }
         for (const attachment of segment.attachments) {
           const marker = new THREE.Mesh(new THREE.SphereGeometry(0.055, 18, 12), attachmentMaterial);
           marker.position.copy(vector(attachment.worldPosition));
