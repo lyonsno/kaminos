@@ -687,6 +687,52 @@ def test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_id
         assert json.loads(failure_path.read_text())["ok"] is False
 
 
+def test_webgpu_queue_publication_post_replace_fsync_failure_preserves_effective_state():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "queue-publications"
+        target = root / "sharp" / "live.json"
+        document = {
+            "schema": "kaminos.webgpu-inference-queue-publication.v0",
+            "producer": {"instanceId": "browser-session-post-replace"},
+            "effectiveRoute": {"routeId": "sharp.image-to-splat.webgpu-local.v0"},
+            "queue": {
+                "schema": "kaminos.webgpu-inference-queue.v0",
+                "routeId": "sharp.image-to-splat.webgpu-local.v0",
+            },
+        }
+        original_fsync = serve.os.fsync
+        fsync_calls = 0
+
+        def fail_directory_fsync_once(file_descriptor):
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == 2:
+                raise OSError("injected directory fsync failure")
+            return original_fsync(file_descriptor)
+
+        serve.os.fsync = fail_directory_fsync_once
+        try:
+            receipt = serve.write_webgpu_queue_publication(
+                {"path": "sharp/live.json", "document": document},
+                root=root,
+            )
+        finally:
+            serve.os.fsync = original_fsync
+
+        body = (json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "directory-fsync"
+        assert receipt["atomicReplace"] is True
+        assert receipt["effectivePath"] == "sharp/live.json"
+        assert receipt["path"] == str(target.resolve())
+        assert receipt["bytes"] == len(body)
+        assert receipt["sha256"] == serve.hashlib.sha256(body).hexdigest()
+        assert json.loads(target.read_text()) == document
+        failure_report = json.loads(Path(receipt["failureReportPath"]).read_text())
+        assert failure_report["phase"] == "directory-fsync"
+        assert failure_report["atomicReplace"] is True
+
+
 def _invoke_webgpu_queue_publication_handler(content_length, body):
     handler = KaminosHandler.__new__(KaminosHandler)
     handler.headers = {"Content-Length": content_length}
@@ -717,6 +763,22 @@ def test_webgpu_queue_publication_invalid_content_length_writes_durable_failure_
         failure_path = Path(receipt["failureReportPath"])
         assert failure_path.is_file()
         assert json.loads(failure_path.read_text())["phase"] == "content-length-validation"
+
+
+def test_webgpu_queue_publication_negative_content_length_writes_durable_failure_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_root = serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR
+        serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = Path(tmp) / "queue-publications"
+        try:
+            receipt, status = _invoke_webgpu_queue_publication_handler("-1", b"")
+        finally:
+            serve.KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR = previous_root
+
+        assert status == 400
+        assert receipt["ok"] is False
+        assert receipt["phase"] == "content-length-validation"
+        assert receipt["failure"]["message"] == "Content-Length must not be negative"
+        assert Path(receipt["failureReportPath"]).is_file()
 
 
 def test_webgpu_queue_publication_invalid_json_writes_durable_failure_report():
@@ -763,5 +825,7 @@ if __name__ == "__main__":
     test_webgpu_queue_publication_is_atomic_and_caller_scoped()
     test_webgpu_queue_publication_rejects_traversal_without_silent_default()
     test_webgpu_queue_publication_failure_preserves_last_trustworthy_document_identity()
+    test_webgpu_queue_publication_post_replace_fsync_failure_preserves_effective_state()
     test_webgpu_queue_publication_invalid_content_length_writes_durable_failure_report()
+    test_webgpu_queue_publication_negative_content_length_writes_durable_failure_report()
     test_webgpu_queue_publication_invalid_json_writes_durable_failure_report()

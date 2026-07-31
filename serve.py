@@ -89,6 +89,17 @@ FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_DIAULOS_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-state/epistaxis/metadosis/diaulos-registry/diauloi.json"),
 )).expanduser()
+
+
+class _AtomicJsonWriteError(OSError):
+    def __init__(self, message, *, phase, atomic_replace, target, write_identity):
+        super().__init__(message)
+        self.phase = phase
+        self.atomic_replace = atomic_replace
+        self.target = str(target)
+        self.write_identity = dict(write_identity)
+
+
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -943,6 +954,10 @@ def _atomic_write_json(path, document):
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     body = (json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+    write_identity = {
+        "bytes": len(body),
+        "sha256": hashlib.sha256(body).hexdigest(),
+    }
     temporary_path = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -958,18 +973,24 @@ def _atomic_write_json(path, document):
             os.fsync(handle.fileno())
         os.replace(temporary_path, target)
         temporary_path = None
-        directory_fd = os.open(target.parent, os.O_RDONLY)
         try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+            directory_fd = os.open(target.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except Exception as error:
+            raise _AtomicJsonWriteError(
+                f"directory fsync failed after atomic replacement: {error}",
+                phase="directory-fsync",
+                atomic_replace=True,
+                target=target,
+                write_identity=write_identity,
+            ) from error
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
-    return {
-        "bytes": len(body),
-        "sha256": hashlib.sha256(body).hexdigest(),
-    }
+    return write_identity
 
 
 def _resolve_webgpu_queue_publication_path(requested_path, root):
@@ -1046,6 +1067,9 @@ def write_webgpu_queue_publication_failure(
     requested_path=None,
     effective_path=None,
     identity=None,
+    atomic_replace=False,
+    target_path=None,
+    write_identity=None,
 ):
     publication_root = KAMINOS_WEBGPU_QUEUE_PUBLICATION_DIR if root is None else root
     trustworthy_identity = dict(identity or _queue_publication_identity(None))
@@ -1065,9 +1089,16 @@ def write_webgpu_queue_publication_failure(
             "message": str(error),
         },
         "lastTrustworthyEvidence": trustworthy_identity,
-        "atomicReplace": False,
+        "atomicReplace": bool(atomic_replace),
         "deletionAuthority": "none",
     }
+    if target_path is not None:
+        receipt["path"] = str(target_path)
+    if write_identity:
+        receipt.update({
+            "bytes": write_identity.get("bytes"),
+            "sha256": write_identity.get("sha256"),
+        })
     try:
         failure_path = _write_queue_publication_failure(publication_root, receipt)
         receipt["failureReportPath"] = str(failure_path)
@@ -1114,11 +1145,14 @@ def write_webgpu_queue_publication(payload, root=KAMINOS_WEBGPU_QUEUE_PUBLICATIO
     except Exception as error:
         return write_webgpu_queue_publication_failure(
             error,
-            phase,
+            getattr(error, "phase", phase),
             root=root,
             requested_path=requested_path,
             effective_path=effective_path,
             identity=identity,
+            atomic_replace=getattr(error, "atomic_replace", False),
+            target_path=getattr(error, "target", None),
+            write_identity=getattr(error, "write_identity", None),
         )
 
 
