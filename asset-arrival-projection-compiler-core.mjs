@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   mkdir,
   readFile,
@@ -268,24 +268,44 @@ async function atomicWriteJson(path, value) {
   await rename(temporary, path);
 }
 
-async function publishDirectory(stagingDir, outDir) {
-  const backup = `${outDir}.backup-${process.pid}-${Date.now()}`;
-  const hadPrior = await pathExists(outDir);
-  if (hadPrior) await rename(outDir, backup);
-  try {
-    await rename(stagingDir, outDir);
-  } catch (error) {
-    if (hadPrior && await pathExists(backup)) await rename(backup, outDir);
-    throw error;
-  }
-  if (hadPrior) await rm(backup, { recursive: true, force: true });
+async function publishVersion({
+  stagingDir,
+  outDir,
+  publicationId,
+  reportSha256,
+  sourceReceiptId,
+  requestedRouteId,
+  failurePath,
+}) {
+  const relativeVersionPath = join('versions', publicationId);
+  const versionPath = join(outDir, relativeVersionPath);
+  await mkdir(dirname(versionPath), { recursive: true });
+  if (await pathExists(versionPath)) throw new Error(`publication identity already exists: ${publicationId}`);
+  await rename(stagingDir, versionPath);
+
+  // The current pointer is the sole mutable admission surface. An orphaned
+  // immutable version is harmless if interruption occurs before this rename.
+  await rm(failurePath, { force: true });
+  const current = {
+    schema: 'kaminos.asset-arrival-projection-current.v0',
+    status: 'published',
+    publicationId,
+    relativeVersionPath,
+    reportPath: join(relativeVersionPath, 'projection-report.json'),
+    reportSha256,
+    sourceReceiptId,
+    requestedRouteId,
+  };
+  await atomicWriteJson(join(outDir, 'current.json'), current);
+  return current;
 }
 
-function failureReceipt({ source, outDir, phase, error, lastTrustworthyEvidence }) {
+function failureReceipt({ source, outDir, attemptId, phase, error, lastTrustworthyEvidence }) {
   return {
     schema: ASSET_ARRIVAL_FAILURE_SCHEMA,
     compilerId: COMPILER_ID,
     status: 'failed',
+    attemptId,
     trackId: source?.trackId ?? null,
     sourceReceiptId: source?.receiptId ?? null,
     assetId: source?.asset?.id ?? null,
@@ -317,6 +337,27 @@ export function validateAssetArrivalProjectionReport(report) {
     || expectedIds.some(id => !cells.some(cell => cell?.id === id))) {
     fail('six-cell matrix is incomplete or duplicated');
   }
+  const variantReceipts = Array.isArray(report?.route?.variantReceipts)
+    ? report.route.variantReceipts
+    : [];
+  if (variantReceipts.length !== VARIANTS.length
+    || new Set(variantReceipts.map(receipt => receipt?.variant)).size !== VARIANTS.length
+    || VARIANTS.some(variant => !variantReceipts.some(receipt => receipt?.variant === variant))) {
+    fail('variant route receipt matrix is incomplete or duplicated');
+  }
+  for (const variant of VARIANTS) {
+    const receipt = variantReceipts.find(candidate => candidate?.variant === variant);
+    const sourceHash = cells.find(cell => cell?.id === `L_${variant}`)?.sourceInputHash;
+    if (receipt?.requestedRouteId !== report?.route?.requestedRouteId
+      || receipt?.effectiveRouteId !== report?.route?.requestedRouteId) {
+      fail(`${variant} variant route identity mismatch`);
+    }
+    if (receipt?.sourceInputHash !== sourceHash) fail(`${variant} variant source hash mismatch`);
+    if (receipt?.cameraHash !== report?.source?.cameraSha256) fail(`${variant} variant camera hash mismatch`);
+    if (receipt?.productConfigHash !== report?.route?.productConfigHash) {
+      fail(`${variant} variant product config hash mismatch`);
+    }
+  }
   for (const variant of VARIANTS) {
     const low = cells.find(cell => cell?.id === `L_${variant}`);
     const high = cells.find(cell => cell?.id === `H_${variant}`);
@@ -344,6 +385,7 @@ export async function compileAssetArrivalProjections({ source, outDir, renderVar
   if (typeof renderVariant !== 'function') throw new Error('renderVariant adapter is required');
   let phase = 'source-validation';
   let stagingDir = null;
+  const attemptId = `projection-${randomUUID()}`;
   let lastTrustworthyEvidence = 'no source receipt admitted';
   const failurePath = `${outDir}.failure.json`;
   try {
@@ -356,7 +398,8 @@ export async function compileAssetArrivalProjections({ source, outDir, renderVar
       productKinds: plan.productKinds,
       roleRegistry: plan.roleRegistry,
     });
-    stagingDir = `${outDir}.staging-${process.pid}-${Date.now()}`;
+    const publicationId = attemptId;
+    stagingDir = `${outDir}.staging-${publicationId}`;
     await mkdir(stagingDir, { recursive: false });
     const projections = new Map();
     const routeReceipts = [];
@@ -447,6 +490,7 @@ export async function compileAssetArrivalProjections({ source, outDir, renderVar
       compilerId: COMPILER_ID,
       status: 'published',
       trackId: RELATIONAL_TRACK_ID,
+      publicationId,
       sourceReceiptId: source.receiptId,
       assetId: source.asset.id,
       source: {
@@ -469,16 +513,26 @@ export async function compileAssetArrivalProjections({ source, outDir, renderVar
     };
     const validation = validateAssetArrivalProjectionReport(report);
     if (!validation.ok) throw new Error(`compiled report failed validation: ${validation.failures.join('; ')}`);
-    await atomicWriteJson(join(stagingDir, 'projection-report.json'), report);
-    await publishDirectory(stagingDir, outDir);
+    const reportPath = join(stagingDir, 'projection-report.json');
+    await atomicWriteJson(reportPath, report);
+    const reportSha256 = sha256(await readFile(reportPath));
+    await publishVersion({
+      stagingDir,
+      outDir,
+      publicationId,
+      reportSha256,
+      sourceReceiptId: source.receiptId,
+      requestedRouteId: plan.requestedRouteId,
+      failurePath,
+    });
     stagingDir = null;
-    await rm(failurePath, { force: true });
     return report;
   } catch (error) {
     if (stagingDir) await rm(stagingDir, { recursive: true, force: true });
     await atomicWriteJson(failurePath, failureReceipt({
       source,
       outDir,
+      attemptId,
       phase,
       error,
       lastTrustworthyEvidence,
