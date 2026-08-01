@@ -12,6 +12,7 @@ import {
   compileAssetArrivalProjections,
   validateAssetArrivalProjectionReport,
 } from '../asset-arrival-projection-compiler-core.mjs';
+import { createPng } from './png-fixture.mjs';
 
 const hash = digit => digit.repeat(64);
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -21,6 +22,13 @@ const identity = [
   0, 0, 1, 0,
   0, 0, 0, 1,
 ];
+const sourceChecks = () => ({
+  occupiedFit: true,
+  rigidClearance: true,
+  attachmentContinuity: true,
+  distalSupportFixed: true,
+  conservativeSweep: true,
+});
 
 function sourceReceipt() {
   const roleIds = [
@@ -35,6 +43,7 @@ function sourceReceipt() {
     schema: ASSET_ARRIVAL_SOURCE_SCHEMA,
     trackId: 'generator-relational-sensitivity',
     receiptId: 'operator-hip-arrival-001',
+    numericTolerance: 1e-9,
     asset: {
       id: 'relational-hip-fixture-v0',
       blendPath: '/authored/relational-hip-fixture-v0.blend',
@@ -76,21 +85,21 @@ function sourceReceipt() {
         sourceSceneId: 'scene-parent',
         sourceInputHash: hash('c'),
         sourceSpillover: 0,
-        sourceChecks: { relationAddressable: true, cameraFrozen: true, unrelatedPartsFrozen: true },
+        sourceChecks: sourceChecks(),
       },
       positive: {
         relationValue: 0.125,
         sourceSceneId: 'scene-positive',
         sourceInputHash: hash('d'),
         sourceSpillover: 0,
-        sourceChecks: { relationAddressable: true, cameraFrozen: true, unrelatedPartsFrozen: true },
+        sourceChecks: sourceChecks(),
       },
       negative: {
         relationValue: -0.125,
         sourceSceneId: 'scene-negative',
         sourceInputHash: hash('e'),
         sourceSpillover: 0,
-        sourceChecks: { relationAddressable: true, cameraFrozen: true, unrelatedPartsFrozen: true },
+        sourceChecks: sourceChecks(),
       },
     },
     roleRegistry: roleIds.map((roleId, index) => ({
@@ -116,7 +125,7 @@ function renderer(overrides = {}) {
       mimeType: 'image/png',
       width: request.camera.width,
       height: request.camera.height,
-      bytes: Buffer.from(`valid-${request.variant}-${kind}`),
+      bytes: createPng(request.camera.width, request.camera.height, kind.length * 31),
     })),
     ...overrides,
   });
@@ -254,7 +263,7 @@ test('compiler rejects stale source echoes and hidden output caps', async () => 
         mimeType: 'image/png',
         width: 128,
         height: 128,
-        bytes: Buffer.from(`capped-${kind}`),
+        bytes: createPng(128, 128, kind.length * 31),
       })),
     }, /dimensions do not match requested camera/],
   ]) {
@@ -276,14 +285,14 @@ test('compiler rejects stale source echoes and hidden output caps', async () => 
 test('compiler rejects missing and blank products without publishing a partial result', async () => {
   for (const [name, products, message] of [
     ['missing', [
-      { kind: 'clay', mimeType: 'image/png', width: 384, height: 384, bytes: Buffer.from('clay') },
+      { kind: 'clay', mimeType: 'image/png', width: 384, height: 384, bytes: createPng(384, 384) },
     ], /product set is incomplete/],
     ['blank', ['clay', 'depth', 'normal', 'semantic-role-mask'].map(kind => ({
       kind,
       mimeType: 'image/png',
       width: 384,
       height: 384,
-      bytes: kind === 'depth' ? Buffer.alloc(0) : Buffer.from(kind),
+      bytes: kind === 'depth' ? Buffer.alloc(0) : createPng(384, 384, kind.length * 31),
     })), /depth product is blank/],
   ]) {
     const root = await mkdtemp(join(tmpdir(), `asset-arrival-${name}-`));
@@ -298,6 +307,70 @@ test('compiler rejects missing and blank products without publishing a partial r
     );
     await assert.rejects(stat(outDir));
   }
+});
+
+test('compiler rejects non-PNG bytes that merely claim image/png', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'asset-arrival-fake-png-'));
+  const outDir = join(root, 'compiled');
+  await assert.rejects(
+    compileAssetArrivalProjections({
+      source: sourceReceipt(),
+      outDir,
+      renderVariant: async request => ({
+        effectiveRouteId: request.requestedRouteId,
+        sourceInputHash: request.sourceInputHash,
+        cameraHash: request.camera.cameraSha256,
+        productConfigHash: request.productConfigHash,
+        products: request.productKinds.map(kind => ({
+          kind,
+          mimeType: 'image/png',
+          width: 384,
+          height: 384,
+          bytes: Buffer.from(`not-a-png-${kind}`),
+        })),
+      }),
+    }),
+    /PNG/,
+  );
+  const failure = JSON.parse(await readFile(`${outDir}.failure.json`, 'utf8'));
+  assert.equal(failure.failure.phase, 'product-validation');
+});
+
+test('compiler rejects PNG products whose chunk checksum does not authenticate their bytes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'asset-arrival-bad-png-checksum-'));
+  const outDir = join(root, 'compiled');
+  await assert.rejects(
+    compileAssetArrivalProjections({
+      source: sourceReceipt(),
+      outDir,
+      renderVariant: async request => ({
+        effectiveRouteId: request.requestedRouteId,
+        sourceInputHash: request.sourceInputHash,
+        cameraHash: request.camera.cameraSha256,
+        productConfigHash: request.productConfigHash,
+        products: request.productKinds.map(kind => {
+          const bytes = Buffer.from(createPng(384, 384, kind.length * 31));
+          bytes[bytes.length - 1] ^= 0xff;
+          return { kind, mimeType: 'image/png', width: 384, height: 384, bytes };
+        }),
+      }),
+    }),
+    /checksum/,
+  );
+  const failure = JSON.parse(await readFile(`${outDir}.failure.json`, 'utf8'));
+  assert.equal(failure.failure.phase, 'product-validation');
+});
+
+test('compiler writes a durable failure receipt when the render adapter is absent', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'asset-arrival-missing-adapter-'));
+  const outDir = join(root, 'compiled');
+  await assert.rejects(
+    compileAssetArrivalProjections({ source: sourceReceipt(), outDir }),
+    /renderVariant adapter is required/,
+  );
+  const failure = JSON.parse(await readFile(`${outDir}.failure.json`, 'utf8'));
+  assert.equal(failure.failure.phase, 'render-dispatch');
+  assert.match(failure.lastTrustworthyEvidence, /source receipt/);
 });
 
 test('successful rerun atomically replaces stale output', async () => {

@@ -8,6 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 export const ASSET_ARRIVAL_SOURCE_SCHEMA = 'kaminos.asset-arrival-source.v0';
 export const ASSET_ARRIVAL_PROJECTION_PLAN_SCHEMA = 'kaminos.asset-arrival-projection-plan.v0';
@@ -21,6 +22,13 @@ const RUNGS = Object.freeze(['L', 'H']);
 const BASE_PRODUCTS = Object.freeze(['clay', 'depth', 'normal']);
 const ROLE_MASK = 'semantic-role-mask';
 const RELATIONAL_TRACK_ID = 'generator-relational-sensitivity';
+const REQUIRED_SOURCE_CHECKS = Object.freeze([
+  'occupiedFit',
+  'rigidClearance',
+  'attachmentContinuity',
+  'distalSupportFixed',
+  'conservativeSweep',
+]);
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -38,6 +46,11 @@ function hashJson(value) {
 
 function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function sameFiniteScalar(left, right, tolerance) {
+  if (!finite(left) || !finite(right)) return false;
+  return Math.abs(left - right) <= tolerance;
 }
 
 function requireHash(value, label) {
@@ -65,6 +78,9 @@ function assertSourceReceipt(source) {
   requireString(source.asset?.id, 'asset id');
   requireString(source.asset?.blendPath, 'authored blend path');
   requireHash(source.asset?.blendSha256, 'authored blend hash');
+  if (!finite(source.numericTolerance) || source.numericTolerance < 0) {
+    throw new Error('source numeric tolerance must be finite and non-negative');
+  }
 
   if (!Array.isArray(source.parts)) throw new Error('semantic parts are required');
   const roleIds = source.parts.map(part => part?.roleId);
@@ -115,7 +131,7 @@ function assertSourceReceipt(source) {
   const roomAbove = relation.upperBound - relation.parentValue;
   const roomBelow = relation.parentValue - relation.lowerBound;
   const admittedDelta = Math.min(relation.maxDelta, 0.5 * Math.min(roomAbove, roomBelow));
-  if (!(relation.delta > 0) || relation.delta !== admittedDelta) {
+  if (!(relation.delta > 0) || !sameFiniteScalar(relation.delta, admittedDelta, source.numericTolerance)) {
     throw new Error('relation delta does not match the bounded symmetric assay rule');
   }
 
@@ -127,7 +143,7 @@ function assertSourceReceipt(source) {
   for (const variant of VARIANTS) {
     const item = source.variants?.[variant];
     if (!item) throw new Error(`missing ${variant} source variant`);
-    if (item.relationValue !== expected[variant]) {
+    if (!sameFiniteScalar(item.relationValue, expected[variant], source.numericTolerance)) {
       throw new Error(`${variant} relation value does not match the authored signed relation`);
     }
     requireString(item.sourceSceneId, `${variant} source scene id`);
@@ -135,8 +151,10 @@ function assertSourceReceipt(source) {
     if (!finite(item.sourceSpillover) || item.sourceSpillover < 0) {
       throw new Error(`${variant} source spillover must be non-negative`);
     }
-    const checks = Object.values(item.sourceChecks ?? {});
-    if (checks.length === 0 || checks.some(value => value !== true)) {
+    const checkNames = Object.keys(item.sourceChecks ?? {});
+    if (checkNames.length !== REQUIRED_SOURCE_CHECKS.length
+      || REQUIRED_SOURCE_CHECKS.some(name => item.sourceChecks?.[name] !== true)
+      || checkNames.some(name => !REQUIRED_SOURCE_CHECKS.includes(name))) {
       throw new Error(`${variant} source predecessor checks did not all pass`);
     }
   }
@@ -207,6 +225,7 @@ export function buildAssetArrivalProjectionPlan(source) {
       bridgeDecisionOwner: 'composition-owner',
     },
     sourceReceiptId: source.receiptId,
+    numericTolerance: source.numericTolerance,
     asset: structuredClone(source.asset),
     camera: structuredClone(source.camera),
     relation: structuredClone(source.relation),
@@ -216,6 +235,92 @@ export function buildAssetArrivalProjectionPlan(source) {
     productKinds: [...BASE_PRODUCTS, ROLE_MASK],
     cells,
   };
+}
+
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function validatePng(bytes, expectedWidth, expectedHeight, label) {
+  const data = Buffer.from(bytes);
+  if (data.length < PNG_SIGNATURE.length || !data.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    throw new Error(`${label} product has an invalid PNG signature`);
+  }
+  let offset = 8;
+  let width = null;
+  let height = null;
+  let bitDepth = null;
+  let colorType = null;
+  let interlace = null;
+  let sawIhdr = false;
+  let sawIend = false;
+  const idat = [];
+  while (offset < data.length) {
+    if (offset + 12 > data.length) throw new Error(`${label} product has a truncated PNG chunk`);
+    const length = data.readUInt32BE(offset);
+    const type = data.toString('ascii', offset + 4, offset + 8);
+    const chunkStart = offset + 8;
+    const chunkEnd = chunkStart + length;
+    if (chunkEnd + 4 > data.length) throw new Error(`${label} product has a truncated PNG chunk`);
+    const expectedCrc = data.readUInt32BE(chunkEnd);
+    const actualCrc = pngCrc32(data.subarray(offset + 4, chunkEnd));
+    if (actualCrc !== expectedCrc) throw new Error(`${label} product has an invalid PNG chunk checksum`);
+    if (!sawIhdr && type !== 'IHDR') throw new Error(`${label} product PNG does not start with IHDR`);
+    if (type === 'IHDR') {
+      if (sawIhdr || length !== 13) throw new Error(`${label} product has an invalid PNG IHDR`);
+      sawIhdr = true;
+      width = data.readUInt32BE(chunkStart);
+      height = data.readUInt32BE(chunkStart + 4);
+      bitDepth = data[chunkStart + 8];
+      colorType = data[chunkStart + 9];
+      const compression = data[chunkStart + 10];
+      const filter = data[chunkStart + 11];
+      interlace = data[chunkStart + 12];
+      if (compression !== 0 || filter !== 0 || interlace !== 0) {
+        throw new Error(`${label} product uses an unsupported PNG encoding`);
+      }
+    } else if (type === 'IDAT') {
+      idat.push(data.subarray(chunkStart, chunkEnd));
+    } else if (type === 'IEND') {
+      if (length !== 0) throw new Error(`${label} product has an invalid PNG IEND`);
+      sawIend = true;
+      offset = chunkEnd + 4;
+      break;
+    }
+    offset = chunkEnd + 4;
+  }
+  if (!sawIhdr || !sawIend || idat.length === 0 || offset !== data.length) {
+    throw new Error(`${label} product has an incomplete PNG chunk stream`);
+  }
+  if (width !== expectedWidth || height !== expectedHeight) {
+    throw new Error(`${label} product decoded PNG dimensions do not match requested camera`);
+  }
+  const channels = new Map([[0, 1], [2, 3], [3, 1], [4, 2], [6, 4]]).get(colorType);
+  const allowedBitDepths = colorType === 3 ? [1, 2, 4, 8] : (colorType === 0 ? [1, 2, 4, 8, 16] : [8, 16]);
+  if (!channels || !allowedBitDepths.includes(bitDepth)) {
+    throw new Error(`${label} product uses an unsupported PNG color mode`);
+  }
+  let decoded;
+  try {
+    decoded = inflateSync(Buffer.concat(idat));
+  } catch {
+    throw new Error(`${label} product PNG pixel stream is not decodable`);
+  }
+  const rowBytes = Math.ceil(width * channels * bitDepth / 8);
+  const expectedBytes = height * (rowBytes + 1);
+  if (decoded.length !== expectedBytes) throw new Error(`${label} product PNG pixel stream has the wrong size`);
+  for (let row = 0; row < height; row += 1) {
+    if (decoded[row * (rowBytes + 1)] > 4) throw new Error(`${label} product PNG uses an invalid row filter`);
+  }
 }
 
 function validateRenderedVariant(result, request) {
@@ -248,6 +353,7 @@ function validateRenderedVariant(result, request) {
     if (!(product.bytes instanceof Uint8Array) || product.bytes.byteLength === 0) {
       throw new Error(`${product.kind} product is blank`);
     }
+    validatePng(product.bytes, request.camera.width, request.camera.height, product.kind);
   }
 }
 
@@ -385,7 +491,6 @@ export function validateAssetArrivalProjectionReport(report) {
 
 export async function compileAssetArrivalProjections({ source, outDir, renderVariant }) {
   if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('output directory is required');
-  if (typeof renderVariant !== 'function') throw new Error('renderVariant adapter is required');
   let phase = 'source-validation';
   let stagingDir = null;
   const attemptId = `projection-${randomUUID()}`;
@@ -395,6 +500,11 @@ export async function compileAssetArrivalProjections({ source, outDir, renderVar
     const plan = buildAssetArrivalProjectionPlan(source);
     lastTrustworthyEvidence = 'source receipt, named parts, signed relation, and fixed camera admitted';
     phase = 'manifest-construction';
+    if (typeof renderVariant !== 'function') {
+      const error = new Error('renderVariant adapter is required');
+      error.failurePhase = 'render-dispatch';
+      throw error;
+    }
     const productConfigHash = hashJson({
       compilerId: COMPILER_ID,
       camera: plan.camera,
