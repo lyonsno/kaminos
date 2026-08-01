@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +14,7 @@ import {
 } from '../asset-arrival-projection-compiler-core.mjs';
 
 const hash = digit => digit.repeat(64);
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const identity = [
   1, 0, 0, 0,
   0, 1, 0, 0,
@@ -177,6 +179,7 @@ test('compiler publishes base-identical L/H products and one H-only role mask', 
   assert.equal(report.status, 'published');
   assert.equal(report.projectionInvocations, 3);
   assert.equal(report.cells.length, 6);
+  assert.match(report.publicationId, /^projection-[a-f0-9-]+$/);
   for (const variant of ['parent', 'positive', 'negative']) {
     const low = report.cells.find(cell => cell.id === `L_${variant}`);
     const high = report.cells.find(cell => cell.id === `H_${variant}`);
@@ -192,7 +195,34 @@ test('compiler publishes base-identical L/H products and one H-only role mask', 
     }
   }
   assert.equal(validateAssetArrivalProjectionReport(report).ok, true);
-  assert.equal(JSON.parse(await readFile(join(outDir, 'projection-report.json'), 'utf8')).status, 'published');
+  const current = JSON.parse(await readFile(join(outDir, 'current.json'), 'utf8'));
+  assert.equal(current.publicationId, report.publicationId);
+  assert.equal(current.reportSha256, digest(await readFile(join(outDir, current.reportPath))));
+  assert.equal(
+    JSON.parse(await readFile(join(outDir, current.reportPath), 'utf8')).status,
+    'published',
+  );
+});
+
+test('report validator binds all three renderer receipts to source, camera, config, and route', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'asset-arrival-receipts-'));
+  const report = await compileAssetArrivalProjections({
+    source: sourceReceipt(),
+    outDir: join(root, 'compiled'),
+    renderVariant: renderer(),
+  });
+  for (const mutate of [
+    candidate => { candidate.route.variantReceipts.pop(); },
+    candidate => { candidate.route.variantReceipts[0].variant = 'positive'; },
+    candidate => { candidate.route.variantReceipts[0].effectiveRouteId = 'fallback'; },
+    candidate => { candidate.route.variantReceipts[0].sourceInputHash = hash('f'); },
+    candidate => { candidate.route.variantReceipts[0].cameraHash = hash('f'); },
+    candidate => { candidate.route.variantReceipts[0].productConfigHash = hash('f'); },
+  ]) {
+    const corrupted = structuredClone(report);
+    mutate(corrupted);
+    assert.equal(validateAssetArrivalProjectionReport(corrupted).ok, false);
+  }
 });
 
 test('compiler fails loud when effective route falls back', async () => {
@@ -270,11 +300,36 @@ test('compiler rejects missing and blank products without publishing a partial r
 test('successful rerun atomically replaces stale output', async () => {
   const root = await mkdtemp(join(tmpdir(), 'asset-arrival-rerun-'));
   const outDir = join(root, 'compiled');
-  await compileAssetArrivalProjections({ source: sourceReceipt(), outDir, renderVariant: renderer() });
-  await writeFile(join(outDir, 'stale.txt'), 'must disappear');
-  await compileAssetArrivalProjections({ source: sourceReceipt(), outDir, renderVariant: renderer() });
-  await assert.rejects(readFile(join(outDir, 'stale.txt')));
+  const first = await compileAssetArrivalProjections({ source: sourceReceipt(), outDir, renderVariant: renderer() });
+  const firstPointer = JSON.parse(await readFile(join(outDir, 'current.json'), 'utf8'));
+  await writeFile(join(outDir, firstPointer.relativeVersionPath, 'stale.txt'), 'must remain historical');
+  const second = await compileAssetArrivalProjections({ source: sourceReceipt(), outDir, renderVariant: renderer() });
+  const secondPointer = JSON.parse(await readFile(join(outDir, 'current.json'), 'utf8'));
+  assert.notEqual(first.publicationId, second.publicationId);
+  assert.equal(secondPointer.publicationId, second.publicationId);
+  await assert.rejects(readFile(join(outDir, secondPointer.relativeVersionPath, 'stale.txt')));
+  assert.equal(await readFile(join(outDir, firstPointer.relativeVersionPath, 'stale.txt'), 'utf8'), 'must remain historical');
   assert.equal(validateAssetArrivalProjectionReport(
-    JSON.parse(await readFile(join(outDir, 'projection-report.json'), 'utf8')),
+    JSON.parse(await readFile(join(outDir, secondPointer.reportPath), 'utf8')),
   ).ok, true);
+});
+
+test('failed rerun preserves the previously admitted current publication', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'asset-arrival-preserve-current-'));
+  const outDir = join(root, 'compiled');
+  await compileAssetArrivalProjections({ source: sourceReceipt(), outDir, renderVariant: renderer() });
+  const before = await readFile(join(outDir, 'current.json'), 'utf8');
+  await assert.rejects(
+    compileAssetArrivalProjections({
+      source: sourceReceipt(),
+      outDir,
+      renderVariant: renderer({ effectiveRouteId: 'fallback-route' }),
+    }),
+    /effective route mismatch/,
+  );
+  assert.equal(await readFile(join(outDir, 'current.json'), 'utf8'), before);
+  const current = JSON.parse(before);
+  const failure = JSON.parse(await readFile(`${outDir}.failure.json`, 'utf8'));
+  assert.notEqual(failure.attemptId, current.publicationId);
+  assert.equal(failure.failure.phase, 'render-dispatch');
 });

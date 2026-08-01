@@ -41,7 +41,9 @@ Each product records relative path, MIME type, dimensions, byte size, and SHA-25
 
 ## Publication And Failure
 
-Compilation occurs in a sibling staging directory. A complete validated result atomically replaces the caller's output directory; a rerun removes stale products. A failed run leaves no partial output directory and atomically writes `<outDir>.failure.json` with the last trustworthy evidence and one exact phase:
+Compilation occurs in a sibling staging directory. A complete validated result moves into an immutable `versions/<publicationId>/` directory, then atomically replaces the small `current.json` pointer that names the admitted report and its hash. Readers retain the previous admitted version until that final pointer rename. An interruption can leave an unreferenced immutable version, while it cannot create an absent current target or partially replace the prior version. A rerun publishes a new identity, preserving historical versions without carrying their stray files into the new result.
+
+A failed run leaves `current.json` unchanged and atomically writes `<outDir>.failure.json` with the last trustworthy evidence and one exact phase:
 
 - `source-validation`;
 - `manifest-construction`;
