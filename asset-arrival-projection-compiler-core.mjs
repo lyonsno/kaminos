@@ -347,12 +347,15 @@ export function validateAssetArrivalProjectionReport(report) {
   }
   for (const variant of VARIANTS) {
     const receipt = variantReceipts.find(candidate => candidate?.variant === variant);
-    const sourceHash = cells.find(cell => cell?.id === `L_${variant}`)?.sourceInputHash;
+    const lowSourceHash = cells.find(cell => cell?.id === `L_${variant}`)?.sourceInputHash;
+    const highSourceHash = cells.find(cell => cell?.id === `H_${variant}`)?.sourceInputHash;
     if (receipt?.requestedRouteId !== report?.route?.requestedRouteId
       || receipt?.effectiveRouteId !== report?.route?.requestedRouteId) {
       fail(`${variant} variant route identity mismatch`);
     }
-    if (receipt?.sourceInputHash !== sourceHash) fail(`${variant} variant source hash mismatch`);
+    if (lowSourceHash !== highSourceHash || receipt?.sourceInputHash !== lowSourceHash) {
+      fail(`${variant} L/H variant source hash mismatch`);
+    }
     if (receipt?.cameraHash !== report?.source?.cameraSha256) fail(`${variant} variant camera hash mismatch`);
     if (receipt?.productConfigHash !== report?.route?.productConfigHash) {
       fail(`${variant} variant product config hash mismatch`);
