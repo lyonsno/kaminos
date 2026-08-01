@@ -1,0 +1,33 @@
+{
+  "schema": "kaminos.exact-elbow-isovolumetric-reshape-ledger.v0",
+  "sourceId": "synthetic-exact-elbow-shared-material-v0",
+  "muscleId": "brachialis-like-flexor",
+  "operation": "constant-volume-local-redistribution",
+  "baselineActiveCellCount": 25312,
+  "targetActiveCellCount": 25312,
+  "predictedActiveCellCount": 25312,
+  "muscleCellDelta": 0,
+  "gainedMuscleCellCount": 90,
+  "releasedMuscleCellCount": 90,
+  "outwardDirection": [
+    0.977552064,
+    -0.210577618462,
+    0.007002054864
+  ],
+  "compensationDirection": [
+    0.971495316875,
+    0.23037691353,
+    0.055886733684
+  ],
+  "remoteDirection": [
+    -0.030930058529,
+    -0.11055296196,
+    0.993388833278
+  ],
+  "directionSeparation": 0.4474199144,
+  "outwardAngularWidth": 0.28,
+  "compensationAngularWidth": 0.34,
+  "outwardAmplitude": 0.060833333333,
+  "compensationAmplitude": 0.041108660292,
+  "authority": "solver-inferred-isovolumetric-redistribution"
+}

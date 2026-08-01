@@ -775,10 +775,13 @@ export function sampleEnvelopeRadius(source, angle) {
 export {
   EXACT_ELBOW_PACKING_RESULT_SCHEMA,
   EXACT_ELBOW_PACKING_SOURCE_SCHEMA,
+  applyExactElbowMuscleReshape,
   applyExactElbowMuscleVolumeEdit,
+  coupleExactElbowIsovolumetricEnvelope,
   prepareExactElbowEnvelopeCouplingSource,
   coupleExactElbowEnvelopeFromMuscleEdit,
   compareExactElbowEnvelopeCoupling,
+  compareExactElbowIsovolumetricReshape,
   sampleExactElbowEnvelopeSurface,
   compareExactElbowPackings,
   createExactElbowPackingSource,

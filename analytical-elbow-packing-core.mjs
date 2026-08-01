@@ -255,11 +255,11 @@ function validateSource(source) {
         !isFinitePoint(lobe.direction) ||
         Math.abs(length(lobe.direction) - 1) > 1e-6 ||
         !Number.isFinite(lobe.amplitude) ||
-        lobe.amplitude < 0 ||
+        lobe.amplitude <= -0.8 ||
         !Number.isFinite(lobe.angularWidth) ||
         lobe.angularWidth <= 0
       ) {
-        throw new Error('exact-elbow surface lobe must have normalized direction and finite positive shape');
+        throw new Error('exact-elbow surface lobe must have normalized direction and finite signed shape');
       }
     }
   }
@@ -280,6 +280,21 @@ function validateSource(source) {
   for (const muscle of source.elbowDescriptor.muscles) {
     if (!Number.isFinite(materialScales[muscle.id]) || materialScales[muscle.id] <= 0) {
       throw new Error(`exact-elbow packing requires a positive material scale for ${muscle.id}`);
+    }
+  }
+  for (const [muscleId, field] of Object.entries(source.musclePackingFields || {})) {
+    if (
+      !source.elbowDescriptor.muscles.some(muscle => muscle.id === muscleId) ||
+      field?.kind !== 'isovolumetric-belly-bias' ||
+      !Number.isFinite(field.centerPathT) ||
+      field.centerPathT <= 0 ||
+      field.centerPathT >= 1 ||
+      !Number.isFinite(field.width) ||
+      field.width <= 0 ||
+      !Number.isFinite(field.amplitude) ||
+      field.amplitude <= 0
+    ) {
+      throw new Error(`exact-elbow muscle packing field is invalid for ${muscleId}`);
     }
   }
 }
@@ -394,6 +409,16 @@ function normalizedMixture(distanceByMuscle, muscles) {
   return Object.fromEntries(entries.map(([id, value]) => [id, rounded(value / total, 6)]));
 }
 
+function musclePackingScore(source, muscle, nearest) {
+  const baseScore = nearest.distance / Math.max(nearest.radius, 0.04);
+  const field = source.musclePackingFields?.[muscle.id];
+  if (!field) return baseScore;
+  const bellyWeight = Math.exp(
+    -0.5 * ((nearest.pathT - field.centerPathT) / field.width) ** 2,
+  );
+  return baseScore / (1 + field.amplitude * bellyWeight);
+}
+
 function assignCells({ source, pose, active }) {
   const muscles = pose.muscles;
   const forcedOwners = forceAttachmentOwners(active.cells, pose);
@@ -419,7 +444,7 @@ function assignCells({ source, pose, active }) {
       candidates.push({
         sourceCellId: cell.sourceCellId,
         muscleId: muscle.id,
-        score: nearest.distance / Math.max(nearest.radius, 0.04),
+        score: musclePackingScore(source, muscle, nearest),
       });
     }
     distanceCache.set(cell.sourceCellId, distances);
@@ -612,6 +637,52 @@ export function applyExactElbowMuscleVolumeEdit({ source, edit }) {
   return next;
 }
 
+export function applyExactElbowMuscleReshape({ source, reshape }) {
+  validateSource(source);
+  if (
+    typeof reshape?.id !== 'string' ||
+    reshape.id.length === 0 ||
+    typeof reshape.muscleId !== 'string' ||
+    !Number.isFinite(reshape.centerPathT) ||
+    reshape.centerPathT <= 0 ||
+    reshape.centerPathT >= 1 ||
+    !Number.isFinite(reshape.width) ||
+    reshape.width <= 0 ||
+    !Number.isFinite(reshape.amplitude) ||
+    reshape.amplitude <= 0
+  ) {
+    throw new Error('exact-elbow muscle reshape requires a valid isovolumetric belly field');
+  }
+  const muscle = source.elbowDescriptor.muscles.find(
+    candidate => candidate.id === reshape.muscleId,
+  );
+  if (!muscle) {
+    throw new Error(`unknown exact-elbow muscle: ${reshape.muscleId}`);
+  }
+  const next = structuredClone(source);
+  next.musclePackingFields ||= {};
+  next.musclePackingFields[muscle.id] = {
+    kind: 'isovolumetric-belly-bias',
+    centerPathT: rounded(reshape.centerPathT, 9),
+    width: rounded(reshape.width, 9),
+    amplitude: rounded(reshape.amplitude, 9),
+    targetVolume: muscle.targetVolume,
+    authority: 'operator-requested-assay-reshape',
+  };
+  next.parentSourceId = source.id;
+  next.provenance.events.push({
+    id: reshape.id,
+    operation: 'isovolumetric-reshape',
+    authority: 'operator-requested-assay-reshape',
+    muscleId: muscle.id,
+    centerPathT: reshape.centerPathT,
+    width: reshape.width,
+    amplitude: reshape.amplitude,
+    preservedTargetVolume: muscle.targetVolume,
+  });
+  return next;
+}
+
 export function solveExactElbowPacking(source) {
   validateSource(source);
   const pose = solveAnalyticalElbowPose(source.elbowDescriptor, {
@@ -709,6 +780,29 @@ function changedCellsForMuscle({ baseline, edited, muscleId }) {
   });
 }
 
+function releasedCellsForMuscle({ baseline, edited, muscleId }) {
+  const editedById = new Map(edited.cells.map(cell => [cell.sourceCellId, cell]));
+  return baseline.cells.filter(cell => {
+    const next = editedById.get(cell.sourceCellId);
+    return next && cell.ownerId === muscleId && next.ownerId !== muscleId;
+  });
+}
+
+function centroidEnvelopeDirection(cells, domain) {
+  if (cells.length === 0) {
+    throw new Error('exact-elbow reshape direction requires at least one changed cell');
+  }
+  const normalizedCentroid = [0, 1, 2].map(index =>
+    cells.reduce(
+      (sum, cell) => sum +
+        ([cell.x, cell.y, cell.z][index] - domain.center[index]) /
+          domain.radii[index],
+      0,
+    ) / cells.length,
+  );
+  return normalize(normalizedCentroid);
+}
+
 function normalizedEnvelopeDirection(point, domain) {
   const normalized = point.map(
     (value, index) => (value - domain.center[index]) / domain.radii[index],
@@ -726,6 +820,37 @@ function domainWithPressureLobe(source, { direction, amplitude, angularWidth, mu
     angularWidth: rounded(angularWidth, 12),
     authority: 'solver-inferred-volume-coupling',
   }];
+  return next;
+}
+
+function domainWithRedistributionLobes(source, {
+  outwardDirection,
+  compensationDirection,
+  outwardAmplitude,
+  compensationAmplitude,
+  outwardAngularWidth,
+  compensationAngularWidth,
+  muscleId,
+}) {
+  const next = structuredClone(source);
+  next.domain.surfaceLobes = [
+    {
+      id: `${muscleId}:isovolumetric-outward-lobe`,
+      muscleId,
+      direction: outwardDirection.map(value => rounded(value, 12)),
+      amplitude: rounded(outwardAmplitude, 12),
+      angularWidth: rounded(outwardAngularWidth, 12),
+      authority: 'solver-inferred-isovolumetric-redistribution',
+    },
+    {
+      id: `${muscleId}:isovolumetric-compensation-lobe`,
+      muscleId,
+      direction: compensationDirection.map(value => rounded(value, 12)),
+      amplitude: rounded(-compensationAmplitude, 12),
+      angularWidth: rounded(compensationAngularWidth, 12),
+      authority: 'solver-inferred-isovolumetric-redistribution',
+    },
+  ];
   return next;
 }
 
@@ -976,6 +1101,239 @@ export function compareExactElbowEnvelopeCoupling({
   };
 }
 
+export function coupleExactElbowIsovolumetricEnvelope({
+  source,
+  baseline,
+  reshapedSource,
+  fixedEnvelopeReshaped,
+  muscleId,
+  outwardAngularWidth = 0.28,
+  compensationAngularWidth = 0.34,
+}) {
+  validateSource(source);
+  validateSource(reshapedSource);
+  if (
+    source.domain.kind !== 'radial-ellipsoid' ||
+    source.domain.surfaceLobes.length !== 0 ||
+    baseline?.sourceId !== source.id ||
+    fixedEnvelopeReshaped?.sourceId !== source.id ||
+    reshapedSource.id !== source.id ||
+    !sameJson(baseline.grid, fixedEnvelopeReshaped.grid) ||
+    !sameJson(baseline.domain, source.domain) ||
+    !sameJson(fixedEnvelopeReshaped.domain, source.domain)
+  ) {
+    throw new Error('exact-elbow isovolumetric coupling requires baseline and reshape from the same prepared source');
+  }
+  if (
+    !Number.isFinite(outwardAngularWidth) ||
+    outwardAngularWidth <= 0 ||
+    !Number.isFinite(compensationAngularWidth) ||
+    compensationAngularWidth <= 0
+  ) {
+    throw new Error('exact-elbow isovolumetric lobe widths must be positive and finite');
+  }
+  const baselineCompartment = baseline.compartments[muscleId];
+  const reshapedCompartment = fixedEnvelopeReshaped.compartments[muscleId];
+  if (!baselineCompartment || !reshapedCompartment) {
+    throw new Error(`unknown exact-elbow reshape muscle: ${muscleId}`);
+  }
+  const muscleCellDelta = reshapedCompartment.cellCount - baselineCompartment.cellCount;
+  if (muscleCellDelta !== 0) {
+    throw new Error('exact-elbow isovolumetric reshape must preserve muscle cell count');
+  }
+  const gainedCells = changedCellsForMuscle({
+    baseline,
+    edited: fixedEnvelopeReshaped,
+    muscleId,
+  });
+  const releasedCells = releasedCellsForMuscle({
+    baseline,
+    edited: fixedEnvelopeReshaped,
+    muscleId,
+  });
+  if (gainedCells.length === 0 || gainedCells.length !== releasedCells.length) {
+    throw new Error('exact-elbow isovolumetric reshape requires balanced gained and released muscle cells');
+  }
+  const outwardDirection = centroidEnvelopeDirection(gainedCells, source.domain);
+  const compensationDirection = centroidEnvelopeDirection(releasedCells, source.domain);
+  const directionSeparation = Math.acos(
+    clamp(dot(outwardDirection, compensationDirection), -1, 1),
+  );
+  if (directionSeparation < 0.18) {
+    throw new Error('exact-elbow isovolumetric reshape did not produce separable outward and compensation regions');
+  }
+  const rigidStructures = baseline.elbow.rigidStructures;
+  const targetActiveCellCount = baseline.metrics.activeCellCount;
+  const maximumOutwardAmplitude = Math.min(
+    0.09,
+    maximumCenteredLobeAmplitude(source, outwardDirection),
+  );
+  const observations = [];
+  const observe = (outwardAmplitude, compensationAmplitude) => {
+    const candidate = domainWithRedistributionLobes(reshapedSource, {
+      outwardDirection,
+      compensationDirection,
+      outwardAmplitude,
+      compensationAmplitude,
+      outwardAngularWidth,
+      compensationAngularWidth,
+      muscleId,
+    });
+    const activeCellCount = enumerateDomain(candidate, rigidStructures).cells.length;
+    const observation = {
+      outwardAmplitude,
+      compensationAmplitude,
+      activeCellCount,
+      error: Math.abs(activeCellCount - targetActiveCellCount),
+    };
+    observations.push(observation);
+    return observation;
+  };
+  const minimumOutwardAmplitude = Math.min(0.04, maximumOutwardAmplitude);
+  const outwardStepCount = 12;
+  for (let outwardIndex = 0; outwardIndex <= outwardStepCount; outwardIndex += 1) {
+    const outwardAmplitude = minimumOutwardAmplitude +
+      (maximumOutwardAmplitude - minimumOutwardAmplitude) *
+        (outwardIndex / outwardStepCount);
+    let low = 0;
+    let high = 0.45;
+    observe(outwardAmplitude, low);
+    observe(outwardAmplitude, high);
+    for (let iteration = 0; iteration < 34; iteration += 1) {
+      const middle = (low + high) / 2;
+      const observation = observe(outwardAmplitude, middle);
+      if (observation.activeCellCount > targetActiveCellCount) low = middle;
+      else high = middle;
+    }
+  }
+  observations.sort((left, right) =>
+    left.error - right.error ||
+    Math.abs(left.outwardAmplitude - 0.06) - Math.abs(right.outwardAmplitude - 0.06) ||
+    left.compensationAmplitude - right.compensationAmplitude,
+  );
+  const selected = observations[0];
+  if (selected.error !== 0) {
+    throw new Error(
+      `exact-elbow isovolumetric envelope could not conserve exterior cells; nearest error ${selected.error}`,
+    );
+  }
+  const next = domainWithRedistributionLobes(reshapedSource, {
+    outwardDirection,
+    compensationDirection,
+    outwardAmplitude: selected.outwardAmplitude,
+    compensationAmplitude: selected.compensationAmplitude,
+    outwardAngularWidth,
+    compensationAngularWidth,
+    muscleId,
+  });
+  const remoteDirection = normalize(
+    length(cross(outwardDirection, compensationDirection)) > 1e-8
+      ? cross(outwardDirection, compensationDirection)
+      : cross(outwardDirection, [0, 0, 1]),
+  );
+  const ledger = {
+    schema: 'kaminos.exact-elbow-isovolumetric-reshape-ledger.v0',
+    sourceId: source.id,
+    muscleId,
+    operation: 'constant-volume-local-redistribution',
+    baselineActiveCellCount: baseline.metrics.activeCellCount,
+    targetActiveCellCount,
+    predictedActiveCellCount: selected.activeCellCount,
+    muscleCellDelta,
+    gainedMuscleCellCount: gainedCells.length,
+    releasedMuscleCellCount: releasedCells.length,
+    outwardDirection: outwardDirection.map(value => rounded(value, 12)),
+    compensationDirection: compensationDirection.map(value => rounded(value, 12)),
+    remoteDirection: remoteDirection.map(value => rounded(value, 12)),
+    directionSeparation: rounded(directionSeparation, 12),
+    outwardAngularWidth: rounded(outwardAngularWidth, 12),
+    compensationAngularWidth: rounded(compensationAngularWidth, 12),
+    outwardAmplitude: rounded(selected.outwardAmplitude, 12),
+    compensationAmplitude: rounded(selected.compensationAmplitude, 12),
+    authority: 'solver-inferred-isovolumetric-redistribution',
+  };
+  next.provenance.events.push({
+    id: 'couple-isovolumetric-muscle-reshape-to-envelope',
+    authority: 'solver-inferred-isovolumetric-redistribution',
+    ledger: structuredClone(ledger),
+  });
+  return { source: next, ledger };
+}
+
+export function compareExactElbowIsovolumetricReshape({
+  baseline,
+  fixedEnvelopeReshaped,
+  coupled,
+  ledger,
+}) {
+  if (
+    baseline?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    fixedEnvelopeReshaped?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    coupled?.schema !== EXACT_ELBOW_PACKING_RESULT_SCHEMA ||
+    ledger?.schema !== 'kaminos.exact-elbow-isovolumetric-reshape-ledger.v0'
+  ) {
+    throw new Error('exact-elbow isovolumetric comparison requires baseline, fixed reshape, coupled result, and ledger');
+  }
+  const baselineById = new Map(baseline.cells.map(cell => [cell.sourceCellId, cell]));
+  const coupledById = new Map(coupled.cells.map(cell => [cell.sourceCellId, cell]));
+  const addedCells = coupled.cells.filter(cell => !baselineById.has(cell.sourceCellId));
+  const lostCells = baseline.cells.filter(cell => !coupledById.has(cell.sourceCellId));
+  let sharedUnchangedMaterialIdentityViolationCount = 0;
+  let unexpectedSharedOwnerTransitionCount = 0;
+  for (const [cellId, baselineCell] of baselineById) {
+    const nextCell = coupledById.get(cellId);
+    if (!nextCell) continue;
+    if (baselineCell.ownerId === nextCell.ownerId) {
+      if (!sameJson(baselineCell.material, nextCell.material)) {
+        sharedUnchangedMaterialIdentityViolationCount += 1;
+      }
+    } else {
+      const transition = `${baselineCell.ownerId}->${nextCell.ownerId}`;
+      if (![
+        `${RESIDUAL_TISSUE_ID}->${ledger.muscleId}`,
+        `${ledger.muscleId}->${RESIDUAL_TISSUE_ID}`,
+      ].includes(transition)) {
+        unexpectedSharedOwnerTransitionCount += 1;
+      }
+    }
+  }
+  const surfaceDisplacement = direction => {
+    const prior = sampleExactElbowEnvelopeSurface(baseline.domain, direction);
+    const next = sampleExactElbowEnvelopeSurface(coupled.domain, direction);
+    return rounded(next.distance - prior.distance, 9);
+  };
+  const compartmentDelta = id =>
+    coupled.compartments[id].cellCount - baseline.compartments[id].cellCount;
+  const activeCellDelta = coupled.metrics.activeCellCount - baseline.metrics.activeCellCount;
+  return {
+    activeCellDelta,
+    addedSourceCellCount: addedCells.length,
+    lostSourceCellCount: lostCells.length,
+    brachialisCellDelta: compartmentDelta('brachialis-like-flexor'),
+    tricepsCellDelta: compartmentDelta('monoarticular-triceps-like-extensor'),
+    residualCellDelta: compartmentDelta(RESIDUAL_TISSUE_ID),
+    rigidIdentityViolationCount:
+      sameJson(baseline.elbow.rigidStructures, coupled.elbow.rigidStructures) ? 0 : 1,
+    attachmentIdentityViolationCount:
+      sameJson(baseline.elbow.attachments, coupled.elbow.attachments) ? 0 : 1,
+    gridIdentityViolationCount: sameJson(baseline.grid, coupled.grid) ? 0 : 1,
+    sharedUnchangedMaterialIdentityViolationCount,
+    unexpectedSharedOwnerTransitionCount,
+    outwardSurfaceDisplacement: surfaceDisplacement(ledger.outwardDirection),
+    compensatingSurfaceDisplacement: surfaceDisplacement(ledger.compensationDirection),
+    remoteSurfaceDisplacement: surfaceDisplacement(ledger.remoteDirection),
+    exteriorVolumeDelta: rounded(activeCellDelta * baseline.grid.cellVolume, 12),
+    muscleVolumeDelta: rounded(
+      compartmentDelta(ledger.muscleId) * baseline.grid.cellVolume,
+      12,
+    ),
+    fixedEnvelopeChangedOwnerCellCount: compareExactElbowPackings({
+      baseline,
+      edited: fixedEnvelopeReshaped,
+    }).changedOwnerCellCount,
+  };
+}
+
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -1029,8 +1387,17 @@ export function compareExactElbowPackings({ baseline, edited }) {
       ? `${RESIDUAL_TISSUE_ID}->${editedMuscleId}`
       : `${editedMuscleId}->${RESIDUAL_TISSUE_ID}`
     : null;
+  const isIsovolumetricReshape = editEvent?.operation === 'isovolumetric-reshape';
   const unexpectedOwnerTransitionCount = Object.entries(ownerTransitionCounts)
-    .filter(([transition]) => transition !== expectedTransition)
+    .filter(([transition]) => {
+      if (isIsovolumetricReshape) {
+        return ![
+          `${RESIDUAL_TISSUE_ID}->${editedMuscleId}`,
+          `${editedMuscleId}->${RESIDUAL_TISSUE_ID}`,
+        ].includes(transition);
+      }
+      return transition !== expectedTransition;
+    })
     .reduce((sum, [, count]) => sum + count, 0);
   return {
     changedOwnerCellCount,

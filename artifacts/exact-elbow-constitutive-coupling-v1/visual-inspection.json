@@ -1,0 +1,86 @@
+{
+  "schema": "kaminos.exact-elbow-constitutive-coupling-visual-inspection.v1",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-01T01:31:57Z",
+  "route": {
+    "requested": "exact-elbow-constitutive-coupling-orbitable-v1",
+    "effective": "exact-elbow-constitutive-coupling-orbitable-v1",
+    "fallbackUsed": false,
+    "url": "http://127.0.0.1:8137/artifacts/exact-elbow-constitutive-coupling-v1/index.html"
+  },
+  "backend": {
+    "requested": "google-chrome-headless-webgl",
+    "effective": "google-chrome-headless-webgl",
+    "fallbackUsed": false
+  },
+  "capture": {
+    "settleMilliseconds": 5000,
+    "routeAttribute": "exact-elbow-constitutive-coupling-orbitable-v1",
+    "agentPixelInspection": true
+  },
+  "bindings": {
+    "indexHtmlSha256": "68d81dff3a282aa418f9e6ef4e44f79879dd680ba5170d90e56953ecbb5fe921",
+    "pendingReportSha256": "dd7a2cc24778211431bf80de651bd4150e25a49f65f28ea5c8e8fa4ebbfb1ba6"
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "baseline",
+      "sha256": "270cb47480b08db4e758a926beaaa3f8dcee688f3e79dbffce7744a586486166"
+    },
+    {
+      "path": "witness-growth-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "growth-inflation",
+      "sha256": "eb0f9c86c4f23b021579e7de0edd29dd838665cc1c88544cfbaa80830eea32af"
+    },
+    {
+      "path": "witness-fixed-reshape-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "fixed-skin-reshape",
+      "sha256": "9f569512338e2f56655037ca712563c7dae7fbc758eef2c92a2e86f02eb72863"
+    },
+    {
+      "path": "witness-isovolumetric-desktop.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "case": "isovolumetric-reshape",
+      "sha256": "0d81b588b66c41b3b020aef096ceb0d2175c53ca15e8bbb9f07c5a0d9ccaf9a5"
+    },
+    {
+      "path": "witness-isovolumetric-mobile.png",
+      "viewport": [
+        500,
+        844
+      ],
+      "case": "isovolumetric-reshape",
+      "sha256": "c60474c7283d4450939528a686305557cf3a179b79bb877410675b049cafed8e"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "skinSurfaceLegible": true,
+    "growthInflationLegible": true,
+    "fixedSkinReshapeLegible": true,
+    "conservedRedistributionLegible": true,
+    "compensationRegionLegible": true,
+    "exactCountsLegible": true,
+    "baselineGhostLegible": true,
+    "rigidAndMuscleContextLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}

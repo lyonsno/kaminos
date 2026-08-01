@@ -1,0 +1,55 @@
+{
+  "observedAt": "2026-08-01T01:31:57Z",
+  "url": "http://127.0.0.1:8137/artifacts/exact-elbow-constitutive-coupling-v1/index.html",
+  "backend": {
+    "requested": "google-chrome-headless-webgl",
+    "effective": "google-chrome-headless-webgl",
+    "fallbackUsed": false
+  },
+  "capture": {
+    "settleMilliseconds": 5000,
+    "routeAttribute": "exact-elbow-constitutive-coupling-orbitable-v1",
+    "agentPixelInspection": true
+  },
+  "images": [
+    {
+      "path": "witness-baseline-desktop.png",
+      "viewport": [1400, 900],
+      "case": "baseline"
+    },
+    {
+      "path": "witness-growth-desktop.png",
+      "viewport": [1400, 900],
+      "case": "growth-inflation"
+    },
+    {
+      "path": "witness-fixed-reshape-desktop.png",
+      "viewport": [1400, 900],
+      "case": "fixed-skin-reshape"
+    },
+    {
+      "path": "witness-isovolumetric-desktop.png",
+      "viewport": [1400, 900],
+      "case": "isovolumetric-reshape"
+    },
+    {
+      "path": "witness-isovolumetric-mobile.png",
+      "viewport": [500, 844],
+      "case": "isovolumetric-reshape"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "skinSurfaceLegible": true,
+    "growthInflationLegible": true,
+    "fixedSkinReshapeLegible": true,
+    "conservedRedistributionLegible": true,
+    "compensationRegionLegible": true,
+    "exactCountsLegible": true,
+    "baselineGhostLegible": true,
+    "rigidAndMuscleContextLegible": true,
+    "desktopTextContained": true,
+    "mobileTextContained": true
+  }
+}

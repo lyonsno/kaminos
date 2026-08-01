@@ -1,0 +1,243 @@
+{
+  "schema": "kaminos.exact-elbow-packing-source.v0",
+  "id": "synthetic-exact-elbow-shared-material-v0",
+  "authority": {
+    "kind": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "dimension": 3,
+  "flexionDegrees": 35,
+  "elbowDescriptor": {
+    "schema": "kaminos.analytical-elbow-descriptor.v0",
+    "id": "synthetic-mammalian-elbow-v0",
+    "authority": {
+      "kind": "synthetic-proxy",
+      "anatomicalAdmission": "structural-hypothesis"
+    },
+    "claimBoundary": {
+      "proves": "analytical articulation and stable low-frequency cage authority",
+      "doesNotProve": "species anatomy, generated-surface transfer, or production skinning"
+    },
+    "joint": {
+      "id": "elbow-hinge",
+      "parentSegmentId": "humerus",
+      "childSegmentId": "ulna",
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "flexionRangeDegrees": [
+        0,
+        100
+      ],
+      "protectedCoreRadius": 0.2
+    },
+    "segments": [
+      {
+        "id": "humerus",
+        "authority": "synthetic-proxy",
+        "bone": {
+          "start": [
+            0,
+            0,
+            0
+          ],
+          "end": [
+            0,
+            1.8,
+            0
+          ],
+          "protectedCoreRadius": 0.14
+        },
+        "processes": []
+      },
+      {
+        "id": "ulna",
+        "authority": "synthetic-proxy",
+        "bone": {
+          "start": [
+            0,
+            0.18,
+            0
+          ],
+          "end": [
+            0,
+            -1.55,
+            0
+          ],
+          "protectedCoreRadius": 0.11
+        },
+        "processes": [
+          {
+            "id": "olecranon-process",
+            "kind": "attachment-bearing-capsule",
+            "localStart": [
+              0,
+              -0.14,
+              0
+            ],
+            "localEnd": [
+              -0.28,
+              0.22,
+              0
+            ],
+            "radius": 0.085,
+            "attachmentId": "triceps-insertion",
+            "authority": "synthetic-proxy"
+          }
+        ]
+      }
+    ],
+    "attachments": [
+      {
+        "id": "brachialis-origin",
+        "segmentId": "humerus",
+        "localPosition": [
+          0.22,
+          0.92,
+          0
+        ],
+        "authority": "synthetic-proxy"
+      },
+      {
+        "id": "brachialis-insertion",
+        "segmentId": "ulna",
+        "localPosition": [
+          0.17,
+          -0.48,
+          0
+        ],
+        "authority": "synthetic-proxy"
+      },
+      {
+        "id": "triceps-origin",
+        "segmentId": "humerus",
+        "localPosition": [
+          -0.22,
+          1.16,
+          0
+        ],
+        "authority": "synthetic-proxy"
+      },
+      {
+        "id": "triceps-insertion",
+        "segmentId": "ulna",
+        "localPosition": [
+          -0.28,
+          0.22,
+          0
+        ],
+        "authority": "synthetic-proxy"
+      }
+    ],
+    "muscles": [
+      {
+        "id": "brachialis-like-flexor",
+        "role": "monoarticular-flexor",
+        "originAttachmentId": "brachialis-origin",
+        "insertionAttachmentId": "brachialis-insertion",
+        "targetVolume": 0.105,
+        "volumeAuthority": "authored-target",
+        "routing": {
+          "kind": "joint-side-handle",
+          "side": "anterior",
+          "radius": 0.58,
+          "lateralOffset": 0.02
+        },
+        "profile": {
+          "tendonRatio": 0.12,
+          "bellyPower": 1.35
+        }
+      },
+      {
+        "id": "monoarticular-triceps-like-extensor",
+        "role": "monoarticular-extensor",
+        "originAttachmentId": "triceps-origin",
+        "insertionAttachmentId": "triceps-insertion",
+        "targetVolume": 0.09,
+        "volumeAuthority": "authored-target",
+        "routing": {
+          "kind": "joint-side-handle",
+          "side": "posterior",
+          "radius": 0.58,
+          "lateralOffset": -0.02
+        },
+        "profile": {
+          "tendonRatio": 0.11,
+          "bellyPower": 1.5
+        }
+      }
+    ]
+  },
+  "materialScales": {
+    "brachialis-like-flexor": 0.235541,
+    "monoarticular-triceps-like-extensor": 0.216771
+  },
+  "domain": {
+    "id": "synthetic-mammalian-elbow-v0:shared-material-domain:35deg",
+    "kind": "radial-ellipsoid",
+    "center": [
+      0,
+      0.3,
+      0
+    ],
+    "radii": [
+      0.78,
+      1.18,
+      0.52
+    ],
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "none",
+    "surfaceLobes": []
+  },
+  "grid": {
+    "width": 48,
+    "height": 66,
+    "depth": 38,
+    "logicalIndexOffset": [
+      6,
+      6,
+      5
+    ],
+    "bounds": {
+      "minX": -1.04,
+      "maxX": 1.04,
+      "minY": -1.1422222222222222,
+      "maxY": 1.7422222222222223,
+      "minZ": -0.7057142857142857,
+      "maxZ": 0.7057142857142857
+    }
+  },
+  "provenance": {
+    "schema": "kaminos.exact-elbow-packing-provenance.v0",
+    "events": [
+      {
+        "id": "derive-from-analytical-elbow",
+        "authority": "solver-derived",
+        "sourceId": "synthetic-mammalian-elbow-v0",
+        "flexionDegrees": 35
+      },
+      {
+        "id": "prepare-envelope-coupling-grid",
+        "authority": "solver-derived",
+        "paddingCells": [
+          6,
+          6,
+          5
+        ],
+        "preservedStep": [
+          0.043333333333,
+          0.043703703704,
+          0.037142857143
+        ],
+        "preservedLogicalLattice": true
+      }
+    ]
+  }
+}

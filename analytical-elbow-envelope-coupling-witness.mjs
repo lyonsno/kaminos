@@ -6,23 +6,29 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+  applyExactElbowMuscleReshape,
   applyExactElbowMuscleVolumeEdit,
   compareExactElbowEnvelopeCoupling,
+  compareExactElbowIsovolumetricReshape,
   coupleExactElbowEnvelopeFromMuscleEdit,
+  coupleExactElbowIsovolumetricEnvelope,
   createExactElbowPackingSource,
   prepareExactElbowEnvelopeCouplingSource,
   solveExactElbowPacking,
 } from './analytical-elbow-packing-core.mjs';
 
-const WITNESS_ROUTE = 'exact-elbow-envelope-coupling-orbitable-v0';
-const REPORT_SCHEMA = 'kaminos.exact-elbow-envelope-coupling-witness-report.v0';
+const WITNESS_ROUTE = 'exact-elbow-constitutive-coupling-orbitable-v1';
+const REPORT_SCHEMA = 'kaminos.exact-elbow-constitutive-coupling-witness-report.v1';
 const DEFAULT_IO = Object.freeze({ mkdir, readFile, rename, writeFile });
 const REQUIRED_VISUAL_VERDICTS = Object.freeze([
   'nonblank',
   'orbitable',
   'skinSurfaceLegible',
-  'fixedEnvelopeControlLegible',
-  'coupledBulgeLegible',
+  'growthInflationLegible',
+  'fixedSkinReshapeLegible',
+  'conservedRedistributionLegible',
+  'compensationRegionLegible',
+  'exactCountsLegible',
   'baselineGhostLegible',
   'rigidAndMuscleContextLegible',
   'desktopTextContained',
@@ -62,23 +68,37 @@ function visualCase({ id, result, changedCellIds = new Set() }) {
   };
 }
 
-function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison, report }) {
+function renderHtml({
+  baseline,
+  growthCoupled,
+  growthLedger,
+  growthComparison,
+  fixedEnvelopeReshaped,
+  isovolumetricCoupled,
+  isovolumetricLedger,
+  isovolumetricComparison,
+  report,
+}) {
   const baselineById = new Map(baseline.cells.map(cell => [cell.sourceCellId, cell]));
-  const fixedChangedIds = new Set(fixedEnvelopeEdited.cells
+  const growthChangedIds = new Set(growthCoupled.cells
+    .filter(cell => !baselineById.has(cell.sourceCellId) || baselineById.get(cell.sourceCellId)?.ownerId !== cell.ownerId)
+    .map(cell => cell.sourceCellId));
+  const fixedReshapeChangedIds = new Set(fixedEnvelopeReshaped.cells
     .filter(cell => baselineById.get(cell.sourceCellId)?.ownerId !== cell.ownerId)
     .map(cell => cell.sourceCellId));
-  const coupledChangedIds = new Set(coupled.cells
+  const isovolumetricChangedIds = new Set(isovolumetricCoupled.cells
     .filter(cell => !baselineById.has(cell.sourceCellId) || baselineById.get(cell.sourceCellId)?.ownerId !== cell.ownerId)
     .map(cell => cell.sourceCellId));
   const visualData = {
     route: report.route,
-    ledger,
-    comparison,
+    ledgers: { growth:growthLedger, isovolumetric:isovolumetricLedger },
+    comparisons: { growth:growthComparison, isovolumetric:isovolumetricComparison },
     baselineDomain: baseline.domain,
     cases: [
       visualCase({ id:'baseline', result:baseline }),
-      visualCase({ id:'fixed-envelope-control', result:fixedEnvelopeEdited, changedCellIds:fixedChangedIds }),
-      visualCase({ id:'coupled-envelope', result:coupled, changedCellIds:coupledChangedIds }),
+      visualCase({ id:'growth-inflation', result:growthCoupled, changedCellIds:growthChangedIds }),
+      visualCase({ id:'fixed-skin-reshape', result:fixedEnvelopeReshaped, changedCellIds:fixedReshapeChangedIds }),
+      visualCase({ id:'isovolumetric-reshape', result:isovolumetricCoupled, changedCellIds:isovolumetricChangedIds }),
     ],
   };
   return `<!doctype html>
@@ -86,7 +106,7 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Exact elbow envelope coupling witness</title>
+  <title>Exact elbow constitutive coupling witness</title>
   <style>
     :root { color-scheme:dark; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:#101412; color:#f2eee3; }
     * { box-sizing:border-box; }
@@ -113,14 +133,14 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
     .callout { position:absolute; top:16px; right:18px; max-width:310px; padding:9px 11px; border-left:3px solid #d8b76d; background:#101613d9; color:#dce2dd; font:600 11px/1.45 ui-sans-serif,system-ui,sans-serif; pointer-events:none; }
     footer { display:flex; align-items:center; justify-content:space-between; gap:18px; width:100%; min-width:0; padding:12px 18px; border-top:1px solid #3f4943; background:#151a17; overflow:hidden; }
     .controls { display:flex; gap:4px; min-width:0; }
-    button { min-width:144px; min-height:36px; padding:7px 12px; border:1px solid #536058; border-radius:4px; background:#202823; color:#dce2dd; font:600 11px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace; cursor:pointer; }
+    button { min-width:126px; min-height:36px; padding:7px 12px; border:1px solid #536058; border-radius:4px; background:#202823; color:#dce2dd; font:600 11px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace; cursor:pointer; }
     button[aria-pressed="true"] { border-color:#d8b76d; background:#d8b76d; color:#181b19; }
     .status { min-width:0; max-width:520px; color:#a8b2ac; font-size:10px; line-height:1.4; text-align:right; overflow-wrap:anywhere; }
     @media (max-width:760px) {
       header { flex-direction:column; align-items:flex-start; gap:7px; padding:12px 13px; }
       .route { width:100%; text-align:left; }
       footer { flex-direction:column; align-items:flex-start; padding:9px 11px; }
-      .controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; overflow:hidden; }
+      .controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; overflow:hidden; }
       button { width:100%; min-width:0; min-height:42px; padding:6px 2px; font-size:8px; overflow:hidden; }
       .status { width:100%; max-width:none; text-align:left; }
       .metrics { right:9px; left:9px; bottom:9px; width:auto; min-width:0; }
@@ -136,8 +156,8 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
   <main>
     <header>
       <div>
-        <h1>Exact elbow · pressure-to-skin coupling</h1>
-        <p class="authority">Volume-accounted constructional hypothesis · no elastic or anatomical admission</p>
+        <h1>Exact elbow · constitutive muscle-to-skin coupling</h1>
+        <p class="authority">Growth and constant-volume redistribution · no elastic or anatomical admission</p>
       </div>
       <div class="route">requested ${WITNESS_ROUTE}<br>effective ${WITNESS_ROUTE}</div>
     </header>
@@ -155,8 +175,9 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
     <footer>
       <div class="controls" role="group" aria-label="Coupling case">
         <button type="button" data-case="0" aria-pressed="true">Baseline</button>
-        <button type="button" data-case="1" aria-pressed="false">Muscle only</button>
-        <button type="button" data-case="2" aria-pressed="false">Coupled skin</button>
+        <button type="button" data-case="1" aria-pressed="false">Add volume</button>
+        <button type="button" data-case="2" aria-pressed="false">Reshape inside</button>
+        <button type="button" data-case="3" aria-pressed="false">Conserve volume</button>
       </div>
       <div class="status" id="status">Same elbow, envelope, lattice, bones, attachments, and material identities.</div>
     </footer>
@@ -288,10 +309,21 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
       const geometry = new THREE.BufferGeometry().setFromPoints(path.map(sample => vector(sample.position)));
       return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent:true, opacity:0.95 }));
     }
-    function pressureArrow() {
+    function outwardArrow(directionValues, color) {
       const origin = vector(data.cases[0].domain.center);
-      const direction = vector(data.ledger.pressureDirection).normalize();
-      return new THREE.ArrowHelper(direction, origin, 1.25, 0xf3ce63, 0.15, 0.08);
+      const direction = vector(directionValues).normalize();
+      return new THREE.ArrowHelper(direction, origin, 1.25, color, 0.15, 0.08);
+    }
+    function compensationArrow(domain, directionValues) {
+      const direction = vector(directionValues).normalize();
+      const scale = lobeScale(direction, domain);
+      const surface = vector(domain.center).add(new THREE.Vector3(
+        direction.x * domain.radii[0] * scale,
+        direction.y * domain.radii[1] * scale,
+        direction.z * domain.radii[2] * scale,
+      ));
+      const origin = surface.clone().add(direction.clone().multiplyScalar(0.18));
+      return new THREE.ArrowHelper(direction.clone().negate(), origin, 0.72, 0x6eaee8, 0.14, 0.08);
     }
     function disposeGroup(group) {
       group.traverse(object => {
@@ -305,9 +337,15 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
       const item = data.cases[index];
       caseGroup = new THREE.Group();
       caseGroup.add(skinSurface(item.domain));
-      if (index === 2) {
+      if (index > 0) {
         caseGroup.add(baselineGhost(data.baselineDomain));
-        caseGroup.add(pressureArrow());
+      }
+      if (index === 1) {
+        caseGroup.add(outwardArrow(data.ledgers.growth.pressureDirection, 0xf3ce63));
+      }
+      if (index === 3) {
+        caseGroup.add(outwardArrow(data.ledgers.isovolumetric.outwardDirection, 0xf3ce63));
+        caseGroup.add(compensationArrow(item.domain, data.ledgers.isovolumetric.compensationDirection));
       }
       for (const ownerId of ['residual-tissue', 'brachialis-like-flexor', 'monoarticular-triceps-like-extensor']) {
         caseGroup.add(pointsFor(item.cells, ownerId, index > 0));
@@ -326,24 +364,35 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
       }
       scene.add(caseGroup);
       const flexor = item.compartments['brachialis-like-flexor'];
-      const residual = item.compartments['residual-tissue'];
-      const addedCells = index === 2 ? data.comparison.addedActiveCellCount : 0;
+      const growth = data.comparisons.growth;
+      const conserved = data.comparisons.isovolumetric;
+      const metricStates = [
+        { muscleDelta:0, interiorExchange:0, envelopeAdded:0, envelopeLost:0, outward:0, inward:0 },
+        { muscleDelta:growth.brachialisCellDelta, interiorExchange:0, envelopeAdded:growth.addedSourceCellCount, envelopeLost:growth.lostSourceCellCount, outward:growth.localSurfaceDisplacement, inward:0 },
+        { muscleDelta:0, interiorExchange:conserved.fixedEnvelopeChangedOwnerCellCount, envelopeAdded:0, envelopeLost:0, outward:0, inward:0 },
+        { muscleDelta:0, interiorExchange:conserved.fixedEnvelopeChangedOwnerCellCount, envelopeAdded:conserved.addedSourceCellCount, envelopeLost:conserved.lostSourceCellCount, outward:conserved.outwardSurfaceDisplacement, inward:conserved.compensatingSurfaceDisplacement },
+      ];
+      const metrics = metricStates[index];
+      const netExteriorCells = metrics.envelopeAdded - metrics.envelopeLost;
       document.querySelector('#metrics').innerHTML =
         '<div><span>Soft cells</span><strong>' + item.metrics.activeCellCount.toLocaleString() + '</strong></div>' +
         '<div><span>Brachialis cells</span><strong>' + flexor.cellCount.toLocaleString() + '</strong></div>' +
-        '<div><span>Residual cells</span><strong>' + residual.cellCount.toLocaleString() + '</strong></div>' +
-        '<div><span>New envelope cells</span><strong>' + addedCells.toLocaleString() + '</strong></div>' +
-        '<div><span>Local skin shift</span><strong>' + (index === 2 ? data.comparison.localSurfaceDisplacement.toFixed(4) : '0.0000') + '</strong></div>' +
-        '<div><span>Remote skin shift</span><strong>' + (index === 2 ? data.comparison.remoteSurfaceDisplacement.toFixed(4) : '0.0000') + '</strong></div>';
+        '<div><span>Muscle cell delta</span><strong>' + metrics.muscleDelta.toLocaleString() + '</strong></div>' +
+        '<div><span>Interior exchange</span><strong>' + metrics.interiorExchange.toLocaleString() + '</strong></div>' +
+        '<div><span>Envelope + / −</span><strong>' + metrics.envelopeAdded.toLocaleString() + ' / ' + metrics.envelopeLost.toLocaleString() + '</strong></div>' +
+        '<div><span>Net exterior cells</span><strong>' + netExteriorCells.toLocaleString() + '</strong></div>' +
+        '<div><span>Skin out / in</span><strong>' + metrics.outward.toFixed(4) + ' / ' + metrics.inward.toFixed(4) + '</strong></div>';
       const callouts = [
-        'Rest state: muscle, residual tissue, and skin share one fixed volume.',
-        'Control: muscle claims 268 residual cells; the skin has no reason to move.',
-        'Coupled: residual volume is preserved, so 268 new skin cells pay the muscle deficit locally.',
+        'Rest state: one exact material domain and one exterior capacity.',
+        'Growth: 268 new muscle cells are paid by 268 new exterior cells.',
+        'Internal reshape: 90 cells enter the belly and 90 leave the shoulders while skin stays fixed.',
+        'Conserved response: 105 exterior cells move outward and 105 move inward. Net volume stays zero.',
       ];
       const statuses = [
         'Baseline capacity and ownership.',
-        'Internal ownership transfer only. Skin surface is unchanged.',
-        'Actual envelope response. The white ghost is the baseline skin; the gold arrow is inferred pressure direction.',
+        'Literal material addition. White is baseline skin; gold is inferred outward pressure.',
+        'Constant muscle volume with a fixed exterior control.',
+        'Paired redistribution. Gold marks outward pressure; blue marks compensating inward motion.',
       ];
       document.querySelector('#callout').textContent = callouts[index];
       document.querySelector('#status').textContent = statuses[index];
@@ -360,7 +409,7 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
     new ResizeObserver(resize).observe(viewport);
     resize();
     const requestedCase = Number(new URLSearchParams(window.location.search).get('case') || 0);
-    showCase([0, 1, 2].includes(requestedCase) ? requestedCase : 0);
+    showCase([0, 1, 2, 3].includes(requestedCase) ? requestedCase : 0);
     renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
     document.documentElement.dataset.witnessLoaded = 'true';
   </script>
@@ -368,8 +417,20 @@ function renderHtml({ baseline, fixedEnvelopeEdited, coupled, ledger, comparison
 </html>`;
 }
 
-function assertNumericallyAdmitted({ baseline, fixedEnvelopeEdited, coupled, comparison }) {
-  const structuralFailure = [baseline, fixedEnvelopeEdited, coupled].some(result =>
+function assertNumericallyAdmitted({
+  baseline,
+  growthCoupled,
+  growthComparison,
+  fixedEnvelopeReshaped,
+  isovolumetricCoupled,
+  isovolumetricComparison,
+}) {
+  const structuralFailure = [
+    baseline,
+    growthCoupled,
+    fixedEnvelopeReshaped,
+    isovolumetricCoupled,
+  ].some(result =>
     result.metrics.unownedCellCount !== 0 ||
     result.metrics.multiOwnedCellCount !== 0 ||
     result.metrics.rigidOwnedCellCount !== 0 ||
@@ -379,24 +440,41 @@ function assertNumericallyAdmitted({ baseline, fixedEnvelopeEdited, coupled, com
   );
   if (
     structuralFailure ||
-    comparison.muscleCellDeficit <= 0 ||
-    comparison.addedActiveCellCount !== comparison.muscleCellDeficit ||
-    comparison.addedSourceCellCount !== comparison.muscleCellDeficit ||
-    comparison.lostSourceCellCount !== 0 ||
-    comparison.brachialisCellDelta !== comparison.muscleCellDeficit ||
-    comparison.tricepsCellDelta !== 0 ||
-    comparison.residualCellDelta !== 0 ||
-    comparison.rigidIdentityViolationCount !== 0 ||
-    comparison.attachmentIdentityViolationCount !== 0 ||
-    comparison.gridIdentityViolationCount !== 0 ||
-    comparison.sharedUnchangedMaterialIdentityViolationCount !== 0 ||
-    comparison.unexpectedSharedOwnerTransitionCount !== 0 ||
-    comparison.localAddedCellFraction < 0.9 ||
-    comparison.localSurfaceDisplacement <= 0.04 ||
-    comparison.remoteSurfaceDisplacement > comparison.localSurfaceDisplacement * 0.08 ||
-    comparison.displacedVolumeError > baseline.grid.cellVolume + 1e-12
+    growthComparison.muscleCellDeficit <= 0 ||
+    growthComparison.addedActiveCellCount !== growthComparison.muscleCellDeficit ||
+    growthComparison.addedSourceCellCount !== growthComparison.muscleCellDeficit ||
+    growthComparison.lostSourceCellCount !== 0 ||
+    growthComparison.brachialisCellDelta !== growthComparison.muscleCellDeficit ||
+    growthComparison.tricepsCellDelta !== 0 ||
+    growthComparison.residualCellDelta !== 0 ||
+    growthComparison.rigidIdentityViolationCount !== 0 ||
+    growthComparison.attachmentIdentityViolationCount !== 0 ||
+    growthComparison.gridIdentityViolationCount !== 0 ||
+    growthComparison.sharedUnchangedMaterialIdentityViolationCount !== 0 ||
+    growthComparison.unexpectedSharedOwnerTransitionCount !== 0 ||
+    growthComparison.localAddedCellFraction < 0.9 ||
+    growthComparison.localSurfaceDisplacement <= 0.04 ||
+    growthComparison.remoteSurfaceDisplacement > growthComparison.localSurfaceDisplacement * 0.08 ||
+    growthComparison.displacedVolumeError > baseline.grid.cellVolume + 1e-12 ||
+    isovolumetricComparison.activeCellDelta !== 0 ||
+    isovolumetricComparison.addedSourceCellCount !== isovolumetricComparison.lostSourceCellCount ||
+    isovolumetricComparison.addedSourceCellCount <= 0 ||
+    isovolumetricComparison.brachialisCellDelta !== 0 ||
+    isovolumetricComparison.tricepsCellDelta !== 0 ||
+    isovolumetricComparison.residualCellDelta !== 0 ||
+    isovolumetricComparison.rigidIdentityViolationCount !== 0 ||
+    isovolumetricComparison.attachmentIdentityViolationCount !== 0 ||
+    isovolumetricComparison.gridIdentityViolationCount !== 0 ||
+    isovolumetricComparison.sharedUnchangedMaterialIdentityViolationCount !== 0 ||
+    isovolumetricComparison.unexpectedSharedOwnerTransitionCount !== 0 ||
+    isovolumetricComparison.fixedEnvelopeChangedOwnerCellCount < 80 ||
+    isovolumetricComparison.outwardSurfaceDisplacement <= 0.025 ||
+    isovolumetricComparison.compensatingSurfaceDisplacement >= -0.01 ||
+    Math.abs(isovolumetricComparison.remoteSurfaceDisplacement) >= 0.004 ||
+    isovolumetricComparison.exteriorVolumeDelta !== 0 ||
+    isovolumetricComparison.muscleVolumeDelta !== 0
   ) {
-    throw new Error('exact-elbow envelope coupling witness failed numerical admission');
+    throw new Error('exact-elbow constitutive coupling witness failed numerical admission');
   }
 }
 
@@ -425,50 +503,95 @@ export async function writeExactElbowEnvelopeCouplingWitness({
     const source = prepareExactElbowEnvelopeCouplingSource({ source:rawSource });
     phase = 'solve-baseline';
     const baseline = solveExactElbowPacking(source);
-    phase = 'derive-muscle-edit';
-    const fixedEnvelopeSource = applyExactElbowMuscleVolumeEdit({
+    phase = 'derive-growth-edit';
+    const growthFixedEnvelopeSource = applyExactElbowMuscleVolumeEdit({
       source,
       edit: {
-        id:'swell-brachialis-18-percent-for-envelope-coupling',
+        id:'add-brachialis-volume-18-percent-for-envelope-coupling',
         muscleId:'brachialis-like-flexor',
         scale:1.18,
       },
     });
-    phase = 'solve-fixed-envelope-control';
-    const fixedEnvelopeEdited = solveExactElbowPacking(fixedEnvelopeSource);
-    phase = 'derive-envelope-response';
-    const response = coupleExactElbowEnvelopeFromMuscleEdit({
+    phase = 'solve-growth-fixed-envelope-control';
+    const growthFixedEnvelopeEdited = solveExactElbowPacking(growthFixedEnvelopeSource);
+    phase = 'derive-growth-envelope-response';
+    const growthResponse = coupleExactElbowEnvelopeFromMuscleEdit({
       source,
       baseline,
-      fixedEnvelopeSource,
-      fixedEnvelopeEdited,
+      fixedEnvelopeSource:growthFixedEnvelopeSource,
+      fixedEnvelopeEdited:growthFixedEnvelopeEdited,
       muscleId:'brachialis-like-flexor',
     });
-    phase = 'solve-coupled-envelope';
-    const coupled = solveExactElbowPacking(response.source);
-    phase = 'compare-cases';
-    const comparison = compareExactElbowEnvelopeCoupling({
+    phase = 'solve-growth-coupled-envelope';
+    const growthCoupled = solveExactElbowPacking(growthResponse.source);
+    phase = 'compare-growth-cases';
+    const growthComparison = compareExactElbowEnvelopeCoupling({
       baseline,
-      fixedEnvelopeEdited,
-      coupled,
-      ledger:response.ledger,
+      fixedEnvelopeEdited:growthFixedEnvelopeEdited,
+      coupled:growthCoupled,
+      ledger:growthResponse.ledger,
     });
-    assertNumericallyAdmitted({ baseline, fixedEnvelopeEdited, coupled, comparison });
+    phase = 'derive-isovolumetric-reshape';
+    const reshapedSource = applyExactElbowMuscleReshape({
+      source,
+      reshape: {
+        id:'contract-brachialis-isovolumetrically',
+        muscleId:'brachialis-like-flexor',
+        centerPathT:0.55,
+        width:0.2,
+        amplitude:0.42,
+      },
+    });
+    phase = 'solve-fixed-skin-reshape';
+    const fixedEnvelopeReshaped = solveExactElbowPacking(reshapedSource);
+    phase = 'derive-isovolumetric-envelope-response';
+    const isovolumetricResponse = coupleExactElbowIsovolumetricEnvelope({
+      source,
+      baseline,
+      reshapedSource,
+      fixedEnvelopeReshaped,
+      muscleId:'brachialis-like-flexor',
+    });
+    phase = 'solve-isovolumetric-envelope';
+    const isovolumetricCoupled = solveExactElbowPacking(isovolumetricResponse.source);
+    phase = 'compare-isovolumetric-cases';
+    const isovolumetricComparison = compareExactElbowIsovolumetricReshape({
+      baseline,
+      fixedEnvelopeReshaped,
+      coupled:isovolumetricCoupled,
+      ledger:isovolumetricResponse.ledger,
+    });
+    assertNumericallyAdmitted({
+      baseline,
+      growthCoupled,
+      growthComparison,
+      fixedEnvelopeReshaped,
+      isovolumetricCoupled,
+      isovolumetricComparison,
+    });
     const report = {
       ...failureBase,
       status: 'complete',
       route: { requested:WITNESS_ROUTE, effective:WITNESS_ROUTE, fallbackUsed:false },
       cases: [
         { id:'baseline', metrics:baseline.metrics, compartments:baseline.compartments },
-        { id:'fixed-envelope-control', metrics:fixedEnvelopeEdited.metrics, compartments:fixedEnvelopeEdited.compartments },
-        { id:'coupled-envelope', metrics:coupled.metrics, compartments:coupled.compartments },
+        { id:'growth-inflation', metrics:growthCoupled.metrics, compartments:growthCoupled.compartments },
+        { id:'fixed-skin-reshape', metrics:fixedEnvelopeReshaped.metrics, compartments:fixedEnvelopeReshaped.compartments },
+        { id:'isovolumetric-reshape', metrics:isovolumetricCoupled.metrics, compartments:isovolumetricCoupled.compartments },
       ],
-      ledger: response.ledger,
-      comparison,
+      ledgers: {
+        growth:growthResponse.ledger,
+        isovolumetric:isovolumetricResponse.ledger,
+      },
+      comparisons: {
+        growth:growthComparison,
+        isovolumetric:isovolumetricComparison,
+      },
       claims: {
-        fixedEnvelopeControl: 'supported-by-numerical-contract',
-        volumeAccountedEnvelopeResponse: 'supported-by-numerical-contract',
-        localizedPressureDirection: 'supported-by-deterministic-constructional-heuristic',
+        literalGrowthInflation: 'supported-by-numerical-contract',
+        fixedSkinInternalReshape: 'supported-by-numerical-contract',
+        constantVolumeEnvelopeRedistribution: 'supported-by-numerical-contract',
+        localizedPairedDirections: 'supported-by-deterministic-constructional-heuristic',
         elasticMechanics: 'unassayed',
         anatomicalCorrectness: 'unassayed',
         poseTransport: 'unassayed',
@@ -479,15 +602,20 @@ export async function writeExactElbowEnvelopeCouplingWitness({
     const writes = await Promise.allSettled([
       io.writeFile(resolve(outputRoot, 'source.json'), `${JSON.stringify(source, null, 2)}\n`),
       io.writeFile(resolve(outputRoot, 'baseline.json'), `${JSON.stringify(baseline, null, 2)}\n`),
-      io.writeFile(resolve(outputRoot, 'fixed-envelope-control.json'), `${JSON.stringify(fixedEnvelopeEdited, null, 2)}\n`),
-      io.writeFile(resolve(outputRoot, 'coupled-envelope.json'), `${JSON.stringify(coupled, null, 2)}\n`),
-      io.writeFile(resolve(outputRoot, 'pressure-ledger.json'), `${JSON.stringify(response.ledger, null, 2)}\n`),
+      io.writeFile(resolve(outputRoot, 'growth-inflation.json'), `${JSON.stringify(growthCoupled, null, 2)}\n`),
+      io.writeFile(resolve(outputRoot, 'growth-pressure-ledger.json'), `${JSON.stringify(growthResponse.ledger, null, 2)}\n`),
+      io.writeFile(resolve(outputRoot, 'fixed-skin-reshape.json'), `${JSON.stringify(fixedEnvelopeReshaped, null, 2)}\n`),
+      io.writeFile(resolve(outputRoot, 'isovolumetric-reshape.json'), `${JSON.stringify(isovolumetricCoupled, null, 2)}\n`),
+      io.writeFile(resolve(outputRoot, 'isovolumetric-ledger.json'), `${JSON.stringify(isovolumetricResponse.ledger, null, 2)}\n`),
       io.writeFile(resolve(outputRoot, 'index.html'), renderHtml({
         baseline,
-        fixedEnvelopeEdited,
-        coupled,
-        ledger:response.ledger,
-        comparison,
+        growthCoupled,
+        growthLedger:growthResponse.ledger,
+        growthComparison,
+        fixedEnvelopeReshaped,
+        isovolumetricCoupled,
+        isovolumetricLedger:isovolumetricResponse.ledger,
+        isovolumetricComparison,
         report,
       })),
     ]);
@@ -495,7 +623,15 @@ export async function writeExactElbowEnvelopeCouplingWitness({
     if (rejected) throw rejected.reason;
     phase = 'publish-report';
     await writeJsonAtomically(io, resolve(outputRoot, 'report.json'), report);
-    return { outputRoot, report, source, baseline, fixedEnvelopeEdited, coupled };
+    return {
+      outputRoot,
+      report,
+      source,
+      baseline,
+      growthCoupled,
+      fixedEnvelopeReshaped,
+      isovolumetricCoupled,
+    };
   } catch (error) {
     const failureReport = {
       ...failureBase,
@@ -539,6 +675,23 @@ export async function admitExactElbowEnvelopeCouplingVisualInspection({
   ) {
     throw new Error('exact-elbow envelope visual admission requires a timestamp, images, and a complete all-positive inspected verdict');
   }
+  if (
+    inspection.capture?.routeAttribute !== WITNESS_ROUTE ||
+    !Number.isInteger(inspection.capture?.settleMilliseconds) ||
+    inspection.capture.settleMilliseconds <= 0 ||
+    inspection.capture.agentPixelInspection !== true
+  ) {
+    throw new Error('exact-elbow envelope visual admission requires current capture route identity and inspected settled pixels');
+  }
+  if (
+    typeof inspection.backend?.requested !== 'string' ||
+    inspection.backend.requested.length === 0 ||
+    typeof inspection.backend?.effective !== 'string' ||
+    inspection.backend.effective !== inspection.backend.requested ||
+    inspection.backend.fallbackUsed !== false
+  ) {
+    throw new Error('exact-elbow envelope visual admission requires matching requested and effective backend identity with no fallback');
+  }
   const reportPath = resolve(outputRoot, 'report.json');
   const indexPath = resolve(outputRoot, 'index.html');
   const pendingReportBytes = await io.readFile(reportPath);
@@ -569,7 +722,12 @@ export async function admitExactElbowEnvelopeCouplingVisualInspection({
     ) {
       throw new Error('exact-elbow envelope visual admission image metadata is incomplete');
     }
-    if (!['baseline', 'fixed-envelope-control', 'coupled-envelope'].includes(image.case)) {
+    if (![
+      'baseline',
+      'growth-inflation',
+      'fixed-skin-reshape',
+      'isovolumetric-reshape',
+    ].includes(image.case)) {
       throw new Error(`exact-elbow envelope visual admission image has unknown case: ${image.case}`);
     }
     if (imagePaths.has(image.path)) {
@@ -592,19 +750,20 @@ export async function admitExactElbowEnvelopeCouplingVisualInspection({
   const isCompact = image => image.viewport[0] <= 600 && image.viewport[1] > image.viewport[0];
   const hasRequiredCaptureCoverage =
     images.some(image => image.case === 'baseline' && isDesktop(image)) &&
-    images.some(image => image.case === 'fixed-envelope-control' && isDesktop(image)) &&
-    images.some(image => image.case === 'coupled-envelope' && isDesktop(image)) &&
-    images.some(image => image.case === 'coupled-envelope' && isCompact(image));
+    images.some(image => image.case === 'growth-inflation' && isDesktop(image)) &&
+    images.some(image => image.case === 'fixed-skin-reshape' && isDesktop(image)) &&
+    images.some(image => image.case === 'isovolumetric-reshape' && isDesktop(image)) &&
+    images.some(image => image.case === 'isovolumetric-reshape' && isCompact(image));
   if (!hasRequiredCaptureCoverage) {
-    throw new Error('exact-elbow envelope visual admission requires required visual capture coverage: baseline, control, and coupled desktop plus coupled compact');
+    throw new Error('exact-elbow envelope visual admission requires required visual capture coverage: baseline, growth, fixed reshape, and isovolumetric desktop plus isovolumetric compact');
   }
   const receipt = {
-    schema: 'kaminos.exact-elbow-envelope-coupling-visual-inspection.v0',
+    schema: 'kaminos.exact-elbow-constitutive-coupling-visual-inspection.v1',
     status: 'passed-agent-inspection',
     observedAt: inspection.observedAt,
     route: { ...structuredClone(pendingReport.route), url:inspection.url || null },
-    backend: inspection.backend ? structuredClone(inspection.backend) : null,
-    capture: inspection.capture ? structuredClone(inspection.capture) : null,
+    backend: structuredClone(inspection.backend),
+    capture: structuredClone(inspection.capture),
     bindings: {
       indexHtmlSha256:sha256(indexBytes),
       pendingReportSha256:sha256(pendingReportBytes),
@@ -629,7 +788,7 @@ export async function admitExactElbowEnvelopeCouplingVisualInspection({
 
 async function main() {
   if (process.argv[2] === '--admit-visual') {
-    const outDir = process.argv[3] || 'artifacts/exact-elbow-envelope-coupling-v0';
+    const outDir = process.argv[3] || 'artifacts/exact-elbow-constitutive-coupling-v1';
     const inspectionPath = process.argv[4];
     if (!inspectionPath) throw new Error('visual admission requires an inspection JSON path');
     const inspection = JSON.parse(await readFile(resolve(inspectionPath), 'utf8'));
@@ -642,13 +801,13 @@ async function main() {
     }));
     return;
   }
-  const outDir = process.argv[2] || 'artifacts/exact-elbow-envelope-coupling-v0';
+  const outDir = process.argv[2] || 'artifacts/exact-elbow-constitutive-coupling-v1';
   const result = await writeExactElbowEnvelopeCouplingWitness({ outDir });
   console.log(JSON.stringify({
     status:result.report.status,
     outputRoot:result.outputRoot,
     route:result.report.route,
-    comparison:result.report.comparison,
+    comparisons:result.report.comparisons,
   }));
 }
 

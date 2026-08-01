@@ -42,31 +42,53 @@ const generated = await packingWitness.writeExactElbowEnvelopeCouplingWitness({
 
 assert.equal(generated.report.status, 'complete');
 assert.deepEqual(generated.report.route, {
-  requested: 'exact-elbow-envelope-coupling-orbitable-v0',
-  effective: 'exact-elbow-envelope-coupling-orbitable-v0',
+  requested: 'exact-elbow-constitutive-coupling-orbitable-v1',
+  effective: 'exact-elbow-constitutive-coupling-orbitable-v1',
   fallbackUsed: false,
 });
 assert.deepEqual(
   generated.report.cases.map(item => item.id),
-  ['baseline', 'fixed-envelope-control', 'coupled-envelope'],
+  ['baseline', 'growth-inflation', 'fixed-skin-reshape', 'isovolumetric-reshape'],
 );
-assert.equal(generated.report.comparison.muscleCellDeficit, 268);
-assert.equal(generated.report.comparison.addedActiveCellCount, 268);
-assert.equal(generated.report.comparison.addedSourceCellCount, 268);
-assert.equal(generated.report.comparison.residualCellDelta, 0);
-assert.equal(generated.report.comparison.tricepsCellDelta, 0);
-assert.equal(generated.report.comparison.displacedVolumeError, 0);
-assert.ok(generated.report.comparison.localSurfaceDisplacement > 0.04);
-assert.equal(generated.report.comparison.remoteSurfaceDisplacement, 0);
+assert.equal(generated.report.comparisons.growth.muscleCellDeficit, 268);
+assert.equal(generated.report.comparisons.growth.addedActiveCellCount, 268);
+assert.equal(generated.report.comparisons.growth.addedSourceCellCount, 268);
+assert.equal(generated.report.comparisons.growth.residualCellDelta, 0);
+assert.equal(generated.report.comparisons.growth.tricepsCellDelta, 0);
+assert.equal(generated.report.comparisons.growth.displacedVolumeError, 0);
+assert.ok(generated.report.comparisons.growth.localSurfaceDisplacement > 0.04);
+assert.equal(generated.report.comparisons.growth.remoteSurfaceDisplacement, 0);
+assert.equal(generated.report.comparisons.isovolumetric.activeCellDelta, 0);
+assert.equal(generated.report.comparisons.isovolumetric.brachialisCellDelta, 0);
+assert.equal(generated.report.comparisons.isovolumetric.exteriorVolumeDelta, 0);
+assert.equal(generated.report.comparisons.isovolumetric.muscleVolumeDelta, 0);
+assert.equal(
+  generated.report.comparisons.isovolumetric.addedSourceCellCount,
+  generated.report.comparisons.isovolumetric.lostSourceCellCount,
+);
+assert.ok(generated.report.comparisons.isovolumetric.outwardSurfaceDisplacement > 0.025);
+assert.ok(generated.report.comparisons.isovolumetric.compensatingSurfaceDisplacement < -0.01);
 assert.equal(generated.report.visualInspection.status, 'pending-agent-inspection');
 
 const outputRoot = '/private/tmp/kaminos-molten-reciprocal-packing-0730/virtual-exact-elbow-envelope-coupling';
+const validCapture = {
+  routeAttribute:'exact-elbow-constitutive-coupling-orbitable-v1',
+  settleMilliseconds:5000,
+  agentPixelInspection:true,
+};
+const validBackend = {
+  requested:'google-chrome-headless-webgl',
+  effective:'google-chrome-headless-webgl',
+  fallbackUsed:false,
+};
 for (const path of [
   'source.json',
   'baseline.json',
-  'fixed-envelope-control.json',
-  'coupled-envelope.json',
-  'pressure-ledger.json',
+  'growth-inflation.json',
+  'growth-pressure-ledger.json',
+  'fixed-skin-reshape.json',
+  'isovolumetric-reshape.json',
+  'isovolumetric-ledger.json',
   'index.html',
   'report.json',
 ]) {
@@ -76,28 +98,38 @@ const html = String(success.files.get(`${outputRoot}/index.html`));
 assert.match(html, /Actual skin response/);
 assert.match(html, /Baseline skin ghost/);
 assert.match(html, /surfaceLobes/);
-assert.match(html, /data-case="2"/);
+assert.match(html, /Add volume/);
+assert.match(html, /Conserve volume/);
+assert.match(html, /Net exterior cells/);
+assert.match(html, /data-case="3"/);
 
 success.files.set(`${outputRoot}/witness-baseline-desktop.png`, Buffer.from('baseline-frame'));
-success.files.set(`${outputRoot}/witness-control-desktop.png`, Buffer.from('control-frame'));
-success.files.set(`${outputRoot}/witness-coupled-desktop.png`, Buffer.from('coupled-frame'));
-success.files.set(`${outputRoot}/witness-coupled-mobile.png`, Buffer.from('mobile-frame'));
+success.files.set(`${outputRoot}/witness-growth-desktop.png`, Buffer.from('growth-frame'));
+success.files.set(`${outputRoot}/witness-fixed-reshape-desktop.png`, Buffer.from('fixed-reshape-frame'));
+success.files.set(`${outputRoot}/witness-isovolumetric-desktop.png`, Buffer.from('isovolumetric-frame'));
+success.files.set(`${outputRoot}/witness-isovolumetric-mobile.png`, Buffer.from('mobile-frame'));
 const admitted = await packingWitness.admitExactElbowEnvelopeCouplingVisualInspection({
   outDir: 'virtual-exact-elbow-envelope-coupling',
   inspection: {
     observedAt: '2026-07-31T23:45:00Z',
+    capture:validCapture,
+    backend:validBackend,
     images: [
       { path:'witness-baseline-desktop.png', viewport:[1400, 900], case:'baseline' },
-      { path:'witness-control-desktop.png', viewport:[1400, 900], case:'fixed-envelope-control' },
-      { path:'witness-coupled-desktop.png', viewport:[1400, 900], case:'coupled-envelope' },
-      { path:'witness-coupled-mobile.png', viewport:[390, 844], case:'coupled-envelope' },
+      { path:'witness-growth-desktop.png', viewport:[1400, 900], case:'growth-inflation' },
+      { path:'witness-fixed-reshape-desktop.png', viewport:[1400, 900], case:'fixed-skin-reshape' },
+      { path:'witness-isovolumetric-desktop.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
+      { path:'witness-isovolumetric-mobile.png', viewport:[390, 844], case:'isovolumetric-reshape' },
     ],
     verdict: {
       nonblank:true,
       orbitable:true,
       skinSurfaceLegible:true,
-      fixedEnvelopeControlLegible:true,
-      coupledBulgeLegible:true,
+      growthInflationLegible:true,
+      fixedSkinReshapeLegible:true,
+      conservedRedistributionLegible:true,
+      compensationRegionLegible:true,
+      exactCountsLegible:true,
       baselineGhostLegible:true,
       rigidAndMuscleContextLegible:true,
       desktopTextContained:true,
@@ -107,8 +139,8 @@ const admitted = await packingWitness.admitExactElbowEnvelopeCouplingVisualInspe
   io: success.io,
 });
 assert.equal(admitted.report.visualInspection.status, 'passed-agent-inspection');
-assert.equal(admitted.receipt.route.effective, 'exact-elbow-envelope-coupling-orbitable-v0');
-assert.equal(admitted.receipt.images.length, 4);
+assert.equal(admitted.receipt.route.effective, 'exact-elbow-constitutive-coupling-orbitable-v1');
+assert.equal(admitted.receipt.images.length, 5);
 assert.ok(admitted.receipt.images.every(image => /^[a-f0-9]{64}$/.test(image.sha256)));
 
 const dishonestAdmission = memoryIo();
@@ -121,8 +153,11 @@ const completeVerdict = {
   nonblank:true,
   orbitable:true,
   skinSurfaceLegible:true,
-  fixedEnvelopeControlLegible:true,
-  coupledBulgeLegible:true,
+  growthInflationLegible:true,
+  fixedSkinReshapeLegible:true,
+  conservedRedistributionLegible:true,
+  compensationRegionLegible:true,
+  exactCountsLegible:true,
   baselineGhostLegible:true,
   rigidAndMuscleContextLegible:true,
   desktopTextContained:true,
@@ -134,6 +169,8 @@ await assert.rejects(
     outDir: 'virtual-dishonest-envelope-coupling',
     inspection: {
       observedAt:'2026-07-31T23:46:00Z',
+      capture:validCapture,
+      backend:validBackend,
       images:[{ path:'baseline.png', viewport:[1400, 900], case:'baseline' }],
       verdict:completeVerdict,
     },
@@ -143,7 +180,7 @@ await assert.rejects(
   'visual admission rejects a baseline-only false pass',
 );
 
-for (const path of ['control.png', 'coupled.png', 'compact.png']) {
+for (const path of ['growth.png', 'fixed.png', 'coupled.png', 'compact.png']) {
   dishonestAdmission.files.set(`${dishonestRoot}/${path}`, Buffer.from('duplicated-frame'));
 }
 await assert.rejects(
@@ -151,11 +188,14 @@ await assert.rejects(
     outDir: 'virtual-dishonest-envelope-coupling',
     inspection: {
       observedAt:'2026-07-31T23:47:00Z',
+      capture:validCapture,
+      backend:validBackend,
       images:[
         { path:'baseline.png', viewport:[1400, 900], case:'baseline' },
-        { path:'control.png', viewport:[1400, 900], case:'fixed-envelope-control' },
-        { path:'coupled.png', viewport:[1400, 900], case:'coupled-envelope' },
-        { path:'compact.png', viewport:[500, 844], case:'coupled-envelope' },
+        { path:'growth.png', viewport:[1400, 900], case:'growth-inflation' },
+        { path:'fixed.png', viewport:[1400, 900], case:'fixed-skin-reshape' },
+        { path:'coupled.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
+        { path:'compact.png', viewport:[500, 844], case:'isovolumetric-reshape' },
       ],
       verdict:completeVerdict,
     },
@@ -165,7 +205,8 @@ await assert.rejects(
   'visual admission rejects duplicated evidence under different filenames',
 );
 
-dishonestAdmission.files.set(`${dishonestRoot}/control.png`, Buffer.from('control'));
+dishonestAdmission.files.set(`${dishonestRoot}/growth.png`, Buffer.from('growth'));
+dishonestAdmission.files.set(`${dishonestRoot}/fixed.png`, Buffer.from('fixed'));
 dishonestAdmission.files.set(`${dishonestRoot}/coupled.png`, Buffer.from('coupled'));
 dishonestAdmission.files.set(`${dishonestRoot}/compact.png`, Buffer.from('compact'));
 await assert.rejects(
@@ -173,11 +214,14 @@ await assert.rejects(
     outDir: 'virtual-dishonest-envelope-coupling',
     inspection: {
       observedAt:'2026-07-31T23:48:00Z',
+      capture:validCapture,
+      backend:validBackend,
       images:[
         { path:'baseline.png', viewport:[1400, 900], case:'baseline' },
-        { path:'control.png', viewport:[1400, 900], case:'fixed-envelope-control' },
-        { path:'coupled.png', viewport:[1400, 900], case:'coupled-envelope' },
-        { path:'compact.png', viewport:[1400, 900], case:'coupled-envelope' },
+        { path:'growth.png', viewport:[1400, 900], case:'growth-inflation' },
+        { path:'fixed.png', viewport:[1400, 900], case:'fixed-skin-reshape' },
+        { path:'coupled.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
+        { path:'compact.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
       ],
       verdict:completeVerdict,
     },
@@ -188,17 +232,20 @@ await assert.rejects(
 );
 
 const incompleteVerdict = { ...completeVerdict };
-delete incompleteVerdict.coupledBulgeLegible;
+delete incompleteVerdict.conservedRedistributionLegible;
 await assert.rejects(
   () => packingWitness.admitExactElbowEnvelopeCouplingVisualInspection({
     outDir: 'virtual-dishonest-envelope-coupling',
     inspection: {
       observedAt:'2026-07-31T23:49:00Z',
+      capture:validCapture,
+      backend:validBackend,
       images:[
         { path:'baseline.png', viewport:[1400, 900], case:'baseline' },
-        { path:'control.png', viewport:[1400, 900], case:'fixed-envelope-control' },
-        { path:'coupled.png', viewport:[1400, 900], case:'coupled-envelope' },
-        { path:'compact.png', viewport:[500, 844], case:'coupled-envelope' },
+        { path:'growth.png', viewport:[1400, 900], case:'growth-inflation' },
+        { path:'fixed.png', viewport:[1400, 900], case:'fixed-skin-reshape' },
+        { path:'coupled.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
+        { path:'compact.png', viewport:[500, 844], case:'isovolumetric-reshape' },
       ],
       verdict:incompleteVerdict,
     },
@@ -207,6 +254,83 @@ await assert.rejects(
   /complete all-positive inspected verdict/,
   'visual admission rejects an omitted load-bearing verdict',
 );
+
+async function routeBypassFixture() {
+  const fixture = memoryIo();
+  const root = '/private/tmp/kaminos-molten-reciprocal-packing-0730/virtual-route-bypass-envelope-coupling';
+  for (const [path, body] of dishonestAdmission.files) {
+    if (path.startsWith(`${dishonestRoot}/`)) {
+      fixture.files.set(path.replace(dishonestRoot, root), body);
+    }
+  }
+  const images = [
+    { path:'baseline.png', viewport:[1400, 900], case:'baseline' },
+    { path:'growth.png', viewport:[1400, 900], case:'growth-inflation' },
+    { path:'fixed.png', viewport:[1400, 900], case:'fixed-skin-reshape' },
+    { path:'coupled.png', viewport:[1400, 900], case:'isovolumetric-reshape' },
+    { path:'compact.png', viewport:[500, 844], case:'isovolumetric-reshape' },
+  ];
+  for (const [index, image] of images.entries()) {
+    fixture.files.set(`${root}/${image.path}`, Buffer.from(`route-frame-${index}`));
+  }
+  return { fixture, images };
+}
+
+{
+  const { fixture, images } = await routeBypassFixture();
+  await assert.rejects(
+    () => packingWitness.admitExactElbowEnvelopeCouplingVisualInspection({
+      outDir:'virtual-route-bypass-envelope-coupling',
+      inspection: {
+        observedAt:'2026-08-01T01:45:00Z',
+        backend:validBackend,
+        images,
+        verdict:completeVerdict,
+      },
+      io:fixture.io,
+    }),
+    /capture route identity/,
+    'visual admission rejects missing capture route identity',
+  );
+}
+
+{
+  const { fixture, images } = await routeBypassFixture();
+  await assert.rejects(
+    () => packingWitness.admitExactElbowEnvelopeCouplingVisualInspection({
+      outDir:'virtual-route-bypass-envelope-coupling',
+      inspection: {
+        observedAt:'2026-08-01T01:46:00Z',
+        capture:{ ...validCapture, routeAttribute:'stale-witness-route-v0' },
+        backend:validBackend,
+        images,
+        verdict:completeVerdict,
+      },
+      io:fixture.io,
+    }),
+    /capture route identity/,
+    'visual admission rejects a stale capture route attribute',
+  );
+}
+
+{
+  const { fixture, images } = await routeBypassFixture();
+  await assert.rejects(
+    () => packingWitness.admitExactElbowEnvelopeCouplingVisualInspection({
+      outDir:'virtual-route-bypass-envelope-coupling',
+      inspection: {
+        observedAt:'2026-08-01T01:47:00Z',
+        capture:validCapture,
+        backend:{ ...validBackend, effective:'fallback-canvas', fallbackUsed:true },
+        images,
+        verdict:completeVerdict,
+      },
+      io:fixture.io,
+    }),
+    /effective backend identity/,
+    'visual admission rejects a fallback or mismatched effective backend',
+  );
+}
 
 const failure = memoryIo();
 const invalidSource = packingCore.createExactElbowPackingSource();
