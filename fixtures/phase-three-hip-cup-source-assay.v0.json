@@ -1,0 +1,309 @@
+{
+  "schema": "kaminos.structural-source-assay.v0",
+  "id": "lerm-adjacent-hip-cup-signed-scout-v0",
+  "track": {
+    "id": "hip-cup-relational-sensitivity-v0",
+    "kind": "generator-relational-sensitivity",
+    "sourceAssignment": {
+      "authority": "composition-owner",
+      "sourceAssetId": "lerm-adjacent-source-v0",
+      "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "sourceGate": {
+    "assetId": "lerm-adjacent-source-v0",
+    "assetHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "units": "meters",
+    "rootId": "root",
+    "neutralStateId": "neutral-v0",
+    "posedStateId": "conservative-pose-v0",
+    "frame": {
+      "id": "source-anatomical-frame-v0",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "handedness": "right",
+      "origin": [0, 0, 0],
+      "anterior": [1, 0, 0],
+      "up": [0, 1, 0]
+    },
+    "bendFrame": {
+      "id": "left-posterior-hip-bend-frame-v0",
+      "origin": [0.3, 0.42, -0.2],
+      "axis": [0, 0, 1]
+    },
+    "conservativeMotion": {
+      "id": "hip-clearance-sweep-v0",
+      "neutralStateId": "neutral-v0",
+      "posedStateId": "conservative-pose-v0",
+      "collisionFree": true,
+      "supportPreserved": true
+    },
+    "attachmentIds": ["left-posterior-hip-attachment"],
+    "supportIds": ["left-hind-support"],
+    "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "projectionSource": {
+    "schema": "kaminos.asset-arrival-source.v0",
+    "trackId": "generator-relational-sensitivity",
+    "receiptId": "hip-cup-relational-source-receipt-v0",
+    "numericTolerance": 1e-9,
+    "asset": {
+      "id": "lerm-adjacent-source-v0",
+      "blendPath": "/caller/assigned/hip-cup-source.blend",
+      "blendSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "parts": [
+      {
+        "roleId": "socket-cup",
+        "objectName": "caller_socket-cup",
+        "localFrame": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        "geometrySha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "roleId": "joint-head",
+        "objectName": "caller_joint-head",
+        "localFrame": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        "geometrySha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      {
+        "roleId": "socket-axis",
+        "objectName": "caller_socket-axis",
+        "localFrame": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        "geometrySha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ],
+    "camera": {
+      "id": "posterior_ortho_body_frame_v1",
+      "objectName": "caller_projection_camera",
+      "localFrame": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      "projection": "orthographic",
+      "width": 1024,
+      "height": 1024,
+      "cameraSha256": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd"
+    },
+    "contract": {
+      "requiredPartRoleIds": ["socket-cup", "joint-head", "socket-axis"]
+    },
+    "relation": {
+      "id": "left-posterior-hip-cup-lateral-position",
+      "regionId": "left-posterior-hip-cup",
+      "scalarId": "silhouette_half_width_over_pelvis",
+      "axisPartRoleId": "socket-axis",
+      "participantRoleIds": ["socket-cup", "joint-head"],
+      "parentValue": 0.3,
+      "delta": 0.04,
+      "lowerBound": 0.22,
+      "upperBound": 0.38,
+      "maxDelta": 0.05
+    },
+    "variants": {
+      "parent": {
+        "relationValue": 0.3,
+        "sourceSceneId": "caller_scene_parent",
+        "sourceInputHash": "1010101010101010101010101010101010101010101010101010101010101010",
+        "sourceSpillover": 0.004,
+        "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true }
+      },
+      "positive": {
+        "relationValue": 0.34,
+        "sourceSceneId": "caller_scene_positive",
+        "sourceInputHash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sourceSpillover": 0.004,
+        "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true }
+      },
+      "negative": {
+        "relationValue": 0.26,
+        "sourceSceneId": "caller_scene_negative",
+        "sourceInputHash": "1212121212121212121212121212121212121212121212121212121212121212",
+        "sourceSpillover": 0.004,
+        "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true }
+      }
+    },
+    "roleRegistry": [
+      { "roleId": "socket-cup", "maskValue": 1 },
+      { "roleId": "joint-head", "maskValue": 2 },
+      { "roleId": "socket-axis", "maskValue": 3 }
+    ],
+    "route": {
+      "requestedRouteId": "frozen-image-generation-route",
+      "supportsCpu": true,
+      "supportsRoleMask": true
+    }
+  },
+  "measurementStation": {
+    "schema": "golden_object_measurement_station_instance.v1",
+    "contractRef": "golden_object_measurement_station.v1",
+    "id": "golden-hip-cup-station-v0",
+    "hash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76",
+    "sourceAssetId": "lerm-adjacent-source-v0",
+    "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "neutralStateId": "neutral-v0",
+    "posedStateId": "conservative-pose-v0",
+    "frameHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd",
+    "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114",
+    "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "foregroundMaskContractId": "foreground-alpha-mask-v0",
+    "primaryRelationId": "left-posterior-hip-cup-lateral-position",
+    "positiveDirection": [1, 0, 0],
+    "constructionStatus": "instantiated",
+    "missingFields": [],
+    "failureCodes": [],
+    "contract_ref": "golden_object_measurement_station.v1",
+    "station_instance_id": "golden-hip-cup-station-v0",
+    "station_hash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76",
+    "asset_id": "lerm-adjacent-source-v0",
+    "asset_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "asset_units": "meters",
+    "neutral_state_id": "neutral-v0",
+    "posed_state_id_or_missing": "conservative-pose-v0",
+    "root_id": "root",
+    "T_asset_to_body": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    "body_frame_origin": [0, 0, 0],
+    "body_frame_axes": { "x": [1, 0, 0], "y": [0, 0, 1], "z": [0, 1, 0] },
+    "tested_side": "left",
+    "midline_plane": { "origin": [0, 0, 0], "normal": [1, 0, 0] },
+    "pelvic_envelope_role_ids": ["pelvis"],
+    "pelvic_width": 0.48,
+    "pelvic_extremal_point_ids": ["pelvis-left", "pelvis-right"],
+    "body_envelope_role_ids_or_missing": ["body"],
+    "body_length_or_missing": 1.8,
+    "socket_center": [0.3, 0.42, -0.2],
+    "socket_axis": [1, 0, 0],
+    "head_center_or_missing": [0.34, 0.42, -0.2],
+    "primary_relation_id_or_unresolved": "left-posterior-hip-cup-lateral-position",
+    "positive_direction_or_unresolved": [1, 0, 0],
+    "camera_id": "posterior_ortho_body_frame_v1",
+    "camera_projection": "orthographic",
+    "world_to_camera_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    "camera_to_raster_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    "camera_crop": [0, 0, 1024, 1024],
+    "near_far": [0.01, 10],
+    "image_width": 1024,
+    "image_height": 1024,
+    "socket_station_row": 512,
+    "socket_station_band_rows": [499, 525],
+    "projected_midline_u": 0.5,
+    "projected_pelvic_width_pixels": 240,
+    "posterior_quarter_role_ids": ["pelvis", "left-posterior-hip-attachment", "left-hind-support"],
+    "role_core_mask_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "role_dilated_mask_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "foreground_mask_contract_id": "foreground-alpha-mask-v0",
+    "primary_measurement_scalar_id_or_unresolved": "silhouette_half_width_over_pelvis",
+    "spillover_metric_id": "linear_rgb_l2_role_dilated_v1",
+    "construction_status": "instantiated",
+    "missing_fields": [],
+    "failure_codes": []
+  },
+  "target": {
+    "family": "robust-plantigrade-lerm-adjacent-quadruped",
+    "sourceKind": "author-controlled-constructional-exemplar",
+    "prompt": "A robust quadrupedal creature in neutral profile."
+  },
+  "relation": {
+    "id": "left-posterior-hip-cup-lateral-position",
+    "axis": "x",
+    "regionId": "left-posterior-hip-cup",
+    "parentValue": 0.3,
+    "lowerBound": 0.22,
+    "upperBound": 0.38,
+    "maxDelta": 0.05,
+    "delta": 0.04,
+    "measurement": {
+      "kind": "posterior-silhouette-half-width",
+      "station": "source-projected-socket-axis",
+      "normalization": "body-length"
+    }
+  },
+  "tolerances": {
+    "numeric": 1e-9,
+    "carrier": 1e-9,
+    "sourceSpilloverMax": 0.02
+  },
+  "frozen": {
+    "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd",
+    "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114",
+    "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "promptHash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "seed": 719024,
+    "model": "frozen-generator-model",
+    "checkpoint": "frozen-generator-checkpoint",
+    "sampler": "frozen-sampler",
+    "guidance": 4,
+    "resolution": [1024, 1024]
+  },
+  "route": {
+    "requestedRouteId": "frozen-image-generation-route",
+    "supportsBudgetNormalization": true
+  },
+  "rungs": [
+    { "id": "L", "enrichment": null, "channelIds": ["clay", "depth", "normal"] },
+    {
+      "id": "H",
+      "enrichment": {
+        "channelId": "semantic-role-mask",
+        "relationId": "left-posterior-hip-cup-lateral-position"
+      },
+      "channelIds": ["clay", "depth", "normal", "semantic-role-mask"]
+    }
+  ],
+  "cells": [
+    {
+      "id": "L_parent", "rungId": "L", "variant": "parent", "editSign": 0,
+      "relationValue": 0.3, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:L:parent", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.4 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.35 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.25 }],
+      "inputHash": "1010101010101010101010101010101010101010101010101010101010101010"
+    },
+    {
+      "id": "L_positive", "rungId": "L", "variant": "positive", "editSign": 1,
+      "relationValue": 0.34, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:L:positive", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.4 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.35 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.25 }],
+      "inputHash": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "id": "L_negative", "rungId": "L", "variant": "negative", "editSign": -1,
+      "relationValue": 0.26, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:L:negative", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.4 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.35 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.25 }],
+      "inputHash": "1212121212121212121212121212121212121212121212121212121212121212"
+    },
+    {
+      "id": "H_parent", "rungId": "H", "variant": "parent", "editSign": 0,
+      "relationValue": 0.3, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:H:parent", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.32 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.28 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.2 }, { "id": "semantic-role-mask", "area": 310, "l1Energy": 1, "l2Energy": 1, "weight": 0.2 }],
+      "inputHash": "1010101010101010101010101010101010101010101010101010101010101010"
+    },
+    {
+      "id": "H_positive", "rungId": "H", "variant": "positive", "editSign": 1,
+      "relationValue": 0.34, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:H:positive", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.32 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.28 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.2 }, { "id": "semantic-role-mask", "area": 310, "l1Energy": 1, "l2Energy": 1, "weight": 0.2 }],
+      "inputHash": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "id": "H_negative", "rungId": "H", "variant": "negative", "editSign": -1,
+      "relationValue": 0.26, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
+      "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "projectionIdentity": { "id": "hip-cup-station:H:negative", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "channels": [{ "id": "clay", "area": 1200, "l1Energy": 0.8, "l2Energy": 1, "weight": 0.32 }, { "id": "depth", "area": 1200, "l1Energy": 0.7, "l2Energy": 1, "weight": 0.28 }, { "id": "normal", "area": 1200, "l1Energy": 0.5, "l2Energy": 1, "weight": 0.2 }, { "id": "semantic-role-mask", "area": 310, "l1Energy": 1, "l2Energy": 1, "weight": 0.2 }],
+      "inputHash": "1212121212121212121212121212121212121212121212121212121212121212"
+    }
+  ]
+}
