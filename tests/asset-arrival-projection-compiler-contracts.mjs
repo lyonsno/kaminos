@@ -218,6 +218,9 @@ test('report validator binds all three renderer receipts to source, camera, conf
     candidate => { candidate.route.variantReceipts[0].sourceInputHash = hash('f'); },
     candidate => { candidate.route.variantReceipts[0].cameraHash = hash('f'); },
     candidate => { candidate.route.variantReceipts[0].productConfigHash = hash('f'); },
+    candidate => {
+      candidate.cells.find(cell => cell.id === 'H_parent').sourceInputHash = hash('f');
+    },
   ]) {
     const corrupted = structuredClone(report);
     mutate(corrupted);
