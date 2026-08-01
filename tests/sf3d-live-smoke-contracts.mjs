@@ -24,7 +24,7 @@ import {
 } from '../scripts/sf3d-live-smoke-witness-core.mjs';
 
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
-assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, 'f977b50fb21815f955a04a1c3a392b3a44060561');
+assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, '10118acbbdd895db7e4eaa7d0a9de252ccaa77af');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: false,
