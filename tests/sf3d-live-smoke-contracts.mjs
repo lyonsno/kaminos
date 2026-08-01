@@ -8,6 +8,7 @@ import {
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
+  SF3D_LIVE_SMOKE_PROFILE_LABEL,
   buildSf3dCompletedOutputReceipt,
   buildSf3dFailureEvidence,
   canFireSf3dLiveSmoke,
@@ -26,8 +27,21 @@ import {
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
 assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, '10118acbbdd895db7e4eaa7d0a9de252ccaa77af');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
+assert.equal(SF3D_LIVE_SMOKE_PROFILE_LABEL, 'DINO + two-stream + bounded-prefix x2');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
-  cooperativeDino: false,
+  cooperativeDino: true,
+  dinoSchedulingMode: 'cooperative',
+  dinoChunkBlocks: 1,
+  cooperativeTwoStream: true,
+  twoStreamSchedulingMode: 'cooperative',
+  twoStreamDutyGranularity: 'attention-tile',
+  twoStreamLinearRowsPerDuty: 256,
+  cooperativePostProcessor: true,
+  postProcessorSchedulingMode: 'cooperative',
+  postProcessorDutyGranularity: 'channel-range',
+  postProcessorChannelsPerDuty: 16,
+  postProcessorCompletionPolicy: 'bounded-prefix',
+  postProcessorMaxInFlightGpuDuties: 2,
   cooperativeBake: true,
   bakeSchedulingMode: 'cooperative',
   bakeBatchTexels: 4096,
@@ -335,6 +349,38 @@ const indexSource = readFileSync(new URL('index.html', root), 'utf8');
 const serverSource = readFileSync(new URL('serve.py', root), 'utf8');
 const launcherSource = readFileSync(new URL('scripts/run-sf3d-live-smoke.mjs', root), 'utf8');
 const witnessSource = readFileSync(new URL('scripts/witness-sf3d-live-smoke-activation.mjs', root), 'utf8');
+const smokeSource = readFileSync(new URL('sf3d-live-smoke.js', root), 'utf8');
+
+for (const optionName of [
+  'cooperativeDino',
+  'dinoSchedulingMode',
+  'dinoChunkBlocks',
+  'cooperativeTwoStream',
+  'twoStreamSchedulingMode',
+  'twoStreamDutyGranularity',
+  'twoStreamLinearRowsPerDuty',
+  'cooperativePostProcessor',
+  'postProcessorSchedulingMode',
+  'postProcessorDutyGranularity',
+  'postProcessorChannelsPerDuty',
+  'postProcessorCompletionPolicy',
+  'postProcessorMaxInFlightGpuDuties',
+  'cooperativeBake',
+  'bakeSchedulingMode',
+  'bakeBatchTexels',
+  'decoderArena',
+]) {
+  assert.match(
+    smokeSource,
+    new RegExp(`\\b${optionName}:\\s*SF3D_LIVE_SMOKE_OPTIONS\\.${optionName}\\b`),
+    `the live route must forward ${optionName} from the accepted options contract`,
+  );
+}
+assert.match(
+  smokeSource,
+  /materializeWorker:\s*workerHandle\.worker/,
+  'the live route must forward its live materialization worker',
+);
 
 function assertSingleSourceRevision(source, pattern, label) {
   const matches = [...source.matchAll(pattern)];
@@ -374,12 +420,30 @@ assert.throws(
 assert.doesNotMatch(indexSource, /device: sf3dLiveSmokePrepared\.device/, 'Kaminos must not consume SF3D external-device lifetime');
 assert.match(indexSource, /new THREE\.WebGPURenderer\(\{\s*antialias: true,\s*\}\)/, 'Kaminos must retain renderer-owned device creation');
 assert.match(indexSource, /id="sf3d-live-smoke-topology"/, 'the operator surface must expose effective GPU topology');
+assert.match(indexSource, /id="sf3d-live-smoke-profile"/, 'the operator surface must expose the effective scheduling profile');
+assert.match(
+  smokeSource,
+  /setText\('sf3d-live-smoke-profile', SF3D_LIVE_SMOKE_PROFILE_LABEL\)/,
+  'the operator profile row must render the accepted profile label',
+);
+assert.match(
+  smokeSource,
+  /profileLabel:\s*SF3D_LIVE_SMOKE_PROFILE_LABEL/,
+  'the debug witness must expose the accepted profile label',
+);
+assert.match(
+  smokeSource,
+  /options:\s*SF3D_LIVE_SMOKE_OPTIONS/,
+  'the debug witness must expose the exact accepted options',
+);
 assert.match(indexSource, /noteRenderedFrame\(performance\.now\(\), frameMs\)/, 'the live route must measure actual renderer-loop completions');
 assert.match(indexSource, /sf3dLiveSmokeRouteActive \|\| idleFrames/, 'the live route must prevent renderer idle retirement');
 assert.match(serverSource, /effective_revision != requested_revision/, 'the config endpoint must reject a stale effective source');
 assert.match(serverSource, /handle_sf3d_live_smoke_report/, 'the route must persist success and pre-output failure reports');
 assert.match(launcherSource, /mesh_path.*meshFile/, 'the launcher must mount the accepted foreground mesh');
 assert.match(witnessSource, /same-page-dual-device-shared-physical-gpu/, 'the witness must reject fallback GPU topology');
+assert.match(witnessSource, /assertProfile\(report\.initialState, 'initial'\)/, 'the witness must reject a stale initial scheduling profile');
+assert.match(witnessSource, /assertProfile\(report\.settledState, 'settled'\)/, 'the witness must reject a stale settled scheduling profile');
 assert.match(witnessSource, /FAILED_ALLOCATION_SIZE\s*=\s*3_145_728/, 'the witness must preserve the exact failed allocation size');
 assert.match(witnessSource, /size:\s*FAILED_ALLOCATION_SIZE,\s*mappedAtCreation:\s*true/, 'the witness must exercise that allocation with mappedAtCreation');
 assert.match(witnessSource, /probeInferenceDevice[\s\S]*setTimeout[\s\S]*probeInferenceDevice/, 'the witness must probe both sides of a renderer/model coexistence window');

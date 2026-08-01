@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+  SF3D_LIVE_SMOKE_OPTIONS,
+  SF3D_LIVE_SMOKE_PROFILE_LABEL,
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   validateSf3dLiveSmokeConfig,
 } from '../sf3d-live-smoke-core.js';
@@ -40,6 +42,11 @@ function parseArgs(argv) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function assertProfile(state, phase) {
+  assert(state.profileLabel === SF3D_LIVE_SMOKE_PROFILE_LABEL, `${phase} profile label mismatch: ${state.profileLabel || 'missing'}`);
+  assert(JSON.stringify(state.options) === JSON.stringify(SF3D_LIVE_SMOKE_OPTIONS), `${phase} effective SF3D options mismatch`);
 }
 
 async function loadPuppeteer(sf3dRepo) {
@@ -230,6 +237,7 @@ try {
   report.initialState = await page.evaluate(() => window.kaminosSf3dLiveSmokeController.debugState());
   assert(report.initialState.gpuTopology === EXPECTED_TOPOLOGY, `wrong GPU topology: ${report.initialState.gpuTopology}`);
   assert(report.initialState.revision === SF3D_LIVE_SMOKE_SOURCE_REVISION, `controller revision mismatch: ${report.initialState.revision}`);
+  assertProfile(report.initialState, 'initial');
   assert(report.initialState.attempted === false, 'activation witness found a spent route');
   assert(report.initialState.deviceLoss === null, 'inference device was already lost');
   report.lastTrustworthyEvidence = 'pinned source identity and armed controller verified';
@@ -265,6 +273,7 @@ try {
   );
   assert(report.settledProbe.usable === true, `settled mapped allocation failed: ${report.settledProbe.error}`);
   report.settledState = await page.evaluate(() => window.kaminosSf3dLiveSmokeController.debugState());
+  assertProfile(report.settledState, 'settled');
   assert(report.settledState.deviceLoss === null, `inference device lost during settle: ${JSON.stringify(report.settledState.deviceLoss)}`);
   assert(report.settledState.attempted === false, 'activation witness unexpectedly spent the route');
   report.lastTrustworthyEvidence = 'settled mapped allocation and device lifetime verified';

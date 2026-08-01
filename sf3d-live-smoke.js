@@ -2,6 +2,7 @@ import {
   SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
   SF3D_LIVE_SMOKE_OPTIONS,
+  SF3D_LIVE_SMOKE_PROFILE_LABEL,
   SF3D_LIVE_SMOKE_ROUTE_ID,
   buildSf3dCompletedOutputReceipt,
   buildSf3dFailureEvidence,
@@ -198,6 +199,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   setText('sf3d-live-smoke-revision', prepared.config.effectiveRevision.slice(0, 10));
   setText('sf3d-live-smoke-route', SF3D_LIVE_SMOKE_ROUTE_ID);
   setText('sf3d-live-smoke-topology', SF3D_LIVE_SMOKE_GPU_TOPOLOGY);
+  setText('sf3d-live-smoke-profile', SF3D_LIVE_SMOKE_PROFILE_LABEL);
   setText('sf3d-live-smoke-status', 'Loading model');
 
   const [weightsModule, inferenceModule, pipelineModule] = await Promise.all([
@@ -239,6 +241,8 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         routeId: SF3D_LIVE_SMOKE_ROUTE_ID,
         revision: prepared.config.effectiveRevision,
         gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+        profileLabel: SF3D_LIVE_SMOKE_PROFILE_LABEL,
+        options: SF3D_LIVE_SMOKE_OPTIONS,
         running,
         attempted,
         deviceLoss: prepared.deviceLoss.info,
@@ -306,6 +310,18 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           inputImage,
           {
             cooperativeDino: SF3D_LIVE_SMOKE_OPTIONS.cooperativeDino,
+            dinoSchedulingMode: SF3D_LIVE_SMOKE_OPTIONS.dinoSchedulingMode,
+            dinoChunkBlocks: SF3D_LIVE_SMOKE_OPTIONS.dinoChunkBlocks,
+            cooperativeTwoStream: SF3D_LIVE_SMOKE_OPTIONS.cooperativeTwoStream,
+            twoStreamSchedulingMode: SF3D_LIVE_SMOKE_OPTIONS.twoStreamSchedulingMode,
+            twoStreamDutyGranularity: SF3D_LIVE_SMOKE_OPTIONS.twoStreamDutyGranularity,
+            twoStreamLinearRowsPerDuty: SF3D_LIVE_SMOKE_OPTIONS.twoStreamLinearRowsPerDuty,
+            cooperativePostProcessor: SF3D_LIVE_SMOKE_OPTIONS.cooperativePostProcessor,
+            postProcessorSchedulingMode: SF3D_LIVE_SMOKE_OPTIONS.postProcessorSchedulingMode,
+            postProcessorDutyGranularity: SF3D_LIVE_SMOKE_OPTIONS.postProcessorDutyGranularity,
+            postProcessorChannelsPerDuty: SF3D_LIVE_SMOKE_OPTIONS.postProcessorChannelsPerDuty,
+            postProcessorCompletionPolicy: SF3D_LIVE_SMOKE_OPTIONS.postProcessorCompletionPolicy,
+            postProcessorMaxInFlightGpuDuties: SF3D_LIVE_SMOKE_OPTIONS.postProcessorMaxInFlightGpuDuties,
             cooperativeBake: SF3D_LIVE_SMOKE_OPTIONS.cooperativeBake,
             bakeSchedulingMode: SF3D_LIVE_SMOKE_OPTIONS.bakeSchedulingMode,
             bakeBatchTexels: SF3D_LIVE_SMOKE_OPTIONS.bakeBatchTexels,

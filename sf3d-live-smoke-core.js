@@ -2,9 +2,22 @@ export const SF3D_LIVE_SMOKE_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 export const SF3D_LIVE_SMOKE_SOURCE_REVISION = '10118acbbdd895db7e4eaa7d0a9de252ccaa77af';
 export const SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 export const SF3D_LIVE_SMOKE_GPU_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
+export const SF3D_LIVE_SMOKE_PROFILE_LABEL = 'DINO + two-stream + bounded-prefix x2';
 
 export const SF3D_LIVE_SMOKE_OPTIONS = Object.freeze({
-  cooperativeDino: false,
+  cooperativeDino: true,
+  dinoSchedulingMode: 'cooperative',
+  dinoChunkBlocks: 1,
+  cooperativeTwoStream: true,
+  twoStreamSchedulingMode: 'cooperative',
+  twoStreamDutyGranularity: 'attention-tile',
+  twoStreamLinearRowsPerDuty: 256,
+  cooperativePostProcessor: true,
+  postProcessorSchedulingMode: 'cooperative',
+  postProcessorDutyGranularity: 'channel-range',
+  postProcessorChannelsPerDuty: 16,
+  postProcessorCompletionPolicy: 'bounded-prefix',
+  postProcessorMaxInFlightGpuDuties: 2,
   cooperativeBake: true,
   bakeSchedulingMode: 'cooperative',
   bakeBatchTexels: 4096,
