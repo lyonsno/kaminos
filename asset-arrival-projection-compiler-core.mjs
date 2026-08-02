@@ -48,11 +48,6 @@ function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function sameFiniteScalar(left, right, tolerance) {
-  if (!finite(left) || !finite(right)) return false;
-  return Math.abs(left - right) <= tolerance;
-}
-
 function requireHash(value, label) {
   if (!HASH_PATTERN.test(value ?? '')) throw new Error(`${label} must be a SHA-256 identity`);
 }
@@ -78,10 +73,6 @@ function assertSourceReceipt(source) {
   requireString(source.asset?.id, 'asset id');
   requireString(source.asset?.blendPath, 'authored blend path');
   requireHash(source.asset?.blendSha256, 'authored blend hash');
-  if (!finite(source.numericTolerance) || source.numericTolerance < 0) {
-    throw new Error('source numeric tolerance must be finite and non-negative');
-  }
-
   if (!Array.isArray(source.parts)) throw new Error('semantic parts are required');
   const roleIds = source.parts.map(part => part?.roleId);
   if (new Set(roleIds).size !== roleIds.length) throw new Error('semantic part roles must be unique');
@@ -131,7 +122,7 @@ function assertSourceReceipt(source) {
   const roomAbove = relation.upperBound - relation.parentValue;
   const roomBelow = relation.parentValue - relation.lowerBound;
   const admittedDelta = Math.min(relation.maxDelta, 0.5 * Math.min(roomAbove, roomBelow));
-  if (!(relation.delta > 0) || !sameFiniteScalar(relation.delta, admittedDelta, source.numericTolerance)) {
+  if (!(relation.delta > 0) || relation.delta !== admittedDelta) {
     throw new Error('relation delta does not match the bounded symmetric assay rule');
   }
 
@@ -143,7 +134,7 @@ function assertSourceReceipt(source) {
   for (const variant of VARIANTS) {
     const item = source.variants?.[variant];
     if (!item) throw new Error(`missing ${variant} source variant`);
-    if (!sameFiniteScalar(item.relationValue, expected[variant], source.numericTolerance)) {
+    if (item.relationValue !== expected[variant]) {
       throw new Error(`${variant} relation value does not match the authored signed relation`);
     }
     requireString(item.sourceSceneId, `${variant} source scene id`);
@@ -225,7 +216,6 @@ export function buildAssetArrivalProjectionPlan(source) {
       bridgeDecisionOwner: 'composition-owner',
     },
     sourceReceiptId: source.receiptId,
-    numericTolerance: source.numericTolerance,
     asset: structuredClone(source.asset),
     camera: structuredClone(source.camera),
     relation: structuredClone(source.relation),

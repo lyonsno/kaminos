@@ -36,10 +36,18 @@ const HASH = {
   roleDilatedMask: 'f'.repeat(64),
 };
 
+const RELATION_PARENT = 0.3;
+const RELATION_LOWER = 0.22;
+const RELATION_UPPER = 0.38;
+const RELATION_MAX_DELTA = 0.05;
+const RELATION_DELTA = Math.min(
+  RELATION_MAX_DELTA,
+  0.5 * Math.min(RELATION_UPPER - RELATION_PARENT, RELATION_PARENT - RELATION_LOWER),
+);
 const variantValues = {
-  parent: 0.3,
-  positive: 0.34,
-  negative: 0.26,
+  parent: RELATION_PARENT,
+  positive: RELATION_PARENT + RELATION_DELTA,
+  negative: RELATION_PARENT - RELATION_DELTA,
 };
 
 function channelsFor(rungId) {
@@ -234,11 +242,11 @@ function makeAssay() {
       id: 'left-posterior-hip-cup-lateral-position',
       axis: 'x',
       regionId: 'left-posterior-hip-cup',
-      parentValue: 0.3,
-      lowerBound: 0.22,
-      upperBound: 0.38,
-      maxDelta: 0.05,
-      delta: 0.04,
+      parentValue: RELATION_PARENT,
+      lowerBound: RELATION_LOWER,
+      upperBound: RELATION_UPPER,
+      maxDelta: RELATION_MAX_DELTA,
+      delta: RELATION_DELTA,
       measurement: {
         kind: 'posterior-silhouette-half-width',
         station: 'source-projected-socket-axis',
@@ -305,7 +313,6 @@ function makeProjectionSource(assay) {
     schema: ASSET_ARRIVAL_SOURCE_SCHEMA,
     trackId: 'generator-relational-sensitivity',
     receiptId: 'hip-cup-relational-source-receipt-v0',
-    numericTolerance: assay.tolerances.numeric,
     asset: {
       id: assay.sourceGate.assetId,
       blendPath: '/caller/assigned/hip-cup-source.blend',
@@ -378,7 +385,7 @@ assert.equal(validation.ok, true, JSON.stringify(validation.failures, null, 2));
 assert.equal(validation.status, 'source-validated');
 assert.equal(validation.cellCount, 6);
 assert.deepEqual(validation.failures, []);
-assert.equal(validation.derivedDelta, 0.04);
+assert.equal(validation.derivedDelta, RELATION_DELTA);
 
 const manifest = buildStructuralSourceGenerationManifest(validAssay);
 assert.equal(manifest.schema, STRUCTURAL_GENERATION_MANIFEST_SCHEMA);
@@ -660,23 +667,21 @@ assert.ok(
   'changing station numerics without changing its content identities must fail',
 );
 
-const sharedToleranceAssay = clone(validAssay);
-sharedToleranceAssay.tolerances.numeric = 1e-4;
-sharedToleranceAssay.projectionSource.numericTolerance = 1e-4;
-sharedToleranceAssay.relation.delta += 1e-6;
+const compilerExactAssay = clone(validAssay);
+compilerExactAssay.tolerances.numeric = 1e-4;
+compilerExactAssay.relation.delta += 1e-6;
 for (const variant of ['positive', 'negative']) {
   const sign = variant === 'positive' ? 1 : -1;
-  sharedToleranceAssay.cells
+  compilerExactAssay.cells
     .filter(cell => cell.variant === variant)
-    .forEach(cell => { cell.relationValue = sharedToleranceAssay.relation.parentValue + sign * sharedToleranceAssay.relation.delta; });
-  sharedToleranceAssay.projectionSource.variants[variant].relationValue = sharedToleranceAssay.relation.parentValue
-    + sign * sharedToleranceAssay.relation.delta;
+    .forEach(cell => { cell.relationValue = compilerExactAssay.relation.parentValue + sign * compilerExactAssay.relation.delta; });
+  compilerExactAssay.projectionSource.variants[variant].relationValue = compilerExactAssay.relation.parentValue
+    + sign * compilerExactAssay.relation.delta;
 }
-sharedToleranceAssay.projectionSource.relation.delta = sharedToleranceAssay.relation.delta;
-assert.equal(
-  validateStructuralSourceAssay(sharedToleranceAssay).ok,
-  true,
-  'Gate-0 and the compiler must apply one explicitly shared numeric tolerance',
+compilerExactAssay.projectionSource.relation.delta = compilerExactAssay.relation.delta;
+assert.ok(
+  failureCodes(validateStructuralSourceAssay(compilerExactAssay)).includes('compiler-source-invalid'),
+  'assay diagnostics must not loosen the published asset-arrival-source.v0 exact numeric contract',
 );
 
 assert.throws(

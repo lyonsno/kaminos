@@ -32,8 +32,9 @@ assay additionally requires:
 - frozen camera, crop, denominator, geometry, semantic, and carrier identities;
 - station, camera, and crop hashes derived from their canonical numeric payloads,
   so editing the measurements without changing the claimed identity fails;
-- one finite nonnegative numeric tolerance shared by source admission and the
-  projection compiler;
+- one finite nonnegative assay tolerance for measurement diagnostics;
+- exact bounded-relation and signed-variant scalars in the embedded
+  `kaminos.asset-arrival-source.v0` compiler receipt;
 - one shared source input per variant across L and H.
 
 The six cell channel lists are bound to the compiler's actual product contract;

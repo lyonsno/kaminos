@@ -43,7 +43,6 @@ function sourceReceipt() {
     schema: ASSET_ARRIVAL_SOURCE_SCHEMA,
     trackId: 'generator-relational-sensitivity',
     receiptId: 'operator-hip-arrival-001',
-    numericTolerance: 1e-9,
     asset: {
       id: 'relational-hip-fixture-v0',
       blendPath: '/authored/relational-hip-fixture-v0.blend',
