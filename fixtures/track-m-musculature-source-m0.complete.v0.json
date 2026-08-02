@@ -1,0 +1,405 @@
+{
+  "schema": "kaminos.musculature-source-m0.v0",
+  "receiptId": "synthetic-track-m-musculature-source-v0",
+  "track": {
+    "id": "synthetic-shape-bearing-musculature-v0",
+    "kind": "shape-bearing-musculature"
+  },
+  "source": {
+    "id": "synthetic-blender-source-v0",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "path": "/operator-assets/synthetic-track-m-source.blend",
+    "completeness": "complete",
+    "knownOmissions": []
+  },
+  "control": {
+    "id": "synthetic-matched-control-v0",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "units": "meters",
+  "semanticNames": {
+    "supportIds": [
+      "neighbor-support-fixture"
+    ],
+    "attachmentIds": [
+      "attachment-fixture"
+    ],
+    "insertionIds": [
+      "insertion-fixture"
+    ],
+    "routedPathIds": [
+      "route-fixture"
+    ],
+    "pathControlIds": [
+      "control-a-fixture",
+      "control-b-fixture",
+      "control-c-fixture"
+    ],
+    "tendonIntervalIds": [
+      "tendon-fixture"
+    ],
+    "bellyIntervalIds": [
+      "belly-fixture"
+    ],
+    "wrapGuideIds": [
+      "wrap-fixture"
+    ]
+  },
+  "localFrames": [
+    {
+      "id": "source-frame-fixture",
+      "ownerId": "synthetic-blender-source-v0",
+      "handedness": "right",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "axes": {
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "attachment-frame-fixture",
+      "ownerId": "attachment-fixture",
+      "handedness": "right",
+      "origin": [
+        0.1,
+        0,
+        0
+      ],
+      "axes": {
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "insertion-frame-fixture",
+      "ownerId": "insertion-fixture",
+      "handedness": "right",
+      "origin": [
+        0.8,
+        0,
+        0
+      ],
+      "axes": {
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "camera-frame-fixture",
+      "ownerId": "camera-fixture",
+      "handedness": "right",
+      "origin": [
+        0,
+        1,
+        4
+      ],
+      "axes": {
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "wrap-frame-fixture",
+      "ownerId": "wrap-fixture",
+      "handedness": "right",
+      "origin": [
+        0.45,
+        0.1,
+        0
+      ],
+      "axes": {
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "id": "attachment-fixture",
+      "insertionId": "insertion-fixture",
+      "frameId": "attachment-frame-fixture"
+    }
+  ],
+  "insertions": [
+    {
+      "id": "insertion-fixture",
+      "frameId": "insertion-frame-fixture"
+    }
+  ],
+  "routedPaths": [
+    {
+      "id": "route-fixture",
+      "controlIds": [
+        "control-a-fixture",
+        "control-b-fixture",
+        "control-c-fixture"
+      ],
+      "intervalIds": [
+        "tendon-fixture",
+        "belly-fixture"
+      ],
+      "wrapGuideIds": [
+        "wrap-fixture"
+      ]
+    }
+  ],
+  "pathControls": [
+    {
+      "id": "control-a-fixture",
+      "pathId": "route-fixture",
+      "frameId": "source-frame-fixture",
+      "position": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "control-b-fixture",
+      "pathId": "route-fixture",
+      "frameId": "source-frame-fixture",
+      "position": [
+        0.4,
+        0.1,
+        0
+      ]
+    },
+    {
+      "id": "control-c-fixture",
+      "pathId": "route-fixture",
+      "frameId": "source-frame-fixture",
+      "position": [
+        0.8,
+        0,
+        0
+      ]
+    }
+  ],
+  "intervals": [
+    {
+      "id": "tendon-fixture",
+      "kind": "tendon",
+      "pathId": "route-fixture",
+      "startControlId": "control-a-fixture",
+      "endControlId": "control-b-fixture",
+      "startT": 0,
+      "endT": 0.35
+    },
+    {
+      "id": "belly-fixture",
+      "kind": "belly",
+      "pathId": "route-fixture",
+      "startControlId": "control-b-fixture",
+      "endControlId": "control-c-fixture",
+      "startT": 0.35,
+      "endT": 1
+    }
+  ],
+  "wrapGuides": [
+    {
+      "id": "wrap-fixture",
+      "pathId": "route-fixture",
+      "frameId": "wrap-frame-fixture",
+      "geometrySha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "poseAuthority": {
+    "id": "synthetic-external-pose-authority-v0",
+    "kind": "external",
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "poses": {
+    "neutral": {
+      "id": "synthetic-neutral-v0",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "authorityId": "synthetic-external-pose-authority-v0"
+    },
+    "conservative": {
+      "id": "synthetic-conservative-v0",
+      "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "authorityId": "synthetic-external-pose-authority-v0"
+    },
+    "pairing": {
+      "neutralPoseId": "synthetic-neutral-v0",
+      "conservativePoseId": "synthetic-conservative-v0"
+    }
+  },
+  "camera": {
+    "id": "camera-fixture",
+    "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "frameId": "camera-frame-fixture",
+    "fixed": true
+  },
+  "packing": {
+    "id": "synthetic-packing-v0",
+    "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "behavior": "declared-volume-preserving"
+  },
+  "routingIntervention": {
+    "relationId": "synthetic-route-relation-v0",
+    "routeToCastCouplingId": "synthetic-route-to-cast-v0",
+    "sourceControlSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "conditionIds": {
+      "absent": "deep_geometry_absent",
+      "correct": "deep_geometry_correct_routing",
+      "wrongRoutingMatched": "deep_geometry_wrong_routing_matched"
+    },
+    "testedPathIds": [
+      "route-fixture"
+    ],
+    "correct": {
+      "transformId": "synthetic-correct-transform-v0",
+      "transformSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "relationWitnessSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "containsCorrectRouting": true
+    },
+    "wrongRoutingMatched": {
+      "transformId": "synthetic-wrong-transform-v0",
+      "transformSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "relationWitnessSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "budgetWitnessSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "destroysRoutingRelation": true,
+      "selectedBeforeOutputInspection": true
+    },
+    "absent": {
+      "transformId": "synthetic-absent-transform-v0",
+      "transformSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "kind": "literal_absent"
+    },
+    "matchedBudget": {
+      "ledgerSha256": "abababababababababababababababababababababababababababababababab",
+      "fieldIds": [
+        "primitiveCount",
+        "curveCount",
+        "controlCount",
+        "crossSectionBudget",
+        "routeLength",
+        "occupiedVolume",
+        "surfaceArea"
+      ],
+      "correct": {
+        "primitiveCount": 1,
+        "curveCount": 1,
+        "controlCount": 3,
+        "crossSectionBudget": 0.2,
+        "routeLength": 0.9,
+        "occupiedVolume": 0.08,
+        "surfaceArea": 0.5
+      },
+      "wrongRoutingMatched": {
+        "primitiveCount": 1,
+        "curveCount": 1,
+        "controlCount": 3,
+        "crossSectionBudget": 0.2,
+        "routeLength": 0.9,
+        "occupiedVolume": 0.08,
+        "surfaceArea": 0.5
+      },
+      "tolerances": {
+        "primitiveCount": 0,
+        "curveCount": 0,
+        "controlCount": 0,
+        "crossSectionBudget": 0,
+        "routeLength": 0,
+        "occupiedVolume": 0,
+        "surfaceArea": 0
+      }
+    }
+  },
+  "neighboringSupports": [
+    {
+      "id": "neighbor-support-fixture",
+      "neutralLocalShapeSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "conservativeLocalShapeSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "independent": true
+    }
+  ],
+  "evidence": {
+    "status": "complete",
+    "sourceSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "controlSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "checks": {
+      "semanticNamesResolved": true,
+      "localFramesResolved": true,
+      "attachmentInsertionsResolved": true,
+      "routedPathsResolved": true,
+      "intervalsResolved": true,
+      "wrapGuidesResolved": true,
+      "posePairResolved": true,
+      "cameraFixed": true,
+      "packingBehaviorWitnessed": true,
+      "neighboringSupportsIndependent": true,
+      "containsCorrectRouting": true,
+      "destroysRoutingWithMatchedBudget": true
+    }
+  }
+}

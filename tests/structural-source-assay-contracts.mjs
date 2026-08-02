@@ -379,6 +379,11 @@ const musculatureGate = validateStructuralSourceGate({
   sourceGate: validAssay.sourceGate,
 });
 assert.equal(musculatureGate.ok, true, 'generic source Gate-0 must not require a relational station or hip assignment');
+assert.equal(
+  typeof structuralAssay.validateMusculatureSourceM0,
+  'function',
+  'Track M requires a dedicated caller-parameterized M0 validator rather than the generic source gate',
+);
 const validation = validateStructuralSourceAssay(validAssay);
 assert.equal(validation.schema, STRUCTURAL_SOURCE_VALIDATION_SCHEMA);
 assert.equal(validation.ok, true, JSON.stringify(validation.failures, null, 2));
