@@ -11,6 +11,15 @@ import {
   validateAssetArrivalProjectionReport,
 } from './asset-arrival-projection-compiler-core.mjs';
 
+export {
+  FAIL_MUSCULATURE_SOURCE,
+  HOLD_MUSCULATURE_SOURCE_EVIDENCE,
+  MUSCULATURE_SOURCE_M0_SCHEMA,
+  MUSCULATURE_SOURCE_M0_VALIDATION_SCHEMA,
+  PASS_MUSCULATURE_SOURCE_ONLY,
+  validateMusculatureSourceM0,
+} from './musculature-source-m0-core.mjs';
+
 export const STRUCTURAL_SOURCE_ASSAY_SCHEMA = 'kaminos.structural-source-assay.v0';
 export const STRUCTURAL_SOURCE_VALIDATION_SCHEMA = 'kaminos.structural-source-validation.v0';
 export const STRUCTURAL_SOURCE_GATE_VALIDATION_SCHEMA = 'kaminos.structural-source-gate-validation.v0';
