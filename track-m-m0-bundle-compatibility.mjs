@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import {
   HOLD_MUSCULATURE_SOURCE_EVIDENCE,
   MUSCULATURE_SOURCE_M0_SCHEMA,
@@ -54,6 +56,23 @@ function failure(code, message, details = {}) {
   return { code, message, ...details };
 }
 
+function isPlainObject(value) {
+  if (value === null || typeof value !== 'object') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function ignoredDownstreamFields(plan) {
+  if (!isPlainObject(plan)) return [];
+  return DOWNSTREAM_FIELDS.filter(field => Object.hasOwn(plan, field));
+}
+
+function canonicalPlanWithoutDownstreamFields(plan) {
+  const canonicalPlan = { ...plan };
+  for (const field of DOWNSTREAM_FIELDS) delete canonicalPlan[field];
+  return canonicalPlan;
+}
+
 function failedResult({ source, plan, failures }) {
   return {
     schema: TRACK_M_M0_BUNDLE_COMPATIBILITY_SCHEMA,
@@ -67,7 +86,7 @@ function failedResult({ source, plan, failures }) {
     mappedPredicates: null,
     matchedBudgetCoverage: null,
     missingM0Authority: [...MISSING_M0_AUTHORITY],
-    ignoredDownstreamFields: DOWNSTREAM_FIELDS.filter(field => field in (plan ?? {})),
+    ignoredDownstreamFields: ignoredDownstreamFields(plan),
     holds: [],
     failures,
   };
@@ -85,6 +104,18 @@ export function validateTrackMM0BundleCompatibility({ source, plan } = {}) {
         'track-m-source-contract-invalid',
         'The supplied Track M source does not satisfy the three-condition bundle contract.',
         { reason: error instanceof Error ? error.message : String(error) },
+      )],
+    });
+  }
+
+  if (!isPlainObject(plan)) {
+    return failedResult({
+      source,
+      plan,
+      failures: [failure(
+        'track-m-plan-shape-invalid',
+        'The supplied Track M plan must be a plain object.',
+        { suppliedPlanType: Array.isArray(plan) ? 'array' : typeof plan },
       )],
     });
   }
@@ -108,6 +139,23 @@ export function validateTrackMM0BundleCompatibility({ source, plan } = {}) {
         'track-m-plan-identity-mismatch',
         'The supplied plan is not the deterministic plan for the supplied Track M source.',
         { expectedPlanId: expectedPlan.id, suppliedPlanId: plan?.id ?? null },
+      )],
+    });
+  }
+
+  const canonicalPlan = canonicalPlanWithoutDownstreamFields(plan);
+  if (!isDeepStrictEqual(canonicalPlan, expectedPlan)) {
+    return failedResult({
+      source,
+      plan,
+      failures: [failure(
+        'track-m-plan-content-mismatch',
+        'The supplied plan content differs from the deterministic plan for the supplied Track M source.',
+        {
+          expectedPlanId: expectedPlan.id,
+          suppliedPlanId: plan.id,
+          allowedDownstreamFields: [...DOWNSTREAM_FIELDS],
+        },
       )],
     });
   }
@@ -154,7 +202,7 @@ export function validateTrackMM0BundleCompatibility({ source, plan } = {}) {
       missingFields: missingBudgetFields,
     },
     missingM0Authority: [...MISSING_M0_AUTHORITY],
-    ignoredDownstreamFields: DOWNSTREAM_FIELDS.filter(field => field in plan),
+    ignoredDownstreamFields: ignoredDownstreamFields(plan),
     holds: [failure(
       'track-m-m0-source-authority-missing',
       'The three-condition bundle preserves the comparison class but cannot supply the authored anatomical source authority required by M0.',

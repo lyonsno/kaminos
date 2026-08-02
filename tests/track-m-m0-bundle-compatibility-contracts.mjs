@@ -131,3 +131,46 @@ test('source and plan identity drift fails instead of looking like a source hold
   assert.equal(result.losslessM0Receipt, false);
   assert.equal(result.failures[0].code, 'track-m-plan-identity-mismatch');
 });
+
+test('nested persisted-plan drift fails even when copied public identities stay unchanged', () => {
+  const source = makeBundleSource();
+  const plan = buildTrackMEvidencePlan(source);
+  plan.asset.sha256 = H('f');
+
+  const result = validateTrackMM0BundleCompatibility({ source, plan });
+  assert.equal(result.comparisonClassCompatible, false);
+  assert.equal(result.losslessM0Receipt, false);
+  assert.equal(result.failures[0].code, 'track-m-plan-content-mismatch');
+});
+
+test('plan schema drift fails even when copied public identities stay unchanged', () => {
+  const source = makeBundleSource();
+  const plan = buildTrackMEvidencePlan(source);
+  plan.schema = 'kaminos.track-m-evidence-plan.stale';
+
+  const result = validateTrackMM0BundleCompatibility({ source, plan });
+  assert.equal(result.comparisonClassCompatible, false);
+  assert.equal(result.failures[0].code, 'track-m-plan-content-mismatch');
+});
+
+test('unrecognized plan baggage fails rather than silently escaping comparison', () => {
+  const source = makeBundleSource();
+  const plan = buildTrackMEvidencePlan(source);
+  plan.unreviewedAuthority = { status: 'passed' };
+
+  const result = validateTrackMM0BundleCompatibility({ source, plan });
+  assert.equal(result.comparisonClassCompatible, false);
+  assert.equal(result.failures[0].code, 'track-m-plan-content-mismatch');
+});
+
+test('malformed plan shapes return structured incompatibility evidence', () => {
+  const source = makeBundleSource();
+
+  for (const plan of [null, 'stale-plan', [], 17]) {
+    const result = validateTrackMM0BundleCompatibility({ source, plan });
+    assert.equal(result.comparisonClassCompatible, false);
+    assert.equal(result.losslessM0Receipt, false);
+    assert.equal(result.failures[0].code, 'track-m-plan-shape-invalid');
+    assert.deepEqual(result.ignoredDownstreamFields, []);
+  }
+});
