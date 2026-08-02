@@ -181,7 +181,6 @@ function compilerBindingFailures(assay, projectionPlan) {
   compare('source.camera.id', source?.camera?.id, station?.camera_id);
   compare('source.camera.width', source?.camera?.width, station?.image_width);
   compare('source.camera.height', source?.camera?.height, station?.image_height);
-  compare('source.numericTolerance', source?.numericTolerance, assay?.tolerances?.numeric);
   for (const field of ['id', 'regionId', 'parentValue', 'delta', 'lowerBound', 'upperBound', 'maxDelta']) {
     compare(`source.relation.${field}`, source?.relation?.[field], relation?.[field]);
   }

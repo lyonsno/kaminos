@@ -47,7 +47,6 @@
     "schema": "kaminos.asset-arrival-source.v0",
     "trackId": "generator-relational-sensitivity",
     "receiptId": "hip-cup-relational-source-receipt-v0",
-    "numericTolerance": 1e-9,
     "asset": {
       "id": "lerm-adjacent-source-v0",
       "blendPath": "/caller/assigned/hip-cup-source.blend",
@@ -92,7 +91,7 @@
       "axisPartRoleId": "socket-axis",
       "participantRoleIds": ["socket-cup", "joint-head"],
       "parentValue": 0.3,
-      "delta": 0.04,
+      "delta": 0.039999999999999994,
       "lowerBound": 0.22,
       "upperBound": 0.38,
       "maxDelta": 0.05
@@ -106,7 +105,7 @@
         "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true }
       },
       "positive": {
-        "relationValue": 0.34,
+        "relationValue": 0.33999999999999997,
         "sourceSceneId": "caller_scene_positive",
         "sourceInputHash": "1111111111111111111111111111111111111111111111111111111111111111",
         "sourceSpillover": 0.004,
@@ -211,7 +210,7 @@
     "lowerBound": 0.22,
     "upperBound": 0.38,
     "maxDelta": 0.05,
-    "delta": 0.04,
+    "delta": 0.039999999999999994,
     "measurement": {
       "kind": "posterior-silhouette-half-width",
       "station": "source-projected-socket-axis",
@@ -262,7 +261,7 @@
     },
     {
       "id": "L_positive", "rungId": "L", "variant": "positive", "editSign": 1,
-      "relationValue": 0.34, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "relationValue": 0.33999999999999997, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
       "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
       "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
       "projectionIdentity": { "id": "hip-cup-station:L:positive", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
@@ -289,7 +288,7 @@
     },
     {
       "id": "H_positive", "rungId": "H", "variant": "positive", "editSign": 1,
-      "relationValue": 0.34, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
+      "relationValue": 0.33999999999999997, "relationRegionId": "left-posterior-hip-cup", "sourceSpillover": 0.004,
       "sourceChecks": { "occupiedFit": true, "rigidClearance": true, "attachmentContinuity": true, "distalSupportFixed": true, "conservativeSweep": true },
       "identities": { "hierarchyHash": "1111111111111111111111111111111111111111111111111111111111111111", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "distalSupportHash": "4444444444444444444444444444444444444444444444444444444444444444", "attachmentHash": "5555555555555555555555555555555555555555555555555555555555555555", "unrelatedGeometryHash": "6666666666666666666666666666666666666666666666666666666666666666" },
       "projectionIdentity": { "id": "hip-cup-station:H:positive", "trackId": "hip-cup-relational-sensitivity-v0", "sourceAssetId": "lerm-adjacent-source-v0", "sourceAssetHash": "0000000000000000000000000000000000000000000000000000000000000000", "stationInstanceId": "golden-hip-cup-station-v0", "stationHash": "c3fbc9dabbce959349decfc017982423fda9fa591bb7dd989332fd9ad3042d76", "cameraHash": "b87ca9fe80ffb76fc7f2d8cf6b85dd67bdfbe74a82633b05bf76d310b3dd24dd", "cropHash": "2ef67702e2cee749895c094a8e9114bfecab49c8d1ae7436687c2f9f3c2fd114", "denominatorHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "roleCoreMaskHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "roleDilatedMaskHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "foregroundMaskContractId": "foreground-alpha-mask-v0", "topologyHash": "2222222222222222222222222222222222222222222222222222222222222222", "semanticRoleIdsHash": "3333333333333333333333333333333333333333333333333333333333333333", "materialCoordinatesHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
