@@ -39,6 +39,11 @@ function hashJson(value) {
   return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 }
 
+function routingFixtureHash(fixture) {
+  const { fixtureSha256: _fixtureSha256, schema: _schema, ...fixtureCore } = fixture;
+  return hashJson(fixtureCore);
+}
+
 function component(role, id, { geometry = null } = {}) {
   return {
     name: id,
@@ -326,17 +331,135 @@ function makeFixtureInputs() {
   return inputs;
 }
 
-function makeFixtureSelection(graph) {
+function makeRoutingFixture(graph) {
+  const routeIds = ['muscle-01', 'muscle-47'];
+  const correctRoutes = routeIds.map((constructionId, index) => ({
+    constructionId,
+    origin: {
+      assignedFromConstructionId: constructionId,
+      assignedHandleInstanceId: `origin-${index}`,
+      authoredHandleInstanceId: `origin-${index}`,
+      point: [index, 0, 0],
+      sourceAuthority: 'source_mesh',
+      sourceName: 'SRC_PELVIS',
+    },
+    insertion: {
+      assignedFromConstructionId: constructionId,
+      assignedHandleInstanceId: `insertion-${index}`,
+      authoredHandleInstanceId: `insertion-${index}`,
+      point: [index, 1, 0],
+      sourceAuthority: 'source_mesh',
+      sourceName: 'DISTAL_BONE',
+    },
+  }));
+  const matchedWrongRoutes = correctRoutes.map((route, index) => {
+    const donorInsertion = correctRoutes[1 - index].insertion;
+    return {
+      constructionId: route.constructionId,
+      origin: structuredClone(route.origin),
+      insertion: {
+        ...structuredClone(donorInsertion),
+        authoredHandleInstanceId: route.insertion.authoredHandleInstanceId,
+      },
+    };
+  });
+  const fixtureCore = {
+    compilerId: 'track-m-m31-m47-routing-fixture-v0',
+    status: 'compiled',
+    trackId: 'shape-bearing-musculature',
+    source: {
+      assetSha256: graph.source.sha256,
+      graphSha256: graph.graphSha256,
+    },
+    selection: {
+      correctConstructionId: 'muscle-01',
+      crossWireDonorConstructionId: 'muscle-47',
+      nullConstructionIds: ['muscle-35', 'muscle-38'],
+      selectionAuthority: 'external-relation-selection-authority-v0',
+    },
+    conditions: {
+      correct: { routes: correctRoutes },
+      matchedWrong: { routes: matchedWrongRoutes },
+    },
+    nulls: [
+      { constructionId: 'muscle-35', sameObject: true },
+      { constructionId: 'muscle-38', sameObject: true },
+    ],
+    authority: {
+      admittedClaims: ['source-side-routing-sensitivity-fixture'],
+      heldClaims: ['selected-relation-m0', 'packing-geometry-admission'],
+    },
+  };
+  const fixture = canonical({
+    schema: 'kaminos.track-m-source-routing-fixture.v0',
+    ...fixtureCore,
+  });
+  return canonical({ ...fixture, fixtureSha256: routingFixtureHash(fixture) });
+}
+
+function rehashGraph(inputs) {
+  inputs.graph.endpointAuthorityCounts = inputs.graph.muscles.reduce((counts, muscle) => {
+    for (const endpoint of [muscle.origin, muscle.insertion]) counts[endpoint.sourceAuthority] += 1;
+    return counts;
+  }, { source_mesh: 0, provisional_muscle_surface: 0, self_reference: 0, unclassified_object: 0 });
+  const graphCore = structuredClone(inputs.graph);
+  delete graphCore.graphSha256;
+  inputs.graph.graphSha256 = hashJson(graphCore);
+  inputs.expectedGraphSha256 = inputs.graph.graphSha256;
+}
+
+function withRoutingFixture(inputs) {
+  const routingFixture = makeRoutingFixture(inputs.graph);
   return {
-    schema: 'kaminos.track-m-authored-relation-fixture-selection.v0',
-    graphSha256: graph.graphSha256,
-    primaryConstructionId: 'muscle-01',
-    matchedWrongDonorConstructionId: 'muscle-47',
-    nullConstructionIds: ['muscle-35', 'muscle-38'],
-    authority: { id: 'external-relation-selection-authority-v0', sha256: H('f') },
-    selectedBeforeOutputInspection: true,
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
   };
 }
+
+test('routing fixture is semantic-hash-bound and chronology remains caller asserted', () => {
+  const inputs = makeFixtureInputs();
+  const routingFixture = makeRoutingFixture(inputs.graph);
+  const result = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+
+  assert.equal(result.selectedFixture.primaryRoute.constructionId, 'muscle-01');
+  assert.equal(result.selectedFixture.matchedWrongDonor.constructionId, 'muscle-47');
+  const selectedEvidence = result.satisfied.find(item => item.field === 'selectedFixture');
+  assert.equal(selectedEvidence.routingFixtureSha256, routingFixture.fixtureSha256);
+  assert.equal(selectedEvidence.selectionChronology, 'caller_asserted_not_validator_proven');
+
+  const substituted = structuredClone(routingFixture);
+  substituted.selection.selectionAuthority = 'self-asserted-substitute';
+  substituted.fixtureSha256 = routingFixtureHash(substituted);
+  const rejected = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture: substituted,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+  assert.equal(rejected.disposition, 'FAIL_MUSCULATURE_SOURCE');
+  assert.ok(rejected.contradictory.some(item => item.field === 'routingFixtureIdentity'));
+});
+
+test('routing fixture rejects rehashed matched-wrong origin reassignment', () => {
+  const inputs = makeFixtureInputs();
+  const routingFixture = makeRoutingFixture(inputs.graph);
+  const [first, second] = routingFixture.conditions.matchedWrong.routes;
+  [first.origin, second.origin] = [second.origin, first.origin];
+  routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+
+  const result = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+
+  assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+  assert.ok(result.contradictory.some(item => item.field === 'routingFixtureMatchedRoutePreservation'));
+});
 
 test('authenticated graph returns an exact hold and a non-selecting adapter contract', () => {
   const result = validateTrackMAuthoredSourceM0Preflight(makeInputs());
@@ -353,20 +476,14 @@ test('authenticated graph returns an exact hold and a non-selecting adapter cont
   assert.ok(result.missing.some(item => item.field === 'localFrames'));
   assert.deepEqual(result.contradictory, []);
   assert.deepEqual(result.selectionAdapter.requiredCallerFields, [
-    'schema',
-    'graphSha256',
-    'primaryConstructionId',
-    'matchedWrongDonorConstructionId',
-    'nullConstructionIds',
-    'authority',
-    'selectedBeforeOutputInspection',
+    'routingFixture',
+    'expectedRoutingFixtureSha256',
   ]);
   assert.equal(result.selectionAdapter.selectsForCaller, false);
 });
 
 test('Golden selection resolves one causal relation fixture without promoting M0', () => {
-  const inputs = makeFixtureInputs();
-  inputs.selection = makeFixtureSelection(inputs.graph);
+  const inputs = withRoutingFixture(makeFixtureInputs());
   const result = validateTrackMAuthoredSourceM0Preflight(inputs);
 
   assert.equal(result.disposition, HOLD_MUSCULATURE_SOURCE_EVIDENCE);
@@ -389,51 +506,46 @@ test('Golden selection resolves one causal relation fixture without promoting M0
 });
 
 test('fixture rejects duplicate roles, unmatched route families, and invalid nulls', () => {
-  for (const mutate of [
-    selection => { selection.matchedWrongDonorConstructionId = selection.primaryConstructionId; },
-    (_selection, graph) => { graph.muscles[1].insertion.sourceName = 'SRC_PELVIS'; },
-    (_selection, graph) => { graph.muscles[2].insertion.sourceName = 'DISTAL_BONE'; },
-  ]) {
-    const inputs = makeFixtureInputs();
-    inputs.selection = makeFixtureSelection(inputs.graph);
-    mutate(inputs.selection, inputs.graph);
-    if (inputs.graph.graphSha256 === inputs.expectedGraphSha256) {
-      const graphCore = structuredClone(inputs.graph);
-      delete graphCore.graphSha256;
-      inputs.graph.graphSha256 = hashJson(graphCore);
-      inputs.expectedGraphSha256 = inputs.graph.graphSha256;
-      inputs.selection.graphSha256 = inputs.graph.graphSha256;
-    }
-    const result = validateTrackMAuthoredSourceM0Preflight(inputs);
+  const cases = [
+    inputs => {
+      const routed = withRoutingFixture(inputs);
+      routed.routingFixture.selection.crossWireDonorConstructionId = 'muscle-01';
+      routed.routingFixture.fixtureSha256 = routingFixtureHash(routed.routingFixture);
+      routed.expectedRoutingFixtureSha256 = routed.routingFixture.fixtureSha256;
+      return routed;
+    },
+    inputs => {
+      inputs.graph.muscles[1].insertion.sourceName = 'SRC_PELVIS';
+      rehashGraph(inputs);
+      return withRoutingFixture(inputs);
+    },
+    inputs => {
+      inputs.graph.muscles[2].insertion.sourceName = 'DISTAL_BONE';
+      rehashGraph(inputs);
+      return withRoutingFixture(inputs);
+    },
+  ];
+  for (const buildCase of cases) {
+    const result = validateTrackMAuthoredSourceM0Preflight(buildCase(makeFixtureInputs()));
     assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
-    assert.ok(result.contradictory.some(item => item.field.startsWith('selectedFixture')));
+    assert.ok(result.contradictory.some(item => (
+      item.field.startsWith('selectedFixture') || item.field.startsWith('routingFixture')
+    )));
   }
 });
 
-test('fixture rejects incomplete or provisional members and authority substitution', () => {
+test('fixture rejects incomplete or provisional members', () => {
   for (const mutate of [
-    (_selection, graph) => { graph.muscles[1].origin.sourceAuthority = 'provisional_muscle_surface'; },
-    (_selection, graph) => {
+    graph => { graph.muscles[1].origin.sourceAuthority = 'provisional_muscle_surface'; },
+    graph => {
       graph.muscles[3].completenessAuthority = 'incomplete_wip';
       graph.muscles[3].missingComponentRoles = ['attachment_insertion'];
     },
-    selection => { selection.authority.sha256 = 'not-a-hash'; },
   ]) {
     const inputs = makeFixtureInputs();
-    inputs.selection = makeFixtureSelection(inputs.graph);
-    mutate(inputs.selection, inputs.graph);
-    if (inputs.selection.authority.sha256 !== 'not-a-hash') {
-      inputs.graph.endpointAuthorityCounts = inputs.graph.muscles.reduce((counts, muscle) => {
-        for (const endpoint of [muscle.origin, muscle.insertion]) counts[endpoint.sourceAuthority] += 1;
-        return counts;
-      }, { source_mesh: 0, provisional_muscle_surface: 0, self_reference: 0, unclassified_object: 0 });
-      const graphCore = structuredClone(inputs.graph);
-      delete graphCore.graphSha256;
-      inputs.graph.graphSha256 = hashJson(graphCore);
-      inputs.expectedGraphSha256 = inputs.graph.graphSha256;
-      inputs.selection.graphSha256 = inputs.graph.graphSha256;
-    }
-    const result = validateTrackMAuthoredSourceM0Preflight(inputs);
+    mutate(inputs.graph);
+    rehashGraph(inputs);
+    const result = validateTrackMAuthoredSourceM0Preflight(withRoutingFixture(inputs));
     assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
     assert.ok(result.contradictory.some(item => item.field.startsWith('selectedFixture')));
   }
@@ -506,6 +618,41 @@ test('CLI records effective input identities and preserves a valid hold report',
   assert.equal(report.inputs.bundleSource.effectivePath, await realpath(bundleSourcePath));
   assert.equal(report.effectivePlanRoute, 'deterministic-plan-from-verified-bundle-source');
   assert.equal(report.failurePhase, null);
+});
+
+test('CLI consumes a semantic-hash-bound routing fixture without promoting M0', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'track-m-cat-m0-routing-fixture-'));
+  const inputs = makeFixtureInputs();
+  const routingFixture = makeRoutingFixture(inputs.graph);
+  const graphPath = join(root, 'graph.json');
+  const bundleSourcePath = join(root, 'bundle-source.json');
+  const routingFixturePath = join(root, 'routing-fixture.json');
+  const outputPath = join(root, 'report.json');
+  await writeFile(graphPath, `${JSON.stringify(inputs.graph)}\n`);
+  await writeFile(bundleSourcePath, `${JSON.stringify(inputs.bundleSource)}\n`);
+  await writeFile(routingFixturePath, `${JSON.stringify(routingFixture)}\n`);
+
+  const run = spawnSync(process.execPath, [
+    'tools/track-m-authored-source-m0-preflight.mjs',
+    '--graph', graphPath,
+    '--bundle-source', bundleSourcePath,
+    '--routing-fixture', routingFixturePath,
+    '--expected-graph-sha256', inputs.expectedGraphSha256,
+    '--expected-source-sha256', inputs.expectedSourceSha256,
+    '--expected-routing-fixture-sha256', routingFixture.fixtureSha256,
+    '--output', outputPath,
+  ], { cwd: process.cwd(), encoding: 'utf8' });
+
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(await readFile(outputPath, 'utf8'));
+  assert.equal(report.validation.disposition, HOLD_MUSCULATURE_SOURCE_EVIDENCE);
+  assert.equal(report.validation.selectedFixture.primaryRoute.constructionId, 'muscle-01');
+  assert.equal(report.inputs.routingFixture.effectivePath, await realpath(routingFixturePath));
+  assert.equal(report.requested.expectedRoutingFixtureSha256, routingFixture.fixtureSha256);
+  assert.equal(
+    report.validation.satisfied.find(item => item.field === 'selectedFixture').selectionChronology,
+    'caller_asserted_not_validator_proven',
+  );
 });
 
 test('CLI writes a durable parse-failure report before validation exists', async () => {

@@ -13,11 +13,14 @@ import {
   TRACK_M_AUTHORED_SOURCE_GRAPH_SCHEMA,
   TRACK_M_SOURCE_PROJECTION_COMPILER_ID,
 } from './track-m-source-projection-core.mjs';
+import {
+  TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
+  TRACK_M_ROUTING_FIXTURE_SCHEMA,
+} from './track-m-routing-fixture-core.mjs';
 
 export const TRACK_M_AUTHORED_SOURCE_M0_PREFLIGHT_SCHEMA =
   'kaminos.track-m-authored-source-m0-preflight.v0';
-export const TRACK_M_RELATION_FIXTURE_SELECTION_SCHEMA =
-  'kaminos.track-m-authored-relation-fixture-selection.v0';
+const VERIFIED_SELECTION_SCHEMA = 'kaminos.track-m-verified-routing-fixture-selection.v0';
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const SELECTION_FIELDS = Object.freeze([
@@ -27,7 +30,6 @@ const SELECTION_FIELDS = Object.freeze([
   'matchedWrongDonorConstructionId',
   'nullConstructionIds',
   'authority',
-  'selectedBeforeOutputInspection',
 ]);
 const AUTHORITY_FIELDS = Object.freeze(['id', 'sha256']);
 const SOURCE_GRAPH_MISSING_M0_FIELDS = Object.freeze([
@@ -157,10 +159,10 @@ function failedResult({ graph, bundleCompatibility, contradictory }) {
 
 function selectionAdapterContract() {
   return {
-    schema: TRACK_M_RELATION_FIXTURE_SELECTION_SCHEMA,
-    requiredCallerFields: [...SELECTION_FIELDS],
+    schema: TRACK_M_ROUTING_FIXTURE_SCHEMA,
+    requiredCallerFields: ['routingFixture', 'expectedRoutingFixtureSha256'],
     selectsForCaller: false,
-    resolution: 'caller ids resolve one primary route, one matched donor, and two same-object null controls; all identities are copied from the authenticated graph',
+    resolution: 'a caller-expected semantic fixture identity resolves one primary route, one matched donor, and two same-object null controls; all relation identities are copied from the authenticated graph',
     admittedEndpointAuthorityWithoutOverride: 'source_mesh',
     outputAuthority: 'selected sensitivity-fixture identity only; no cross-wire transform, tolerance, superiority, M0, station, pose, or routing admission',
   };
@@ -275,6 +277,167 @@ function validateFixtureMember(muscle, role, contradictory) {
   }
 }
 
+function validateMatchedRoutePreservation(correctRoutes, matchedRoutes, contradictory) {
+  if (!Array.isArray(correctRoutes) || !Array.isArray(matchedRoutes)
+    || correctRoutes.length !== 2 || matchedRoutes.length !== 2) {
+    contradictory.push(field('routingFixtureMatchedRoutePreservation', {
+      reason: 'direct-field verification requires exactly two correct and two matched-wrong routes',
+    }));
+    return;
+  }
+  for (let index = 0; index < correctRoutes.length; index += 1) {
+    const correctRoute = correctRoutes[index];
+    const donorRoute = correctRoutes[1 - index];
+    const matchedRoute = matchedRoutes[index];
+    if (!isPlainObject(correctRoute?.origin)
+      || !isPlainObject(correctRoute?.insertion)
+      || !isPlainObject(donorRoute?.insertion)
+      || !isPlainObject(matchedRoute?.origin)
+      || !isPlainObject(matchedRoute?.insertion)
+      || !nonEmptyString(correctRoute.insertion.authoredHandleInstanceId)) {
+      contradictory.push(field('routingFixtureMatchedRoutePreservation', {
+        reason: 'each route requires inspectable origin and insertion assignment objects',
+        constructionId: correctRoute?.constructionId ?? null,
+      }));
+      continue;
+    }
+    const expectedMatchedRoute = structuredClone(correctRoute);
+    expectedMatchedRoute.insertion = structuredClone(donorRoute.insertion);
+    expectedMatchedRoute.insertion.authoredHandleInstanceId =
+      correctRoute.insertion.authoredHandleInstanceId;
+    if (!isDeepStrictEqual(matchedRoute, expectedMatchedRoute)) {
+      contradictory.push(field('routingFixtureMatchedRoutePreservation', {
+        reason: 'matched-wrong must preserve the complete route and origin while changing only the insertion assignment to the paired donor',
+        constructionId: correctRoute.constructionId,
+        donorConstructionId: donorRoute.constructionId,
+        originPreserved: isDeepStrictEqual(matchedRoute.origin, correctRoute.origin),
+        insertionMatchesPairedDonor: isDeepStrictEqual(
+          matchedRoute.insertion,
+          expectedMatchedRoute.insertion,
+        ),
+      }));
+    }
+  }
+}
+
+function resolveRoutingFixture(routingFixture, expectedRoutingFixtureSha256, graph) {
+  if (routingFixture === null || routingFixture === undefined) {
+    return { selection: null, evidence: null, contradictory: [] };
+  }
+  const contradictory = [];
+  if (!isPlainObject(routingFixture)) {
+    return {
+      selection: null,
+      evidence: null,
+      contradictory: [field('routingFixtureIdentity', { reason: 'routing fixture must be an object' })],
+    };
+  }
+  const {
+    fixtureSha256,
+    schema: fixtureSchema,
+    ...fixtureCore
+  } = routingFixture;
+  const effectiveFixtureSha256 = hashJson(fixtureCore);
+  if (!validHash(expectedRoutingFixtureSha256)
+    || !validHash(fixtureSha256)
+    || fixtureSha256 !== effectiveFixtureSha256
+    || fixtureSha256 !== expectedRoutingFixtureSha256) {
+    contradictory.push(field('routingFixtureIdentity', {
+      reason: 'routing fixture semantic identity must match both its canonical content and the caller-expected identity',
+      expectedRoutingFixtureSha256: expectedRoutingFixtureSha256 ?? null,
+      declaredRoutingFixtureSha256: fixtureSha256 ?? null,
+      effectiveRoutingFixtureSha256: effectiveFixtureSha256,
+    }));
+  }
+  if (fixtureSchema !== TRACK_M_ROUTING_FIXTURE_SCHEMA
+    || routingFixture.compilerId !== TRACK_M_ROUTING_FIXTURE_COMPILER_ID
+    || routingFixture.status !== 'compiled'
+    || routingFixture.trackId !== graph.trackId) {
+    contradictory.push(field('routingFixtureContract', {
+      reason: 'routing fixture schema, compiler, status, or track does not match the authenticated Track M contract',
+    }));
+  }
+  if (routingFixture.source?.assetSha256 !== graph.source.sha256
+    || routingFixture.source?.graphSha256 !== graph.graphSha256) {
+    contradictory.push(field('routingFixtureSourceIdentity', {
+      reason: 'routing fixture source or graph identity does not match the authenticated source graph',
+      fixtureSourceSha256: routingFixture.source?.assetSha256 ?? null,
+      fixtureGraphSha256: routingFixture.source?.graphSha256 ?? null,
+      graphSourceSha256: graph.source.sha256,
+      graphSha256: graph.graphSha256,
+    }));
+  }
+  const selection = routingFixture.selection;
+  const primaryConstructionId = selection?.correctConstructionId;
+  const matchedWrongDonorConstructionId = selection?.crossWireDonorConstructionId;
+  const nullConstructionIds = selection?.nullConstructionIds;
+  if (!nonEmptyString(primaryConstructionId)
+    || !nonEmptyString(matchedWrongDonorConstructionId)
+    || !Array.isArray(nullConstructionIds)
+    || nullConstructionIds.length !== 2
+    || nullConstructionIds.some(id => !nonEmptyString(id))
+    || !nonEmptyString(selection?.selectionAuthority)) {
+    contradictory.push(field('routingFixtureSelection', {
+      reason: 'routing fixture must identify one correct route, one matched donor, two nulls, and one selection authority',
+    }));
+  }
+  const selectedRouteIds = [primaryConstructionId, matchedWrongDonorConstructionId];
+  const correctRouteIds = routingFixture.conditions?.correct?.routes?.map(route => route.constructionId);
+  const matchedRouteIds = routingFixture.conditions?.matchedWrong?.routes?.map(route => route.constructionId);
+  if (!isDeepStrictEqual(correctRouteIds, selectedRouteIds)
+    || !isDeepStrictEqual(matchedRouteIds, selectedRouteIds)) {
+    contradictory.push(field('routingFixtureRouteIdentity', {
+      reason: 'correct and matched-wrong conditions must carry the selected route pair in caller-selected order',
+      selectedRouteIds,
+      correctRouteIds: correctRouteIds ?? null,
+      matchedRouteIds: matchedRouteIds ?? null,
+    }));
+  }
+  validateMatchedRoutePreservation(
+    routingFixture.conditions?.correct?.routes,
+    routingFixture.conditions?.matchedWrong?.routes,
+    contradictory,
+  );
+  const nullIds = routingFixture.nulls?.map(control => control.constructionId);
+  if (!isDeepStrictEqual(nullIds, nullConstructionIds)
+    || routingFixture.nulls?.some(control => control.sameObject !== true)) {
+    contradictory.push(field('routingFixtureNullIdentity', {
+      reason: 'routing fixture nulls must match the selected ids and remain same-object controls',
+      selectedNullIds: nullConstructionIds ?? null,
+      effectiveNullIds: nullIds ?? null,
+    }));
+  }
+  if (!routingFixture.authority?.admittedClaims?.includes('source-side-routing-sensitivity-fixture')
+    || !routingFixture.authority?.heldClaims?.includes('selected-relation-m0')
+    || !routingFixture.authority?.heldClaims?.includes('packing-geometry-admission')) {
+    contradictory.push(field('routingFixtureClaimBoundary', {
+      reason: 'routing fixture must admit only source-side sensitivity while preserving M0 and packing holds',
+    }));
+  }
+  return {
+    selection: contradictory.length === 0 ? {
+      schema: VERIFIED_SELECTION_SCHEMA,
+      graphSha256: graph.graphSha256,
+      primaryConstructionId,
+      matchedWrongDonorConstructionId,
+      nullConstructionIds: [...nullConstructionIds],
+      authority: {
+        id: selection.selectionAuthority,
+        sha256: fixtureSha256,
+      },
+    } : null,
+    evidence: contradictory.length === 0 ? {
+      routingFixtureSha256: fixtureSha256,
+      selectionAuthorityId: selection.selectionAuthority,
+      selectionChronology: 'caller_asserted_not_validator_proven',
+      matchedRoutePreservation: 'direct_fixture_field_assertion',
+      originsPreserved: true,
+      insertionAssignmentsOnlyChanged: true,
+    } : null,
+    contradictory,
+  };
+}
+
 function resolveSelection(selection, graph) {
   if (selection === null || selection === undefined) return { fixture: null, contradictory: [] };
   const contradictory = [];
@@ -282,7 +445,7 @@ function resolveSelection(selection, graph) {
     contradictory.push(field('selectedFixture', { reason: 'selection fields are missing or carry unreviewed baggage' }));
     return { fixture: null, contradictory };
   }
-  if (selection.schema !== TRACK_M_RELATION_FIXTURE_SELECTION_SCHEMA
+  if (selection.schema !== VERIFIED_SELECTION_SCHEMA
     || selection.graphSha256 !== graph.graphSha256
     || !nonEmptyString(selection.primaryConstructionId)
     || !nonEmptyString(selection.matchedWrongDonorConstructionId)
@@ -291,10 +454,9 @@ function resolveSelection(selection, graph) {
     || selection.nullConstructionIds.some(id => !nonEmptyString(id))
     || !exactKeys(selection.authority, AUTHORITY_FIELDS)
     || !nonEmptyString(selection.authority.id)
-    || !validHash(selection.authority.sha256)
-    || selection.selectedBeforeOutputInspection !== true) {
+    || !validHash(selection.authority.sha256)) {
     contradictory.push(field('selectedFixtureAuthority', {
-      reason: 'selection must bind this graph, one primary route, one donor, two nulls, one content-addressed authority, and preregistration',
+      reason: 'verified routing selection must bind this graph, one primary route, one donor, two nulls, and one content-addressed authority',
     }));
     return { fixture: null, contradictory };
   }
@@ -384,7 +546,8 @@ export function validateTrackMAuthoredSourceM0Preflight({
   expectedSourceSha256,
   bundleSource,
   bundlePlan,
-  selection = null,
+  routingFixture = null,
+  expectedRoutingFixtureSha256 = null,
 } = {}) {
   const bundleCompatibility = validateTrackMM0BundleCompatibility({
     source: bundleSource,
@@ -420,7 +583,19 @@ export function validateTrackMAuthoredSourceM0Preflight({
     muscle.origin.sourceAuthority === 'provisional_muscle_surface'
     || muscle.insertion.sourceAuthority === 'provisional_muscle_surface'
   ));
-  const resolvedSelection = resolveSelection(selection, graph);
+  const resolvedRoutingFixture = resolveRoutingFixture(
+    routingFixture,
+    expectedRoutingFixtureSha256,
+    graph,
+  );
+  if (resolvedRoutingFixture.contradictory.length > 0) {
+    return failedResult({
+      graph,
+      bundleCompatibility,
+      contradictory: resolvedRoutingFixture.contradictory,
+    });
+  }
+  const resolvedSelection = resolveSelection(resolvedRoutingFixture.selection, graph);
   if (resolvedSelection.contradictory.length > 0) {
     return failedResult({
       graph,
@@ -465,7 +640,13 @@ export function validateTrackMAuthoredSourceM0Preflight({
       primaryConstructionId: resolvedSelection.fixture.primaryRoute.constructionId,
       matchedWrongDonorConstructionId: resolvedSelection.fixture.matchedWrongDonor.constructionId,
       nullConstructionIds: resolvedSelection.fixture.nullControls.map(relation => relation.constructionId),
-      selectionAuthorityId: selection.authority.id,
+      routingFixtureSha256: resolvedRoutingFixture.evidence.routingFixtureSha256,
+      selectionAuthorityId: resolvedRoutingFixture.evidence.selectionAuthorityId,
+      selectionChronology: resolvedRoutingFixture.evidence.selectionChronology,
+      matchedRoutePreservation: resolvedRoutingFixture.evidence.matchedRoutePreservation,
+      originsPreserved: resolvedRoutingFixture.evidence.originsPreserved,
+      insertionAssignmentsOnlyChanged:
+        resolvedRoutingFixture.evidence.insertionAssignmentsOnlyChanged,
       claimCeiling: resolvedSelection.fixture.claimCeiling,
     }));
   }

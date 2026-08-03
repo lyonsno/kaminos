@@ -4,7 +4,8 @@
   "failurePhase": null,
   "requested": {
     "expectedGraphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
-    "expectedSourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3"
+    "expectedSourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "expectedRoutingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
   },
   "inputs": {
     "graph": {
@@ -19,11 +20,11 @@
       "bytesSha256": "8a8b37d1672ba32d07192edb632547a775286ac408d0c2fbe9fb5a037f9f7dbc",
       "byteLength": 4293
     },
-    "selection": {
-      "requestedPath": "fixtures/track-m-cat-armature-m31-m47-relation-fixture-selection.v0.json",
-      "effectivePath": "/private/tmp/kaminos-mushfinger-phase-three-source-validator-0731-mushfinger-track-m-m0-validator-0802-mushfinger-track-m-bundle-consumer-0802-mushfinger-cat-armature-m0-preflight-0803/fixtures/track-m-cat-armature-m31-m47-relation-fixture-selection.v0.json",
-      "bytesSha256": "84a3715c6646f0c35f30ec5d7eb2f11faa601a1b400931a8d5e9e2bbf5455ca9",
-      "byteLength": 522
+    "routingFixture": {
+      "requestedPath": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-phase-three-source-validator-0731-mushfinger-track-m-m0-validator-0802-mushfinger-track-m-bundle-consumer-0802-mushfinger-cat-armature-m0-preflight-0803/fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "bytesSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075",
+      "byteLength": 24138
     }
   },
   "effectivePlanRoute": "deterministic-plan-from-verified-bundle-source",
@@ -397,7 +398,12 @@
           "muscle-35",
           "muscle-38"
         ],
-        "selectionAuthorityId": "track-m-cat-armature-relation-selection-2026-08-03",
+        "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28",
+        "selectionAuthorityId": "track-m-relation-selection-2026-08-03",
+        "selectionChronology": "caller_asserted_not_validator_proven",
+        "matchedRoutePreservation": "direct_fixture_field_assertion",
+        "originsPreserved": true,
+        "insertionAssignmentsOnlyChanged": true,
         "claimCeiling": "routing-sensitivity-only"
       }
     ],
@@ -441,18 +447,13 @@
     ],
     "contradictory": [],
     "selectionAdapter": {
-      "schema": "kaminos.track-m-authored-relation-fixture-selection.v0",
+      "schema": "kaminos.track-m-source-routing-fixture.v0",
       "requiredCallerFields": [
-        "schema",
-        "graphSha256",
-        "primaryConstructionId",
-        "matchedWrongDonorConstructionId",
-        "nullConstructionIds",
-        "authority",
-        "selectedBeforeOutputInspection"
+        "routingFixture",
+        "expectedRoutingFixtureSha256"
       ],
       "selectsForCaller": false,
-      "resolution": "caller ids resolve one primary route, one matched donor, and two same-object null controls; all identities are copied from the authenticated graph",
+      "resolution": "a caller-expected semantic fixture identity resolves one primary route, one matched donor, and two same-object null controls; all relation identities are copied from the authenticated graph",
       "admittedEndpointAuthorityWithoutOverride": "source_mesh",
       "outputAuthority": "selected sensitivity-fixture identity only; no cross-wire transform, tolerance, superiority, M0, station, pose, or routing admission"
     },
