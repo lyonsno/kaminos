@@ -69,6 +69,49 @@ function roundedMatrixAt(point) {
   return matrixAt(point.map(value => Number(value.toFixed(9))));
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  }
+  if (typeof value === 'number' && Object.is(value, -0)) return 0;
+  return value;
+}
+
+function hashJson(value) {
+  return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function routeGraph(routes) {
+  return routes.map(route => ({
+    constructionId: route.constructionId,
+    origin: {
+      assignedFromConstructionId: route.origin.assignedFromConstructionId,
+      assignedHandleInstanceId: route.origin.assignedHandleInstanceId,
+      sourceName: route.origin.sourceName,
+    },
+    insertion: {
+      assignedFromConstructionId: route.insertion.assignedFromConstructionId,
+      assignedHandleInstanceId: route.insertion.assignedHandleInstanceId,
+      sourceName: route.insertion.sourceName,
+    },
+  }));
+}
+
+function refreshConditionRouteReceipts(condition) {
+  const graph = routeGraph(condition.routes);
+  condition.attachmentEndpointMultisetSha256 = hashJson(condition.routes.flatMap(route => [
+    route.origin.assignedHandleInstanceId,
+    route.insertion.assignedHandleInstanceId,
+  ]).sort());
+  condition.routingGraphSha256 = hashJson(graph);
+  condition.transform.sha256 = hashJson({
+    kind: condition.transform.kind,
+    routingGraphSha256: condition.routingGraphSha256,
+    routes: graph,
+  });
+}
+
 function muscle(constructionId, route) {
   const component = (role, instanceId, matrixWorld, hash = null) => ({
     name: `${route.name} | ${role}`,
@@ -215,6 +258,30 @@ test('matched-route validator rejects duplicate/drop endpoint laundering even wi
   assert.throws(
     () => validateMatchedRoutePreservation(fixture.conditions.correct, laundered),
     /effective endpoint inventory|endpoint.*multiset/i,
+  );
+});
+
+test('matched-route validator rejects recomputed-receipt origin swaps outside the frozen insertion intervention', () => {
+  const fixture = compile();
+  const laundered = structuredClone(fixture.conditions.matchedWrong);
+  [laundered.routes[0].origin, laundered.routes[1].origin] = [
+    laundered.routes[1].origin,
+    laundered.routes[0].origin,
+  ];
+  refreshConditionRouteReceipts(laundered);
+  assert.throws(
+    () => validateMatchedRoutePreservation(fixture.conditions.correct, laundered),
+    /origin assignment|only insertion/i,
+  );
+});
+
+test('matched-route validator rejects a stale condition-transform receipt', () => {
+  const fixture = compile();
+  const staleTransform = structuredClone(fixture.conditions.matchedWrong);
+  staleTransform.transform.sha256 = 'f'.repeat(64);
+  assert.throws(
+    () => validateMatchedRoutePreservation(fixture.conditions.correct, staleTransform),
+    /transform.*receipt/i,
   );
 });
 

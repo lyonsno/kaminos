@@ -330,9 +330,14 @@ function condition(id, kind, routes) {
 function assertConditionReceipts(conditionValue, label) {
   requireObject(conditionValue, label);
   if (!Array.isArray(conditionValue.routes)) throw new Error(`${label} routes must be an array`);
+  requireObject(conditionValue.transform, `${label} transform`);
+  requireString(conditionValue.transform.id, `${label} transform id`);
+  requireString(conditionValue.transform.kind, `${label} transform kind`);
+  requireHash(conditionValue.transform.sha256, `${label} transform receipt`);
   const expectedGeometry = contentIdentity(conditionValue.routes);
   const expectedEndpoints = endpointMultisetIdentity(conditionValue.routes);
-  const expectedRouting = hashJson(routeGraph(conditionValue.routes));
+  const expectedRouteGraph = routeGraph(conditionValue.routes);
+  const expectedRouting = hashJson(expectedRouteGraph);
   const expectedBudget = representationalBudget(conditionValue.routes);
   requireIdentity(conditionValue.deepGeometryContentSetSha256, expectedGeometry, `${label} deep geometry receipt`);
   requireIdentity(conditionValue.attachmentEndpointMultisetSha256, expectedEndpoints, `${label} effective endpoint multiset receipt`);
@@ -340,11 +345,77 @@ function assertConditionReceipts(conditionValue, label) {
   if (hashJson(conditionValue.representationalBudget) !== hashJson(expectedBudget)) {
     throw new Error(`${label} representational budget receipt mismatch`);
   }
+  const expectedTransform = hashJson({
+    kind: conditionValue.transform.kind,
+    routingGraphSha256: expectedRouting,
+    routes: expectedRouteGraph,
+  });
+  requireIdentity(conditionValue.transform.sha256, expectedTransform, `${label} transform receipt`);
 }
 
 export function validateMatchedRoutePreservation(correct, matchedWrong) {
   assertConditionReceipts(correct, 'correct condition');
   assertConditionReceipts(matchedWrong, 'matched-wrong condition');
+  requireIdentity(correct.id, 'deep-geometry-correctly-routed', 'correct condition id');
+  requireIdentity(correct.transform.id, 'deep-geometry-correctly-routed-m31-m47-v0', 'correct condition transform id');
+  requireIdentity(correct.transform.kind, 'preserve-correct-routing', 'correct condition transform kind');
+  requireIdentity(matchedWrong.id, 'deep-geometry-matched-wrong-routing', 'matched-wrong condition id');
+  requireIdentity(matchedWrong.transform.id, 'deep-geometry-matched-wrong-routing-m31-m47-v0', 'matched-wrong condition transform id');
+  requireIdentity(matchedWrong.transform.kind, 'matched-wrong-routing', 'matched-wrong condition transform kind');
+  if (correct.routes.length !== ROUTE_SPECS.length || matchedWrong.routes.length !== ROUTE_SPECS.length) {
+    throw new Error(`matched route comparison requires exactly ${ROUTE_SPECS.length} ordered routes`);
+  }
+
+  ROUTE_SPECS.forEach((spec, index) => {
+    const correctRoute = correct.routes[index];
+    const wrongRoute = matchedWrong.routes[index];
+    for (const [field, expected] of [
+      ['constructionId', spec.constructionId],
+      ['instanceId', spec.instanceId],
+      ['lineageId', spec.lineageId],
+    ]) {
+      requireIdentity(correctRoute?.[field], expected, `correct route ${index} ${field}`);
+      requireIdentity(wrongRoute?.[field], expected, `matched-wrong route ${index} ${field}`);
+    }
+    requireIdentity(
+      correctRoute.origin?.assignedFromConstructionId,
+      spec.constructionId,
+      `correct route ${spec.constructionId} origin assignment`,
+    );
+    requireIdentity(
+      correctRoute.origin?.assignedHandleInstanceId,
+      correctRoute.origin?.authoredHandleInstanceId,
+      `correct route ${spec.constructionId} origin handle assignment`,
+    );
+    requireIdentity(
+      correctRoute.insertion?.assignedFromConstructionId,
+      spec.constructionId,
+      `correct route ${spec.constructionId} insertion assignment`,
+    );
+    requireIdentity(
+      correctRoute.insertion?.assignedHandleInstanceId,
+      correctRoute.insertion?.authoredHandleInstanceId,
+      `correct route ${spec.constructionId} insertion handle assignment`,
+    );
+
+    const correctPreserved = structuredClone(correctRoute);
+    const wrongPreserved = structuredClone(wrongRoute);
+    delete correctPreserved.insertion;
+    delete wrongPreserved.insertion;
+    if (JSON.stringify(canonical(correctPreserved)) !== JSON.stringify(canonical(wrongPreserved))) {
+      throw new Error(
+        `matched-wrong route ${spec.constructionId} changes fields outside insertion assignment, including origin assignment`,
+      );
+    }
+
+    const donorRoute = correct.routes[ROUTE_SPECS.length - 1 - index];
+    const expectedInsertion = structuredClone(donorRoute.insertion);
+    expectedInsertion.authoredHandleInstanceId = correctRoute.insertion.authoredHandleInstanceId;
+    expectedInsertion.assignedFromConstructionId = donorRoute.constructionId;
+    if (JSON.stringify(canonical(wrongRoute.insertion)) !== JSON.stringify(canonical(expectedInsertion))) {
+      throw new Error(`matched-wrong route ${spec.constructionId} does not carry the intended insertion permutation`);
+    }
+  });
   if (correct.deepGeometryContentSetSha256 !== matchedWrong.deepGeometryContentSetSha256) {
     throw new Error('matched-wrong condition does not preserve deep geometry content');
   }
