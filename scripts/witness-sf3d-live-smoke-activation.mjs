@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   SF3D_LIVE_SMOKE_OPTIONS,
+  SF3D_LIVE_SMOKE_KIT_VERSION,
   SF3D_LIVE_SMOKE_PROFILE_LABEL,
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   validateSf3dLiveSmokeConfig,
@@ -47,6 +48,9 @@ function assert(condition, message) {
 function assertProfile(state, phase) {
   assert(state.profileLabel === SF3D_LIVE_SMOKE_PROFILE_LABEL, `${phase} profile label mismatch: ${state.profileLabel || 'missing'}`);
   assert(JSON.stringify(state.options) === JSON.stringify(SF3D_LIVE_SMOKE_OPTIONS), `${phase} effective SF3D options mismatch`);
+  assert(state.requestedKitVersion === SF3D_LIVE_SMOKE_KIT_VERSION, `${phase} requested kit mismatch: ${state.requestedKitVersion || 'missing'}`);
+  assert(state.effectiveKitVersion === SF3D_LIVE_SMOKE_KIT_VERSION, `${phase} effective kit mismatch: ${state.effectiveKitVersion || 'missing'}`);
+  assert(typeof state.effectiveKitPackagePath === 'string' && state.effectiveKitPackagePath.length > 0, `${phase} effective kit package path is missing`);
 }
 
 async function loadPuppeteer(sf3dRepo) {

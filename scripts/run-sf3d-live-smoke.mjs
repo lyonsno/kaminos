@@ -5,7 +5,10 @@ import net from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
 
+import { resolveSf3dRuntimeKitIdentity } from './sf3d-runtime-kit-identity.mjs';
+
 const EXPECTED_REVISION = '10118acbbdd895db7e4eaa7d0a9de252ccaa77af';
+const EXPECTED_KIT_VERSION = '0.1.42';
 const KAMINOS_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
 function argument(name, fallback = null) {
@@ -57,6 +60,7 @@ if (effectiveRevision !== EXPECTED_REVISION) {
   throw new Error(`SF3D effective revision ${effectiveRevision} != accepted ${EXPECTED_REVISION}`);
 }
 if (dirty) throw new Error(`SF3D source must be clean:\n${dirty}`);
+const kitIdentity = resolveSf3dRuntimeKitIdentity(sf3dRepo, EXPECTED_KIT_VERSION);
 
 const sf3dPort = await openPort(Number(argument('--sf3d-port', '5176')));
 const kaminosPort = await openPort(Number(argument('--kaminos-port', '8093')));
@@ -95,6 +99,9 @@ const kaminos = spawn('python3', ['serve.py', String(kaminosPort)], {
     KAMINOS_SF3D_REPO: sf3dRepo,
     KAMINOS_SF3D_ORIGIN: sf3dOrigin,
     KAMINOS_SF3D_EXPECTED_REVISION: EXPECTED_REVISION,
+    KAMINOS_SF3D_EXPECTED_KIT_VERSION: kitIdentity.requestedVersion,
+    KAMINOS_SF3D_EFFECTIVE_KIT_VERSION: kitIdentity.effectiveVersion,
+    KAMINOS_SF3D_EFFECTIVE_KIT_PACKAGE_PATH: kitIdentity.effectivePackagePath,
     KAMINOS_SPLAT_ASSET_ROOTS: meshDir,
   },
 });
@@ -118,6 +125,7 @@ url.searchParams.set('mesh_root', 'splat-extra-1');
 url.searchParams.set('mesh_path', meshFile);
 console.log('\nSF3D live contention smoke');
 console.log(`  source: ${effectiveRevision}`);
+console.log(`  kit:    ${kitIdentity.effectiveVersion}`);
 console.log(`  sf3d:   ${sf3dOrigin}`);
 console.log(`  open:   ${url.href}`);
 console.log('  firing is manual; model load does not start inference\n');

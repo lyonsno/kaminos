@@ -120,6 +120,7 @@ PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 SF3D_LIVE_SMOKE_ROUTE_ID = "sf3d.image-to-mesh.webgpu-local.v0"
 SF3D_LIVE_SMOKE_SOURCE_REVISION = "10118acbbdd895db7e4eaa7d0a9de252ccaa77af"
+SF3D_LIVE_SMOKE_KIT_VERSION = "0.1.42"
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
 GIT_SHA_PATTERN = re.compile(r"^[a-f0-9]{40}$", re.IGNORECASE)
 
@@ -145,17 +146,27 @@ def sf3d_live_smoke_config():
         "KAMINOS_SF3D_EXPECTED_REVISION",
         SF3D_LIVE_SMOKE_SOURCE_REVISION,
     ).strip()
+    requested_kit_version = os.environ.get("KAMINOS_SF3D_EXPECTED_KIT_VERSION", "").strip()
+    effective_kit_version = os.environ.get("KAMINOS_SF3D_EFFECTIVE_KIT_VERSION", "").strip()
+    effective_kit_package_path = os.environ.get(
+        "KAMINOS_SF3D_EFFECTIVE_KIT_PACKAGE_PATH", ""
+    ).strip()
     base = {
         "schema": "kaminos.sf3d-live-smoke-config.v0",
         "ok": False,
         "routeId": SF3D_LIVE_SMOKE_ROUTE_ID,
         "requestedRevision": requested_revision,
         "effectiveRevision": None,
+        "requestedKitVersion": requested_kit_version or None,
+        "effectiveKitVersion": effective_kit_version or None,
+        "effectiveKitPackagePath": effective_kit_package_path or None,
         "clean": False,
         "origin": origin or None,
     }
     if not repo_value or not origin:
         return {**base, "error": "KAMINOS_SF3D_REPO and KAMINOS_SF3D_ORIGIN are required"}
+    if not requested_kit_version or not effective_kit_version or not effective_kit_package_path:
+        return {**base, "error": "SF3D WebGPU kit runtime identity is required"}
     repo = Path(repo_value).expanduser().resolve()
     if not repo.is_dir():
         return {**base, "error": f"SF3D repo does not exist: {repo}"}
@@ -178,6 +189,10 @@ def sf3d_live_smoke_config():
     }
     if requested_revision != SF3D_LIVE_SMOKE_SOURCE_REVISION:
         return {**resolved, "error": "requested SF3D revision is not the accepted smoke revision"}
+    if requested_kit_version != SF3D_LIVE_SMOKE_KIT_VERSION:
+        return {**resolved, "error": "requested SF3D WebGPU kit is not the accepted smoke version"}
+    if effective_kit_version != requested_kit_version:
+        return {**resolved, "error": "effective SF3D WebGPU kit does not match requested version"}
     if effective_revision != requested_revision:
         return {**resolved, "error": "effective SF3D revision does not match requested revision"}
     if dirty:

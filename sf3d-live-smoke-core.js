@@ -2,6 +2,7 @@ export const SF3D_LIVE_SMOKE_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 export const SF3D_LIVE_SMOKE_SOURCE_REVISION = '10118acbbdd895db7e4eaa7d0a9de252ccaa77af';
 export const SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 export const SF3D_LIVE_SMOKE_GPU_TOPOLOGY = 'same-page-dual-device-shared-physical-gpu';
+export const SF3D_LIVE_SMOKE_KIT_VERSION = '0.1.42';
 export const SF3D_LIVE_SMOKE_PROFILE_LABEL = 'DINO + two-stream + bounded-prefix x2';
 
 export const SF3D_LIVE_SMOKE_OPTIONS = Object.freeze({
@@ -45,6 +46,13 @@ export function validateSf3dLiveSmokeConfig(value) {
   if (value.effectiveRevision !== value.requestedRevision) {
     throw new Error(`SF3D effective revision mismatch: ${value.effectiveRevision || 'missing'}`);
   }
+  if (value.requestedKitVersion !== SF3D_LIVE_SMOKE_KIT_VERSION) {
+    throw new Error(`SF3D requested WebGPU kit mismatch: ${value.requestedKitVersion || 'missing'}`);
+  }
+  if (value.effectiveKitVersion !== value.requestedKitVersion) {
+    throw new Error(`SF3D effective WebGPU kit mismatch: ${value.effectiveKitVersion || 'missing'}`);
+  }
+  requiredString(value.effectiveKitPackagePath, 'SF3D effective WebGPU kit package path');
   if (value.clean !== true) throw new Error('SF3D live smoke requires a clean source checkout');
   const origin = new URL(requiredString(value.origin, 'SF3D origin'));
   if (!['127.0.0.1', 'localhost'].includes(origin.hostname) || origin.protocol !== 'http:') {

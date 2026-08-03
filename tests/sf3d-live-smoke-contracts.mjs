@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import {
   SF3D_LIVE_SMOKE_ROUTE_ID,
   SF3D_LIVE_SMOKE_SOURCE_REVISION,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+  SF3D_LIVE_SMOKE_KIT_VERSION,
   SF3D_LIVE_SMOKE_OPTIONS,
   SF3D_LIVE_SMOKE_PROFILE_LABEL,
   buildSf3dCompletedOutputReceipt,
@@ -23,10 +24,12 @@ import {
   requireArgumentValue,
   validateTetWitnessEvidence,
 } from '../scripts/sf3d-live-smoke-witness-core.mjs';
+import { resolveSf3dRuntimeKitIdentity } from '../scripts/sf3d-runtime-kit-identity.mjs';
 
 assert.equal(SF3D_LIVE_SMOKE_ROUTE_ID, 'sf3d.image-to-mesh.webgpu-local.v0');
 assert.equal(SF3D_LIVE_SMOKE_SOURCE_REVISION, '10118acbbdd895db7e4eaa7d0a9de252ccaa77af');
 assert.equal(SF3D_LIVE_SMOKE_GPU_TOPOLOGY, 'same-page-dual-device-shared-physical-gpu');
+assert.equal(SF3D_LIVE_SMOKE_KIT_VERSION, '0.1.42');
 assert.equal(SF3D_LIVE_SMOKE_PROFILE_LABEL, 'DINO + two-stream + bounded-prefix x2');
 assert.deepEqual(SF3D_LIVE_SMOKE_OPTIONS, {
   cooperativeDino: true,
@@ -153,6 +156,9 @@ const config = validateSf3dLiveSmokeConfig({
   routeId: SF3D_LIVE_SMOKE_ROUTE_ID,
   requestedRevision: SF3D_LIVE_SMOKE_SOURCE_REVISION,
   effectiveRevision: SF3D_LIVE_SMOKE_SOURCE_REVISION,
+  requestedKitVersion: SF3D_LIVE_SMOKE_KIT_VERSION,
+  effectiveKitVersion: SF3D_LIVE_SMOKE_KIT_VERSION,
+  effectiveKitPackagePath: '/tmp/sf3d/node_modules/@kaminos/webgpu-inference-kit/package.json',
   clean: true,
   origin: 'http://127.0.0.1:5176',
 });
@@ -160,6 +166,10 @@ assert.equal(config.effectiveRevision, SF3D_LIVE_SMOKE_SOURCE_REVISION);
 assert.throws(
   () => validateSf3dLiveSmokeConfig({ ...config, effectiveRevision: 'stale' }),
   /effective revision/i,
+);
+assert.throws(
+  () => validateSf3dLiveSmokeConfig({ ...config, effectiveKitVersion: '0.1.36' }),
+  /effective WebGPU kit/i,
 );
 assert.throws(
   () => validateSf3dLiveSmokeConfig({ ...config, clean: false }),
@@ -351,6 +361,46 @@ const launcherSource = readFileSync(new URL('scripts/run-sf3d-live-smoke.mjs', r
 const witnessSource = readFileSync(new URL('scripts/witness-sf3d-live-smoke-activation.mjs', root), 'utf8');
 const smokeSource = readFileSync(new URL('sf3d-live-smoke.js', root), 'utf8');
 
+const kitFixture = mkdtempSync(join(tmpdir(), 'sf3d-kit-identity-'));
+try {
+  writeFileSync(join(kitFixture, 'package.json'), JSON.stringify({
+    devDependencies: { '@kaminos/webgpu-inference-kit': SF3D_LIVE_SMOKE_KIT_VERSION },
+  }));
+  const installedKit = join(kitFixture, 'node_modules', '@kaminos', 'webgpu-inference-kit');
+  mkdirSync(installedKit, { recursive: true });
+  writeFileSync(join(installedKit, 'package.json'), JSON.stringify({
+    name: '@kaminos/webgpu-inference-kit',
+    version: '0.1.36',
+  }));
+  assert.throws(
+    () => resolveSf3dRuntimeKitIdentity(kitFixture, SF3D_LIVE_SMOKE_KIT_VERSION),
+    /requested 0\.1\.42, effective 0\.1\.36/,
+    'the launcher identity helper must reject the stale package from the operator failure',
+  );
+  rmSync(join(installedKit, 'package.json'));
+  assert.throws(
+    () => resolveSf3dRuntimeKitIdentity(kitFixture, SF3D_LIVE_SMOKE_KIT_VERSION),
+    /could not be read/,
+    'the launcher identity helper must reject a missing installed package',
+  );
+  writeFileSync(join(installedKit, 'package.json'), JSON.stringify({
+    name: '@kaminos/webgpu-inference-kit',
+    version: SF3D_LIVE_SMOKE_KIT_VERSION,
+  }));
+  assert.deepEqual(
+    resolveSf3dRuntimeKitIdentity(kitFixture, SF3D_LIVE_SMOKE_KIT_VERSION),
+    {
+      packageName: '@kaminos/webgpu-inference-kit',
+      requestedVersion: SF3D_LIVE_SMOKE_KIT_VERSION,
+      effectiveVersion: SF3D_LIVE_SMOKE_KIT_VERSION,
+      requestedPackagePath: join(kitFixture, 'package.json'),
+      effectivePackagePath: join(installedKit, 'package.json'),
+    },
+  );
+} finally {
+  rmSync(kitFixture, { recursive: true, force: true });
+}
+
 for (const optionName of [
   'cooperativeDino',
   'dinoSchedulingMode',
@@ -396,6 +446,11 @@ const serverRevisionPattern = /^SF3D_LIVE_SMOKE_SOURCE_REVISION = "([0-9a-f]{40}
 const launcherRevisionPattern = /^const EXPECTED_REVISION = '([0-9a-f]{40})';$/gm;
 assertSingleSourceRevision(serverSource, serverRevisionPattern, 'Kaminos server');
 assertSingleSourceRevision(launcherSource, launcherRevisionPattern, 'SF3D smoke launcher');
+assert.match(
+  launcherSource,
+  /resolveSf3dRuntimeKitIdentity\(sf3dRepo, EXPECTED_KIT_VERSION\)/,
+  'the launcher must reject a stale effective WebGPU kit before starting the smoke servers',
+);
 
 const staleRevision = '2f79b9b84a19809107f5eb29b5fab806e00e6c6a';
 assert.throws(
@@ -420,6 +475,7 @@ assert.throws(
 assert.doesNotMatch(indexSource, /device: sf3dLiveSmokePrepared\.device/, 'Kaminos must not consume SF3D external-device lifetime');
 assert.match(indexSource, /new THREE\.WebGPURenderer\(\{\s*antialias: true,\s*\}\)/, 'Kaminos must retain renderer-owned device creation');
 assert.match(indexSource, /id="sf3d-live-smoke-topology"/, 'the operator surface must expose effective GPU topology');
+assert.match(indexSource, /id="sf3d-live-smoke-kit"/, 'the operator surface must expose the effective WebGPU kit');
 assert.match(indexSource, /id="sf3d-live-smoke-profile"/, 'the operator surface must expose the effective scheduling profile');
 assert.match(
   smokeSource,
@@ -435,6 +491,11 @@ assert.match(
   smokeSource,
   /options:\s*SF3D_LIVE_SMOKE_OPTIONS/,
   'the debug witness must expose the exact accepted options',
+);
+assert.match(
+  smokeSource,
+  /effectiveKitVersion:\s*prepared\.config\.effectiveKitVersion/,
+  'the debug witness and route reports must expose the effective WebGPU kit',
 );
 assert.match(indexSource, /noteRenderedFrame\(performance\.now\(\), frameMs\)/, 'the live route must measure actual renderer-loop completions');
 assert.match(indexSource, /sf3dLiveSmokeRouteActive \|\| idleFrames/, 'the live route must prevent renderer idle retirement');

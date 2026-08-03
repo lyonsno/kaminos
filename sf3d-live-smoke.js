@@ -1,6 +1,7 @@
 import {
   SF3D_LIVE_SMOKE_CANONICAL_GLB_SHA256,
   SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+  SF3D_LIVE_SMOKE_KIT_VERSION,
   SF3D_LIVE_SMOKE_OPTIONS,
   SF3D_LIVE_SMOKE_PROFILE_LABEL,
   SF3D_LIVE_SMOKE_ROUTE_ID,
@@ -199,6 +200,7 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
   setText('sf3d-live-smoke-revision', prepared.config.effectiveRevision.slice(0, 10));
   setText('sf3d-live-smoke-route', SF3D_LIVE_SMOKE_ROUTE_ID);
   setText('sf3d-live-smoke-topology', SF3D_LIVE_SMOKE_GPU_TOPOLOGY);
+  setText('sf3d-live-smoke-kit', prepared.config.effectiveKitVersion);
   setText('sf3d-live-smoke-profile', SF3D_LIVE_SMOKE_PROFILE_LABEL);
   setText('sf3d-live-smoke-status', 'Loading model');
 
@@ -241,6 +243,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
         routeId: SF3D_LIVE_SMOKE_ROUTE_ID,
         revision: prepared.config.effectiveRevision,
         gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
+        requestedKitVersion: SF3D_LIVE_SMOKE_KIT_VERSION,
+        effectiveKitVersion: prepared.config.effectiveKitVersion,
+        effectiveKitPackagePath: prepared.config.effectiveKitPackagePath,
         profileLabel: SF3D_LIVE_SMOKE_PROFILE_LABEL,
         options: SF3D_LIVE_SMOKE_OPTIONS,
         running,
@@ -374,6 +379,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
+          requestedKitVersion: prepared.config.requestedKitVersion,
+          effectiveKitVersion: prepared.config.effectiveKitVersion,
+          effectiveKitPackagePath: prepared.config.effectiveKitPackagePath,
           gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
           ...completedOutput,
@@ -420,6 +428,9 @@ export async function createSf3dLiveSmokeController({ prepared, onOutput }) {
           requestedRevision: prepared.config.requestedRevision,
           effectiveRevision: prepared.config.effectiveRevision,
           sourceClean: prepared.config.clean,
+          requestedKitVersion: prepared.config.requestedKitVersion,
+          effectiveKitVersion: prepared.config.effectiveKitVersion,
+          effectiveKitPackagePath: prepared.config.effectiveKitPackagePath,
           gpuTopology: SF3D_LIVE_SMOKE_GPU_TOPOLOGY,
           options: SF3D_LIVE_SMOKE_OPTIONS,
           elapsedMs: completedOutput?.totalWallMs ?? performance.now() - startedAt,
