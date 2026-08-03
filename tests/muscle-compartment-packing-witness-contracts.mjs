@@ -98,6 +98,14 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
       { path: 'before.png', viewport: [1400, 900], state: 'before' },
       { path: 'before.png', viewport: [1400, 900], state: 'before' },
     ],
+    [
+      { path: 'before.png', viewport: [1400, 900], state: 'before' },
+      { path: 'before.png', viewport: [1400, 900], state: 'packed' },
+    ],
+    [
+      { path: 'packed.png', viewport: [1400, 900], state: 'before' },
+      { path: 'before.png', viewport: [1400, 900], state: 'packed' },
+    ],
   ]) {
     await assert.rejects(
       () => admitMuscleCompartmentPackingVisualInspection({
@@ -105,9 +113,27 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
         inspection: { ...commonInspection, images },
         io: memory.io,
       }),
-      /before.*packed|packed.*before|exactly one/i,
+      /before.*packed|packed.*before|exactly one|state at/i,
     );
   }
+  memory.files.set(`${outDir}/before.png`, Buffer.from('same-pixels'));
+  memory.files.set(`${outDir}/packed.png`, Buffer.from('same-pixels'));
+  await assert.rejects(
+    () => admitMuscleCompartmentPackingVisualInspection({
+      outDir,
+      inspection: {
+        ...commonInspection,
+        images: [
+          { path: 'before.png', viewport: [1400, 900], state: 'before' },
+          { path: 'packed.png', viewport: [1400, 900], state: 'packed' },
+        ],
+      },
+      io: memory.io,
+    }),
+    /distinct.*hash|identical.*capture/i,
+  );
+  memory.files.set(`${outDir}/before.png`, Buffer.from('before-pixels'));
+  memory.files.set(`${outDir}/packed.png`, Buffer.from('packed-pixels'));
   const admitted = await admitMuscleCompartmentPackingVisualInspection({
     outDir,
     inspection: {

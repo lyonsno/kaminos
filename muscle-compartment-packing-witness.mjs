@@ -305,6 +305,15 @@ export async function admitMuscleCompartmentPackingVisualInspection({
   if (stateCounts.before !== 1 || stateCounts.packed !== 1 || inspection.images.length !== 2) {
     throw new Error('muscle packing visual admission requires exactly one before and exactly one packed capture');
   }
+  const requiredCapturePath = { before:'before.png', packed:'packed.png' };
+  for (const image of inspection.images) {
+    if (requiredCapturePath[image?.state] !== image?.path) {
+      throw new Error(
+        `muscle packing visual admission requires ${image?.state || 'unknown'} state at ` +
+        `${requiredCapturePath[image?.state] || 'a recognized state path'}`,
+      );
+    }
+  }
   const reportPath = resolve(outputRoot, 'report.json');
   const indexPath = resolve(outputRoot, 'index.html');
   const sourcePath = resolve(outputRoot, 'source.json');
@@ -339,6 +348,9 @@ export async function admitMuscleCompartmentPackingVisualInspection({
     const bytes = await io.readFile(imagePath);
     if (bytes.length === 0) throw new Error(`muscle packing visual admission rejects blank or empty capture: ${image.path}`);
     images.push({ ...structuredClone(image), byteLength:bytes.length, sha256:sha256(bytes) });
+  }
+  if (new Set(images.map(image => image.sha256)).size !== images.length) {
+    throw new Error('muscle packing visual admission requires distinct state capture hashes; identical captures cannot prove movement');
   }
   const receipt = {
     schema: INSPECTION_SCHEMA,
