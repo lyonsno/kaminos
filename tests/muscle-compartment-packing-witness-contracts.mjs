@@ -48,8 +48,11 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.ok(memory.files.has(`${outDir}/index.html`));
   assert.ok(memory.files.has(`${outDir}/report.json`));
   assert.ok(!memory.files.has(`${outDir}/report.json.tmp`));
-  assert.match(String(memory.files.get(`${outDir}/index.html`)), /Before packing/);
-  assert.match(String(memory.files.get(`${outDir}/index.html`)), /Packed result/);
+  const witnessHtml = String(memory.files.get(`${outDir}/index.html`));
+  assert.match(witnessHtml, /Overlapping input/);
+  assert.match(witnessHtml, /Collision-resolved result/);
+  assert.doesNotMatch(witnessHtml, />Before packing</);
+  assert.doesNotMatch(witnessHtml, />Packed result</);
   assert.match(String(memory.files.get(`${outDir}/index.html`)), /OrbitControls/);
 });
 

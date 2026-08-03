@@ -1,15 +1,15 @@
 {
-  "observedAt": "2026-08-03T20:15:36Z",
+  "observedAt": "2026-08-03T22:32:09Z",
   "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/",
   "backend": {
-    "browser": "Google Chrome 150.0.7871.187",
+    "browser": "Playwright chrome-headless-shell revision 1234",
     "renderer": "Three.js WebGLRenderer",
     "routeRequested": "muscle-compartment-packing-orbitable-v0",
     "routeEffective": "muscle-compartment-packing-orbitable-v0",
     "fallbackUsed": false
   },
   "capture": {
-    "method": "Chrome headless screenshot after 6000 ms virtual-time settle",
+    "method": "Independent chrome-headless-shell screenshot with receipt-bearing process-group cleanup",
     "server": "Kaminos serve.py",
     "serverPort": 8765,
     "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",

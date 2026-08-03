@@ -38,7 +38,7 @@ function renderHtml({ source, result, report }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Muscle Compartment Packing · Before / Packed</title>
+  <title>Muscle Compartment Packing · Overlapping Input / Collision-Resolved Result</title>
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -66,13 +66,13 @@ function renderHtml({ source, result, report }) {
   <div id="viewport"></div>
   <section class="panel" aria-label="Packing witness controls and residuals">
     <h1>Muscle Compartment Packing</h1>
-    <p class="authority">Synthetic 3D falsifier · no anatomical admission</p>
+    <p class="authority">Synthetic 3D overlap-resolution falsifier · no anatomical admission</p>
     <div class="controls">
-      <button data-state="before">Before packing</button>
-      <button data-state="packed">Packed result</button>
+      <button data-state="before">Overlapping input</button>
+      <button data-state="packed">Collision-resolved result</button>
     </div>
     <div class="metrics">
-      <span class="head">residual</span><span class="head value">before</span><span class="head value">packed</span>
+      <span class="head">residual</span><span class="head value">input</span><span class="head value">resolved</span>
       <span>pairwise overlap</span><span class="value">${formatMetric(initial.pairwisePenetration)}</span><span class="value packed">${formatMetric(packed.pairwisePenetration)}</span>
       <span>skeletal penetration</span><span class="value">${formatMetric(initial.skeletalPenetration)}</span><span class="value packed">${formatMetric(packed.skeletalPenetration)}</span>
       <span>compartment escape</span><span class="value">${formatMetric(initial.compartmentEscape)}</span><span class="value packed">${formatMetric(packed.compartmentEscape)}</span>
@@ -87,7 +87,7 @@ function renderHtml({ source, result, report }) {
       <span><i class="swatch" style="background:#f5f1e8"></i>attachments</span>
     </div>
   </section>
-  <div class="hint">Drag to orbit · wheel to zoom · packed view retains faint before-state centerlines and displacement vectors</div>
+  <div class="hint">Drag to orbit · wheel to zoom · resolved view retains faint input-state centerlines and displacement vectors</div>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';

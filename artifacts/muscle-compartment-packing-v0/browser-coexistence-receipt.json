@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.muscle-compartment-browser-coexistence-receipt.v0",
-  "status": "passed-machine-observation-operator-confirmation-pending",
-  "observedAt": "2026-08-03T22:20:08Z",
+  "status": "passed-machine-observation-and-operator-confirmation",
+  "observedAt": "2026-08-03T22:32:36Z",
   "correction": {
     "failureClass": "installed stable browser identity used for automation",
     "effectivePolicy": "independent browser artifact or fail without fallback"
@@ -9,12 +9,12 @@
   "witness": {
     "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed",
     "httpStatus": 200,
-    "packingSolveRerun": false,
+    "packingSolveRerun": true,
     "requestedState": "packed",
     "effectiveState": "packed"
   },
   "ordinaryChrome": {
-    "observationAuthority": "macOS System Events process/window visibility; operator usability confirmation remains pending",
+    "observationAuthority": "macOS System Events process/window visibility plus direct operator usability confirmation",
     "before": {
       "processName": "Google Chrome",
       "pid": 63158,
@@ -30,15 +30,15 @@
   },
   "capture": {
     "report": "browser-coexistence-packed-report.json",
-    "reportSha256": "a7797573dbe66df7e16b60e357218fa5dbe351482ca5bddbe13e603d0211a8a1",
+    "reportSha256": "fb77fb6c9f2df0f0e3bce5e95e4ffe8925a4272927ccac11d986a4f45c6f01b8",
     "image": "browser-coexistence-packed.png",
-    "imageSha256": "8848cc92d1a09d5ce6231e3075a775a56d0bc69c3f1e06dedddc1c15e5908373",
+    "imageSha256": "9451d262a876af432563eaf8c995126e16bb1514d1a61d4a258a825d41924450",
     "requestedBrowser": "independent-default",
     "effectiveBrowserKind": "playwright-chromium-headless-shell",
     "effectiveBrowserRevision": 1234,
     "effectiveExecutable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
     "installedStableChrome": false,
-    "processGroupId": 22876,
+    "processGroupId": 30170,
     "processExitCode": 0,
     "processGroupPresentAfter": false,
     "profileRemoved": true,
@@ -46,8 +46,8 @@
     "structuralPngValidation": {
       "width": 1400,
       "height": 900,
-      "chunkCount": 44,
-      "idatBytes": 165874,
+      "chunkCount": 45,
+      "idatBytes": 169702,
       "crcChecked": true,
       "terminalIendChecked": true
     }
@@ -57,13 +57,13 @@
     "status": "passed-capture-route-inspection",
     "observations": [
       "1400x900 output is nonblank and framed",
-      "Packed result is selected",
+      "Collision-resolved result is selected",
       "stable muscle colors, skeletal obstacle, compartment bounds, attachment handles, and residual table are visible"
     ],
     "claimBoundary": "This passes the replacement capture route and does not add anatomical admission beyond the existing synthetic witness."
   },
   "operatorConfirmation": {
-    "status": "pending",
-    "question": "Did ordinary Chrome remain normally visible and usable while this independent headless-shell capture ran?"
+    "status": "passed-direct-operator-observation",
+    "observation": "Ordinary Chrome remained alive and usable while the independent headless-shell smoke was visible."
   }
 }
