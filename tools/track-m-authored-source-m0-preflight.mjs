@@ -38,10 +38,14 @@ function parseArgs(argv) {
     '--expected-graph-sha256',
     '--expected-source-sha256',
     '--output',
-    '--selection',
+    '--routing-fixture',
+    '--expected-routing-fixture-sha256',
   ]);
   for (const key of args.keys()) {
     if (!accepted.has(key)) throw new Error(`unsupported argument ${key}`);
+  }
+  if (args.has('--routing-fixture') !== args.has('--expected-routing-fixture-sha256')) {
+    throw new Error('--routing-fixture and --expected-routing-fixture-sha256 must be provided together');
   }
   return args;
 }
@@ -93,7 +97,7 @@ let outputPath = outputCandidate ? resolve(outputCandidate) : null;
 const receipts = {
   graph: inputReceipt(requestedPath(argv, '--graph')),
   bundleSource: inputReceipt(requestedPath(argv, '--bundle-source')),
-  selection: inputReceipt(requestedPath(argv, '--selection')),
+  routingFixture: inputReceipt(requestedPath(argv, '--routing-fixture')),
 };
 let failurePhase = 'arguments';
 let validation = null;
@@ -103,7 +107,7 @@ try {
   outputPath = resolve(args.get('--output'));
   receipts.graph.requestedPath = args.get('--graph');
   receipts.bundleSource.requestedPath = args.get('--bundle-source');
-  receipts.selection.requestedPath = args.get('--selection') ?? null;
+  receipts.routingFixture.requestedPath = args.get('--routing-fixture') ?? null;
 
   failurePhase = 'graph-read';
   const graph = await readJsonInput(receipts.graph, 'graph');
@@ -111,10 +115,10 @@ try {
   const bundleSource = await readJsonInput(receipts.bundleSource, 'bundle-source');
   failurePhase = 'bundle-plan-build';
   const bundlePlan = buildTrackMEvidencePlan(bundleSource);
-  let selection = null;
-  if (receipts.selection.requestedPath) {
-    failurePhase = 'selection-read';
-    selection = await readJsonInput(receipts.selection, 'selection');
+  let routingFixture = null;
+  if (receipts.routingFixture.requestedPath) {
+    failurePhase = 'routing-fixture-read';
+    routingFixture = await readJsonInput(receipts.routingFixture, 'routing-fixture');
   }
 
   failurePhase = 'validation';
@@ -124,7 +128,8 @@ try {
     expectedSourceSha256: args.get('--expected-source-sha256'),
     bundleSource,
     bundlePlan,
-    selection,
+    routingFixture,
+    expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256') ?? null,
   });
   const report = {
     schema: REPORT_SCHEMA,
@@ -133,6 +138,7 @@ try {
     requested: {
       expectedGraphSha256: args.get('--expected-graph-sha256'),
       expectedSourceSha256: args.get('--expected-source-sha256'),
+      expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256') ?? null,
     },
     inputs: receipts,
     effectivePlanRoute: 'deterministic-plan-from-verified-bundle-source',
@@ -156,6 +162,7 @@ try {
     requested: {
       expectedGraphSha256: requestedPath(argv, '--expected-graph-sha256'),
       expectedSourceSha256: requestedPath(argv, '--expected-source-sha256'),
+      expectedRoutingFixtureSha256: requestedPath(argv, '--expected-routing-fixture-sha256'),
     },
     inputs: receipts,
     effectivePlanRoute: null,
