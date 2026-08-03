@@ -1,0 +1,69 @@
+{
+  "schema": "kaminos.muscle-compartment-browser-coexistence-receipt.v0",
+  "status": "passed-machine-observation-operator-confirmation-pending",
+  "observedAt": "2026-08-03T22:20:08Z",
+  "correction": {
+    "failureClass": "installed stable browser identity used for automation",
+    "effectivePolicy": "independent browser artifact or fail without fallback"
+  },
+  "witness": {
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed",
+    "httpStatus": 200,
+    "packingSolveRerun": false,
+    "requestedState": "packed",
+    "effectiveState": "packed"
+  },
+  "ordinaryChrome": {
+    "observationAuthority": "macOS System Events process/window visibility; operator usability confirmation remains pending",
+    "before": {
+      "processName": "Google Chrome",
+      "pid": 63158,
+      "windowCount": 1,
+      "visible": true
+    },
+    "after": {
+      "processName": "Google Chrome",
+      "pid": 63158,
+      "windowCount": 1,
+      "visible": true
+    }
+  },
+  "capture": {
+    "report": "browser-coexistence-packed-report.json",
+    "reportSha256": "a7797573dbe66df7e16b60e357218fa5dbe351482ca5bddbe13e603d0211a8a1",
+    "image": "browser-coexistence-packed.png",
+    "imageSha256": "8848cc92d1a09d5ce6231e3075a775a56d0bc69c3f1e06dedddc1c15e5908373",
+    "requestedBrowser": "independent-default",
+    "effectiveBrowserKind": "playwright-chromium-headless-shell",
+    "effectiveBrowserRevision": 1234,
+    "effectiveExecutable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "installedStableChrome": false,
+    "processGroupId": 22876,
+    "processExitCode": 0,
+    "processGroupPresentAfter": false,
+    "profileRemoved": true,
+    "matchingHeadlessShellProcessesAfter": 0,
+    "structuralPngValidation": {
+      "width": 1400,
+      "height": 900,
+      "chunkCount": 44,
+      "idatBytes": 165874,
+      "crcChecked": true,
+      "terminalIendChecked": true
+    }
+  },
+  "agentVisualInspection": {
+    "artifact": "browser-coexistence-packed.png",
+    "status": "passed-capture-route-inspection",
+    "observations": [
+      "1400x900 output is nonblank and framed",
+      "Packed result is selected",
+      "stable muscle colors, skeletal obstacle, compartment bounds, attachment handles, and residual table are visible"
+    ],
+    "claimBoundary": "This passes the replacement capture route and does not add anatomical admission beyond the existing synthetic witness."
+  },
+  "operatorConfirmation": {
+    "status": "pending",
+    "question": "Did ordinary Chrome remain normally visible and usable while this independent headless-shell capture ran?"
+  }
+}
