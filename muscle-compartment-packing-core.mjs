@@ -104,6 +104,62 @@ function closestPointOnSegment(point, start, end) {
   return add(start, scale(direction, t));
 }
 
+function interpolate(left, right, amount) {
+  return left * (1 - amount) + right * amount;
+}
+
+function interpolatePoint(left, right, amount) {
+  return left.map((value, axis) => interpolate(value, right[axis], amount));
+}
+
+function goldenSectionMinimum(fn, iterations = 48) {
+  const inversePhi = (Math.sqrt(5) - 1) / 2;
+  let lower = 0;
+  let upper = 1;
+  let left = upper - inversePhi * (upper - lower);
+  let right = lower + inversePhi * (upper - lower);
+  let leftValue = fn(left);
+  let rightValue = fn(right);
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    if (leftValue <= rightValue) {
+      upper = right;
+      right = left;
+      rightValue = leftValue;
+      left = upper - inversePhi * (upper - lower);
+      leftValue = fn(left);
+    } else {
+      lower = left;
+      left = right;
+      leftValue = rightValue;
+      right = lower + inversePhi * (upper - lower);
+      rightValue = fn(right);
+    }
+  }
+  return {
+    value: Math.min(fn(0), fn(1), leftValue, rightValue, fn((lower + upper) / 2)),
+    intervalWidth: upper - lower,
+  };
+}
+
+function taperedSegmentSurfaceGapLowerBound(leftStart, leftEnd, rightStart, rightEnd) {
+  const gapAt = (leftT, rightT) => distance(
+    interpolatePoint(leftStart.position, leftEnd.position, leftT),
+    interpolatePoint(rightStart.position, rightEnd.position, rightT),
+  ) - interpolate(leftStart.radius, leftEnd.radius, leftT) -
+    interpolate(rightStart.radius, rightEnd.radius, rightT);
+  const outer = goldenSectionMinimum(leftT =>
+    goldenSectionMinimum(rightT => gapAt(leftT, rightT)).value);
+  const lipschitzBound =
+    distance(leftStart.position, leftEnd.position) +
+    Math.abs(leftEnd.radius - leftStart.radius) +
+    distance(rightStart.position, rightEnd.position) +
+    Math.abs(rightEnd.radius - rightStart.radius);
+  // The nested convex minimization is deterministic. Subtracting the final
+  // interval's Lipschitz error makes the reported gap conservative at the
+  // numerical search resolution instead of rounding a narrow collision away.
+  return outer.value - lipschitzBound * outer.intervalWidth * 2;
+}
+
 function closestPointOnObstacle(point, obstacle) {
   if (obstacle.kind === 'sphere') return [...obstacle.center];
   if (obstacle.kind === 'capsule') {
@@ -161,7 +217,7 @@ function bendEnergy(muscle) {
   return energy;
 }
 
-function measureState(source, muscles, sampleCount) {
+function measureState(source, muscles, sampleCount, continuousClearance = true) {
   const sampled = muscles.map(muscle => sampleCarrier(muscle, sampleCount));
   let pairwisePenetration = 0;
   for (let leftIndex = 0; leftIndex < sampled.length; leftIndex += 1) {
@@ -173,6 +229,27 @@ function measureState(source, muscles, sampleCount) {
             pairMaximum,
             left.radius + right.radius - distance(left.position, right.position),
           );
+        }
+      }
+      if (continuousClearance) {
+        const leftMuscle = muscles[leftIndex];
+        const rightMuscle = muscles[rightIndex];
+        for (let leftSegment = 0; leftSegment < leftMuscle.centerline.length - 1; leftSegment += 1) {
+          const leftStart = leftMuscle.centerline[leftSegment];
+          const leftEnd = leftMuscle.centerline[leftSegment + 1];
+          for (let rightSegment = 0; rightSegment < rightMuscle.centerline.length - 1; rightSegment += 1) {
+            const rightStart = rightMuscle.centerline[rightSegment];
+            const rightEnd = rightMuscle.centerline[rightSegment + 1];
+            pairMaximum = Math.max(
+              pairMaximum,
+              -taperedSegmentSurfaceGapLowerBound(
+                leftStart,
+                leftEnd,
+                rightStart,
+                rightEnd,
+              ),
+            );
+          }
         }
       }
       pairwisePenetration += Math.max(0, pairMaximum);
@@ -204,6 +281,29 @@ function measureState(source, muscles, sampleCount) {
         nonFiniteValueCount += 1;
       }
       if (!(knot.radius > 0)) nonPositiveRadiusCount += 1;
+    }
+    if (continuousClearance) {
+      for (let segmentIndex = 0; segmentIndex < muscle.centerline.length - 1; segmentIndex += 1) {
+        const segmentStart = muscle.centerline[segmentIndex];
+        const segmentEnd = muscle.centerline[segmentIndex + 1];
+        for (const obstacle of source.obstacles) {
+          const obstacleStart = obstacle.kind === 'capsule'
+            ? { position:obstacle.start, radius:obstacleRadius(obstacle) }
+            : { position:obstacle.center, radius:obstacleRadius(obstacle) };
+          const obstacleEnd = obstacle.kind === 'capsule'
+            ? { position:obstacle.end, radius:obstacleRadius(obstacle) }
+            : obstacleStart;
+          skeletalPenetration = Math.max(
+            skeletalPenetration,
+            -taperedSegmentSurfaceGapLowerBound(
+              segmentStart,
+              segmentEnd,
+              obstacleStart,
+              obstacleEnd,
+            ),
+          );
+        }
+      }
     }
     for (const sample of sampled[muscleIndex]) {
       for (const obstacle of source.obstacles) {
@@ -563,7 +663,7 @@ function residualMaximum(metrics) {
 
 export function measureMuscleCompartmentPacking(source, muscles = source.muscles, sampleCount = 25) {
   validateSource(source);
-  return measureState(source, muscles, sampleCount);
+  return measureState(source, muscles, sampleCount, true);
 }
 
 export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
@@ -573,7 +673,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     : { ...DEFAULT_CONFIG, ...structuredClone(requestedConfig) };
   validateConfig(config);
   const muscles = structuredClone(source.muscles);
-  const initial = measureState(source, muscles, config.sampleCount);
+  const initial = measureState(source, muscles, config.sampleCount, true);
   const iterationHistory = [];
   let packed = initial;
   let status = 'iteration-limit';
@@ -591,20 +691,42 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     projectRigidAndBounds(source, muscles, config.relaxationStep);
     restoreTargetVolumes(muscles);
 
-    packed = measureState(source, muscles, config.sampleCount);
+    packed = measureState(source, muscles, config.sampleCount, false);
     iterations = iteration;
-    iterationHistory.push({
-      iteration,
-      residualMaximum: rounded(residualMaximum(packed)),
-      ...packed,
-    });
     if (
       residualMaximum(packed) <= config.convergenceTolerance &&
       packed.nonFiniteValueCount === 0 &&
       packed.nonPositiveRadiusCount === 0
     ) {
-      status = 'converged';
+      packed = measureState(source, muscles, config.sampleCount, true);
+      status = residualMaximum(packed) <= config.convergenceTolerance
+        ? 'converged'
+        : 'continuous-clearance-failed';
+      iterationHistory.push({
+        iteration,
+        validationKind:'conservative-continuous',
+        residualMaximum:rounded(residualMaximum(packed)),
+        ...packed,
+      });
       break;
+    }
+    iterationHistory.push({
+      iteration,
+      validationKind:'sampled-supplement',
+      residualMaximum: rounded(residualMaximum(packed)),
+      ...packed,
+    });
+  }
+
+  if (status === 'iteration-limit') {
+    packed = measureState(source, muscles, config.sampleCount, true);
+    if (iterationHistory.length > 0) {
+      iterationHistory[iterationHistory.length - 1] = {
+        iteration:iterations,
+        validationKind:'conservative-continuous',
+        residualMaximum:rounded(residualMaximum(packed)),
+        ...packed,
+      };
     }
   }
 
@@ -614,6 +736,12 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     sourceId: source.id,
     sourceAuthority: structuredClone(source.authority),
     dimension: 3,
+    clearanceValidation: {
+      kind: 'conservative-continuous-piecewise-linear',
+      centerlineDistance: 'nested-convex-golden-section',
+      segmentRadiusBound: 'linear-taper-with-lipschitz-search-bound',
+      sampledSupplementCount: config.sampleCount,
+    },
     status,
     iterations,
     input: structuredClone(source.input),
