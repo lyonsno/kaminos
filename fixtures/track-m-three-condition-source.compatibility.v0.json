@@ -1,0 +1,111 @@
+{
+  "schema": "kaminos.track-m-evidence-source.v0",
+  "trackId": "shape-bearing-musculature",
+  "receiptId": "operator-musculature-source-receipt-v0",
+  "asset": {
+    "id": "operator-musculature-source-v0",
+    "path": "/caller/source.blend",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "pose": {
+    "id": "conservative-pose-v0",
+    "kind": "conservative",
+    "authorityId": "external-pose-authority",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "camera": {
+    "id": "track-m-fixed-camera-v0",
+    "projection": "orthographic",
+    "width": 640,
+    "height": 640,
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "material": {
+    "id": "track-m-clay-v0",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "illumination": {
+    "id": "track-m-light-v0",
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "renderConfig": {
+    "id": "track-m-render-v0",
+    "width": 640,
+    "height": 640,
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "route": {
+    "requestedRouteId": "cpu-shape-bearing-oracle-route",
+    "executionClass": "cpu",
+    "requiresGpu": false,
+    "adapterContractSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "productContract": [
+    { "kind": "clay", "mimeType": "image/png" },
+    { "kind": "depth", "mimeType": "image/png" },
+    { "kind": "normal", "mimeType": "image/png" }
+  ],
+  "testedRelation": {
+    "id": "deep-flexor-routing-v0",
+    "deepGeometryIds": ["deep-flexor-a", "deep-flexor-b"],
+    "deepGeometryContentSetSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "attachmentEndpointMultisetSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "expectedRoutingGraphSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "representationalBudget": {
+      "primitiveCount": 12,
+      "vertexCount": 480,
+      "triangleCount": 912,
+      "parameterCount": 36
+    }
+  },
+  "conditions": {
+    "deep-geometry-absent": {
+      "transform": {
+        "id": "remove-deep-geometry-v0",
+        "kind": "remove-deep-geometry",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "deepGeometryPresent": false,
+      "testedRelationPresent": false,
+      "removedGeometryIds": ["deep-flexor-a", "deep-flexor-b"]
+    },
+    "deep-geometry-correctly-routed": {
+      "transform": {
+        "id": "correct-routing-v0",
+        "kind": "preserve-correct-routing",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "deepGeometryPresent": true,
+      "testedRelationPresent": true,
+      "deepGeometryContentSetSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "attachmentEndpointMultisetSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "routingGraphSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+      "representationalBudget": {
+        "primitiveCount": 12,
+        "vertexCount": 480,
+        "triangleCount": 912,
+        "parameterCount": 36
+      }
+    },
+    "deep-geometry-matched-wrong-routing": {
+      "transform": {
+        "id": "wrong-routing-v0",
+        "kind": "matched-wrong-routing",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "deepGeometryPresent": true,
+      "testedRelationPresent": false,
+      "destroyedRelationId": "deep-flexor-routing-v0",
+      "deepGeometryContentSetSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "attachmentEndpointMultisetSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "routingGraphSha256": "9999999999999999999999999999999999999999999999999999999999999999",
+      "routingPermutationSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "representationalBudget": {
+        "primitiveCount": 12,
+        "vertexCount": 480,
+        "triangleCount": 912,
+        "parameterCount": 36
+      }
+    }
+  }
+}
