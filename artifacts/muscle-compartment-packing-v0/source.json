@@ -1,0 +1,333 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-source.v0",
+  "id": "synthetic-four-muscle-central-bone-v0",
+  "authority": {
+    "kind": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "dimension": 3,
+  "compartment": {
+    "id": "local-muscle-compartment",
+    "kind": "box",
+    "minimum": [
+      -0.95,
+      -1.1,
+      -0.95
+    ],
+    "maximum": [
+      0.95,
+      1.1,
+      0.95
+    ],
+    "clearance": 0.015
+  },
+  "obstacles": [
+    {
+      "id": "central-skeletal-shaft",
+      "kind": "capsule",
+      "start": [
+        0,
+        -0.96,
+        0
+      ],
+      "end": [
+        0,
+        0.96,
+        0
+      ],
+      "radius": 0.18,
+      "clearance": 0.02,
+      "authority": "synthetic-proxy"
+    }
+  ],
+  "muscles": [
+    {
+      "id": "muscle-01",
+      "identity": {
+        "sourceId": "synthetic-source-muscle-01",
+        "constructionId": "synthetic-construction-muscle-01",
+        "lineageId": "synthetic-lineage-muscle-01",
+        "instanceId": "synthetic-instance-muscle-01"
+      },
+      "authority": {
+        "kind": "synthetic-proxy",
+        "anatomicalAdmission": "none"
+      },
+      "attachments": {
+        "origin": {
+          "id": "muscle-01:origin",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            0.5,
+            -0.9,
+            0
+          ]
+        },
+        "insertion": {
+          "id": "muscle-01:insertion",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            0.5,
+            0.9,
+            0
+          ]
+        }
+      },
+      "centerline": [
+        {
+          "position": [
+            0.5,
+            -0.9,
+            0
+          ],
+          "radius": 0.16
+        },
+        {
+          "position": [
+            0.14,
+            -0.3,
+            0
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            0.14,
+            0.3,
+            0
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            0.5,
+            0.9,
+            0
+          ],
+          "radius": 0.16
+        }
+      ],
+      "targetVolume": 0.3872858890460241,
+      "volumeAuthority": "synthetic-authored-target"
+    },
+    {
+      "id": "muscle-02",
+      "identity": {
+        "sourceId": "synthetic-source-muscle-02",
+        "constructionId": "synthetic-construction-muscle-02",
+        "lineageId": "synthetic-lineage-muscle-02",
+        "instanceId": "synthetic-instance-muscle-02"
+      },
+      "authority": {
+        "kind": "synthetic-proxy",
+        "anatomicalAdmission": "none"
+      },
+      "attachments": {
+        "origin": {
+          "id": "muscle-02:origin",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            3.061616997868383e-17,
+            -0.9,
+            0.5
+          ]
+        },
+        "insertion": {
+          "id": "muscle-02:insertion",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            3.061616997868383e-17,
+            0.9,
+            0.5
+          ]
+        }
+      },
+      "centerline": [
+        {
+          "position": [
+            3.061616997868383e-17,
+            -0.9,
+            0.5
+          ],
+          "radius": 0.16
+        },
+        {
+          "position": [
+            8.572527594031473e-18,
+            -0.3,
+            0.14
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            8.572527594031473e-18,
+            0.3,
+            0.14
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            3.061616997868383e-17,
+            0.9,
+            0.5
+          ],
+          "radius": 0.16
+        }
+      ],
+      "targetVolume": 0.3872858890460241,
+      "volumeAuthority": "synthetic-authored-target"
+    },
+    {
+      "id": "muscle-03",
+      "identity": {
+        "sourceId": "synthetic-source-muscle-03",
+        "constructionId": "synthetic-construction-muscle-03",
+        "lineageId": "synthetic-lineage-muscle-03",
+        "instanceId": "synthetic-instance-muscle-03"
+      },
+      "authority": {
+        "kind": "synthetic-proxy",
+        "anatomicalAdmission": "none"
+      },
+      "attachments": {
+        "origin": {
+          "id": "muscle-03:origin",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            -0.5,
+            -0.9,
+            6.123233995736766e-17
+          ]
+        },
+        "insertion": {
+          "id": "muscle-03:insertion",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            -0.5,
+            0.9,
+            6.123233995736766e-17
+          ]
+        }
+      },
+      "centerline": [
+        {
+          "position": [
+            -0.5,
+            -0.9,
+            6.123233995736766e-17
+          ],
+          "radius": 0.16
+        },
+        {
+          "position": [
+            -0.14,
+            -0.3,
+            1.7145055188062947e-17
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            -0.14,
+            0.3,
+            1.7145055188062947e-17
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            -0.5,
+            0.9,
+            6.123233995736766e-17
+          ],
+          "radius": 0.16
+        }
+      ],
+      "targetVolume": 0.3872858890460241,
+      "volumeAuthority": "synthetic-authored-target"
+    },
+    {
+      "id": "muscle-04",
+      "identity": {
+        "sourceId": "synthetic-source-muscle-04",
+        "constructionId": "synthetic-construction-muscle-04",
+        "lineageId": "synthetic-lineage-muscle-04",
+        "instanceId": "synthetic-instance-muscle-04"
+      },
+      "authority": {
+        "kind": "synthetic-proxy",
+        "anatomicalAdmission": "none"
+      },
+      "attachments": {
+        "origin": {
+          "id": "muscle-04:origin",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            -9.184850993605148e-17,
+            -0.9,
+            -0.5
+          ]
+        },
+        "insertion": {
+          "id": "muscle-04:insertion",
+          "sourceAuthority": "synthetic-proxy",
+          "position": [
+            -9.184850993605148e-17,
+            0.9,
+            -0.5
+          ]
+        }
+      },
+      "centerline": [
+        {
+          "position": [
+            -9.184850993605148e-17,
+            -0.9,
+            -0.5
+          ],
+          "radius": 0.16
+        },
+        {
+          "position": [
+            -2.571758278209442e-17,
+            -0.3,
+            -0.14
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            -2.571758278209442e-17,
+            0.3,
+            -0.14
+          ],
+          "radius": 0.29
+        },
+        {
+          "position": [
+            -9.184850993605148e-17,
+            0.9,
+            -0.5
+          ],
+          "radius": 0.16
+        }
+      ],
+      "targetVolume": 0.3872858890460241,
+      "volumeAuthority": "synthetic-authored-target"
+    }
+  ],
+  "input": {
+    "requested": {
+      "kind": "synthetic-fixture",
+      "id": "synthetic-four-muscle-central-bone-v0",
+      "sha256": "60b842da9781c4cdb988560015f06e5d6ce29dd52e0db84aa035e5b6a8a230c7"
+    },
+    "effective": {
+      "kind": "synthetic-fixture",
+      "id": "synthetic-four-muscle-central-bone-v0",
+      "sha256": "60b842da9781c4cdb988560015f06e5d6ce29dd52e0db84aa035e5b6a8a230c7"
+    }
+  }
+}

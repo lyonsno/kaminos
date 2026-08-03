@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-03T19:57:48Z",
+  "route": {
+    "requested": "muscle-compartment-packing-orbitable-v0",
+    "effective": "muscle-compartment-packing-orbitable-v0",
+    "fallbackUsed": false,
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/"
+  },
+  "backend": {
+    "browser": "Google Chrome 150.0.7871.187",
+    "renderer": "Three.js WebGLRenderer",
+    "routeRequested": "muscle-compartment-packing-orbitable-v0",
+    "routeEffective": "muscle-compartment-packing-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "capture": {
+    "method": "Chrome headless screenshot after 6000 ms virtual-time settle",
+    "server": "Kaminos serve.py",
+    "serverPort": 8765,
+    "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",
+    "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed"
+  },
+  "bindings": {
+    "indexHtmlSha256": "1667a885efd6c57587d7c797b1110255e69561d4384b13d7f1585caa821a857b",
+    "sourceJsonSha256": "acbfa3eafac78043ecd732ea1b7af770c2eca9b3462fe1cd0d0fb89f29c9e026",
+    "packedJsonSha256": "8da8e0cf4a3e90e7e7768b8f887cb52a39248c8be659529a642fdb52ad50a672",
+    "pendingReportSha256": "8ca7b807f893c9ea066df8de4ddd3ba138e46ec222bb7567e57514650d54e513"
+  },
+  "images": [
+    {
+      "path": "before.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "state": "before",
+      "byteLength": 149188,
+      "sha256": "16f8d50739f9228ade7cc1a3744e422ce9acd2e7deff7c74ab3a9dca51f31efe"
+    },
+    {
+      "path": "packed.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "state": "packed",
+      "byteLength": 164824,
+      "sha256": "f2aee8c3e1a96c1b27ee9755d1c538e881572394a92bd0dd2c310c729edde65d"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "movementLegible": true,
+    "stableMuscleIdentityLegible": true,
+    "attachmentHandlesLegible": true,
+    "skeletonAndCompartmentLegible": true,
+    "metricsLegible": true,
+    "textContained": true
+  }
+}

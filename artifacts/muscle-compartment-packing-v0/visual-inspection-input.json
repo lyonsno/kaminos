@@ -1,0 +1,40 @@
+{
+  "observedAt": "2026-08-03T19:57:48Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/",
+  "backend": {
+    "browser": "Google Chrome 150.0.7871.187",
+    "renderer": "Three.js WebGLRenderer",
+    "routeRequested": "muscle-compartment-packing-orbitable-v0",
+    "routeEffective": "muscle-compartment-packing-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "capture": {
+    "method": "Chrome headless screenshot after 6000 ms virtual-time settle",
+    "server": "Kaminos serve.py",
+    "serverPort": 8765,
+    "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",
+    "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed"
+  },
+  "images": [
+    {
+      "path": "before.png",
+      "viewport": [1400, 900],
+      "state": "before"
+    },
+    {
+      "path": "packed.png",
+      "viewport": [1400, 900],
+      "state": "packed"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "movementLegible": true,
+    "stableMuscleIdentityLegible": true,
+    "attachmentHandlesLegible": true,
+    "skeletonAndCompartmentLegible": true,
+    "metricsLegible": true,
+    "textContained": true
+  }
+}
