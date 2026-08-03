@@ -16,13 +16,13 @@
     },
     "bundleSource": {
       "requestedPath": "fixtures/track-m-three-condition-source.compatibility.v0.json",
-      "effectivePath": "/private/tmp/kaminos-mushfinger-phase-three-source-validator-0731-mushfinger-track-m-m0-validator-0802-mushfinger-track-m-bundle-consumer-0802-mushfinger-cat-armature-m0-preflight-0803/fixtures/track-m-three-condition-source.compatibility.v0.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-m31-m47-direct-consumer-r2-0803/fixtures/track-m-three-condition-source.compatibility.v0.json",
       "bytesSha256": "8a8b37d1672ba32d07192edb632547a775286ac408d0c2fbe9fb5a037f9f7dbc",
       "byteLength": 4293
     },
     "routingFixture": {
       "requestedPath": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
-      "effectivePath": "/private/tmp/kaminos-mushfinger-phase-three-source-validator-0731-mushfinger-track-m-m0-validator-0802-mushfinger-track-m-bundle-consumer-0802-mushfinger-cat-armature-m0-preflight-0803/fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-m31-m47-direct-consumer-r2-0803/fixtures/track-m-routing/m31-m47-routing-fixture.json",
       "bytesSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075",
       "byteLength": 24138
     }

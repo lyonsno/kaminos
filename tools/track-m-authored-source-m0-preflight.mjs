@@ -26,8 +26,10 @@ function parseArgs(argv) {
   for (const required of [
     '--graph',
     '--bundle-source',
+    '--routing-fixture',
     '--expected-graph-sha256',
     '--expected-source-sha256',
+    '--expected-routing-fixture-sha256',
     '--output',
   ]) {
     if (!args.has(required)) throw new Error(`${required} is required`);
@@ -43,9 +45,6 @@ function parseArgs(argv) {
   ]);
   for (const key of args.keys()) {
     if (!accepted.has(key)) throw new Error(`unsupported argument ${key}`);
-  }
-  if (args.has('--routing-fixture') !== args.has('--expected-routing-fixture-sha256')) {
-    throw new Error('--routing-fixture and --expected-routing-fixture-sha256 must be provided together');
   }
   return args;
 }
@@ -115,11 +114,8 @@ try {
   const bundleSource = await readJsonInput(receipts.bundleSource, 'bundle-source');
   failurePhase = 'bundle-plan-build';
   const bundlePlan = buildTrackMEvidencePlan(bundleSource);
-  let routingFixture = null;
-  if (receipts.routingFixture.requestedPath) {
-    failurePhase = 'routing-fixture-read';
-    routingFixture = await readJsonInput(receipts.routingFixture, 'routing-fixture');
-  }
+  failurePhase = 'routing-fixture-read';
+  const routingFixture = await readJsonInput(receipts.routingFixture, 'routing-fixture');
 
   failurePhase = 'validation';
   validation = validateTrackMAuthoredSourceM0Preflight({
@@ -129,7 +125,7 @@ try {
     bundleSource,
     bundlePlan,
     routingFixture,
-    expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256') ?? null,
+    expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256'),
   });
   const report = {
     schema: REPORT_SCHEMA,
@@ -138,7 +134,7 @@ try {
     requested: {
       expectedGraphSha256: args.get('--expected-graph-sha256'),
       expectedSourceSha256: args.get('--expected-source-sha256'),
-      expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256') ?? null,
+      expectedRoutingFixtureSha256: args.get('--expected-routing-fixture-sha256'),
     },
     inputs: receipts,
     effectivePlanRoute: 'deterministic-plan-from-verified-bundle-source',

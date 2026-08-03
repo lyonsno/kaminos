@@ -19,6 +19,11 @@ node tools/track-m-authored-source-m0-preflight.mjs \
 
 No path or identity falls back to a repository default. The report records each requested path, canonical effective path, byte length, and byte SHA-256. The unchanged Track M evidence plan is rebuilt deterministically from the supplied bundle source, and the report names that effective route.
 
+This command is the exact selected-relation consumer: both the routing fixture
+and its caller-expected semantic SHA-256 are mandatory. Callers that need an
+earlier graph-only inventory must use a distinct preflight surface; omission of
+the fixture here is a failed contract, not a graph-only HOLD.
+
 Read or parse failure still writes a report when `--output` was supplied. The report names the failure phase and last trustworthy input receipts instead of presenting missing validation as evidence.
 
 ## Authority Boundary

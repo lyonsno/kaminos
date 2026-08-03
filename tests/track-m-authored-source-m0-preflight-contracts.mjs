@@ -461,25 +461,16 @@ test('routing fixture rejects rehashed matched-wrong origin reassignment', () =>
   assert.ok(result.contradictory.some(item => item.field === 'routingFixtureMatchedRoutePreservation'));
 });
 
-test('authenticated graph returns an exact hold and a non-selecting adapter contract', () => {
+test('exact selected-relation consumer rejects an absent routing fixture', () => {
   const result = validateTrackMAuthoredSourceM0Preflight(makeInputs());
 
   assert.equal(result.schema, TRACK_M_AUTHORED_SOURCE_M0_PREFLIGHT_SCHEMA);
-  assert.equal(result.disposition, HOLD_MUSCULATURE_SOURCE_EVIDENCE);
-  assert.equal(result.graphIdentityVerified, true);
-  assert.equal(result.bundlePredecessorCompatible, true);
+  assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
   assert.equal(result.selectedFixture, null);
-  assert.equal(result.candidates.completeSourceMeshRelations, 1);
-  assert.ok(result.satisfied.some(item => item.field === 'sourceUnits'));
-  assert.ok(result.satisfied.some(item => item.field === 'sourceCompletenessAndKnownOmissions'));
-  assert.ok(result.missing.some(item => item.field === 'selectedFixture'));
-  assert.ok(result.missing.some(item => item.field === 'localFrames'));
-  assert.deepEqual(result.contradictory, []);
-  assert.deepEqual(result.selectionAdapter.requiredCallerFields, [
-    'routingFixture',
-    'expectedRoutingFixtureSha256',
-  ]);
-  assert.equal(result.selectionAdapter.selectsForCaller, false);
+  assert.ok(result.contradictory.some(item => (
+    item.field === 'routingFixtureIdentity'
+    && item.reason === 'routing fixture and caller-expected semantic identity are required'
+  )));
 });
 
 test('Golden selection resolves one causal relation fixture without promoting M0', () => {
@@ -591,7 +582,7 @@ test('missing or malformed graphs return structured failure evidence', () => {
   }
 });
 
-test('CLI records effective input identities and preserves a valid hold report', async () => {
+test('CLI rejects an absent routing fixture and preserves a phase-local report', async () => {
   const root = await mkdtemp(join(tmpdir(), 'track-m-cat-m0-preflight-'));
   const inputs = makeInputs();
   const graphPath = join(root, 'graph.json');
@@ -609,15 +600,12 @@ test('CLI records effective input identities and preserves a valid hold report',
     '--output', outputPath,
   ], { cwd: process.cwd(), encoding: 'utf8' });
 
-  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.status, 1, run.stderr);
   const report = JSON.parse(await readFile(outputPath, 'utf8'));
-  assert.equal(report.status, 'validated');
-  assert.equal(report.validation.disposition, HOLD_MUSCULATURE_SOURCE_EVIDENCE);
-  assert.equal(report.inputs.graph.effectivePath, await realpath(graphPath));
-  assert.match(report.inputs.graph.bytesSha256, /^[0-9a-f]{64}$/);
-  assert.equal(report.inputs.bundleSource.effectivePath, await realpath(bundleSourcePath));
-  assert.equal(report.effectivePlanRoute, 'deterministic-plan-from-verified-bundle-source');
-  assert.equal(report.failurePhase, null);
+  assert.equal(report.status, 'failed-before-validation');
+  assert.equal(report.failurePhase, 'arguments');
+  assert.equal(report.inputs.routingFixture.requestedPath, null);
+  assert.match(report.error, /--routing-fixture is required/);
 });
 
 test('CLI consumes a semantic-hash-bound routing fixture without promoting M0', async () => {
@@ -657,19 +645,24 @@ test('CLI consumes a semantic-hash-bound routing fixture without promoting M0', 
 
 test('CLI writes a durable parse-failure report before validation exists', async () => {
   const root = await mkdtemp(join(tmpdir(), 'track-m-cat-m0-preflight-failure-'));
-  const inputs = makeInputs();
+  const inputs = makeFixtureInputs();
+  const routingFixture = makeRoutingFixture(inputs.graph);
   const graphPath = join(root, 'graph.json');
   const bundleSourcePath = join(root, 'bundle-source.json');
+  const routingFixturePath = join(root, 'routing-fixture.json');
   const outputPath = join(root, 'report.json');
   await writeFile(graphPath, '{');
   await writeFile(bundleSourcePath, `${JSON.stringify(inputs.bundleSource)}\n`);
+  await writeFile(routingFixturePath, `${JSON.stringify(routingFixture)}\n`);
 
   const run = spawnSync(process.execPath, [
     'tools/track-m-authored-source-m0-preflight.mjs',
     '--graph', graphPath,
     '--bundle-source', bundleSourcePath,
+    '--routing-fixture', routingFixturePath,
     '--expected-graph-sha256', inputs.expectedGraphSha256,
     '--expected-source-sha256', inputs.expectedSourceSha256,
+    '--expected-routing-fixture-sha256', routingFixture.fixtureSha256,
     '--output', outputPath,
   ], { cwd: process.cwd(), encoding: 'utf8' });
 

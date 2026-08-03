@@ -322,7 +322,14 @@ function validateMatchedRoutePreservation(correctRoutes, matchedRoutes, contradi
 
 function resolveRoutingFixture(routingFixture, expectedRoutingFixtureSha256, graph) {
   if (routingFixture === null || routingFixture === undefined) {
-    return { selection: null, evidence: null, contradictory: [] };
+    return {
+      selection: null,
+      evidence: null,
+      contradictory: [field('routingFixtureIdentity', {
+        reason: 'routing fixture and caller-expected semantic identity are required',
+        expectedRoutingFixtureSha256: expectedRoutingFixtureSha256 ?? null,
+      })],
+    };
   }
   const contradictory = [];
   if (!isPlainObject(routingFixture)) {
