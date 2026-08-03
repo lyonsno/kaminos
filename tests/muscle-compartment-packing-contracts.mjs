@@ -5,11 +5,60 @@ import {
   MUSCLE_COMPARTMENT_PACKING_RESULT_SCHEMA,
   MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
   createSyntheticFourMuscleCompartment,
+  measureMuscleCompartmentPacking,
   solveMuscleCompartmentPacking,
 } from '../muscle-compartment-packing-core.mjs';
 
 function endpointPositions(muscle) {
   return [muscle.centerline[0].position, muscle.centerline.at(-1).position];
+}
+
+function carrierVolume(centerline) {
+  let volume = 0;
+  for (let index = 0; index < centerline.length - 1; index += 1) {
+    const left = centerline[index];
+    const right = centerline[index + 1];
+    const segmentLength = Math.hypot(...left.position.map(
+      (value, axis) => value - right.position[axis],
+    ));
+    volume += Math.PI * segmentLength / 3 * (
+      left.radius ** 2 + left.radius * right.radius + right.radius ** 2
+    );
+  }
+  return volume;
+}
+
+function createInterSegmentCrossingSource() {
+  const source = createSyntheticFourMuscleCompartment();
+  source.id = 'operator-authored-inter-segment-crossing';
+  source.authority = { kind:'operator-authored', anatomicalAdmission:'test-only' };
+  source.input = {
+    requested: { kind:'operator-authored-test', id:source.id, sha256:'a'.repeat(64) },
+    effective: { kind:'operator-authored-test', id:source.id, sha256:'a'.repeat(64) },
+  };
+  source.compartment = {
+    id:'crossing-test-compartment', kind:'box',
+    minimum:[-2,-2,-2], maximum:[2,2,2], clearance:0,
+  };
+  source.obstacles = [];
+  const paths = [
+    [[-0.8,0,0],[0.2,0,0],[0.8,0.6,0],[0.8,0.9,0]],
+    [[0,-0.8,0],[0,0.2,0],[-0.6,0.8,0],[-0.9,0.8,0]],
+  ];
+  source.muscles = source.muscles.slice(0, 2).map((muscle, muscleIndex) => {
+    const centerline = paths[muscleIndex].map(position => ({ position, radius:0.12 }));
+    return {
+      ...muscle,
+      authority: { kind:'operator-authored', anatomicalAdmission:'test-only' },
+      centerline,
+      attachments: {
+        origin: { ...muscle.attachments.origin, position:[...centerline[0].position] },
+        insertion: { ...muscle.attachments.insertion, position:[...centerline.at(-1).position] },
+      },
+      targetVolume: carrierVolume(centerline),
+    };
+  });
+  return source;
 }
 
 test('four endpoint-fixed swept muscles pack around rigid anatomy without identity or volume loss', () => {
@@ -93,4 +142,27 @@ test('source validation rejects identity collision and non-finite carrier state'
     () => solveMuscleCompartmentPacking(staleIdentity),
     /synthetic fixture identity mismatch/i,
   );
+});
+
+test('convergence cannot hide a continuous inter-segment crossing between sparse samples', () => {
+  const source = createInterSegmentCrossingSource();
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 1,
+    relaxationStep: 0.18,
+    smoothnessStep: 1e-12,
+    sampleCount: 3,
+    convergenceTolerance: 1e-7,
+  });
+  const dense = measureMuscleCompartmentPacking(source, result.muscles, 401);
+
+  assert.ok(dense.pairwisePenetration > 0.2, 'fixture must contain an inter-sample crossing');
+  assert.notEqual(
+    result.status,
+    'converged',
+    `sparse sample grid falsely admitted continuous crossing: ${JSON.stringify({
+      solver: result.metrics.packed,
+      dense,
+    })}`,
+  );
+  assert.ok(result.metrics.packed.pairwisePenetration > 0.2);
 });

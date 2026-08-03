@@ -296,6 +296,15 @@ export async function admitMuscleCompartmentPackingVisualInspection({
   ) {
     throw new Error('muscle packing visual admission requires timestamp, images, and all-positive inspected verdict');
   }
+  const stateCounts = inspection.images.reduce((counts, image) => {
+    if (image?.state === 'before' || image?.state === 'packed') {
+      counts[image.state] += 1;
+    }
+    return counts;
+  }, { before:0, packed:0 });
+  if (stateCounts.before !== 1 || stateCounts.packed !== 1 || inspection.images.length !== 2) {
+    throw new Error('muscle packing visual admission requires exactly one before and exactly one packed capture');
+  }
   const reportPath = resolve(outputRoot, 'report.json');
   const indexPath = resolve(outputRoot, 'index.html');
   const sourcePath = resolve(outputRoot, 'source.json');

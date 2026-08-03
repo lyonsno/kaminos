@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.muscle-compartment-packing-visual-inspection.v0",
   "status": "passed-agent-inspection",
-  "observedAt": "2026-08-03T19:57:48Z",
+  "observedAt": "2026-08-03T20:15:36Z",
   "route": {
     "requested": "muscle-compartment-packing-orbitable-v0",
     "effective": "muscle-compartment-packing-orbitable-v0",
@@ -23,10 +23,10 @@
     "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed"
   },
   "bindings": {
-    "indexHtmlSha256": "1667a885efd6c57587d7c797b1110255e69561d4384b13d7f1585caa821a857b",
+    "indexHtmlSha256": "ee860157e6a25b243e912f0260afd0b4035c4ffbc85b8142302260e87bea476c",
     "sourceJsonSha256": "acbfa3eafac78043ecd732ea1b7af770c2eca9b3462fe1cd0d0fb89f29c9e026",
-    "packedJsonSha256": "8da8e0cf4a3e90e7e7768b8f887cb52a39248c8be659529a642fdb52ad50a672",
-    "pendingReportSha256": "8ca7b807f893c9ea066df8de4ddd3ba138e46ec222bb7567e57514650d54e513"
+    "packedJsonSha256": "c2e6f58f04eff97e3e60bbb4a942090a0041b611f270d48eb2061063b260f140",
+    "pendingReportSha256": "a3794176bb4bf002d810fc9eb2ac87a7c3da06ceb1b1850c3d221890114fed69"
   },
   "images": [
     {
@@ -36,8 +36,8 @@
         900
       ],
       "state": "before",
-      "byteLength": 149188,
-      "sha256": "16f8d50739f9228ade7cc1a3744e422ce9acd2e7deff7c74ab3a9dca51f31efe"
+      "byteLength": 149252,
+      "sha256": "322bd4ee2288675f80c57b7c38ecc7d1e67c449a6faba31361fc06fcb0e77f84"
     },
     {
       "path": "packed.png",
@@ -46,8 +46,8 @@
         900
       ],
       "state": "packed",
-      "byteLength": 164824,
-      "sha256": "f2aee8c3e1a96c1b27ee9755d1c538e881572394a92bd0dd2c310c729edde65d"
+      "byteLength": 164885,
+      "sha256": "4fca42e498f3b1383306f135e1a188790c80d599452b547fbb3028b5bb9ad283"
     }
   ],
   "verdict": {

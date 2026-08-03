@@ -58,13 +58,17 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
   const outDir = '/virtual/muscle-compartment-packing';
   await writeMuscleCompartmentPackingWitness({ outDir, io: memory.io });
   memory.files.set(`${outDir}/before.png`, Buffer.alloc(0));
+  memory.files.set(`${outDir}/packed.png`, Buffer.from('packed-pixels'));
 
   await assert.rejects(
     () => admitMuscleCompartmentPackingVisualInspection({
       outDir,
       inspection: {
         observedAt: '2026-08-03T20:00:00Z',
-        images: [{ path: 'before.png', viewport: [1400, 900], state: 'before' }],
+        images: [
+          { path: 'before.png', viewport: [1400, 900], state: 'before' },
+          { path: 'packed.png', viewport: [1400, 900], state: 'packed' },
+        ],
         verdict: { nonblank: true, orbitable: true, movementLegible: true },
       },
       io: memory.io,
@@ -74,6 +78,36 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
 
   memory.files.set(`${outDir}/before.png`, Buffer.from('before-pixels'));
   memory.files.set(`${outDir}/packed.png`, Buffer.from('packed-pixels'));
+  const commonInspection = {
+    observedAt: '2026-08-03T20:00:00Z',
+    verdict: {
+      nonblank: true,
+      orbitable: true,
+      movementLegible: true,
+      stableMuscleIdentityLegible: true,
+      attachmentHandlesLegible: true,
+      skeletonAndCompartmentLegible: true,
+      metricsLegible: true,
+      textContained: true,
+    },
+  };
+  for (const images of [
+    [{ path: 'before.png', viewport: [1400, 900], state: 'before' }],
+    [{ path: 'packed.png', viewport: [1400, 900], state: 'packed' }],
+    [
+      { path: 'before.png', viewport: [1400, 900], state: 'before' },
+      { path: 'before.png', viewport: [1400, 900], state: 'before' },
+    ],
+  ]) {
+    await assert.rejects(
+      () => admitMuscleCompartmentPackingVisualInspection({
+        outDir,
+        inspection: { ...commonInspection, images },
+        io: memory.io,
+      }),
+      /before.*packed|packed.*before|exactly one/i,
+    );
+  }
   const admitted = await admitMuscleCompartmentPackingVisualInspection({
     outDir,
     inspection: {
@@ -83,16 +117,7 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
         { path: 'before.png', viewport: [1400, 900], state: 'before' },
         { path: 'packed.png', viewport: [1400, 900], state: 'packed' },
       ],
-      verdict: {
-        nonblank: true,
-        orbitable: true,
-        movementLegible: true,
-        stableMuscleIdentityLegible: true,
-        attachmentHandlesLegible: true,
-        skeletonAndCompartmentLegible: true,
-        metricsLegible: true,
-        textContained: true,
-      },
+      verdict: commonInspection.verdict,
     },
     io: memory.io,
   });
