@@ -9,6 +9,9 @@ import {
   measureMuscleCompartmentPacking,
   solveMuscleCompartmentPacking,
 } from '../muscle-compartment-packing-core.mjs';
+import {
+  deriveMuscleCompartmentPackingSensitivitySource,
+} from '../muscle-compartment-packing-sensitivity.mjs';
 
 function endpointPositions(muscle) {
   return [muscle.centerline[0].position, muscle.centerline.at(-1).position];
@@ -824,4 +827,65 @@ test('fixed attachment outside compartment fails at preflight with exact boundar
   }]);
   assert.equal(result.metrics.packed.compartmentEscape, 0.32);
   assert.equal(result.metrics.packed.endpointDrift, 0);
+});
+
+test('source-frame halfspaces preserve declared longitudinal order and bend floor on exact k8 attachment-0550', () => {
+  const parent = createSyntheticMuscleDensityLadder(8);
+  const { source } = deriveMuscleCompartmentPackingSensitivitySource(parent, {
+    axis:'attachment-radial-scale',
+    obstacleId:'central-skeletal-shaft',
+    scaleFactor:1.1,
+  });
+  const config = {
+    maxIterations:480,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    curvatureUpdate:'source-frame-halfspace',
+    minimumSourceTangentProjectionRatio:0.2,
+    minimumSourceCurvatureProjectionRatio:0.3,
+    maximumSourceBendEnergyRatio:1.05,
+    minimumSourceCurvatureCosine:0.3,
+    minimumSourceTangentCosine:0,
+  };
+
+  const result = solveMuscleCompartmentPacking(source, config);
+
+  assert.deepEqual(result.curvatureProjection, {
+    requestedUpdate:'source-frame-halfspace',
+    effectiveUpdate:'source-frame-halfspace',
+    minimumSourceTangentProjectionRatio:0.2,
+    minimumSourceCurvatureProjectionRatio:0.3,
+    fallbackUsed:false,
+  });
+  assert.equal(result.metrics.packed.sourceTangentReversalCount, 0);
+  assert.ok(result.metrics.packed.minimumSourceTangentCosine > 0);
+  assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(result.metrics.packed.minimumSourceCurvatureCosine >= 0.3);
+  assert.ok(
+    result.metrics.packed.minimumSourceBendEnergyRetention >=
+      config.minimumSourceCurvatureProjectionRatio ** 2 - 1e-9,
+    `source-frame projection surrendered declared bend retention: ${JSON.stringify(result.metrics.packed)}`,
+  );
+  assert.ok(
+    result.metrics.packed.maximumBendEnergy <=
+      result.metrics.initial.maximumBendEnergy * config.maximumSourceBendEnergyRatio,
+    `source-frame projection inflated bend energy: ${JSON.stringify(result.metrics.packed)}`,
+  );
+  assert.ok(
+    result.metrics.packed.pairwisePenetration <
+      result.metrics.initial.pairwisePenetration * 0.15,
+    `source-frame projection did not materially reduce overlap: ${JSON.stringify(result.metrics)}`,
+  );
+  assert.equal(result.metrics.packed.endpointDrift, 0);
+  assert.ok(result.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(result.metrics.packed.skeletalPenetration <= config.convergenceTolerance);
+  assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
+  assert.equal(result.metrics.packed.nonFiniteValueCount, 0);
+  assert.equal(result.metrics.packed.nonPositiveRadiusCount, 0);
 });

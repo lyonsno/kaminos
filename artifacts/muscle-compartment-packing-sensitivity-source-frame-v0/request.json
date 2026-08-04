@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-request.v0",
+  "id": "synthetic-k8-attachment-0550-source-frame-sweep-v0",
+  "expectedSourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3",
+  "variants": [
+    {
+      "id": "curvature-retention-030",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-frame-halfspace",
+        "minimumSourceTangentProjectionRatio": 0.2,
+        "minimumSourceCurvatureProjectionRatio": 0.3,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    },
+    {
+      "id": "curvature-retention-050",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-frame-halfspace",
+        "minimumSourceTangentProjectionRatio": 0.2,
+        "minimumSourceCurvatureProjectionRatio": 0.5,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    },
+    {
+      "id": "curvature-retention-070",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-frame-halfspace",
+        "minimumSourceTangentProjectionRatio": 0.2,
+        "minimumSourceCurvatureProjectionRatio": 0.7,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    }
+  ]
+}

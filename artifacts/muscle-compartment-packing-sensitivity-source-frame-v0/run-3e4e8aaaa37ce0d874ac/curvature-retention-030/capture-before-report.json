@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before",
+    "outputPath": "repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png",
+    "reportPath": "repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/capture-before-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 66848,
+    "processGroupId": 66848,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 66848,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2561,
+    "retainedBytes": 2561,
+    "truncated": false,
+    "tail": "[0804/172648.569030:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/172648.667581:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/172649.311464:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before (0)\n[0804/172649.312534:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before (0)\n[0804/172649.315050:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/172649.469923:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before (0)\n[0804/172649.473322:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/172649.566209:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before (0)\n[0804/172649.567283:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n277626 bytes written to file repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png",
+    "sizeBytes": 277626,
+    "sha256": "34b9c5aed9546e4ea0dcbdaf7f9e5d885ffbb2af0341a15ad02f3d86a227f06a",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 71,
+      "idatBytes": 276753
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png",
+      "sizeBytes": 277626,
+      "sha256": "34b9c5aed9546e4ea0dcbdaf7f9e5d885ffbb2af0341a15ad02f3d86a227f06a",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 71,
+        "idatBytes": 276753
+      }
+    }
+  }
+}

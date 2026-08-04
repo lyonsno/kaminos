@@ -1,0 +1,105 @@
+{
+  "observedAt": "2026-08-04T21:32:00Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/",
+  "variants": [
+    {
+      "id": "curvature-retention-030",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/packed.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The source-frame projection removes all longitudinal reversals and gross radial ironing, but 0.30 retention still over-straightens the bowed bellies. It preserves endpoint order and clears the skeletal obstacle while retaining a visible and measured pairwise residual; it is diagnostic, not admission."
+    },
+    {
+      "id": "curvature-retention-050",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/before.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/packed.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "At 0.50 the output visibly retains an hourglass bow and stable longitudinal order instead of becoming a generic radial cylinder array. That visual gain is not a solve: pairwise overlap remains 1.25001 and skeletal penetration remains 0.06515."
+    },
+    {
+      "id": "curvature-retention-070",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/before.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/packed.png",
+          "captureReport": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "At 0.70 the source bow and tangent order are most legible, with curvature cosine 1.0 and tangent cosine 0.98827. The independently projected carriers cannot negotiate the compartment: pairwise overlap rises to 1.92634 and skeletal penetration to 0.14051, so this is a clean redirect toward coordinated inter-muscle allocation."
+    }
+  ]
+}

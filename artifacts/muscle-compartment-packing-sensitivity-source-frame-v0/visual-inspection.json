@@ -1,0 +1,366 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-visual-inspection.v0",
+  "status": "completed-agent-inspection",
+  "disposition": "visually-rejected",
+  "observedAt": "2026-08-04T21:32:00Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "bindings": {
+    "inspectionInputReportSha256": "b2f6ad1440232b2ca7411d1b082e47e81efe2f9c5ac2a6799bb99cedfb3de25a",
+    "inspectionInputPortfolioSha256": "a21d9b46554d41aa8bde95872eeeb3b281e42cc76b6bbb6dd63a1f3629348ebc",
+    "inspectedPortfolioSha256": "1f1da0769ac4609d9b7195722ec1ef21dd43fb4710fba809c133f11d370697e5",
+    "runId": "run-3e4e8aaaa37ce0d874ac",
+    "sourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3"
+  },
+  "variants": [
+    {
+      "id": "curvature-retention-030",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "963729e0344a3c337d4bd7df3823d6453a4fbf33ec7afbbc557504c3b3046f71",
+        "indexHtmlSha256": "ccaf2070c621d2771ebf1b69d045efa108a54155d52724ad63ba5362138abb51"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/before.png",
+          "sha256": "34b9c5aed9546e4ea0dcbdaf7f9e5d885ffbb2af0341a15ad02f3d86a227f06a",
+          "sizeBytes": 277626,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/capture-before-report.json",
+            "reportSha256": "3057e4159b590bc9550793306a6f57aeb909f7628387b5b2c81c499a882c9a4e",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/packed.png",
+          "sha256": "4c159b18f419beb564c1b634a06dd3e2781b11fe94854379dab67b1d11269f92",
+          "sizeBytes": 266207,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-030/capture-packed-report.json",
+            "reportSha256": "d99da472320f3fe098927eb8b9d31b8ad49e830d8e04d45b94b2e9814708f2d0",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-030/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The source-frame projection removes all longitudinal reversals and gross radial ironing, but 0.30 retention still over-straightens the bowed bellies. It preserves endpoint order and clears the skeletal obstacle while retaining a visible and measured pairwise residual; it is diagnostic, not admission."
+    },
+    {
+      "id": "curvature-retention-050",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "1e04ca69af0dcfd6495d7b7b5a72f132c39c3da41578539af24a9c406b86eb20",
+        "indexHtmlSha256": "720ae677eecd9e7837afa08b21296ea8b3d4c326b6bfa6d25ed6a0ebc72882bc"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/before.png",
+          "sha256": "4a16d3a86f78f3f28f86876a5251b40b7723631ea2abf3ef3da7fc7810263145",
+          "sizeBytes": 276087,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/capture-before-report.json",
+            "reportSha256": "8ef09e92b7d7c65161e8077b79dbc43bedf74434a8a89d8ec70cdb49f94e5d3a",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-050/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/packed.png",
+          "sha256": "5428132c35299eb0d4df33eba4d4e4cb3289ea1579d91d2101b875258d6dfd99",
+          "sizeBytes": 268803,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-050/capture-packed-report.json",
+            "reportSha256": "fb0276627adeba398325f5eef55d52f30434843ab7b82ac7be95cb3dd5cd89ef",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-050/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "At 0.50 the output visibly retains an hourglass bow and stable longitudinal order instead of becoming a generic radial cylinder array. That visual gain is not a solve: pairwise overlap remains 1.25001 and skeletal penetration remains 0.06515."
+    },
+    {
+      "id": "curvature-retention-070",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "a50a7057eb2b80acd101af19b2dcc7125cb143a08fcf619e8ecab8bade5e206e",
+        "indexHtmlSha256": "c76259be4b5db7a40cac21ebe6dcd555239f40d71f08860d8af2e1dbd08876a8"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/before.png",
+          "sha256": "4a69528f6cc1eb0ce6bea5226510cc4e66e2e43830d6f8976d4378c1b629fe63",
+          "sizeBytes": 277042,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/capture-before-report.json",
+            "reportSha256": "0d0c82cafbcffed325bf798d332202abd43f2be518b473c7d2cba187ef908972",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-070/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/packed.png",
+          "sha256": "bcc9089f50e6bad36b38196e3215bc879593b9a96512c50f9ec1c55d3a5bb09c",
+          "sizeBytes": 270963,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-3e4e8aaaa37ce0d874ac/curvature-retention-070/capture-packed-report.json",
+            "reportSha256": "e59834d6647d33624f3f5d7c91a934dd8c2d274bb14f69d0fc42e63b69c9de54",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/run-3e4e8aaaa37ce0d874ac/curvature-retention-070/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "At 0.70 the source bow and tangent order are most legible, with curvature cosine 1.0 and tangent cosine 0.98827. The independently projected carriers cannot negotiate the compartment: pairwise overlap rises to 1.92634 and skeletal penetration to 0.14051, so this is a clean redirect toward coordinated inter-muscle allocation."
+    }
+  ]
+}

@@ -65,6 +65,14 @@ function dot(left, right) {
   return left.reduce((sum, value, index) => sum + value * right[index], 0);
 }
 
+function cross(left, right) {
+  return [
+    left[1] * right[2] - left[2] * right[1],
+    left[2] * right[0] - left[0] * right[2],
+    left[0] * right[1] - left[1] * right[0],
+  ];
+}
+
 function length(vector) {
   return Math.hypot(...vector);
 }
@@ -600,11 +608,29 @@ function validateConfig(config) {
   }
   if (
     config.curvatureUpdate !== undefined &&
-    !['unconstrained', 'source-sign-halfspace'].includes(config.curvatureUpdate)
+    !['unconstrained', 'source-sign-halfspace', 'source-frame-halfspace']
+      .includes(config.curvatureUpdate)
   ) {
     throw new Error(
-      'muscle packing curvatureUpdate must be unconstrained or source-sign-halfspace',
+      'muscle packing curvatureUpdate must be unconstrained, source-sign-halfspace, or source-frame-halfspace',
     );
+  }
+  const sourceFrameRatioKeys = [
+    'minimumSourceTangentProjectionRatio',
+    'minimumSourceCurvatureProjectionRatio',
+  ];
+  if (config.curvatureUpdate === 'source-frame-halfspace') {
+    for (const key of sourceFrameRatioKeys) {
+      if (!Number.isFinite(config[key]) || config[key] <= 0 || config[key] > 1) {
+        throw new Error(`${key} must be finite and in (0, 1] for source-frame-halfspace`);
+      }
+    }
+  } else {
+    for (const key of sourceFrameRatioKeys) {
+      if (config[key] !== undefined) {
+        throw new Error(`${key} requires source-frame-halfspace curvatureUpdate`);
+      }
+    }
   }
   if (
     config.crossSectionUpdate !== undefined &&
@@ -784,11 +810,18 @@ function pairwiseCoordinateReceipt(config) {
 
 function curvatureProjectionReceipt(config) {
   const update = config.curvatureUpdate || 'unconstrained';
-  return {
+  const receipt = {
     requestedUpdate: update,
     effectiveUpdate: update,
-    fallbackUsed: false,
   };
+  if (update === 'source-frame-halfspace') {
+    receipt.minimumSourceTangentProjectionRatio =
+      config.minimumSourceTangentProjectionRatio;
+    receipt.minimumSourceCurvatureProjectionRatio =
+      config.minimumSourceCurvatureProjectionRatio;
+  }
+  receipt.fallbackUsed = false;
+  return receipt;
 }
 
 function crossSectionProjectionReceipt(config) {
@@ -1745,7 +1778,7 @@ function solveDenseLinearSystem(matrix, rightHandSide) {
   return rows.map(row => row[size]);
 }
 
-function sourceCurvatureConstraints(sourceCenterline) {
+function sourceCurvatureConstraints(sourceCenterline, projectionRatio = 1e-6) {
   const variableCount = (sourceCenterline.length - 2) * 3;
   const coefficients = [1, -2, 1];
   const constraints = [];
@@ -1772,7 +1805,107 @@ function sourceCurvatureConstraints(sourceCenterline) {
     }
     constraints.push({
       row,
-      lowerBound:sourceMagnitudeSquared * 1e-6 - fixedContribution,
+      lowerBound:sourceMagnitudeSquared * projectionRatio - fixedContribution,
+      tolerance:sourceMagnitudeSquared * 1e-12,
+    });
+  }
+  return constraints;
+}
+
+function sourceCurvatureFrameConstraints(sourceCenterline, config) {
+  const variableCount = (sourceCenterline.length - 2) * 3;
+  const coefficients = [1, -2, 1];
+  const constraints = [];
+  const appendConstraint = (knotIndex, direction, lowerBound, sign = 1) => {
+    const row = Array(variableCount).fill(0);
+    let fixedContribution = 0;
+    for (let localIndex = 0; localIndex < 3; localIndex += 1) {
+      const targetKnotIndex = knotIndex + localIndex - 1;
+      const coefficient = coefficients[localIndex] * sign;
+      if (targetKnotIndex > 0 && targetKnotIndex < sourceCenterline.length - 1) {
+        const variableOffset = (targetKnotIndex - 1) * 3;
+        for (let axis = 0; axis < 3; axis += 1) {
+          row[variableOffset + axis] += coefficient * direction[axis];
+        }
+      } else {
+        fixedContribution += coefficient * dot(
+          direction,
+          sourceCenterline[targetKnotIndex].position,
+        );
+      }
+    }
+    constraints.push({
+      row,
+      lowerBound:lowerBound - fixedContribution,
+      tolerance:Math.max(1, Math.abs(lowerBound)) * 1e-12,
+    });
+  };
+  for (let knotIndex = 1; knotIndex < sourceCenterline.length - 1; knotIndex += 1) {
+    const sourceCurvature = centerlineSecondDifference(sourceCenterline, knotIndex);
+    const sourceMagnitude = length(sourceCurvature);
+    const sourceMagnitudeSquared = sourceMagnitude ** 2;
+    if (sourceMagnitudeSquared <= 1e-24) continue;
+    appendConstraint(
+      knotIndex,
+      sourceCurvature,
+      sourceMagnitudeSquared * config.minimumSourceCurvatureProjectionRatio,
+    );
+    appendConstraint(
+      knotIndex,
+      sourceCurvature,
+      -sourceMagnitudeSquared * Math.sqrt(config.maximumSourceBendEnergyRatio),
+      -1,
+    );
+    const sourceDirection = scale(sourceCurvature, 1 / sourceMagnitude);
+    const leastAlignedAxis = Math.abs(sourceDirection[0]) <= Math.abs(sourceDirection[1]) &&
+      Math.abs(sourceDirection[0]) <= Math.abs(sourceDirection[2])
+      ? [1, 0, 0]
+      : Math.abs(sourceDirection[1]) <= Math.abs(sourceDirection[2])
+        ? [0, 1, 0]
+        : [0, 0, 1];
+    const firstPerpendicularRaw = cross(sourceDirection, leastAlignedAxis);
+    const firstPerpendicular = scale(firstPerpendicularRaw, 1 / length(firstPerpendicularRaw));
+    const secondPerpendicular = cross(sourceDirection, firstPerpendicular);
+    for (const perpendicular of [firstPerpendicular, secondPerpendicular]) {
+      const scaledPerpendicular = scale(perpendicular, sourceMagnitude);
+      appendConstraint(knotIndex, scaledPerpendicular, 0);
+      appendConstraint(knotIndex, scaledPerpendicular, 0, -1);
+    }
+  }
+  return constraints;
+}
+
+function sourceTangentConstraints(sourceCenterline, projectionRatio) {
+  const variableCount = (sourceCenterline.length - 2) * 3;
+  const constraints = [];
+  for (let segmentIndex = 0; segmentIndex < sourceCenterline.length - 1; segmentIndex += 1) {
+    const sourceTangent = subtract(
+      sourceCenterline[segmentIndex + 1].position,
+      sourceCenterline[segmentIndex].position,
+    );
+    const sourceMagnitudeSquared = dot(sourceTangent, sourceTangent);
+    if (sourceMagnitudeSquared <= 1e-24) continue;
+    const row = Array(variableCount).fill(0);
+    let fixedContribution = 0;
+    for (const [targetKnotIndex, coefficient] of [
+      [segmentIndex, -1],
+      [segmentIndex + 1, 1],
+    ]) {
+      if (targetKnotIndex > 0 && targetKnotIndex < sourceCenterline.length - 1) {
+        const variableOffset = (targetKnotIndex - 1) * 3;
+        for (let axis = 0; axis < 3; axis += 1) {
+          row[variableOffset + axis] += coefficient * sourceTangent[axis];
+        }
+      } else {
+        fixedContribution += coefficient * dot(
+          sourceTangent,
+          sourceCenterline[targetKnotIndex].position,
+        );
+      }
+    }
+    constraints.push({
+      row,
+      lowerBound:sourceMagnitudeSquared * projectionRatio - fixedContribution,
       tolerance:sourceMagnitudeSquared * 1e-12,
     });
   }
@@ -1826,13 +1959,22 @@ function minimumHalfspaceProjection(initial, constraints) {
   throw new Error('source-curvature halfspace active-set projection did not stabilize');
 }
 
-function projectSourceCurvatureSigns(source, muscles, attribution, category) {
+function projectSourceFormation(source, muscles, attribution, category, config) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
     const initial = muscle.centerline.slice(1, -1).flatMap(knot => knot.position);
+    const constraints = config.curvatureUpdate === 'source-frame-halfspace'
+      ? [
+          ...sourceTangentConstraints(
+            sourceCenterline,
+            config.minimumSourceTangentProjectionRatio,
+          ),
+          ...sourceCurvatureFrameConstraints(sourceCenterline, config),
+        ]
+      : sourceCurvatureConstraints(sourceCenterline);
     const projected = minimumHalfspaceProjection(
       initial,
-      sourceCurvatureConstraints(sourceCenterline),
+      constraints,
     );
     for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
       const offset = (knotIndex - 1) * 3;
@@ -2246,12 +2388,16 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       correctionAttribution,
       'compartmentProjection',
     );
-    if (config.curvatureUpdate === 'source-sign-halfspace') {
-      projectSourceCurvatureSigns(
+    if (
+      config.curvatureUpdate === 'source-sign-halfspace' ||
+      config.curvatureUpdate === 'source-frame-halfspace'
+    ) {
+      projectSourceFormation(
         source,
         muscles,
         correctionAttribution,
         'formationConstraint',
+        config,
       );
     }
     restoreTargetVolumes(muscles, correctionAttribution, 'volumeRestoration');
