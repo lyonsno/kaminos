@@ -397,7 +397,7 @@ def _configure_compositor(
         depth_output = tree.nodes.new("CompositorNodeOutputFile")
         depth_output.directory = str(output_dir)
         depth_output.file_name = "depth"
-        depth_output.format.file_format = "OPEN_EXR"
+        depth_output.format.file_format = "OPEN_EXR_MULTILAYER"
         depth_output.format.color_mode = "RGB"
         depth_output.format.color_depth = "32"
         tree.links.new(render_layers.outputs["Depth"], depth_output.inputs[0])
@@ -405,7 +405,7 @@ def _configure_compositor(
         normal_output = tree.nodes.new("CompositorNodeOutputFile")
         normal_output.directory = str(output_dir)
         normal_output.file_name = "normal"
-        normal_output.format.file_format = "OPEN_EXR"
+        normal_output.format.file_format = "OPEN_EXR_MULTILAYER"
         normal_output.format.color_mode = "RGB"
         normal_output.format.color_depth = "32"
         tree.links.new(render_layers.outputs["Normal"], normal_output.inputs[0])
