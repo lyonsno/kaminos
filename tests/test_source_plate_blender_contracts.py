@@ -77,6 +77,15 @@ def test_blender_51_uses_supported_compositor_node_types():
     assert 'nodes.new("CompositorNodeMath")' not in adapter
 
 
+def test_blender_51_uses_file_output_directory_and_name_fields():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert ".directory = str(output_dir)" in adapter
+    assert ".file_name = " in adapter
+    assert ".base_path = " not in adapter
+    assert ".file_slots[0].path = " not in adapter
+
+
 if __name__ == "__main__":
     test_four_channel_paths_are_unique_and_caller_addressed()
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
@@ -84,3 +93,4 @@ if __name__ == "__main__":
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
     test_blender_51_uses_the_scene_compositing_node_group()
     test_blender_51_uses_supported_compositor_node_types()
+    test_blender_51_uses_file_output_directory_and_name_fields()
