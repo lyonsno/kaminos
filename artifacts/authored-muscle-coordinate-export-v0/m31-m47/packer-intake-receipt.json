@@ -1,19 +1,5 @@
 {
-  "acceptedFields": [
-    "source.assetSha256",
-    "source.graphSha256",
-    "source.graphFileSha256",
-    "source.routingFixtureSha256",
-    "muscles[].constructionId",
-    "muscles[].lineageId",
-    "muscles[].instanceId",
-    "muscles[].surfaceInstanceId",
-    "muscles[].surfaceGeometrySha256",
-    "muscles[].pathInstanceId",
-    "muscles[].pathGeometrySha256",
-    "muscles[].attachments.origin",
-    "muscles[].attachments.insertion"
-  ],
+  "acceptedFields": [],
   "admitted": false,
   "conflictingFields": [],
   "execution": {
@@ -73,7 +59,7 @@
   ],
   "packingSource": null,
   "reason": "muscle-31 selected-row authority state candidate is not admitted",
-  "receiptSha256": "a8d54ca43fcb07f51d31f7fc0044dd53fd42b1368104dcc4965c488c5fc9072a",
+  "receiptSha256": "196195295ffd64f6a0e2c54a4c412b512c6acb00518b9fa6b6435fa91c80144b",
   "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
   "source": {
     "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",

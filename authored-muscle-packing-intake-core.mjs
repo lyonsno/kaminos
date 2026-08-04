@@ -474,7 +474,7 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
       reason: error.message,
       input,
       source,
-      acceptedFields: ACCEPTED_IDENTITY_FIELDS,
+      acceptedFields: [],
       missingFields: error instanceof AuthorityIncompleteError ? error.missingFields : [],
       conflictingFields: error instanceof SourceToCarrierBindingInvalidError
         ? error.conflictingFields

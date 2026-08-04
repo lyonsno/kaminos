@@ -349,6 +349,8 @@ test('fixture-specific geometry cannot omit reusable atlas derivation provenance
 test('candidate selected rows cannot pass as an admitted packing carrier', () => {
   const candidateCarrier = makeCoordinateCarrier();
   candidateCarrier.derivation.selectionAuthority.rows[0].state = 'candidate';
+  candidateCarrier.source.graphSha256 = 'd'.repeat(64);
+  candidateCarrier.source.graphFileSha256 = 'e'.repeat(64);
 
   const receipt = admitAuthoredMusclePackingIntake({
     routingFixture: fixture,
@@ -360,6 +362,11 @@ test('candidate selected rows cannot pass as an admitted packing carrier', () =>
   assert.equal(receipt.admitted, false);
   assert.equal(receipt.packingSource, null);
   assert.match(receipt.reason, /muscle-31.*candidate/i);
+  assert.deepEqual(
+    receipt.acceptedFields,
+    [],
+    'an early authority refusal cannot claim that later source/carrier comparisons passed',
+  );
 });
 
 test('selected-row admission requires a byte-bound receipt and every required solve field', () => {

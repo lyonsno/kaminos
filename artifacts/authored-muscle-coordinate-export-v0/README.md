@@ -21,7 +21,7 @@ Packer consumed `m31-m47/packer-authority-probe.json`, which is explicitly marke
 - Source graph file SHA-256: `a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785`
 - Parent atlas id SHA-256: `b9a857559f7d20e1efe18e0a29103ba7cb2347dc3e0b20ac0df409929af6b77b`
 - Authority receipt id SHA-256: `64d586c0831d48868ac51f4b1d519df0dac37073c95ad96047c352542907a490`
-- Packer receipt id SHA-256: `a8d54ca43fcb07f51d31f7fc0044dd53fd42b1368104dcc4965c488c5fc9072a`
+- Packer receipt id SHA-256: `196195295ffd64f6a0e2c54a4c412b512c6acb00518b9fa6b6435fa91c80144b`
 
 Two executions of the current Blender extractor produced byte-identical `source-extraction.json`. Recompiling the graph, atlas, receipt, Packer probe, and Packer receipt reproduced the same file SHA-256 values.
 
@@ -57,4 +57,4 @@ Curve point `radius` is preserved as a native Blender curve attribute but is not
 
 The shortest path is a source-author decision naming whether the saved native path samples and visible-surface volume measurements are the admitted M31/M47 centerline/volume facts, plus explicit authority for physical radii, units, local compartment bounds, and obstacle membership. The older fixture graph identity must either be superseded by a source-authorized operator-path graph/fixture binding or retained as a declared cross-path correspondence; the exporter must not choose between those policies.
 
-Packer should also correct one receipt-reporting issue before its “accepted fields” list is treated as proof: the authority-incomplete return currently lists source identity fields as accepted even though selection-authority validation exits before comparing the probe's source graph identity.
+Packer's replayed authority-incomplete receipt now keeps `acceptedFields` empty because selection-authority validation exits before comparing the probe's source graph identity. The refusal therefore preserves the candidate-authority blocker without implying that the later graph-binding comparison passed.
