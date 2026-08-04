@@ -1,0 +1,390 @@
+{
+  "schema": "kaminos.source-shaped-muscle-packing-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+  "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+  "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "evidenceTrack": "experimental",
+  "claimCeiling": "qualitative-route-local-mechanical-response",
+  "mechanism": {
+    "effective": {
+      "config": {
+        "convergenceTolerance": 1e-7,
+        "maxIterations": 640,
+        "relaxationStep": 0.18,
+        "sampleCount": 25,
+        "smoothnessStep": 0.035
+      },
+      "id": "muscle-compartment-packing-projection.v0"
+    },
+    "requested": {
+      "config": {
+        "convergenceTolerance": 1e-7,
+        "maxIterations": 640,
+        "relaxationStep": 0.18,
+        "sampleCount": 25,
+        "smoothnessStep": 0.035
+      },
+      "id": "muscle-compartment-packing-projection.v0"
+    }
+  },
+  "interpretationChecks": {
+    "fixedEndpointsPreserved": true,
+    "initialPairwisePenetrationStrictlyIncreasing": true,
+    "maximumInteriorDisplacementNondecreasing": true,
+    "targetVolumesPreserved": true
+  },
+  "conditions": [
+    {
+      "id": "baseline",
+      "crowdingFraction": 0,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0,
+        "effective": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "baseline",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 3e-12,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 5.581723846788,
+        "skeletalPenetration": 0.862611751278
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 1.833505573084,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 4.445160916104,
+        "skeletalPenetration": 0.183025363698
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.263100583311,
+        "meanInteriorDisplacement": 0.67878300871
+      }
+    },
+    {
+      "id": "mild",
+      "crowdingFraction": 0.12,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.12,
+        "effective": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "mild",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.123194664416,
+        "maximumRelativeVolumeError": 0.002199818934,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 5.772364512578,
+        "skeletalPenetration": 0.922930635725
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 1.811810628378,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 4.448398812615,
+        "skeletalPenetration": 0.175651672059
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.328059698368,
+        "meanInteriorDisplacement": 0.775468177007
+      }
+    },
+    {
+      "id": "moderate",
+      "crowdingFraction": 0.24,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "fdeb8d242b5e439a04df219482287001611671161eedb66fa0182b623b1fccc0"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "fdeb8d242b5e439a04df219482287001611671161eedb66fa0182b623b1fccc0"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.24,
+        "effective": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "moderate",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.492777912542,
+        "maximumRelativeVolumeError": 0.008848741491,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 6.459445559318,
+        "skeletalPenetration": 0.983230936648
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 1.800613015852,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 4.46190996936,
+        "skeletalPenetration": 0.176866736698
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.38135255422,
+        "meanInteriorDisplacement": 0.874635292847
+      }
+    }
+  ],
+  "primaryOutput": "perturbation-result.json",
+  "outputSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b",
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-written",
+    "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+    "effectiveConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  }
+}
