@@ -190,6 +190,156 @@ def verify_source_freshness(
     return receipt
 
 
+def verify_source_unchanged(
+    descriptor: Mapping[str, Any],
+    effective_source_path: str | Path,
+    before: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Re-hash source bytes after rendering and reject any in-run drift."""
+    try:
+        after = verify_source_freshness(descriptor, effective_source_path)
+    except SourcePlateContractError as error:
+        raise SourcePlateContractError(
+            "post-render-source-freshness",
+            f"post-render source freshness failed: {error}",
+        ) from error
+    comparisons = (
+        ("requestedResolvedPath", "requested source path"),
+        ("requestedSha256", "requested source SHA-256"),
+        ("requestedByteLength", "requested source byte length"),
+        ("effectivePath", "effective source path"),
+        ("effectiveSha256", "effective source SHA-256"),
+        ("byteLength", "effective source byte length"),
+    )
+    for field, label in comparisons:
+        if before.get(field) != after.get(field):
+            raise SourcePlateContractError(
+                "post-render-source-freshness",
+                f"post-render source changed: {label} was {before.get(field)!r}, "
+                f"now {after.get(field)!r}",
+            )
+    return {
+        "status": "unchanged",
+        "requestedPath": after["requestedResolvedPath"],
+        "effectivePath": after["effectivePath"],
+        "beforeSha256": before["effectiveSha256"],
+        "afterSha256": after["effectiveSha256"],
+        "beforeByteLength": before["byteLength"],
+        "afterByteLength": after["byteLength"],
+        "loadPolicy": after["loadPolicy"],
+    }
+
+
+def _numeric_vector(value: Any, *, length: int, field: str) -> list[float]:
+    if (
+        not isinstance(value, list)
+        or len(value) != length
+        or any(type(component) not in (int, float) for component in value)
+    ):
+        raise SourcePlateContractError(
+            "descriptor-validation", f"{field} must contain {length} numbers"
+        )
+    return [float(component) for component in value]
+
+
+def validate_transform_contracts(descriptor: Mapping[str, Any]) -> dict[str, Any]:
+    """Enforce the one authored transform vocabulary consumed by Blender."""
+    camera = descriptor.get("camera")
+    if not isinstance(camera, Mapping):
+        raise SourcePlateContractError(
+            "descriptor-validation", "descriptor camera contract is missing"
+        )
+    projection = camera.get("projection")
+    if projection not in {"orthographic", "perspective"}:
+        raise SourcePlateContractError(
+            "descriptor-validation",
+            "camera.projection must be orthographic or perspective",
+        )
+    legacy_camera_fields = sorted(
+        field for field in ("quaternion", "matrix") if field in camera
+    )
+    if legacy_camera_fields:
+        raise SourcePlateContractError(
+            "descriptor-validation",
+            "camera uses unsupported transform fields; rotationEuler is authoritative: "
+            + ", ".join(legacy_camera_fields),
+        )
+    camera_receipt: dict[str, Any] = {
+        "projection": projection,
+        "location": _numeric_vector(camera.get("location"), length=3, field="camera.location"),
+        "rotationEuler": _numeric_vector(
+            camera.get("rotationEuler"), length=3, field="camera.rotationEuler"
+        ),
+        "target": _numeric_vector(camera.get("target"), length=3, field="camera.target"),
+        "sensorWidthMm": float(camera.get("sensorWidthMm"))
+        if type(camera.get("sensorWidthMm")) in (int, float)
+        and camera.get("sensorWidthMm") > 0
+        else None,
+        "framing": copy.deepcopy(camera.get("framing")),
+    }
+    if camera_receipt["sensorWidthMm"] is None:
+        raise SourcePlateContractError(
+            "descriptor-validation", "camera.sensorWidthMm must be positive"
+        )
+    if projection == "orthographic":
+        scale = camera.get("orthoScale")
+        if type(scale) not in (int, float) or scale <= 0:
+            raise SourcePlateContractError(
+                "descriptor-validation", "orthographic camera needs positive orthoScale"
+            )
+        camera_receipt["orthoScale"] = float(scale)
+    else:
+        focal = camera.get("focalLengthMm")
+        if type(focal) not in (int, float) or focal <= 0:
+            raise SourcePlateContractError(
+                "descriptor-validation", "perspective camera needs positive focalLengthMm"
+            )
+        camera_receipt["focalLengthMm"] = float(focal)
+
+    lighting = descriptor.get("lighting")
+    lights = lighting.get("lights") if isinstance(lighting, Mapping) else None
+    if not isinstance(lights, list) or not lights:
+        raise SourcePlateContractError(
+            "descriptor-validation", "lighting.lights must be a non-empty list"
+        )
+    light_receipts: list[dict[str, Any]] = []
+    for index, light in enumerate(lights):
+        if not isinstance(light, Mapping):
+            raise SourcePlateContractError(
+                "descriptor-validation", f"lighting.lights[{index}] must be an object"
+            )
+        name = str(light.get("name") or f"light-{index}")
+        if "rotation" in light:
+            raise SourcePlateContractError(
+                "descriptor-validation",
+                f"lighting.{name}.rotation is unsupported; use rotationEuler",
+            )
+        light_receipts.append(
+            {
+                "name": name,
+                "type": light.get("type"),
+                "location": _numeric_vector(
+                    light.get("location"),
+                    length=3,
+                    field=f"lighting.{name}.location",
+                ),
+                "rotationEuler": _numeric_vector(
+                    light.get("rotationEuler"),
+                    length=3,
+                    field=f"lighting.{name}.rotationEuler",
+                ),
+                "energy": light.get("energy"),
+            }
+        )
+    return {
+        "camera": camera_receipt,
+        "lighting": {
+            "preset": lighting.get("preset"),
+            "lights": light_receipts,
+        },
+    }
+
+
 def require_effective_renderer(
     descriptor: Mapping[str, Any], effective_renderer: str
 ) -> dict[str, str]:
@@ -283,6 +433,18 @@ def validate_complete_outputs(
             raise SourcePlateContractError(
                 "output-validation", f"output {name} is not complete"
             )
+        if record.get("measurementSource") != "decoded-pixels":
+            raise SourcePlateContractError(
+                "output-validation", f"output {name} lacks decoded-pixel evidence"
+            )
+        if record.get("nonblank") is not True:
+            raise SourcePlateContractError(
+                "output-validation", f"output {name} is blank or unverified"
+            )
+        if record.get("representationValidated") is not True:
+            raise SourcePlateContractError(
+                "output-validation", f"output {name} representation is unverified"
+            )
         if record.get("descriptorSha256") != descriptor_identity:
             raise SourcePlateContractError(
                 "output-validation", f"output {name} belongs to another descriptor"
@@ -290,6 +452,10 @@ def validate_complete_outputs(
         if record.get("encoding") != channel_contracts[name]["encoding"]:
             raise SourcePlateContractError(
                 "output-validation", f"output {name} has the wrong encoding"
+            )
+        if record.get("measuredEncoding") != channel_contracts[name]["encoding"]:
+            raise SourcePlateContractError(
+                "output-validation", f"output {name} measured the wrong encoding"
             )
         expected_representation = channel_contracts[name].get("representation")
         if (
@@ -351,9 +517,23 @@ def validate_complete_outputs(
                 "byteLength": byte_length,
                 "sha256": effective_sha256,
                 "descriptorSha256": descriptor_identity,
+                "measurementSource": "decoded-pixels",
+                "measuredEncoding": record["measuredEncoding"],
+                "nonblank": True,
+                "representationValidated": True,
             }
         if expected_representation is not None:
             validated_record["representation"] = expected_representation
+        for evidence_field in (
+            "componentRange",
+            "binaryCoverage",
+            "positiveMetricSamples",
+            "unitVectorSamples",
+            "nonzeroVectorSamples",
+            "maxUnitLengthError",
+        ):
+            if evidence_field in record:
+                validated_record[evidence_field] = copy.deepcopy(record[evidence_field])
         validated.append(validated_record)
     return {
         "status": "complete",

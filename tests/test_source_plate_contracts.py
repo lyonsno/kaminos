@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import source_plate_core as _core  # noqa: E402
 from source_plate_core import (  # noqa: E402
     SCHEMA_ID,
     SourcePlateContractError,
@@ -21,6 +22,9 @@ from source_plate_core import (  # noqa: E402
     verify_source_freshness,
     write_descriptor,
 )
+
+validate_transform_contracts = getattr(_core, "validate_transform_contracts", None)
+verify_source_unchanged = getattr(_core, "verify_source_unchanged", None)
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -60,8 +64,9 @@ def _descriptor(source: Path, *, plate_name: str = "cat-ecorche-right-sagittal-r
         "camera": {
             "projection": "orthographic",
             "location": [4.0, 0.0, 0.0],
-            "quaternion": [0.70710678, 0.0, 0.70710678, 0.0],
+            "rotationEuler": [0.0, 1.57079632679, 0.0],
             "target": [0.0, 0.0, 0.0],
+            "sensorWidthMm": 36.0,
             "clipStart": 0.01,
             "clipEnd": 100.0,
             "orthoScale": 4.0,
@@ -80,7 +85,8 @@ def _descriptor(source: Path, *, plate_name: str = "cat-ecorche-right-sagittal-r
                     "name": "key",
                     "type": "AREA",
                     "energy": 500.0,
-                    "rotation": [0.4, 0.0, -0.7],
+                    "location": [4.0, -3.0, 6.0],
+                    "rotationEuler": [0.4, 0.0, -0.7],
                 }
             ],
         },
@@ -125,6 +131,10 @@ def _output_records(root: Path, descriptor: dict) -> dict[str, dict]:
             "byteLength": len(payload),
             "sha256": _sha256_bytes(payload),
             "descriptorSha256": identity,
+            "measurementSource": "decoded-pixels",
+            "measuredEncoding": channel["encoding"],
+            "nonblank": True,
+            "representationValidated": True,
         }
     return records
 
@@ -198,6 +208,44 @@ def test_source_freshness_binds_requested_path_and_bytes():
         with _raises(SourcePlateContractError, match="SHA-256"):
             verify_source_freshness(descriptor, duplicate)
         assert _raises.last_error.phase == "source-freshness"
+
+
+def test_post_render_source_freshness_rehashes_and_rejects_drift():
+    assert callable(verify_source_unchanged), "core lacks post-render source rehash"
+    with TemporaryDirectory() as tmp:
+        source = Path(tmp) / "source.blend"
+        source.write_bytes(b"operator-authored-source")
+        descriptor = _descriptor(source)
+        before = verify_source_freshness(descriptor, source)
+
+        after = verify_source_unchanged(descriptor, source, before)
+
+        assert after["status"] == "unchanged"
+        assert after["beforeSha256"] == after["afterSha256"]
+        source.write_bytes(b"mutated-during-render")
+        with _raises(SourcePlateContractError, match="post-render source"):
+            verify_source_unchanged(descriptor, source, before)
+        assert _raises.last_error.phase == "post-render-source-freshness"
+
+
+def test_camera_and_lighting_use_one_replayable_transform_vocabulary():
+    assert callable(validate_transform_contracts), "core lacks transform vocabulary validation"
+    with TemporaryDirectory() as tmp:
+        source = Path(tmp) / "source.blend"
+        source.write_bytes(b"operator-authored-source")
+        descriptor = _descriptor(source)
+
+        receipt = validate_transform_contracts(descriptor)
+
+        assert receipt["camera"]["rotationEuler"] == [0.0, 1.57079632679, 0.0]
+        assert receipt["camera"]["target"] == [0.0, 0.0, 0.0]
+        assert receipt["camera"]["sensorWidthMm"] == 36.0
+        assert receipt["lighting"]["lights"][0]["location"] == [4.0, -3.0, 6.0]
+        legacy = copy.deepcopy(descriptor)
+        legacy["camera"].pop("rotationEuler")
+        legacy["camera"]["quaternion"] = [1.0, 0.0, 0.0, 0.0]
+        with _raises(SourcePlateContractError, match="rotationEuler"):
+            validate_transform_contracts(legacy)
 
 
 def test_renderer_fallback_is_rejected():
@@ -323,6 +371,8 @@ if __name__ == "__main__":
     test_descriptor_identity_is_canonical_and_binds_authored_state()
     test_caller_addressed_sibling_descriptors_do_not_stomp_each_other()
     test_source_freshness_binds_requested_path_and_bytes()
+    test_post_render_source_freshness_rehashes_and_rejects_drift()
+    test_camera_and_lighting_use_one_replayable_transform_vocabulary()
     test_renderer_fallback_is_rejected()
     test_partial_output_set_cannot_complete()
     test_zero_byte_or_cross_descriptor_output_cannot_complete()

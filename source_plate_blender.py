@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import traceback
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -28,7 +30,9 @@ from source_plate_core import (
     read_descriptor,
     require_effective_renderer,
     validate_complete_outputs,
+    validate_transform_contracts,
     verify_source_freshness,
+    verify_source_unchanged,
 )
 
 
@@ -48,8 +52,8 @@ def channel_paths(output_dir: str | Path) -> dict[str, Path]:
 
 def failure_document(
     *,
-    descriptor_path: str | Path,
-    output_dir: str | Path,
+    descriptor_path: str | Path | None,
+    output_dir: str | Path | None,
     phase: str,
     error: BaseException,
     last_trustworthy_evidence: dict[str, Any],
@@ -60,8 +64,12 @@ def failure_document(
         "status": "failed",
         "failurePhase": phase,
         "requested": {
-            "descriptorPath": str(Path(descriptor_path).expanduser().resolve()),
-            "outputDirectory": str(Path(output_dir).expanduser().resolve()),
+            "descriptorPath": str(Path(descriptor_path).expanduser().resolve())
+            if descriptor_path is not None
+            else None,
+            "outputDirectory": str(Path(output_dir).expanduser().resolve())
+            if output_dir is not None
+            else None,
         },
         "lastTrustworthyEvidence": last_trustworthy_evidence,
         "error": {"type": type(error).__name__, "message": str(error)},
@@ -202,6 +210,7 @@ def _apply_camera(bpy: Any, descriptor: Mapping[str, Any]) -> tuple[Any, dict[st
     camera.rotation_euler = rotation
     camera_data.clip_start = float(camera_contract.get("clipStart", 0.01))
     camera_data.clip_end = float(camera_contract.get("clipEnd", 1000.0))
+    camera_data.sensor_width = float(camera_contract["sensorWidthMm"])
     if projection == "orthographic":
         ortho_scale = camera_contract.get("orthoScale")
         if type(ortho_scale) not in (int, float) or ortho_scale <= 0:
@@ -224,6 +233,8 @@ def _apply_camera(bpy: Any, descriptor: Mapping[str, Any]) -> tuple[Any, dict[st
         "rotationEuler": list(camera.rotation_euler),
         "clipStart": camera_data.clip_start,
         "clipEnd": camera_data.clip_end,
+        "target": list(camera_contract["target"]),
+        "sensorWidthMm": camera_data.sensor_width,
         "framing": camera_contract.get("framing"),
     }
     if projection == "orthographic":
@@ -411,16 +422,8 @@ def _normal_material(bpy: Any) -> Any:
     transform.vector_type = "NORMAL"
     transform.convert_from = "WORLD"
     transform.convert_to = "CAMERA"
-    multiply = tree.nodes.new("ShaderNodeVectorMath")
-    multiply.operation = "MULTIPLY"
-    multiply.inputs[1].default_value = (0.5, 0.5, 0.5)
-    add = tree.nodes.new("ShaderNodeVectorMath")
-    add.operation = "ADD"
-    add.inputs[1].default_value = (0.5, 0.5, 0.5)
     tree.links.new(geometry.outputs["True Normal"], transform.inputs["Vector"])
-    tree.links.new(transform.outputs["Vector"], multiply.inputs[0])
-    tree.links.new(multiply.outputs["Vector"], add.inputs[0])
-    tree.links.new(add.outputs["Vector"], emission.inputs["Color"])
+    tree.links.new(transform.outputs["Vector"], emission.inputs["Color"])
     return material
 
 
@@ -452,51 +455,279 @@ def _write_silhouette_mask(bpy: Any, source_path: Path, output_path: Path) -> No
         bpy.data.images.remove(source_image)
 
 
-def _record_outputs(descriptor: Mapping[str, Any], paths: Mapping[str, Path]) -> dict[str, Any]:
+def _inspect_rendered_output(
+    bpy: Any,
+    name: str,
+    path: Path,
+    channel_contract: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Decode one rendered artifact and measure the channel it actually contains."""
+    expected_encoding = channel_contract.get("encoding")
+    expected_format = {"png": "PNG", "openexr": "OPEN_EXR"}.get(expected_encoding)
+    if expected_format is None:
+        raise SourcePlateContractError(
+            "output-validation", f"unsupported encoding contract for {name}: {expected_encoding}"
+        )
+    try:
+        image = bpy.data.images.load(str(path), check_existing=False)
+    except Exception as error:
+        raise SourcePlateContractError(
+            "output-validation", f"output {name} could not be decoded: {error}"
+        ) from error
+    try:
+        width, height = (int(image.size[0]), int(image.size[1]))
+        measured_format = str(image.file_format)
+        channels = int(getattr(image, "channels", 4))
+        pixels = [float(value) for value in image.pixels]
+    finally:
+        bpy.data.images.remove(image)
+    if measured_format != expected_format:
+        raise SourcePlateContractError(
+            "output-validation",
+            f"output {name} format is {measured_format}, expected {expected_format}",
+        )
+    if width <= 0 or height <= 0 or channels < 3:
+        raise SourcePlateContractError(
+            "output-validation", f"output {name} has invalid decoded dimensions/channels"
+        )
+    if len(pixels) < width * height * channels:
+        raise SourcePlateContractError(
+            "output-validation", f"output {name} decoded pixel buffer is partial"
+        )
+    rgb = [
+        tuple(pixels[index : index + 3])
+        for index in range(0, width * height * channels, channels)
+    ]
+    flat = [component for pixel in rgb for component in pixel]
+    if not flat or any(not math.isfinite(component) for component in flat):
+        raise SourcePlateContractError(
+            "output-validation", f"output {name} contains no finite RGB samples"
+        )
+    component_min = min(flat)
+    component_max = max(flat)
+    representation = channel_contract.get("representation")
+    measurement: dict[str, Any] = {
+        "measurementSource": "decoded-pixels",
+        "measuredEncoding": expected_encoding,
+        "width": width,
+        "height": height,
+        "componentRange": [component_min, component_max],
+        "representation": representation,
+        "representationValidated": True,
+    }
+    if name == "rgb":
+        nonblank = component_max - component_min > 1.0e-5
+        if not nonblank:
+            raise SourcePlateContractError("output-validation", "output rgb is blank")
+    elif name == "silhouette":
+        tolerance = 1.0e-3
+        nonbinary = [
+            value
+            for pixel in rgb
+            for value in pixel
+            if abs(value) > tolerance and abs(value - 1.0) > tolerance
+        ]
+        foreground = any(value > 1.0 - tolerance for pixel in rgb for value in pixel)
+        background = any(abs(value) <= tolerance for pixel in rgb for value in pixel)
+        if nonbinary or not foreground or not background:
+            raise SourcePlateContractError(
+                "output-validation", "output silhouette is blank or non-binary"
+            )
+        nonblank = True
+        measurement["binaryCoverage"] = True
+    elif name == "depth":
+        if representation != "metric_camera_z_rgb":
+            raise SourcePlateContractError(
+                "output-validation", "depth representation is not metric camera Z"
+            )
+        if component_min < -1.0e-6 or component_max <= 1.0e-6:
+            raise SourcePlateContractError(
+                "output-validation", "output depth has no positive metric samples"
+            )
+        nonblank = True
+        measurement["positiveMetricSamples"] = sum(
+            1 for value in flat if value > 1.0e-6
+        )
+    elif name == "normal":
+        if representation != "camera_space_unit_normal_rgb":
+            raise SourcePlateContractError(
+                "output-validation", "normal representation is not camera-space unit RGB"
+            )
+        vectors = [
+            pixel
+            for pixel in rgb
+            if math.sqrt(sum(component * component for component in pixel)) > 1.0e-6
+        ]
+        lengths = [
+            math.sqrt(sum(component * component for component in pixel))
+            for pixel in vectors
+        ]
+        unit_lengths = [length for length in lengths if abs(length - 1.0) <= 0.05]
+        if (
+            not unit_lengths
+            or len(unit_lengths) < max(1, len(lengths) // 2)
+            or component_min >= -1.0e-5
+            or component_min < -1.001
+            or component_max > 1.001
+        ):
+            raise SourcePlateContractError(
+                "output-validation", "output normal is not signed camera-space unit normal data"
+            )
+        nonblank = True
+        measurement["unitVectorSamples"] = len(unit_lengths)
+        measurement["nonzeroVectorSamples"] = len(lengths)
+        measurement["maxUnitLengthError"] = max(
+            abs(length - 1.0) for length in unit_lengths
+        )
+    else:
+        raise SourcePlateContractError(
+            "output-validation", f"unsupported output channel {name}"
+        )
+    measurement["nonblank"] = nonblank
+    return measurement
+
+
+def _record_outputs(
+    bpy: Any, descriptor: Mapping[str, Any], paths: Mapping[str, Path]
+) -> dict[str, Any]:
     identity = descriptor_sha256(descriptor)
-    render = descriptor["render"]
     channel_by_name = {
         channel["name"]: channel for channel in descriptor["channels"]
     }
     records: dict[str, Any] = {}
     for name, path in paths.items():
         channel_contract = channel_by_name[name]
+        measurement = _inspect_rendered_output(bpy, name, path, channel_contract)
         sha256, byte_length = _sha256_file(path)
         records[name] = {
             "status": "complete",
             "path": str(path.resolve()),
-            "encoding": channel_contract["encoding"],
-            "representation": channel_contract.get("representation"),
-            "width": render["width"],
-            "height": render["height"],
+            "encoding": measurement["measuredEncoding"],
             "byteLength": byte_length,
             "sha256": sha256,
             "descriptorSha256": identity,
+            **measurement,
         }
     return records
 
 
-def render_descriptor(
-    *, descriptor_path: Path, output_dir: Path, bpy: Any
-) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    report_path = output_dir / "render-report.json"
-    outputs = channel_paths(output_dir)
-    for path in [*outputs.values(), report_path]:
-        path.unlink(missing_ok=True)
-    for pattern in ("silhouette*.png", "depth*.exr", "normal*.exr"):
-        for path in output_dir.glob(pattern):
-            path.unlink()
+def _promote_staged_run(
+    *,
+    staging_dir: Path,
+    output_dir: Path,
+    report_path: Path,
+    report: Mapping[str, Any],
+    replace: Callable[[str | Path, str | Path], None] = os.replace,
+) -> None:
+    """Promote a validated product directory, rolling back on any finalization fault."""
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    backup_dir = output_dir.with_name(f".{output_dir.name}.previous")
+    if backup_dir.exists():
+        raise SourcePlateContractError(
+            "output-promotion", f"stale promotion backup exists: {backup_dir}"
+        )
+    had_previous = output_dir.exists()
+    promoted = False
+    try:
+        if had_previous:
+            replace(output_dir, backup_dir)
+        replace(staging_dir, output_dir)
+        promoted = True
+        _atomic_json(report_path, report)
+    except BaseException:
+        if promoted and output_dir.exists():
+            replace(output_dir, staging_dir)
+        if had_previous and backup_dir.exists():
+            replace(backup_dir, output_dir)
+        raise
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
 
+
+def _parse_cli_arguments(arguments: list[str]) -> dict[str, Path]:
+    values: dict[str, str] = {}
+    allowed = {"--descriptor", "--out-dir", "--report", "--failure-report"}
+    index = 0
+    while index < len(arguments):
+        flag = arguments[index]
+        if flag not in allowed:
+            raise SourcePlateContractError(
+                "argument-validation", f"unexpected argument {flag}"
+            )
+        if flag in values:
+            raise SourcePlateContractError(
+                "argument-validation", f"duplicate argument {flag}"
+            )
+        if index + 1 >= len(arguments) or arguments[index + 1] in allowed:
+            raise SourcePlateContractError(
+                "argument-validation", f"{flag} requires a path"
+            )
+        values[flag] = arguments[index + 1]
+        index += 2
+    missing = [
+        flag for flag in ("--descriptor", "--out-dir", "--report") if flag not in values
+    ]
+    if missing:
+        raise SourcePlateContractError(
+            "argument-validation", f"missing required arguments: {', '.join(missing)}"
+        )
+    report = Path(values["--report"]).expanduser().resolve()
+    failure_report = (
+        Path(values["--failure-report"]).expanduser().resolve()
+        if "--failure-report" in values
+        else report.with_name(f"{report.stem}-failure{report.suffix or '.json'}")
+    )
+    return {
+        "descriptor": Path(values["--descriptor"]).expanduser().resolve(),
+        "out_dir": Path(values["--out-dir"]).expanduser().resolve(),
+        "report": report,
+        "failure_report": failure_report,
+    }
+
+
+def _known_argument_path(arguments: list[str], flag: str) -> Path | None:
+    try:
+        index = arguments.index(flag)
+    except ValueError:
+        return None
+    if index + 1 >= len(arguments) or arguments[index + 1].startswith("--"):
+        return None
+    return Path(arguments[index + 1]).expanduser().resolve()
+
+
+def render_descriptor(
+    *,
+    descriptor_path: Path,
+    output_dir: Path,
+    report_path: Path,
+    failure_report_path: Path,
+    bpy: Any,
+) -> dict[str, Any]:
     phase = "descriptor-read"
+    staging_dir: Path | None = None
     last: dict[str, Any] = {
         "descriptorPath": str(descriptor_path.resolve()),
         "effectiveSourcePath": str(Path(bpy.data.filepath).resolve()),
+        "outputDirectory": str(output_dir.resolve()),
+        "reportPath": str(report_path.resolve()),
+        "failureReportPath": str(failure_report_path.resolve()),
     }
     try:
+        output_dir.parent.mkdir(parents=True, exist_ok=True)
+        staging_dir = Path(
+            tempfile.mkdtemp(
+                prefix=f".{output_dir.name}.", suffix=".staging", dir=output_dir.parent
+            )
+        )
+        last["stagingDirectory"] = str(staging_dir)
+        outputs = channel_paths(staging_dir)
         descriptor = read_descriptor(descriptor_path)
         identity = descriptor_sha256(descriptor)
         last["descriptorSha256"] = identity
+
+        transform_contract = validate_transform_contracts(descriptor)
+        last["transformContract"] = transform_contract
 
         phase = "source-freshness"
         source_receipt = verify_source_freshness(descriptor, bpy.data.filepath)
@@ -576,8 +807,18 @@ def render_descriptor(
         )
 
         phase = "output-validation"
-        output_records = _record_outputs(descriptor, outputs)
+        output_records = _record_outputs(bpy, descriptor, outputs)
         validation = validate_complete_outputs(descriptor, output_records)
+        final_paths = channel_paths(output_dir)
+        for output in validation["outputs"]:
+            output["path"] = str(final_paths[output["channel"]])
+
+        phase = "post-render-source-freshness"
+        post_render_source = verify_source_unchanged(
+            descriptor, bpy.data.filepath, source_receipt
+        )
+        last["postRenderSource"] = post_render_source
+
         report = {
             "schema": REPORT_SCHEMA,
             "status": "complete",
@@ -588,10 +829,13 @@ def render_descriptor(
                 "renderer": render["requestedRenderer"],
                 "channels": [channel["name"] for channel in descriptor["channels"]],
                 "outputDirectory": str(output_dir.resolve()),
+                "reportPath": str(report_path.resolve()),
+                "failureReportPath": str(failure_report_path.resolve()),
             },
             "effective": {
                 "descriptorSha256": identity,
                 "source": source_receipt,
+                "postRenderSource": post_render_source,
                 "selection": selection_receipt,
                 "camera": camera_receipt,
                 "renderer": renderer_receipt,
@@ -610,7 +854,13 @@ def render_descriptor(
             },
             "outputs": validation,
         }
-        _atomic_json(report_path, report)
+        phase = "output-promotion"
+        _promote_staged_run(
+            staging_dir=staging_dir,
+            output_dir=output_dir,
+            report_path=report_path,
+            report=report,
+        )
         return report
     except BaseException as error:
         failure_phase = error.phase if isinstance(error, SourcePlateContractError) else phase
@@ -621,34 +871,74 @@ def render_descriptor(
             error=error,
             last_trustworthy_evidence=last,
         )
+        if staging_dir is not None:
+            failure["stagingDirectory"] = str(staging_dir)
         failure["traceback"] = traceback.format_exc()
-        _atomic_json(report_path, failure)
+        _atomic_json(failure_report_path, failure)
         raise
 
 
-def _main() -> int:
-    separator = sys.argv.index("--") if "--" in sys.argv else -1
-    arguments = sys.argv[separator + 1 :] if separator >= 0 else []
-    if len(arguments) != 2:
+def _main(arguments: list[str] | None = None) -> int:
+    if arguments is None:
+        separator = sys.argv.index("--") if "--" in sys.argv else -1
+        arguments = sys.argv[separator + 1 :] if separator >= 0 else []
+    try:
+        parsed = _parse_cli_arguments(arguments)
+    except SourcePlateContractError as error:
+        failure_report_path = _known_argument_path(arguments, "--failure-report")
+        if failure_report_path is not None:
+            failure = failure_document(
+                descriptor_path=_known_argument_path(arguments, "--descriptor"),
+                output_dir=_known_argument_path(arguments, "--out-dir"),
+                phase=error.phase,
+                error=error,
+                last_trustworthy_evidence={"arguments": arguments},
+            )
+            _atomic_json(failure_report_path, failure)
         print(
-            "usage: blender ... --python source_plate_blender.py -- DESCRIPTOR OUTPUT_DIR",
+            "usage: blender ... --python source_plate_blender.py -- "
+            "--descriptor PATH --out-dir PATH --report PATH "
+            "[--failure-report PATH]",
             file=sys.stderr,
         )
+        print(str(error), file=sys.stderr)
         return 2
-    descriptor_path = Path(arguments[0]).expanduser().resolve()
-    output_dir = Path(arguments[1]).expanduser().resolve()
+    descriptor_path = parsed["descriptor"]
+    output_dir = parsed["out_dir"]
+    report_path = parsed["report"]
+    failure_report_path = parsed["failure_report"]
+    if report_path == failure_report_path:
+        error = SourcePlateContractError(
+            "argument-validation", "success and failure report paths must differ"
+        )
+        _atomic_json(
+            failure_report_path,
+            failure_document(
+                descriptor_path=descriptor_path,
+                output_dir=output_dir,
+                phase=error.phase,
+                error=error,
+                last_trustworthy_evidence={"arguments": arguments},
+            ),
+        )
+        print(str(error), file=sys.stderr)
+        return 2
     try:
         import bpy
 
         report = render_descriptor(
-            descriptor_path=descriptor_path, output_dir=output_dir, bpy=bpy
+            descriptor_path=descriptor_path,
+            output_dir=output_dir,
+            report_path=report_path,
+            failure_report_path=failure_report_path,
+            bpy=bpy,
         )
     except BaseException as error:
         print(
             json.dumps(
                 {
                     "status": "failed",
-                    "report": str(output_dir / "render-report.json"),
+                    "report": str(failure_report_path),
                     "error": str(error),
                 }
             ),
@@ -660,7 +950,7 @@ def _main() -> int:
         json.dumps(
             {
                 "status": report["status"],
-                "report": str(output_dir / "render-report.json"),
+                "report": str(report_path),
             }
         ),
         flush=True,
