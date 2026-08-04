@@ -1,0 +1,25 @@
+{
+  "schema": "kaminos.shape-bearing-collar-witness-route-receipt.v0",
+  "repo": "lyonsno/kaminos",
+  "worktree": "/private/tmp/kaminos-mushfinger-shape-bearing-collar-assay-0804",
+  "branch": "cc/mushfinger-shape-bearing-collar-assay-0804",
+  "implementationCommit": "0ec784520131ce953fe51390f5ecf46158b23f2e",
+  "source": {
+    "id": "synthetic-mammalian-elbow-v0",
+    "requestedRoute": "analytical-cage",
+    "effectiveRoute": "analytical-cage",
+    "fallbackUsed": false
+  },
+  "witness": {
+    "requestedRoute": "analytical-elbow-collar-failure-witness",
+    "effectiveRoute": "analytical-elbow-collar-failure-witness",
+    "fallbackUsed": false,
+    "startsPaused": true,
+    "animationActive": false
+  },
+  "images": {
+    "desktop-cdp.png": "cfba49ebde6333b89a31b42bb7a7dd8bee32834934277c45bac7d50483e4bb0b",
+    "desktop-three-quarter-wire-rest-cdp.png": "87850799a077cc8202f8e67a8a123d9a321984130cdfd22561d37d4533c9c09e",
+    "mobile-full-cdp.png": "784938e293765a1bef8475705d0f16f57c30399e806e108543657a65bdeca59b"
+  }
+}
