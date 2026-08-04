@@ -9,17 +9,17 @@
   "input": {
     "requested": {
       "kind": "synthetic-fixture",
-      "id": "synthetic-four-muscle-central-bone-v0",
-      "sha256": "60b842da9781c4cdb988560015f06e5d6ce29dd52e0db84aa035e5b6a8a230c7"
+      "id": "synthetic-four-muscle-asymmetric-central-bone-v3",
+      "sha256": "0e0bb69c0a5d045c6fe2c4c4c25224faf5eae41d140e3fd7bfd5448379267e07"
     },
     "effective": {
       "kind": "synthetic-fixture",
-      "id": "synthetic-four-muscle-central-bone-v0",
-      "sha256": "60b842da9781c4cdb988560015f06e5d6ce29dd52e0db84aa035e5b6a8a230c7"
+      "id": "synthetic-four-muscle-asymmetric-central-bone-v3",
+      "sha256": "0e0bb69c0a5d045c6fe2c4c4c25224faf5eae41d140e3fd7bfd5448379267e07"
     }
   },
   "source": {
-    "id": "synthetic-four-muscle-central-bone-v0",
+    "id": "synthetic-four-muscle-asymmetric-central-bone-v3",
     "schema": "kaminos.muscle-compartment-packing-source.v0",
     "authority": "synthetic-proxy",
     "anatomicalAdmission": "none"
@@ -34,26 +34,45 @@
   "result": {
     "schema": "kaminos.muscle-compartment-packing-result.v0",
     "status": "converged",
-    "iterations": 640,
+    "iterations": 374,
     "muscleCount": 4,
+    "formation": {
+      "requestedCenterlineSmoothingReference": "source-displacement",
+      "effectiveCenterlineSmoothingReference": "source-displacement",
+      "fallbackUsed": false
+    },
     "metrics": {
       "initial": {
-        "pairwisePenetration": 2.128040406923,
-        "skeletalPenetration": 0.350000000512,
+        "pairwisePenetration": 0.164341617649,
+        "skeletalPenetration": 0.17500000044,
         "compartmentEscape": 0,
         "endpointDrift": 0,
         "maximumRelativeVolumeError": 0,
-        "maximumBendEnergy": 0.2592,
+        "maximumBendEnergy": 0.072450138311,
+        "maximumSourceKnotDisplacement": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "sourceCurvatureReversalCount": 0,
+        "minimumPairwiseRelationCosine": 1,
+        "pairwiseRelationReversalCount": 0,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0
       },
       "packed": {
         "pairwisePenetration": 0,
-        "skeletalPenetration": 5.6889e-8,
+        "skeletalPenetration": 9.9155e-8,
         "compartmentEscape": 0,
         "endpointDrift": 0,
         "maximumRelativeVolumeError": 0,
-        "maximumBendEnergy": 0.000018402346,
+        "maximumBendEnergy": 0.066780167305,
+        "maximumSourceKnotDisplacement": 0.178648404683,
+        "rootMeanSquareSourceKnotDisplacement": 0.075576636949,
+        "minimumSourceBendEnergyRetention": 0.683672353615,
+        "minimumSourceCurvatureCosine": 0.338201768753,
+        "sourceCurvatureReversalCount": 0,
+        "minimumPairwiseRelationCosine": 0.991895306868,
+        "pairwiseRelationReversalCount": 0,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0
       }
@@ -65,15 +84,15 @@
     "approximateIndividualVolumePreservation": "supported-by-numerical-contract",
     "pairwiseAndSkeletalExclusion": "supported-by-numerical-contract",
     "anatomicalCorrectness": "unassayed",
-    "authoredSourcePacking": "blocked-on-coordinate-bearing-atlas"
+    "authoredSourcePacking": "not-assayed-by-synthetic-witness"
   },
   "visualInspection": {
     "status": "passed-agent-inspection",
     "artifact": "index.html",
     "receipt": "visual-inspection.json",
-    "indexHtmlSha256": "70bc4ac032d4fa7afe4cae375bb8b585fd7ec4ba1c2d928317fad25dcc5c5049",
-    "sourceJsonSha256": "acbfa3eafac78043ecd732ea1b7af770c2eca9b3462fe1cd0d0fb89f29c9e026",
-    "packedJsonSha256": "c2e6f58f04eff97e3e60bbb4a942090a0041b611f270d48eb2061063b260f140",
-    "pendingReportSha256": "a3794176bb4bf002d810fc9eb2ac87a7c3da06ceb1b1850c3d221890114fed69"
+    "indexHtmlSha256": "a65d81dec01a8cef45fcb98318d96a1e9920c77bcfa015e140c8a2df87106fc0",
+    "sourceJsonSha256": "fb8722c2567ecde9e06f105b4db5437c92a596e782792ab255fca6590071484d",
+    "packedJsonSha256": "610bc5d629ccdc7e75d94f4a1f2b44bf99c199155e5b420a8cb5cc53a9672cc0",
+    "pendingReportSha256": "4a7cf7570f18b4f66cfcf28612f57a2064222c29646c89ef62a92ba3a8989378"
   }
 }

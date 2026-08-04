@@ -63,6 +63,8 @@ function fixedAttachmentConflictSource() {
 test('witness publishes exact source, result, interactive route, and pending visual gate atomically', async () => {
   const memory = memoryIo();
   const outDir = '/virtual/muscle-compartment-packing';
+  memory.files.set(`${outDir}/visual-inspection.json`, Buffer.from('stale-inspection'));
+  memory.files.set(`${outDir}/visual-inspection-input.json`, Buffer.from('stale-inspection-input'));
   const written = await writeMuscleCompartmentPackingWitness({ outDir, io: memory.io });
 
   assert.equal(written.report.status, 'complete');
@@ -74,17 +76,38 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.deepEqual(written.report.input.requested, written.report.input.effective);
   assert.equal(written.result.status, 'converged');
   assert.equal(written.result.muscles.length, 4);
+  assert.deepEqual(written.report.result.formation, written.result.formation);
   assert.equal(written.report.visualInspection.status, 'pending-agent-inspection');
+  assert.deepEqual(written.report.visualInspection.staleAdmissionCleanup, {
+    status: 'cleared',
+    paths: ['visual-inspection.json', 'visual-inspection-input.json'],
+  });
   assert.equal(written.report.claims.anatomicalCorrectness, 'unassayed');
   assert.ok(memory.files.has(`${outDir}/source.json`));
   assert.ok(memory.files.has(`${outDir}/packed.json`));
   assert.ok(memory.files.has(`${outDir}/index.html`));
   assert.ok(memory.files.has(`${outDir}/report.json`));
+  assert.ok(!memory.files.has(`${outDir}/visual-inspection.json`));
+  assert.ok(!memory.files.has(`${outDir}/visual-inspection-input.json`));
   assert.ok(!memory.files.has(`${outDir}/report.json.tmp`));
   const witnessHtml = String(memory.files.get(`${outDir}/index.html`));
   assert.match(witnessHtml, /Overlapping input/);
   assert.match(witnessHtml, /Collision-resolved result/);
   assert.match(witnessHtml, /physically interpenetrate/);
+  assert.match(witnessHtml, /Packing means nonpenetrating occupancy, not compression/);
+  assert.match(witnessHtml, /source-displacement smoothing · no fallback/);
+  assert.match(witnessHtml, /source displacement/);
+  assert.match(witnessHtml, /source bend retention/);
+  assert.match(witnessHtml, /curvature cosine/);
+  assert.match(witnessHtml, /relation cosine/);
+  assert.match(witnessHtml, /function carrierSurface/);
+  assert.match(witnessHtml, /startCapCenter/);
+  assert.match(witnessHtml, /endCapCenter/);
+  assert.doesNotMatch(
+    witnessHtml,
+    /group\.add\(capsuleBetween\(left\.position, right\.position/,
+    'one muscle must render as one joined carrier surface rather than a chain of bead capsules',
+  );
   assert.match(witnessHtml, /skeletal obstacle/);
   assert.doesNotMatch(witnessHtml, />Before packing</);
   assert.doesNotMatch(witnessHtml, />Packed result</);
@@ -239,6 +262,8 @@ test('structured solver refusal survives witness failure reporting without visua
   const memory = memoryIo();
   const outDir = '/virtual/immutable-muscle-compartment-conflict';
   const source = fixedAttachmentConflictSource();
+  const expectedPenetration =
+    source.muscles[0].centerline[0].radius + source.muscles[1].centerline[0].radius;
 
   await assert.rejects(
     () => writeMuscleCompartmentPackingWitness({ outDir, source, io: memory.io }),
@@ -269,11 +294,11 @@ test('structured solver refusal survives witness failure reporting without visua
         attachment: 'origin',
         attachmentId: source.muscles[1].attachments.origin.id,
       },
-      penetration: 0.32,
+      penetration: expectedPenetration,
     }],
   });
   assert.equal(report.result.metrics.packed.endpointDrift, 0);
-  assert.ok(report.result.metrics.packed.pairwisePenetration >= 0.32);
+  assert.ok(report.result.metrics.packed.pairwisePenetration >= expectedPenetration);
   assert.ok(!memory.files.has(`${outDir}/source.json`));
   assert.ok(!memory.files.has(`${outDir}/packed.json`));
   assert.ok(!memory.files.has(`${outDir}/index.html`));

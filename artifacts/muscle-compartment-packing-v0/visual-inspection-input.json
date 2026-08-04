@@ -1,19 +1,22 @@
 {
-  "observedAt": "2026-08-03T22:32:09Z",
+  "observedAt": "2026-08-04T06:23:23Z",
   "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/",
   "backend": {
     "browser": "Playwright chrome-headless-shell revision 1234",
     "renderer": "Three.js WebGLRenderer",
     "routeRequested": "muscle-compartment-packing-orbitable-v0",
     "routeEffective": "muscle-compartment-packing-orbitable-v0",
-    "fallbackUsed": false
+    "fallbackUsed": false,
+    "installedStableChrome": false
   },
   "capture": {
-    "method": "Independent chrome-headless-shell screenshot with receipt-bearing process-group cleanup",
+    "method": "Independent chrome-headless-shell screenshots with receipt-bearing process-group cleanup",
     "server": "Kaminos serve.py",
     "serverPort": 8765,
     "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",
-    "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed"
+    "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed",
+    "beforeSha256": "f57ada0fe082fd38fc607fd7fe254cd89c3cf032304b1cc8ab6ecaa5ffd7a1e2",
+    "packedSha256": "d73ac27a971b6b1be975997ec59334ecc168fe9204394aa9b8daecc8d29ff3bd"
   },
   "images": [
     {
@@ -35,6 +38,8 @@
     "attachmentHandlesLegible": true,
     "skeletonAndCompartmentLegible": true,
     "metricsLegible": true,
-    "textContained": true
+    "textContained": true,
+    "sourceFormationRetainedLegible": true,
+    "packingSemanticsNotInverted": true
   }
 }

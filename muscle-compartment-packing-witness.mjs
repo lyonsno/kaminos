@@ -15,6 +15,10 @@ const REPORT_SCHEMA = 'kaminos.muscle-compartment-packing-witness-report.v0';
 const INSPECTION_SCHEMA = 'kaminos.muscle-compartment-packing-visual-inspection.v0';
 const DEFAULT_IO = { mkdir, readFile, rename, unlink, writeFile };
 const SUCCESS_ARTIFACT_PATHS = Object.freeze(['source.json', 'packed.json', 'index.html']);
+const VISUAL_ADMISSION_ARTIFACT_PATHS = Object.freeze([
+  'visual-inspection.json',
+  'visual-inspection-input.json',
+]);
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -40,6 +44,25 @@ async function clearStaleSuccessArtifacts(io, outputRoot) {
   return failures.length === 0
     ? { status: 'cleared', paths: [...SUCCESS_ARTIFACT_PATHS] }
     : { status: 'failed', paths: [...SUCCESS_ARTIFACT_PATHS], failures };
+}
+
+async function clearStaleVisualAdmissionArtifacts(io, outputRoot) {
+  const results = await Promise.allSettled(VISUAL_ADMISSION_ARTIFACT_PATHS.map(async path => {
+    try {
+      await io.unlink(resolve(outputRoot, path));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }));
+  const failures = results.flatMap((result, index) => result.status === 'rejected'
+    ? [{
+      path: VISUAL_ADMISSION_ARTIFACT_PATHS[index],
+      reason: result.reason?.message || String(result.reason),
+    }]
+    : []);
+  return failures.length === 0
+    ? { status:'cleared', paths:[...VISUAL_ADMISSION_ARTIFACT_PATHS] }
+    : { status:'failed', paths:[...VISUAL_ADMISSION_ARTIFACT_PATHS], failures };
 }
 
 function formatMetric(value) {
@@ -103,7 +126,7 @@ function renderHtml({ source, result, report }) {
   <section class="panel" aria-label="Packing witness controls and residuals">
     <h1>Muscle Compartment Packing</h1>
     <p class="authority">Synthetic 3D overlap-resolution falsifier · no anatomical admission</p>
-    <p class="explanation">Input carriers physically interpenetrate; resolution spreads them only enough to clear each other and the skeletal obstacle.</p>
+    <p class="explanation">Packing means nonpenetrating occupancy, not compression. Input carriers physically interpenetrate; resolution clears them while retaining fixed attachments and measured source relationships. Formation policy: ${escapeHtml(result.formation.effectiveCenterlineSmoothingReference)} smoothing · ${result.formation.fallbackUsed ? 'fallback used' : 'no fallback'}.</p>
     <div class="controls">
       <button data-state="before">Overlapping input</button>
       <button data-state="packed">Collision-resolved result</button>
@@ -115,6 +138,10 @@ function renderHtml({ source, result, report }) {
       <span>compartment escape</span><span class="value">${formatMetric(initial.compartmentEscape)}</span><span class="value packed">${formatMetric(packed.compartmentEscape)}</span>
       <span>endpoint drift</span><span class="value">${formatMetric(initial.endpointDrift)}</span><span class="value packed">${formatMetric(packed.endpointDrift)}</span>
       <span>max volume error</span><span class="value">${formatMetric(initial.maximumRelativeVolumeError)}</span><span class="value packed">${formatMetric(packed.maximumRelativeVolumeError)}</span>
+      <span>source displacement</span><span class="value">${formatMetric(initial.maximumSourceKnotDisplacement)}</span><span class="value packed">${formatMetric(packed.maximumSourceKnotDisplacement)}</span>
+      <span>source bend retention</span><span class="value">${formatMetric(initial.minimumSourceBendEnergyRetention)}</span><span class="value packed">${formatMetric(packed.minimumSourceBendEnergyRetention)}</span>
+      <span>curvature cosine</span><span class="value">${formatMetric(initial.minimumSourceCurvatureCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceCurvatureCosine)}</span>
+      <span>relation cosine</span><span class="value">${formatMetric(initial.minimumPairwiseRelationCosine)}</span><span class="value packed">${formatMetric(packed.minimumPairwiseRelationCosine)}</span>
     </div>
     <div class="legend">
       ${muscleLegend}
@@ -162,12 +189,61 @@ function renderHtml({ source, result, report }) {
       const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => new THREE.Vector3(...point)));
       return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent:opacity < 1, opacity }));
     }
+    function carrierSurface(centerline, mat) {
+      const radialSegments = 20;
+      const vertices = [];
+      const indices = [];
+      let previousNormal = null;
+      for (let knotIndex = 0; knotIndex < centerline.length; knotIndex++) {
+        const knot = centerline[knotIndex];
+        const position = new THREE.Vector3(...knot.position);
+        const previous = new THREE.Vector3(...centerline[Math.max(0, knotIndex - 1)].position);
+        const next = new THREE.Vector3(...centerline[Math.min(centerline.length - 1, knotIndex + 1)].position);
+        const tangent = next.sub(previous).normalize();
+        const reference = Math.abs(tangent.y) < .9
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(1, 0, 0);
+        const normal = new THREE.Vector3().crossVectors(tangent, reference).normalize();
+        if (previousNormal && normal.dot(previousNormal) < 0) normal.multiplyScalar(-1);
+        const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+        previousNormal = normal.clone();
+        for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+          const angle = radialIndex / radialSegments * Math.PI * 2;
+          const vertex = position.clone()
+            .addScaledVector(normal, Math.cos(angle) * knot.radius)
+            .addScaledVector(binormal, Math.sin(angle) * knot.radius);
+          vertices.push(vertex.x, vertex.y, vertex.z);
+        }
+      }
+      for (let knotIndex = 0; knotIndex < centerline.length - 1; knotIndex++) {
+        for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+          const nextRadial = (radialIndex + 1) % radialSegments;
+          const left = knotIndex * radialSegments + radialIndex;
+          const leftNext = knotIndex * radialSegments + nextRadial;
+          const right = (knotIndex + 1) * radialSegments + radialIndex;
+          const rightNext = (knotIndex + 1) * radialSegments + nextRadial;
+          indices.push(left, right, leftNext, leftNext, right, rightNext);
+        }
+      }
+      const startCapCenter = vertices.length / 3;
+      vertices.push(...centerline[0].position);
+      const endCapCenter = vertices.length / 3;
+      vertices.push(...centerline.at(-1).position);
+      const endRing = (centerline.length - 1) * radialSegments;
+      for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+        const nextRadial = (radialIndex + 1) % radialSegments;
+        indices.push(startCapCenter, radialIndex, nextRadial);
+        indices.push(endCapCenter, endRing + radialIndex, endRing + nextRadial);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return new THREE.Mesh(geometry, mat);
+    }
     function addMuscle(group, muscle, index, opacity=1) {
       const mat = material(colors[index], opacity);
-      for (let i=0; i<muscle.centerline.length-1; i++) {
-        const left=muscle.centerline[i], right=muscle.centerline[i+1];
-        group.add(capsuleBetween(left.position, right.position, (left.radius+right.radius)/2, mat));
-      }
+      group.add(carrierSurface(muscle.centerline, mat));
       group.add(line(muscle.centerline.map(k => k.position), 0xffffff, opacity * .72));
       for (const endpoint of [muscle.centerline[0], muscle.centerline.at(-1)]) {
         const handle = new THREE.Mesh(new THREE.SphereGeometry(.035, 16, 12), material(0xf5f1e8, opacity));
@@ -245,8 +321,17 @@ export async function writeMuscleCompartmentPackingWitness({
     },
   };
   let result = null;
+  let staleVisualAdmissionCleanup = {
+    status:'not-attempted-output-unavailable',
+    paths:[...VISUAL_ADMISSION_ARTIFACT_PATHS],
+  };
   try {
     await io.mkdir(outputRoot, { recursive:true });
+    phase = 'clear-stale-visual-admission';
+    staleVisualAdmissionCleanup = await clearStaleVisualAdmissionArtifacts(io, outputRoot);
+    if (staleVisualAdmissionCleanup.status !== 'cleared') {
+      throw new Error('muscle packing witness could not clear stale visual admission artifacts');
+    }
     phase = 'solve';
     result = solveMuscleCompartmentPacking(source, config);
     if (result.status !== 'converged') {
@@ -275,6 +360,7 @@ export async function writeMuscleCompartmentPackingWitness({
         status: result.status,
         iterations: result.iterations,
         muscleCount: result.muscles.length,
+        formation: structuredClone(result.formation),
         metrics: structuredClone(result.metrics),
       },
       claims: {
@@ -285,7 +371,11 @@ export async function writeMuscleCompartmentPackingWitness({
         anatomicalCorrectness: 'unassayed',
         authoredSourcePacking: 'not-assayed-by-synthetic-witness',
       },
-      visualInspection: { status:'pending-agent-inspection', artifact:'index.html' },
+      visualInspection: {
+        status:'pending-agent-inspection',
+        artifact:'index.html',
+        staleAdmissionCleanup: staleVisualAdmissionCleanup,
+      },
     };
     phase = 'write-supporting-artifacts';
     const writes = await Promise.allSettled([
@@ -331,6 +421,7 @@ export async function writeMuscleCompartmentPackingWitness({
           input: source?.input ? structuredClone(source.input) : null,
         },
       ...(structuredSolverFailure ? { result: structuredSolverFailure } : {}),
+      staleVisualAdmissionCleanup,
       staleSuccessArtifactCleanup,
       error: { name:error.name, message:error.message },
     };

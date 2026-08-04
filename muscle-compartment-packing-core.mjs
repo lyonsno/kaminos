@@ -303,6 +303,93 @@ function bendEnergy(muscle) {
   return energy;
 }
 
+function centerlineSecondDifference(centerline, index) {
+  const previous = centerline[index - 1].position;
+  const current = centerline[index].position;
+  const next = centerline[index + 1].position;
+  return add(previous, subtract(next, scale(current, 2)));
+}
+
+function measureSourceRelationshipRetention(source, muscles) {
+  let maximumSourceKnotDisplacement = 0;
+  let squaredDisplacementSum = 0;
+  let displacementCount = 0;
+  let minimumPairwiseRelationCosine = 1;
+  let pairwiseRelationReversalCount = 0;
+  let minimumSourceBendEnergyRetention = 1;
+  let minimumSourceCurvatureCosine = 1;
+  let sourceCurvatureReversalCount = 0;
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const sourceMuscle = source.muscles[muscleIndex];
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      const displacement = distance(knot.position, sourceMuscle.centerline[knotIndex].position);
+      if (!Number.isFinite(displacement)) continue;
+      maximumSourceKnotDisplacement = Math.max(maximumSourceKnotDisplacement, displacement);
+      squaredDisplacementSum += displacement ** 2;
+      displacementCount += 1;
+    }
+    const sourceBendEnergy = bendEnergy(sourceMuscle);
+    const packedBendEnergy = bendEnergy(muscle);
+    if (sourceBendEnergy > 1e-12 && Number.isFinite(packedBendEnergy)) {
+      minimumSourceBendEnergyRetention = Math.min(
+        minimumSourceBendEnergyRetention,
+        packedBendEnergy / sourceBendEnergy,
+      );
+    }
+    for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+      const sourceCurvature = centerlineSecondDifference(sourceMuscle.centerline, knotIndex);
+      const packedCurvature = centerlineSecondDifference(muscle.centerline, knotIndex);
+      const sourceMagnitude = length(sourceCurvature);
+      const packedMagnitude = length(packedCurvature);
+      if (!(sourceMagnitude > 1e-12)) continue;
+      const cosine = packedMagnitude > 1e-12
+        ? Math.max(-1, Math.min(
+          1,
+          dot(sourceCurvature, packedCurvature) / (sourceMagnitude * packedMagnitude),
+        ))
+        : 0;
+      if (!Number.isFinite(cosine)) continue;
+      minimumSourceCurvatureCosine = Math.min(minimumSourceCurvatureCosine, cosine);
+      if (cosine < 0) sourceCurvatureReversalCount += 1;
+    }
+  }
+  for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
+      for (let knotIndex = 0; knotIndex < muscles[leftIndex].centerline.length; knotIndex += 1) {
+        const sourceOffset = subtract(
+          source.muscles[leftIndex].centerline[knotIndex].position,
+          source.muscles[rightIndex].centerline[knotIndex].position,
+        );
+        const packedOffset = subtract(
+          muscles[leftIndex].centerline[knotIndex].position,
+          muscles[rightIndex].centerline[knotIndex].position,
+        );
+        const sourceLength = length(sourceOffset);
+        const packedLength = length(packedOffset);
+        if (!(sourceLength > 1e-12) || !(packedLength > 1e-12)) continue;
+        const cosine = Math.max(-1, Math.min(
+          1,
+          dot(sourceOffset, packedOffset) / (sourceLength * packedLength),
+        ));
+        if (!Number.isFinite(cosine)) continue;
+        minimumPairwiseRelationCosine = Math.min(minimumPairwiseRelationCosine, cosine);
+        if (cosine < 0) pairwiseRelationReversalCount += 1;
+      }
+    }
+  }
+  return {
+    maximumSourceKnotDisplacement: rounded(maximumSourceKnotDisplacement),
+    rootMeanSquareSourceKnotDisplacement: rounded(
+      displacementCount > 0 ? Math.sqrt(squaredDisplacementSum / displacementCount) : 0,
+    ),
+    minimumSourceBendEnergyRetention: rounded(minimumSourceBendEnergyRetention),
+    minimumSourceCurvatureCosine: rounded(minimumSourceCurvatureCosine),
+    sourceCurvatureReversalCount,
+    minimumPairwiseRelationCosine: rounded(minimumPairwiseRelationCosine),
+    pairwiseRelationReversalCount,
+  };
+}
+
 function measureState(source, muscles, sampleCount, continuousClearance = true) {
   const sampled = muscles.map(muscle => sampleCarrier(muscle, sampleCount));
   let pairwisePenetration = 0;
@@ -419,6 +506,7 @@ function measureState(source, muscles, sampleCount, continuousClearance = true) 
     endpointDrift: rounded(endpointDrift),
     maximumRelativeVolumeError: rounded(maximumRelativeVolumeError),
     maximumBendEnergy: rounded(maximumBendEnergy),
+    ...measureSourceRelationshipRetention(source, muscles),
     nonFiniteValueCount,
     nonPositiveRadiusCount,
   };
@@ -455,6 +543,14 @@ function validateSource(source) {
     throw new Error('muscle packing source authority kind is unsupported');
   }
   requireString(source.authority?.anatomicalAdmission, 'source anatomical admission');
+  if (
+    source.formation !== undefined &&
+    source.formation?.centerlineSmoothingReference !== 'source-displacement'
+  ) {
+    throw new Error(
+      'muscle packing centerline smoothing reference must be source-displacement when specified',
+    );
+  }
   for (const route of ['requested', 'effective']) {
     requireString(source.input?.[route]?.kind, `${route} input kind`);
     requireString(source.input?.[route]?.id, `${route} input id`);
@@ -562,6 +658,15 @@ function validateSource(source) {
   }
 }
 
+function formationReceipt(source) {
+  const reference = source.formation?.centerlineSmoothingReference || 'absolute-position';
+  return {
+    requestedCenterlineSmoothingReference: reference,
+    effectiveCenterlineSmoothingReference: reference,
+    fallbackUsed: false,
+  };
+}
+
 function syntheticMuscleAtAngle(index, angle) {
   const id = `muscle-${String(index + 1).padStart(2, '0')}`;
   const radial = radius => [Math.cos(angle) * radius, Math.sin(angle) * radius];
@@ -614,15 +719,61 @@ const SYNTHETIC_DENSITY_LADDER_ANGLES = Object.freeze([
   7 * Math.PI / 4,
 ]);
 
+const SYNTHETIC_ASYMMETRIC_FOUR_PROFILES = Object.freeze([
+  {
+    angles:[-0.25,-0.05,0.35,0.55,0.3,0.05],
+    radial:[0.62,0.48,0.38,0.4,0.5,0.59],
+    y:[-0.9,-0.58,-0.2,0.2,0.58,0.9],
+    radii:[0.14,0.21,0.24,0.24,0.2,0.14],
+  },
+  {
+    angles:[2.85,3.05,3.4,3.62,3.36,3.1],
+    radial:[0.54,0.41,0.28,0.32,0.43,0.57],
+    y:[-0.9,-0.55,-0.17,0.23,0.6,0.9],
+    radii:[0.14,0.23,0.255,0.255,0.22,0.14],
+  },
+  {
+    angles:[1.25,1.45,1.8,2.05,1.82,1.58],
+    radial:[0.6,0.45,0.34,0.36,0.46,0.56],
+    y:[-0.9,-0.6,-0.22,0.18,0.56,0.9],
+    radii:[0.14,0.21,0.235,0.235,0.21,0.14],
+  },
+  {
+    angles:[4.35,4.55,4.9,5.15,4.9,4.68],
+    radial:[0.55,0.4,0.3,0.34,0.44,0.6],
+    y:[-0.9,-0.57,-0.15,0.25,0.61,0.9],
+    radii:[0.14,0.22,0.25,0.25,0.225,0.14],
+  },
+]);
+
+function syntheticAsymmetricMuscle(index) {
+  const profile = SYNTHETIC_ASYMMETRIC_FOUR_PROFILES[index];
+  const muscle = syntheticMuscleAtAngle(index, profile.angles[0]);
+  muscle.centerline = profile.angles.map((angle, knotIndex) => {
+    const radial = profile.radial[knotIndex];
+    return {
+      position: [Math.cos(angle) * radial, profile.y[knotIndex], Math.sin(angle) * radial],
+      radius: profile.radii[knotIndex],
+    };
+  });
+  muscle.attachments.origin.position = [...muscle.centerline[0].position];
+  muscle.attachments.insertion.position = [...muscle.centerline.at(-1).position];
+  muscle.targetVolume = carrierVolume(muscle.centerline);
+  return muscle;
+}
+
 export function createSyntheticFourMuscleCompartment() {
   const core = {
     schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
-    id: 'synthetic-four-muscle-central-bone-v0',
+    id: 'synthetic-four-muscle-asymmetric-central-bone-v3',
     authority: {
       kind: 'synthetic-proxy',
       anatomicalAdmission: 'none',
     },
     dimension: 3,
+    formation: {
+      centerlineSmoothingReference: 'source-displacement',
+    },
     compartment: {
       id: 'local-muscle-compartment',
       kind: 'box',
@@ -639,8 +790,7 @@ export function createSyntheticFourMuscleCompartment() {
       clearance: 0.02,
       authority: 'synthetic-proxy',
     }],
-    muscles: Array.from({ length: 4 }, (_, index) =>
-      syntheticMuscleAtAngle(index, index * Math.PI / 2)),
+    muscles: Array.from({ length: 4 }, (_, index) => syntheticAsymmetricMuscle(index)),
   };
   const sha256 = hashJson(core);
   return {
@@ -820,6 +970,71 @@ function moveSegmentPoint(centerline, segmentIndex, segmentT, displacement) {
   return true;
 }
 
+function projectSegmentObstacles(source, muscles, amount) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    for (let segmentIndex = 0; segmentIndex < muscle.centerline.length - 1; segmentIndex += 1) {
+      const segmentStart = muscle.centerline[segmentIndex];
+      const segmentEnd = muscle.centerline[segmentIndex + 1];
+      for (const [obstacleIndex, obstacle] of source.obstacles.entries()) {
+        const obstacleStart = obstacle.kind === 'capsule'
+          ? { position:obstacle.start, radius:obstacleRadius(obstacle) }
+          : { position:obstacle.center, radius:obstacleRadius(obstacle) };
+        const obstacleEnd = obstacle.kind === 'capsule'
+          ? { position:obstacle.end, radius:obstacleRadius(obstacle) }
+          : obstacleStart;
+        const spatialParameters = closestSegmentParameters(
+          segmentStart.position,
+          segmentEnd.position,
+          obstacleStart.position,
+          obstacleEnd.position,
+        );
+        const musclePoint = interpolatePoint(
+          segmentStart.position,
+          segmentEnd.position,
+          spatialParameters.leftT,
+        );
+        const obstaclePoint = interpolatePoint(
+          obstacleStart.position,
+          obstacleEnd.position,
+          spatialParameters.rightT,
+        );
+        if (
+          distance(musclePoint, obstaclePoint) -
+            Math.max(segmentStart.radius, segmentEnd.radius) - obstacleStart.radius >= 0
+        ) continue;
+        const { leftT, rightT, gap } = taperedSegmentSurfaceMinimum(
+          segmentStart,
+          segmentEnd,
+          obstacleStart,
+          obstacleEnd,
+        );
+        if (gap >= 0) continue;
+        const contactMusclePoint = interpolatePoint(
+          segmentStart.position,
+          segmentEnd.position,
+          leftT,
+        );
+        const contactObstaclePoint = interpolatePoint(
+          obstacleStart.position,
+          obstacleEnd.position,
+          rightT,
+        );
+        const direction = normalizedOrFallback(
+          subtract(contactMusclePoint, contactObstaclePoint),
+          muscleIndex + segmentIndex,
+          obstacleIndex,
+        );
+        moveSegmentPoint(
+          muscle.centerline,
+          segmentIndex,
+          leftT,
+          scale(direction, -gap * amount),
+        );
+      }
+    }
+  }
+}
+
 function projectSegmentPairwise(muscles, amount) {
   for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
     const leftCenterline = muscles[leftIndex].centerline;
@@ -922,7 +1137,26 @@ function restoreTargetVolumes(muscles) {
   }
 }
 
-function smoothInterior(muscles, amount) {
+function smoothInteriorDisplacement(source, muscles, amount) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const sourceCenterline = source.muscles[muscleIndex].centerline;
+    const prior = muscle.centerline.map(knot => [...knot.position]);
+    const priorDisplacements = prior.map((position, index) =>
+      subtract(position, sourceCenterline[index].position));
+    for (let index = 1; index < muscle.centerline.length - 1; index += 1) {
+      const midpointDisplacement = scale(
+        add(priorDisplacements[index - 1], priorDisplacements[index + 1]),
+        0.5,
+      );
+      muscle.centerline[index].position = add(
+        prior[index],
+        scale(subtract(midpointDisplacement, priorDisplacements[index]), amount),
+      );
+    }
+  }
+}
+
+function smoothInteriorAbsolute(muscles, amount) {
   for (const muscle of muscles) {
     const prior = muscle.centerline.map(knot => [...knot.position]);
     for (let index = 1; index < muscle.centerline.length - 1; index += 1) {
@@ -1109,6 +1343,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       sourceId: source.id,
       sourceAuthority: structuredClone(source.authority),
       dimension: 3,
+      formation: formationReceipt(source),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
         centerlineDistance: 'nested-convex-golden-section',
@@ -1141,14 +1376,24 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
   let iterations = 0;
   let continuousCandidateFailed = false;
   let failure = null;
+  const preservesSourceFormation =
+    source.formation?.centerlineSmoothingReference === 'source-displacement';
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
+    const smoothingHorizon = preservesSourceFormation
+      ? Math.min(config.maxIterations * 0.5, 320)
+      : config.maxIterations * 0.8;
     const smoothingProgress = Math.max(
       0,
-      1 - iteration / (config.maxIterations * 0.8),
+      1 - iteration / smoothingHorizon,
     );
     const smoothingAmount = config.smoothnessStep * smoothingProgress ** 2;
-    smoothInterior(muscles, smoothingAmount);
+    if (preservesSourceFormation) {
+      smoothInteriorDisplacement(source, muscles, smoothingAmount);
+    } else {
+      smoothInteriorAbsolute(muscles, smoothingAmount);
+    }
     projectRigidAndBounds(source, muscles, config.relaxationStep);
+    projectSegmentObstacles(source, muscles, config.relaxationStep);
     projectPairwise(muscles, config.relaxationStep);
     projectSegmentPairwise(muscles, config.relaxationStep);
     projectRigidAndBounds(source, muscles, config.relaxationStep);
@@ -1216,6 +1461,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     sourceId: source.id,
     sourceAuthority: structuredClone(source.authority),
     dimension: 3,
+    formation: formationReceipt(source),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
       centerlineDistance: 'nested-convex-golden-section',

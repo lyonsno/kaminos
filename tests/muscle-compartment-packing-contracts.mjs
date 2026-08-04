@@ -64,6 +64,15 @@ function createInterSegmentCrossingSource() {
 
 test('four endpoint-fixed swept muscles pack around rigid anatomy without identity or volume loss', () => {
   const source = createSyntheticFourMuscleCompartment();
+  const sourceBellyRadialDistances = source.muscles.map(muscle =>
+    muscle.centerline.slice(1, -1).reduce(
+      (sum, knot) => sum + Math.hypot(knot.position[0], knot.position[2]),
+      0,
+    ) / (muscle.centerline.length - 2));
+  assert.ok(
+    Math.max(...sourceBellyRadialDistances) - Math.min(...sourceBellyRadialDistances) > 0.04,
+    'visual witness input must be asymmetric rather than a regular radial formation',
+  );
   assert.match(source.input.requested.sha256, /^[0-9a-f]{64}$/);
   assert.deepEqual(source.input.requested, source.input.effective);
   const config = {
@@ -80,6 +89,11 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   assert.deepEqual(result.input, source.input);
   assert.deepEqual(result.config, config, 'effective config must equal caller request');
   assert.equal(result.dimension, 3);
+  assert.deepEqual(result.formation, {
+    requestedCenterlineSmoothingReference: 'source-displacement',
+    effectiveCenterlineSmoothingReference: 'source-displacement',
+    fallbackUsed: false,
+  });
   assert.equal(result.muscles.length, 4);
   assert.equal(
     result.status,
@@ -88,8 +102,8 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   );
   assert.ok(result.iterations > 0 && result.iterations <= config.maxIterations);
 
-  assert.ok(result.metrics.initial.pairwisePenetration > 0.2);
-  assert.ok(result.metrics.initial.skeletalPenetration > 0.2);
+  assert.ok(result.metrics.initial.pairwisePenetration > 0.1);
+  assert.ok(result.metrics.initial.skeletalPenetration > 0.15);
   assert.ok(
     result.metrics.packed.pairwisePenetration <
       result.metrics.initial.pairwisePenetration * 0.02,
@@ -98,7 +112,25 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
   assert.equal(result.metrics.packed.endpointDrift, 0);
   assert.ok(result.metrics.packed.maximumRelativeVolumeError <= 1e-9);
-  assert.ok(result.metrics.packed.maximumBendEnergy < 0.04);
+  assert.ok(
+    result.metrics.packed.maximumBendEnergy <= result.metrics.initial.maximumBendEnergy * 1.05,
+    'packing must not create a sharper centerline fold than the authored source',
+  );
+  assert.equal(result.metrics.initial.maximumSourceKnotDisplacement, 0);
+  assert.equal(result.metrics.initial.rootMeanSquareSourceKnotDisplacement, 0);
+  assert.equal(result.metrics.initial.minimumSourceBendEnergyRetention, 1);
+  assert.equal(result.metrics.initial.minimumSourceCurvatureCosine, 1);
+  assert.equal(result.metrics.initial.sourceCurvatureReversalCount, 0);
+  assert.ok(result.metrics.packed.maximumSourceKnotDisplacement < 0.5);
+  assert.ok(result.metrics.packed.rootMeanSquareSourceKnotDisplacement < 0.35);
+  assert.ok(
+    result.metrics.packed.minimumSourceBendEnergyRetention > 0.25,
+    `packed centerlines collapsed source bend: ${JSON.stringify(result.metrics.packed)}`,
+  );
+  assert.ok(result.metrics.packed.minimumSourceCurvatureCosine > 0.3);
+  assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(result.metrics.packed.minimumPairwiseRelationCosine > 0.9);
+  assert.equal(result.metrics.packed.pairwiseRelationReversalCount, 0);
   assert.ok(result.metrics.packed.nonFiniteValueCount === 0);
   assert.ok(result.metrics.packed.nonPositiveRadiusCount === 0);
 
@@ -177,6 +209,13 @@ test('source validation rejects identity collision and non-finite carrier state'
   assert.throws(
     () => solveMuscleCompartmentPacking(nonFinite),
     /finite.*centerline|centerline.*finite/i,
+  );
+
+  const unsupportedFormationPolicy = createSyntheticFourMuscleCompartment();
+  unsupportedFormationPolicy.formation.centerlineSmoothingReference = 'silent-fallback';
+  assert.throws(
+    () => solveMuscleCompartmentPacking(unsupportedFormationPolicy),
+    /centerline smoothing reference.*source-displacement/i,
   );
 
   const staleIdentity = createSyntheticFourMuscleCompartment();
