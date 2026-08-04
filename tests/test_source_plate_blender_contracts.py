@@ -62,35 +62,23 @@ def test_blender_bootstraps_its_script_directory_before_importing_the_core():
     assert adapter.index("sys.path.insert") < adapter.index("from source_plate_core import")
 
 
-def test_blender_51_uses_the_scene_compositing_node_group():
-    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
-
-    assert "scene.compositing_node_group" in adapter
-
-
-def test_blender_51_uses_supported_compositor_node_types():
-    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
-
-    assert 'render_layers.outputs["Alpha"]' in adapter
-    assert 'nodes.new("CompositorNodeIDMask")' not in adapter
-    assert 'nodes.new("CompositorNodeComposite")' not in adapter
-    assert 'nodes.new("CompositorNodeMath")' not in adapter
-
-
-def test_blender_51_uses_file_output_directory_and_name_fields():
-    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
-
-    assert ".directory = str(output_dir)" in adapter
-    assert ".file_name = " in adapter
-    assert ".base_path = " not in adapter
-    assert ".file_slots[0].path = " not in adapter
-
-
-def test_blender_51_uses_supported_multilayer_exr_file_outputs():
+def test_blender_51_writes_distinct_multilayer_render_pass_artifacts():
     adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
 
     assert adapter.count('file_format = "OPEN_EXR_MULTILAYER"') == 2
-    assert 'file_format = "OPEN_EXR"' not in adapter
+    assert 'scene.render.filepath = str(outputs["depth"])' in adapter
+    assert 'scene.render.filepath = str(outputs["normal"])' in adapter
+    assert "view_layer.use_pass_z = True" in adapter
+    assert "view_layer.use_pass_normal = True" in adapter
+    assert "CompositorNodeOutputFile" not in adapter
+
+
+def test_silhouette_is_derived_from_the_same_camera_render_alpha():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert "scene.render.film_transparent = True" in adapter
+    assert 'source_pixels[index + 3]' in adapter
+    assert 'scene.render.filepath = str(outputs["silhouette"])' in adapter
 
 
 if __name__ == "__main__":
@@ -98,7 +86,5 @@ if __name__ == "__main__":
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
     test_blender_adapter_never_saves_the_loaded_source()
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
-    test_blender_51_uses_the_scene_compositing_node_group()
-    test_blender_51_uses_supported_compositor_node_types()
-    test_blender_51_uses_file_output_directory_and_name_fields()
-    test_blender_51_uses_supported_multilayer_exr_file_outputs()
+    test_blender_51_writes_distinct_multilayer_render_pass_artifacts()
+    test_silhouette_is_derived_from_the_same_camera_render_alpha()

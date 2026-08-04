@@ -360,71 +360,32 @@ def _apply_presentation(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, An
     }
 
 
-def _configure_compositor(
-    bpy: Any,
-    output_dir: Path,
-    *,
-    include_silhouette: bool,
-    include_data: bool,
-) -> None:
-    scene = bpy.context.scene
-    view_layer = bpy.context.view_layer
-    view_layer.use_pass_z = include_data
-    view_layer.use_pass_normal = include_data
-    scene.use_nodes = True
-    if hasattr(scene, "compositing_node_group"):
-        tree = scene.compositing_node_group
-        if tree is None:
-            tree = bpy.data.node_groups.new(
-                "SOURCE_PLATE_COMPOSITOR", "CompositorNodeTree"
-            )
-            scene.compositing_node_group = tree
-    else:
-        tree = scene.node_tree
-    tree.nodes.clear()
-    render_layers = tree.nodes.new("CompositorNodeRLayers")
-
-    if include_silhouette:
-        silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
-        silhouette_output.directory = str(output_dir)
-        silhouette_output.file_name = "silhouette"
-        silhouette_output.format.file_format = "PNG"
-        silhouette_output.format.color_mode = "BW"
-        silhouette_output.format.color_depth = "8"
-        tree.links.new(render_layers.outputs["Alpha"], silhouette_output.inputs[0])
-
-    if include_data:
-        depth_output = tree.nodes.new("CompositorNodeOutputFile")
-        depth_output.directory = str(output_dir)
-        depth_output.file_name = "depth"
-        depth_output.format.file_format = "OPEN_EXR_MULTILAYER"
-        depth_output.format.color_mode = "RGB"
-        depth_output.format.color_depth = "32"
-        tree.links.new(render_layers.outputs["Depth"], depth_output.inputs[0])
-
-        normal_output = tree.nodes.new("CompositorNodeOutputFile")
-        normal_output.directory = str(output_dir)
-        normal_output.file_name = "normal"
-        normal_output.format.file_format = "OPEN_EXR_MULTILAYER"
-        normal_output.format.color_mode = "RGB"
-        normal_output.format.color_depth = "32"
-        tree.links.new(render_layers.outputs["Normal"], normal_output.inputs[0])
-
-
-def _normalize_compositor_output(output_dir: Path, stem: str, extension: str) -> Path:
-    target = output_dir / f"{stem}.{extension}"
-    candidates = [
-        path
-        for path in output_dir.glob(f"{stem}*.{extension}")
-        if path != target and path.is_file()
-    ]
-    if len(candidates) != 1:
-        raise SourcePlateContractError(
-            "output-finalization",
-            f"expected one compositor artifact for {stem}, found {len(candidates)}",
-        )
-    os.replace(candidates[0], target)
-    return target
+def _write_silhouette_mask(bpy: Any, source_path: Path, output_path: Path) -> None:
+    source_image = bpy.data.images.load(str(source_path), check_existing=False)
+    width, height = source_image.size
+    source_pixels = list(source_image.pixels)
+    mask_pixels = [0.0] * len(source_pixels)
+    for index in range(0, len(source_pixels), 4):
+        value = 1.0 if source_pixels[index + 3] > 0.0 else 0.0
+        mask_pixels[index] = value
+        mask_pixels[index + 1] = value
+        mask_pixels[index + 2] = value
+        mask_pixels[index + 3] = 1.0
+    mask_image = bpy.data.images.new(
+        "SOURCE_PLATE_SILHOUETTE",
+        width=width,
+        height=height,
+        alpha=True,
+        float_buffer=False,
+    )
+    try:
+        mask_image.pixels.foreach_set(mask_pixels)
+        mask_image.file_format = "PNG"
+        mask_image.filepath_raw = str(output_path)
+        mask_image.save()
+    finally:
+        bpy.data.images.remove(mask_image)
+        bpy.data.images.remove(source_image)
 
 
 def _record_outputs(descriptor: Mapping[str, Any], paths: Mapping[str, Path]) -> dict[str, Any]:
@@ -510,20 +471,36 @@ def render_descriptor(
             scene.view_settings.look = "AgX - Medium High Contrast"
         except TypeError:
             scene.view_settings.look = "AgX - Medium High Contrast"
-        _configure_compositor(
-            bpy, output_dir, include_silhouette=False, include_data=True
-        )
-
         phase = "render"
         bpy.ops.render.render(write_still=True)
-        _normalize_compositor_output(output_dir, "depth", "exr")
-        _normalize_compositor_output(output_dir, "normal", "exr")
+
+        view_layer = bpy.context.view_layer
+        scene.render.image_settings.file_format = "OPEN_EXR_MULTILAYER"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_depth = "32"
+        view_layer.use_pass_z = True
+        view_layer.use_pass_normal = False
+        scene.render.filepath = str(outputs["depth"])
+        bpy.ops.render.render(write_still=True)
+
+        scene.render.image_settings.file_format = "OPEN_EXR_MULTILAYER"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_depth = "32"
+        view_layer.use_pass_z = False
+        view_layer.use_pass_normal = True
+        scene.render.filepath = str(outputs["normal"])
+        bpy.ops.render.render(write_still=True)
+
+        view_layer.use_pass_normal = False
+        scene.render.image_settings.file_format = "PNG"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_depth = "8"
         scene.render.film_transparent = True
-        _configure_compositor(
-            bpy, output_dir, include_silhouette=True, include_data=False
+        scene.render.filepath = str(outputs["silhouette"])
+        bpy.ops.render.render(write_still=True)
+        _write_silhouette_mask(
+            bpy, outputs["silhouette"], outputs["silhouette"]
         )
-        bpy.ops.render.render(write_still=False)
-        _normalize_compositor_output(output_dir, "silhouette", "png")
 
         phase = "output-validation"
         output_records = _record_outputs(descriptor, outputs)
