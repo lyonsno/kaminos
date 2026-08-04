@@ -143,14 +143,29 @@ def verify_source_freshness(
     try:
         requested = Path(requested_path).expanduser().resolve(strict=True)
         effective = Path(effective_source_path).expanduser().resolve(strict=True)
+        snapshot_path = source.get("snapshotPath")
+        snapshot = (
+            Path(snapshot_path).expanduser().resolve(strict=True)
+            if isinstance(snapshot_path, str) and snapshot_path
+            else None
+        )
     except OSError as error:
         raise SourcePlateContractError(
             "source-freshness", f"source path cannot be resolved: {error}"
         ) from error
-    if effective != requested:
+    if effective != requested and effective != snapshot:
         raise SourcePlateContractError(
             "source-freshness",
-            f"effective source path {effective} does not match requested source path {requested}",
+            "effective source path "
+            f"{effective} does not match requested source path {requested} "
+            "or the explicit snapshot path",
+        )
+    requested_sha256, requested_byte_length = _sha256_file(requested)
+    if requested_sha256 != expected_sha256:
+        raise SourcePlateContractError(
+            "source-freshness",
+            "requested source SHA-256 mismatch: "
+            f"expected {expected_sha256}, got {requested_sha256}",
         )
     effective_sha256, byte_length = _sha256_file(effective)
     if effective_sha256 != expected_sha256:
@@ -158,15 +173,21 @@ def verify_source_freshness(
             "source-freshness",
             f"source SHA-256 mismatch: expected {expected_sha256}, got {effective_sha256}",
         )
-    return {
+    receipt = {
         "status": "fresh",
         "requestedPath": requested_path,
+        "requestedResolvedPath": str(requested),
+        "requestedSha256": requested_sha256,
+        "requestedByteLength": requested_byte_length,
         "effectivePath": str(effective),
         "expectedSha256": expected_sha256,
         "effectiveSha256": effective_sha256,
         "byteLength": byte_length,
         "loadPolicy": "read_only",
     }
+    if snapshot is not None:
+        receipt["snapshotPath"] = str(snapshot)
+    return receipt
 
 
 def require_effective_renderer(

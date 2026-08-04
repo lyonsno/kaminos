@@ -184,9 +184,19 @@ def test_source_freshness_binds_requested_path_and_bytes():
         with _raises(SourcePlateContractError, match="effective source path"):
             verify_source_freshness(descriptor, duplicate)
         assert _raises.last_error.phase == "source-freshness"
+        descriptor["source"]["snapshotPath"] = str(duplicate)
+        snapshot_receipt = verify_source_freshness(descriptor, duplicate)
+        assert snapshot_receipt["requestedPath"] == str(source)
+        assert snapshot_receipt["effectivePath"] == str(duplicate.resolve())
+        assert snapshot_receipt["snapshotPath"] == str(duplicate.resolve())
+        assert snapshot_receipt["requestedSha256"] == snapshot_receipt["effectiveSha256"]
+        unlisted = root / "unlisted.blend"
+        unlisted.write_bytes(source.read_bytes())
+        with _raises(SourcePlateContractError, match="effective source path"):
+            verify_source_freshness(descriptor, unlisted)
         source.write_bytes(b"mutated-source")
         with _raises(SourcePlateContractError, match="SHA-256"):
-            verify_source_freshness(descriptor, source)
+            verify_source_freshness(descriptor, duplicate)
         assert _raises.last_error.phase == "source-freshness"
 
 
