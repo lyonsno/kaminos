@@ -475,7 +475,7 @@ def render_descriptor(
         bpy.ops.render.render(write_still=True)
 
         view_layer = bpy.context.view_layer
-        scene.render.image_settings.file_format = "OPEN_EXR_MULTILAYER"
+        scene.render.image_settings.file_format = "OPEN_EXR"
         scene.render.image_settings.color_mode = "RGBA"
         scene.render.image_settings.color_depth = "32"
         view_layer.use_pass_z = True
@@ -483,7 +483,7 @@ def render_descriptor(
         scene.render.filepath = str(outputs["depth"])
         bpy.ops.render.render(write_still=True)
 
-        scene.render.image_settings.file_format = "OPEN_EXR_MULTILAYER"
+        scene.render.image_settings.file_format = "OPEN_EXR"
         scene.render.image_settings.color_mode = "RGBA"
         scene.render.image_settings.color_depth = "32"
         view_layer.use_pass_z = False
