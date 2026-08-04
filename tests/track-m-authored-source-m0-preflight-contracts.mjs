@@ -331,8 +331,12 @@ function makeFixtureInputs() {
   return inputs;
 }
 
-function makeRoutingFixture(graph) {
-  const routeIds = ['muscle-01', 'muscle-47'];
+function makeRoutingFixture(graph, {
+  routeIds = ['muscle-01', 'muscle-47'],
+  compilerId = 'track-m-m31-m47-routing-fixture-v0',
+  selectionId = null,
+  selectionAuthority = 'external-relation-selection-authority-v0',
+} = {}) {
   const correctRoutes = routeIds.map((constructionId, index) => ({
     constructionId,
     origin: {
@@ -364,7 +368,7 @@ function makeRoutingFixture(graph) {
     };
   });
   const fixtureCore = {
-    compilerId: 'track-m-m31-m47-routing-fixture-v0',
+    compilerId,
     status: 'compiled',
     trackId: 'shape-bearing-musculature',
     source: {
@@ -372,10 +376,11 @@ function makeRoutingFixture(graph) {
       graphSha256: graph.graphSha256,
     },
     selection: {
-      correctConstructionId: 'muscle-01',
-      crossWireDonorConstructionId: 'muscle-47',
+      ...(selectionId === null ? {} : { id: selectionId }),
+      correctConstructionId: routeIds[0],
+      crossWireDonorConstructionId: routeIds[1],
       nullConstructionIds: ['muscle-35', 'muscle-38'],
-      selectionAuthority: 'external-relation-selection-authority-v0',
+      selectionAuthority,
     },
     conditions: {
       correct: { routes: correctRoutes },
@@ -395,6 +400,129 @@ function makeRoutingFixture(graph) {
     ...fixtureCore,
   });
   return canonical({ ...fixture, fixtureSha256: routingFixtureHash(fixture) });
+}
+
+function makeDenseFixtureInputs() {
+  const inputs = makeInputs();
+  inputs.graph.muscles[0].origin.sourceName = 'DISTAL_BONE';
+  inputs.graph.muscles[0].insertion.sourceName = 'SRC_PELVIS';
+  for (const [constructionId, hashCharacter] of [
+    ['muscle-34', '8'],
+    ['muscle-13', '9'],
+    ['muscle-35', '6'],
+    ['muscle-38', '7'],
+  ]) {
+    addRelation(inputs.graph, {
+      constructionId,
+      originSourceName: constructionId === 'muscle-38' ? 'DISTAL_BONE' : 'SRC_PELVIS',
+      insertionSourceName: constructionId === 'muscle-35' ? 'SRC_PELVIS' : 'DISTAL_BONE',
+      hashCharacter,
+    });
+  }
+  for (let index = 1; index <= 34; index += 1) {
+    addRelation(inputs.graph, {
+      constructionId: `muscle-neighbor-${String(index).padStart(2, '0')}`,
+      originSourceName: 'SRC_PELVIS',
+      insertionSourceName: 'DISTAL_BONE',
+      hashCharacter: 'a',
+    });
+  }
+  rehashGraph(inputs);
+  return inputs;
+}
+
+function denseRouteIdentity(muscle) {
+  return {
+    constructionId: muscle.identity.construction_id,
+    instanceId: muscle.identity.instance_id,
+    lineageId: muscle.identity.lineage_id,
+    originHandleInstanceId: muscle.origin.handleInstanceId,
+    insertionHandleInstanceId: muscle.insertion.handleInstanceId,
+    pathGeometrySha256: muscle.components.path.geometry.contentSha256,
+    surfaceGeometrySha256: muscle.components.surface.geometry.contentSha256,
+  };
+}
+
+function makeDenseRoutingFixture(graph) {
+  const fixture = makeRoutingFixture(graph, {
+    routeIds: ['muscle-34', 'muscle-13'],
+    compilerId: 'track-m-m34-m13-dense-routing-fixture-v0',
+    selectionId: 'src-pelvis-cube002-m34-m13-routing-sensitivity-v0',
+    selectionAuthority: 'golden-object-parallel-assay-portfolio-2026-08-03',
+  });
+  fixture.selection.family = {
+    originSource: 'SRC_PELVIS',
+    insertionSource: 'DISTAL_BONE',
+  };
+  const neighborConstructionIds = Array.from(
+    { length: 34 },
+    (_, index) => `muscle-neighbor-${String(index + 1).padStart(2, '0')}`,
+  );
+  const byId = new Map(graph.muscles.map(muscle => [muscle.identity.construction_id, muscle]));
+  const familyConstructionIds = ['muscle-34', 'muscle-13', ...neighborConstructionIds];
+  const familyRelations = familyConstructionIds
+    .map(constructionId => denseRouteIdentity(byId.get(constructionId)))
+    .sort((left, right) => left.constructionId.localeCompare(right.constructionId));
+  const neighborRelations = neighborConstructionIds
+    .map(constructionId => denseRouteIdentity(byId.get(constructionId)))
+    .sort((left, right) => left.constructionId.localeCompare(right.constructionId));
+  const neighborIdentity = hashJson(neighborRelations);
+  fixture.conditions.absent = {
+    id: 'deep-geometry-absent',
+    routes: [],
+    deepGeometryPresent: false,
+    testedRelationPresent: false,
+    removedConstructionIds: ['muscle-13', 'muscle-34'],
+    preservedNeighborRouteCount: 34,
+    preservedNeighborConstructionIds: neighborConstructionIds,
+    preservedNeighborFamilyIdentitySha256: neighborIdentity,
+    budgetMatchStatus: 'outside-matched-budget-pair',
+  };
+  fixture.conditions.correct.id = 'deep-geometry-correctly-routed';
+  fixture.conditions.correct.deepGeometryPresent = true;
+  fixture.conditions.correct.testedRelationPresent = true;
+  fixture.conditions.matchedWrong.id = 'deep-geometry-matched-wrong-routing';
+  fixture.conditions.matchedWrong.deepGeometryPresent = true;
+  fixture.conditions.matchedWrong.testedRelationPresent = false;
+  fixture.densityContext = {
+    family: { originSource: 'SRC_PELVIS', insertionSource: 'DISTAL_BONE' },
+    familyRouteCount: 36,
+    neighborRouteCount: 34,
+    familyConstructionIds,
+    familyIdentitySha256: hashJson(familyRelations),
+    neighborConstructionIds,
+    neighborFamilyIdentitySha256: neighborIdentity,
+    targetCorridor: {
+      freezeStatus: 'frozen-before-condition-output',
+      conditionIndependent: true,
+      authority: 'authenticated-source-route-endpoints',
+      attachmentNeighborhoodRadius: null,
+      castProjection: 'unavailable-held',
+      expectedSignedLocalization: 'unassigned-held',
+      neighboringRouteLeakage: 'unmeasured-held',
+    },
+  };
+  fixture.deltaLedger = {
+    routes: [
+      { constructionId: 'muscle-34', relativeChange: 0.02731012950405119 },
+      { constructionId: 'muscle-13', relativeChange: 0.005295978656482437 },
+    ],
+    maximumAbsoluteRelativeChange: 0.02731012950405119,
+    tolerance: null,
+    toleranceAuthority: 'unassigned',
+    budgetMatchStatus: 'measured-awaiting-owner-tolerance',
+  };
+  fixture.authority.heldClaims = [
+    'correct-route-superiority',
+    'musculature-source-evidence',
+    'selected-relation-m0',
+    'station-instance',
+    'source-to-cast-correspondence',
+    'expected-signed-localization',
+    'packing-geometry-admission',
+  ];
+  fixture.fixtureSha256 = routingFixtureHash(fixture);
+  return canonical(fixture);
 }
 
 function rehashGraph(inputs) {
@@ -459,6 +587,143 @@ test('routing fixture rejects rehashed matched-wrong origin reassignment', () =>
 
   assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
   assert.ok(result.contradictory.some(item => item.field === 'routingFixtureMatchedRoutePreservation'));
+});
+
+test('dense M34/M13 profile preserves absent neighbors and null tolerance without promoting M0', () => {
+  const inputs = makeDenseFixtureInputs();
+  const routingFixture = makeDenseRoutingFixture(inputs.graph);
+  const result = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+
+  assert.equal(result.disposition, HOLD_MUSCULATURE_SOURCE_EVIDENCE);
+  assert.equal(result.selectedFixture.primaryRoute.constructionId, 'muscle-34');
+  assert.equal(result.selectedFixture.matchedWrongDonor.constructionId, 'muscle-13');
+  const selectedEvidence = result.satisfied.find(item => item.field === 'selectedFixture');
+  assert.equal(selectedEvidence.fixtureProfile, 'dense-m34-m13');
+  assert.equal(selectedEvidence.absentNeighborRouteCount, 34);
+  assert.equal(selectedEvidence.tolerance, null);
+  assert.deepEqual(result.contradictory, []);
+});
+
+test('dense M34/M13 profile rejects assigned tolerance and forged neighbor preservation', () => {
+  for (const mutate of [
+    fixture => { fixture.deltaLedger.tolerance = 0.03; },
+    fixture => { fixture.conditions.absent.preservedNeighborConstructionIds.pop(); },
+  ]) {
+    const inputs = makeDenseFixtureInputs();
+    const routingFixture = makeDenseRoutingFixture(inputs.graph);
+    mutate(routingFixture);
+    routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+    const result = validateTrackMAuthoredSourceM0Preflight({
+      ...inputs,
+      routingFixture,
+      expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+    });
+    assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+    assert.ok(result.contradictory.some(item => (
+      item.field === 'routingFixtureDenseTolerance'
+      || item.field === 'routingFixtureDenseNeighborPreservation'
+    )));
+  }
+});
+
+test('dense M34/M13 profile rejects an internally rehashed family absent from the source graph', () => {
+  const inputs = makeDenseFixtureInputs();
+  const routingFixture = makeDenseRoutingFixture(inputs.graph);
+  const replacedNeighbor = routingFixture.densityContext.neighborConstructionIds[0];
+  routingFixture.densityContext.neighborConstructionIds[0] = 'muscle-forged-neighbor';
+  routingFixture.conditions.absent.preservedNeighborConstructionIds[0] = 'muscle-forged-neighbor';
+  routingFixture.densityContext.familyConstructionIds = routingFixture.densityContext.familyConstructionIds
+    .map(id => id === replacedNeighbor ? 'muscle-forged-neighbor' : id);
+  routingFixture.densityContext.neighborFamilyIdentitySha256 = H('d');
+  routingFixture.conditions.absent.preservedNeighborFamilyIdentitySha256 = H('d');
+  routingFixture.densityContext.familyIdentitySha256 = H('e');
+  routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+
+  const result = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+
+  assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+  assert.ok(result.contradictory.some(item => item.field === 'routingFixtureDenseGraphFamily'));
+});
+
+test('dense M34/M13 profile returns structured failure for a falsely complete graph member', () => {
+  const inputs = makeDenseFixtureInputs();
+  const routingFixture = makeDenseRoutingFixture(inputs.graph);
+  const malformedMember = inputs.graph.muscles.find(muscle => (
+    muscle.identity.construction_id === 'muscle-neighbor-01'
+  ));
+  delete malformedMember.components.path;
+  rehashGraph(inputs);
+  routingFixture.source.graphSha256 = inputs.graph.graphSha256;
+  routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+
+  const result = validateTrackMAuthoredSourceM0Preflight({
+    ...inputs,
+    routingFixture,
+    expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+  });
+
+  assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+  assert.ok(result.contradictory.some(item => (
+    item.field === 'graphCompleteConstructionGeometry'
+    && item.constructionId === 'muscle-neighbor-01'
+  )));
+});
+
+test('dense M34/M13 profile pins route and null role identities', () => {
+  for (const mutate of [
+    fixture => {
+      [fixture.selection.correctConstructionId, fixture.selection.crossWireDonorConstructionId] =
+        [fixture.selection.crossWireDonorConstructionId, fixture.selection.correctConstructionId];
+      fixture.conditions.correct.routes.reverse();
+      fixture.conditions.matchedWrong.routes.reverse();
+    },
+    fixture => {
+      fixture.selection.nullConstructionIds.reverse();
+      fixture.nulls.reverse();
+    },
+  ]) {
+    const inputs = makeDenseFixtureInputs();
+    const routingFixture = makeDenseRoutingFixture(inputs.graph);
+    mutate(routingFixture);
+    routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+    const result = validateTrackMAuthoredSourceM0Preflight({
+      ...inputs,
+      routingFixture,
+      expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+    });
+    assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+    assert.ok(result.contradictory.some(item => item.field === 'routingFixtureDenseSelection'));
+  }
+});
+
+test('dense M34/M13 profile rejects claim promotion and lost holds', () => {
+  for (const mutate of [
+    fixture => { fixture.authority.admittedClaims.push('correct-route-superiority'); },
+    fixture => {
+      fixture.authority.heldClaims = fixture.authority.heldClaims
+        .filter(claim => claim !== 'source-to-cast-correspondence');
+    },
+  ]) {
+    const inputs = makeDenseFixtureInputs();
+    const routingFixture = makeDenseRoutingFixture(inputs.graph);
+    mutate(routingFixture);
+    routingFixture.fixtureSha256 = routingFixtureHash(routingFixture);
+    const result = validateTrackMAuthoredSourceM0Preflight({
+      ...inputs,
+      routingFixture,
+      expectedRoutingFixtureSha256: routingFixture.fixtureSha256,
+    });
+    assert.equal(result.disposition, 'FAIL_MUSCULATURE_SOURCE');
+    assert.ok(result.contradictory.some(item => item.field === 'routingFixtureClaimBoundary'));
+  }
 });
 
 test('exact selected-relation consumer rejects an absent routing fixture', () => {

@@ -14,6 +14,7 @@ import {
   TRACK_M_SOURCE_PROJECTION_COMPILER_ID,
 } from './track-m-source-projection-core.mjs';
 import {
+  TRACK_M_DENSE_ROUTING_FIXTURE_COMPILER_ID,
   TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
   TRACK_M_ROUTING_FIXTURE_SCHEMA,
 } from './track-m-routing-fixture-core.mjs';
@@ -21,6 +22,19 @@ import {
 export const TRACK_M_AUTHORED_SOURCE_M0_PREFLIGHT_SCHEMA =
   'kaminos.track-m-authored-source-m0-preflight.v0';
 const VERIFIED_SELECTION_SCHEMA = 'kaminos.track-m-verified-routing-fixture-selection.v0';
+const DENSE_SELECTION_ID = 'src-pelvis-cube002-m34-m13-routing-sensitivity-v0';
+const DENSE_SELECTED_ROUTE_IDS = Object.freeze(['muscle-34', 'muscle-13']);
+const DENSE_NULL_CONTROL_IDS = Object.freeze(['muscle-35', 'muscle-38']);
+const DENSE_ADMITTED_CLAIMS = Object.freeze(['source-side-routing-sensitivity-fixture']);
+const DENSE_HELD_CLAIMS = Object.freeze([
+  'correct-route-superiority',
+  'musculature-source-evidence',
+  'selected-relation-m0',
+  'station-instance',
+  'source-to-cast-correspondence',
+  'expected-signed-localization',
+  'packing-geometry-admission',
+]);
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const SELECTION_FIELDS = Object.freeze([
@@ -226,6 +240,43 @@ function validateGraph(graph, expectedGraphSha256, expectedSourceSha256) {
   if (constructionIds.some(id => !nonEmptyString(id)) || new Set(constructionIds).size !== constructionIds.length) {
     contradictory.push(field('constructionIdentity', { reason: 'construction ids must be nonempty and unique' }));
   }
+  for (const muscle of graph.muscles) {
+    const constructionId = muscle?.identity?.construction_id ?? null;
+    if (!isPlainObject(muscle)
+      || !isPlainObject(muscle.identity)
+      || !Array.isArray(muscle.missingComponentRoles)
+      || !isPlainObject(muscle.origin)
+      || !isPlainObject(muscle.insertion)) {
+      contradictory.push(field('graphConstructionShape', {
+        constructionId,
+        reason: 'each construction requires identity, endpoint, and missing-component records before relation evaluation',
+      }));
+      continue;
+    }
+    if (muscle.completenessAuthority !== 'declared_components_present'
+      || muscle.missingComponentRoles.length !== 0) {
+      continue;
+    }
+    if (![muscle.identity.instance_id, muscle.identity.lineage_id,
+      muscle.origin.handleInstanceId, muscle.origin.sourceName,
+      muscle.insertion.handleInstanceId, muscle.insertion.sourceName]
+      .every(nonEmptyString)) {
+      contradictory.push(field('graphCompleteConstructionIdentity', {
+        constructionId,
+        reason: 'a construction declared complete requires stable instance, lineage, endpoint-handle, and endpoint-source identities',
+      }));
+    }
+    const pathGeometrySha256 = muscle.components?.path?.geometry?.contentSha256;
+    const surfaceGeometrySha256 = muscle.components?.surface?.geometry?.contentSha256;
+    if (!validHash(pathGeometrySha256) || !validHash(surfaceGeometrySha256)) {
+      contradictory.push(field('graphCompleteConstructionGeometry', {
+        constructionId,
+        reason: 'a construction declared complete requires content-addressed path and surface geometry',
+        pathGeometrySha256: pathGeometrySha256 ?? null,
+        surfaceGeometrySha256: surfaceGeometrySha256 ?? null,
+      }));
+    }
+  }
   const endpointAuthorityCounts = {
     source_mesh: 0,
     provisional_muscle_surface: 0,
@@ -320,6 +371,179 @@ function validateMatchedRoutePreservation(correctRoutes, matchedRoutes, contradi
   }
 }
 
+function sameMembers(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && new Set(left).size === left.length
+    && new Set(right).size === right.length
+    && left.every(item => right.includes(item));
+}
+
+function denseRouteIdentity(muscle) {
+  return {
+    constructionId: muscle.identity.construction_id,
+    instanceId: muscle.identity.instance_id,
+    lineageId: muscle.identity.lineage_id,
+    originHandleInstanceId: muscle.origin.handleInstanceId,
+    insertionHandleInstanceId: muscle.insertion.handleInstanceId,
+    pathGeometrySha256: muscle.components.path.geometry.contentSha256,
+    surfaceGeometrySha256: muscle.components.surface.geometry.contentSha256,
+  };
+}
+
+function validateRoutingFixtureProfile(routingFixture, graph, contradictory) {
+  const dense = routingFixture.selection?.id === DENSE_SELECTION_ID;
+  const expectedCompilerId = dense
+    ? TRACK_M_DENSE_ROUTING_FIXTURE_COMPILER_ID
+    : TRACK_M_ROUTING_FIXTURE_COMPILER_ID;
+  if (routingFixture.compilerId !== expectedCompilerId) {
+    contradictory.push(field('routingFixtureContract', {
+      reason: 'routing fixture compiler identity must match its selected profile',
+      selectionId: routingFixture.selection?.id ?? null,
+      expectedCompilerId,
+      effectiveCompilerId: routingFixture.compilerId ?? null,
+    }));
+  }
+  if (!dense) {
+    return {
+      fixtureProfile: 'sparse-selected-relation',
+      absentNeighborRouteCount: null,
+      tolerance: routingFixture.deltaLedger?.tolerance ?? null,
+    };
+  }
+
+  const selectedIds = [
+    routingFixture.selection?.correctConstructionId,
+    routingFixture.selection?.crossWireDonorConstructionId,
+  ];
+  const absent = routingFixture.conditions?.absent;
+  const correct = routingFixture.conditions?.correct;
+  const matchedWrong = routingFixture.conditions?.matchedWrong;
+  const density = routingFixture.densityContext;
+  const neighborIds = density?.neighborConstructionIds;
+  const absentNeighborIds = absent?.preservedNeighborConstructionIds;
+  const familyIds = density?.familyConstructionIds;
+  const expectedFamilyIds = Array.isArray(neighborIds) ? [...selectedIds, ...neighborIds] : null;
+  const removedIds = [...selectedIds].sort();
+
+  if (!isDeepStrictEqual(selectedIds, DENSE_SELECTED_ROUTE_IDS)
+    || !isDeepStrictEqual(routingFixture.selection?.nullConstructionIds, DENSE_NULL_CONTROL_IDS)) {
+    contradictory.push(field('routingFixtureDenseSelection', {
+      reason: 'dense profile must bind the exact M34 primary, M13 donor, M35 null, and M38 null roles',
+      selectedRouteIds: selectedIds,
+      nullConstructionIds: routingFixture.selection?.nullConstructionIds ?? null,
+    }));
+  }
+
+  if (absent?.id !== 'deep-geometry-absent'
+    || !Array.isArray(absent?.routes)
+    || absent.routes.length !== 0
+    || absent.deepGeometryPresent !== false
+    || absent.testedRelationPresent !== false
+    || !sameMembers(absent.removedConstructionIds, removedIds)
+    || correct?.id !== 'deep-geometry-correctly-routed'
+    || correct.deepGeometryPresent !== true
+    || correct.testedRelationPresent !== true
+    || matchedWrong?.id !== 'deep-geometry-matched-wrong-routing'
+    || matchedWrong.deepGeometryPresent !== true
+    || matchedWrong.testedRelationPresent !== false) {
+    contradictory.push(field('routingFixtureDenseConditions', {
+      reason: 'dense profile requires exact absent, correct, and matched-wrong condition identities and presence states',
+    }));
+  }
+
+  if (density?.familyRouteCount !== 36
+    || density?.neighborRouteCount !== 34
+    || absent?.preservedNeighborRouteCount !== 34
+    || !sameMembers(neighborIds, absentNeighborIds)
+    || !sameMembers(familyIds, expectedFamilyIds)
+    || absent?.preservedNeighborFamilyIdentitySha256 !== density?.neighborFamilyIdentitySha256
+    || !validHash(density?.neighborFamilyIdentitySha256)
+    || !validHash(density?.familyIdentitySha256)) {
+    contradictory.push(field('routingFixtureDenseNeighborPreservation', {
+      reason: 'dense profile must preserve the exact 34-route neighbor family around the selected pair',
+      familyRouteCount: density?.familyRouteCount ?? null,
+      densityNeighborRouteCount: density?.neighborRouteCount ?? null,
+      absentNeighborRouteCount: absent?.preservedNeighborRouteCount ?? null,
+    }));
+  }
+
+  const family = density?.family;
+  const graphFamily = graph.muscles
+    .filter(muscle => (
+      muscle.completenessAuthority === 'declared_components_present'
+      && muscle.missingComponentRoles.length === 0
+      && muscle.origin.sourceAuthority === 'source_mesh'
+      && muscle.insertion.sourceAuthority === 'source_mesh'
+      && muscle.origin.sourceName === family?.originSource
+      && muscle.insertion.sourceName === family?.insertionSource
+    ))
+    .sort((left, right) => (
+      left.identity.construction_id.localeCompare(right.identity.construction_id)
+    ));
+  const graphFamilyIds = graphFamily.map(muscle => muscle.identity.construction_id);
+  const selectedIdSet = new Set(DENSE_SELECTED_ROUTE_IDS);
+  const graphNeighbors = graphFamily.filter(muscle => !selectedIdSet.has(muscle.identity.construction_id));
+  const graphNeighborIds = graphNeighbors.map(muscle => muscle.identity.construction_id);
+  const graphFamilyIdentitySha256 = hashJson(graphFamily.map(denseRouteIdentity));
+  const graphNeighborIdentitySha256 = hashJson(graphNeighbors.map(denseRouteIdentity));
+  if (!sameMembers(familyIds, graphFamilyIds)
+    || !sameMembers(neighborIds, graphNeighborIds)
+    || density?.familyIdentitySha256 !== graphFamilyIdentitySha256
+    || density?.neighborFamilyIdentitySha256 !== graphNeighborIdentitySha256
+    || absent?.preservedNeighborFamilyIdentitySha256 !== graphNeighborIdentitySha256) {
+    contradictory.push(field('routingFixtureDenseGraphFamily', {
+      reason: 'dense family membership and identity hashes must derive from the authenticated source graph',
+      fixtureFamilyConstructionIds: familyIds ?? null,
+      graphFamilyConstructionIds: graphFamilyIds,
+      fixtureFamilyIdentitySha256: density?.familyIdentitySha256 ?? null,
+      graphFamilyIdentitySha256,
+      fixtureNeighborIdentitySha256: density?.neighborFamilyIdentitySha256 ?? null,
+      graphNeighborIdentitySha256,
+    }));
+  }
+
+  if (!isDeepStrictEqual(routingFixture.selection?.family, density?.family)
+    || density?.targetCorridor?.freezeStatus !== 'frozen-before-condition-output'
+    || density?.targetCorridor?.conditionIndependent !== true
+    || density?.targetCorridor?.authority !== 'authenticated-source-route-endpoints'
+    || density?.targetCorridor?.attachmentNeighborhoodRadius !== null
+    || density?.targetCorridor?.castProjection !== 'unavailable-held'
+    || density?.targetCorridor?.expectedSignedLocalization !== 'unassigned-held'
+    || density?.targetCorridor?.neighboringRouteLeakage !== 'unmeasured-held') {
+    contradictory.push(field('routingFixtureDenseCorridor', {
+      reason: 'dense comparison corridor must remain source-bound, condition-independent, and explicitly held downstream',
+    }));
+  }
+
+  if (routingFixture.deltaLedger?.tolerance !== null
+    || routingFixture.deltaLedger?.toleranceAuthority !== 'unassigned'
+    || routingFixture.deltaLedger?.budgetMatchStatus !== 'measured-awaiting-owner-tolerance') {
+    contradictory.push(field('routingFixtureDenseTolerance', {
+      reason: 'dense source observations must retain null tolerance and unassigned tolerance authority',
+      tolerance: routingFixture.deltaLedger?.tolerance ?? null,
+      toleranceAuthority: routingFixture.deltaLedger?.toleranceAuthority ?? null,
+      budgetMatchStatus: routingFixture.deltaLedger?.budgetMatchStatus ?? null,
+    }));
+  }
+
+  if (!sameMembers(routingFixture.authority?.admittedClaims, DENSE_ADMITTED_CLAIMS)
+    || !sameMembers(routingFixture.authority?.heldClaims, DENSE_HELD_CLAIMS)) {
+    contradictory.push(field('routingFixtureClaimBoundary', {
+      reason: 'dense profile must admit only source-side sensitivity and retain every downstream hold',
+      admittedClaims: routingFixture.authority?.admittedClaims ?? null,
+      heldClaims: routingFixture.authority?.heldClaims ?? null,
+    }));
+  }
+
+  return {
+    fixtureProfile: 'dense-m34-m13',
+    absentNeighborRouteCount: absent?.preservedNeighborRouteCount ?? null,
+    tolerance: routingFixture.deltaLedger?.tolerance ?? null,
+  };
+}
+
 function resolveRoutingFixture(routingFixture, expectedRoutingFixtureSha256, graph) {
   if (routingFixture === null || routingFixture === undefined) {
     return {
@@ -356,8 +580,8 @@ function resolveRoutingFixture(routingFixture, expectedRoutingFixtureSha256, gra
       effectiveRoutingFixtureSha256: effectiveFixtureSha256,
     }));
   }
+  const profileEvidence = validateRoutingFixtureProfile(routingFixture, graph, contradictory);
   if (fixtureSchema !== TRACK_M_ROUTING_FIXTURE_SCHEMA
-    || routingFixture.compilerId !== TRACK_M_ROUTING_FIXTURE_COMPILER_ID
     || routingFixture.status !== 'compiled'
     || routingFixture.trackId !== graph.trackId) {
     contradictory.push(field('routingFixtureContract', {
@@ -440,6 +664,7 @@ function resolveRoutingFixture(routingFixture, expectedRoutingFixtureSha256, gra
       matchedRoutePreservation: 'direct_fixture_field_assertion',
       originsPreserved: true,
       insertionAssignmentsOnlyChanged: true,
+      ...profileEvidence,
     } : null,
     contradictory,
   };
@@ -654,6 +879,9 @@ export function validateTrackMAuthoredSourceM0Preflight({
       originsPreserved: resolvedRoutingFixture.evidence.originsPreserved,
       insertionAssignmentsOnlyChanged:
         resolvedRoutingFixture.evidence.insertionAssignmentsOnlyChanged,
+      fixtureProfile: resolvedRoutingFixture.evidence.fixtureProfile,
+      absentNeighborRouteCount: resolvedRoutingFixture.evidence.absentNeighborRouteCount,
+      tolerance: resolvedRoutingFixture.evidence.tolerance,
       claimCeiling: resolvedSelection.fixture.claimCeiling,
     }));
   }

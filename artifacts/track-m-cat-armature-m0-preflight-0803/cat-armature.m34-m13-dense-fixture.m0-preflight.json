@@ -1,0 +1,571 @@
+{
+  "schema": "kaminos.track-m-authored-source-m0-preflight-report.v0",
+  "status": "validated",
+  "failurePhase": null,
+  "requested": {
+    "expectedGraphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "expectedSourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "expectedRoutingFixtureSha256": "f4fb4b8d54ad547bd5c095d7972cc699ab75b344da977ba68737cafae7a71b3e"
+  },
+  "inputs": {
+    "graph": {
+      "requestedPath": "/private/tmp/kaminos-molten-cat-armature-source-projection-0803-output-v2/cat-armature.source-graph.json",
+      "effectivePath": "/private/tmp/kaminos-molten-cat-armature-source-projection-0803-output-v2/cat-armature.source-graph.json",
+      "bytesSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+      "byteLength": 489899
+    },
+    "bundleSource": {
+      "requestedPath": "fixtures/track-m-three-condition-source.compatibility.v0.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-m34-m13-dense-consumer-0804/fixtures/track-m-three-condition-source.compatibility.v0.json",
+      "bytesSha256": "8a8b37d1672ba32d07192edb632547a775286ac408d0c2fbe9fb5a037f9f7dbc",
+      "byteLength": 4293
+    },
+    "routingFixture": {
+      "requestedPath": "fixtures/track-m-routing/m34-m13-dense-routing-fixture.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-m34-m13-dense-consumer-0804/fixtures/track-m-routing/m34-m13-dense-routing-fixture.json",
+      "bytesSha256": "9235b269388d784d44ef4987dce3581175b13f3f0a88574a554bcc5637e862c1",
+      "byteLength": 29932
+    }
+  },
+  "effectivePlanRoute": "deterministic-plan-from-verified-bundle-source",
+  "validation": {
+    "schema": "kaminos.track-m-authored-source-m0-preflight.v0",
+    "disposition": "HOLD_MUSCULATURE_SOURCE_EVIDENCE",
+    "ok": false,
+    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "sourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphIdentityVerified": true,
+    "bundlePredecessorCompatible": true,
+    "selectedFixture": {
+      "primaryRoute": {
+        "constructionId": "muscle-34",
+        "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+        "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+        "name": "Muscle 34",
+        "origin": {
+          "sourceName": "SRC_PELVIS",
+          "sourceAuthority": "source_mesh",
+          "handleObject": "Muscle 34 | Origin",
+          "handleInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c"
+        },
+        "insertion": {
+          "sourceName": "Cube.002",
+          "sourceAuthority": "source_mesh",
+          "handleObject": "Muscle 34 | Insertion",
+          "handleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+        },
+        "path": {
+          "objectName": "Muscle 34 | Path",
+          "instanceId": "instance-a9b5e1a5-d219-404b-aa95-5a6e087e7783",
+          "geometrySha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+          "pointCount": 25,
+          "splineCount": 1
+        },
+        "surface": {
+          "objectName": "Muscle 34 | Surface",
+          "instanceId": "instance-25a5fbea-a3dc-4c43-92a2-d4d9c977746e",
+          "geometrySha256": "b8795bd26a24cc9506def18ca1bdf2645ff82b4499253a015c472500edbf4dac"
+        },
+        "tendonFractions": {
+          "origin": 0.18,
+          "insertion": 0.18
+        },
+        "constructionBudget": {
+          "longitudinalSections": 12,
+          "profileSides": 12,
+          "originTendonFraction": 0.18,
+          "insertionTendonFraction": 0.18,
+          "pathPointCount": 25,
+          "pathSplineCount": 1,
+          "surfaceVertexCount": 300,
+          "surfaceEdgeCount": 588,
+          "surfacePolygonCount": 290
+        }
+      },
+      "matchedWrongDonor": {
+        "constructionId": "muscle-13",
+        "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+        "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+        "name": "Muscle 13",
+        "origin": {
+          "sourceName": "SRC_PELVIS",
+          "sourceAuthority": "source_mesh",
+          "handleObject": "Muscle 13 | Origin",
+          "handleInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c"
+        },
+        "insertion": {
+          "sourceName": "Cube.002",
+          "sourceAuthority": "source_mesh",
+          "handleObject": "Muscle 13 | Insertion",
+          "handleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154"
+        },
+        "path": {
+          "objectName": "Muscle 13 | Path",
+          "instanceId": "instance-173e65f0-0ffc-4678-ad5b-461ba87204b1",
+          "geometrySha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+          "pointCount": 25,
+          "splineCount": 1
+        },
+        "surface": {
+          "objectName": "Muscle 13 | Surface",
+          "instanceId": "instance-182a0783-9dc7-4283-9189-3460f8e36fba",
+          "geometrySha256": "41afac51a52007866e49e533224734b77588341baaec5cb2cf5654ece89e5dce"
+        },
+        "tendonFractions": {
+          "origin": 0.18,
+          "insertion": 0.18
+        },
+        "constructionBudget": {
+          "longitudinalSections": 12,
+          "profileSides": 12,
+          "originTendonFraction": 0.18,
+          "insertionTendonFraction": 0.18,
+          "pathPointCount": 25,
+          "pathSplineCount": 1,
+          "surfaceVertexCount": 300,
+          "surfaceEdgeCount": 588,
+          "surfacePolygonCount": 290
+        }
+      },
+      "nullControls": [
+        {
+          "constructionId": "muscle-35",
+          "lineageId": "lineage-6e15ea13-947d-4971-928a-4f1547a46a65",
+          "instanceId": "instance-df26f025-7412-43c8-abc1-c7082fdd906c",
+          "name": "Muscle 35",
+          "origin": {
+            "sourceName": "Cube.002",
+            "sourceAuthority": "source_mesh",
+            "handleObject": "Muscle 35 | Origin",
+            "handleInstanceId": "instance-fcf8ae57-e038-4ebe-a80b-5ad3c1c498de"
+          },
+          "insertion": {
+            "sourceName": "Cube.002",
+            "sourceAuthority": "source_mesh",
+            "handleObject": "Muscle 35 | Insertion",
+            "handleInstanceId": "instance-63a2453e-0087-45f3-9106-b8bfeae4d156"
+          },
+          "path": {
+            "objectName": "Muscle 35 | Path",
+            "instanceId": "instance-509a335b-2bc7-4be4-95b4-084068b783cc",
+            "geometrySha256": "c4855e81cdf60c48b849701bb2cc23f7f16e94712626a654ef83abba072429a6",
+            "pointCount": 25,
+            "splineCount": 1
+          },
+          "surface": {
+            "objectName": "Muscle 35 | Surface",
+            "instanceId": "instance-13a69eff-a8db-4be9-bd05-1718ff290253",
+            "geometrySha256": "247b5fae4fb6a748a167c313a83edf281498db4667bd28776fdabec0e7a551d5"
+          },
+          "tendonFractions": {
+            "origin": 0.18,
+            "insertion": 0.18
+          },
+          "constructionBudget": {
+            "longitudinalSections": 12,
+            "profileSides": 12,
+            "originTendonFraction": 0.18,
+            "insertionTendonFraction": 0.18,
+            "pathPointCount": 25,
+            "pathSplineCount": 1,
+            "surfaceVertexCount": 300,
+            "surfaceEdgeCount": 588,
+            "surfacePolygonCount": 290
+          }
+        },
+        {
+          "constructionId": "muscle-38",
+          "lineageId": "lineage-f950b812-9a33-41c0-8cc3-40b922aad2e8",
+          "instanceId": "instance-11cb7bdf-288c-4cbf-9004-f854279c5e8b",
+          "name": "Muscle 38",
+          "origin": {
+            "sourceName": "SRC_PELVIS",
+            "sourceAuthority": "source_mesh",
+            "handleObject": "Muscle 38 | Origin",
+            "handleInstanceId": "instance-5fecede8-4b52-48a2-a7fa-48562c2d7423"
+          },
+          "insertion": {
+            "sourceName": "SRC_PELVIS",
+            "sourceAuthority": "source_mesh",
+            "handleObject": "Muscle 38 | Insertion",
+            "handleInstanceId": "instance-c675d994-ae3f-41ab-a830-9b05280334a3"
+          },
+          "path": {
+            "objectName": "Muscle 38 | Path",
+            "instanceId": "instance-33f3d229-57f0-4ad3-9d58-08fe23f4e196",
+            "geometrySha256": "14b0ec70e3acd2f9f1fe0205144f156cfbc8e6ad00f962cc6d5f4913be35f996",
+            "pointCount": 25,
+            "splineCount": 1
+          },
+          "surface": {
+            "objectName": "Muscle 38 | Surface",
+            "instanceId": "instance-ba957163-3ea1-4452-8edd-a4d7a5e02466",
+            "geometrySha256": "7c0ad1956ca1985befb68fa438e266e6872bb9784d0a3e55b52ff8287e0647e2"
+          },
+          "tendonFractions": {
+            "origin": 0.18,
+            "insertion": 0.18
+          },
+          "constructionBudget": {
+            "longitudinalSections": 12,
+            "profileSides": 12,
+            "originTendonFraction": 0.18,
+            "insertionTendonFraction": 0.18,
+            "pathPointCount": 25,
+            "pathSplineCount": 1,
+            "surfaceVertexCount": 300,
+            "surfaceEdgeCount": 588,
+            "surfacePolygonCount": 290
+          }
+        }
+      ],
+      "sourceObjectFamily": {
+        "originSourceName": "SRC_PELVIS",
+        "insertionSourceName": "Cube.002"
+      },
+      "claimCeiling": "routing-sensitivity-only",
+      "transformAuthority": "external-molten-source-side-fixture-receipt",
+      "toleranceAuthority": "not-authorized-by-selection"
+    },
+    "candidates": {
+      "totalConstructions": 68,
+      "completeSourceMeshRelations": 51,
+      "provisionalEndpointRelations": 12,
+      "incompleteConstructions": 7,
+      "completeSourceMeshConstructionIds": [
+        "muscle-42",
+        "muscle-28",
+        "muscle-27",
+        "muscle-48",
+        "muscle-10",
+        "muscle-16",
+        "muscle-38",
+        "muscle-22",
+        "muscle-09",
+        "muscle-20",
+        "muscle",
+        "muscle-60",
+        "muscle-25",
+        "muscle-05",
+        "muscle-14",
+        "muscle-59",
+        "muscle-47",
+        "muscle-39",
+        "muscle-61",
+        "muscle-63",
+        "muscle-43",
+        "muscle-07",
+        "muscle-21",
+        "muscle-15",
+        "muscle-65",
+        "muscle-46",
+        "muscle-26",
+        "muscle-06",
+        "muscle-64",
+        "muscle-03",
+        "muscle-37",
+        "muscle-53",
+        "muscle-04",
+        "muscle-18",
+        "muscle-41",
+        "muscle-23",
+        "muscle-52",
+        "muscle-45",
+        "muscle-08",
+        "muscle-44",
+        "muscle-31",
+        "muscle-62",
+        "muscle-58",
+        "muscle-11",
+        "muscle-35",
+        "muscle-34",
+        "muscle-02",
+        "muscle-12",
+        "muscle-32",
+        "muscle-30",
+        "muscle-13"
+      ]
+    },
+    "sourceOmissions": [
+      {
+        "constructionId": "muscle-17",
+        "missingComponentRoles": [
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-57",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-54",
+        "missingComponentRoles": [
+          "attachment_insertion"
+        ]
+      },
+      {
+        "constructionId": "muscle-55",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "attachment_origin",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-36",
+        "missingComponentRoles": [
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-49",
+        "missingComponentRoles": [
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-56",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      }
+    ],
+    "satisfied": [
+      {
+        "field": "trackScope",
+        "value": "shape-bearing-musculature"
+      },
+      {
+        "field": "sourceIdentity",
+        "sourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+        "byteLength": 549819
+      },
+      {
+        "field": "sourcePath",
+        "requestedPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend",
+        "effectivePath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend"
+      },
+      {
+        "field": "sourceCompletenessAndKnownOmissions",
+        "completeness": "incomplete",
+        "omissionCount": 7
+      },
+      {
+        "field": "sourceUnits",
+        "system": "METRIC",
+        "lengthUnit": "METERS",
+        "scaleLength": 1
+      },
+      {
+        "field": "authoredConstructionInventory",
+        "sourceMeshCount": 16,
+        "muscleCount": 68
+      },
+      {
+        "field": "componentLineage",
+        "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0"
+      },
+      {
+        "field": "rawGeometryAndTransforms",
+        "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0"
+      },
+      {
+        "field": "bundleComparisonClass",
+        "sourceReceiptId": "operator-musculature-source-receipt-v0",
+        "planId": "16989ca7c629fc0c26bd5a4e82915e234cc114c9f637705b3400679877a813c6",
+        "conditionIds": [
+          "deep-geometry-absent",
+          "deep-geometry-correctly-routed",
+          "deep-geometry-matched-wrong-routing"
+        ]
+      },
+      {
+        "field": "selectedFixture",
+        "primaryConstructionId": "muscle-34",
+        "matchedWrongDonorConstructionId": "muscle-13",
+        "nullConstructionIds": [
+          "muscle-35",
+          "muscle-38"
+        ],
+        "routingFixtureSha256": "f4fb4b8d54ad547bd5c095d7972cc699ab75b344da977ba68737cafae7a71b3e",
+        "selectionAuthorityId": "golden-object-parallel-assay-portfolio-2026-08-03",
+        "selectionChronology": "caller_asserted_not_validator_proven",
+        "matchedRoutePreservation": "direct_fixture_field_assertion",
+        "originsPreserved": true,
+        "insertionAssignmentsOnlyChanged": true,
+        "fixtureProfile": "dense-m34-m13",
+        "absentNeighborRouteCount": 34,
+        "tolerance": null,
+        "claimCeiling": "routing-sensitivity-only"
+      }
+    ],
+    "missing": [
+      {
+        "field": "semanticNames"
+      },
+      {
+        "field": "localFrames"
+      },
+      {
+        "field": "attachmentInsertionBindings"
+      },
+      {
+        "field": "routedPathControls"
+      },
+      {
+        "field": "tendonBellyIntervals"
+      },
+      {
+        "field": "wrapGuides"
+      },
+      {
+        "field": "neutralConservativePosePair"
+      },
+      {
+        "field": "fixedCamera"
+      },
+      {
+        "field": "packingBehavior"
+      },
+      {
+        "field": "m0MatchedBudgetLedgerAndWitnesses"
+      },
+      {
+        "field": "neighboringSupportIndependence"
+      },
+      {
+        "field": "sourceEvidenceChecks"
+      }
+    ],
+    "contradictory": [],
+    "selectionAdapter": {
+      "schema": "kaminos.track-m-source-routing-fixture.v0",
+      "requiredCallerFields": [
+        "routingFixture",
+        "expectedRoutingFixtureSha256"
+      ],
+      "selectsForCaller": false,
+      "resolution": "a caller-expected semantic fixture identity resolves one primary route, one matched donor, and two same-object null controls; all relation identities are copied from the authenticated graph",
+      "admittedEndpointAuthorityWithoutOverride": "source_mesh",
+      "outputAuthority": "selected sensitivity-fixture identity only; no cross-wire transform, tolerance, superiority, M0, station, pose, or routing admission"
+    },
+    "bundleCompatibility": {
+      "schema": "kaminos.track-m-m0-bundle-compatibility.v0",
+      "disposition": "HOLD_MUSCULATURE_SOURCE_EVIDENCE",
+      "comparisonClassCompatible": true,
+      "losslessM0Receipt": false,
+      "sourceSchema": "kaminos.track-m-evidence-source.v0",
+      "targetSchema": "kaminos.musculature-source-m0.v0",
+      "sourceReceiptId": "operator-musculature-source-receipt-v0",
+      "planId": "16989ca7c629fc0c26bd5a4e82915e234cc114c9f637705b3400679877a813c6",
+      "mappedPredicates": {
+        "sourceReceiptId": "operator-musculature-source-receipt-v0",
+        "assetId": "operator-musculature-source-v0",
+        "assetPath": "/caller/source.blend",
+        "assetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "conservativePoseId": "conservative-pose-v0",
+        "conservativePoseAuthorityId": "external-pose-authority",
+        "conservativePoseSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "fixedCameraId": "track-m-fixed-camera-v0",
+        "fixedCameraSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "routingRelationId": "deep-flexor-routing-v0",
+        "deepGeometryIds": [
+          "deep-flexor-a",
+          "deep-flexor-b"
+        ],
+        "attachmentEndpointMultisetSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+        "expectedRoutingGraphSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+        "conditionIds": [
+          "deep-geometry-absent",
+          "deep-geometry-correctly-routed",
+          "deep-geometry-matched-wrong-routing"
+        ],
+        "conditionTransformIds": {
+          "deep-geometry-absent": "remove-deep-geometry-v0",
+          "deep-geometry-correctly-routed": "correct-routing-v0",
+          "deep-geometry-matched-wrong-routing": "wrong-routing-v0"
+        }
+      },
+      "matchedBudgetCoverage": {
+        "bundleFields": [
+          "primitiveCount",
+          "vertexCount",
+          "triangleCount",
+          "parameterCount"
+        ],
+        "m0RequiredFields": [
+          "primitiveCount",
+          "curveCount",
+          "controlCount",
+          "crossSectionBudget",
+          "routeLength",
+          "occupiedVolume",
+          "surfaceArea"
+        ],
+        "coveredFields": [
+          "primitiveCount"
+        ],
+        "missingFields": [
+          "curveCount",
+          "controlCount",
+          "crossSectionBudget",
+          "routeLength",
+          "occupiedVolume",
+          "surfaceArea"
+        ]
+      },
+      "missingM0Authority": [
+        "matchedControlIdentity",
+        "sourceCompletenessAndKnownOmissions",
+        "sourceUnits",
+        "semanticNames",
+        "localFrames",
+        "attachmentInsertionBindings",
+        "routedPathControls",
+        "tendonBellyIntervals",
+        "wrapGuides",
+        "neutralConservativePosePair",
+        "packingBehavior",
+        "m0MatchedBudgetLedgerAndWitnesses",
+        "neighboringSupportIndependence",
+        "sourceEvidenceChecks"
+      ],
+      "ignoredDownstreamFields": [],
+      "holds": [
+        {
+          "code": "track-m-m0-source-authority-missing",
+          "message": "The three-condition bundle preserves the comparison class but cannot supply the authored anatomical source authority required by M0.",
+          "fields": [
+            "matchedControlIdentity",
+            "sourceCompletenessAndKnownOmissions",
+            "sourceUnits",
+            "semanticNames",
+            "localFrames",
+            "attachmentInsertionBindings",
+            "routedPathControls",
+            "tendonBellyIntervals",
+            "wrapGuides",
+            "neutralConservativePosePair",
+            "packingBehavior",
+            "m0MatchedBudgetLedgerAndWitnesses",
+            "neighboringSupportIndependence",
+            "sourceEvidenceChecks"
+          ]
+        }
+      ],
+      "failures": []
+    }
+  },
+  "error": null
+}
