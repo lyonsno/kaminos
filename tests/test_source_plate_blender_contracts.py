@@ -150,9 +150,8 @@ def test_blender_51_writes_distinct_exr_render_pass_artifacts():
     assert 'nodes.new("ShaderNodeMapRange")' not in adapter
     assert 'nodes.new("ShaderNodeNewGeometry")' in adapter
     assert 'nodes.new("ShaderNodeVectorTransform")' in adapter
-    assert 'tree.links.new(transform.outputs["Vector"], emission.inputs["Color"])' in adapter
-    assert 'multiply.inputs[1].default_value = (0.5, 0.5, 0.5)' not in adapter
-    assert 'add.inputs[1].default_value = (0.5, 0.5, 0.5)' not in adapter
+    assert 'multiply.inputs[1].default_value = (0.5, 0.5, 0.5)' in adapter
+    assert 'add.inputs[1].default_value = (0.5, 0.5, 0.5)' in adapter
     assert "view_layer.material_override = depth_material" in adapter
     assert "view_layer.material_override = normal_material" in adapter
     assert "view_layer.use_pass_z = True" not in adapter
@@ -311,6 +310,34 @@ def test_output_inspection_rejects_blank_wrong_size_and_unsigned_normal_claims()
             raise AssertionError("encoded unsigned normals impersonated signed unit normals")
 
 
+def test_explicit_encoded_normal_derivative_is_decoded_and_unit_checked():
+    assert callable(_inspect_rendered_output), "adapter lacks measured image inspection"
+    with TemporaryDirectory() as tmp:
+        normal = Path(tmp) / "normal.exr"
+        normal.write_bytes(b"fake-exr-container")
+        bpy = _fake_image_bpy(
+            width=2,
+            height=1,
+            file_format="OPEN_EXR",
+            pixels=[0.0, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 1.0],
+        )
+
+        receipt = _inspect_rendered_output(
+            bpy,
+            "normal",
+            normal,
+            {
+                "encoding": "openexr",
+                "representation": "camera_space_unit_normal_rgb_encoded_0_1",
+            },
+        )
+
+        assert receipt["representation"] == "camera_space_unit_normal_rgb_encoded_0_1"
+        assert receipt["decodeFormula"] == "signed = encoded * 2 - 1"
+        assert receipt["decodedComponentRange"] == [-1.0, 1.0]
+        assert receipt["unitVectorSamples"] == 2
+
+
 def test_cli_paths_are_explicit_and_argument_failure_is_durable():
     assert callable(_parse_cli_arguments), "adapter lacks explicit caller-addressed CLI parsing"
     with TemporaryDirectory() as tmp:
@@ -400,6 +427,7 @@ if __name__ == "__main__":
     test_object_color_remains_object_derived_without_clay_color()
     test_output_inspection_measures_pixels_format_dimensions_and_signed_normals()
     test_output_inspection_rejects_blank_wrong_size_and_unsigned_normal_claims()
+    test_explicit_encoded_normal_derivative_is_decoded_and_unit_checked()
     test_cli_paths_are_explicit_and_argument_failure_is_durable()
     test_failed_staged_promotion_preserves_prior_complete_product_set()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()

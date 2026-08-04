@@ -422,8 +422,16 @@ def _normal_material(bpy: Any) -> Any:
     transform.vector_type = "NORMAL"
     transform.convert_from = "WORLD"
     transform.convert_to = "CAMERA"
+    multiply = tree.nodes.new("ShaderNodeVectorMath")
+    multiply.operation = "MULTIPLY"
+    multiply.inputs[1].default_value = (0.5, 0.5, 0.5)
+    add = tree.nodes.new("ShaderNodeVectorMath")
+    add.operation = "ADD"
+    add.inputs[1].default_value = (0.5, 0.5, 0.5)
     tree.links.new(geometry.outputs["True Normal"], transform.inputs["Vector"])
-    tree.links.new(transform.outputs["Vector"], emission.inputs["Color"])
+    tree.links.new(transform.outputs["Vector"], multiply.inputs[0])
+    tree.links.new(multiply.outputs["Vector"], add.inputs[0])
+    tree.links.new(add.outputs["Vector"], emission.inputs["Color"])
     return material
 
 
@@ -549,15 +557,37 @@ def _inspect_rendered_output(
             1 for value in flat if value > 1.0e-6
         )
     elif name == "normal":
-        if representation != "camera_space_unit_normal_rgb":
+        if representation == "camera_space_unit_normal_rgb":
+            vectors = [
+                pixel
+                for pixel in rgb
+                if math.sqrt(sum(component * component for component in pixel)) > 1.0e-6
+            ]
+            if component_min >= -1.0e-5:
+                raise SourcePlateContractError(
+                    "output-validation",
+                    "output normal is not signed camera-space unit normal data",
+                )
+        elif representation == "camera_space_unit_normal_rgb_encoded_0_1":
+            if component_min < -1.0e-6 or component_max > 1.0 + 1.0e-6:
+                raise SourcePlateContractError(
+                    "output-validation", "encoded normal leaves the declared 0..1 range"
+                )
+            encoded_vectors = [pixel for pixel in rgb if max(pixel) > 1.0e-6]
+            vectors = [
+                tuple(component * 2.0 - 1.0 for component in pixel)
+                for pixel in encoded_vectors
+            ]
+            decoded_flat = [component for pixel in vectors for component in pixel]
+            measurement["decodeFormula"] = "signed = encoded * 2 - 1"
+            measurement["decodedComponentRange"] = [
+                min(decoded_flat) if decoded_flat else None,
+                max(decoded_flat) if decoded_flat else None,
+            ]
+        else:
             raise SourcePlateContractError(
-                "output-validation", "normal representation is not camera-space unit RGB"
+                "output-validation", "normal representation is unsupported"
             )
-        vectors = [
-            pixel
-            for pixel in rgb
-            if math.sqrt(sum(component * component for component in pixel)) > 1.0e-6
-        ]
         lengths = [
             math.sqrt(sum(component * component for component in pixel))
             for pixel in vectors
@@ -566,9 +596,8 @@ def _inspect_rendered_output(
         if (
             not unit_lengths
             or len(unit_lengths) < max(1, len(lengths) // 2)
-            or component_min >= -1.0e-5
-            or component_min < -1.001
-            or component_max > 1.001
+            or min(component for pixel in vectors for component in pixel) < -1.001
+            or max(component for pixel in vectors for component in pixel) > 1.001
         ):
             raise SourcePlateContractError(
                 "output-validation", "output normal is not signed camera-space unit normal data"
