@@ -395,10 +395,10 @@ class ProjectionSentinelContracts(unittest.TestCase):
             )
             mutations = (
                 lambda result: result["cells"][0]["visualInspection"].update(
-                    description="inspected at /Users/example/private/output.png"
+                    description="inspected at /Users/example/output.png"
                 ),
                 lambda result: result["cells"][0]["receipt"].update(
-                    warnings=["file:///Users/example/private/output.png"]
+                    warnings=["file:///Users/example/output.png"]
                 ),
                 lambda result: result["cells"][0]["receipt"]["worker"].update(
                     capabilities=["read:/Volumes/private-run/output.png"]
