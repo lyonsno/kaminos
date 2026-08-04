@@ -70,6 +70,8 @@ def test_blender_51_writes_distinct_exr_render_pass_artifacts():
     assert 'scene.render.filepath = str(outputs["depth"])' in adapter
     assert 'scene.render.filepath = str(outputs["normal"])' in adapter
     assert 'nodes.new("ShaderNodeCameraData")' in adapter
+    assert 'camera_data.outputs["View Z Depth"], emission.inputs["Color"]' in adapter
+    assert 'nodes.new("ShaderNodeMapRange")' not in adapter
     assert 'nodes.new("ShaderNodeNewGeometry")' in adapter
     assert 'nodes.new("ShaderNodeVectorTransform")' in adapter
     assert "view_layer.material_override = depth_material" in adapter
@@ -83,6 +85,13 @@ def test_output_records_bind_channel_representation():
     adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
 
     assert '"representation": channel_contract.get("representation")' in adapter
+
+
+def test_collection_selectors_resolve_objects_without_requiring_object_duplication():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert 'selection.get("objects", [])' in adapter
+    assert "collection.all_objects" in adapter
 
 
 def test_silhouette_is_derived_from_the_same_camera_render_alpha():
@@ -100,4 +109,5 @@ if __name__ == "__main__":
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
     test_blender_51_writes_distinct_exr_render_pass_artifacts()
     test_output_records_bind_channel_representation()
+    test_collection_selectors_resolve_objects_without_requiring_object_duplication()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()
