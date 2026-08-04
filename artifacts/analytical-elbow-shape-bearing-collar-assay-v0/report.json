@@ -1,0 +1,214 @@
+{
+  "schema": "kaminos.shape-bearing-collar-assay.v0",
+  "status": "complete",
+  "requestedRoute": "analytical-elbow-graded-collar",
+  "effectiveRoute": "analytical-elbow-graded-collar",
+  "fallbackUsed": false,
+  "source": {
+    "id": "synthetic-mammalian-elbow-v0",
+    "schema": "kaminos.analytical-elbow-descriptor.v0",
+    "requestedRoute": "analytical-cage",
+    "effectiveRoute": "analytical-cage"
+  },
+  "poseDegrees": [
+    0,
+    35,
+    80
+  ],
+  "collarHalfWidths": [
+    0,
+    0.24,
+    0.48,
+    0.72
+  ],
+  "sleeve": {
+    "vertexCount": 986,
+    "triangleCount": 1968,
+    "watertight": true
+  },
+  "rows": [
+    {
+      "flexionDegrees": 0,
+      "collarHalfWidth": 0,
+      "qualifies": true,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0,
+        "maximumAbsoluteLogAreaStrain": 0,
+        "relativeVolumeDrift": 0,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 0,
+      "collarHalfWidth": 0.24,
+      "qualifies": true,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0,
+        "maximumAbsoluteLogAreaStrain": 0,
+        "relativeVolumeDrift": 0,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 0,
+      "collarHalfWidth": 0.48,
+      "qualifies": true,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0,
+        "maximumAbsoluteLogAreaStrain": 0,
+        "relativeVolumeDrift": 0,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 0,
+      "collarHalfWidth": 0.72,
+      "qualifies": true,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0,
+        "maximumAbsoluteLogAreaStrain": 0,
+        "relativeVolumeDrift": 0,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 1.437123158645674,
+        "maximumAbsoluteLogAreaStrain": 2.5271787288302603,
+        "relativeVolumeDrift": 0.007416514109193019,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 18,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0.24,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.9905290468168881,
+        "maximumAbsoluteLogAreaStrain": 0.9908957841814354,
+        "relativeVolumeDrift": 0.0011931111822089566,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0.48,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.3820052566072145,
+        "maximumAbsoluteLogAreaStrain": 0.3821124395818195,
+        "relativeVolumeDrift": 0.0005888982256327094,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0.72,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.2382771074683381,
+        "maximumAbsoluteLogAreaStrain": 0.23834023515158728,
+        "relativeVolumeDrift": 0.0003826626704251153,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 2.014346220046643,
+        "maximumAbsoluteLogAreaStrain": 2.0114517372596183,
+        "relativeVolumeDrift": 0.033888411541036396,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 22,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0.24,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 2.540544560004459,
+        "maximumAbsoluteLogAreaStrain": 4.210657975884006,
+        "relativeVolumeDrift": 0.006208872959785088,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 43,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0.48,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 1.2918683443815349,
+        "maximumAbsoluteLogAreaStrain": 1.2924408126102491,
+        "relativeVolumeDrift": 0.0030736151618097275,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0.72,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.6631764980434747,
+        "maximumAbsoluteLogAreaStrain": 0.6633857538960244,
+        "relativeVolumeDrift": 0.0019983203654098183,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    }
+  ],
+  "disposition": "PROMOTE_VOLUMETRIC_OR_CORRECTIVE_CAGE",
+  "survivingWidths": [],
+  "claimCeiling": "provisional-clean-topology-shape-bearing-collar-mechanism"
+}
