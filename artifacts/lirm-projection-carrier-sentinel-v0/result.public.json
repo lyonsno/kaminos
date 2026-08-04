@@ -1,0 +1,271 @@
+{
+  "schema": "kaminos.source-plate-projection-sentinel-public-result.v0",
+  "status": "complete",
+  "privateResultSha256": "485379e856610b7686af30597e39328be2e16fd259bc15f97fa55883a5e00a3b",
+  "planSha256": "43e83e5cc5a4d2688f55b6de99169d49d07ed61ef9fb8964a27aa85237f2ec59",
+  "comparisonClass": {
+    "matched": [
+      "source geometry",
+      "source camera",
+      "prompt",
+      "model revision",
+      "seed",
+      "steps",
+      "guidance",
+      "dimensions",
+      "quantization"
+    ],
+    "varied": [
+      "conditioning carrier topology"
+    ],
+    "knownCoupling": "depth-plus-normal uses two reference images while the other cells use one; carrier information and reference cardinality are therefore coupled in that cell"
+  },
+  "source": {
+    "commit": "48c63a0f8b89ce28c308940b0b5c529fac335c67",
+    "descriptor": {
+      "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/bundle.json",
+      "sha256": "850ce28b4984e9d754e3d530af21df2b31f1c61fcad5cc0c8fb7656dd51d1997"
+    },
+    "projection": {
+      "mode": "orthographic",
+      "view": "front-three-quarter",
+      "cameraYawRadians": 0.42,
+      "cameraSha256": "4875b0f7479f8573faeb6923c32617357943868923869d9b71958d53a6cc5e09",
+      "silhouetteSha256": "0ea5b6208a1c532d35989e7d05181c09a7b7c228c0ce7b1871cbeb00e80442ba"
+    },
+    "images": {
+      "clay": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/clay-implicit.png",
+        "sha256": "0cdf52dc5a862afd11a29a8b5fd141b4f621a83fad61c8949252fc460b0a1a55"
+      },
+      "depth": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png",
+        "sha256": "cc39a97d3ac7bde94bc13ad9d31363025e646fbad49c50dc2d72b6ac372b33b0"
+      },
+      "normal": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png",
+        "sha256": "07474fe27b80666670fcb1c794c25ee473059032d7eca8e5c63f114a1ba9e0c6"
+      },
+      "mask": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/mask-implicit.png",
+        "sha256": "0ea5b6208a1c532d35989e7d05181c09a7b7c228c0ce7b1871cbeb00e80442ba"
+      }
+    }
+  },
+  "prompt": {
+    "fullText": "Complete the supplied smooth creature construction as one healthy, aesthetically pleasing living animal. Keep the exact source camera, outer silhouette, body proportions, support placement, and major mass distribution authoritative. Elaborate coherent anatomical transitions, surface structure, material, and gentle character within that authored outline. Present one intact healthy quadruped with a continuous closed outer surface and four load-bearing supports on a clean pale studio background.",
+    "sha256": "8fd1b5a0bd1968b9d41a08b931138693dd0344ccc3d672f0581ec01fe9345b8d",
+    "path": "artifacts/lirm-metaball-silhouette-authority-v0/prompt.txt"
+  },
+  "fixedGenerator": {
+    "runnerFamily": "mflux-generate-flux2-edit",
+    "model": "flux2-klein-9b",
+    "modelRevision": "92196c8e11f7b6cf2b7493e037d8c5345c559216",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "seed": 80401,
+    "promptSha256": "8fd1b5a0bd1968b9d41a08b931138693dd0344ccc3d672f0581ec01fe9345b8d"
+  },
+  "cells": [
+    {
+      "id": "clay",
+      "carrierRoles": [
+        "clay"
+      ],
+      "conditioningInputs": [
+        {
+          "role": "clay",
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/clay-implicit.png",
+          "sha256": "0cdf52dc5a862afd11a29a8b5fd141b4f621a83fad61c8949252fc460b0a1a55"
+        }
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": {
+        "jobType": "mflux_flux2_edit_promptfile",
+        "renderer": "mflux-generate-flux2-edit",
+        "conditioningInputs": [
+          "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/clay-implicit.png"
+        ],
+        "output": "artifacts/lirm-projection-carrier-sentinel-v0/generated/clay/output.png"
+      },
+      "jobId": "4ce88d05f1f4",
+      "receiptSha256": "7b3d3fab1b55adb695d559d447d62458f20b33ee9f4b76aaeb12a5db20eb5197",
+      "receiptWarnings": [
+        "volatile_output"
+      ],
+      "worker": {
+        "commit": "8ac87f5af0c42f8ff329f7d4b98198cd30d03cd3",
+        "git_dirty": false,
+        "capabilities": [
+          "structured-command.v1"
+        ]
+      },
+      "output": {
+        "path": "artifacts/lirm-projection-carrier-sentinel-v0/generated/clay/output.png",
+        "sha256": "552dfe47c2a0def9b37aa0bd1ec211db98d6a1fb17ef200b805ba9f5d55e039e",
+        "byteLength": 184454,
+        "mediaType": "image/png",
+        "status": "complete",
+        "cached": false
+      },
+      "visualInspection": {
+        "status": "inspected",
+        "projectionVerdict": "canonicalized",
+        "description": "The authored left-to-right front-three-quarter massing is reorganized into a rear-facing creature. Four supports survive, but their spatial relationship is rewritten around a centered rump-like bulb. The output also copies the source plate's green body, purple supports, and dotted render texture, showing that the clay carrier's presentation is treated as semantic appearance rather than as neutral geometric evidence."
+      }
+    },
+    {
+      "id": "depth",
+      "carrierRoles": [
+        "depth"
+      ],
+      "conditioningInputs": [
+        {
+          "role": "depth",
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png",
+          "sha256": "cc39a97d3ac7bde94bc13ad9d31363025e646fbad49c50dc2d72b6ac372b33b0"
+        }
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": {
+        "jobType": "mflux_flux2_edit_promptfile",
+        "renderer": "mflux-generate-flux2-edit",
+        "conditioningInputs": [
+          "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png"
+        ],
+        "output": "artifacts/lirm-projection-carrier-sentinel-v0/generated/depth/output.png"
+      },
+      "jobId": "7e78a5c50595",
+      "receiptSha256": "39303718d971eaec3cd311c7310bc958c907b67632f5c2a9cb5a7e0d7db609c9",
+      "receiptWarnings": [
+        "volatile_output"
+      ],
+      "worker": {
+        "commit": "8ac87f5af0c42f8ff329f7d4b98198cd30d03cd3",
+        "git_dirty": false,
+        "capabilities": [
+          "structured-command.v1"
+        ]
+      },
+      "output": {
+        "path": "artifacts/lirm-projection-carrier-sentinel-v0/generated/depth/output.png",
+        "sha256": "e577839ee9874f31818c2ae305f21ea81c052967c3a4de6708857735c8ab4b8d",
+        "byteLength": 192077,
+        "mediaType": "image/png",
+        "status": "complete",
+        "cached": false
+      },
+      "visualInspection": {
+        "status": "inspected",
+        "projectionVerdict": "partially preserved",
+        "description": "This is the only cell that retains the authored left-to-right asymmetric reading and a silhouette close to the source plate. It produces a neutral pale continuous organism with four supports. Framing expands and support contours move, and the right-side head/facial mass remains semantically unresolved, but the image does not undergo the strong rear-view canonicalization seen in the other cells."
+      }
+    },
+    {
+      "id": "normal",
+      "carrierRoles": [
+        "normal"
+      ],
+      "conditioningInputs": [
+        {
+          "role": "normal",
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png",
+          "sha256": "07474fe27b80666670fcb1c794c25ee473059032d7eca8e5c63f114a1ba9e0c6"
+        }
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": {
+        "jobType": "mflux_flux2_edit_promptfile",
+        "renderer": "mflux-generate-flux2-edit",
+        "conditioningInputs": [
+          "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png"
+        ],
+        "output": "artifacts/lirm-projection-carrier-sentinel-v0/generated/normal/output.png"
+      },
+      "jobId": "ba580a2220d0",
+      "receiptSha256": "d90a372d913e0f38136e726ad087c97d8f0a202e8e0ea29ea67686ee4ecd5a3e",
+      "receiptWarnings": [
+        "volatile_output"
+      ],
+      "worker": {
+        "commit": "8ac87f5af0c42f8ff329f7d4b98198cd30d03cd3",
+        "git_dirty": false,
+        "capabilities": [
+          "structured-command.v1"
+        ]
+      },
+      "output": {
+        "path": "artifacts/lirm-projection-carrier-sentinel-v0/generated/normal/output.png",
+        "sha256": "0199922921ce26423a702d20f881f4d1f09d4cbc77647124f5b9e0e59f43b8c2",
+        "byteLength": 186159,
+        "mediaType": "image/png",
+        "status": "complete",
+        "cached": false
+      },
+      "visualInspection": {
+        "status": "inspected",
+        "projectionVerdict": "canonicalized",
+        "description": "The normal carrier becomes a smooth blue rear-facing creature, with the source's right-side head/facial mass reinterpreted as a rump-like frontal bulb. The four supports survive but are repositioned into a near-symmetric rear-view arrangement. Normal-map color is consumed as appearance and shading rather than operating as dependable geometric authority."
+      }
+    },
+    {
+      "id": "depth-plus-normal",
+      "carrierRoles": [
+        "depth",
+        "normal"
+      ],
+      "conditioningInputs": [
+        {
+          "role": "depth",
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png",
+          "sha256": "cc39a97d3ac7bde94bc13ad9d31363025e646fbad49c50dc2d72b6ac372b33b0"
+        },
+        {
+          "role": "normal",
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png",
+          "sha256": "07474fe27b80666670fcb1c794c25ee473059032d7eca8e5c63f114a1ba9e0c6"
+        }
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "effectiveRoute": {
+        "jobType": "mflux_flux2_edit_promptfile_2ref",
+        "renderer": "mflux-generate-flux2-edit",
+        "conditioningInputs": [
+          "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png",
+          "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png"
+        ],
+        "output": "artifacts/lirm-projection-carrier-sentinel-v0/generated/depth-plus-normal/output.png"
+      },
+      "jobId": "afcb95ff579f",
+      "receiptSha256": "17f95ffc469e69b3123f1206ff50733b435b794146c0c0b55a7ab6031456ce99",
+      "receiptWarnings": [
+        "volatile_output"
+      ],
+      "worker": {
+        "commit": "8ac87f5af0c42f8ff329f7d4b98198cd30d03cd3",
+        "git_dirty": false,
+        "capabilities": [
+          "structured-command.v1"
+        ]
+      },
+      "output": {
+        "path": "artifacts/lirm-projection-carrier-sentinel-v0/generated/depth-plus-normal/output.png",
+        "sha256": "3fd4fc21e82b4cb829a1536676868143f3151cf458c2209b5bd82063ae950555",
+        "byteLength": 190364,
+        "mediaType": "image/png",
+        "status": "complete",
+        "cached": false
+      },
+      "visualInspection": {
+        "status": "inspected",
+        "projectionVerdict": "canonicalized",
+        "description": "The two-reference output is visually almost the same rear-facing construction as the normal-only cell and does not recover the depth-only cell's left-to-right projection. It is slightly more matte and textured, but its pose and mass placement track normal far more than depth. This leaves two live explanations: normal-carrier dominance or an order/second-reference dominance effect in the multi-reference route."
+      }
+    }
+  ],
+  "privateRuntimeEvidence": "Exact host paths, effective argv, copied Greenroom receipts, and failure-boundary state live in the private source-signed coordination return.",
+  "publicResultSha256": "f3f35020011e246adafbc854c6d840a240c539d12c259038eed58dfe4f9186f5"
+}

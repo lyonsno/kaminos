@@ -1,0 +1,22 @@
+{
+  "clay": {
+    "status": "inspected",
+    "projectionVerdict": "canonicalized",
+    "description": "The authored left-to-right front-three-quarter massing is reorganized into a rear-facing creature. Four supports survive, but their spatial relationship is rewritten around a centered rump-like bulb. The output also copies the source plate's green body, purple supports, and dotted render texture, showing that the clay carrier's presentation is treated as semantic appearance rather than as neutral geometric evidence."
+  },
+  "depth": {
+    "status": "inspected",
+    "projectionVerdict": "partially preserved",
+    "description": "This is the only cell that retains the authored left-to-right asymmetric reading and a silhouette close to the source plate. It produces a neutral pale continuous organism with four supports. Framing expands and support contours move, and the right-side head/facial mass remains semantically unresolved, but the image does not undergo the strong rear-view canonicalization seen in the other cells."
+  },
+  "normal": {
+    "status": "inspected",
+    "projectionVerdict": "canonicalized",
+    "description": "The normal carrier becomes a smooth blue rear-facing creature, with the source's right-side head/facial mass reinterpreted as a rump-like frontal bulb. The four supports survive but are repositioned into a near-symmetric rear-view arrangement. Normal-map color is consumed as appearance and shading rather than operating as dependable geometric authority."
+  },
+  "depth-plus-normal": {
+    "status": "inspected",
+    "projectionVerdict": "canonicalized",
+    "description": "The two-reference output is visually almost the same rear-facing construction as the normal-only cell and does not recover the depth-only cell's left-to-right projection. It is slightly more matte and textured, but its pose and mass placement track normal far more than depth. This leaves two live explanations: normal-carrier dominance or an order/second-reference dominance effect in the multi-reference route."
+  }
+}
