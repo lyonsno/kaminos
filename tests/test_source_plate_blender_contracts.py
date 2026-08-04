@@ -94,6 +94,15 @@ def test_collection_selectors_resolve_objects_without_requiring_object_duplicati
     assert "collection.all_objects" in adapter
 
 
+def test_neutral_clay_presentation_uses_one_descriptor_bound_material():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert 'material_mode == "neutral_clay"' in adapter
+    assert 'presentation.get("clayColor")' in adapter
+    assert '"materialMode": material_mode' in adapter
+    assert '"clayColor": clay_color' in adapter
+
+
 def test_silhouette_is_derived_from_the_same_camera_render_alpha():
     adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
 
@@ -110,4 +119,5 @@ if __name__ == "__main__":
     test_blender_51_writes_distinct_exr_render_pass_artifacts()
     test_output_records_bind_channel_representation()
     test_collection_selectors_resolve_objects_without_requiring_object_duplication()
+    test_neutral_clay_presentation_uses_one_descriptor_bound_material()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()

@@ -244,11 +244,29 @@ def _material(bpy: Any, name: str, color: tuple[float, float, float, float]) -> 
     return material
 
 
-def _apply_materials(bpy: Any, selection: Mapping[str, Any]) -> dict[str, Any]:
+def _apply_materials(
+    bpy: Any, selection: Mapping[str, Any], descriptor: Mapping[str, Any]
+) -> dict[str, Any]:
+    presentation = descriptor.get("presentation")
+    if not isinstance(presentation, Mapping):
+        raise SourcePlateContractError(
+            "descriptor-application", "presentation contract is missing"
+        )
+    material_mode = presentation.get("materialMode")
+    if material_mode not in {"object_color", "neutral_clay"}:
+        raise SourcePlateContractError(
+            "descriptor-application",
+            "presentation.materialMode must be object_color or neutral_clay",
+        )
+    clay_color = None
+    if material_mode == "neutral_clay":
+        clay_color = _vector(
+            presentation.get("clayColor"), length=4, field="presentation.clayColor"
+        )
     material_cache: dict[tuple[float, float, float, float], Any] = {}
     for object_name in selection["effectiveObjects"]:
         obj = bpy.data.objects[object_name]
-        color = _color_for_object(obj)
+        color = tuple(clay_color) if clay_color is not None else _color_for_object(obj)
         material = material_cache.get(color)
         if material is None:
             material = _material(bpy, f"SOURCE_PLATE_MATERIAL_{len(material_cache):02d}", color)
@@ -256,7 +274,8 @@ def _apply_materials(bpy: Any, selection: Mapping[str, Any]) -> dict[str, Any]:
         obj.data.materials.clear()
         obj.data.materials.append(material)
     return {
-        "materialMode": "object_color",
+        "materialMode": material_mode,
+        "clayColor": clay_color,
         "materialCount": len(material_cache),
         "objectCount": len(selection["effectiveObjects"]),
     }
@@ -499,7 +518,7 @@ def render_descriptor(
         renderer_receipt = require_effective_renderer(descriptor, scene.render.engine)
         last["renderer"] = renderer_receipt
         _camera, camera_receipt = _apply_camera(bpy, descriptor)
-        material_receipt = _apply_materials(bpy, selection_receipt)
+        material_receipt = _apply_materials(bpy, selection_receipt, descriptor)
         lighting_receipt = _apply_lighting(bpy, descriptor)
         presentation_receipt = _apply_presentation(bpy, descriptor)
         last["camera"] = camera_receipt
