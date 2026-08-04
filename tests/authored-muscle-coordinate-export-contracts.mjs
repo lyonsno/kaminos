@@ -314,6 +314,26 @@ test('disagreeing helper, curve, and surface candidates remain visible and block
   assert.match(result.authorityReceipt.blockers.join('\n'), /unresolved.*origin.*conflict/i);
 });
 
+test('a matching routing endpoint without source_mesh authority remains a candidate', () => {
+  const provisionalFixture = routingFixture();
+  provisionalFixture.conditions.correct.routes[0].origin.sourceAuthority = 'provisional_muscle_surface';
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: provisionalFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+  const origin = result.authorityReceipt.rows[0].fields['attachments.origin.position'];
+
+  assert.equal(origin.state, 'candidate');
+  assert.equal(origin.selected, null);
+  assert.equal(origin.candidates.at(-1).authority, 'candidate');
+  assert.match(result.authorityReceipt.blockers.join('\n'), /route-a.*origin.*candidate/i);
+  assert.equal(result.coordinateCarrier, null);
+});
+
 test('candidate receipt is byte-identical on replay and keeps non-authoritative geometry out of the carrier', () => {
   const first = build();
   const second = build();

@@ -288,7 +288,12 @@ function endpointField(muscle, endpoint, fixtureRoute) {
       evidenceLocators: [`routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`],
     });
   }
-  return fieldRecord({ candidates, authorityCandidateKind: 'routing-fixture-endpoint' });
+  return fieldRecord({
+    candidates,
+    authorityCandidateKind: fixtureEndpoint?.sourceAuthority === 'source_mesh'
+      ? 'routing-fixture-endpoint'
+      : null,
+  });
 }
 
 function centerlineField(muscle) {
