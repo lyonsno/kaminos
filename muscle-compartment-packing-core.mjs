@@ -907,12 +907,18 @@ export function createSyntheticFourMuscleCompartment() {
   };
 }
 
-export function createSyntheticMuscleDensityLadder(muscleCount) {
+export function createSyntheticMuscleDensityLadder(
+  muscleCount,
+  { knotCount = 4 } = {},
+) {
   if (![4, 6, 8].includes(muscleCount)) {
     throw new Error('synthetic muscle density ladder supports exactly 4, 6, or 8 muscles');
   }
+  if (![4, 6, 8].includes(knotCount)) {
+    throw new Error('synthetic muscle density ladder supports exactly 4, 6, or 8 knots');
+  }
   const bellyRadius = 0.2;
-  const core = {
+  const baselineCore = {
     schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
     id: `synthetic-muscle-density-ladder-${muscleCount}-v0`,
     authority: {
@@ -949,6 +955,44 @@ export function createSyntheticMuscleDensityLadder(muscleCount) {
         return muscle;
       },
     ),
+  };
+  const baselineSha256 = hashJson(baselineCore);
+  const comparisonSource = {
+    kind:'synthetic-fixture',
+    id:baselineCore.id,
+    sha256:baselineSha256,
+  };
+  const core = knotCount === 4 ? baselineCore : {
+    ...baselineCore,
+    id:`${baselineCore.id}-${knotCount}-knots`,
+    longitudinalResolution: {
+      kind:'analytic-source-curve-resample-v0',
+      sampleCount:knotCount,
+      comparisonSource,
+    },
+    muscles:baselineCore.muscles.map((baselineMuscle, muscleIndex) => {
+      const angle = SYNTHETIC_DENSITY_LADDER_ANGLES[muscleIndex];
+      const centerline = Array.from({ length:knotCount }, (_, knotIndex) => {
+        const progress = knotIndex / (knotCount - 1);
+        const y = -0.9 + 1.8 * progress;
+        const radialDistance = 0.095 + 0.5 * y ** 2;
+        const endpointProgress = Math.max(0, (Math.abs(y) - 0.3) / 0.6);
+        return {
+          position:[
+            Math.cos(angle) * radialDistance,
+            y,
+            Math.sin(angle) * radialDistance,
+          ],
+          radius:bellyRadius - 0.04 * endpointProgress,
+        };
+      });
+      centerline[0] = structuredClone(baselineMuscle.centerline[0]);
+      centerline[centerline.length - 1] = structuredClone(baselineMuscle.centerline.at(-1));
+      return {
+        ...structuredClone(baselineMuscle),
+        centerline,
+      };
+    }),
   };
   const sha256 = hashJson(core);
   return {
@@ -1633,62 +1677,134 @@ function smoothInteriorAbsolute(muscles, amount, attribution, category) {
   }
 }
 
+function denseDot(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function solveDenseLinearSystem(matrix, rightHandSide) {
+  const size = rightHandSide.length;
+  const rows = matrix.map((row, index) => [...row, rightHandSide[index]]);
+  const scaleMaximum = Math.max(1, ...matrix.flat().map(Math.abs));
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(rows[row][column]) > Math.abs(rows[pivot][column])) pivot = row;
+    }
+    if (Math.abs(rows[pivot][column]) <= scaleMaximum * 1e-12) return null;
+    [rows[column], rows[pivot]] = [rows[pivot], rows[column]];
+    const pivotValue = rows[column][column];
+    for (let entry = column; entry <= size; entry += 1) {
+      rows[column][entry] /= pivotValue;
+    }
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue;
+      const factor = rows[row][column];
+      for (let entry = column; entry <= size; entry += 1) {
+        rows[row][entry] -= factor * rows[column][entry];
+      }
+    }
+  }
+  return rows.map(row => row[size]);
+}
+
+function sourceCurvatureConstraints(sourceCenterline) {
+  const variableCount = (sourceCenterline.length - 2) * 3;
+  const coefficients = [1, -2, 1];
+  const constraints = [];
+  for (let knotIndex = 1; knotIndex < sourceCenterline.length - 1; knotIndex += 1) {
+    const sourceCurvature = centerlineSecondDifference(sourceCenterline, knotIndex);
+    const sourceMagnitudeSquared = dot(sourceCurvature, sourceCurvature);
+    if (sourceMagnitudeSquared <= 1e-24) continue;
+    const row = Array(variableCount).fill(0);
+    let fixedContribution = 0;
+    for (let localIndex = 0; localIndex < 3; localIndex += 1) {
+      const targetKnotIndex = knotIndex + localIndex - 1;
+      const coefficient = coefficients[localIndex];
+      if (targetKnotIndex > 0 && targetKnotIndex < sourceCenterline.length - 1) {
+        const variableOffset = (targetKnotIndex - 1) * 3;
+        for (let axis = 0; axis < 3; axis += 1) {
+          row[variableOffset + axis] += coefficient * sourceCurvature[axis];
+        }
+      } else {
+        fixedContribution += coefficient * dot(
+          sourceCurvature,
+          sourceCenterline[targetKnotIndex].position,
+        );
+      }
+    }
+    constraints.push({
+      row,
+      lowerBound:sourceMagnitudeSquared * 1e-6 - fixedContribution,
+      tolerance:sourceMagnitudeSquared * 1e-12,
+    });
+  }
+  return constraints;
+}
+
+function minimumHalfspaceProjection(initial, constraints) {
+  if (constraints.length === 0) return initial;
+  const active = [];
+  let projected = [...initial];
+  const iterationLimit = constraints.length ** 2 * 4 + 4;
+  for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
+    if (active.length > 0) {
+      const gram = active.map(leftIndex => active.map(rightIndex =>
+        denseDot(constraints[leftIndex].row, constraints[rightIndex].row)));
+      const rightHandSide = active.map(index =>
+        constraints[index].lowerBound - denseDot(constraints[index].row, initial));
+      const multipliers = solveDenseLinearSystem(gram, rightHandSide);
+      if (!multipliers) {
+        throw new Error('source-curvature halfspace active constraints are singular');
+      }
+      let negativeMultiplier = -1;
+      for (let index = 0; index < multipliers.length; index += 1) {
+        if (multipliers[index] < -1e-12 && (
+          negativeMultiplier < 0 ||
+          multipliers[index] < multipliers[negativeMultiplier]
+        )) negativeMultiplier = index;
+      }
+      if (negativeMultiplier >= 0) {
+        active.splice(negativeMultiplier, 1);
+        continue;
+      }
+      projected = initial.map((value, variableIndex) => value + active.reduce(
+        (sum, constraintIndex, activeIndex) =>
+          sum + multipliers[activeIndex] * constraints[constraintIndex].row[variableIndex],
+        0,
+      ));
+    }
+    let mostViolated = -1;
+    let mostNegativeGap = 0;
+    for (const [constraintIndex, constraint] of constraints.entries()) {
+      const gap = denseDot(constraint.row, projected) - constraint.lowerBound;
+      if (gap < -constraint.tolerance && gap < mostNegativeGap) {
+        mostViolated = constraintIndex;
+        mostNegativeGap = gap;
+      }
+    }
+    if (mostViolated < 0) return projected;
+    if (!active.includes(mostViolated)) active.push(mostViolated);
+  }
+  throw new Error('source-curvature halfspace active-set projection did not stabilize');
+}
+
 function projectSourceCurvatureSigns(source, muscles, attribution, category) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
-    let projected = false;
-    for (let sweep = 0; sweep < 64; sweep += 1) {
-      let correctionApplied = false;
-      for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
-        const sourceCurvature = centerlineSecondDifference(sourceCenterline, knotIndex);
-        const sourceMagnitudeSquared = dot(sourceCurvature, sourceCurvature);
-        if (sourceMagnitudeSquared <= 1e-24) continue;
-        const packedCurvature = centerlineSecondDifference(muscle.centerline, knotIndex);
-        const currentDot = dot(sourceCurvature, packedCurvature);
-        // Stay just inside the admissible halfspace so the neighboring
-        // constraint's sequential projection cannot turn rounding noise into
-        // a sign reversal at measurement time.
-        const requiredDot = sourceMagnitudeSquared * 1e-6;
-        if (currentDot >= requiredDot - sourceMagnitudeSquared * 1e-12) continue;
-        correctionApplied = true;
-        const coefficients = [1, -2, 1];
-        const movable = [
-          knotIndex - 1 > 0,
-          true,
-          knotIndex + 1 < muscle.centerline.length - 1,
-        ];
-        const response = coefficients.reduce(
-          (sum, coefficient, index) => sum + (movable[index] ? coefficient ** 2 : 0),
-          0,
-        );
-        if (response <= 0) continue;
-        const correctionScale = (requiredDot - currentDot) /
-          (sourceMagnitudeSquared * response);
-        for (let localIndex = 0; localIndex < 3; localIndex += 1) {
-          if (!movable[localIndex]) continue;
-          const targetKnotIndex = knotIndex + localIndex - 1;
-          const knot = muscle.centerline[targetKnotIndex];
-          applyAttributedPosition(
-            attribution,
-            category,
-            muscles,
-            muscleIndex,
-            targetKnotIndex,
-            add(
-              knot.position,
-              scale(sourceCurvature, correctionScale * coefficients[localIndex]),
-            ),
-          );
-        }
-      }
-      if (!correctionApplied) {
-        projected = true;
-        break;
-      }
-    }
-    if (!projected) {
-      throw new Error(
-        `muscle ${muscle.id} source-curvature halfspace projection did not stabilize`,
+    const initial = muscle.centerline.slice(1, -1).flatMap(knot => knot.position);
+    const projected = minimumHalfspaceProjection(
+      initial,
+      sourceCurvatureConstraints(sourceCenterline),
+    );
+    for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+      const offset = (knotIndex - 1) * 3;
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        projected.slice(offset, offset + 3),
       );
     }
   }

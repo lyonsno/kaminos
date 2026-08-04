@@ -283,6 +283,69 @@ test('nested density rungs use source-relative formation and expose the remainin
   }
 });
 
+test('longitudinal resolution rungs preserve the dense source identity and fixed contract', () => {
+  const baseline = createSyntheticMuscleDensityLadder(8);
+  for (const knotCount of [4, 6, 8]) {
+    const source = createSyntheticMuscleDensityLadder(8, { knotCount });
+    assert.ok(source.muscles.every(muscle => muscle.centerline.length === knotCount));
+    assert.deepEqual(
+      source.muscles.map(muscle => muscle.identity),
+      baseline.muscles.map(muscle => muscle.identity),
+    );
+    assert.deepEqual(
+      source.muscles.map(muscle => muscle.attachments),
+      baseline.muscles.map(muscle => muscle.attachments),
+    );
+    assert.deepEqual(
+      source.muscles.map(muscle => muscle.targetVolume),
+      baseline.muscles.map(muscle => muscle.targetVolume),
+    );
+    if (knotCount === 4) {
+      assert.deepEqual(source, baseline);
+    } else {
+      assert.deepEqual(source.longitudinalResolution, {
+        kind:'analytic-source-curve-resample-v0',
+        sampleCount:knotCount,
+        comparisonSource:baseline.input.effective,
+      });
+      assert.notEqual(source.input.effective.sha256, baseline.input.effective.sha256);
+    }
+  }
+});
+
+test('higher longitudinal resolution does not disguise the dense clearance residual', () => {
+  const config = {
+    maxIterations:120,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    curvatureUpdate:'source-sign-halfspace',
+  };
+  const results = [4, 6, 8].map(knotCount => solveMuscleCompartmentPacking(
+    createSyntheticMuscleDensityLadder(8, { knotCount }),
+    config,
+  ));
+  const baselineResidual = results[0].metrics.packed.pairwisePenetration;
+  for (const [index, result] of results.entries()) {
+    assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+    assert.equal(result.metrics.packed.endpointDrift, 0);
+    assert.ok(result.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+    assert.ok(result.metrics.packed.skeletalPenetration <= config.convergenceTolerance);
+    assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
+    if (index > 0) {
+      assert.ok(
+        result.metrics.packed.pairwisePenetration > baselineResidual,
+        `${[4, 6, 8][index]}-knot residual ${result.metrics.packed.pairwisePenetration} disguised rather than exposed baseline ${baselineResidual}`,
+      );
+    }
+  }
+});
+
 test('legacy absolute smoothing cannot converge through source-curvature reversal', () => {
   const source = createSyntheticMuscleDensityLadder(6);
   delete source.formation;
