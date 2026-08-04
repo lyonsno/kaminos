@@ -94,6 +94,53 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     effectiveCenterlineSmoothingReference: 'source-displacement',
     fallbackUsed: false,
   });
+  assert.equal(
+    result.correctionAttribution?.schema,
+    'kaminos.muscle-compartment-packing-correction-attribution.v0',
+    'solver must publish the correction-attribution ledger',
+  );
+  assert.equal(
+    result.correctionAttribution.interpretation,
+    'algorithmic-projection-path-length-not-physical-force',
+  );
+  assert.deepEqual(
+    result.correctionAttribution.categories,
+    [
+      'sourceSmoothing',
+      'skeletalClearance',
+      'pairwiseExclusion',
+      'compartmentProjection',
+      'volumeRestoration',
+    ],
+  );
+  assert.deepEqual(
+    result.correctionAttribution.byMuscle.map(row => row.muscleId),
+    source.muscles.map(muscle => muscle.id),
+  );
+  assert.ok(
+    result.correctionAttribution.totals.skeletalClearance
+      .cumulativeAppliedKnotDisplacement > 0,
+  );
+  assert.ok(
+    result.correctionAttribution.totals.pairwiseExclusion
+      .cumulativeAppliedKnotDisplacement > 0,
+  );
+  assert.equal(
+    result.correctionAttribution.totals.volumeRestoration
+      .cumulativeAppliedKnotDisplacement,
+    0,
+  );
+  assert.ok(
+    result.correctionAttribution.totals.volumeRestoration
+      .cumulativeAppliedRadiusChange > 0,
+  );
+  for (const row of result.correctionAttribution.byMuscle) {
+    assert.deepEqual(Object.keys(row.corrections), result.correctionAttribution.categories);
+    for (const correction of Object.values(row.corrections)) {
+      assert.ok(correction.cumulativeAppliedKnotDisplacement >= 0);
+      assert.ok(correction.cumulativeAppliedRadiusChange >= 0);
+    }
+  }
   assert.equal(result.muscles.length, 4);
   assert.equal(
     result.status,

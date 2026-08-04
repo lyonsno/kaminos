@@ -20,6 +20,141 @@
   },
   "status": "converged",
   "iterations": 374,
+  "correctionAttribution": {
+    "schema": "kaminos.muscle-compartment-packing-correction-attribution.v0",
+    "interpretation": "algorithmic-projection-path-length-not-physical-force",
+    "categories": [
+      "sourceSmoothing",
+      "skeletalClearance",
+      "pairwiseExclusion",
+      "compartmentProjection",
+      "volumeRestoration"
+    ],
+    "byMuscle": [
+      {
+        "muscleId": "muscle-01",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.172445486382,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.226979000807,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.004097229903
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-02",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.496033390906,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.696956230021,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0.005388007359,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.018996347406
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-03",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.29011368739,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.382037443066,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.007724485486
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-04",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.413333963231,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.588311339868,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0.005388882499,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.016812127753
+          }
+        }
+      }
+    ],
+    "totals": {
+      "sourceSmoothing": {
+        "cumulativeAppliedKnotDisplacement": 1.371926527909,
+        "cumulativeAppliedRadiusChange": 0
+      },
+      "skeletalClearance": {
+        "cumulativeAppliedKnotDisplacement": 1.894284013762,
+        "cumulativeAppliedRadiusChange": 0
+      },
+      "pairwiseExclusion": {
+        "cumulativeAppliedKnotDisplacement": 0.010776889858,
+        "cumulativeAppliedRadiusChange": 0
+      },
+      "compartmentProjection": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0
+      },
+      "volumeRestoration": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0.047630190547
+      }
+    }
+  },
   "input": {
     "requested": {
       "kind": "synthetic-fixture",

@@ -41,6 +41,141 @@
       "effectiveCenterlineSmoothingReference": "source-displacement",
       "fallbackUsed": false
     },
+    "correctionAttribution": {
+      "schema": "kaminos.muscle-compartment-packing-correction-attribution.v0",
+      "interpretation": "algorithmic-projection-path-length-not-physical-force",
+      "categories": [
+        "sourceSmoothing",
+        "skeletalClearance",
+        "pairwiseExclusion",
+        "compartmentProjection",
+        "volumeRestoration"
+      ],
+      "byMuscle": [
+        {
+          "muscleId": "muscle-01",
+          "corrections": {
+            "sourceSmoothing": {
+              "cumulativeAppliedKnotDisplacement": 0.172445486382,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "skeletalClearance": {
+              "cumulativeAppliedKnotDisplacement": 0.226979000807,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "pairwiseExclusion": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "compartmentProjection": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "volumeRestoration": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0.004097229903
+            }
+          }
+        },
+        {
+          "muscleId": "muscle-02",
+          "corrections": {
+            "sourceSmoothing": {
+              "cumulativeAppliedKnotDisplacement": 0.496033390906,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "skeletalClearance": {
+              "cumulativeAppliedKnotDisplacement": 0.696956230021,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "pairwiseExclusion": {
+              "cumulativeAppliedKnotDisplacement": 0.005388007359,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "compartmentProjection": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "volumeRestoration": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0.018996347406
+            }
+          }
+        },
+        {
+          "muscleId": "muscle-03",
+          "corrections": {
+            "sourceSmoothing": {
+              "cumulativeAppliedKnotDisplacement": 0.29011368739,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "skeletalClearance": {
+              "cumulativeAppliedKnotDisplacement": 0.382037443066,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "pairwiseExclusion": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "compartmentProjection": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "volumeRestoration": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0.007724485486
+            }
+          }
+        },
+        {
+          "muscleId": "muscle-04",
+          "corrections": {
+            "sourceSmoothing": {
+              "cumulativeAppliedKnotDisplacement": 0.413333963231,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "skeletalClearance": {
+              "cumulativeAppliedKnotDisplacement": 0.588311339868,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "pairwiseExclusion": {
+              "cumulativeAppliedKnotDisplacement": 0.005388882499,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "compartmentProjection": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0
+            },
+            "volumeRestoration": {
+              "cumulativeAppliedKnotDisplacement": 0,
+              "cumulativeAppliedRadiusChange": 0.016812127753
+            }
+          }
+        }
+      ],
+      "totals": {
+        "sourceSmoothing": {
+          "cumulativeAppliedKnotDisplacement": 1.371926527909,
+          "cumulativeAppliedRadiusChange": 0
+        },
+        "skeletalClearance": {
+          "cumulativeAppliedKnotDisplacement": 1.894284013762,
+          "cumulativeAppliedRadiusChange": 0
+        },
+        "pairwiseExclusion": {
+          "cumulativeAppliedKnotDisplacement": 0.010776889858,
+          "cumulativeAppliedRadiusChange": 0
+        },
+        "compartmentProjection": {
+          "cumulativeAppliedKnotDisplacement": 0,
+          "cumulativeAppliedRadiusChange": 0
+        },
+        "volumeRestoration": {
+          "cumulativeAppliedKnotDisplacement": 0,
+          "cumulativeAppliedRadiusChange": 0.047630190547
+        }
+      }
+    },
     "metrics": {
       "initial": {
         "pairwisePenetration": 0.164341617649,
@@ -90,9 +225,9 @@
     "status": "passed-agent-inspection",
     "artifact": "index.html",
     "receipt": "visual-inspection.json",
-    "indexHtmlSha256": "a65d81dec01a8cef45fcb98318d96a1e9920c77bcfa015e140c8a2df87106fc0",
+    "indexHtmlSha256": "e15e0ccf516355f9b80f59960226ab5769cc433313754a931ce5d2e9174c89e8",
     "sourceJsonSha256": "fb8722c2567ecde9e06f105b4db5437c92a596e782792ab255fca6590071484d",
-    "packedJsonSha256": "610bc5d629ccdc7e75d94f4a1f2b44bf99c199155e5b420a8cb5cc53a9672cc0",
-    "pendingReportSha256": "4a7cf7570f18b4f66cfcf28612f57a2064222c29646c89ef62a92ba3a8989378"
+    "packedJsonSha256": "bf0bdb7a657054d1f0b68dcf571c7def0d79eee38f1a46c3278700aa5b5839e1",
+    "pendingReportSha256": "6e3ffb6761350fba56e92908b50f98ac55fd361e5c3b93240d9dc267dd3f8e8f"
   }
 }

@@ -41,8 +41,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 59219,
-    "processGroupId": 59219,
+    "pid": 7662,
+    "processGroupId": 7662,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -51,7 +51,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 59219,
+      "processGroupId": 7662,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -68,12 +68,12 @@
     "totalBytes": 2470,
     "retainedBytes": 2470,
     "truncated": false,
-    "tail": "[0804/022310.587212:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/022310.640673:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/022311.026745:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/022311.026856:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/022311.028051:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/022311.063258:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/022311.065209:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/022311.076769:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/022311.077479:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/022311.092562:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n209146 bytes written to file repo://artifacts/muscle-compartment-packing-v0/before.png\n"
+    "tail": "[0804/023825.127475:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/023825.199286:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.596027:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/023825.596905:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/023825.597973:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.631957:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/023825.634014:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.644432:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n[0804/023825.645127:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/023825.657486:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before (0)\n228256 bytes written to file repo://artifacts/muscle-compartment-packing-v0/before.png\n"
   },
   "primaryOutput": {
     "path": "repo://artifacts/muscle-compartment-packing-v0/before.png",
-    "sizeBytes": 209146,
-    "sha256": "f57ada0fe082fd38fc607fd7fe254cd89c3cf032304b1cc8ab6ecaa5ffd7a1e2",
+    "sizeBytes": 228256,
+    "sha256": "364421ba601717ffc26be970e058cc73f4fc50836814f9b1ce5e199d7e72c082",
     "png": {
       "width": 1400,
       "height": 900,
@@ -82,8 +82,8 @@
       "compression": 0,
       "filter": 0,
       "interlace": 0,
-      "chunkCount": 54,
-      "idatBytes": 208477
+      "chunkCount": 59,
+      "idatBytes": 227527
     }
   },
   "interruption": null,
@@ -115,8 +115,8 @@
     },
     "primaryOutput": {
       "path": "repo://artifacts/muscle-compartment-packing-v0/before.png",
-      "sizeBytes": 209146,
-      "sha256": "f57ada0fe082fd38fc607fd7fe254cd89c3cf032304b1cc8ab6ecaa5ffd7a1e2",
+      "sizeBytes": 228256,
+      "sha256": "364421ba601717ffc26be970e058cc73f4fc50836814f9b1ce5e199d7e72c082",
       "png": {
         "width": 1400,
         "height": 900,
@@ -125,8 +125,8 @@
         "compression": 0,
         "filter": 0,
         "interlace": 0,
-        "chunkCount": 54,
-        "idatBytes": 208477
+        "chunkCount": 59,
+        "idatBytes": 227527
       }
     }
   }

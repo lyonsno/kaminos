@@ -91,6 +91,23 @@ function renderHtml({ source, result, report }) {
   const muscleLegend = source.muscles.map((muscle, index) =>
     `<span><i class="swatch" style="background:${muscleColors[index]}"></i>${escapeHtml(muscle.id)}</span>`,
   ).join('');
+  const correctionLabels = {
+    sourceSmoothing: 'source smoothing',
+    skeletalClearance: 'skeletal clearance',
+    pairwiseExclusion: 'pairwise exclusion',
+    compartmentProjection: 'compartment projection',
+    volumeRestoration: 'volume restoration',
+  };
+  const attributionRows = result.correctionAttribution.byMuscle.map((row, index) => {
+    const [dominantCategory, dominantMeasures] = Object.entries(row.corrections)
+      .filter(([, measures]) => measures.cumulativeAppliedKnotDisplacement > 0)
+      .sort((left, right) =>
+        right[1].cumulativeAppliedKnotDisplacement -
+        left[1].cumulativeAppliedKnotDisplacement)[0] || ['none', {
+        cumulativeAppliedKnotDisplacement: 0,
+      }];
+    return `<span class="cause" data-correction-muscle="${escapeHtml(row.muscleId)}"><i class="swatch" style="background:${muscleColors[index]}"></i>${escapeHtml(row.muscleId)}</span><span>${escapeHtml(correctionLabels[dominantCategory] || dominantCategory)}</span><span class="value">${formatMetric(dominantMeasures.cumulativeAppliedKnotDisplacement)}</span>`;
+  }).join('');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -114,6 +131,9 @@ function renderHtml({ source, result, report }) {
     .metrics .head { color: #8e9baa; text-transform: uppercase; font-size: 9px; letter-spacing: .08em; }
     .metrics .value { text-align: right; color: #dce6f0; }
     .metrics .packed { color: #8ce6be; }
+    .attribution-title { margin: 13px 0 5px; color: #8e9baa; font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .attribution { display:grid; grid-template-columns:1.05fr 1.4fr .65fr; gap:4px 8px; color:#b9c5d1; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .attribution .value { text-align:right; color:#dce6f0; }
     .legend { display: flex; flex-wrap: wrap; gap: 7px 13px; margin-top: 13px; color: #aeb9c6; font-size: 10px; }
     .swatch { display:inline-block; width: 8px; height: 8px; margin-right:5px; border-radius:50%; }
     .hint { position: fixed; z-index:2; right:18px; bottom:16px; max-width:340px; padding:9px 12px; border-radius:9px; background:#080c12c7; color:#aeb8c4; font-size:11px; text-align:right; }
@@ -143,6 +163,8 @@ function renderHtml({ source, result, report }) {
       <span>curvature cosine</span><span class="value">${formatMetric(initial.minimumSourceCurvatureCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceCurvatureCosine)}</span>
       <span>relation cosine</span><span class="value">${formatMetric(initial.minimumPairwiseRelationCosine)}</span><span class="value packed">${formatMetric(packed.minimumPairwiseRelationCosine)}</span>
     </div>
+    <p class="attribution-title">Dominant algorithmic correction path · not physical force</p>
+    <div class="attribution">${attributionRows}</div>
     <div class="legend">
       ${muscleLegend}
       <span><i class="swatch" style="background:#f5f1e8"></i>attachments</span>
@@ -361,6 +383,7 @@ export async function writeMuscleCompartmentPackingWitness({
         iterations: result.iterations,
         muscleCount: result.muscles.length,
         formation: structuredClone(result.formation),
+        correctionAttribution: structuredClone(result.correctionAttribution),
         metrics: structuredClone(result.metrics),
       },
       claims: {

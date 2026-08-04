@@ -77,6 +77,10 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.equal(written.result.status, 'converged');
   assert.equal(written.result.muscles.length, 4);
   assert.deepEqual(written.report.result.formation, written.result.formation);
+  assert.deepEqual(
+    written.report.result.correctionAttribution,
+    written.result.correctionAttribution,
+  );
   assert.equal(written.report.visualInspection.status, 'pending-agent-inspection');
   assert.deepEqual(written.report.visualInspection.staleAdmissionCleanup, {
     status: 'cleared',
@@ -96,6 +100,9 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.match(witnessHtml, /physically interpenetrate/);
   assert.match(witnessHtml, /Packing means nonpenetrating occupancy, not compression/);
   assert.match(witnessHtml, /source-displacement smoothing · no fallback/);
+  assert.match(witnessHtml, /algorithmic correction path · not physical force/);
+  assert.match(witnessHtml, /data-correction-muscle="muscle-01"/);
+  assert.match(witnessHtml, /skeletal clearance/);
   assert.match(witnessHtml, /source displacement/);
   assert.match(witnessHtml, /source bend retention/);
   assert.match(witnessHtml, /curvature cosine/);
