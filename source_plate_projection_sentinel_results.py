@@ -8,7 +8,10 @@ import hashlib
 import html
 import json
 from pathlib import Path
+import re
+import struct
 from typing import Any, Mapping
+import zlib
 
 from source_plate_projection_sentinel import (
     CARRIER_TOPOLOGIES,
@@ -97,10 +100,63 @@ def _validate_png_output(path: Path) -> bytes:
         _fail(f"output is missing: {path}")
     payload = path.read_bytes()
     if len(payload) < 64:
-        _fail(f"output is partial or implausibly small: {path}")
+        _fail(f"output PNG is partial or implausibly small: {path}")
     if payload[:8] != b"\x89PNG\r\n\x1a\n":
         _fail(f"output is not a PNG: {path}")
+    offset = 8
+    chunk_index = 0
+    saw_ihdr = False
+    saw_idat = False
+    saw_iend = False
+    while offset < len(payload):
+        if offset + 12 > len(payload):
+            _fail(f"output PNG has a truncated chunk header: {path}")
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        chunk_type = payload[offset + 4 : offset + 8]
+        chunk_end = offset + 12 + length
+        if chunk_end > len(payload):
+            _fail(f"output PNG has a truncated {chunk_type!r} chunk: {path}")
+        chunk_data = payload[offset + 8 : offset + 8 + length]
+        recorded_crc = struct.unpack(">I", payload[offset + 8 + length : chunk_end])[0]
+        measured_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if recorded_crc != measured_crc:
+            _fail(f"output PNG has a corrupt {chunk_type!r} chunk: {path}")
+        if chunk_index == 0:
+            if chunk_type != b"IHDR" or length != 13:
+                _fail(f"output PNG does not begin with a valid IHDR chunk: {path}")
+            width, height = struct.unpack(">II", chunk_data[:8])
+            if width <= 0 or height <= 0:
+                _fail(f"output PNG has invalid dimensions: {path}")
+            saw_ihdr = True
+        elif chunk_type == b"IHDR":
+            _fail(f"output PNG contains a duplicate IHDR chunk: {path}")
+        if chunk_type == b"IDAT":
+            saw_idat = True
+        if chunk_type == b"IEND":
+            if length != 0 or chunk_end != len(payload):
+                _fail(f"output PNG has malformed or trailing IEND data: {path}")
+            saw_iend = True
+            break
+        offset = chunk_end
+        chunk_index += 1
+    if not saw_ihdr or not saw_idat or not saw_iend:
+        _fail(f"output PNG is incomplete: {path}")
     return payload
+
+
+_HOST_COORDINATE = re.compile(
+    r"(?:file://)?/(?:Users|home|private|var/folders|Volumes|mnt|tmp)/|[A-Za-z]:[\\/]"
+)
+
+
+def _contains_host_coordinate(value: Any) -> bool:
+    if isinstance(value, str):
+        return _HOST_COORDINATE.search(value) is not None
+    if isinstance(value, dict):
+        return any(_contains_host_coordinate(key) or _contains_host_coordinate(item) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_host_coordinate(item) for item in value)
+    return False
 
 
 def _validated_jobs(plan: dict[str, Any], jobs: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -158,6 +214,12 @@ def build_projection_sentinel_result(
             _fail(f"cell {cell_id} requested route drifted before submission")
         if job.get("jobType") != expected_job_type:
             _fail(f"cell {cell_id} submitted job type does not match requested route")
+        expected_input_paths = [
+            plan["source"]["images"][role]["path"]
+            for role in cell["carrierRoles"]
+        ]
+        if job.get("inputPaths") != expected_input_paths:
+            _fail(f"cell {cell_id} jobs ledger disagrees with plan-derived conditioning inputs")
 
         receipt_path = Path(receipt_paths[cell_id]).resolve()
         receipt_bytes = _verified_file(receipt_path)
@@ -178,7 +240,7 @@ def build_projection_sentinel_result(
             _fail(f"cell {cell_id} lacks effective argv")
         if not argv or Path(argv[0]).name != "mflux-generate-flux2-edit":
             _fail(f"cell {cell_id} effective renderer is unsupported or fallback")
-        if _effective_image_paths(argv) != job.get("inputPaths"):
+        if _effective_image_paths(argv) != expected_input_paths:
             _fail(f"cell {cell_id} effective conditioning inputs drifted")
         for option, expected in expected_options.items():
             if _option_value(argv, option) != expected:
@@ -346,9 +408,8 @@ def build_public_projection_sentinel_result(result: dict[str, Any]) -> dict[str,
             "visualInspection": copy.deepcopy(cell["visualInspection"]),
         })
     public["publicResultSha256"] = public_result_sha256(public)
-    serialized = json.dumps(public, ensure_ascii=False)
-    if "/private/" in serialized:
-        _fail("public result still contains a private worktree coordinate")
+    if _contains_host_coordinate(public):
+        _fail("public result contains a host coordinate")
     return public
 
 
