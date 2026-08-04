@@ -61,8 +61,106 @@ const ROUTES = Object.freeze({
   },
 });
 
+const DENSE_SELECTION_ID = 'src-pelvis-cube002-m34-m13-routing-sensitivity-v0';
+const DENSE_FIXTURE_BYTE_SHA256 = '9235b269388d784d44ef4987dce3581175b13f3f0a88574a554bcc5637e862c1';
+const LEGACY_FIXTURE_BYTE_SHA256 = 'ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075';
+const DENSE_FAMILY_CONSTRUCTION_IDS = Object.freeze([
+  'muscle', 'muscle-02', 'muscle-03', 'muscle-04', 'muscle-05', 'muscle-06', 'muscle-07',
+  'muscle-08', 'muscle-09', 'muscle-10', 'muscle-11', 'muscle-12', 'muscle-13', 'muscle-14',
+  'muscle-15', 'muscle-16', 'muscle-18', 'muscle-20', 'muscle-21', 'muscle-22', 'muscle-23',
+  'muscle-25', 'muscle-26', 'muscle-27', 'muscle-30', 'muscle-32', 'muscle-34', 'muscle-37',
+  'muscle-39', 'muscle-41', 'muscle-42', 'muscle-43', 'muscle-44', 'muscle-45', 'muscle-52',
+  'muscle-53',
+]);
+const DENSE_ROUTES = Object.freeze({
+  'muscle-34': {
+    name: 'Muscle 34', instance: 'instance-dfa1e302-587f-4a02-813d-e18b63e1b78d',
+    lineage: 'lineage-452338f8-5611-49e9-913f-d5b62c921b1e',
+    originHandle: 'instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c',
+    insertionHandle: 'instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7',
+    origin: [4.189600944519043, 8.059602737426758, -5.167895317077637],
+    insertion: [8.319665908813477, -2.7821168899536133, 8.736489295959473],
+    chordLength: 18.10889919337251,
+    originTarget: 'SRC_PELVIS', insertionTarget: 'Cube.002', pathHash: '9'.repeat(64), surfaceHash: 'a'.repeat(64),
+  },
+  'muscle-13': {
+    name: 'Muscle 13', instance: 'instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1',
+    lineage: 'lineage-128e590e-d1ca-4373-a030-c619c0ee277f',
+    originHandle: 'instance-4b9bc3a6-077d-4209-b940-429804d4944c',
+    insertionHandle: 'instance-76120608-af3c-4aaa-bff2-720daca75154',
+    origin: [1.5449469089508057, 9.841607093811035, -2.5539662837982178],
+    insertion: [6.266059875488281, -2.056589126586914, 10.305938720703125],
+    chordLength: 18.144783115178726,
+    originTarget: 'SRC_PELVIS', insertionTarget: 'Cube.002', pathHash: 'b'.repeat(64), surfaceHash: 'c'.repeat(64),
+  },
+});
+
+function denseNeighborRoutes() {
+  return Array.from({ length: 34 }, (_, index) => {
+    const suffix = String(index + 100).padStart(3, '0');
+    const origin = [index * 0.07, 7 + index * 0.03, -4 + index * 0.02];
+    const insertion = [6 + index * 0.05, -2 + index * 0.01, 9 + index * 0.04];
+    return [`dense-neighbor-${suffix}`, {
+      name: `Dense Neighbor ${suffix}`,
+      instance: `instance-dense-neighbor-${suffix}`,
+      lineage: `lineage-dense-neighbor-${suffix}`,
+      originHandle: `instance-dense-origin-${suffix}`,
+      insertionHandle: `instance-dense-insertion-${suffix}`,
+      origin,
+      insertion,
+      chordLength: Math.hypot(...origin.map((value, axis) => value - insertion[axis])),
+      originTarget: 'SRC_PELVIS',
+      insertionTarget: 'Cube.002',
+      pathHash: createHash('sha256').update(`path-${suffix}`).digest('hex'),
+      surfaceHash: createHash('sha256').update(`surface-${suffix}`).digest('hex'),
+    }];
+  });
+}
+
+function denseInputs() {
+  const graph = sourceGraph();
+  const assay = geometryAssay();
+  for (const [constructionId, route] of [
+    ...Object.entries(DENSE_ROUTES),
+    ...denseNeighborRoutes(),
+  ]) {
+    graph.muscles.push(muscle(constructionId, route));
+    assay.rows.push({
+      construction_id: constructionId,
+      lineage_id: route.lineage,
+      name: route.name,
+      pair: [route.originTarget, route.insertionTarget],
+      endpoint_strategy: 'surface_hits',
+      endpoints: [
+        { role: 'origin', point: [...route.origin], declared_target: route.originTarget, nearest_source_mesh: { name: route.originTarget, distance: 0.001 } },
+        { role: 'insertion', point: [...route.insertion], declared_target: route.insertionTarget, nearest_source_mesh: { name: route.insertionTarget, distance: 0.001 } },
+      ],
+      path_control_point_count: 25,
+      chord_length: route.chordLength,
+      path_start_to_origin: 0,
+      path_end_to_insertion: 0,
+      settings: { insertion_tendon_fraction: 0.18, longitudinal_sections: 12, origin_tendon_fraction: 0.18, profile_sides: 12 },
+    });
+  }
+  return { graph, assay };
+}
+
 function matrixAt(point) {
   return [1, 0, 0, point[0], 0, 1, 0, point[1], 0, 0, 1, point[2], 0, 0, 0, 1];
+}
+
+function canonicalValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalValue(value[key])]));
+  }
+  if (typeof value === 'number' && Object.is(value, -0)) return 0;
+  return value;
+}
+
+function semanticFixtureSha256(fixture) {
+  const { fixtureSha256: _embeddedIdentity, schema: _schema, ...fixtureCore } = fixture;
+  return createHash('sha256').update(JSON.stringify(canonicalValue(fixtureCore))).digest('hex');
 }
 
 function roundedMatrixAt(point) {
@@ -160,12 +258,12 @@ async function exists(path) {
   }
 }
 
-async function writeSyntheticInputs(root) {
+async function writeSyntheticInputs(root, inputs = { graph: sourceGraph(), assay: geometryAssay() }) {
   const graphPath = join(root, 'graph.json');
   const assayPath = join(root, 'assay.json');
-  const graphBytes = `${JSON.stringify(sourceGraph(), null, 2)}\n`;
+  const graphBytes = `${JSON.stringify(inputs.graph, null, 2)}\n`;
   const graphFileSha256 = createHash('sha256').update(graphBytes).digest('hex');
-  const assay = geometryAssay();
+  const assay = structuredClone(inputs.assay);
   assay.graph_file_sha256 = graphFileSha256;
   const assayBytes = `${JSON.stringify(assay, null, 2)}\n`;
   const assayFileSha256 = createHash('sha256').update(assayBytes).digest('hex');
@@ -192,6 +290,53 @@ test('fixture binds exact correct and matched cross-wired M31/M47 transforms', (
   assert.equal(fixture.deltaLedger.toleranceAuthority, 'unassigned');
 });
 
+test('dense fixture freezes exact M34/M13 routing, absence, and 36-route context', () => {
+  const { graph, assay } = denseInputs();
+  const fixture = compile(graph, assay, { selectionId: DENSE_SELECTION_ID });
+  assert.equal(fixture.selection.id, DENSE_SELECTION_ID);
+  assert.deepEqual(fixture.selection.family, { originSource: 'SRC_PELVIS', insertionSource: 'Cube.002' });
+  assert.equal(fixture.selection.correctConstructionId, 'muscle-34');
+  assert.equal(fixture.selection.crossWireDonorConstructionId, 'muscle-13');
+  assert.deepEqual(Object.keys(fixture.conditions).sort(), ['absent', 'correct', 'matchedWrong']);
+  assert.deepEqual(fixture.conditions.absent.removedConstructionIds, ['muscle-13', 'muscle-34']);
+  assert.equal(fixture.conditions.absent.deepGeometryPresent, false);
+  assert.equal(fixture.conditions.absent.testedRelationPresent, false);
+  assert.equal(fixture.conditions.correct.deepGeometryPresent, true);
+  assert.equal(fixture.conditions.correct.testedRelationPresent, true);
+  assert.equal(fixture.conditions.matchedWrong.deepGeometryPresent, true);
+  assert.equal(fixture.conditions.matchedWrong.testedRelationPresent, false);
+  assert.equal(fixture.densityContext.familyRouteCount, 36);
+  assert.equal(fixture.densityContext.neighborRouteCount, 34);
+  assert.equal(fixture.conditions.absent.preservedNeighborRouteCount, 34);
+  assert.equal(
+    fixture.conditions.absent.preservedNeighborFamilyIdentitySha256,
+    fixture.densityContext.neighborFamilyIdentitySha256,
+  );
+  assert.deepEqual(
+    fixture.conditions.absent.preservedNeighborConstructionIds,
+    fixture.densityContext.neighborConstructionIds,
+  );
+  assert.equal(fixture.densityContext.targetCorridor.freezeStatus, 'frozen-before-condition-output');
+  assert.equal(fixture.densityContext.targetCorridor.castProjection, 'unavailable-held');
+  assert.equal(fixture.deltaLedger.tolerance, null);
+  assert.equal(fixture.deltaLedger.toleranceAuthority, 'unassigned');
+  assert.ok(Math.abs(fixture.deltaLedger.maximumAbsoluteRelativeChange - 0.02731012950405119) < 1e-12);
+  validateMatchedRoutePreservation(fixture.conditions.correct, fixture.conditions.matchedWrong);
+});
+
+test('checked dense and legacy fixtures retain their authenticated production identities', async () => {
+  const denseBytes = await readFile(new URL('../fixtures/track-m-routing/m34-m13-dense-routing-fixture.json', import.meta.url));
+  const legacyBytes = await readFile(new URL('../fixtures/track-m-routing/m31-m47-routing-fixture.json', import.meta.url));
+  assert.equal(createHash('sha256').update(denseBytes).digest('hex'), DENSE_FIXTURE_BYTE_SHA256);
+  assert.equal(createHash('sha256').update(legacyBytes).digest('hex'), LEGACY_FIXTURE_BYTE_SHA256);
+  const dense = JSON.parse(denseBytes);
+  assert.equal(dense.fixtureSha256, 'f4fb4b8d54ad547bd5c095d7972cc699ab75b344da977ba68737cafae7a71b3e');
+  assert.equal(semanticFixtureSha256(dense), dense.fixtureSha256);
+  assert.deepEqual(dense.densityContext.familyConstructionIds, DENSE_FAMILY_CONSTRUCTION_IDS);
+  assert.equal(dense.densityContext.familyIdentitySha256, 'e8b0e9b7337aaa7f2949472f08d2c99f9874d251e30f1dfa4cb2061a08d50eb7');
+  assert.equal(dense.densityContext.neighborFamilyIdentitySha256, 'ee137d793e5cefb80a12c1572ad3ef4f7a325db10da9b8240639ef921b5e02b6');
+});
+
 test('matched wrong changes only insertion assignments while preserving budget and endpoint inventory', () => {
   const fixture = compile();
   assert.equal(fixture.conditions.correct.deepGeometryContentSetSha256, fixture.conditions.matchedWrong.deepGeometryContentSetSha256);
@@ -215,6 +360,16 @@ test('matched-route validator rejects duplicate/drop endpoint laundering even wi
   assert.throws(
     () => validateMatchedRoutePreservation(fixture.conditions.correct, laundered),
     /effective endpoint inventory|endpoint.*multiset/i,
+  );
+});
+
+test('matched-route validator rejects preserved-field mutation outside insertion assignment', () => {
+  const fixture = compile();
+  const mutated = structuredClone(fixture.conditions.matchedWrong);
+  mutated.routes[0].instanceId = 'instance-laundered';
+  assert.throws(
+    () => validateMatchedRoutePreservation(fixture.conditions.correct, mutated),
+    /preserve exact route body/i,
   );
 });
 
@@ -265,6 +420,11 @@ test('fixture rejects stale geometry registration and assay source substitution'
 
 test('condition identities are deterministic under input ordering changes while byte receipts remain honest', () => {
   const first = compile();
+  const serializedCompilerOutput = `${JSON.stringify(first, null, 2)}\n`;
+  assert.equal(
+    createHash('sha256').update(serializedCompilerOutput).digest('hex'),
+    'f7fd78468a681f655ed33a9abcd7729ad9eca312c1e512bcef80f1e2a465e971',
+  );
   const graph = sourceGraph();
   const assay = geometryAssay();
   graph.muscles.reverse();
@@ -331,6 +491,58 @@ test('CLI success removes stale failure evidence and publishes only the primary 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(await exists(outputPath), true);
   assert.equal(await exists(failurePath), false);
+});
+
+test('CLI selection emits the dense M34/M13 three-condition fixture', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'track-m-dense-routing-fixture-success-'));
+  const inputs = denseInputs();
+  const { graphPath, assayPath, graphFileSha256, assayFileSha256 } = await writeSyntheticInputs(root, inputs);
+  const outputPath = join(root, 'fixture.json');
+  const failurePath = join(root, 'failure.json');
+  const result = spawnSync('node', [
+    'tools/compile-track-m-routing-fixture.mjs',
+    '--selection', DENSE_SELECTION_ID,
+    '--graph', graphPath,
+    '--assay', assayPath,
+    '--out', outputPath,
+    '--failure', failurePath,
+    '--expected-source-sha256', SOURCE_SHA256,
+    '--expected-graph-sha256', GRAPH_SHA256,
+    '--expected-graph-file-sha256', graphFileSha256,
+    '--expected-assay-file-sha256', assayFileSha256,
+  ], { cwd: process.cwd(), encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const fixture = JSON.parse(await readFile(outputPath, 'utf8'));
+  assert.equal(fixture.selection.id, DENSE_SELECTION_ID);
+  assert.deepEqual(Object.keys(fixture.conditions).sort(), ['absent', 'correct', 'matchedWrong']);
+  assert.equal(fixture.densityContext.familyRouteCount, 36);
+  assert.equal(await exists(failurePath), false);
+});
+
+test('CLI unknown selection writes a durable failure with unresolved compiler identity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'track-m-routing-fixture-unknown-selection-'));
+  const { graphPath, assayPath, graphFileSha256, assayFileSha256 } = await writeSyntheticInputs(root);
+  const outputPath = join(root, 'fixture.json');
+  const failurePath = join(root, 'failure.json');
+  const result = spawnSync('node', [
+    'tools/compile-track-m-routing-fixture.mjs',
+    '--selection', 'unknown-routing-selection',
+    '--graph', graphPath,
+    '--assay', assayPath,
+    '--out', outputPath,
+    '--failure', failurePath,
+    '--expected-source-sha256', SOURCE_SHA256,
+    '--expected-graph-sha256', GRAPH_SHA256,
+    '--expected-graph-file-sha256', graphFileSha256,
+    '--expected-assay-file-sha256', assayFileSha256,
+  ], { cwd: process.cwd(), encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.equal(await exists(outputPath), false);
+  assert.equal(await exists(failurePath), true);
+  const failure = JSON.parse(await readFile(failurePath, 'utf8'));
+  assert.equal(failure.compilerId, null);
+  assert.equal(failure.requestedSelectionId, 'unknown-routing-selection');
+  assert.match(failure.error, /unknown Track M routing selection/i);
 });
 
 test('CLI failure removes stale primary evidence and publishes only the failure receipt', async () => {
@@ -441,7 +653,9 @@ test('CLI redirects an aliased failure path to a durable sidecar without overwri
   assert.deepEqual(await readFile(graphPath), graphBefore);
   assert.equal(await exists(outputPath), false);
   assert.equal(await exists(sidecarPath), true);
-  assert.match((await readFile(sidecarPath, 'utf8')), /failure receipt path.*alias/i);
+  const receipt = JSON.parse(await readFile(sidecarPath, 'utf8'));
+  assert.equal(receipt.compilerId, 'track-m-m31-m47-routing-fixture-v0');
+  assert.match(receipt.error, /failure receipt path.*alias/i);
 });
 
 test('CLI preserves symlink-resolved inputs when the first failure sidecar also collides', async () => {
